@@ -1649,11 +1649,11 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_fillsPlaceAsInline_whenCallReadingCallersLazyValueIsReenteredOnlyThroughAnotherCallsFill(caller: CallingMockCallerKind, layout: ReenteredThroughAnotherCallsFillLayout) async throws {
 		// `F`’s place `api`, whose fill `Live` reads `Root`’s `LazilyInstantiated<Log>`, is inside a fill of `G`’s place, and
-		// `G` is built again inside `F`’s fills: no fill of `F`’s places calls `F`’s public mock, or one whose builders reach
-		// its places, so the gate that passes a re-entered call’s place up leaves `api` filled
-		// (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`). The fill that builds `G` again takes `Root`’s
-		// wrapper, which the re-entered call of `F` is handed past `F`’s by-value copy, so each `Live` holds `Root`’s wrapper,
-		// as inline.
+		// `G` is built again inside `F`’s fills, through a third called type `H` where `layout` says so: no fill of `F`’s
+		// places calls `F`’s public mock, or one whose builders reach its places, so the gate that passes a re-entered call’s
+		// place up leaves `api` filled (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`). The fill that builds
+		// `G` again takes `Root`’s wrapper, which the re-entered call of `F` is handed past `F`’s by-value copy, so each `Live`
+		// holds `Root`’s wrapper, as inline, also where `api` is on `F`’s root level.
 		try await expectValuesEqualInline(
 			mock: Self.reenteredThroughAnotherCallsFillModules(caller: caller, layout: layout),
 			inline: Self.reenteredThroughAnotherCallsFillInlineModules(layout: layout),
@@ -1663,20 +1663,44 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		)
 	}
 
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCallerKind.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPlaceOnCalledTypesRootAsInline_whenFillReadingCallersLazyValueBuildsAnotherCalledType(caller: CallingMockCallerKind) async throws {
+		// `Root` builds `F`, whose place `api` is on its root level: `Live` fills it, reads `Root`’s `LazilyInstantiated<Log>`
+		// and builds `G`, a second called type, whose fill builds nothing called. `F`’s mock binds `log` by value, so the fill
+		// reads `Root`’s wrapper and hands its instance to `G`’s mock, as inline.
+		try await expectValuesEqualInline(
+			mock: Self.secondCallFromCalledTypesRootModules(caller: caller, secondCallBuildsFirstAgain: false),
+			inline: Self.secondCallFromCalledTypesRootInlineModules(secondCallBuildsFirstAgain: false),
+			caller: caller.callingMockCaller,
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+			probes: Self.secondCallFromCalledTypesRootProbes,
+		)
+	}
+
 	// MARK: Tests – a place passed up whole where two places’ fills read different lazy values
 
-	@Test(arguments: CallingMockCaller.allCases, PlacesDisagreeVariation.allCases)
+	@Test(arguments: CallingMockCallerKind.allCases, PlacesDisagreeVariation.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesPlaceUpWhole_whenPlacesOfOneHoleTypeReadDifferentLazyValuesBesideTheirFields(caller: CallingMockCaller, variation: PlacesDisagreeVariation) async throws {
-		// `F` holds `api` twice: on `A`’s level, which `F`’s by-value copy of `log` reaches, so `Live` reads `Root`’s wrapper
-		// beside that place’s fields, and beneath a level that instantiates a `log` of its own, `Live` reading that level’s
-		// field. One fill serves both places, so the hole type is passed up whole, where filling it named a builder the mock
-		// does not take. No call re-enters `F`.
+	mutating func generate_passesPlaceUpWhole_whenPlacesOfOneHoleTypeReadDifferentLazyValuesBesideTheirFields(caller: CallingMockCallerKind, variation: PlacesDisagreeVariation) async throws {
+		// `F` holds `api` twice: on `A`’s level, where `Live` reads `Root`’s wrapper beside that place’s fields, and beneath a
+		// level that instantiates a `log` of its own, `Live` reading that level’s field. One fill serves both places, so the
+		// hole type is passed up whole, where filling it named a builder the mock does not take, as main’s calling mock passes
+		// it up. No call re-enters `F`. Where `F`’s by-value copy of `log` reaches the first place, no level that holds only
+		// the copy can hand `Live` the wrapper. Where `F` holds no copy (`levelBesidePlaceWithoutCopy`), or the second place is
+		// an `ErasedInstantiator` (`levelBesideErasedPlace`), filling both places built what inline builds, so passing them up
+		// is the gate’s stated cost (`DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:)`).
 		var builders = [PassedUpBuilder.api]
 		var guards = PassedUpGuards(calledType: "F1E8D579CB81D9A6", root: "60281D4498053F73")
+		var calledMockTakesLog = true
 		switch variation {
 		case .levelBesidePlace:
 			break
+		case .levelBesidePlaceWithoutCopy:
+			guards = PassedUpGuards(calledType: "B3A1B35B307DAED5", root: "FC5216D443EEF05F")
+			calledMockTakesLog = false
+		case .levelBesideErasedPlace:
+			guards = PassedUpGuards(calledType: "44EB5F20039A77EF", root: "F7B7A5B98F14BF14")
 		case .levelInSendableFunctionBesidePlace:
 			builders = [.api, .sendableApi]
 			guards = PassedUpGuards(calledType: "52604B0DC106621C", root: "1BDB61EC60CB728C")
@@ -1686,10 +1710,11 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		}
 		try await expectPassesPlacesUpWhole(
 			mock: Self.placesDisagreeModules(caller: caller, variation: variation),
-			caller: caller == .internal ? .internal : .public,
+			caller: caller,
 			wrapper: variation.wrapper,
 			builders: builders,
 			guards: guards,
+			calledMockTakesLog: calledMockTakesLog,
 		)
 	}
 
@@ -2738,7 +2763,8 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	/// Expects `Root`’s calling mock of `mock`, whose module is `App` and whose tree holds `log` in `wrapper` and calls `F`’s
 	/// public mock, to pass `builders` up whole, as `passedUpRootMockSection` spells its mock, and to compile with a call of
 	/// its `mock()` that passes a stub for each builder. The whole generated file is compared, but for a listed caller,
-	/// whose file holds its production tree first, of which only the mock is compared.
+	/// whose file holds its production tree first, of which only the mock is compared. `calledMockTakesLog` says whether
+	/// `F`’s mock takes `log`.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func expectPassesPlacesUpWhole(
 		mock: [ModuleFixture],
@@ -2746,6 +2772,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		wrapper: CallerLazyWrapper,
 		builders: [PassedUpBuilder],
 		guards: PassedUpGuards,
+		calledMockTakesLog: Bool = true,
 		sourceLocation: SourceLocation = #_sourceLocation,
 	) async throws {
 		var stubs = ""
@@ -2768,7 +2795,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			#expect(compilation.failure == nil, "\(compilation.failure.map { "\($0)" } ?? "")", sourceLocation: sourceLocation)
 		}
 		let generatedFile = try #require(output.modules["App"]?.generatedFiles["App.swift"], sourceLocation: sourceLocation)
-		let mockSection = Self.passedUpRootMockSection(caller: caller.callingMockCaller, wrapper: wrapper, builders: builders, guards: guards)
+		let mockSection = Self.passedUpRootMockSection(caller: caller.callingMockCaller, wrapper: wrapper, builders: builders, guards: guards, calledMockTakesLog: calledMockTakesLog)
 		switch caller {
 		case .internal, .public:
 			let expectedFile = generatedFileHeader + "#if canImport(Feat)\nimport Feat\n#endif\n#if canImport(SafeDI)\nimport SafeDI\n#endif\n\n" + mockSection
@@ -2817,9 +2844,11 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 
 	/// The mock SafeDI generates for `Root`, which instantiates `log` in `wrapper` and `f: F`, where it passes `builders` up
 	/// whole: `mock()` takes each, and hands `F`’s mock each, with `log`’s instance, as main’s calling mock did for a place it
-	/// passes up. A `.public` mock declares each builder’s struct, which its caller fills or passes up.
-	private static func passedUpRootMockSection(caller: CallingMockCaller, wrapper: CallerLazyWrapper, builders: [PassedUpBuilder], guards: PassedUpGuards) -> String {
+	/// passes up. A `.public` mock declares each builder’s struct, which its caller fills or passes up. Where
+	/// `calledMockTakesLog` is `false`, `F`’s mock takes no `log`.
+	private static func passedUpRootMockSection(caller: CallingMockCaller, wrapper: CallerLazyWrapper, builders: [PassedUpBuilder], guards: PassedUpGuards, calledMockTakesLog: Bool = true) -> String {
 		let access = caller == .public ? "public " : ""
+		let logArgument = calledMockTakesLog ? "log: log.instance, " : ""
 		let sendable = wrapper == .sendableLazilyInstantiated ? "@Sendable " : ""
 		var logBinding = "        func __safeDI_log() -> Log {\n            if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }\n        }\n"
 		if wrapper == .sendableLazilyInstantiated {
@@ -2891,7 +2920,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 				section += "            let \(builder.label): \(builder.readableType) = __safeDI_\(builder.label)\n"
 			}
 			let arguments = builders.map { "\($0.label): .init(__safeDI_noScope: \($0.label))" }.joined(separator: ", ")
-			section += "            return F.__safeDI_mock(\(arguments), log: log.instance, safeDIOverrides: safeDIOverrides.f)\n"
+			section += "            return F.__safeDI_mock(\(arguments), \(logArgument)safeDIOverrides: safeDIOverrides.f)\n"
 			section += "        }\n"
 			section += "        let f: F = __safeDI_f()\n"
 			section += "        return Root(log: log, f: f)\n"
@@ -2913,7 +2942,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			let arguments = builders.map { builder in
 				"\(builder.label): __safeDI_\(builder.label).\(builder.member)(\(builder.enumName).\(builder.isSendable ? "f_Sendable_Values" : "f_Values")())"
 			}.joined(separator: ", ")
-			section += "        let f = F.__safeDI_mock(\(arguments), log: log.instance, safeDIOverrides: safeDIOverrides.f)\n"
+			section += "        let f = F.__safeDI_mock(\(arguments), \(logArgument)safeDIOverrides: safeDIOverrides.f)\n"
 			section += "        return Root(log: log, f: f)\n"
 			section += "    }\n"
 			section += "}\n\n"
@@ -4159,6 +4188,8 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	/// `api` is filled by `Live`, which reads `Root`’s `LazilyInstantiated<Log>`, and `F` is re-entered only through `G`’s
 	/// fill: `Live` itself builds `G` again, or, where `layout` says so, `F` also holds `b: B`, whose place `other`
 	/// `LiveOther` fills, building `G` again. `G` and `F` each build `Z`, which receives `log`, so each mock binds it by value.
+	/// Where `layout` says so, `F` holds `api` on its root level, or a third called type, `H`, is between them: `LiveG`
+	/// builds `H`, whose place `hapi` `LiveH` fills, building `F`.
 	private static func reenteredThroughAnotherCallsFillModules(caller: CallingMockCallerKind, layout: ReenteredThroughAnotherCallsFillLayout) -> [ModuleFixture] {
 		var appFiles = [
 			"AppTypes.swift": "import Feat\nimport SafeDI\n\n" + reenteredThroughAnotherCallsFillAppTypes(rootAttribute: caller.attribute(listed: "@Instantiable(isRoot: true)"), layout: layout),
@@ -4172,6 +4203,147 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		]
 	}
 
+	/// `F`, a seam and public mock in module `Feat`, holds its place `api` on its root level, and `Z`, which receives `log`,
+	/// so `F`’s mock binds `log` by value; `G`, another, holds its place `gapi` in `GA`, and `Z`. `Live` fills `api`, reads
+	/// `Root`’s `LazilyInstantiated<Log>` and builds `Instantiator<G>`; `LiveG` fills `gapi`, building `F` again where
+	/// `secondCallBuildsFirstAgain`. `Root`, the calling mock `caller` says, builds `log` and `f: F`.
+	private static func secondCallFromCalledTypesRootModules(caller: CallingMockCallerKind, secondCallBuildsFirstAgain: Bool) -> [ModuleFixture] {
+		var appFiles = [
+			"AppTypes.swift": "import Feat\nimport SafeDI\n\n" + secondCallFromCalledTypesRootAppTypes(rootAttribute: caller.attribute(listed: "@Instantiable(isRoot: true)"), secondCallBuildsFirstAgain: secondCallBuildsFirstAgain),
+		]
+		if caller == .listed {
+			appFiles["SafeDIConfiguration.swift"] = "import SafeDI\n\n#SafeDIConfiguration(additionalMocksToGenerate: [\"Root\"])\n"
+		}
+		return [
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": secondCallFromCalledTypesRootFeatureTypes(callee: twinCalledTypes)]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: appFiles, dependencies: ["Feat"]),
+		]
+	}
+
+	/// `secondCallFromCalledTypesRootModules`’ types in one module, `Root` a root: what inline builds.
+	private static func secondCallFromCalledTypesRootInlineModules(secondCallBuildsFirstAgain: Bool) -> [ModuleFixture] {
+		var types = secondCallFromCalledTypesRootFeatureTypes(callee: "@Instantiable")
+		types += "\n\n"
+		types += secondCallFromCalledTypesRootAppTypes(rootAttribute: "@Instantiable(isRoot: true)", secondCallBuildsFirstAgain: secondCallBuildsFirstAgain)
+		return [ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": types])]
+	}
+
+	/// `F` and `G`, declared with `callee`, and the types their trees build, of `secondCallFromCalledTypesRootModules`.
+	private static func secondCallFromCalledTypesRootFeatureTypes(callee: String) -> String {
+		"""
+		import SafeDI
+
+		public protocol Api {}
+
+		public protocol GApi {}
+
+		@Instantiable
+		public final class Log: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public final class Z: Instantiable {
+		    init(log: Log) {
+		        self.log = log
+		    }
+
+		    @Received public let log: Log
+		}
+
+		@Instantiable
+		public final class GA: Instantiable {
+		    init(gapi: any GApi) {
+		        self.gapi = gapi
+		    }
+
+		    @Instantiated public let gapi: any GApi
+		}
+
+		\(callee)
+		public final class F: Instantiable {
+		    public init(api: any Api, z: Z) {
+		        self.api = api
+		        self.z = z
+		    }
+
+		    @Instantiated public let api: any Api
+		    @Instantiated public let z: Z
+		}
+
+		\(callee)
+		public final class G: Instantiable {
+		    public init(ga: GA, z: Z) {
+		        self.ga = ga
+		        self.z = z
+		    }
+
+		    @Instantiated public let ga: GA
+		    @Instantiated public let z: Z
+		}
+		"""
+	}
+
+	/// `Live`, `LiveG` and `Root`, declared with `rootAttribute`, of `secondCallFromCalledTypesRootModules`.
+	private static func secondCallFromCalledTypesRootAppTypes(rootAttribute: String, secondCallBuildsFirstAgain: Bool) -> String {
+		let liveG = secondCallBuildsFirstAgain
+			? """
+			@Instantiable(fulfillingAdditionalTypes: [GApi.self])
+			public final class LiveG: GApi, Instantiable {
+			    public init(f: F) {
+			        self.f = f
+			    }
+
+			    @Instantiated public let f: F
+			}
+			"""
+			: """
+			@Instantiable(fulfillingAdditionalTypes: [GApi.self])
+			public final class LiveG: GApi, Instantiable {
+			    public init() {}
+			}
+			"""
+		return """
+		@Instantiable(fulfillingAdditionalTypes: [Api.self])
+		public final class Live: Api, Instantiable {
+		    public init(log: LazilyInstantiated<Log>, gBuilder: Instantiator<G>) {
+		        self.log = log
+		        self.gBuilder = gBuilder
+		    }
+
+		    @Received public let log: LazilyInstantiated<Log>
+		    @Instantiated public let gBuilder: Instantiator<G>
+		}
+
+		\(liveG)
+
+		\(rootAttribute)
+		public final class Root: Instantiable {
+		    public init(log: LazilyInstantiated<Log>, f: F) {
+		        self.log = log
+		        self.f = f
+		    }
+
+		    @Instantiated public let log: LazilyInstantiated<Log>
+		    @Instantiated public let f: F
+		}
+		"""
+	}
+
+	/// What `Root`’s mock and inline `Root` build; whether `Live` holds `Root`’s wrapper, and `F`’s `Z` and the `Z` of the
+	/// `G` `Live` builds its value.
+	private static let secondCallFromCalledTypesRootProbes = {
+		func probe(_ name: String, _ expression: (String) -> String) -> DifferentialValueProbe {
+			DifferentialValueProbe(name: name, expression: expression("Root.mock()"), knownRightExpression: expression("Root()"))
+		}
+		return [
+			probe("Root") { $0 },
+			probe("Live’s log is Root’s") { "{ let root = \($0); return (root.f.api as! Live).log === root.log }()" },
+			probe("F’s Z holds Root’s Log") { "{ let root = \($0); return root.f.z.log === root.log.instance }()" },
+			probe("the Z of the G Live builds holds Root’s Log") { "{ let root = \($0); return (root.f.api as! Live).gBuilder.instantiate().z.log === root.log.instance }()" },
+		]
+	}()
+
 	/// `reenteredThroughAnotherCallsFillModules`’ types in one module, `Root` a root: what inline builds.
 	private static func reenteredThroughAnotherCallsFillInlineModules(layout: ReenteredThroughAnotherCallsFillLayout) -> [ModuleFixture] {
 		var types = reenteredThroughAnotherCallsFillFeatureTypes(callee: "@Instantiable", layout: layout)
@@ -4182,9 +4354,9 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 
 	/// `F` and `G`, declared with `callee`, and the types their trees build, of `reenteredThroughAnotherCallsFillModules`.
 	private static func reenteredThroughAnotherCallsFillFeatureTypes(callee: String, layout: ReenteredThroughAnotherCallsFillLayout) -> String {
-		var fProperties = [(label: "a", type: "A"), (label: "z", type: "Z")]
+		var fProperties = [layout.placeIsOnCalledTypesRootLevel ? (label: "api", type: "any Api") : (label: "a", type: "A"), (label: "z", type: "Z")]
 		var other = ""
-		if layout == .otherPlacesFillBuildsOuterCallAgain {
+		if layout.otherPlacesFillBuildsOuterCallAgain {
 			fProperties.insert((label: "b", type: "B"), at: 1)
 			other = """
 			public protocol Other {}
@@ -4204,6 +4376,34 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		let fParameters = fProperties.map { "\($0.label): \($0.type)" }.joined(separator: ", ")
 		let fAssignments = fProperties.map { "        self.\($0.label) = \($0.label)" }.joined(separator: "\n")
 		let fDeclarations = fProperties.map { "    @Instantiated public let \($0.label): \($0.type)" }.joined(separator: "\n")
+		var third = ""
+		if layout == .thirdCallsFillBuildsCalledTypeAgain {
+			third = """
+
+
+			public protocol HApi {}
+
+			@Instantiable
+			public final class HA: Instantiable {
+			    init(hapi: any HApi) {
+			        self.hapi = hapi
+			    }
+
+			    @Instantiated public let hapi: any HApi
+			}
+
+			\(callee)
+			public final class H: Instantiable {
+			    public init(ha: HA, z: Z) {
+			        self.ha = ha
+			        self.z = z
+			    }
+
+			    @Instantiated public let ha: HA
+			    @Instantiated public let z: Z
+			}
+			"""
+		}
 		return """
 		import SafeDI
 
@@ -4261,15 +4461,15 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 
 		    @Instantiated public let ga: GA
 		    @Instantiated public let z: Z
-		}
+		}\(third)
 		"""
 	}
 
-	/// `Live`, `LiveG`, `LiveOther` where `layout` has it, and `Root`, declared with `rootAttribute`, of
+	/// `Live`, `LiveG`, `LiveOther` and `LiveH` where `layout` has them, and `Root`, declared with `rootAttribute`, of
 	/// `reenteredThroughAnotherCallsFillModules`.
 	private static func reenteredThroughAnotherCallsFillAppTypes(rootAttribute: String, layout: ReenteredThroughAnotherCallsFillLayout) -> String {
 		var types = switch layout {
-		case .fillBuildsOuterCallAgain:
+		case .fillBuildsOuterCallAgain, .thirdCallsFillBuildsCalledTypeAgain:
 			"""
 			@Instantiable(fulfillingAdditionalTypes: [Api.self])
 			public final class Live: Api, Instantiable {
@@ -4282,7 +4482,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			    @Instantiated public let gBuilder: Instantiator<G>
 			}
 			"""
-		case .otherPlacesFillBuildsOuterCallAgain:
+		case .otherPlacesFillBuildsOuterCallAgain, .otherPlacesFillBuildsOuterCallAgainWithPlaceOnCalledTypesRootLevel:
 			"""
 			@Instantiable(fulfillingAdditionalTypes: [Api.self])
 			public final class Live: Api, Instantiable {
@@ -4303,17 +4503,44 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			}
 			"""
 		}
+		if layout == .thirdCallsFillBuildsCalledTypeAgain {
+			types += """
+
+
+			@Instantiable(fulfillingAdditionalTypes: [GApi.self])
+			public final class LiveG: GApi, Instantiable {
+			    public init(h: H) {
+			        self.h = h
+			    }
+
+			    @Instantiated public let h: H
+			}
+
+			@Instantiable(fulfillingAdditionalTypes: [HApi.self])
+			public final class LiveH: HApi, Instantiable {
+			    public init(f: F) {
+			        self.f = f
+			    }
+
+			    @Instantiated public let f: F
+			}
+			"""
+		} else {
+			types += """
+
+
+			@Instantiable(fulfillingAdditionalTypes: [GApi.self])
+			public final class LiveG: GApi, Instantiable {
+			    public init(f: F) {
+			        self.f = f
+			    }
+
+			    @Instantiated public let f: F
+			}
+			"""
+		}
 		types += """
 
-
-		@Instantiable(fulfillingAdditionalTypes: [GApi.self])
-		public final class LiveG: GApi, Instantiable {
-		    public init(f: F) {
-		        self.f = f
-		    }
-
-		    @Instantiated public let f: F
-		}
 
 		\(rootAttribute)
 		public final class Root: Instantiable {
@@ -4332,21 +4559,29 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	/// What `Root`’s mock and inline `Root` build; whether the `Live` of `G`’s fill’s `F` holds `Root`’s wrapper; and whether
 	/// the `Live` of the `F` in `G` built again, and that `G`’s and `F`’s `Z`, hold `Root`’s wrapper and its value.
 	private static func reenteredThroughAnotherCallsFillProbes(layout: ReenteredThroughAnotherCallsFillLayout) -> [DifferentialValueProbe] {
-		let f = "(root.g.ga.gapi as! LiveG).f"
-		let gAgain = switch layout {
-		case .fillBuildsOuterCallAgain:
-			"(\(f).a.api as! Live).gBuilder.instantiate()"
-		case .otherPlacesFillBuildsOuterCallAgain:
-			"(\(f).b.other as! LiveOther).gBuilder.instantiate()"
+		func calledTypeF(in g: String) -> String {
+			switch layout {
+			case .fillBuildsOuterCallAgain, .otherPlacesFillBuildsOuterCallAgain, .otherPlacesFillBuildsOuterCallAgainWithPlaceOnCalledTypesRootLevel:
+				"(\(g).ga.gapi as! LiveG).f"
+			case .thirdCallsFillBuildsCalledTypeAgain:
+				"((\(g).ga.gapi as! LiveG).h.ha.hapi as! LiveH).f"
+			}
 		}
-		let fAgain = "(\(gAgain).ga.gapi as! LiveG).f"
+		func live(in f: String) -> String {
+			layout.placeIsOnCalledTypesRootLevel ? "(\(f).api as! Live)" : "(\(f).a.api as! Live)"
+		}
+		let f = calledTypeF(in: "root.g")
+		let gAgain = layout.otherPlacesFillBuildsOuterCallAgain
+			? "(\(f).b.other as! LiveOther).gBuilder.instantiate()"
+			: "\(live(in: f)).gBuilder.instantiate()"
+		let fAgain = calledTypeF(in: gAgain)
 		func probe(_ name: String, _ expression: (String) -> String) -> DifferentialValueProbe {
 			DifferentialValueProbe(name: name, expression: expression("Root.mock()"), knownRightExpression: expression("Root()"))
 		}
 		return [
 			probe("Root") { $0 },
-			probe("Live’s log is Root’s") { "{ let root = \($0); return (\(f).a.api as! Live).log === root.log }()" },
-			probe("the Live of F in G built again holds Root’s log") { "{ let root = \($0); return (\(fAgain).a.api as! Live).log === root.log }()" },
+			probe("Live’s log is Root’s") { "{ let root = \($0); return \(live(in: f)).log === root.log }()" },
+			probe("the Live of F in G built again holds Root’s log") { "{ let root = \($0); return \(live(in: fAgain)).log === root.log }()" },
 			probe("the Z of G built again holds Root’s Log") { "{ let root = \($0); return \(gAgain).z.log === root.log.instance }()" },
 			probe("the Z of F in G built again holds Root’s Log") { "{ let root = \($0); return \(fAgain).z.log === root.log.instance }()" },
 		]
@@ -4355,13 +4590,65 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	/// The adopter’s shape with two places of `api`, where `F`’s mock binds `log` by value, `Z` receiving it: `A`’s, on `F`’s
 	/// level, which `F`’s copy reaches, and `A`’s beneath a level that instantiates a `log` of its own, `B`, or, where
 	/// `variation` says so, `B2`, built in `F`’s `SendableInstantiator`. `Live` fills both, reading the caller’s `log` in a
-	/// lazy wrapper at the first place and the level’s at the second.
-	private static func placesDisagreeModules(caller: CallingMockCaller, variation: PlacesDisagreeVariation) -> [ModuleFixture] {
+	/// lazy wrapper at the first place and the level’s at the second. Where `variation` says so, `F` builds no `Z`, so it
+	/// holds no copy of `log`, or `B` holds its place in `A2`, as an `ErasedInstantiator`.
+	private static func placesDisagreeModules(caller: CallingMockCallerKind, variation: PlacesDisagreeVariation) -> [ModuleFixture] {
 		let wrapper = variation.wrapper.name
-		let sendable = variation == .levelBesidePlace ? "" : ", Sendable"
+		let sendable = variation.levelIsBuiltInSendableFunction ? ", Sendable" : ""
 		let zLog = variation == .levelInSendableFunctionBesidePlaceReceivedOnlyIfAvailable ? "Log?" : "Log"
 		let zReceive = variation == .levelInSendableFunctionBesidePlaceReceivedOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received"
-		let level = variation == .levelBesidePlace ? (label: "b", type: "B", name: "B") : (label: "b2Builder", type: "SendableInstantiator<B2>", name: "B2")
+		let level = variation.levelIsBuiltInSendableFunction ? (label: "b2Builder", type: "SendableInstantiator<B2>", name: "B2") : (label: "b", type: "B", name: "B")
+		var fProperties = [(label: "a", type: "A"), (label: level.label, type: level.type)]
+		if variation != .levelBesidePlaceWithoutCopy {
+			fProperties.append((label: "z", type: "Z"))
+		}
+		let fParameters = fProperties.map { "\($0.label): \($0.type)" }.joined(separator: ", ")
+		let fAssignments = fProperties.map { "        self.\($0.label) = \($0.label)" }.joined(separator: "\n")
+		let fDeclarations = fProperties.map { "    @Instantiated public let \($0.label): \($0.type)" }.joined(separator: "\n")
+		var levelPlace = (label: "a", type: "A")
+		var erasedPlace = ""
+		if variation == .levelBesideErasedPlace {
+			levelPlace = (label: "a", type: "A2")
+			erasedPlace = """
+
+
+			@Instantiable
+			public final class A2: Instantiable {
+			    init(api: ErasedInstantiator<(), any Api>) {
+			        self.api = api
+			    }
+
+			    @Instantiated(fulfilledByType: "Api") public let api: ErasedInstantiator<(), any Api>
+			}
+			"""
+		}
+		var appFiles = ["AppTypes.swift": """
+		import Feat
+		import SafeDI
+
+		@Instantiable(fulfillingAdditionalTypes: [Api.self])
+		public final class Live: Api, Instantiable\(sendable) {
+		    public init(log: \(wrapper)<Log>) {
+		        self.log = log
+		    }
+
+		    @Received public let log: \(wrapper)<Log>
+		}
+
+		\(caller.attribute(listed: "@Instantiable(isRoot: true)"))
+		public final class Root: Instantiable {
+		    public init(log: \(wrapper)<Log>, f: F) {
+		        self.log = log
+		        self.f = f
+		    }
+
+		    @Instantiated public let log: \(wrapper)<Log>
+		    @Instantiated public let f: F
+		}
+		"""]
+		if caller == .listed {
+			appFiles["SafeDIConfiguration.swift"] = "import SafeDI\n\n#SafeDIConfiguration(additionalMocksToGenerate: [\"Root\"])\n"
+		}
 		return [
 			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": """
 			import SafeDI
@@ -4393,52 +4680,25 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 
 			@Instantiable
 			public final class \(level.name): Instantiable\(sendable) {
-			    init(log: \(wrapper)<Log>, a: A) {
+			    init(log: \(wrapper)<Log>, \(levelPlace.label): \(levelPlace.type)) {
 			        self.log = log
-			        self.a = a
+			        self.\(levelPlace.label) = \(levelPlace.label)
 			    }
 
 			    @Instantiated public let log: \(wrapper)<Log>
-			    @Instantiated public let a: A
-			}
+			    @Instantiated public let \(levelPlace.label): \(levelPlace.type)
+			}\(erasedPlace)
 
 			\(twinCalledTypes)
 			public final class F: Instantiable\(sendable) {
-			    public init(a: A, \(level.label): \(level.type), z: Z) {
-			        self.a = a
-			        self.\(level.label) = \(level.label)
-			        self.z = z
+			    public init(\(fParameters)) {
+			\(fAssignments)
 			    }
 
-			    @Instantiated public let a: A
-			    @Instantiated public let \(level.label): \(level.type)
-			    @Instantiated public let z: Z
+			\(fDeclarations)
 			}
 			"""]),
-			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": """
-			import Feat
-			import SafeDI
-
-			@Instantiable(fulfillingAdditionalTypes: [Api.self])
-			public final class Live: Api, Instantiable\(sendable) {
-			    public init(log: \(wrapper)<Log>) {
-			        self.log = log
-			    }
-
-			    @Received public let log: \(wrapper)<Log>
-			}
-
-			\(caller.attribute)
-			public final class Root: Instantiable {
-			    public init(log: \(wrapper)<Log>, f: F) {
-			        self.log = log
-			        self.f = f
-			    }
-
-			    @Instantiated public let log: \(wrapper)<Log>
-			    @Instantiated public let f: F
-			}
-			"""], dependencies: ["Feat"]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: appFiles, dependencies: ["Feat"]),
 		]
 	}
 
@@ -6833,19 +7093,27 @@ enum RootLevelReaderVariation: CustomTestStringConvertible, Sendable {
 }
 
 /// Where the level that instantiates a `log` of its own above the second place of `api` is (`placesDisagreeModules`): beside
-/// `A`, holding the `LazilyInstantiated` the fill reads, or built in a `SendableInstantiator`, holding a
+/// `A`, holding the `LazilyInstantiated` the fill reads, with `F` holding a by-value copy of `log` or none, or with the
+/// level holding its place as an `ErasedInstantiator`; or built in a `SendableInstantiator`, holding a
 /// `SendableLazilyInstantiated`, with `Z` receiving `log` outright or only if available.
 enum PlacesDisagreeVariation: CaseIterable, CustomTestStringConvertible, Sendable {
 	case levelBesidePlace
+	case levelBesidePlaceWithoutCopy
+	case levelBesideErasedPlace
 	case levelInSendableFunctionBesidePlace
 	case levelInSendableFunctionBesidePlaceReceivedOnlyIfAvailable
 
 	var wrapper: CallerLazyWrapper {
+		levelIsBuiltInSendableFunction ? .sendableLazilyInstantiated : .lazilyInstantiated
+	}
+
+	/// Whether `F` builds the level in a `SendableInstantiator`.
+	var levelIsBuiltInSendableFunction: Bool {
 		switch self {
-		case .levelBesidePlace:
-			.lazilyInstantiated
+		case .levelBesidePlace, .levelBesidePlaceWithoutCopy, .levelBesideErasedPlace:
+			false
 		case .levelInSendableFunctionBesidePlace, .levelInSendableFunctionBesidePlaceReceivedOnlyIfAvailable:
-			.sendableLazilyInstantiated
+			true
 		}
 	}
 
@@ -6853,6 +7121,10 @@ enum PlacesDisagreeVariation: CaseIterable, CustomTestStringConvertible, Sendabl
 		switch self {
 		case .levelBesidePlace:
 			"level beside the place"
+		case .levelBesidePlaceWithoutCopy:
+			"level beside the place, F holding no copy"
+		case .levelBesideErasedPlace:
+			"level beside the place, the level’s place erased"
 		case .levelInSendableFunctionBesidePlace:
 			"level in a @Sendable function beside the place"
 		case .levelInSendableFunctionBesidePlaceReceivedOnlyIfAvailable:
@@ -6862,10 +7134,28 @@ enum PlacesDisagreeVariation: CaseIterable, CustomTestStringConvertible, Sendabl
 }
 
 /// What builds the outer called type `G` again in `reenteredThroughAnotherCallsFillModules`: the fill of `F`’s place
-/// that reads the caller’s lazy value, or the fill of `F`’s second place, `other`.
+/// that reads the caller’s lazy value, or the fill of `F`’s second place, `other`, with the place below `F`’s root or on
+/// its root level; or the fill of `F`’s place where a third called type, `H`, is between `G` and `F`.
 enum ReenteredThroughAnotherCallsFillLayout: CaseIterable, CustomTestStringConvertible, Sendable {
 	case fillBuildsOuterCallAgain
 	case otherPlacesFillBuildsOuterCallAgain
+	case otherPlacesFillBuildsOuterCallAgainWithPlaceOnCalledTypesRootLevel
+	case thirdCallsFillBuildsCalledTypeAgain
+
+	/// Whether `F` holds `b: B`, whose place `other` `LiveOther` fills, building `G` again.
+	var otherPlacesFillBuildsOuterCallAgain: Bool {
+		switch self {
+		case .fillBuildsOuterCallAgain, .thirdCallsFillBuildsCalledTypeAgain:
+			false
+		case .otherPlacesFillBuildsOuterCallAgain, .otherPlacesFillBuildsOuterCallAgainWithPlaceOnCalledTypesRootLevel:
+			true
+		}
+	}
+
+	/// Whether `F` holds the place `api` on its root level, rather than in `A`.
+	var placeIsOnCalledTypesRootLevel: Bool {
+		self == .otherPlacesFillBuildsOuterCallAgainWithPlaceOnCalledTypesRootLevel
+	}
 
 	var testDescription: String {
 		switch self {
@@ -6873,6 +7163,10 @@ enum ReenteredThroughAnotherCallsFillLayout: CaseIterable, CustomTestStringConve
 			"the reading fill builds G again"
 		case .otherPlacesFillBuildsOuterCallAgain:
 			"another place’s fill builds G again"
+		case .otherPlacesFillBuildsOuterCallAgainWithPlaceOnCalledTypesRootLevel:
+			"another place’s fill builds G again, the place on F’s root level"
+		case .thirdCallsFillBuildsCalledTypeAgain:
+			"the reading fill builds G again, H between G and F"
 		}
 	}
 }
