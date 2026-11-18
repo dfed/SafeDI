@@ -1269,6 +1269,158 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		)
 	}
 
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: RedeclaredValueShape.all + RedeclaredValueShape.neighbours)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsReenteredFillsNearestDeclaration_whenFillBuildingCalledTypeAgainDeclaresValueAgain(shape: RedeclaredValueShape) async throws {
+		// `F` holds a copy of `Root`’s `log` through `Z`. `Live` fills `api`, below `F`’s root, and reads `log`. `Live2` fills
+		// `api2`, instantiates a `log` of its own and builds `F` again, which takes `Live2`’s `log` as its parameter: each
+		// `Live` holds the `log` nearest it, `Root`’s and then `Live2`’s, in production (`Root()`) and in the mock, as inline,
+		// since the level function of `api`’s level hands the fill the memo of the `F` it is part of
+		// (`ScopeGenerator.FillDispatcher`’s `structDeclaration`).
+		try await expectValuesEqualInline(
+			mock: Self.redeclaredValueModules(shape: shape),
+			inline: Self.redeclaredValueInlineModules(shape: shape),
+			caller: .internal,
+			handWrittenCall: "import Feat\n\nfunc callRoot() {\n    _ = Root()\n    _ = Root.mock()\n}\n",
+			probes: Self.redeclaredValueProbes(shape: shape),
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsReenteredFillsLevelTheMemoOfTheCalledTypeBuiltAgain_whenFillBuildingCalledTypeAgainDeclaresValueAgain() async throws {
+		// The primary shape of `generate_handsReenteredFillsNearestDeclaration_whenFillBuildingCalledTypeAgainDeclaresValueAgain`:
+		// built again by the fill, a copy by value, `Root` holding `log` by value. The member of `api`’s level hands
+		// `__safeDI_apiBuilder_F_A_Scope` the memo the struct of the `F` built there carries, `values.__safeDI_log`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.redeclaredValueModules(shape: RedeclaredValueShape(reentry: .direct, copyIsOptional: false, rootWrapper: nil)),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
+		#if canImport(Feat)
+		import Feat
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        let log = Log()
+		        func __safeDI_f() -> F {
+		            _ = F.__safeDI_F_FE93DFE55C7820EA.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_api2Builder_F_B_Scope_api2(_ scope: F.SafeDIScope_Api2.B_Scope.api2_Values) -> any Api2 {
+		                func __safeDI_api2() -> Live2 {
+		                    let log = Log()
+		                    func __safeDI_builder() -> F {
+		                        _ = F.__safeDI_F_FE93DFE55C7820EA.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                        return F(__safeDI_log: log, __safeDI_api2Builder: __safeDI_api2Builder_F(), __safeDI_apiBuilder: __safeDI_apiBuilder_F())
+		                    }
+		                    let builder = Instantiator<F>(__safeDI_builder)
+		                    return Live2(log: log, builder: builder)
+		                }
+		                let api2: any Api2 = __safeDI_api2()
+		                return api2
+		            }
+		            func __safeDI_api2Builder_F() -> F.SafeDIScope_Api2.__safeDI_Builder<any Api2> {
+		                .init(b: { _ in __safeDI_api2Builder_F_B_Scope() })
+		            }
+		            func __safeDI_api2Builder_F_B_Scope() -> F.SafeDIScope_Api2.B_Scope.__safeDI_Builder<any Api2> {
+		                .init(api2: { scope in __safeDI_api2Builder_F_B_Scope_api2(scope) })
+		            }
+		            func __safeDI_apiBuilder_F() -> F.SafeDIScope_Api.__safeDI_Builder<any Api> {
+		                .init(a: { values in __safeDI_apiBuilder_F_A_Scope(log: values.__safeDI_log) })
+		            }
+		            func __safeDI_apiBuilder_F_A_Scope(log: LazilyInstantiated<Log>) -> F.SafeDIScope_Api.A_Scope.__safeDI_Builder<any Api> {
+		                .init(api: { _ in
+		                    let api: any Api = Live(log: log.instance)
+		                    return api
+		                })
+		            }
+		            return F(__safeDI_log: log, __safeDI_api2Builder: __safeDI_api2Builder_F(), __safeDI_apiBuilder: __safeDI_apiBuilder_F())
+		        }
+		        let f: F = __safeDI_f()
+		        self.init(log: log, f: f)
+		    }
+		}
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            log: (() -> Log)? = nil,
+		            f: F.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                log: log,
+		                f: f
+		            )
+		        }
+
+		        var log: (() -> Log)? { __safeDI_storage.log }
+		        var f: F.SafeDIOverrides { __safeDI_storage.f }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                log: (() -> Log)?,
+		                f: F.SafeDIOverrides
+		            ) {
+		                self.log = log
+		                self.f = f
+		            }
+
+		            let log: (() -> Log)?
+		            let f: F.SafeDIOverrides
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let log = if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
+		        func __safeDI_f() -> F {
+		            func __safeDI_api2Builder_F_B_Scope_api2(_ scope: F.SafeDIMockScope_Api2.B_Scope.api2_Values) -> any Api2 {
+		                func __safeDI_api2() -> Live2 {
+		                    let log = Log()
+		                    func __safeDI_builder() -> F {
+		                        F.__safeDI_mock(api2Builder: __safeDI_api2Builder_F(), apiBuilder: __safeDI_apiBuilder_F(), log: log)
+		                    }
+		                    let builder = Instantiator<F>(__safeDI_builder)
+		                    return Live2(log: log, builder: builder)
+		                }
+		                let api2: any Api2 = __safeDI_api2()
+		                return api2
+		            }
+		            func __safeDI_api2Builder_F() -> F.SafeDIMockScope_Api2.__safeDI_Builder<any Api2> {
+		                .init(b: { _ in __safeDI_api2Builder_F_B_Scope() })
+		            }
+		            func __safeDI_api2Builder_F_B_Scope() -> F.SafeDIMockScope_Api2.B_Scope.__safeDI_Builder<any Api2> {
+		                .init(api2: { scope in __safeDI_api2Builder_F_B_Scope_api2(scope) })
+		            }
+		            func __safeDI_apiBuilder_F() -> F.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
+		                .init(a: { values in __safeDI_apiBuilder_F_A_Scope(log: values.log) })
+		            }
+		            func __safeDI_apiBuilder_F_A_Scope(log: Log) -> F.SafeDIMockScope_Api.A_Scope.__safeDI_Builder<any Api> {
+		                .init(api: { _ in
+		                    let api: any Api = Live(log: log)
+		                    return api
+		                })
+		            }
+		            _ = F.__safeDI_F_mock_89EF74B0E3940DBA.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return F.__safeDI_mock(api2Builder: __safeDI_api2Builder_F(), apiBuilder: __safeDI_apiBuilder_F(), log: log, safeDIOverrides: safeDIOverrides.f)
+		        }
+		        let f: F = __safeDI_f()
+		        return Root(log: log, f: f)
+		    }
+		}
+		#endif
+		""")
+	}
+
 	// MARK: Tests – a place passed up whole where a fill of a re-entered call reads the caller’s lazy value
 
 	@Test(arguments: CallingMockCallerKind.allCases, ReenteredFunctionReadShape.passedUp)
@@ -3634,6 +3786,309 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 				expression: "{ let root = Root.mock(); return \(holder).log === \(rootInstance) }()",
 				knownRightExpression: "{ let root = Root(); return \(holder).log === \(rootInstance) }()",
 			))
+		}
+		return probes
+	}
+
+	/// `F`, a seam and public mock in module `Feat` declared with `callee`, holds a copy of `log` through its child `Z`, which
+	/// receives it by value or only if available as `shape` says, and places `api`, beneath `A` (or beneath `A2`, beneath
+	/// `A`, where the place is two levels below the root), and `api2`, beneath `B`; and, where `shape` builds `F` again
+	/// through another call, `G`, a seam and public mock there too, whose place `gapi` is beneath `GA`. Where `shape` adds a
+	/// second label, `Session` too, which `Z` receives.
+	private static func redeclaredValueFeatureTypes(shape: RedeclaredValueShape, callee: String) -> String {
+		let zLog = shape.copyIsOptional ? "Log?" : "Log"
+		let zReceive = shape.copyIsOptional ? "@Received(onlyIfAvailable: true)" : "@Received"
+		var zParameters = ["log: \(zLog)"]
+		var zAssignments = ["self.log = log"]
+		var zDeclarations = ["\(zReceive) public let log: \(zLog)"]
+		var types = """
+		public protocol Api {}
+
+		public protocol Api2 {}
+
+		@Instantiable
+		public final class Log: Instantiable, Sendable {
+		    public init() {}
+		}
+		"""
+		if shape.neighbour == .secondLabel {
+			zParameters.append("session: Session")
+			zAssignments.append("self.session = session")
+			zDeclarations.append("@Received public let session: Session")
+			types += """
+
+
+			@Instantiable
+			public final class Session: Instantiable, Sendable {
+			    public init() {}
+			}
+			"""
+		}
+		types += """
+
+
+		@Instantiable
+		public final class Z: Instantiable {
+		    init(\(zParameters.joined(separator: ", "))) {
+		\(zAssignments.map { "        \($0)" }.joined(separator: "\n"))
+		    }
+
+		\(zDeclarations.map { "    \($0)" }.joined(separator: "\n"))
+		}
+		"""
+		if shape.neighbour == .placeTwoLevelsBelowRoot {
+			types += """
+
+
+			@Instantiable
+			public final class A2: Instantiable {
+			    init(api: any Api) {
+			        self.api = api
+			    }
+
+			    @Instantiated public let api: any Api
+			}
+
+			@Instantiable
+			public final class A: Instantiable {
+			    init(a2: A2) {
+			        self.a2 = a2
+			    }
+
+			    @Instantiated public let a2: A2
+			}
+			"""
+		} else {
+			types += """
+
+
+			@Instantiable
+			public final class A: Instantiable {
+			    init(api: any Api) {
+			        self.api = api
+			    }
+
+			    @Instantiated public let api: any Api
+			}
+			"""
+		}
+		types += """
+
+
+		@Instantiable
+		public final class B: Instantiable {
+		    init(api2: any Api2) {
+		        self.api2 = api2
+		    }
+
+		    @Instantiated public let api2: any Api2
+		}
+
+		\(callee)
+		public final class F: Instantiable {
+		    public init(a: A, b: B, z: Z) {
+		        self.a = a
+		        self.b = b
+		        self.z = z
+		    }
+
+		    @Instantiated public let a: A
+		    @Instantiated public let b: B
+		    @Instantiated public let z: Z
+		}
+		"""
+		if shape.reentry == .throughOtherCall {
+			types += """
+
+
+			public protocol GApi {}
+
+			@Instantiable
+			public final class GA: Instantiable {
+			    init(gapi: any GApi) {
+			        self.gapi = gapi
+			    }
+
+			    @Instantiated public let gapi: any GApi
+			}
+
+			\(callee)
+			public final class G: Instantiable {
+			    public init(ga: GA) {
+			        self.ga = ga
+			    }
+
+			    @Instantiated public let ga: GA
+			}
+			"""
+		}
+		return types
+	}
+
+	/// `Live`, which fills `api` and receives `log` by value or only if available (and `session`, where `shape` adds it);
+	/// `Live2`, which fills `api2`, instantiates a `log` of its own and builds `F` again, itself, through its child `Nav`, or
+	/// through `G`, whose place `LiveG` fills by building `F`; and `Root`, a root that generates its mock, which holds `log`
+	/// as `shape` says and `F`, or, where `shape` adds it, `Mid`, which instantiates a `log` of its own and `F`.
+	private static func redeclaredValueAppTypes(shape: RedeclaredValueShape) -> String {
+		let liveLog = shape.liveReadsLogOnlyIfAvailable ? "Log?" : "Log"
+		let liveReceive = shape.liveReadsLogOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received"
+		var liveParameters = ["log: \(liveLog)"]
+		var liveAssignments = ["self.log = log"]
+		var liveDeclarations = ["\(liveReceive) public let log: \(liveLog)"]
+		if shape.neighbour == .secondLabel {
+			liveParameters.append("session: Session")
+			liveAssignments.append("self.session = session")
+			liveDeclarations.append("@Received public let session: Session")
+		}
+		let builtAgain = shape.reentry == .throughOtherCall ? "G" : "F"
+		let live2Builder = shape.reentry == .throughChild ? ("nav", "Nav") : ("builder", "Instantiator<\(builtAgain)>")
+		var types = """
+		@Instantiable(fulfillingAdditionalTypes: [Api.self])
+		public final class Live: Api, Instantiable {
+		    public init(\(liveParameters.joined(separator: ", "))) {
+		\(liveAssignments.map { "        \($0)" }.joined(separator: "\n"))
+		    }
+
+		\(liveDeclarations.map { "    \($0)" }.joined(separator: "\n"))
+		}
+
+		@Instantiable(fulfillingAdditionalTypes: [Api2.self])
+		public final class Live2: Api2, Instantiable {
+		    public init(log: Log, \(live2Builder.0): \(live2Builder.1)) {
+		        self.log = log
+		        self.\(live2Builder.0) = \(live2Builder.0)
+		    }
+
+		    @Instantiated public let log: Log
+		    @Instantiated public let \(live2Builder.0): \(live2Builder.1)
+		}
+		"""
+		switch shape.reentry {
+		case .direct:
+			break
+		case .throughChild:
+			types += """
+
+
+			@Instantiable
+			public final class Nav: Instantiable {
+			    public init(builder: Instantiator<F>) {
+			        self.builder = builder
+			    }
+
+			    @Instantiated public let builder: Instantiator<F>
+			}
+			"""
+		case .throughOtherCall:
+			types += """
+
+
+			@Instantiable(fulfillingAdditionalTypes: [GApi.self])
+			public final class LiveG: GApi, Instantiable {
+			    public init(f: F) {
+			        self.f = f
+			    }
+
+			    @Instantiated public let f: F
+			}
+			"""
+		}
+		var rootProperties = [(label: "log", type: shape.rootLog)]
+		if shape.neighbour == .secondLabel {
+			rootProperties.append((label: "session", type: "Session"))
+		}
+		if shape.neighbour == .midDeclaresValueAgain {
+			rootProperties.append((label: "mid", type: "Mid"))
+			types += """
+
+
+			@Instantiable
+			public final class Mid: Instantiable {
+			    public init(log: Log, f: F) {
+			        self.log = log
+			        self.f = f
+			    }
+
+			    @Instantiated public let log: Log
+			    @Instantiated public let f: F
+			}
+			"""
+		} else {
+			rootProperties.append((label: "f", type: "F"))
+		}
+		types += """
+
+
+		@Instantiable(isRoot: true, generateMock: true)
+		public final class Root: Instantiable {
+		    public init(\(rootProperties.map { "\($0.label): \($0.type)" }.joined(separator: ", "))) {
+		\(rootProperties.map { "        self.\($0.label) = \($0.label)" }.joined(separator: "\n"))
+		    }
+
+		\(rootProperties.map { "    @Instantiated public let \($0.label): \($0.type)" }.joined(separator: "\n"))
+		}
+		"""
+		return types
+	}
+
+	/// `redeclaredValueAppTypes`’ and `redeclaredValueFeatureTypes`’ modules: `Feat`, and `App`, which depends on it.
+	private static func redeclaredValueModules(shape: RedeclaredValueShape) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": "import SafeDI\n\n" + redeclaredValueFeatureTypes(shape: shape, callee: twinCalledTypes)]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": "import Feat\nimport SafeDI\n\n" + redeclaredValueAppTypes(shape: shape)], dependencies: ["Feat"]),
+		]
+	}
+
+	/// `redeclaredValueModules`’ types in one module, `F` and `G` plain types: what inline builds.
+	private static func redeclaredValueInlineModules(shape: RedeclaredValueShape) -> [ModuleFixture] {
+		var types = "import SafeDI\n\n"
+		types += redeclaredValueFeatureTypes(shape: shape, callee: "@Instantiable")
+		types += "\n\n"
+		types += redeclaredValueAppTypes(shape: shape)
+		return [ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": types])]
+	}
+
+	/// What `Root()`, the production tree, and `Root.mock()` build, each against inline `Root()`, and whether each `Live`
+	/// holds the `log` nearest it: the first `Live` the one `Root` (or `Mid`) holds, the `Live` and the copy `Z` holds of the
+	/// `F` a `Live2` builds again that `Live2`’s own, two rounds deep where `shape` says so; where `shape` adds `session`,
+	/// whether the re-entered `Live` holds `Root`’s.
+	private static func redeclaredValueProbes(shape: RedeclaredValueShape) -> [DifferentialValueProbe] {
+		let placePath = shape.neighbour == .placeTwoLevelsBelowRoot ? "a.a2.api" : "a.api"
+		func builtAgain(by live2: String) -> String {
+			switch shape.reentry {
+			case .direct:
+				"\(live2).builder.instantiate()"
+			case .throughChild:
+				"\(live2).nav.builder.instantiate()"
+			case .throughOtherCall:
+				"(\(live2).builder.instantiate().ga.gapi as! LiveG).f"
+			}
+		}
+		let owner = shape.neighbour == .midDeclaresValueAgain ? "root.mid" : "root"
+		let nearestLog = shape.neighbour == .midDeclaresValueAgain || shape.rootWrapper == nil ? "\(owner).log" : "root.log.instance"
+		var checks = [
+			("the first Live holds the nearest log", "(\(owner).f.\(placePath) as! Live).log === \(nearestLog)"),
+			("the Live of F built again holds Live2’s log", "(again.\(placePath) as! Live).log === live2.log"),
+			("the Z of F built again holds Live2’s log", "again.z.log === live2.log"),
+		]
+		if shape.neighbour == .secondLabel {
+			checks.append(("the Live of F built again holds Root’s session", "(again.\(placePath) as! Live).session === root.session"))
+		}
+		if shape.neighbour == .thirdRound {
+			checks.append(("the Live of F built a third time holds the second Live2’s log", "{ let live2 = again.b.api2 as! Live2; let again = \(builtAgain(by: "live2")); return (again.\(placePath) as! Live).log === live2.log }()"))
+		}
+		var probes = [
+			DifferentialValueProbe(name: "Root()", expression: "Root()", knownRightExpression: "Root()"),
+			DifferentialValueProbe(name: "Root.mock()", expression: "Root.mock()", knownRightExpression: "Root()"),
+		]
+		for (call, path) in [("Root()", "production"), ("Root.mock()", "mock")] {
+			for (name, check) in checks {
+				probes.append(DifferentialValueProbe(
+					name: "\(path): \(name)",
+					expression: "{ let root = \(call); let live2 = \(owner).f.b.api2 as! Live2; let again = \(builtAgain(by: "live2")); return \(check) }()",
+					knownRightExpression: "{ let root = Root(); let live2 = \(owner).f.b.api2 as! Live2; let again = \(builtAgain(by: "live2")); return \(check) }()",
+				))
+			}
 		}
 		return probes
 	}
@@ -7572,6 +8027,97 @@ struct ReenteredFunctionReadShape: CustomTestStringConvertible, Sendable {
 		description += fillReadsLogOnlyIfAvailable ? ", read only if available" : ", not read"
 		description += liveReadsLogOnlyIfAvailable ? ", Live reads it only if available" : ""
 		description += ", caller holds \(rootLog)"
+		return description
+	}
+}
+
+/// A called type that holds a copy of the caller’s `log` through its child `Z`, by value or only if available, one of whose
+/// fills, `Live2`, instantiates a `log` of its own and builds the called type again, as `reentry` says, while another,
+/// `Live`, fills a place below the called type’s root and reads `log`: each `Live` must hold the `log` nearest it, `Live2`’s
+/// in the called type built again. `rootWrapper` says how `Root` holds its `log`, and `neighbour` adds one more variation.
+struct RedeclaredValueShape: CustomTestStringConvertible, Sendable {
+	init(reentry: ReenteredFunctionReadShape.Reentry, copyIsOptional: Bool, rootWrapper: CallerLazyWrapper?, neighbour: Neighbour = .none) {
+		self.reentry = reentry
+		self.copyIsOptional = copyIsOptional
+		self.rootWrapper = rootWrapper
+		self.neighbour = neighbour
+	}
+
+	/// Each way of building the called type again, each copy, and each way `Root` holds `log`.
+	static let all: [Self] = {
+		var shapes = [Self]()
+		for reentry in [ReenteredFunctionReadShape.Reentry.direct, .throughChild, .throughOtherCall] {
+			for copyIsOptional in [false, true] {
+				for rootWrapper in [nil, CallerLazyWrapper.lazilyInstantiated, .sendableLazilyInstantiated] {
+					shapes.append(Self(reentry: reentry, copyIsOptional: copyIsOptional, rootWrapper: rootWrapper))
+				}
+			}
+		}
+		return shapes
+	}()
+
+	/// The primary shape, built again by the fill, with a copy by value and `Root` holding `log` by value, with each
+	/// neighbour.
+	static let neighbours = [Neighbour.secondLabel, .placeTwoLevelsBelowRoot, .thirdRound, .midDeclaresValueAgain, .liveReadsCopyOnlyIfAvailable].map {
+		Self(reentry: .direct, copyIsOptional: false, rootWrapper: nil, neighbour: $0)
+	}
+
+	/// One more variation of the primary shape.
+	enum Neighbour: Sendable {
+		case none
+		/// `Root` also holds `session`, which `Z` and `Live` receive, and which no fill declares again.
+		case secondLabel
+		/// The place is beneath `A2`, beneath `A`, two levels below the called type’s root.
+		case placeTwoLevelsBelowRoot
+		/// The probes also build the called type a third time, from the `Live2` of the one built again.
+		case thirdRound
+		/// `Mid`, between `Root` and the called type, instantiates a `log` of its own.
+		case midDeclaresValueAgain
+		/// `Live` receives `log` only if available, where the copy is by value.
+		case liveReadsCopyOnlyIfAvailable
+	}
+
+	let reentry: ReenteredFunctionReadShape.Reentry
+	/// Whether `Z` receives `log` only if available, as `Log?`, as `Live` then does too.
+	let copyIsOptional: Bool
+	let rootWrapper: CallerLazyWrapper?
+	let neighbour: Neighbour
+
+	/// Whether `Live` receives `log` only if available, as `Log?`.
+	var liveReadsLogOnlyIfAvailable: Bool {
+		copyIsOptional || neighbour == .liveReadsCopyOnlyIfAvailable
+	}
+
+	/// The type of `Root`’s `log`.
+	var rootLog: String {
+		rootWrapper.map { "\($0.name)<Log>" } ?? "Log"
+	}
+
+	var testDescription: String {
+		var description = switch reentry {
+		case .direct:
+			"built again by the fill"
+		case .throughChild:
+			"built again through a child of the fill"
+		case .throughOtherCall:
+			"built again through another call’s fill"
+		}
+		description += copyIsOptional ? ", copy only if available" : ", copy by value"
+		description += ", Root holds \(rootLog)"
+		switch neighbour {
+		case .none:
+			break
+		case .secondLabel:
+			description += ", a second label"
+		case .placeTwoLevelsBelowRoot:
+			description += ", place two levels below the root"
+		case .thirdRound:
+			description += ", built a third time"
+		case .midDeclaresValueAgain:
+			description += ", Mid declares log again"
+		case .liveReadsCopyOnlyIfAvailable:
+			description += ", Live reads the copy only if available"
+		}
 		return description
 	}
 }
