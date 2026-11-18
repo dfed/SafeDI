@@ -30,6 +30,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///   - propertiesToDeclare: The properties the scope declares for the scopes it builds, which its children therefore
 	///     do not receive from its ancestors (see `Scope.propertiesToDeclare`). Empty for a scope that closes a property
 	///     cycle, which builds nothing.
+	///   - instantiatedDependenciesNotGenerated: The `@Instantiated` dependencies of the scope's type that a mock is passed
+	///     because no scope builds them (see `Scope.instantiatedDependenciesNotGenerated`). Empty for a scope that closes a
+	///     property cycle, which builds nothing.
 	///   - closedOnDeclaration: For a scope that closes a property cycle, the declaration it repeats (see
 	///     `closedOnDeclaration`).
 	///   - receivesPassedNil: The properties the type's dependencies receive only if available that a mock passes `nil`
@@ -44,6 +47,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		property: Property?,
 		propertiesToGenerate: [ScopeGenerator],
 		propertiesToDeclare: Set<Property>,
+		instantiatedDependenciesNotGenerated: [Dependency] = [],
 		unavailableOptionalProperties: Set<Property>,
 		receivesPassedNil: Set<Property> = [],
 		lazilyInstantiatedInstanceProperties: Set<Property>,
@@ -424,6 +428,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.referencedFillNamesByKey = referencedFillNamesByKey.filter { !ownFillKeys.contains($0.key) }
 		self.fillKeysReferencedFromSendableFunction = fillKeysReferencedFromSendableFunction.subtracting(ownFillKeys)
 		self.propertiesToDeclare = propertiesToDeclare
+		self.instantiatedDependenciesNotGenerated = instantiatedDependenciesNotGenerated
 		self.unavailableOptionalProperties = unavailableOptionalProperties
 		self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
 		fulfillingPropertyIsLazilyInstantiatedInstance = false
@@ -868,6 +873,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		description = property.asSource
 		propertiesToGenerate = []
 		propertiesToDeclare = []
+		instantiatedDependenciesNotGenerated = []
 		self.unavailableOptionalProperties = unavailableOptionalProperties
 		lazilyInstantiatedInstanceProperties = []
 		self.fulfillingPropertyIsLazilyInstantiatedInstance = fulfillingPropertyIsLazilyInstantiatedInstance
@@ -975,6 +981,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		description = holeProperty.asSource
 		propertiesToGenerate = []
 		propertiesToDeclare = []
+		instantiatedDependenciesNotGenerated = []
 		unavailableOptionalProperties = []
 		lazilyInstantiatedInstanceProperties = []
 		fulfillingPropertyIsLazilyInstantiatedInstance = false
@@ -3359,6 +3366,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				instanceProperty: dependency.lazilyInstantiatedInstanceProperty,
 			))
 		}
+		// A dependency the mock cannot build is the value `mock()` is passed for it, bound where this scope is built, which
+		// the scopes this scope builds read as they would read the property this scope generated, as production's does.
+		for dependency in instantiatedDependenciesNotGenerated {
+			scopeDeclarationsByLabel[dependency.property.label, default: []].append(visibleDeclaration(
+				of: dependency.property,
+				instanceProperty: dependency.lazilyInstantiatedInstanceProperty,
+			))
+		}
 		let orderedChildren = orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater)
 		// An `onlyIfAvailable` alias is declared even where it is bound to `nil`.
 		for child in orderedChildren {
@@ -3793,6 +3808,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Properties that this scope declares as a `let` constant, and those its type instantiates that a mock is
 	/// passed instead (see `Scope.propertiesToDeclare`).
 	let propertiesToDeclare: Set<Property>
+	/// The `@Instantiated` dependencies of this scope's type that a mock is passed because no scope builds them (see
+	/// `Scope.instantiatedDependenciesNotGenerated`), which the scopes this scope builds read as they would read the
+	/// property this scope generated.
+	private let instantiatedDependenciesNotGenerated: [Dependency]
 	/// For a scope that calls a seam, the builders the call passes, in builder-label order; empty otherwise.
 	private let holeCallArguments: [HoleCallArgument]
 	/// What this scope's seam call passes each builder, in the order the seam takes them.
