@@ -339,6 +339,41 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingForwarding_whenValueBoundOutsideSendableFunctionReceivesForwardedValue() async {
+		// `U` receives the `n` `Mid` forwards, so no type above `Feature` can build it: `K` takes it forwarded instead.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Live.swift"]):9:5: error: `Live` receives `u: U`, which `Mid` declares outside the `@Sendable` function that builds `k: SendableInstantiator<K>`, and SafeDI hands the builder for `K`’s `api: any Api` (`api` of `apiSendableBuilder`) only what that function binds. Declare `@Forwarded let u: U` on `K`, so that function binds it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Mid.swift"]):10:5: note: `Mid` declares `u: U` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.midModules(
+					k: ["@Instantiated public let api: any Api"],
+					mid: ["@Forwarded public let n: Int", "@Instantiated public let u: U", "@Instantiated public let k: SendableInstantiator<K>"],
+					live: ["@Received public let u: U"],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenTypeInsideSendableFunctionTakesValueForwardedAsTheErrorSays() async throws {
+		try await expectRemedyBuildsInlineValues(
+			Self.midModules(
+				k: ["@Forwarded public let u: U", "@Instantiated public let api: any Api"],
+				mid: ["@Forwarded public let n: Int", "@Instantiated public let u: U", "@Instantiated public let k: SendableInstantiator<K>"],
+				live: ["@Received public let u: U"],
+			),
+			probe: DifferentialValueProbe("{ () -> String in let mid = Root().feature.midBuilder.instantiate(7); return \"\\(mid.k.instantiate(mid.u).api)\" }()"),
+		)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

@@ -2359,13 +2359,6 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 					"outside the `@Sendable` function that builds `\(functionProperty.asSource)`, and SafeDI hands \(namedBuilders) only what that function binds."
 				}
 				let capitalizedFulfillRemedy = "\(fulfillRemedy(seamModule).prefix(1).uppercased())\(fulfillRemedy(seamModule).dropFirst())."
-				// Receiving on the seam a value that a place built inside a `@Sendable` function reads reaches the place only where the
-				// seam declares the value itself: a type of its tree, or a seam it calls, that declares it still binds it outside the
-				// function, and a seam it calls carries its own receive of it in the struct its fill binds, so the place would get the
-				// same error. Only the fulfilling type is offered there.
-				let receiveOnSeamRemedy = declaration.declaringType == hole.scopeSeamType
-					? "Instantiate `\(declaration.property.label)` outside \(seamName) and declare `@\(Dependency.Source.receivedRawValue) let \(declaration.property.asSource)` on \(seamName), so the \(buildersPossessive) caller reads its own, or \(fulfillRemedy(seamModule))."
-					: capitalizedFulfillRemedy
 				/// The remedy that forwards `property` into the `@Sendable` function that builds `functionProperty`, of `builtType`,
 				/// `again` where an enclosing type forwards it already. Only an instantiator is passed forwarded values, so a lazy
 				/// wrapper becomes an instantiator of the type as well.
@@ -2375,6 +2368,19 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 					return ScopeGenerator.isBuilder(functionProperty)
 						? "\(forward), so that function binds it, or \(fulfillRemedy(seamModule))."
 						: "\(forward), and `\(functionProperty.label)` as `\(instantiator.asSource)`, so that function binds it, or \(fulfillRemedy(seamModule))."
+				}
+				/// The remedy for the declaration, which the seam's tree instantiates outside the `@Sendable` function that builds
+				/// `functionProperty`, of `functionBuiltType`: where the seam declares it and the seam's caller can build it, the seam
+				/// receives it, which the function's caller then reads; otherwise the type the function builds takes it forwarded.
+				/// Receiving it on the seam reaches the place only where the seam declares the value itself: a type of its tree, or a
+				/// seam it calls, that declares it still binds it outside the function, and a seam it calls carries its own receive
+				/// of it in the struct its fill binds, so the place would get the same error.
+				func instantiatedOutsideFunctionRemedy(functionProperty: Property, functionBuiltType: TypeDescription?) -> String {
+					if declaration.isBuildableAboveSeam, declaration.declaringType == hole.scopeSeamType {
+						"Instantiate `\(declaration.property.label)` outside \(seamName) and declare `@\(Dependency.Source.receivedRawValue) let \(declaration.property.asSource)` on \(seamName), so the \(buildersPossessive) caller reads its own, or \(fulfillRemedy(seamModule))."
+					} else {
+						functionBuiltType.map { forwardingRemedy(of: declaration.property, into: functionProperty, building: $0, again: false) } ?? capitalizedFulfillRemedy
+					}
 				}
 				/// The message of a declaration `seam` binds on a path to calls that present the places the finding names, whose
 				/// builders it passes up: each place itself, or the place a fill fills, when the reader is beneath a place inside
@@ -2451,7 +2457,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 						"`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which `\(declaration.declaringType.asSource)` \(isForwarded ? "forwards" : "declares") \(outside(functionProperty)) "
 							+ (isForwarded
 								? functionBuiltType.map { forwardingRemedy(of: declaration.property, into: functionProperty, building: $0, again: true) } ?? capitalizedFulfillRemedy
-								: receiveOnSeamRemedy)
+								: instantiatedOutsideFunctionRemedy(functionProperty: functionProperty, functionBuiltType: functionBuiltType))
 					}
 				}
 				// A parameter of a builder function a cycle closes on is noted where the cycle declares the value it passes.
