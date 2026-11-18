@@ -7744,11 +7744,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			func isBesideForwardedProperty(_ property: Property) -> Bool {
 				lazilyInstantiatedPropertiesBesideForwardedProperties.contains(property.asUnwrappedProperty)
 			}
-			receivedParameterProperties = Set(
-				receivedProperties.lazy
-					.filter { !isFulfilledByForwardedProperty($0) || isBesideForwardedProperty($0) }
-					.map(\.asValidatedForDependencyCycles),
-			)
+			// A property received by value and the instance of a `LazilyInstantiated` received under its label are one
+			// parameter, which `==` reads as one where the two spell a protocol apart, with and without `any`, so the form the
+			// mock's order lists first, the one received by value, decides how the parameter is spelled, on every run.
+			var receivedParameterPropertiesInMockOrder = Set<Property>()
+			for receivedProperty in receivedProperties.sorted(by: { $0.precedesInMockOrder($1) })
+				where !isFulfilledByForwardedProperty(receivedProperty) || isBesideForwardedProperty(receivedProperty)
+			{
+				receivedParameterPropertiesInMockOrder.insert(receivedProperty.asValidatedForDependencyCycles)
+			}
+			receivedParameterProperties = receivedParameterPropertiesInMockOrder
 			// A dependency some receiver requires, as `LazilyInstantiated` or by value, is required.
 			onlyIfAvailableUnwrappedReceivedParameterProperties = Set(onlyIfAvailableUnwrappedReceivedProperties.map(\.asValidatedForDependencyCycles))
 				.subtracting(
