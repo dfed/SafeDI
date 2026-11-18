@@ -455,7 +455,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func drawnValueProbes_describeKnownRight_inFirstGraphOfEachProbedCell() async throws {
 		let seeds = GraphFuzzerCallingMockCell.firstSeeds.filter { GraphFuzzerCallingMockDraw(seed: $0).valueProbes != nil }
-		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293, 450, 451, 452, 453, 530, 531, 610, 611, 612, 613, 614, 615, 670, 671, 672, 673, 674, 675])
+		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293, 450, 451, 452, 453, 530, 531, 610, 611, 612, 613, 614, 615, 670, 671, 672, 673, 674, 675, 730, 731, 732, 733, 734, 735])
 		for seed in seeds {
 			var filesToDelete = [URL]()
 			defer {
@@ -1241,6 +1241,47 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.comparedValues == compileVerificationIsEnabled)
 	}
 
+	/// Seed 730 draws the first graph of `fillHoldsBuilderOfEnclosingCalledType/internal/plain`, the first of its block: an
+	/// internal calling mock whose fill of the enclosing called type's place builds a third module's type, whose public mock
+	/// holds a builder of the enclosing called type. The twin's call inside the fill re-enters the enclosing seam call's
+	/// root level function; the calling mock's level function passes the place up to a builder its `mock()` does not take,
+	/// so its module does not compile.
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_reentersEnclosingCallsRootLevel_whenDrawnFillHoldsBuilderOfEnclosingCalledType() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 730)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 730)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillHoldsBuilderOfEnclosingCalledType, caller: .internal, place: .plain))
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.passUps.map(\.label) == [])
+		#expect(result.comparedValues)
+		// A known issue until the change that fixes cross-call re-entry, the next lane: the level function of the call
+		// inside the fill passes the place up to a builder the mock does not declare. That change deletes this wrapper.
+		withKnownIssue("cross-call re-entry, fixed by the next lane") {
+			#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+		} matching: { issue in
+			issue.comments.contains { $0.rawValue.contains(Self.crossCallReentryCompilerError) }
+		}
+	}
+
+	/// The graphs of the shape whose fill holds a builder of the enclosing called type draw each builder, each caller kind
+	/// and each place in the pinned number of graphs. A `LazilyInstantiated` is drawn beside a deferred place only.
+	@Test
+	func fillHoldsBuilderOfEnclosingCalledTypeDraw_drawsEachBuilder_inPinnedNumberOfGraphs() {
+		let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .fillHoldsBuilderOfEnclosingCalledType }
+		var counts = [String: Int]()
+		for draw in draws {
+			counts["\(draw.enclosingBuilder?.rawValue ?? "none") \(draw.cell.place.rawValue)", default: 0] += 1
+			counts[draw.cell.caller.rawValue, default: 0] += 1
+		}
+		print("calling-mock builders of the enclosing called type \(counts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
+
+		#expect(counts == ["instantiator plain": 18, "instantiator deferred": 15, "sendableInstantiator plain": 12, "sendableInstantiator deferred": 5, "lazilyInstantiated deferred": 10, "internal": 20, "public": 20, "listed": 20])
+		#expect(GraphFuzzerCallingMockDraw(seed: 0).enclosingBuilder == nil)
+	}
+
 	/// The seam caller's graphs share a builder between the caller's own places and the fill's, a fill that instantiates
 	/// its places as plain values outside every `@Sendable` function, in the pinned number of its twenty graphs.
 	@Test
@@ -1331,7 +1372,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	@Test
 	func drawnCells_coverEveryCell_whenCorpusDrawsTenGraphsPerCell() {
-		#expect(GraphFuzzerCallingMockCell.all.count == 73)
+		#expect(GraphFuzzerCallingMockCell.all.count == 79)
 		#expect(GraphFuzzerCallingMockCell.drawnCells == GraphFuzzerCallingMockCell.all)
 		#expect(Self.callingMockCorpusSeedCount == GraphFuzzerCallingMockCell.drawnCells.count * 10)
 		#expect(GraphFuzzerCallingMockCell.firstSeeds.map(GraphFuzzerCallingMockCell.cell(ofSeed:)) == GraphFuzzerCallingMockCell.all)
@@ -1674,6 +1715,43 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		return seeds
 	}()
 
-	/// One entry per cell that fails, with the cell's seeds: none fails.
-	static let callingMockKnownIssues: [GraphFuzzerKnownIssue] = []
+	/// The end of what the compiler reports of a calling mock whose call inside a fill passes a place up to a builder the
+	/// mock does not declare (`cannot find 'apiServiceBuilder' in scope`), which the cross-call re-entry entries below and
+	/// `callingMock_reentersEnclosingCallsRootLevel_whenDrawnFillHoldsBuilderOfEnclosingCalledType` match.
+	static let crossCallReentryCompilerError = "Builder' in scope"
+
+	/// One entry per cell that fails, with the cell's seeds: the cells whose fill holds a builder of the enclosing called
+	/// type, whose compared seeds' mocks do not compile until cross-call re-entry is fixed, which deletes these entries.
+	static let callingMockKnownIssues: [GraphFuzzerKnownIssue] = [
+		GraphFuzzerKnownIssue(
+			reason: "cross-call re-entry: the internal caller's call inside the fill of a plain place passes the enclosing call's place up to a builder its mock does not declare",
+			signatures: [.callingMockDoesNotCompile(containing: crossCallReentryCompilerError)],
+			seeds: [730, 736, 754],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "cross-call re-entry: the internal caller's call inside the fill of a deferred place passes the enclosing call's place up to a builder its mock does not declare",
+			signatures: [.callingMockDoesNotCompile(containing: crossCallReentryCompilerError)],
+			seeds: [731, 743, 749],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "cross-call re-entry: the public caller's call inside the fill of a plain place passes the enclosing call's place up to a builder its mock does not declare",
+			signatures: [.callingMockDoesNotCompile(containing: crossCallReentryCompilerError)],
+			seeds: [732, 738, 762],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "cross-call re-entry: the public caller's call inside the fill of a deferred place passes the enclosing call's place up to a builder its mock does not declare",
+			signatures: [.callingMockDoesNotCompile(containing: crossCallReentryCompilerError)],
+			seeds: [733, 739, 745],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "cross-call re-entry: the listed caller's call inside the fill of a plain place passes the enclosing call's place up to a builder its mock does not declare",
+			signatures: [.callingMockDoesNotCompile(containing: crossCallReentryCompilerError)],
+			seeds: [734, 740, 752],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "cross-call re-entry: the listed caller's call inside the fill of a deferred place passes the enclosing call's place up to a builder its mock does not declare",
+			signatures: [.callingMockDoesNotCompile(containing: crossCallReentryCompilerError)],
+			seeds: [735, 741, 753],
+		),
+	]
 }
