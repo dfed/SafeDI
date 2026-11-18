@@ -321,6 +321,31 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: CallingMockCaller.allCases, CalledTypeDeclaration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsTwinsCycleStatingBothRemedies_whenCallingMocksFillReceivesBuilderItsCallerDeclares(caller: CallingMockCaller, calledTypes: CalledTypeDeclaration) async {
+		// `LiveRouter` fills `SignedIn`’s `router` and receives the `aBuilder` that `Root`, not `SignedIn`’s tree, declares:
+		// received only if available, the fill reads `Root`’s, as inline, so the error keeps both remedies.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: Self.callerDeclaredBuilderCycleDiagnostics) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.callerDeclaredBuilderCycleModules(caller: caller.attribute, callee: calledTypes.attribute), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: Self.callerDeclaredBuilderCycleDiagnostics) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.callerDeclaredBuilderCycleModules(caller: Self.twinCaller, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test(arguments: CalledTypeDeclaration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsTwinsCycleStatingBothRemedies_whenListedMocksFillReceivesBuilderItsCallerDeclares(calledTypes: CalledTypeDeclaration) async {
+		// `Root` has no `generateMock`: its module lists it in `additionalMocksToGenerate`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: Self.callerDeclaredBuilderCycleDiagnostics) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.callerDeclaredBuilderCycleModules(caller: "@Instantiable", callee: calledTypes.attribute, listsCaller: true), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: Self.callerDeclaredBuilderCycleDiagnostics) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.callerDeclaredBuilderCycleModules(caller: Self.twinCaller, callee: Self.twinCalledTypes), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+	}
+
 	// MARK: Tests – each error’s remedies work for the calling mock
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCaller.allCases)
@@ -370,6 +395,30 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			mock: Self.w4ConstantCycleRemediedModules(caller: caller.attribute, callee: Self.twinCalledTypes),
 			twin: Self.w4ConstantCycleRemediedModules(caller: Self.twinCaller, callee: Self.twinCalledTypes),
 			caller: caller,
+			handWrittenCall: "import Feature\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+		)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: CallingMockCaller.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_compilesCallingMockAndItsCall_whenFillReceivesBuilderItsCallerDeclaresOnlyIfAvailableAsCycleErrorSays(caller: CallingMockCaller) async throws {
+		// The second remedy of the dependency cycle where `Root` declares `aBuilder`: `LiveRouter` receives it only if available.
+		try await expectRemedyWorks(
+			mock: Self.callerDeclaredBuilderCycleModules(caller: caller.attribute, callee: Self.twinCalledTypes, receivesOnlyIfAvailable: true),
+			twin: Self.callerDeclaredBuilderCycleModules(caller: Self.twinCaller, callee: Self.twinCalledTypes, receivesOnlyIfAvailable: true),
+			caller: caller,
+			handWrittenCall: "import Feature\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
+		)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_compilesListedMockAndItsCall_whenFillReceivesBuilderItsCallerDeclaresOnlyIfAvailableAsCycleErrorSays() async throws {
+		// The same remedy where module `App` lists `Root` in `additionalMocksToGenerate`.
+		try await expectRemedyWorks(
+			mock: Self.callerDeclaredBuilderCycleModules(caller: "@Instantiable", callee: Self.twinCalledTypes, receivesOnlyIfAvailable: true, listsCaller: true),
+			twin: Self.callerDeclaredBuilderCycleModules(caller: Self.twinCaller, callee: Self.twinCalledTypes, receivesOnlyIfAvailable: true),
+			caller: .internal,
 			handWrittenCall: "import Feature\n\nfunc callMock() {\n    _ = Root.mock()\n}\n",
 		)
 	}
@@ -2252,6 +2301,78 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 				""",
 			], dependencies: ["Feature"]),
 		]
+	}
+
+	/// `Root` builds `aBuilder` and `SignedIn`, whose `router` place `LiveRouter` fills, receiving `aBuilder`, only if available
+	/// where `receivesOnlyIfAvailable`; `AScreen`, which `aBuilder` builds, receives `signedIn`. Where `listsCaller`, module
+	/// `App` lists `Root` in `additionalMocksToGenerate`.
+	private static func callerDeclaredBuilderCycleModules(caller: String, callee: String, receivesOnlyIfAvailable: Bool = false, listsCaller: Bool = false) -> [ModuleFixture] {
+		let receive = receivesOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received"
+		let receivedType = receivesOnlyIfAvailable ? "Instantiator<AScreen>?" : "Instantiator<AScreen>"
+		var appFiles = [
+			"AppTypes.swift": """
+			import SafeDI
+			import Feature
+
+			@Instantiable(fulfillingAdditionalTypes: [Router.self])
+			final class LiveRouter: Router, Instantiable {
+			    init(aBuilder: \(receivedType)) {
+			        self.aBuilder = aBuilder
+			    }
+
+			    \(receive) private let aBuilder: \(receivedType)
+			}
+
+			\(caller)
+			public final class Root: Instantiable {
+			    public init(aBuilder: Instantiator<AScreen>, signedIn: SignedIn) {
+			        self.aBuilder = aBuilder
+			        self.signedIn = signedIn
+			    }
+
+			    @Instantiated private let aBuilder: Instantiator<AScreen>
+			    @Instantiated private let signedIn: SignedIn
+			}
+			""",
+		]
+		if listsCaller {
+			appFiles["SafeDIConfiguration.swift"] = "import SafeDI\n\n#SafeDIConfiguration(additionalMocksToGenerate: [\"Root\"])\n"
+		}
+		return [
+			ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContentByFilePath: [
+				"FeatureTypes.swift": """
+				import SafeDI
+
+				public protocol Router {}
+
+				@Instantiable
+				public final class AScreen: Instantiable {
+				    public init(signedIn: SignedIn) {
+				        self.signedIn = signedIn
+				    }
+
+				    @Received private let signedIn: SignedIn
+				}
+
+				\(callee)
+				public final class SignedIn: Instantiable {
+				    public init(router: any Router) {
+				        self.router = router
+				    }
+
+				    @Instantiated private let router: any Router
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: appFiles, dependencies: ["Feature"]),
+		]
+	}
+
+	/// The cycle `callerDeclaredBuilderCycleModules` closes, which the calling mock and its twin report alike.
+	private static func callerDeclaredBuilderCycleDiagnostics(_ fixtures: [String: FixturePaths]) -> String {
+		"""
+		\(fixtures["App"]!["AppTypes.swift"]):10:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<AScreen>` -> @Received `signedIn: SignedIn` -> @Received `aBuilder: Instantiator<AScreen>`. `aBuilder: Instantiator<AScreen>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+		"""
 	}
 
 	/// A receive hidden inside a fill: `Root` builds `logger: Logger` and `Session`, which builds `logger: AuditLogger` and
