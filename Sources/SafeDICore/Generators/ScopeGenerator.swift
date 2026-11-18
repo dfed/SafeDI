@@ -7230,6 +7230,80 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 	}
 
+	/// How a mocked type spells each dependency it receives, directly or through an alias, which its mock declares wherever
+	/// it binds a form of that dependency it does not build itself: a promoted dependency
+	/// (`DependencyTreeGenerator.createMockRootScopeGenerator`), a flat `mock()` parameter, and an `onlyIfAvailable` override
+	/// or parameter (`mockRootParameters`). `==` reads `any P` and `P` as one type, so the properties a mock's tree receives
+	/// hold whichever spelling a walk met first, often a receiver's deep in the tree, and a protocol the mocked type spells
+	/// with `any` would lose it in its own mock, which warns in a module that enables the `ExistentialAny` upcoming feature.
+	///
+	/// A deliberate gap, commented where the closure types are built (`MockParameterNode.init`): the override closure of a
+	/// type the mock builds takes that type's initializer's parameters as they are declared.
+	struct MockedTypeSpellings {
+		init(of instantiable: Instantiable) {
+			for dependency in instantiable.dependencies {
+				let receivedProperty: Property
+				switch dependency.source {
+				case .received:
+					receivedProperty = dependency.property
+				case let .aliased(fulfillingProperty, _, _):
+					receivedProperty = fulfillingProperty
+				case .instantiated, .forwarded:
+					continue
+				}
+				// Of two declarations of one dependency, the first one the type declares decides.
+				let instanceProperty = Self.instanceProperty(of: receivedProperty)
+				if spelledInstanceProperties[instanceProperty] == nil {
+					spelledInstanceProperties[instanceProperty] = instanceProperty
+				}
+			}
+		}
+
+		/// `property` with the mocked type's spelling of the dependency it is a form of: its optional, its unwrapped form,
+		/// and a `LazilyInstantiated` or `SendableLazilyInstantiated` of its instance are each a form of one dependency,
+		/// which the mock binds once. `property` itself when the mocked type receives no form of it.
+		func spelling(of property: Property) -> Property {
+			guard !spelledInstanceProperties.isEmpty,
+			      let spelledInstanceProperty = spelledInstanceProperties[Self.instanceProperty(of: property)]
+			else { return property }
+			return Property(label: property.label, typeDescription: Self.typeDescription(property.typeDescription, spellingInstanceAs: spelledInstanceProperty.typeDescription))
+		}
+
+		/// `properties`, each spelled as `spelling(of:)` spells it.
+		func spellings(of properties: Set<Property>) -> Set<Property> {
+			if spelledInstanceProperties.isEmpty {
+				properties
+			} else {
+				Set(properties.lazy.map(spelling(of:)))
+			}
+		}
+
+		/// The mocked type's own spelling of the instance of each dependency it receives (`instanceProperty(of:)`), keyed by
+		/// that instance.
+		private var spelledInstanceProperties = [Property: Property]()
+
+		/// The instance of the dependency `property` is a form of: `property` unwrapped, and the instance of a lazily
+		/// instantiated property that creates a non-optional one.
+		private static func instanceProperty(of property: Property) -> Property {
+			let unwrappedProperty = property.asUnwrappedProperty
+			return unwrappedProperty.asLazilyInstantiatedInstanceProperty ?? unwrappedProperty
+		}
+
+		/// `typeDescription` with the instance `instanceProperty(of:)` reads spelled `instanceType`.
+		private static func typeDescription(_ typeDescription: TypeDescription, spellingInstanceAs instanceType: TypeDescription) -> TypeDescription {
+			if case let .optional(wrappedType) = typeDescription {
+				.optional(Self.typeDescription(wrappedType, spellingInstanceAs: instanceType))
+			} else if case let .simple(name, generics) = typeDescription,
+			          let lazilyInstantiatedInstanceType = typeDescription.lazilyInstantiatedInstanceType,
+			          !lazilyInstantiatedInstanceType.isOptional
+			{
+				.simple(name: name, generics: [instanceType] + generics.dropFirst())
+			} else {
+				instanceType
+			}
+		}
+	}
+
 	/// The parameters this scope's `mock()` takes as a mock root. See `MockRootParameters`.
 	/// - Parameter mockDefaults: The hand-written mock a flat parameter of each type defaults to.
 	func mockRootParameters(instantiable: Instantiable, mockDefaults: [TypeDescription: FlatParameterMockDefault]) async -> MockRootParameters {
@@ -7243,7 +7317,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			passedByPublicMockCalls: passedByPublicMockCalls,
 			mockedType: instantiable,
 		)
-		let receivedProperties = receivedProperties.subtracting(receivedOnlyByPublicMockCallsLeftOut)
+		// Each in the mocked type's own spelling where it receives the dependency, which the flat parameters and the
+		// `onlyIfAvailable` overrides and parameters declare. A deliberate gap, as in
+		// `DependencyTreeGenerator.createMockRootScopeGenerator`: where two receivers in the tree spell a dependency the mocked
+		// type does not receive apart, the mocked type declares no spelling to prefer, and the mock takes one of theirs.
+		let receivedProperties = MockedTypeSpellings(of: instantiable).spellings(of: receivedProperties.subtracting(receivedOnlyByPublicMockCallsLeftOut))
 		let onlyIfAvailableUnwrappedReceivedProperties = receivedOnlyByPublicMockCalls.isEmpty
 			? onlyIfAvailableUnwrappedReceivedProperties
 			: onlyIfAvailableUnwrappedReceivedProperties.filter { property in
@@ -8790,6 +8868,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// a function spelled as a name, such as an erased instantiator's `Builder`, is handed `@escaping` where the called
 			// mock takes it so (`PublicMockCall.typesDeclaredEscaping`).
 			let builderTypesDeclaredEscaping = publicMockCall?.typesDeclaredEscaping ?? []
+			// A deliberate gap beside `MockedTypeSpellings`, which spells what the mock root binds as the mocked type does:
+			// the closure takes each argument as the initializer declares it, so a protocol the type spells without `any`,
+			// which the mocked type spells with it, warns here in a module that enables the `ExistentialAny` upcoming
+			// feature. The argument reads whichever declaration of its label is nearest above the node, which a type between
+			// the node and the mock root can declare in a spelling of its own, and which the node is not told.
 			builderParameterTypes = callSiteArguments.map { argument in
 				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription).asFunctionParameter(amongTypesDeclaredEscaping: builderTypesDeclaredEscaping).implicitlyUnwrappedOptionalSpelledAsOptional
 			}
