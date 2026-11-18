@@ -7104,9 +7104,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 		// A caller's own value the fill reads from its mock root's binding is bound under its label from the name the root binds
 		// it under, where that is not the label.
-		var body = fillCallerReads.mockRootBindingByLabel.keys.sorted().compactMap { label in
-			fillCallerReads.mockRootBindingByLabel[label].flatMap { fillPlaceBindings.rootBindingNames[label]?[$0.typeDescription] }.map { "\(indent)let \(label) = \($0)" }
-		}
+		var body = fillCallerReads.mockRootRebindings(rootBindingNames: fillPlaceBindings.rootBindingNames).map { "\(indent)let \($0.label) = \($0.rootBindingName)" }
 		body += childCode.joined(separator: "\n").split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 		guard !fillReturnsWrapperBuilder else {
 			// A level function's member hands the fill of an instantiator's place each field it reads, and the fill returns the
