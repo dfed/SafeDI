@@ -90,10 +90,10 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func mockFindings_reportNothing_whenPublicMockCorpusGraphHasHole() async throws {
-		// Public mock corpus seed 2: a mock with a hole takes its builder struct only in `__safeDI_mock`, which only
+		// Public mock corpus seed 3: a mock with a hole takes its builder struct only in `__safeDI_mock`, which only
 		// generated code calls, and its `mock()` takes closures that name no type SafeDI generates.
-		guard case let .accepted(generatedFiles, _) = try await GraphFuzzerOracle.toolOutcome(of: GraphFuzzerGenerator.fixture(forSeed: 2, features: [.generateMockPublic])) else {
-			Issue.record("Public mock corpus seed 2 is no longer accepted")
+		guard case let .accepted(generatedFiles, _) = try await GraphFuzzerOracle.toolOutcome(of: GraphFuzzerGenerator.fixture(forSeed: 3, features: [.generateMockPublic])) else {
+			Issue.record("Public mock corpus seed 3 is no longer accepted")
 			return
 		}
 		#expect(generatedFiles.values.contains { $0.contains("static func __safeDI_mock(") && $0.contains(".__safeDI_Builder<") })
@@ -850,7 +850,7 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 		(.placeBehindLazilyInstantiated, .generateMockPublic, 3),
 		(.instantiatorPlaceMovedToPlainPlace, .generateMockPublic, 18),
 		(.instantiatorChangedToErasedInstantiator, .generateMockPublic, 18),
-		(.placeOfNewBuilderOfExistingFillingType, .generateMockPublic, 2),
+		(.placeOfNewBuilderOfExistingFillingType, .generateMockPublic, 19),
 		(.placeForwardingOtherValuesRemedied, .generateMockPublic, 3),
 	])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
