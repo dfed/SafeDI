@@ -2325,11 +2325,12 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			/// parameter of the seam is bound before every site, and the seam's caller, which fills the builder, holds it.
 			/// Otherwise, where the declaration's type builds it after the property that leads to the place, the reader's module
 			/// can build both in one type of its own, which fills one hole in their place, so the reader is in the tree that
-			/// builds the instantiator. Otherwise none moves the instantiator.
+			/// builds the instantiator, unless a place of that tree is one a module whose fill the reader's does not see fills.
+			/// Otherwise none moves the instantiator.
 			func receiveInstantiatorRemedies(_ declaration: SeamSignature.Hole.UncarriedDeclaration, reader: Reader) -> [String] {
 				if declaration.isBuildableAboveSeam {
 					["instantiate `\(declaration.property.label)` on a type above \(seamName), and receive it on `\(declaration.declaringType.asSource)` in place of its @\(Dependency.Source.instantiatedRawValue) declaration, so that the caller’s tree builds it"]
-				} else if let builtAfter = declaration.builtAfter {
+				} else if let builtAfter = declaration.builtAfter, !declaration.holdsPlaceFilledElsewhere {
 					["declare `\(declaration.property.label)` and `\(builtAfter.label)` on one type of \(module(reader.fillingModule)) instead, and have `\(declaration.declaringType.asSource)` instantiate a protocol that type fulfills in their place, so that type’s tree builds both"]
 				} else {
 					[]
@@ -2753,14 +2754,16 @@ extension SeamSignature.Hole.UncarriedDeclaration {
 
 	/// This declaration, with `isBuildableAboveSeam` kept only where the fill of each place its tree holds, among
 	/// `fillsOfCall`, the fills of the seam call whose fill reads it, receives only labels a type above the seam would hold
-	/// for that tree (`labelsHeldAboveSeam`). A place none of them fills is one this module does not build, nor would a type
-	/// above the seam.
+	/// for that tree (`labelsHeldAboveSeam`). A place none of them fills is filled by a module whose fill this one does not
+	/// see, which can read what that module binds, so neither a type above the seam nor one of this module could build the
+	/// tree for certain: no remedy moves the declaration (`holdsPlaceFilledElsewhere`).
 	func resolvingBuildabilityAboveSeam(fillsOfCall: [ScopeGenerator]) -> SeamSignature.Hole.UncarriedDeclaration {
 		guard isBuildableAboveSeam, !placesInTree.isEmpty else { return self }
 		var declaration = self
-		declaration.isBuildableAboveSeam = placesInTree.allSatisfy { site in
-			let fulfillingScope = fillsOfCall.first { $0.fillHole?.site == site }?.children.first
-			return fulfillingScope?.receivedProperties.allSatisfy { labelsHeldAboveSeam.contains($0.label) } ?? false
+		let fulfillingScopes = placesInTree.map { site in fillsOfCall.first { $0.fillHole?.site == site }?.children.first }
+		declaration.holdsPlaceFilledElsewhere = fulfillingScopes.contains { $0 == nil }
+		declaration.isBuildableAboveSeam = fulfillingScopes.allSatisfy { fulfillingScope in
+			fulfillingScope?.receivedProperties.allSatisfy { labelsHeldAboveSeam.contains($0.label) } ?? false
 		}
 		return declaration
 	}

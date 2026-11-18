@@ -447,6 +447,9 @@ public struct SeamSignature: Sendable {
 			var labelsHeldAboveSeam = Set<String>()
 			/// Where `isBuildableAboveSeam`, the sites of the places the declaration's tree holds or passes up.
 			var placesInTree = [Site]()
+			/// Whether a module whose fill the reading module does not see fills one of `placesInTree`
+			/// (`resolvingBuildabilityAboveSeam(fillsOfCall:)`), so that no remedy moves the declaration.
+			var holdsPlaceFilledElsewhere = false
 		}
 
 		/// A declaration a cycle in the seam's tree hands the site's owner when it builds it again: the site lies in the body

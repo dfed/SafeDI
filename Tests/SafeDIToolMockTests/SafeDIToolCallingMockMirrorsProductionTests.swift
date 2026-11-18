@@ -482,7 +482,8 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		// Step 2: `App`’s `LivePair` instantiates `feedBuilder` and `settings`, and `SignedIn` instantiates it in their place,
 		// as W4’s error says. `Feed` and its initializer are `internal`, which the code built in `App` cannot reach; each
 		// error’s fix-it makes them `public`. This step asserts the twin’s errors only: the calling mock, which cannot build
-		// `Feed` either, is accepted here, a divergence from its twin that this change leaves to the calling-mock rules.
+		// `Feed` either, passes the place up and is accepted here, a deliberate gap from its twin that the calling-mock mirror
+		// work in 2.3.1 closes (`seam-and-mock-contract.md`, rule 7).
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["Feature"]!["FeatureTypes.swift"]):16:1: error: `Feed` is `internal`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Feed` `public` to fix.

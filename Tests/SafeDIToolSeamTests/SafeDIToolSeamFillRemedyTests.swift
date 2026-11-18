@@ -277,6 +277,42 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingOnlyToFulfillTheHole_whenFillReceivesHoleBuiltAfterItThatAnotherModuleFills() async {
+		// `Middle`'s `Outer` fills `settingsBuilder` with `DefaultSettings`, which receives the `token` `Outer` instantiates,
+		// and passes `detailBuilder` up to `App`, whose `DefaultDetail` receives `settingsBuilder`. `App` sees no fill of
+		// `settingsBuilder`, so it cannot tell that a type above `Screen`, or one type of `App` that declares both
+		// instantiators, could build it: declaring both on such a type leads to an error about `token`, whose remedies `Feature`
+		// and `Middle` cannot apply, since neither can name the other's types.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultDetail.swift"]):10:5: error: `DefaultDetail` receives `settingsBuilder: ErasedInstantiator<(), any Settings>`, which `Screen`’s tree builds only after it calls the builder for `Screen`’s `detailBuilder: ErasedInstantiator<(), any Detail>` (`detailBuilder` of `defaultDetail_DetailBuilder`), so SafeDI does not hand it to that builder. Declare an @Instantiable type that fulfills `DefaultDetail` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Screen.swift"]):9:5: note: `Screen` declares `settingsBuilder: ErasedInstantiator<(), any Settings>` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+						"public protocol Detail {}\npublic protocol Settings {}",
+						seamFixtureType(named: "Screen", isSeam: true, declarations: [Self.detailBuilder, Self.settingsBuilder]),
+					]),
+					ModuleFixture(name: "Middle", packageName: "Mid", swiftFileContent: [
+						seamFixtureType(named: "Token", isFinalClass: true, declarations: []),
+						Self.defaultSettings(declarations: ["@Received public let token: Token"]),
+						seamFixtureType(named: "Outer", isSeam: true, declarations: ["@Instantiated public let token: Token", "@Instantiated public let screen: Screen"]),
+					].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+						Self.defaultDetail(declarations: [Self.receivedSettingsBuilder]),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let outer: Outer"]),
+					].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: A value declared on a cycle
 
 	@Test
@@ -485,6 +521,69 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 				live: ["@Received public let u: U"],
 			),
 			probe: DifferentialValueProbe("{ () -> String in let mid = Root().feature.midBuilder.instantiate(7); return \"\\(mid.k.instantiate(mid.u).api)\" }()"),
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenTypeInsideSendableFunctionTakesValueATypeOfTheSeamsTreeDeclaresForwardedAsTheErrorSays() async throws {
+		// The remedy of `SafeDIToolSeamSendableScopeByTypeTests`' error where `DefaultWidget` requires the `part` that `Shell`,
+		// a type of `Host`'s tree, instantiates outside the `@Sendable` function that builds `Panel`: receiving `part` on
+		// `Host` would leave `Shell`'s declaration nearer, so `Panel` takes it forwarded instead.
+		try await expectRemedyBuildsInlineValues(
+			SafeDIToolSeamBuilderParameterTests.modules(
+				feature: [
+					"public protocol Widget {}",
+					seamFixtureType(named: "Part", isFinalClass: true, declarations: []),
+					seamFixtureType(named: "Panel", declarations: ["@Forwarded public let name: String", "@Forwarded public let part: Part", "@Instantiated public let widget: any Widget"]),
+					seamFixtureType(named: "Shell", declarations: ["@Instantiated public let part: Part", "@Instantiated public let panelBuilder: SendableInstantiator<Panel>"]),
+					seamFixtureType(named: "Host", isSeam: true, declarations: ["@Instantiated public let shell: Shell"]),
+				],
+				app: [
+					SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultWidget", fulfilling: "Widget", declarations: ["@Received public let part: Part"]),
+					seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let host: Host"]),
+				],
+			),
+			probe: DifferentialValueProbe(
+				name: "the part DefaultWidget reads",
+				expression: #"{ () -> [Bool] in let shell = Root().host.shell; return [(shell.panelBuilder.instantiate((name: "n", part: shell.part)).widget as? DefaultWidget)?.part === shell.part] }()"#,
+			),
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenTypeASendableInstantiatorBuildsAgainTakesValueForwardedAsTheErrorSays() async throws {
+		// The remedy of `SafeDIToolSeamSendableScopeByTypeTests`' error for the tangle where the `T` that `C` builds again
+		// reads `C`'s `mark`, which `C` declares outside the `@Sendable` function that builds that `T`: `T` takes `mark`
+		// forwarded, so each call of the function hands it its own.
+		try await expectRemedyBuildsInlineValues(
+			SafeDIToolSeamBuilderParameterTests.modules(
+				feature: [
+					"public protocol Api {}",
+					seamFixtureType(named: "Mark", isFinalClass: true, declarations: []),
+					seamFixtureType(named: "MarkReader", declarations: ["@Received(onlyIfAvailable: true) public let mark: Mark?"]),
+					seamFixtureType(named: "T", declarations: ["@Forwarded public let mark: Mark", "@Instantiated public let reader: MarkReader", "@Instantiated public let cBuilder: Instantiator<C>", "@Instantiated public let api: any Api"]),
+					seamFixtureType(named: "C", declarations: ["@Instantiated public let mark: Mark", "@Instantiated public let tBuilder: SendableInstantiator<T>"]),
+					seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let tBuilder: SendableInstantiator<T>", "@Instantiated public let cBuilder: Instantiator<C>"]),
+				],
+				app: [
+					SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let mark: Mark?"]),
+					seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let hub: Hub"]),
+				],
+			),
+			probe: DifferentialValueProbe(
+				name: "the mark LiveApi reads at each level",
+				expression: """
+				{ () -> [Bool] in
+				    let mark = Mark()
+				    let t = Root().hub.tBuilder.instantiate(mark)
+				    let c = t.cBuilder.instantiate()
+				    let tAgain = c.tBuilder.instantiate(c.mark)
+				    return [(t.api as? LiveApi)?.mark === mark, (tAgain.api as? LiveApi)?.mark === c.mark]
+				}()
+				""",
+			),
 		)
 	}
 
