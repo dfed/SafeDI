@@ -450,12 +450,13 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	/// The known-right half of every drawn probe, compiled and run alone against the first graph of each probed cell, so a
 	/// probe that names no declaration of its known-right path fails here by name rather than as a harness error of the cell
-	/// test: the twin's for the cells whose twin is accepted, and the same types built inline for the seam built again.
+	/// test: the twin's for the cells whose twin is accepted, and the same types built inline for the seam built again and
+	/// the cells whose graphs compare values with inline (`comparesValuesWithInline`).
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func drawnValueProbes_describeKnownRight_inFirstGraphOfEachProbedCell() async throws {
 		let seeds = GraphFuzzerCallingMockCell.firstSeeds.filter { GraphFuzzerCallingMockDraw(seed: $0).valueProbes != nil }
-		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293, 450, 451, 452, 453, 530, 531])
+		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293, 450, 451, 452, 453, 530, 531, 610, 611, 612, 613, 614, 615])
 		for seed in seeds {
 			var filesToDelete = [URL]()
 			defer {
@@ -465,7 +466,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			}
 			let draw = GraphFuzzerCallingMockDraw(seed: seed)
 			let graph = draw.graph
-			let knownRightModules = draw.cell.shape.twinRejects ? graph.inlineModules : graph.modules(.twin)
+			let knownRightModules = draw.cell.shape.twinRejects || graph.comparesValuesWithInline ? graph.inlineModules : graph.modules(.twin)
 			let output = try await executeSafeDIToolMultiModuleTest(modules: knownRightModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 			let knownRightPath = try DifferentialValuePath(output: output, modules: knownRightModules)
 			let knownRightProbes = try #require(graph.valueProbes).map { DifferentialValueProbe(name: $0.name, expression: $0.knownRightExpression ?? $0.expression) }
@@ -601,6 +602,45 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			"probe `App.Host` at <1> Host > service > xBuilder > instantiate() > serviceBuilder > instantiate() again > xBuilder > instantiate() > serviceBuilder > instantiate() > gadget > logger:\n  feature:     logger: <41> Logger\n  known right: logger: <31> Logger (seen, first at <1> Host > service > xBuilder > instantiate() > serviceBuilder > instantiate() again > xBuilder > instantiate() > logger)",
 			"probe `App.Host` at <1> Host > service > xBuilder > instantiate() again > serviceBuilder > instantiate() > gadget > logger:\n  feature:     logger: <48> Logger\n  known right: logger: <37> Logger (seen, first at <1> Host > service > xBuilder > instantiate() again > logger)",
 			"probe `App.Host` at <1> Host > service > xBuilder > instantiate() again > serviceBuilder > instantiate() > xBuilder > instantiate() > serviceBuilder > instantiate() > gadget > logger:\n  feature:     logger: <55> Logger\n  known right: logger: <43> Logger (seen, first at <1> Host > service > xBuilder > instantiate() again > serviceBuilder > instantiate() > xBuilder > instantiate() > logger)",
+		])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func check_reportsOtherValuesThanInline_whenGraphComparesAcceptedTwinsMockWithInline() async throws {
+		// The twin is accepted, and the graph compares its mock with the same types built inline, whose fill receives the
+		// caller's `Database` where the mock's builds one of its own.
+		let mockGraph = Self.innerSeamGraph(named: "the mock's fill", tests: Self.fillReadingNothing.replacingOccurrences(
+			of: "    init() {}\n}",
+			with: "    init(database: Database) { self.database = database }\n    @Instantiated let database: Database\n}",
+		), expectedTwinErrorSite: nil)
+		let twinGraph = Self.innerSeamGraph(named: "the twin's fill", tests: Self.fillReadingNothing.replacingOccurrences(
+			of: "    init() {}\n}",
+			with: "    init(database: Database) { self.database = database }\n    @Received let database: Database\n}",
+		), expectedTwinErrorSite: nil)
+		let graph = GraphFuzzerCallingMockGraph(
+			name: "a mock whose fill builds what inline's receives",
+			mockFiles: mockGraph.mockFiles,
+			twinFiles: twinGraph.twinFiles,
+			callerTypeName: "Host",
+			callerIsPublic: false,
+			flatParameterLabels: [],
+			implementationIsVisible: true,
+			expectedTwinInitializerLabels: [],
+			expectedPassUpLabels: [],
+			expectedTwinErrorSite: nil,
+			valueProbes: [Self.hostProbe],
+			comparesValuesWithInline: true,
+		)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
+
+		#expect(result.twinHasIntendedOutcome)
+		#expect(result.twinSites == nil)
+		#expect(result.comparedValues)
+		#expect(result.failure?.kind == .callingMockBuildsOtherValuesThanInline)
+		#expect(result.failure?.valueDifferences == [
+			"probe `Host` at <1> Host > inner > api > database:\n  feature:     database: <5> Database\n  known right: database: <2> Database (seen, first at <1> Host > database)",
 		])
 	}
 
@@ -1059,7 +1099,10 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			case (nil, nil):
 				break
 			case let (nil, knownIssue?):
-				Issue.record("Stale known issue: calling-mock seed \(seed) (\(draw.cell)) passes, so remove it from the entry “\(knownIssue.reason)”")
+				// A mock that does not compile shows only where the run compiles it.
+				if compileVerificationIsEnabled || !knownIssue.signatures.allSatisfy({ $0 == .callingMockDoesNotCompile }) {
+					Issue.record("Stale known issue: calling-mock seed \(seed) (\(draw.cell)) passes, so remove it from the entry “\(knownIssue.reason)”")
+				}
 			case let (failure?, nil):
 				Issue.record("Calling-mock seed \(seed) (\(draw.cell)): \(failure.kind.rawValue). \(failure.details)\n\(Self.description(of: draw.graph))")
 			case let (failure?, knownIssue?):
@@ -1186,6 +1229,77 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(GraphFuzzerCallingMockDraw(seed: 0).mockBuild == .compilesGeneratedMocks)
 	}
 
+	/// Seed 610 draws the first graph of `fillReceivesCallersLazyValueBelowCalledRoot/internal/plain`, the first of its
+	/// block: an internal calling mock whose call's place is a level below the called type's root, filled by a type that
+	/// receives the caller's lazily held value, which the called type's tree also receives by value. Its twin fills the
+	/// place, handing the fill the caller's own wrapper, as the same types built inline do, so the mock must build their
+	/// values. Its mock names a builder it does not take and does not compile, which `callingMockKnownIssues` lists until
+	/// the fix, which removes the entry.
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_buildsInlineValues_whenDrawnFillReceivesCallersLazyValueBelowCalledRoot() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 610)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 610)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillReceivesCallersLazyValueBelowCalledRoot, caller: .internal, place: .plain))
+		#expect(draw.graph.comparesValuesWithInline)
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.passUps.isEmpty)
+		#expect(result.comparedValues)
+		if let knownIssue = Self.callingMockKnownIssues.first(where: { $0.seeds.contains(610) }), let failure = result.failure, knownIssue.matches(failure) {
+			withKnownIssue("\(knownIssue.reason)") {
+				Issue.record("\(failure.kind.rawValue). \(failure.details)")
+			}
+		} else {
+			#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+		}
+	}
+
+	/// The graphs of the shape whose fill receives the caller's lazy value below the called type's root draw each wrapper,
+	/// each way the called type's tree receives the value, each caller kind and each place in the pinned number of graphs,
+	/// each in at least ten, and the cell test compiles and compares the pinned number of them.
+	@Test
+	func fillReceivesCallersLazyValueBelowCalledRootDraw_drawsEachVariation_inPinnedNumberOfGraphs() {
+		let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .fillReceivesCallersLazyValueBelowCalledRoot }
+		var counts = [String: Int]()
+		for draw in draws {
+			let variation = "\(draw.callerLazyValue?.wrapper ?? "none") \(draw.callerLazyValue?.receivesOnlyIfAvailable == true ? "onlyIfAvailable" : "byValue")"
+			counts[variation, default: 0] += 1
+			counts[draw.callerLazyValue?.wrapper ?? "none", default: 0] += 1
+			counts[draw.callerLazyValue?.receivesOnlyIfAvailable == true ? "onlyIfAvailable" : "byValue", default: 0] += 1
+			counts[draw.cell.caller.rawValue, default: 0] += 1
+			counts[draw.cell.place.rawValue, default: 0] += 1
+			if Self.comparesValues(ofSeed: draw.seed) {
+				counts["compared", default: 0] += 1
+				counts["compared \(variation)", default: 0] += 1
+			}
+		}
+		print("calling-mock caller lazy values \(counts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
+
+		#expect(counts == [
+			"LazilyInstantiated": 27,
+			"LazilyInstantiated byValue": 14,
+			"LazilyInstantiated onlyIfAvailable": 13,
+			"SendableLazilyInstantiated": 33,
+			"SendableLazilyInstantiated byValue": 15,
+			"SendableLazilyInstantiated onlyIfAvailable": 18,
+			"byValue": 29,
+			"onlyIfAvailable": 31,
+			"internal": 20,
+			"public": 20,
+			"listed": 20,
+			"plain": 30,
+			"deferred": 30,
+			"compared": 18,
+			"compared LazilyInstantiated byValue": 5,
+			"compared LazilyInstantiated onlyIfAvailable": 4,
+			"compared SendableLazilyInstantiated byValue": 5,
+			"compared SendableLazilyInstantiated onlyIfAvailable": 4,
+		])
+		#expect(GraphFuzzerCallingMockDraw(seed: 0).callerLazyValue == nil)
+	}
+
 	/// Seed 530 draws the first graph of `seamCallerFillSharesBuilder/internal/plain`, the first of its block: a seam's own
 	/// internal mock whose fill instantiates what nothing in its module fulfills, beside places of its own of the same hole
 	/// types. It takes the twin's builders, one for a hole type and family its own places and the fill's share.
@@ -1293,7 +1407,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	@Test
 	func drawnCells_coverEveryCell_whenCorpusDrawsTenGraphsPerCell() {
-		#expect(GraphFuzzerCallingMockCell.all.count == 61)
+		#expect(GraphFuzzerCallingMockCell.all.count == 67)
 		#expect(GraphFuzzerCallingMockCell.drawnCells == GraphFuzzerCallingMockCell.all)
 		#expect(Self.callingMockCorpusSeedCount == GraphFuzzerCallingMockCell.drawnCells.count * 10)
 		#expect(GraphFuzzerCallingMockCell.firstSeeds.map(GraphFuzzerCallingMockCell.cell(ofSeed:)) == GraphFuzzerCallingMockCell.all)
@@ -1636,6 +1750,26 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		return seeds
 	}()
 
-	/// One entry per cell that fails, with the cell's seeds: none fails.
-	static let callingMockKnownIssues: [GraphFuzzerKnownIssue] = []
+	/// One entry per cell that fails, with the cell's seeds: only the cells of the fill that receives the caller's lazy value
+	/// below the called type's root, whose compared seeds' mocks do not compile until the fix of the adopter's report M1,
+	/// which removes these entries.
+	static let callingMockKnownIssues: [GraphFuzzerKnownIssue] = [
+		callerLazyValueBelowCalledRootIssue(caller: "an internal", place: "a plain", seeds: [610, 616, 634]),
+		callerLazyValueBelowCalledRootIssue(caller: "an internal", place: "a deferred", seeds: [611, 617, 629]),
+		callerLazyValueBelowCalledRootIssue(caller: "a public", place: "a plain", seeds: [612, 636, 660]),
+		callerLazyValueBelowCalledRootIssue(caller: "a public", place: "a deferred", seeds: [613, 619, 631]),
+		callerLazyValueBelowCalledRootIssue(caller: "a listed", place: "a plain", seeds: [614, 620, 650]),
+		callerLazyValueBelowCalledRootIssue(caller: "a listed", place: "a deferred", seeds: [615, 621, 645]),
+	]
+
+	/// The entry of one cell of the fill that receives the caller's lazy value below the called type's root, the adopter's
+	/// report M1, for `caller`'s mock and `place` place: the mock names a builder of the place it does not take, so it does
+	/// not compile.
+	private static func callerLazyValueBelowCalledRootIssue(caller: String, place: String, seeds: [UInt64]) -> GraphFuzzerKnownIssue {
+		GraphFuzzerKnownIssue(
+			reason: "M1: \(caller) calling mock whose call’s \(place) place below the called type’s root is filled by a type that receives the caller’s lazily held value names a builder of the place it does not take",
+			signatures: [.callingMockDoesNotCompile],
+			seeds: seeds,
+		)
+	}
 }
