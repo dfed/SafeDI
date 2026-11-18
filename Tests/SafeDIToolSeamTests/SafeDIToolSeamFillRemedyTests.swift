@@ -188,6 +188,120 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 		}
 	}
 
+	// MARK: A value declared on a cycle
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingReceiveOnTheTypeBuiltAgain_whenFillReadsValueTheCycleDeclaresAgain() async {
+		// Inline, the `Step` that `Screen` builds again hands `Live` that `Screen`'s `cache`; a receive of `cache` on `Step`
+		// makes each `Step` take its own level's.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Live.swift"]):9:5: error: `Live` receives `cache: Cache`, which `Screen` declares between where `Screen` instantiates `stepBuilder: Instantiator<Step>` and where `Screen` instantiates it again. Inline, the `Step` built again receives `Screen`’s `cache`, but SafeDI hands the builder for `Step`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let cache: Cache` on `Step`, so each `Step` receives the `cache` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Screen.swift"]):8:5: note: `Screen` declares `cache: Cache` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.screenCycleModules(stepDeclarations: ["@Instantiated public let api: any Api"]), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenTypeBuiltAgainReceivesValueAsTheErrorSays() async throws {
+		try await expectRemedyBuildsInlineValues(
+			Self.screenCycleModules(stepDeclarations: ["@Received public let cache: Cache", "@Instantiated public let api: any Api"]),
+			probe: Self.liveCacheAtEachLevel(api: "api"),
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingReceiveOnTheTypeBuiltAgain_whenPlaceIsBeneathTheTypeBuiltAgain() async {
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Live.swift"]):9:5: error: `Live` receives `cache: Cache`, which `Screen` declares between where `Screen` instantiates `stepBuilder: Instantiator<Step>` and where `Screen` instantiates it again. Inline, the `Step` built again receives `Screen`’s `cache`, but SafeDI hands the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let cache: Cache` on `Step`, so each `Step` receives the `cache` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Screen.swift"]):8:5: note: `Screen` declares `cache: Cache` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.screenCycleModules(stepDeclarations: ["@Instantiated public let panel: Panel"]), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenTypeBuiltAgainAbovePlaceReceivesValueAsTheErrorSays() async throws {
+		try await expectRemedyBuildsInlineValues(
+			Self.screenCycleModules(stepDeclarations: ["@Received public let cache: Cache", "@Instantiated public let panel: Panel"]),
+			probe: Self.liveCacheAtEachLevel(api: "panel.api"),
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenTypeTheSeamBuildsFirstReceivesValueOnlyIfAvailableAsTheErrorSays() async throws {
+		// The `A` `Hub` builds has no `count` above it, and the one `B` builds again receives `B`'s, as `LiveApi` does
+		// inline, the remedy the error offers where `LiveApi` receives `count` only if available.
+		try await expectRemedyBuildsInlineValues(
+			[
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+					"public protocol Api {}",
+					seamFixtureType(named: "A", declarations: ["@Forwarded public let name: String", "@Received(onlyIfAvailable: true) public let count: Int?", "@Instantiated public let api: any Api", "@Instantiated public let bBuilder: Instantiator<B>"]),
+					seamFixtureType(named: "B", declarations: ["@Forwarded public let count: Int", "@Instantiated public let aBuilder: Instantiator<A>"]),
+					seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let aBuilder: Instantiator<A>"]),
+				]),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+					"import Feature\n\n" + SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let name: String?", "@Received(onlyIfAvailable: true) public let count: Int?"]),
+					"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let hub: Hub"]),
+				], dependencies: ["Feature"]),
+			],
+			probe: DifferentialValueProbe(
+				name: "A's api at each level",
+				expression: """
+				{ () -> [String] in
+				    let a = Root().hub.aBuilder.instantiate("x")
+				    let again = a.bBuilder.instantiate(2).aBuilder.instantiate("y")
+				    return [a.api, again.api].map { "\\($0)" }
+				}()
+				""",
+			),
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenTypeBuiltAgainReceivesValueANestedCyclePassesAsTheErrorSays() async throws {
+		// `C` builds `B` again, so `B`'s function takes `count`, which `X` passes it first and `C` from then on; the error, of
+		// `count` as a parameter of `B`'s function, offers the receive on `A`, the type `B` builds again.
+		try await expectRemedyBuildsInlineValues(
+			[
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+					"public protocol Api {}",
+					seamFixtureType(named: "A", declarations: ["@Received(onlyIfAvailable: true) public let count: Int?", "@Instantiated public let api: any Api", "@Instantiated public let xBuilder: Instantiator<X>"]),
+					seamFixtureType(named: "X", declarations: ["@Forwarded public let count: Int", "@Instantiated public let bBuilder: Instantiator<B>"]),
+					seamFixtureType(named: "B", declarations: ["@Received(onlyIfAvailable: true) public let count: Int?", "@Instantiated public let cBuilder: Instantiator<C>", "@Instantiated public let aBuilder: Instantiator<A>"]),
+					seamFixtureType(named: "C", declarations: ["@Forwarded public let count: Int", "@Instantiated public let bBuilder: Instantiator<B>"]),
+					seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Instantiated public let aBuilder: Instantiator<A>"]),
+				]),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+					"import Feature\n\n" + SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let count: Int?"]),
+					"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let hub: Hub"]),
+				], dependencies: ["Feature"]),
+			],
+			probe: DifferentialValueProbe(
+				name: "A's api at each level",
+				expression: """
+				{ () -> [String] in
+				    let a = Root().hub.aBuilder.instantiate()
+				    let b = a.xBuilder.instantiate(1).bBuilder.instantiate()
+				    let again = b.aBuilder.instantiate()
+				    let throughC = b.cBuilder.instantiate(2).bBuilder.instantiate().aBuilder.instantiate()
+				    return [a.api, again.api, throughC.api].map { "\\($0)" }
+				}()
+				""",
+			),
+		)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -241,6 +355,43 @@ struct SafeDIToolSeamFillRemedyTests: ~Copyable {
 				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let signedInBuilder: Instantiator<SignedIn>"]),
 			]).map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
 		]
+	}
+
+	/// `Feature`, whose seam `Home` instantiates `Screen`, which instantiates `cache` and then `Step`, with
+	/// `stepDeclarations` and an instantiator of `Screen`, and `Panel`, which instantiates `api: any Api`; and `App`, whose
+	/// `Live` fills `Api` and receives `cache`.
+	private static func screenCycleModules(stepDeclarations: [String]) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Api {}",
+				seamFixtureType(named: "Cache", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "Home", isSeam: true, declarations: ["@Instantiated public let screen: Screen"]),
+				seamFixtureType(named: "Screen", declarations: ["@Instantiated public let cache: Cache", "@Instantiated public let stepBuilder: Instantiator<Step>"]),
+				seamFixtureType(named: "Step", declarations: stepDeclarations + ["@Instantiated public let screenBuilder: Instantiator<Screen>"]),
+				seamFixtureType(named: "Panel", declarations: ["@Instantiated public let api: any Api"]),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				"import Feature\n\n" + SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "Live", fulfilling: "Api", declarations: ["@Received public let cache: Cache"]),
+				"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let home: Home"]),
+			], dependencies: ["Feature"]),
+		]
+	}
+
+	/// Whether the `Live` beneath the `Step` that `Home`'s `Screen` builds, at `api` from the step, reads that `Screen`'s
+	/// `cache`, and whether the one beneath the `Step` that `Screen` builds again reads that `Screen`'s.
+	private static func liveCacheAtEachLevel(api: String) -> DifferentialValueProbe {
+		DifferentialValueProbe(
+			name: "Live's cache at each level",
+			expression: """
+			{ () -> [Bool] in
+			    let screen = Root().home.screen
+			    let step = screen.stepBuilder.instantiate()
+			    let screenAgain = step.screenBuilder.instantiate()
+			    let stepAgain = screenAgain.stepBuilder.instantiate()
+			    return [(step.\(api) as? Live)?.cache === screen.cache, (stepAgain.\(api) as? Live)?.cache === screenAgain.cache]
+			}()
+			""",
+		)
 	}
 
 	/// Expects `modules`, a remedied graph, to generate and compile in every module, and its seam build to construct the

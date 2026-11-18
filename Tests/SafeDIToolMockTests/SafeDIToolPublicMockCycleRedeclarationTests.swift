@@ -52,7 +52,7 @@ struct SafeDIToolPublicMockCycleRedeclarationTests: ~Copyable {
 		// error, which the mock reports in production's words.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Live.swift"]):10:5: error: `Live` receives `cache: Cache`, which `Screen` declares between where `Screen` instantiates `stepBuilder: Instantiator<Step>` and where `Screen` instantiates it again. Inline, the `Step` built again receives `Screen`’s `cache`, but SafeDI hands the builder for `Step`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Give `cache` on `Screen` another label, or declare an @Instantiable type that fulfills `Api` in module `Feat` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["Live.swift"]):10:5: error: `Live` receives `cache: Cache`, which `Screen` declares between where `Screen` instantiates `stepBuilder: Instantiator<Step>` and where `Screen` instantiates it again. Inline, the `Step` built again receives `Screen`’s `cache`, but SafeDI hands the builder for `Step`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let cache: Cache` on `Step`, so each `Step` receives the `cache` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feat` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feat"]!["Feat.swift"]):19:5: note: `Screen` declares `cache: Cache` here.
 			"""
 		}) {
@@ -138,7 +138,7 @@ struct SafeDIToolPublicMockCycleRedeclarationTests: ~Copyable {
 		// direct call is.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Live.swift"]):11:5: error: `Live` receives `cache: Cache`, which `Screen` declares between where `Screen` instantiates `stepBuilder: Instantiator<Step>` and where `Screen` instantiates it again. Inline, the `Step` built again receives `Screen`’s `cache`, but SafeDI hands the builder for `Step`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Give `cache` on `Screen` another label, or declare an @Instantiable type that fulfills `Api` in module `Feat` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["Live.swift"]):11:5: error: `Live` receives `cache: Cache`, which `Screen` declares between where `Screen` instantiates `stepBuilder: Instantiator<Step>` and where `Screen` instantiates it again. Inline, the `Step` built again receives `Screen`’s `cache`, but SafeDI hands the builder for `Step`’s `api: any Api` (`api` of `apiBuilder`) the same values at every level of that cycle. Declare `@Received let cache: Cache` on `Step`, so each `Step` receives the `cache` of its own level and hands it on, or declare an @Instantiable type that fulfills `Api` in module `Feat` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feat"]!["Feat.swift"]):19:5: note: `Screen` declares `cache: Cache` here.
 			"""
 		}) {
