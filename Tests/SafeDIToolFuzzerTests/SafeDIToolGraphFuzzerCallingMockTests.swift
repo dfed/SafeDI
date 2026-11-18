@@ -455,7 +455,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func drawnValueProbes_describeKnownRight_inFirstGraphOfEachProbedCell() async throws {
 		let seeds = GraphFuzzerCallingMockCell.firstSeeds.filter { GraphFuzzerCallingMockDraw(seed: $0).valueProbes != nil }
-		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293, 450, 451, 452, 453, 530, 531])
+		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293, 450, 451, 452, 453, 530, 531, 550, 551, 552, 553, 554, 555])
 		for seed in seeds {
 			var filesToDelete = [URL]()
 			defer {
@@ -1128,6 +1128,41 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(sharing.count == 10)
 	}
 
+	/// Seed 550 draws the first graph of `fillHoldsBuilderOfEnclosingCalledType/internal/plain`, the first of its block: an
+	/// internal calling mock whose fill of the enclosing called type's place builds a third module's type, whose public mock
+	/// holds a builder of the enclosing called type. The calling mock's call inside the fill re-enters the root level
+	/// function of the call that encloses it, as the twin's call re-enters the enclosing seam call's, so it passes up no
+	/// place and builds what the twin builds.
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_reentersEnclosingCallsRootLevel_whenDrawnFillHoldsBuilderOfEnclosingCalledType() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 550)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 550)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillHoldsBuilderOfEnclosingCalledType, caller: .internal, place: .plain))
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.passUps.map(\.label) == [])
+		#expect(result.comparedValues)
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
+	/// The graphs of the shape whose fill holds a builder of the enclosing called type draw each builder, each caller kind
+	/// and each place in the pinned number of graphs. A `LazilyInstantiated` is drawn beside a deferred place only.
+	@Test
+	func fillHoldsBuilderOfEnclosingCalledTypeDraw_drawsEachBuilder_inPinnedNumberOfGraphs() {
+		let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .fillHoldsBuilderOfEnclosingCalledType }
+		var counts = [String: Int]()
+		for draw in draws {
+			counts["\(draw.enclosingBuilder?.rawValue ?? "none") \(draw.cell.place.rawValue)", default: 0] += 1
+			counts[draw.cell.caller.rawValue, default: 0] += 1
+		}
+		print("calling-mock builders of the enclosing called type \(counts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
+
+		#expect(counts == ["instantiator plain": 15, "instantiator deferred": 7, "sendableInstantiator plain": 15, "sendableInstantiator deferred": 13, "lazilyInstantiated deferred": 10, "internal": 20, "public": 20, "listed": 20])
+		#expect(GraphFuzzerCallingMockDraw(seed: 0).enclosingBuilder == nil)
+	}
+
 	/// The graphs of the shape whose fill instantiates what nothing fulfills draw each of its variations (`FillHoles`) in
 	/// the pinned number of graphs, each value in at least ten, so that the cell test, which requires every graph's mock to
 	/// take its twin's builders, judges each.
@@ -1203,7 +1238,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	@Test
 	func drawnCells_coverEveryCell_whenCorpusDrawsTenGraphsPerCell() {
-		#expect(GraphFuzzerCallingMockCell.all.count == 55)
+		#expect(GraphFuzzerCallingMockCell.all.count == 61)
 		#expect(GraphFuzzerCallingMockCell.drawnCells == GraphFuzzerCallingMockCell.all)
 		#expect(Self.callingMockCorpusSeedCount == GraphFuzzerCallingMockCell.drawnCells.count * 10)
 		#expect(GraphFuzzerCallingMockCell.firstSeeds.map(GraphFuzzerCallingMockCell.cell(ofSeed:)) == GraphFuzzerCallingMockCell.all)
