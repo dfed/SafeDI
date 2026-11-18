@@ -2666,7 +2666,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		// `Book`’s: the mock reports the twin’s error, where it built another value than inline before.
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(fixtures["App"]!["AppTypes.swift"]):21:5: error: `DefaultStore` receives `token: Token`, which `Book` builds where it calls `Page`, but `Book` passes the builder for `Page`’s `service: any Service` (`service` of `serviceBuilder`) on from its own caller, which cannot hand it `Book`’s values. Declare `@Received let token: Token` on `Page`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Service` in module `Mid` or a module it lists among its SafeDI dependencies, so `Book` fills the builder itself.
+			\(fixtures["App"]!["AppTypes.swift"]):21:5: error: `DefaultStore` receives `token: Token`, which `Book` builds where it calls `Page`, but `Book` passes the builder for `Page`’s `service: any Service` (`service` of `serviceBuilder`) on from its own caller, which cannot hand it `Book`’s values. Declare `@Received let token: Token` on `Page`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Service` in module `Mid` or a module it lists among its SafeDI dependencies, so `Book` fills the builder itself.
 			\(fixtures["Mid"]!["MidTypes.swift"]):7:5: note: `Book` declares `token: Token` here.
 			"""
 		}
@@ -3826,7 +3826,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		// reports the twin’s error, never handing the fill the caller’s `log`.
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(fixtures["App"]!["AppTypes.swift"]):7:5: error: `Live` receives `log: Log`, which `F`’s dependency tree builds after `api`, since `Log` requires `other`, which carries another builder, so the values struct SafeDI hands the builder for `F`’s `api: any Api` (`api` of `apiBuilder`) does not carry it. Declare `log` before `api` in `F`, or declare an @Instantiable type that fulfills `Api` in module `Feat` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["AppTypes.swift"]):7:5: error: `Live` receives `log: Log`, which `F`’s dependency tree builds after `api`, since `Log` requires `other`, which carries another builder, so SafeDI does not hand it to the builder for `F`’s `api: any Api` (`api` of `apiBuilder`). Declare `log` before `api` in `F`, or declare an @Instantiable type that fulfills `Api` in module `Feat` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feat"]!["FeatTypes.swift"]):18:5: note: `F` declares `log: Log` here.
 			"""
 		}
