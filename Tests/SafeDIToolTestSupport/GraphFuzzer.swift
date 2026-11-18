@@ -1819,6 +1819,9 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// `CarriedOuter` builds `CarriedInnerB` too, which defers `carriedToken` `@Sendable`, so the fill of `CarriedGizmo` is
 	/// handed a `LazilyInstantiated` through `CarriedInner`'s level and a `SendableLazilyInstantiated` through its.
 	case carriedLevelFillReadsDeferredValueFromTwoSeams
+	/// Both seams defer `carriedToken` `@Sendable`, and the fill of `CarriedGizmo` reads the `SendableLazilyInstantiated`
+	/// beside the value, through `CarriedWrapperReader`.
+	case carriedLevelFillReadsSendableWrapper
 	/// `addingPassingUpCopyShapes`' tree: `Copy1Root` calls `Copy1Inner`, whose places in two files the roots' module fills,
 	/// each fill building a seam of its own that calls `Copy1Inner` again and passes both fills on.
 	case passingUpCopies
@@ -8425,7 +8428,12 @@ enum GraphFuzzerGenerator {
 		/// holds a place `CarriedServiceImpl` fills (drawn in every such graph, so that ten graphs of it are accepted): the
 		/// fill of `CarriedGizmo` is then handed
 		/// another form on another route, which the roots' module once handed by reading the memo's instance where a level's
-		/// member was called (`SafeDIToolSeamPassedUpDeferredFieldTests`' `fillTakesMemoOnEveryRoute`).
+		/// member was called (`SafeDIToolSeamPassedUpDeferredFieldTests`' `fillTakesMemoOnEveryRoute`). In half of those
+		/// graphs `CarriedInner` builds `CarriedLeaf` in a `SendableInstantiator` too, and `CarriedGizmoImpl` builds
+		/// `CarriedWrapperReader`, which receives the `SendableLazilyInstantiated`: the fill takes the `Sendable` memo every
+		/// route hands, which the roots' module once handed as a `LazilyInstantiated` on `CarriedTop`'s own route
+		/// (`fillTakesSendableMemo`). A seam that defers the value in a `LazilyInstantiated` is not drawn beside the reader,
+		/// since SafeDI rejects that read (`sendableWrapperReadBesidePlainMemo`, `seam-hole-fills.md`).
 		///
 		/// `carriedLevelRandom` draws only for this pass, which runs after `addingFillCallShapes` and only in a graph another
 		/// pass split, so that every graph in one module, and every other draw of a graph it draws in, draws as before. A
@@ -8440,6 +8448,7 @@ enum GraphFuzzerGenerator {
 			let fillReadsDeferredValue = carriedLevelRandom.percentChance(75)
 			let rootDeclaresDeferredValue = carriedLevelRandom.percentChance(50)
 			let topBuildsWorkerToo = carriedLevelRandom.percentChance(50)
+			let gizmoReadsSendableWrapper = carriedLevelRandom.percentChance(50)
 			guard !modulesOmittingPackageName.contains(.seamModule), sendability != .sendable else { return declarations }
 			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
 			let prefix = prefix
@@ -8478,10 +8487,14 @@ enum GraphFuzzerGenerator {
 			// `CarriedInnerB` takes `carriedToken` `@Sendable`, so the type that declares it holds it in the `Sendable` wrapper.
 			let drawsSecondInner = fillReadsDeferredValue && sendability == .mixed
 			let tokenWrapper = drawsSecondInner ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			// The fill of `CarriedGizmo` reads that `SendableLazilyInstantiated` too, through `CarriedWrapperReader`, where every
+			// seam defers `carriedToken` `@Sendable`: a seam that defers it in a `LazilyInstantiated` would make the graph a
+			// rejected one (`sendableWrapperReadBesidePlainMemo`).
+			let drawsWrapperReader = drawsSecondInner && gizmoReadsSendableWrapper
 			if fillReadsDeferredValue {
 				let token = instantiable("CarriedToken", module: .seamDependencyBase)
 				let leaf = instantiable("CarriedLeaf", module: .seamDependencyBase, properties: [PropertyDeclaration(attribute: "@Received", label: "carriedToken", type: token.name)])
-				inner.properties.insert(PropertyDeclaration(attribute: "@Instantiated", label: "carriedLeafBuilder", type: "Instantiator<\(leaf.name)>"), at: 0)
+				inner.properties.insert(PropertyDeclaration(attribute: "@Instantiated", label: "carriedLeafBuilder", type: "\(drawsWrapperReader ? "SendableInstantiator" : "Instantiator")<\(leaf.name)>"), at: 0)
 				if !rootDeclaresDeferredValue {
 					// `CarriedOuter`'s module lists `CarriedToken`'s, so it declares the value the roots' module otherwise does.
 					outer.properties.insert(PropertyDeclaration(attribute: "@Instantiated", label: "carriedToken", type: "\(tokenWrapper)<\(token.name)>"), at: 0)
@@ -8518,6 +8531,14 @@ enum GraphFuzzerGenerator {
 				if rootDeclaresDeferredValue {
 					root.properties.insert(PropertyDeclaration(attribute: "@Instantiated", label: "carriedToken", type: "\(tokenWrapper)<\(token.name)>"), at: 0)
 					root.imports.append(GraphFuzzerModule.seamDependencyBase.name)
+				}
+				if drawsWrapperReader {
+					var reader = instantiable("CarriedWrapperReader", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Received", label: "carriedToken", type: "SendableLazilyInstantiated<\(token.name)>")])
+					reader.imports.append(GraphFuzzerModule.seamDependencyBase.name)
+					// The visible build declares it beside `CarriedGizmoImpl`, whose tree builds it.
+					reader.fillsHole = true
+					gizmoImplementation.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "carriedWrapperReader", type: reader.name))
+					added.append(reader)
 				}
 			}
 			return declarations + deferredValueDeclarations + [inner] + added + [serviceImplementation, outer, gadgetImplementation, top, gizmoImplementation, root]
@@ -10396,6 +10417,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				}
 				if propertiesByType[prefix + "CarriedInnerB"] != nil {
 					features.insert(.carriedLevelFillReadsDeferredValueFromTwoSeams)
+				}
+				if propertiesByType[prefix + "CarriedWrapperReader"] != nil {
+					features.insert(.carriedLevelFillReadsSendableWrapper)
 				}
 			}
 		}

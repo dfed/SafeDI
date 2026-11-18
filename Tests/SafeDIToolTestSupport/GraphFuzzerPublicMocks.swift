@@ -2781,11 +2781,10 @@ extension GraphFuzzerOracle {
 	/// each derived from a leaf call – a call of a `.public` type's mock (`<prefix>T<i>.mock(`, or `.__safeDI_mock(`) in the
 	/// generated mock of the probe's type, read from the graph's generated code – rather than from the difference's text
 	/// alone, so that any other value a leaf call builds still fails:
-	/// - M8.32 (`isReWrappedHeldInstance`, `isEarlyReadHeldInstance`): a leaf call that passes `<label>.instance` of a
-	///   lazily instantiated dependency its caller holds makes the leaf wrap the instance again, a second wrapper where the
-	///   known-right path shares the caller's, whose instance the call reads before the probe's value is built. The
-	///   re-made wrapper's node is exempt only where the instance beneath it is the one beneath the node the known-right
-	///   path shares it with (`heldInstanceUnderReWrappedWrapperIsConsumers(_:firstSeenAt:in:)`).
+	/// - M8.32 (`isEarlyReadHeldInstance`): a leaf call that passes `<label>.instance` of a lazily instantiated dependency
+	///   its caller holds reads that instance before the probe's value is built. The leaf wraps the instance again, a
+	///   second wrapper where the known-right path shares the caller's, which the comparator compares by its instance, so
+	///   the re-made wrapper over the caller's instance agrees and one over another instance differs at that instance.
 	/// - A dependency the calling tree does not provide, which includes one its module cannot name, is built by each call
 	///   of a public mock that builds it, and is `nil` in one that receives it only if available (`isInstancePerLeafCall`,
 	///   M8.9b widened): a dependency a leaf's tree receives
@@ -2805,8 +2804,7 @@ extension GraphFuzzerOracle {
 			let calls = leafCalls(ofMockedType: mockedType, in: generatedFiles, prefix: prefix)
 			guard !calls.isEmpty else { return false }
 			let callerLabels = Set([mockedType, "\(prefix)T9"].flatMap { types.declarations[$0]?.properties.map(\.label) ?? [] })
-			return isReWrappedHeldInstance(difference, calls: calls, featureDescription: comparison.featureDescription)
-				|| isEarlyReadHeldInstance(difference, calls: calls, featureDescription: comparison.featureDescription)
+			return isEarlyReadHeldInstance(difference, calls: calls, featureDescription: comparison.featureDescription)
 				|| isInstancePerLeafCall(difference, calls: calls, callerLabels: callerLabels, onlyIfAvailableLabels: onlyIfAvailableLabels)
 		}
 	}
@@ -2890,22 +2888,6 @@ extension GraphFuzzerOracle {
 		return (1..<match.numberOfRanges).compactMap { Range(match.range(at: $0), in: text).map { String(text[$0]) } }
 	}
 
-	/// M8.32's re-made wrapper: a wrapper node of `label`, fresh on the feature path and shared on the known-right path,
-	/// where every leaf on the node's path and on its first sight passes `label` as `.instance`, at least one does, and the
-	/// two hold one instance on the feature path.
-	private static func isReWrappedHeldInstance(_ difference: DifferentialValueDifference, calls: [PublicMockLeafCall], featureDescription: String) -> Bool {
-		guard let label = difference.path.last,
-		      let feature = captures(of: NSRegularExpression.escapedPattern(for: label) + #": <\d+> ((?:Sendable)?LazilyInstantiated<.+>) \(instance read last\)"#, in: difference.feature),
-		      let knownRight = captures(of: NSRegularExpression.escapedPattern(for: label) + #": <\d+> ((?:Sendable)?LazilyInstantiated<.+>) \(seen, first at (.+)\)"#, in: difference.knownRight),
-		      feature[0] == knownRight[0]
-		else { return false }
-		let firstSeenAt = knownRight[1]
-		let leafLabels = (difference.path + components(of: firstSeenAt)).filter { component in calls.contains { $0.leafLabel == component } }
-		return !leafLabels.isEmpty
-			&& leafLabels.allSatisfy { leafLabel in calls.filter { $0.leafLabel == leafLabel }.allSatisfy { $0.instanceLabels.contains(label) } }
-			&& heldInstanceUnderReWrappedWrapperIsConsumers(difference, firstSeenAt: firstSeenAt, in: featureDescription)
-	}
-
 	/// M8.32's early read: a wrapper's instance built before the probe's value on the feature path alone, the wrapper being
 	/// one of a label a leaf call passes as `.instance`, of the instance's type.
 	private static func isEarlyReadHeldInstance(_ difference: DifferentialValueDifference, calls: [PublicMockLeafCall], featureDescription: String) -> Bool {
@@ -2962,55 +2944,12 @@ extension GraphFuzzerOracle {
 		return !nodeLeaves.isEmpty && !firstSightLeaves.isEmpty && noCallPasses(nodeLeaves + firstSightLeaves)
 	}
 
-	/// Whether, beneath the re-made wrapper an M8.32 exemption names, the feature path's `description` holds the
-	/// consumer's own instance: the instance the re-made wrapper's `.instance` line names is the one the consumer's
-	/// wrapper, at the path `firstSeenAt` names (`<1> Screen > analytics`), names. The exemption removes everything
-	/// beneath the wrapper's node from the comparison, so this check stands beside it: a re-made wrapper over a second
-	/// instance fails it.
-	static func heldInstanceUnderReWrappedWrapperIsConsumers(_ exemption: DifferentialValueDifference, firstSeenAt: String, in description: String) -> Bool {
-		guard let reMadeWrapper = identity(in: exemption.feature.drop { $0 != ":" }),
-		      let section = probeSection(named: exemption.probe, in: description),
-		      let consumerWrapperLine = line(at: firstSeenAt.components(separatedBy: " > "), in: section),
-		      let consumerWrapper = identity(in: consumerWrapperLine.drop { $0 != ":" }),
-		      let consumerInstance = instanceIdentity(ofWrapper: consumerWrapper, in: section),
-		      let reMadeInstance = instanceIdentity(ofWrapper: reMadeWrapper, in: section)
-		else { return false }
-		return consumerInstance == reMadeInstance
-	}
-
-	/// The identity a described value names first: `3` of `: <3> LazilyInstantiated<Analytics>`.
-	private static func identity(in text: some StringProtocol) -> Int? {
-		guard let start = text.firstIndex(of: "<"), let end = text[start...].firstIndex(of: ">") else { return nil }
-		return Int(text[text.index(after: start)..<end])
-	}
-
-	/// The identity of the instance `<wrapper>.instance: <n> …` names in `lines`.
-	private static func instanceIdentity(ofWrapper wrapper: Int, in lines: [Substring]) -> Int? {
-		let prefix = "<\(wrapper)>.instance: "
-		return lines.lazy.compactMap { line in line.hasPrefix(prefix) ? identity(in: line.dropFirst(prefix.count)) : nil }.first
-	}
-
 	/// The lines of the probe `probe` in a path's description: from its `probe <expression>` line to the next probe's.
 	private static func probeSection(named probe: String, in description: String) -> [Substring]? {
 		let lines = description.split(separator: "\n", omittingEmptySubsequences: false)
 		guard let start = lines.firstIndex(of: "probe \(probe)") else { return nil }
 		let end = lines[(start + 1)...].firstIndex { $0.hasPrefix("probe ") } ?? lines.endIndex
 		return Array(lines[(start + 1)..<end])
-	}
-
-	/// The line at `path` in a probe's lines – its value's line (`<1> Screen`), then each child's by its label, two
-	/// spaces deeper than its parent's.
-	private static func line(at path: [String], in lines: [Substring]) -> Substring? {
-		guard let first = path.first, var index = lines.firstIndex(where: { $0 == first }) else { return nil }
-		var indent = 0
-		for label in path.dropFirst() {
-			indent += 2
-			let childPrefix = String(repeating: " ", count: indent) + label + ": "
-			let subtreeEnd = lines[(index + 1)...].firstIndex { $0.prefix { $0 == " " }.count < indent } ?? lines.endIndex
-			guard let child = lines[(index + 1)..<subtreeEnd].firstIndex(where: { $0.hasPrefix(childPrefix) }) else { return nil }
-			index = child
-		}
-		return lines[index]
 	}
 
 	/// Each `public` or `package` declaration in `generatedFiles` – a mock tier, an override's or a configuration's

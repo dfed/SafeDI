@@ -68,6 +68,7 @@ extension DependencyTreeGenerator {
 			/// path aside.
 			let pathFields: [Property]
 			let pathUncarriedProperties: [Property]
+			let declarationsHiddenByFields: [SeamSignature.Hole.DeclarationHiddenByField]
 		}
 		var declarationsBetweenByClosedOnScope = [ObjectIdentifier: [DeclarationBetween]]()
 		let siteContents = sites.compactMap { site -> SiteContent? in
@@ -93,6 +94,7 @@ extension DependencyTreeGenerator {
 				levels: content.levels,
 				pathFields: content.pathFields,
 				pathUncarriedProperties: content.pathUncarriedProperties,
+				declarationsHiddenByFields: content.declarationsHiddenByFields,
 			)
 		}
 		// The levels of each place, beside its fields, for the tests and the graph fuzzer: generated code reads none yet.
@@ -234,6 +236,7 @@ extension DependencyTreeGenerator {
 			hole = hole.addingUncarriedDeclarations(insideFills.calledCopyDeclarations.filter { declaration in !hole.uncarriedDeclarations.contains { $0.property.label == declaration.property.label } }, isSendable: hole.isSendable)
 			hole.reenteringCallDeclarations = Self.adding(additions.reenteringCallDeclarations, to: insideFills.reenteringCallDeclarations)
 			hole.reenteringPlaceFields = Self.adding(additions.reenteringPlaceFields, to: insideFills.reenteringPlaceFields)
+			hole.declarationsHiddenByFields = content.declarationsHiddenByFields
 			holes.append(hole)
 		}
 		for (offset, passedUp) in passedUpHoles.enumerated() {
@@ -277,6 +280,7 @@ extension DependencyTreeGenerator {
 			// The copy keeps every declaration of every call that presents the place.
 			passedUpHole.reenteringCallDeclarations = inner.reenteringCallDeclarations
 			passedUpHole.reenteringPlaceFields = inner.reenteringPlaceFields
+			passedUpHole.declarationsHiddenByFields = inner.declarationsHiddenByFields
 			holes.append(passedUpHole)
 		}
 		return holes.sorted { $0.builderLabel < $1.builderLabel }
@@ -819,7 +823,7 @@ extension DependencyTreeGenerator {
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
 		declarationsBetweenByClosedOnScope: inout [ObjectIdentifier: [DeclarationBetween]],
-	) -> (fields: [SeamSignature.Hole.Field], uncarriedDeclarations: [SeamSignature.Hole.UncarriedDeclaration], cycleReentryDeclarations: [SeamSignature.Hole.CycleReentryDeclaration], levels: [SeamPlaceLevels.Level], pathFields: [Property], pathUncarriedProperties: [Property]) {
+	) -> (fields: [SeamSignature.Hole.Field], uncarriedDeclarations: [SeamSignature.Hole.UncarriedDeclaration], cycleReentryDeclarations: [SeamSignature.Hole.CycleReentryDeclaration], levels: [SeamPlaceLevels.Level], pathFields: [Property], pathUncarriedProperties: [Property], declarationsHiddenByFields: [SeamSignature.Hole.DeclarationHiddenByField]) {
 		// A field is as visible as the narrowest type it names, which the declarations of the seam's module and of the
 		// module of the type that declares the value prove, capped at the seam's type.
 		func access(of property: Property, declaredBy declaringModuleName: String?) -> (level: AccessLevel, cause: TypeAccessProof.Cause?) {
@@ -848,6 +852,8 @@ extension DependencyTreeGenerator {
 			levelDeclarations.append(levelDeclaration)
 		}
 		var isInFill = false
+		// Each declaration a fill's field hides, by label, with the level of the fill that binds the field.
+		var hiddenByFillFields = [String: (declaration: SeamSignature.Hole.DeclarationHiddenByField, fieldLevel: Int)]()
 		func endLevel(builtType: TypeDescription?, nextProperty: Property?) {
 			levels.append(SeamPlaceLevels.Level(builtType: builtType, nextProperty: nextProperty, isInFill: isInFill, declarations: levelDeclarations))
 			levelDeclarations = []
@@ -932,6 +938,20 @@ extension DependencyTreeGenerator {
 					sendableFunctions.append((filledHole.property, frame.generator.children.first?.builtInstantiable?.concreteInstantiable))
 				}
 				for field in frame.generator.fillFields where frame.generator.fillStructBoundLabels.contains(field.property.label) && !uncarriedLabels.contains(field.property.label) {
+					// A parameter of the seam whose struct carries the field hides a declaration of another form above the call, which
+					// a seam on the route to the place that passes it up, or a scope above the call, binds: kept apart, while the field
+					// stays the nearest declaration of its label (`SeamSignature.Hole.DeclarationHiddenByField`).
+					if field.isSeamParameter, let hidden = nearestDeclarations[field.property.label], hidden.property != field.property {
+						let calledSeam = if case let .boundByPassingUpSeam(_, _, place) = hidden.reason {
+							place.seamType
+						} else {
+							site.frames[level - 1].generator.builtInstantiable?.concreteInstantiable ?? filledHole.scopeSeamType
+						}
+						hiddenByFillFields[field.property.label] = (
+							SeamSignature.Hole.DeclarationHiddenByField(property: hidden.property, declaringType: hidden.declaringType, declarationLocation: hidden.declarationLocation, calledSeam: calledSeam, receivingSeam: filledHole.scopeSeamType),
+							level,
+						)
+					}
 					let fieldAccess = access(of: field.property, declaredBy: instantiables[field.declaringType]?.moduleName)
 					declare(PathDeclaration(
 						property: field.property,
@@ -1162,7 +1182,13 @@ extension DependencyTreeGenerator {
 				))
 			}
 		}
-		return (fields, uncarriedDeclarations, cycleReentryDeclarations, levels.reversed(), pathFields, pathUncarriedProperties)
+		// A hidden declaration counts where the fill's field stays the nearest declaration of its label, and the place's field.
+		var declarationsHiddenByFields = [SeamSignature.Hole.DeclarationHiddenByField]()
+		for field in fields {
+			guard let (declaration, fieldLevel) = hiddenByFillFields[field.property.label], nearestDeclarations[field.property.label]?.frameLevel == fieldLevel else { continue }
+			declarationsHiddenByFields.append(declaration)
+		}
+		return (fields, uncarriedDeclarations, cycleReentryDeclarations, levels.reversed(), pathFields, pathUncarriedProperties, declarationsHiddenByFields)
 	}
 
 	/// A declaration between the builder function of a scope a cycle closes on and a cycle-closing scope that calls it.
@@ -1468,7 +1494,7 @@ extension DependencyTreeGenerator {
 			var generatorsToVisit = [(generator: root, hidden: FillReentryHidings?.none)]
 			while let (generator, hidden) = generatorsToVisit.popLast() {
 				if let hole = generator.fillHole, let child = generator.children.first {
-					findingsOfFill(of: hole, child: child, hidden: hidden ?? FillReentryHidings(), requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule).forEach(record)
+					findingsOfFill(of: hole, fill: generator, child: child, hidden: hidden ?? FillReentryHidings(), requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule).forEach(record)
 				}
 				// A seam call's children are its fills, which are judged against the calls inside any of them.
 				let hiddenByFillKey = generator.seamCall == nil ? [:] : hiddenByReenteringCalls(ofFillsOf: generator)
@@ -1562,9 +1588,12 @@ extension DependencyTreeGenerator {
 	/// beneath it is that fill's, which `validateFills` reaches itself. This generator tree holds a seam the fill calls as a
 	/// leaf, so a property re-entered through such a call is never judged here; the cycle walk of
 	/// `validateCyclesFromRootsOfForeignSeamsWithHoles`, which inlines every seam, judges those.
-	/// - Parameter hidden: What the calls inside the fills of the seam call that declares this fill hide from it.
+	/// - Parameters:
+	///   - fill: The fill's generator, whose fields say which memos it binds.
+	///   - hidden: What the calls inside the fills of the seam call that declares this fill hide from it.
 	private static func findingsOfFill(
 		of hole: SeamSignature.Hole,
+		fill: ScopeGenerator,
 		child: ScopeGenerator,
 		hidden: FillReentryHidings,
 		requirement: AccessRequirement,
@@ -1599,6 +1628,56 @@ extension DependencyTreeGenerator {
 			let carried = (hidden.fieldsOfReenteringPlaces[property.label] ?? []).filter { provides($0.field, property) }
 			guard !carried.isEmpty else { return }
 			findings.append(.init(hole: hole, kind: .fieldOfReenteringPlace(reader: reader, isOnlyIfAvailable: onlyIfAvailable, carried: carried, reenteredPlace: SeamSignature.Hole.UncarriedDeclaration.PresentedPlace(hole), fillingModule: callerModule, seamModule: seamModule)))
+		}
+		/// Whether the fill binds a memo of the label of `property`, a `LazilyInstantiated` or `SendableLazilyInstantiated` it
+		/// receives, of the wrapper's own kind, which the tree reads where it reads that wrapper. The fill binds the memo where
+		/// its tree reads the memo's instance; a tree that reads only the wrapper reads the caller's scope.
+		func readsMemoOfItsOwnKind(_ property: Property) -> Bool {
+			guard let instance = property.asLazilyInstantiatedInstanceProperty else { return false }
+			let isSendable = property.propertyType == .sendableLazilyInstantiated
+			return fill.fillStructBoundLabels.contains(property.label) && fill.fillFields.contains { field in
+				field.property.label == property.label && field.bindsMemo && field.deferral == .deferred(isSendable: isSendable) && field.property.asUnwrappedProperty == instance.asUnwrappedProperty && child.reads(field.property)
+			}
+		}
+		/// The declaration of the wrapper `property` that a field of its label, a parameter of a seam whose struct carries it, hides
+		/// on the place's path, with that field, where `property` is a `LazilyInstantiated` or `SendableLazilyInstantiated` the
+		/// declaration provides: the nearest such declaration a fill's field hides (`SeamSignature.Hole.declarationsHiddenByFields`),
+		/// or the nearest a passing-up seam binds above its call that presents the place itself, which the place's own field of a
+		/// parameter of its seam hides.
+		func declarationHiddenByField(providing property: Property) -> (declaration: SeamSignature.Hole.DeclarationHiddenByField, field: SeamSignature.Hole.Field)? {
+			guard property.asLazilyInstantiatedInstanceProperty != nil else { return nil }
+			func providesRead(_ declared: Property) -> Bool {
+				declared == property || (property.typeDescription.isOptional && declared == property.asUnwrappedProperty)
+			}
+			guard let field = fields.first(where: { $0.property.label == property.label }) else { return nil }
+			if let declaration = hole.declarationsHiddenByFields.first(where: { $0.property.label == property.label && providesRead($0.property) }) {
+				return (declaration, field)
+			} else if field.isSeamParameter,
+			          let declaration = hole.uncarriedDeclarations.first(where: { declaration in
+			          	guard declaration.property.label == property.label, providesRead(declaration.property), case let .boundByPassingUpSeam(_, _, place) = declaration.reason else { return false }
+			          	return place.isPresentation(of: hole)
+			          }),
+			          case let .boundByPassingUpSeam(_, _, place) = declaration.reason
+			{
+				return (SeamSignature.Hole.DeclarationHiddenByField(property: declaration.property, declaringType: declaration.declaringType, declarationLocation: declaration.declarationLocation, calledSeam: place.seamType, receivingSeam: hole.scopeSeamType), field)
+			} else {
+				return nil
+			}
+		}
+		/// The receive of `instance`, or of its optional form, in the fill's tree declared first in source order, by the type
+		/// that receives it.
+		func firstReader(of instance: Property) -> DependencyTreeGeneratorError.FillFinding.InstanceReader? {
+			var readers = [DependencyTreeGeneratorError.FillFinding.InstanceReader]()
+			var generatorsToVisit = [child]
+			while let generator = generatorsToVisit.popLast() {
+				for dependency in generator.builtInstantiable?.dependencies ?? [] {
+					if case .received = dependency.source, dependency.property.asUnwrappedProperty == instance, let type = generator.builtInstantiable?.concreteInstantiable {
+						readers.append(.init(property: dependency.property, type: type, declarationLocation: dependency.declarationLocation))
+					}
+				}
+				generatorsToVisit.append(contentsOf: generator.children)
+			}
+			return readers.min { [$0.declarationLocation].lexicographicallyPrecedes([$1.declarationLocation], by: Dependency.DeclarationLocation.precedesInSourceOrder) }
 		}
 		func checkReceive(of property: Property, by instantiable: Instantiable, declaredAt declarationLocation: Dependency.DeclarationLocation?, onlyIfAvailable: Bool, passingCall: DependencyTreeGeneratorError.FillFinding.PassingCall? = nil) {
 			// Inline, a receive only if available of the property the fill builds finds it still being built and is handed
@@ -1672,6 +1751,22 @@ extension DependencyTreeGenerator {
 				}
 			} else if !onlyIfAvailable, let field = sameLabelFields.first(where: { $0.property.typeDescription.isOptional && $0.property.asUnwrappedProperty == property }) {
 				findings.append(.init(hole: hole, kind: .fieldHeldOnlyOptionally(reader: reader, field: field, seamModule: seamModule)))
+			} else if !readsMemoOfItsOwnKind(property), let (declaration, field) = declarationHiddenByField(providing: property) {
+				// The fill resolves a wrapper the tree reads from the caller's scope, while inline it reads the declaration that a
+				// seam on the route to the place binds above its call of the seam whose parameter the field is: the struct carries
+				// only that parameter. Reported before a memo the fill takes in another form, which follows from the same field.
+				findings.append(.init(hole: hole, kind: .declarationHiddenByField(reader: reader, declaration: declaration, field: field, seamModule: seamModule)))
+			} else if !readsMemoOfItsOwnKind(property), property.propertyType == .sendableLazilyInstantiated, !property.typeDescription.isOptional,
+			          let instance = property.asLazilyInstantiatedInstanceProperty,
+			          let routes = fill.fillPlainMemoRoutesOfSendableWrapperReads[property.label],
+			          let memo = fill.fillFields.first(where: { $0.property.label == property.label && $0.bindsMemo && $0.deferral == .deferred(isSendable: false) && $0.property.asUnwrappedProperty == instance }),
+			          let instanceReader = firstReader(of: instance)
+			{
+				// The fill takes a `LazilyInstantiated` some route hands, which is no `SendableLazilyInstantiated`, where its tree reads
+				// the value too: generation found it (`ScopeGenerator.fillPlainMemoRoutesOfSendableWrapperReads`). A read of the
+				// optional wrapper only if available is a deliberate leniency: generation leaves it out (`fillSendableWrapperReads`),
+				// and the fill builds it where one module rejects the graph for reading the label in two forms.
+				findings.append(.init(hole: hole, kind: .sendableWrapperReadBesidePlainMemo(reader: reader, memo: memo, instanceReader: instanceReader, routes: routes)))
 			} else if sameLabelFields.isEmpty, let declarations = hole.uncarriedDeclarations.first(where: { $0.property.label == property.label }).map({ [$0] })
 				// A call inside a fill that passes it to a seam passing the site up hands it that seam's copy of the hole,
 				// which does not carry what that seam binds on its path to the call presenting the site: each such call's.
@@ -1935,6 +2030,13 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			let isOnlyIfAvailable: Bool
 		}
 
+		/// A receive in a fill's tree of the instance a wrapper another receive reads holds.
+		struct InstanceReader {
+			let property: Property
+			let type: TypeDescription
+			let declarationLocation: Dependency.DeclarationLocation?
+		}
+
 		/// A call of a seam, by `callingType`'s `property`, declared at `declarationLocation`.
 		struct PassingCall {
 			let callingType: TypeDescription
@@ -1947,6 +2049,14 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			case fieldNotReadable(reader: Reader, field: SeamSignature.Hole.Field, callerModule: ModuleIdentity, seamModule: ModuleIdentity, requirement: AccessRequirement)
 			/// The scope struct carries the value only as an optional value, which the reader requires.
 			case fieldHeldOnlyOptionally(reader: Reader, field: SeamSignature.Hole.Field, seamModule: ModuleIdentity)
+			/// The reader receives a wrapper that `declaration`, which a seam on the route to the place binds above its call, provides
+			/// inline, while the scope struct carries only `field`, a parameter of the seam whose tree receives its instance: the fill
+			/// would read the caller's scope.
+			case declarationHiddenByField(reader: Reader, declaration: SeamSignature.Hole.DeclarationHiddenByField, field: SeamSignature.Hole.Field, seamModule: ModuleIdentity)
+			/// The reader receives a `SendableLazilyInstantiated` whose instance `instanceReader` receives too, while the fill takes
+			/// `memo`, a `LazilyInstantiated`, since each of `routes` hands the `LazilyInstantiated` of a seam whose tree reads the
+			/// value outside a `@Sendable` function, which no `@Sendable` function can capture.
+			case sendableWrapperReadBesidePlainMemo(reader: Reader, memo: SeamSignature.Hole.Field, instanceReader: InstanceReader, routes: [ScopeGenerator.FillDispatcher.PlainMemoRoute])
 			/// A cycle in the seam's tree builds the site's owner again with `declaration`, which a scope between the function
 			/// the cycle closes on and the cycle-closing scope declares, while the fill reads the same value at every level.
 			case declarationBoundOnCycleReentry(reader: Reader, declaration: SeamSignature.Hole.CycleReentryDeclaration, seamModule: ModuleIdentity)
@@ -2106,6 +2216,10 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 				"fieldNotReadable"
 			case .fieldHeldOnlyOptionally:
 				"fieldHeldOnlyOptionally"
+			case .declarationHiddenByField:
+				"declarationHiddenByField"
+			case .sendableWrapperReadBesidePlainMemo:
+				"sendableWrapperReadBesidePlainMemo"
 			case .declarationBoundOnCycleReentry:
 				"declarationBoundOnCycleReentry"
 			case .declarationBoundAfterSite:
@@ -2247,6 +2361,34 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 					SourceDiagnostic(severity: .error, location: reader.declarationLocation, message: "`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which \(scope) \(scopeCarries) only as `\(field.property.asSource)`, \(cause)"),
 					SourceDiagnostic(severity: .note, location: field.declarationLocation, message: "`\(field.declaringType.asSource)` receives `\(field.property.asSource)` here."),
 				]
+			case let .declarationHiddenByField(reader, declaration, field, _):
+				let receive = reader.isOnlyIfAvailable ? "@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)" : "@\(Dependency.Source.receivedRawValue)"
+				let receivingSeam = "`\(declaration.receivingSeam.asSource)`"
+				return [
+					SourceDiagnostic(severity: .error, location: reader.declarationLocation, message: "`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which `\(declaration.declaringType.asSource)` builds where it calls `\(declaration.calledSeam.asSource)`, but \(scope) \(scopeCarries) only its instance, `\(field.property.asSource)`, which \(receivingSeam)’s tree receives. Declare `\(receive) let \(reader.property.asSource)` on \(receivingSeam), so the \(namesSeveralBuilders ? "builders’ values structs carry" : "builder’s values struct carries") it."),
+					SourceDiagnostic(severity: .note, location: declaration.declarationLocation, message: "`\(declaration.declaringType.asSource)` declares `\(declaration.property.asSource)` here."),
+				]
+			case let .sendableWrapperReadBesidePlainMemo(reader, memo, instanceReader, routes):
+				let memoProperty = Property(label: memo.property.label, typeDescription: memo.memoType ?? memo.property.typeDescription)
+				var seams = [String]()
+				for route in routes where !seams.contains("`\(route.seamType.asSource)`’s") {
+					seams.append("`\(route.seamType.asSource)`’s")
+				}
+				let trees = seams.count > 1 ? "trees read" : "tree reads"
+				// The reader requires the wrapper, so the value it receives instead is required too.
+				let instance = reader.property.asLazilyInstantiatedInstanceProperty ?? instanceReader.property
+				var diagnostics = [
+					SourceDiagnostic(severity: .error, location: reader.declarationLocation, message: "`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which \(scope) \(scopeCarries) only as `\(memoProperty.asSource)`, since \(listed(seams)) \(trees) `\(reader.property.label)` outside a `@Sendable` function and `\(instanceReader.type.asSource)` receives its instance, `\(instanceReader.property.asSource)`. Receive `\(instance.asSource)` on `\(reader.type.asSource)`, or receive `\(reader.property.asSource)` wherever that builder’s tree receives `\(instanceReader.property.asSource)`."),
+					SourceDiagnostic(severity: .note, location: instanceReader.declarationLocation, message: "`\(instanceReader.type.asSource)` receives `\(instanceReader.property.asSource)` here."),
+				]
+				// Seams that build one type in their trees note its receive once.
+				for route in routes {
+					let note = SourceDiagnostic(severity: .note, location: route.receivedAt, message: "`\(route.receivingType.asSource)` receives `\(route.receivedProperty.asSource)` here.")
+					if !diagnostics.contains(note) {
+						diagnostics.append(note)
+					}
+				}
+				return diagnostics
 			case let .declarationBoundOnCycleReentry(reader, declaration, seamModule):
 				let declaringType = "`\(declaration.declaringType.asSource)`"
 				let closedOnDeclaringType = "`\(declaration.closedOnDeclaringType.asSource)`"

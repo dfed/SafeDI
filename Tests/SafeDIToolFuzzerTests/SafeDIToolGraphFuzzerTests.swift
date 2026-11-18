@@ -6903,6 +6903,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.carriedLevelFillReadsDeferredValueRootDeclares: 0,
 		.carriedLevelFillReadsDeferredValueOnTopsRouteToo: 0,
 		.carriedLevelFillReadsDeferredValueFromTwoSeams: 0,
+		.carriedLevelFillReadsSendableWrapper: 0,
 		.carriedLevelTwoRoutes: 31,
 		.fillCallReadsOwnLevel: 64,
 		.fillCallReadsOwnLevelInsideSendableFill: 22,
@@ -7301,6 +7302,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.carriedLevelFillReadsDeferredValueRootDeclares: 0,
 		.carriedLevelFillReadsDeferredValueOnTopsRouteToo: 0,
 		.carriedLevelFillReadsDeferredValueFromTwoSeams: 0,
+		.carriedLevelFillReadsSendableWrapper: 0,
 		.passingUpCopies: 259,
 		.passingUpCopiesFillReadsLabel: 128,
 		.passingUpCopiesSeamsBindLabel: 101,
@@ -8272,14 +8274,6 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: publicMockFormsNamedApartOrderReason,
 			signatures: [.renamedGraphDiffers(.mockCode)],
 			seeds: [22, 101, 156, 161, 326, 629, 881, 970, 977],
-		),
-		// The root-level stream's lazily received `holeSession` (`holeRootLevelHoldsWrapper`): each call of `T6`'s mock wraps
-		// again the instance its consumer passes (M8.32), and its root level holds that wrapper, so the fill beneath a later
-		// leaf reads the wrapper that leaf made, first seen at the leaf, where the known-right path's reads the consumer's.
-		GraphFuzzerKnownIssue(
-			reason: "Each call of a public mock wraps again the instance a consumer passes for a value received lazily (M8.32), which the mock's root level holds, so a fill beneath a later leaf reads that leaf's wrapper again, a later sight of the re-made wrapper the stated divergence's exemption does not derive",
-			signatures: [.publicMockBuildsOtherValuesThanKnownRight(containing: "hole > value > holeSession")],
-			seeds: [162],
 		),
 		// The retention oracle's written exception until the leak fix gives a public mock builders that keep only what their
 		// fill reads: a public mock hands each place's case the values of every level on the way to it, and the builder
