@@ -281,9 +281,16 @@ extension DependencyTreeGenerator {
 			func builtType(of property: Property) -> TypeDescription? {
 				placeHolding.builtTypeByTypeAndProperty[SeamDeclarationGraph.TypeAndProperty(type: type, property: property)]
 			}
-			// In the type's declaration order.
-			for dependency in instantiable.dependencies {
-				let property = dependency.property
+			// In the type's declaration order, then the children a public mock's root builds that the type does not declare, in the
+			// order the root builds them: the received dependencies the mock promotes to its root
+			// (`createMockRootScopeGenerator`), whose trees' places are the mock's places like any other's.
+			var caseProperties = instantiable.dependencies.map(\.property)
+			let declaredProperties = Set(caseProperties)
+			for child in build.children {
+				guard let property = child.property, !declaredProperties.contains(property) else { continue }
+				caseProperties.append(property)
+			}
+			for property in caseProperties {
 				guard let child = childrenByProperty[property] else { continue }
 				let isCall = child.holeSite == nil && !child.passedUpHoles.isEmpty
 				if plainProperties.contains(property) {
