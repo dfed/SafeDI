@@ -87,6 +87,30 @@ enum GraphFuzzerRemedyKind: String, CaseIterable, Comparable {
 	/// so the receive reaches the declaration above it. A hidden receive that is a required optional is not a shape anyone
 	/// writes, and gets no remedy; nor does a hiding declaration that `T` renames, or whose new label `T` already declares.
 	case relabelHidingDeclaration = "relabel-hiding-declaration"
+	/// "Declare `@Received let x: X` on `S`, so the builder’s values struct carries it", or its only-if-available
+	/// spelling, for a fill that reads a value the scope its builder is handed does not carry: a seam that passes the
+	/// builder up binds it, a call that builds the seam again hides it, or the place whose fill builds the seam again
+	/// carries it. Each seam the error names declares the property it spells, as it spells it.
+	case receiveOnSeam = "receive-on-seam"
+	/// "receive it only if available on `S` and `R`, with `@Received(onlyIfAvailable: true) let x: X?`", for a fill that
+	/// requires a value a call that builds the seam again hides: the seam declares the property, and the fill's receive
+	/// becomes it.
+	case receiveOnlyIfAvailableOnSeamAndReader = "receive-only-if-available-on-seam-and-reader"
+	/// "Declare `@Forwarded let x: X` on `T` too, so that function binds it", for a fill inside a `@Sendable` function that
+	/// reads a value its builder's type forwards outside that function: `T`, the type the function builds, forwards the
+	/// property too. The remedy states nothing of the wrapper that builds `T`, so it changes none.
+	case forwardIntoSendableFunction = "forward-into-sendable-function"
+	/// "Instantiate `x` outside `S` and declare `@Received let x: X` on `S`", for a fill inside a `@Sendable` function that
+	/// reads a value declared outside that function, and "instantiate `x` on a type above `S`, and receive it on `T` in
+	/// place of its @Instantiated declaration", for one that reads an instantiator the seam's tree builds after the
+	/// builder or is building there: the declaration moves out of the seam to the builder's callers. Each type outside `S`'s
+	/// tree that builds `S`, or, for a seam that passes the builder up, each of its own such callers in its place, declares
+	/// it as the error's declaring type did, that type receives it in place of the declaration, and, where the error says
+	/// so, `S` receives it too.
+	case instantiateOutsideSeam = "instantiate-outside-seam"
+	/// "Give `x` on `T` another label", for a fill that reads a value a cycle in the seam's tree declares again: `T`'s
+	/// property takes the label `xRelabeled`, with its initializer parameter and assignment.
+	case relabelCycleDeclaration = "relabel-cycle-declaration"
 
 	/// The words a failure line of a remedy of this kind begins with (`GraphFuzzerRemedyRun.failureLine`), which a known
 	/// issue's signature reads.
@@ -129,6 +153,10 @@ struct GraphFuzzerRemedy: Equatable {
 	let description: String
 	/// The graph with the remedy applied.
 	let fixture: GraphFuzzerFixture
+	/// The types whose new errors the verdict counts besides the site's (`GraphFuzzerRemedies.errorsIntroduced`): a seam
+	/// fill's remedy edits declarations other than the fill's receive, which can then report the error the remedy trades
+	/// the site's for. Each type the remedy edits, and each type a property the remedy declares builds.
+	var checkedTypeNames = [String]()
 }
 
 /// The remedied graph's outcome.
@@ -138,7 +166,8 @@ struct GraphFuzzerRemedyRun {
 	let outcome: GraphFuzzerToolOutcome
 	/// The messages of the errors the remedy introduced and its follow-up runs left, at the declarations that build the
 	/// type of the remedy's site (`GraphFuzzerRemedies.errorsIntroducedByForwarding`): a `forwardReceive` remedy's, whose
-	/// own site, once it forwards, has no receive left for an error to be at.
+	/// own site, once it forwards, has no receive left for an error to be at. For a seam fill's remedy, the errors it
+	/// introduced at the types it edits or whose declarations it adds (`GraphFuzzerRemedies.errorsIntroduced`).
 	var introducedErrors = [String]()
 
 	/// The messages of the errors the tool reports at the remedy's site in the remedied graph, and of those the remedy
@@ -167,6 +196,19 @@ enum GraphFuzzerRemedies {
 		/// One-based, as the tool reports it.
 		let line: Int
 		let message: String
+		/// The messages of the notes that follow the error, where the reader of the diagnostics gives them.
+		var notes = [String]()
+
+		/// The message of `diagnosticLine` when it is a note, or `nil` for any other line.
+		static func noteMessage(of diagnosticLine: Substring) -> String? {
+			if diagnosticLine.hasPrefix("note: ") {
+				return String(diagnosticLine.dropFirst("note: ".count))
+			} else if let noteMarker = diagnosticLine.range(of: ": note: ") {
+				return String(diagnosticLine[noteMarker.upperBound...])
+			} else {
+				return nil
+			}
+		}
 
 		init?(_ diagnosticLine: Substring) {
 			guard let errorMarker = diagnosticLine.range(of: ": error: ") else { return nil }
@@ -197,11 +239,166 @@ enum GraphFuzzerRemedies {
 		case forwardReceive(label: String)
 		case declareProvidingFormOnSeam(collision: SeamLabelCollision, property: GraphFuzzerRemedyProperty)
 		case relabelHidingDeclaration(hiddenLabel: String, hidingProperty: GraphFuzzerRemedyProperty, declaringType: String)
+		/// The remedies the error of a seam's fill states, beside the one that fulfills the hole in the seam's module.
+		case seamFill([SeamFillRemedy])
+
+		/// A remedy the error of a seam's fill states (`SeamFillRemedy.remedies(statedIn:notes:)`).
+		enum SeamFillRemedy: Equatable {
+			/// "Declare `@Received let x: X` on `S`, so the builder’s values struct carries it", or of several seams.
+			case receiveOnSeam(property: GraphFuzzerRemedyProperty, seams: [String])
+			/// "receive it only if available on `S` and `R`, with `@Received(onlyIfAvailable: true) let x: X?`".
+			case receiveOnlyIfAvailableOnSeamAndReader(property: GraphFuzzerRemedyProperty, seam: String, reader: String)
+			/// "Declare `@Forwarded let x: X` on `T` too, so that function binds it".
+			case forwardIntoSendableFunction(property: GraphFuzzerRemedyProperty, builtType: String)
+			/// "Instantiate `x` outside `S` and declare `@Received let x: X` on `S`" (`seamReceives`), whose declaring type a
+			/// note names, or "instantiate `x` on a type above `S`, and receive it on `T` in place of its @Instantiated
+			/// declaration".
+			case instantiateOutsideSeam(label: String, seam: String, declaringType: String, seamReceives: Bool)
+			/// "Give `x` on `T` another label".
+			case relabelCycleDeclaration(label: String, declaringType: String)
+
+			/// Whether `message` is the error of a seam's fill: a receive in its tree, "`R` receives `x: X`, which …", or a
+			/// call in it that passes a value on, "The call by which `T` instantiates `S` (`s`) passes on `x: X`, which …".
+			static func isSeamFillError(_ message: String) -> Bool {
+				guard !message.hasPrefix("The call by which `") else { return true }
+				guard message.hasPrefix("`"),
+				      let receivesRange = message.range(of: "` receives `"),
+				      !message[message.index(after: message.startIndex)..<receivesRange.lowerBound].contains("`")
+				else { return false }
+				return message[receivesRange.upperBound...].contains("`, which ")
+			}
+
+			/// The remedies `message`, a seam fill's error, states, in the order it states them, with the declaring type of
+			/// an instantiation outside the seam read from `notes`, the error's notes ("`T` declares `x: X` here."). A
+			/// sentence the oracle cannot read as it reads these is left out.
+			static func remedies(statedIn message: String, notes: [String]) -> [SeamFillRemedy] {
+				var remedies = [SeamFillRemedy]()
+				// "Declare `@Received let x: X` on `S`, so the builder’s values struct carries it" (or "on `S` and `T`, so the
+				// builders’ values structs carry it"). A form followed by anything else, such as ", with `x` declared on every
+				// route to `S`", states a condition the oracle does not meet.
+				var searchStart = message.startIndex
+				while let declareRange = message.range(of: "Declare `@Received", range: searchStart..<message.endIndex) {
+					searchStart = declareRange.upperBound
+					let propertyStart = message.index(declareRange.lowerBound, offsetBy: "Declare `".count)
+					guard let onRange = message.range(of: "` on `", range: propertyStart..<message.endIndex),
+					      let soRange = message.range(of: ", so the builder", range: onRange.upperBound..<message.endIndex),
+					      let receive = property(declaredIn: message[propertyStart..<onRange.lowerBound]),
+					      let seams = backtickedNames(in: message[message.index(before: onRange.upperBound)..<soRange.lowerBound])
+					else { continue }
+					remedies.append(.receiveOnSeam(property: receive, seams: seams))
+				}
+				// "receive it only if available on `S` and `R`, with `@Received(onlyIfAvailable: true) let x: X?`;"
+				let onlyIfAvailablePrefix = "receive it only if available on `"
+				if let prefixRange = message.range(of: onlyIfAvailablePrefix),
+				   let andRange = message.range(of: "` and `", range: prefixRange.upperBound..<message.endIndex),
+				   let withRange = message.range(of: "`, with `", range: andRange.upperBound..<message.endIndex),
+				   let endRange = message.range(of: "`;", range: withRange.upperBound..<message.endIndex),
+				   let receive = property(declaredIn: message[withRange.upperBound..<endRange.lowerBound])
+				{
+					let seam = String(message[prefixRange.upperBound..<andRange.lowerBound])
+					let reader = String(message[andRange.upperBound..<withRange.lowerBound])
+					if !seam.contains("`"), !reader.contains("`") {
+						remedies.append(.receiveOnlyIfAvailableOnSeamAndReader(property: receive, seam: seam, reader: reader))
+					}
+				}
+				// "Declare `@Forwarded let x: X` on `T` too, so that function binds it"
+				if let declareRange = message.range(of: "Declare `@Forwarded "),
+				   let onRange = message.range(of: "` on `", range: declareRange.upperBound..<message.endIndex),
+				   let tooRange = message.range(of: "` too, so that function binds it", range: onRange.upperBound..<message.endIndex),
+				   let forwarded = property(declaredIn: message[message.index(declareRange.lowerBound, offsetBy: "Declare `".count)..<onRange.lowerBound])
+				{
+					let builtType = String(message[onRange.upperBound..<tooRange.lowerBound])
+					if !builtType.contains("`") {
+						remedies.append(.forwardIntoSendableFunction(property: forwarded, builtType: builtType))
+					}
+				}
+				// "Instantiate `x` outside `S` and declare `@Received let x: X` on `S`, so the builder’s caller reads its own":
+				// the declaring type is the note's, "`T` declares `x: X` here."
+				if let instantiateRange = message.range(of: "Instantiate `"),
+				   let outsideRange = message.range(of: "` outside `", range: instantiateRange.upperBound..<message.endIndex),
+				   let declareRange = message.range(of: "` and declare `@Received let ", range: outsideRange.upperBound..<message.endIndex),
+				   let onRange = message.range(of: "` on `", range: declareRange.upperBound..<message.endIndex),
+				   let readsRange = message.range(of: "`, so the ", range: onRange.upperBound..<message.endIndex)
+				{
+					let label = String(message[instantiateRange.upperBound..<outsideRange.lowerBound])
+					let seam = String(message[outsideRange.upperBound..<declareRange.lowerBound])
+					let receivedLabel = message[declareRange.upperBound...].prefix { $0 != ":" }
+					let receivingSeam = String(message[onRange.upperBound..<readsRange.lowerBound])
+					let declaringTypes = notes.compactMap { declaringType(ofLabel: label, inNote: $0) }
+					if receivedLabel == label, receivingSeam == seam, !seam.contains("`"), let noteDeclaringType = declaringTypes.first {
+						remedies.append(.instantiateOutsideSeam(label: label, seam: seam, declaringType: noteDeclaringType, seamReceives: true))
+					}
+				}
+				// "instantiate `x` on a type above `S`, and receive it on `T` in place of its @Instantiated declaration", which
+				// begins the remedies, capitalized, where it is the first.
+				if let aboveRange = message.range(of: "` on a type above `"),
+				   let instantiateRange = message.range(of: "nstantiate `", options: .backwards, range: message.startIndex..<aboveRange.lowerBound),
+				   let receiveRange = message.range(of: "`, and receive it on `", range: aboveRange.upperBound..<message.endIndex),
+				   let placeRange = message.range(of: "` in place of its @Instantiated declaration", range: receiveRange.upperBound..<message.endIndex)
+				{
+					let label = String(message[instantiateRange.upperBound..<aboveRange.lowerBound])
+					let seam = String(message[aboveRange.upperBound..<receiveRange.lowerBound])
+					let declaringType = String(message[receiveRange.upperBound..<placeRange.lowerBound])
+					if ![label, seam, declaringType].contains(where: { $0.contains("`") }) {
+						remedies.append(.instantiateOutsideSeam(label: label, seam: seam, declaringType: declaringType, seamReceives: false))
+					}
+				}
+				// "Give `x` on `T` another label"
+				if let giveRange = message.range(of: " Give `"),
+				   let onRange = message.range(of: "` on `", range: giveRange.upperBound..<message.endIndex),
+				   let labelRange = message.range(of: "` another label", range: onRange.upperBound..<message.endIndex)
+				{
+					let label = String(message[giveRange.upperBound..<onRange.lowerBound])
+					let declaringType = String(message[onRange.upperBound..<labelRange.lowerBound])
+					if !label.contains("`"), !label.contains(":"), !declaringType.contains("`") {
+						remedies.append(.relabelCycleDeclaration(label: label, declaringType: declaringType))
+					}
+				}
+				return remedies
+			}
+
+			/// The property `@Attribute let label: Type` spells, or `nil` when it spells none.
+			private static func property(declaredIn spelling: Substring) -> GraphFuzzerRemedyProperty? {
+				guard let letRange = spelling.range(of: " let "), let separator = spelling.range(of: ": ", range: letRange.upperBound..<spelling.endIndex) else { return nil }
+				let attribute = spelling[..<letRange.lowerBound]
+				let label = spelling[letRange.upperBound..<separator.lowerBound]
+				let type = spelling[separator.upperBound...]
+				guard attribute.hasPrefix("@"), !label.isEmpty, label.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }), !type.isEmpty else { return nil }
+				return GraphFuzzerRemedyProperty(attribute: String(attribute), label: String(label), type: String(type))
+			}
+
+			/// The names a list in backticks gives – "`A`", "`A` and `B`", "`A`, `B`, and `C`" – or `nil` for a list spelled
+			/// otherwise.
+			private static func backtickedNames(in list: Substring) -> [String]? {
+				let parts = list.components(separatedBy: "`")
+				// The parts alternate between separators and names: "", "A", " and ", "B", "".
+				guard parts.count >= 3, parts.count % 2 == 1, parts.first == "", parts.last == "" else { return nil }
+				var names = [String]()
+				for (index, part) in parts.enumerated() {
+					if index % 2 == 1 {
+						guard !part.isEmpty else { return nil }
+						names.append(part)
+					} else if index > 0, index < parts.count - 1 {
+						guard [" and ", ", ", ", and "].contains(part) else { return nil }
+					}
+				}
+				return names
+			}
+
+			/// The type a note "`T` declares `label: X` here." names, or `nil` for any other note.
+			private static func declaringType(ofLabel label: String, inNote note: String) -> String? {
+				let marker = "` declares `\(label): "
+				guard note.hasPrefix("`"), note.hasSuffix("` here."), let markerRange = note.range(of: marker) else { return nil }
+				let typeName = note[note.index(after: note.startIndex)..<markerRange.lowerBound]
+				return typeName.contains("`") ? nil : String(typeName)
+			}
+		}
 
 		/// The remedy `message` states, or `nil` for an error outside the families the oracle reads, or one whose remedy
 		/// the oracle cannot apply as stated: an erased instantiator whose fulfilling type the error leaves to the user, or a
-		/// cycle an alias received only if available closes.
-		init?(message: String) {
+		/// cycle an alias received only if available closes. `notes`, the error's notes, name the declaration a seam fill's
+		/// remedy moves out of the seam.
+		init?(message: String, notes: [String] = []) {
 			let unfulfilledPrefix = "@Received property `"
 			let unfulfilledMarker = "` is not @Instantiated or @Forwarded in chain: "
 			let onlyIfAvailableRemedy = " Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required."
@@ -355,6 +552,13 @@ enum GraphFuzzerRemedies {
 				} else {
 					return nil
 				}
+			} else if SeamFillRemedy.isSeamFillError(message) {
+				// "`R` receives `x: X`, which … Declare `@Received let x: X` on `S`, so the builder’s values struct carries it, or
+				// declare an @Instantiable type that fulfills `P` in module `M` …": the remedies beside the one that fulfills the
+				// hole in the seam's module, which the oracle does not judge.
+				let remedies = SeamFillRemedy.remedies(statedIn: message, notes: notes)
+				guard !remedies.isEmpty else { return nil }
+				self = .seamFill(remedies)
 			} else {
 				return nil
 			}
@@ -465,6 +669,7 @@ enum GraphFuzzerRemedies {
 				|| error.message.contains(StatedRemedy.sendableCaptureMarker)
 				|| (error.message.hasPrefix("@Received property `") && error.message.contains(StatedRemedy.hiddenMarker) && error.message.hasSuffix(StatedRemedy.hiddenSuffix))
 				|| SeamLabelCollision(message: error.message) != nil
+				|| StatedRemedy.SeamFillRemedy.isSeamFillError(error.message)
 		}
 		let unremediedCount = sites(of: fixture, diagnostics: diagnostics).count(where: { site in
 			site.remedies.isEmpty && site.errors.contains(where: isOfAFamilyTheOracleReads)
@@ -481,10 +686,24 @@ enum GraphFuzzerRemedies {
 	/// the remedies they state.
 	private static func sites(of fixture: GraphFuzzerFixture, diagnostics: String) -> [(errors: [ReportedError], remedies: [GraphFuzzerRemedy])] {
 		guard reads(fixture), let files = Files(fixture) else { return [] }
+		// Each error with the notes that follow it.
+		var reportedErrors = [ReportedError]()
+		var followsAnError = false
+		for diagnosticLine in diagnostics.split(separator: "\n") {
+			if let error = ReportedError(diagnosticLine) {
+				reportedErrors.append(error)
+				followsAnError = true
+			} else if followsAnError, let note = ReportedError.noteMessage(of: diagnosticLine) {
+				reportedErrors[reportedErrors.count - 1].notes.append(note)
+			} else if !diagnosticLine.contains(": fixit: ") {
+				// A fix-it belongs to the error before it, as its notes do; any other line ends the error's notes.
+				followsAnError = false
+			}
+		}
 		var sites = [GraphFuzzerRemedy.Site]()
 		var errorsBySite = [GraphFuzzerRemedy.Site: [ReportedError]]()
-		for diagnosticLine in diagnostics.split(separator: "\n") {
-			guard let error = ReportedError(diagnosticLine), let site = files.site(of: error) else { continue }
+		for error in reportedErrors {
+			guard let site = files.site(of: error) else { continue }
 			if errorsBySite[site] == nil {
 				sites.append(site)
 			}
@@ -575,7 +794,7 @@ enum GraphFuzzerRemedies {
 	}
 
 	private static func remedies(at site: GraphFuzzerRemedy.Site, answering errors: [ReportedError], in files: Files, of fixture: GraphFuzzerFixture) -> [GraphFuzzerRemedy] {
-		let statedRemedies = errors.map { StatedRemedy(message: $0.message) }
+		let statedRemedies = errors.map { StatedRemedy(message: $0.message, notes: $0.notes) }
 		guard let firstStatedRemedy = statedRemedies.first.flatMap(\.self) else { return [] }
 		let answeredErrors = errors.map(\.message)
 		if case let .keepOneFulfiller(fulfilledType) = firstStatedRemedy {
@@ -765,6 +984,10 @@ enum GraphFuzzerRemedies {
 			guard !judgesNoRequiredOptionalReceive(in: fixture), statedRemedies.allSatisfy({ $0 == firstStatedRemedy }), label == site.label, siteProperty.attribute == "@Received" else { return [] }
 			let property = GraphFuzzerRemedyProperty(attribute: "@Received(onlyIfAvailable: true)", label: label, type: siteProperty.type)
 			return [remedy(.receiveOnlyIfAvailable, "decorates \(site) with `\(property.attribute)`", editing: [(site.typeName, replacingSiteProperty(with: property))])].compactMap(\.self)
+		case let .seamFill(fillRemedies):
+			// Each error at the site, one per root whose walk reached the fill, states the same remedies.
+			guard statedRemedies.allSatisfy({ $0 == firstStatedRemedy }) else { return [] }
+			return fillRemedies.compactMap { seamFillRemedy($0, at: site, siteProperty: siteProperty, answering: answeredErrors, in: files, of: fixture) }
 		case let .receiveSuggestedProperty(label, suggestions):
 			guard statedRemedies.allSatisfy({ $0 == firstStatedRemedy }), label == site.label, siteProperty.attribute == "@Received" else { return [] }
 			return suggestions.compactMap { suggestion in
@@ -784,6 +1007,128 @@ enum GraphFuzzerRemedies {
 		case .removeReceive:
 			guard statedRemedies.allSatisfy({ $0 == firstStatedRemedy }), siteProperty.attribute.hasPrefix("@Received") else { return [] }
 			return [remedy(.removeReceive, "removes \(site)", editing: [(site.typeName, { properties in properties.filter { $0.label != site.label } })])].compactMap(\.self)
+		}
+	}
+
+	/// `fillRemedy`, a remedy a seam fill's error at `site` states, applied to `files`, or `nil` when the declarations it
+	/// names are not in the fuzzer's form, or it would declare a label a type declares already. The remedy checks the
+	/// types it edits, and the type a declaration it moves builds, for errors it introduces (`errorsIntroduced`).
+	private static func seamFillRemedy(
+		_ fillRemedy: StatedRemedy.SeamFillRemedy,
+		at site: GraphFuzzerRemedy.Site,
+		siteProperty: GraphFuzzerRemedyProperty,
+		answering answeredErrors: [String],
+		in files: Files,
+		of fixture: GraphFuzzerFixture,
+	) -> GraphFuzzerRemedy? {
+		typealias Edit = (typeName: String, edit: ([GraphFuzzerRemedyProperty]) -> [GraphFuzzerRemedyProperty]?)
+		func adding(_ property: GraphFuzzerRemedyProperty) -> ([GraphFuzzerRemedyProperty]) -> [GraphFuzzerRemedyProperty]? {
+			{ properties in properties.contains { $0.label == property.label } ? nil : properties + [property] }
+		}
+		func replacing(label: String, with property: GraphFuzzerRemedyProperty) -> ([GraphFuzzerRemedyProperty]) -> [GraphFuzzerRemedyProperty]? {
+			{ properties in
+				guard properties.contains(where: { $0.label == label }),
+				      !properties.contains(where: { $0.label == property.label && $0.label != label })
+				else { return nil }
+				return properties.map { $0.label == label ? property : $0 }
+			}
+		}
+		func named(_ typeNames: [String]) -> String {
+			typeNames.map { "`\($0)`" }.joined(separator: " and ")
+		}
+		let kind: GraphFuzzerRemedyKind
+		let description: String
+		var edits = [Edit]()
+		var checkedTypeNames = [String]()
+		switch fillRemedy {
+		case let .receiveOnSeam(property, seams):
+			kind = .receiveOnSeam
+			description = "declares `\(property.attribute) let \(property.label): \(property.type)` on \(named(seams))"
+			edits = seams.map { ($0, adding(property)) }
+			checkedTypeNames = seams
+		case let .receiveOnlyIfAvailableOnSeamAndReader(property, seam, reader):
+			guard reader == site.typeName, property.label == site.label, siteProperty.attribute.hasPrefix("@Received") else { return nil }
+			kind = .receiveOnlyIfAvailableOnSeamAndReader
+			description = "declares `\(property.attribute) let \(property.label): \(property.type)` on `\(seam)` and \(site)"
+			edits = [(seam, adding(property)), (reader, replacing(label: site.label, with: property))]
+			checkedTypeNames = [seam]
+		case let .forwardIntoSendableFunction(property, builtType):
+			kind = .forwardIntoSendableFunction
+			description = "declares `\(property.attribute) let \(property.label): \(property.type)` on `\(builtType)`"
+			edits = [(builtType, adding(property))]
+			checkedTypeNames = [builtType]
+		case let .instantiateOutsideSeam(label, seam, declaringType, seamReceives):
+			// The declaration moves to the builder's callers, the types outside the seam that build it, and its type and the
+			// seam receive it.
+			guard let declaration = files.property(labeled: label, ofTypeNamed: declaringType), declaration.attribute.hasPrefix("@Instantiated") else { return nil }
+			let builders = files.namesOfTypes(callingBuilderOfSeamNamed: seam).filter { $0 != declaringType }
+			guard !builders.isEmpty else { return nil }
+			let receive = GraphFuzzerRemedyProperty(attribute: "@Received", label: label, type: declaration.type)
+			kind = .instantiateOutsideSeam
+			var receivers = [declaringType]
+			edits = [(declaringType, replacing(label: label, with: receive))]
+			if seamReceives, seam != declaringType {
+				receivers.append(seam)
+				edits.append((seam, adding(receive)))
+			}
+			edits += builders.map { ($0, adding(declaration)) }
+			description = "declares `\(declaration.attribute) let \(label): \(declaration.type)` on \(named(builders)), and `\(receive.attribute) let \(label): \(receive.type)` on \(named(receivers)) in place of `\(declaringType)`’s declaration"
+			checkedTypeNames = receivers + builders + [builtTypeName(of: declaration)].compactMap(\.self)
+		case let .relabelCycleDeclaration(label, declaringType):
+			let newLabel = "\(label)Relabeled"
+			guard let declaration = files.property(labeled: label, ofTypeNamed: declaringType) else { return nil }
+			kind = .relabelCycleDeclaration
+			description = "gives `\(label): \(declaration.type)` on `\(declaringType)` the label `\(newLabel)`"
+			edits = [(declaringType, replacing(label: label, with: GraphFuzzerRemedyProperty(attribute: declaration.attribute, label: newLabel, type: declaration.type)))]
+			checkedTypeNames = [declaringType]
+		}
+		var editedFiles = files
+		for (typeName, edit) in edits {
+			guard editedFiles.edit(typeNamed: typeName, edit) else { return nil }
+		}
+		return GraphFuzzerRemedy(
+			kind: kind,
+			site: site,
+			answeredErrors: answeredErrors,
+			description: description,
+			fixture: GraphFuzzerFixture(seed: fixture.seed, swiftFileContent: editedFiles.contents),
+			checkedTypeNames: checkedTypeNames,
+		)
+	}
+
+	/// The name of the type `property`, a declaration the fuzzer writes, builds: the type `fulfilledByType:` names, the
+	/// type an instantiator or a lazy wrapper builds, or the property's own type, or `nil` for any other spelling.
+	static func builtTypeName(of property: GraphFuzzerRemedyProperty) -> String? {
+		let fulfilledByTypePrefix = "fulfilledByType: \""
+		if let prefixRange = property.attribute.range(of: fulfilledByTypePrefix) {
+			return String(property.attribute[prefixRange.upperBound...].prefix { $0 != "\"" })
+		}
+		var type = Substring(property.type)
+		for wrapper in ["SendableInstantiator<", "Instantiator<", "SendableLazilyInstantiated<", "LazilyInstantiated<"] where type.hasPrefix(wrapper) && type.hasSuffix(">") {
+			type = type.dropFirst(wrapper.count).dropLast()
+			break
+		}
+		return !type.isEmpty && type.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }) ? String(type) : nil
+	}
+
+	/// The messages of the errors `outcome`, a seam fill's remedy's run, reports that `originalDiagnostics`, the tool's on
+	/// the graph before the remedy, did not, beside the remedy's site: those at a declaration of a type the remedy checks
+	/// (`GraphFuzzerRemedy.checkedTypeNames`), and those of a declaration that cannot build such a type, which has
+	/// `@Forwarded` properties now. An error elsewhere is allowed, as at any remedy's site.
+	static func errorsIntroduced(by remedy: GraphFuzzerRemedy, outcome: GraphFuzzerToolOutcome, originalDiagnostics: String) -> [String] {
+		guard !remedy.checkedTypeNames.isEmpty, case let .rejected(diagnostics) = outcome, let files = Files(remedy.fixture) else { return [] }
+		let originalMessages = Set(originalDiagnostics.split(separator: "\n").compactMap { ReportedError($0)?.message })
+		return diagnostics.split(separator: "\n").compactMap { diagnosticLine in
+			guard let error = ReportedError(diagnosticLine), !originalMessages.contains(error.message) else { return nil }
+			let site = files.site(of: error)
+			guard site != remedy.site else { return nil }
+			if let site, remedy.checkedTypeNames.contains(site.typeName) {
+				return error.message
+			} else if isForwardedBuilderError(error.message), remedy.checkedTypeNames.contains(where: { error.message.contains(" cannot build `\($0)`, ") }) {
+				return error.message
+			} else {
+				return nil
+			}
 		}
 	}
 
@@ -941,6 +1286,86 @@ enum GraphFuzzerRemedies {
 					}
 				}.map(\.name)
 			}
+		}
+
+		/// The names of the `final class`es that instantiate the type named `typeName`, by value or in a wrapper, in the
+		/// files' order.
+		func namesOfTypes(buildingTypeNamed typeName: String) -> [String] {
+			contents.flatMap { content in
+				let lines = Self.lines(of: content)
+				return Self.typeDeclarations(in: lines).filter { typeDeclaration in
+					typeDeclaration.lines.contains { lineIndex in
+						Self.property(on: lines[lineIndex]).map { $0.attribute.hasPrefix("@Instantiated") && ($0.type == typeName || $0.type.hasSuffix("<\(typeName)>")) } ?? false
+					}
+				}.map(\.name)
+			}
+		}
+
+		/// The names of the types that call a builder the seam named `seamName` takes, in the order the walk meets them: each
+		/// type that instantiates the seam and that the seam's own tree does not build, or, for such a type that is a seam
+		/// itself, which passes the builder up to its own caller, that seam's such types in its place.
+		func namesOfTypes(callingBuilderOfSeamNamed seamName: String) -> [String] {
+			var names = [String]()
+			var visited: Set = [seamName]
+			var pending = [seamName]
+			while !pending.isEmpty {
+				let seam = pending.removeFirst()
+				let typesTheSeamBuilds = namesOfTypes(builtBeneath: seam)
+				for builder in namesOfTypes(buildingTypeNamed: seam) where !typesTheSeamBuilds.contains(builder) && visited.insert(builder).inserted {
+					if declaresSeam(named: builder) {
+						pending.append(builder)
+					} else {
+						names.append(builder)
+					}
+				}
+			}
+			return names
+		}
+
+		/// The names of the types the tree of the type named `typeName` builds, directly or beneath another: through each
+		/// `@Instantiated` property, the type it names, `fulfilledByType:` names, or a wrapper builds, or, for an existential,
+		/// each type whose `fulfillingAdditionalTypes` lists its protocol.
+		private func namesOfTypes(builtBeneath typeName: String) -> Set<String> {
+			var built = Set<String>()
+			var pending = [typeName]
+			while let current = pending.popLast() {
+				guard let (fileIndex, typeDeclaration) = typeDeclaration(named: current) else { continue }
+				let lines = Self.lines(of: contents[fileIndex])
+				for lineIndex in typeDeclaration.lines {
+					guard let property = Self.property(on: lines[lineIndex]), property.attribute.hasPrefix("@Instantiated") else { continue }
+					for name in namesOfTypes(builtBy: property) where built.insert(name).inserted {
+						pending.append(name)
+					}
+				}
+			}
+			return built
+		}
+
+		/// The types `property`, an `@Instantiated` declaration, builds: the one `GraphFuzzerRemedies.builtTypeName(of:)`
+		/// reads, or, for an existential `any P`, alone or in a wrapper, the types whose `@Instantiable` attribute lists
+		/// `P.self` among its `fulfillingAdditionalTypes`.
+		private func namesOfTypes(builtBy property: GraphFuzzerRemedyProperty) -> [String] {
+			if let name = GraphFuzzerRemedies.builtTypeName(of: property) {
+				return [name]
+			}
+			guard let existentialRange = property.type.range(of: "any ") else { return [] }
+			let protocolName = property.type[existentialRange.upperBound...].prefix { $0.isLetter || $0.isNumber || $0 == "_" }
+			guard !protocolName.isEmpty else { return [] }
+			return contents.flatMap { content in
+				let lines = Self.lines(of: content)
+				return Self.typeDeclarations(in: lines).filter { typeDeclaration in
+					let attributeIndex = typeDeclaration.lines.lowerBound - 2
+					return attributeIndex >= 0 && lines[attributeIndex].hasPrefix("@Instantiable(") && lines[attributeIndex].contains("\(protocolName).self")
+				}.map(\.name)
+			}
+		}
+
+		/// Whether the `final class` named `typeName` is a seam: its `@Instantiable` attribute generates its dependency tree.
+		private func declaresSeam(named typeName: String) -> Bool {
+			guard let (fileIndex, typeDeclaration) = typeDeclaration(named: typeName) else { return false }
+			let lines = Self.lines(of: contents[fileIndex])
+			let attributeIndex = typeDeclaration.lines.lowerBound - 2
+			return attributeIndex >= 0 && lines[attributeIndex].hasPrefix("@Instantiable(") && lines[attributeIndex].contains("generateDependencyTree: true")
 		}
 
 		/// The property labeled `label` that the `final class` named `typeName` declares, in the first file that declares it.
@@ -1133,7 +1558,7 @@ extension GraphFuzzerOracle {
 			}
 			let introducedErrors = remedy.kind == .forwardReceive
 				? GraphFuzzerRemedies.errorsIntroducedByForwarding(remedy, outcome: remedyOutcome, originalDiagnostics: diagnostics)
-				: []
+				: GraphFuzzerRemedies.errorsIntroduced(by: remedy, outcome: remedyOutcome, originalDiagnostics: diagnostics)
 			runs.append(GraphFuzzerRemedyRun(remedy: remedy, outcome: remedyOutcome, introducedErrors: introducedErrors))
 		}
 		return runs
