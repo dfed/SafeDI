@@ -1,0 +1,11 @@
+# Functions of SafeDICore known to be over a limit of function-compile-time-check.py: `sil` or `type-check`, a ceiling
+# in seconds, and the start of the function's name as the check prints it. A waiver that matches no function over the
+# limit fails the check, so remove a line in the change that brings its function under the limit.
+
+# A 646-line initializer whose computed blocks the optimizer handles as one function: 172 to 198 s measured, of which
+# one `sil-combine` run is 96 s. Splitting its blocks into functions of their own removes this line.
+sil 300 SafeDICore.ScopeGenerator.init(instantiable:
+
+# `sourceDiagnostics`, a switch whose arms join arrays with `+` over `map` and `sorted`: 10 to 12 s measured. Building
+# each arm's array with sequential appends removes this line.
+type-check 20 getter SafeDICore.(file).DependencyTreeGenerator.DependencyTreeGeneratorError._
