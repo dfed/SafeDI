@@ -5163,10 +5163,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Service {
 			        let retries = retries ?? (3)
-			        func __safeDI_logger() -> Logger {
+			        func __safeDI_logger() -> any Logger {
 			            return FakeLogger.__safeDI_mock(verbose: safeDIOverrides.logger.verbose, safeDIBuilder: safeDIOverrides.logger.safeDIBuilder)
 			        }
-			        let logger: Logger = __safeDI_logger()
+			        let logger: any Logger = __safeDI_logger()
 			        func __safeDI_analytics() -> Analytics {
 			            if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 			        }
@@ -6264,7 +6264,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    nonisolated public struct SafeDIOverrides {
 		        public init(
-		            auth: (() -> Auth)? = nil,
+		            auth: (() -> any Auth)? = nil,
 		            inner: (() -> Outer.Inner)? = nil,
 		            analytics: (() -> Analytics)? = nil,
 		            sessionBuilder: (() -> Session)? = nil,
@@ -6283,7 +6283,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            )
 		        }
 
-		        public var auth: (() -> Auth)? { __safeDI_storage.auth }
+		        public var auth: (() -> any Auth)? { __safeDI_storage.auth }
 		        public var inner: (() -> Outer.Inner)? { __safeDI_storage.inner }
 		        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
 		        public var sessionBuilder: (() -> Session)? { __safeDI_storage.sessionBuilder }
@@ -6297,7 +6297,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		        private final class __safeDI_Storage {
 		            init(
-		                auth: (() -> Auth)?,
+		                auth: (() -> any Auth)?,
 		                inner: (() -> Outer.Inner)?,
 		                analytics: (() -> Analytics)?,
 		                sessionBuilder: (() -> Session)?,
@@ -6314,7 +6314,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                self.onCancel = onCancel
 		            }
 
-		            let auth: (() -> Auth)?
+		            let auth: (() -> any Auth)?
 		            let inner: (() -> Outer.Inner)?
 		            let analytics: (() -> Analytics)?
 		            let sessionBuilder: (() -> Session)?
@@ -6373,7 +6373,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    ) -> Service {
 		        let retries = retries ?? (3)
 		        let onFinish = onFinish ?? ({})
-		        let auth: Auth = if let auth { auth } else if let safeDIBuilder = safeDIOverrides.auth { safeDIBuilder() } else { DefaultAuth() }
+		        let auth: any Auth = if let auth { auth } else if let safeDIBuilder = safeDIOverrides.auth { safeDIBuilder() } else { DefaultAuth() }
 		        let inner = if let inner { inner } else if let safeDIBuilder = safeDIOverrides.inner { safeDIBuilder() } else { Outer.Inner() }
 		        let analytics = if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        func __safeDI_sessionBuilder() -> Session {
@@ -6829,32 +6829,32 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        }
 
 		        package init(
-		            userService: (() -> UserService)? = nil
+		            userService: (() -> any UserService)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                userService: userService
 		            )
 		        }
 
-		        package var userService: (() -> UserService)? { __safeDI_storage.userService }
+		        package var userService: (() -> any UserService)? { __safeDI_storage.userService }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
 		        private final class __safeDI_Storage {
 		            init(
-		                userService: (() -> UserService)?
+		                userService: (() -> any UserService)?
 		            ) {
 		                self.userService = userService
 		            }
 
-		            let userService: (() -> UserService)?
+		            let userService: (() -> any UserService)?
 		        }
 		    }
 
 		    public static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
-		        let userService: UserService = if let safeDIBuilder = safeDIOverrides.userService { safeDIBuilder() } else { PreviewUserService.mock() }
+		        let userService: any UserService = if let safeDIBuilder = safeDIOverrides.userService { safeDIBuilder() } else { PreviewUserService.mock() }
 		        return Service(userService: userService)
 		    }
 		}
@@ -9025,7 +9025,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
-		            filter: (() -> FilterProtocol)? = nil,
+		            filter: (() -> any FilterProtocol)? = nil,
 		            service: Service.SafeDIOverrides = .init(),
 		            board: Board.SafeDIOverrides = .init()
 		        ) {
@@ -9038,7 +9038,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        }
 
 		        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
-		        public var filter: (() -> FilterProtocol)? { __safeDI_storage.filter }
+		        public var filter: (() -> any FilterProtocol)? { __safeDI_storage.filter }
 		        public var service: Service.SafeDIOverrides { __safeDI_storage.service }
 		        public var board: Board.SafeDIOverrides { __safeDI_storage.board }
 
@@ -9047,7 +9047,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        private final class __safeDI_Storage {
 		            init(
 		                analytics: (() -> Analytics)?,
-		                filter: (() -> FilterProtocol)?,
+		                filter: (() -> any FilterProtocol)?,
 		                service: Service.SafeDIOverrides,
 		                board: Board.SafeDIOverrides
 		            ) {
@@ -9058,7 +9058,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            let analytics: (() -> Analytics)?
-		            let filter: (() -> FilterProtocol)?
+		            let filter: (() -> any FilterProtocol)?
 		            let service: Service.SafeDIOverrides
 		            let board: Board.SafeDIOverrides
 		        }
@@ -9069,7 +9069,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        let filter: FilterProtocol = if let filter { filter } else if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder() } else { CoreFilter() }
+		        let filter: any FilterProtocol = if let filter { filter } else if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder() } else { CoreFilter() }
 		        func __safeDI_service() -> Service {
 		            func __safeDI_defaultUserService_AnyUserServiceBuilder_Service_userService(_ scope: Service.SafeDIMockScope_DefaultUserService_AnyUserService.userService_Values) -> AnyUserService {
 		                let analytics = scope.analytics
@@ -9153,7 +9153,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            analytics: (() -> Analytics)? = nil,
-		            filter: (() -> FilterProtocol)? = nil,
+		            filter: (() -> any FilterProtocol)? = nil,
 		            service: Service.SafeDIOverrides = .init(),
 		            board: Board.SafeDIOverrides = .init()
 		        ) {
@@ -9166,7 +9166,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        }
 
 		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
-		        var filter: (() -> FilterProtocol)? { __safeDI_storage.filter }
+		        var filter: (() -> any FilterProtocol)? { __safeDI_storage.filter }
 		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
 		        var board: Board.SafeDIOverrides { __safeDI_storage.board }
 
@@ -9175,7 +9175,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        private final class __safeDI_Storage {
 		            init(
 		                analytics: (() -> Analytics)?,
-		                filter: (() -> FilterProtocol)?,
+		                filter: (() -> any FilterProtocol)?,
 		                service: Service.SafeDIOverrides,
 		                board: Board.SafeDIOverrides
 		            ) {
@@ -9186,7 +9186,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            let analytics: (() -> Analytics)?
-		            let filter: (() -> FilterProtocol)?
+		            let filter: (() -> any FilterProtocol)?
 		            let service: Service.SafeDIOverrides
 		            let board: Board.SafeDIOverrides
 		        }
@@ -9196,7 +9196,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder() } else { CoreFilter() }
+		        let filter: any FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder() } else { CoreFilter() }
 		        func __safeDI_service() -> Service {
 		            func __safeDI_defaultUserService_AnyUserServiceBuilder_Service_userService(_ scope: Service.SafeDIMockScope_DefaultUserService_AnyUserService.userService_Values) -> AnyUserService {
 		                let analytics = scope.analytics
@@ -9280,7 +9280,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
-		            filter: (() -> FilterProtocol)? = nil,
+		            filter: (() -> any FilterProtocol)? = nil,
 		            service: Service.SafeDIOverrides = .init(),
 		            board: Board.SafeDIOverrides = .init()
 		        ) {
@@ -9293,7 +9293,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        }
 
 		        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
-		        public var filter: (() -> FilterProtocol)? { __safeDI_storage.filter }
+		        public var filter: (() -> any FilterProtocol)? { __safeDI_storage.filter }
 		        public var service: Service.SafeDIOverrides { __safeDI_storage.service }
 		        public var board: Board.SafeDIOverrides { __safeDI_storage.board }
 
@@ -9302,7 +9302,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        private final class __safeDI_Storage {
 		            init(
 		                analytics: (() -> Analytics)?,
-		                filter: (() -> FilterProtocol)?,
+		                filter: (() -> any FilterProtocol)?,
 		                service: Service.SafeDIOverrides,
 		                board: Board.SafeDIOverrides
 		            ) {
@@ -9313,7 +9313,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            let analytics: (() -> Analytics)?
-		            let filter: (() -> FilterProtocol)?
+		            let filter: (() -> any FilterProtocol)?
 		            let service: Service.SafeDIOverrides
 		            let board: Board.SafeDIOverrides
 		        }
@@ -9324,7 +9324,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        func __safeDI_filter() -> FilterProtocol {
+		        func __safeDI_filter() -> any FilterProtocol {
 		            if let filter { filter } else if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder() } else { CoreFilter() }
 		        }
 		        let filter = LazilyInstantiated<any FilterProtocol>(__safeDI_filter)
@@ -9503,7 +9503,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    nonisolated public struct SafeDIOverrides {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
-		            filter: (() -> FilterProtocol)? = nil,
+		            filter: (() -> any FilterProtocol)? = nil,
 		            service: Service.SafeDIOverrides = .init()
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
@@ -9514,7 +9514,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        }
 
 		        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
-		        public var filter: (() -> FilterProtocol)? { __safeDI_storage.filter }
+		        public var filter: (() -> any FilterProtocol)? { __safeDI_storage.filter }
 		        public var service: Service.SafeDIOverrides { __safeDI_storage.service }
 
 		        private let __safeDI_storage: __safeDI_Storage
@@ -9522,7 +9522,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        private final class __safeDI_Storage {
 		            init(
 		                analytics: (() -> Analytics)?,
-		                filter: (() -> FilterProtocol)?,
+		                filter: (() -> any FilterProtocol)?,
 		                service: Service.SafeDIOverrides
 		            ) {
 		                self.analytics = analytics
@@ -9531,7 +9531,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            let analytics: (() -> Analytics)?
-		            let filter: (() -> FilterProtocol)?
+		            let filter: (() -> any FilterProtocol)?
 		            let service: Service.SafeDIOverrides
 		        }
 		    }
@@ -9540,7 +9540,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder() } else { AppFilter() }
+		        let filter: any FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder() } else { AppFilter() }
 		        func __safeDI_service() -> Service {
 		            func __safeDI_defaultUserService_AnyUserServiceBuilder_Service_userService(_ scope: Service.SafeDIMockScope_DefaultUserService_AnyUserService.userService_Values) -> AnyUserService {
 		                let analytics = scope.analytics
@@ -9590,7 +9590,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init(),
-		            filter: ((Service) -> FilterProtocol)? = nil
+		            filter: ((Service) -> any FilterProtocol)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                analytics: analytics,
@@ -9601,7 +9601,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
 		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
-		        var filter: ((Service) -> FilterProtocol)? { __safeDI_storage.filter }
+		        var filter: ((Service) -> any FilterProtocol)? { __safeDI_storage.filter }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -9609,7 +9609,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            init(
 		                analytics: (() -> Analytics)?,
 		                service: Service.SafeDIOverrides,
-		                filter: ((Service) -> FilterProtocol)?
+		                filter: ((Service) -> any FilterProtocol)?
 		            ) {
 		                self.analytics = analytics
 		                self.service = service
@@ -9618,7 +9618,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		            let analytics: (() -> Analytics)?
 		            let service: Service.SafeDIOverrides
-		            let filter: ((Service) -> FilterProtocol)?
+		            let filter: ((Service) -> any FilterProtocol)?
 		        }
 		    }
 
@@ -9643,7 +9643,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            return Service.__safeDI_mock(defaultUserService_AnyUserServiceBuilder: __safeDI_defaultUserService_AnyUserServiceBuilder_Service(), analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
-		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        let filter: any FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
 		        return Screen(analytics: analytics, service: service, filter: filter)
 		    }
 		}
@@ -9670,7 +9670,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init(),
-		            filter: ((Service) -> FilterProtocol)? = nil
+		            filter: ((Service) -> any FilterProtocol)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                analytics: analytics,
@@ -9681,7 +9681,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
 		        public var service: Service.SafeDIOverrides { __safeDI_storage.service }
-		        public var filter: ((Service) -> FilterProtocol)? { __safeDI_storage.filter }
+		        public var filter: ((Service) -> any FilterProtocol)? { __safeDI_storage.filter }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -9689,7 +9689,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            init(
 		                analytics: (() -> Analytics)?,
 		                service: Service.SafeDIOverrides,
-		                filter: ((Service) -> FilterProtocol)?
+		                filter: ((Service) -> any FilterProtocol)?
 		            ) {
 		                self.analytics = analytics
 		                self.service = service
@@ -9698,7 +9698,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		            let analytics: (() -> Analytics)?
 		            let service: Service.SafeDIOverrides
-		            let filter: ((Service) -> FilterProtocol)?
+		            let filter: ((Service) -> any FilterProtocol)?
 		        }
 		    }
 
@@ -9723,7 +9723,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            return Service.__safeDI_mock(defaultUserService_AnyUserServiceBuilder: __safeDI_defaultUserService_AnyUserServiceBuilder_Service(), analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
-		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        let filter: any FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
 		        return Screen(analytics: analytics, service: service, filter: filter)
 		    }
 		}
@@ -9754,7 +9754,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            analytics: (() -> Analytics)? = nil,
-		            filter: ((Service?) -> FilterProtocol)? = nil,
+		            filter: ((Service?) -> any FilterProtocol)? = nil,
 		            service: Service.SafeDIOverrides = .init()
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
@@ -9765,7 +9765,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        }
 
 		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
-		        var filter: ((Service?) -> FilterProtocol)? { __safeDI_storage.filter }
+		        var filter: ((Service?) -> any FilterProtocol)? { __safeDI_storage.filter }
 		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
 
 		        private let __safeDI_storage: __safeDI_Storage
@@ -9773,7 +9773,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        private final class __safeDI_Storage {
 		            init(
 		                analytics: (() -> Analytics)?,
-		                filter: ((Service?) -> FilterProtocol)?,
+		                filter: ((Service?) -> any FilterProtocol)?,
 		                service: Service.SafeDIOverrides
 		            ) {
 		                self.analytics = analytics
@@ -9782,7 +9782,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            let analytics: (() -> Analytics)?
-		            let filter: ((Service?) -> FilterProtocol)?
+		            let filter: ((Service?) -> any FilterProtocol)?
 		            let service: Service.SafeDIOverrides
 		        }
 		    }
@@ -9791,7 +9791,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(nil) } else { AppFilter(service: nil) }
+		        let filter: any FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(nil) } else { AppFilter(service: nil) }
 		        func __safeDI_service() -> Service {
 		            func __safeDI_defaultUserService_AnyUserServiceBuilder_Service_userService(_ scope: Service.SafeDIMockScope_DefaultUserService_AnyUserService.userService_Values) -> AnyUserService {
 		                let analytics = scope.analytics
@@ -9837,7 +9837,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init(),
-		            filter: ((Service) -> FilterProtocol)? = nil,
+		            filter: ((Service) -> any FilterProtocol)? = nil,
 		            laterService: Service.SafeDIOverrides = .init()
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
@@ -9850,7 +9850,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
 		        public var service: Service.SafeDIOverrides { __safeDI_storage.service }
-		        public var filter: ((Service) -> FilterProtocol)? { __safeDI_storage.filter }
+		        public var filter: ((Service) -> any FilterProtocol)? { __safeDI_storage.filter }
 		        public var laterService: Service.SafeDIOverrides { __safeDI_storage.laterService }
 
 		        private let __safeDI_storage: __safeDI_Storage
@@ -9859,7 +9859,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            init(
 		                analytics: (() -> Analytics)?,
 		                service: Service.SafeDIOverrides,
-		                filter: ((Service) -> FilterProtocol)?,
+		                filter: ((Service) -> any FilterProtocol)?,
 		                laterService: Service.SafeDIOverrides
 		            ) {
 		                self.analytics = analytics
@@ -9870,7 +9870,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		            let analytics: (() -> Analytics)?
 		            let service: Service.SafeDIOverrides
-		            let filter: ((Service) -> FilterProtocol)?
+		            let filter: ((Service) -> any FilterProtocol)?
 		            let laterService: Service.SafeDIOverrides
 		        }
 		    }
@@ -9896,7 +9896,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            return Service.__safeDI_mock(defaultUserService_AnyUserServiceBuilder: __safeDI_defaultUserService_AnyUserServiceBuilder_Service(), analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
-		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        let filter: any FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
 		        func __safeDI_laterService() -> Service {
 		            func __safeDI_defaultUserService_AnyUserServiceBuilder_Service_userService(_ scope: Service.SafeDIMockScope_DefaultUserService_AnyUserService.userService_Values) -> AnyUserService {
 		                let analytics = scope.analytics
@@ -9966,7 +9966,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init(),
-		            filter: ((Service) -> FilterProtocol)? = nil
+		            filter: ((Service) -> any FilterProtocol)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                analytics: analytics,
@@ -9977,7 +9977,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
 		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
-		        var filter: ((Service) -> FilterProtocol)? { __safeDI_storage.filter }
+		        var filter: ((Service) -> any FilterProtocol)? { __safeDI_storage.filter }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -9985,7 +9985,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            init(
 		                analytics: (() -> Analytics)?,
 		                service: Service.SafeDIOverrides,
-		                filter: ((Service) -> FilterProtocol)?
+		                filter: ((Service) -> any FilterProtocol)?
 		            ) {
 		                self.analytics = analytics
 		                self.service = service
@@ -9994,7 +9994,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		            let analytics: (() -> Analytics)?
 		            let service: Service.SafeDIOverrides
-		            let filter: ((Service) -> FilterProtocol)?
+		            let filter: ((Service) -> any FilterProtocol)?
 		        }
 		    }
 
@@ -10033,7 +10033,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            return Service.__safeDI_mock(defaultUserService_AnyUserServiceBuilder: __safeDI_defaultUserService_AnyUserServiceBuilder_Service(), analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
-		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        let filter: any FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
 		        return Screen(analytics: analytics, service: service, filter: filter)
 		    }
 		}
@@ -10077,7 +10077,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            analytics: (() -> Analytics)? = nil,
-		            filter: (() -> FilterProtocol)? = nil,
+		            filter: (() -> any FilterProtocol)? = nil,
 		            service: Service.SafeDIOverrides = .init()
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
@@ -10088,7 +10088,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        }
 
 		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
-		        var filter: (() -> FilterProtocol)? { __safeDI_storage.filter }
+		        var filter: (() -> any FilterProtocol)? { __safeDI_storage.filter }
 		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
 
 		        private let __safeDI_storage: __safeDI_Storage
@@ -10096,7 +10096,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        private final class __safeDI_Storage {
 		            init(
 		                analytics: (() -> Analytics)?,
-		                filter: (() -> FilterProtocol)?,
+		                filter: (() -> any FilterProtocol)?,
 		                service: Service.SafeDIOverrides
 		            ) {
 		                self.analytics = analytics
@@ -10105,7 +10105,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 
 		            let analytics: (() -> Analytics)?
-		            let filter: (() -> FilterProtocol)?
+		            let filter: (() -> any FilterProtocol)?
 		            let service: Service.SafeDIOverrides
 		        }
 		    }
@@ -10114,7 +10114,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        func __safeDI_filter() -> FilterProtocol {
+		        func __safeDI_filter() -> any FilterProtocol {
 		            if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder() } else { AppFilter() }
 		        }
 		        let filter = LazilyInstantiated<any FilterProtocol>(__safeDI_filter)
@@ -14020,7 +14020,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init(),
-		            filter: ((Service) -> FilterProtocol)? = nil
+		            filter: ((Service) -> any FilterProtocol)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                analytics: analytics,
@@ -14031,7 +14031,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
 		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
-		        var filter: ((Service) -> FilterProtocol)? { __safeDI_storage.filter }
+		        var filter: ((Service) -> any FilterProtocol)? { __safeDI_storage.filter }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -14039,7 +14039,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            init(
 		                analytics: (() -> Analytics)?,
 		                service: Service.SafeDIOverrides,
-		                filter: ((Service) -> FilterProtocol)?
+		                filter: ((Service) -> any FilterProtocol)?
 		            ) {
 		                self.analytics = analytics
 		                self.service = service
@@ -14048,7 +14048,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		            let analytics: (() -> Analytics)?
 		            let service: Service.SafeDIOverrides
-		            let filter: ((Service) -> FilterProtocol)?
+		            let filter: ((Service) -> any FilterProtocol)?
 		        }
 		    }
 
@@ -14058,7 +14058,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
-		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        let filter: any FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
 		        return Screen(analytics: analytics, service: service, filter: filter)
 		    }
 		}
@@ -14087,7 +14087,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init(),
-		            filter: ((Service) -> FilterProtocol)? = nil
+		            filter: ((Service) -> any FilterProtocol)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                analytics: analytics,
@@ -14098,7 +14098,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
 		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
-		        var filter: ((Service) -> FilterProtocol)? { __safeDI_storage.filter }
+		        var filter: ((Service) -> any FilterProtocol)? { __safeDI_storage.filter }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -14106,7 +14106,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            init(
 		                analytics: (() -> Analytics)?,
 		                service: Service.SafeDIOverrides,
-		                filter: ((Service) -> FilterProtocol)?
+		                filter: ((Service) -> any FilterProtocol)?
 		            ) {
 		                self.analytics = analytics
 		                self.service = service
@@ -14115,7 +14115,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		            let analytics: (() -> Analytics)?
 		            let service: Service.SafeDIOverrides
-		            let filter: ((Service) -> FilterProtocol)?
+		            let filter: ((Service) -> any FilterProtocol)?
 		        }
 		    }
 
@@ -14125,7 +14125,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
-		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        let filter: any FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
 		        return Screen(analytics: analytics, service: service, filter: filter)
 		    }
 		}
@@ -14153,7 +14153,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init(),
-		            filter: ((Service) -> FilterProtocol)? = nil
+		            filter: ((Service) -> any FilterProtocol)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                analytics: analytics,
@@ -14164,7 +14164,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
 		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
-		        var filter: ((Service) -> FilterProtocol)? { __safeDI_storage.filter }
+		        var filter: ((Service) -> any FilterProtocol)? { __safeDI_storage.filter }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -14172,7 +14172,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            init(
 		                analytics: (() -> Analytics)?,
 		                service: Service.SafeDIOverrides,
-		                filter: ((Service) -> FilterProtocol)?
+		                filter: ((Service) -> any FilterProtocol)?
 		            ) {
 		                self.analytics = analytics
 		                self.service = service
@@ -14181,7 +14181,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		            let analytics: (() -> Analytics)?
 		            let service: Service.SafeDIOverrides
-		            let filter: ((Service) -> FilterProtocol)?
+		            let filter: ((Service) -> any FilterProtocol)?
 		        }
 		    }
 
@@ -14194,7 +14194,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let service = Service.mock(analytics: analytics.instance, safeDIOverrides: safeDIOverrides.service)
-		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        let filter: any FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
 		        return Screen(analytics: analytics, service: service, filter: filter)
 		    }
 		}
@@ -14222,7 +14222,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        init(
 		            analyticsBuilder: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init(),
-		            filter: ((Service) -> FilterProtocol)? = nil
+		            filter: ((Service) -> any FilterProtocol)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                analyticsBuilder: analyticsBuilder,
@@ -14233,7 +14233,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		        var analyticsBuilder: (() -> Analytics)? { __safeDI_storage.analyticsBuilder }
 		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
-		        var filter: ((Service) -> FilterProtocol)? { __safeDI_storage.filter }
+		        var filter: ((Service) -> any FilterProtocol)? { __safeDI_storage.filter }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -14241,7 +14241,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            init(
 		                analyticsBuilder: (() -> Analytics)?,
 		                service: Service.SafeDIOverrides,
-		                filter: ((Service) -> FilterProtocol)?
+		                filter: ((Service) -> any FilterProtocol)?
 		            ) {
 		                self.analyticsBuilder = analyticsBuilder
 		                self.service = service
@@ -14250,7 +14250,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		            let analyticsBuilder: (() -> Analytics)?
 		            let service: Service.SafeDIOverrides
-		            let filter: ((Service) -> FilterProtocol)?
+		            let filter: ((Service) -> any FilterProtocol)?
 		        }
 		    }
 
@@ -14263,7 +14263,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        let analyticsBuilder = Instantiator<Analytics>(__safeDI_analyticsBuilder)
 		        _ = Service.__safeDI_Service_mock_0B1B0F45EEE6C284.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let service = Service.mock(analyticsBuilder: analyticsBuilder, safeDIOverrides: safeDIOverrides.service)
-		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        let filter: any FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
 		        return Screen(analyticsBuilder: analyticsBuilder, service: service, filter: filter)
 		    }
 		}
@@ -14292,7 +14292,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init(),
-		            filter: ((Analytics, Service) -> FilterProtocol)? = nil
+		            filter: ((Analytics, Service) -> any FilterProtocol)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                analytics: analytics,
@@ -14303,7 +14303,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
 		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
-		        var filter: ((Analytics, Service) -> FilterProtocol)? { __safeDI_storage.filter }
+		        var filter: ((Analytics, Service) -> any FilterProtocol)? { __safeDI_storage.filter }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -14311,7 +14311,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            init(
 		                analytics: (() -> Analytics)?,
 		                service: Service.SafeDIOverrides,
-		                filter: ((Analytics, Service) -> FilterProtocol)?
+		                filter: ((Analytics, Service) -> any FilterProtocol)?
 		            ) {
 		                self.analytics = analytics
 		                self.service = service
@@ -14320,7 +14320,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		            let analytics: (() -> Analytics)?
 		            let service: Service.SafeDIOverrides
-		            let filter: ((Analytics, Service) -> FilterProtocol)?
+		            let filter: ((Analytics, Service) -> any FilterProtocol)?
 		        }
 		    }
 
@@ -14330,7 +14330,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
-		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(analytics, service) } else { AppFilter(analytics: analytics, service: service) }
+		        let filter: any FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(analytics, service) } else { AppFilter(analytics: analytics, service: service) }
 		        return Screen(analytics: analytics, service: service, filter: filter)
 		    }
 		}
@@ -14358,7 +14358,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        public init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init(),
-		            filter: ((Service) -> FilterProtocol)? = nil
+		            filter: ((Service) -> any FilterProtocol)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                analytics: analytics,
@@ -14369,7 +14369,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
 		        public var service: Service.SafeDIOverrides { __safeDI_storage.service }
-		        public var filter: ((Service) -> FilterProtocol)? { __safeDI_storage.filter }
+		        public var filter: ((Service) -> any FilterProtocol)? { __safeDI_storage.filter }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -14377,7 +14377,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            init(
 		                analytics: (() -> Analytics)?,
 		                service: Service.SafeDIOverrides,
-		                filter: ((Service) -> FilterProtocol)?
+		                filter: ((Service) -> any FilterProtocol)?
 		            ) {
 		                self.analytics = analytics
 		                self.service = service
@@ -14386,7 +14386,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		            let analytics: (() -> Analytics)?
 		            let service: Service.SafeDIOverrides
-		            let filter: ((Service) -> FilterProtocol)?
+		            let filter: ((Service) -> any FilterProtocol)?
 		        }
 		    }
 
@@ -14398,7 +14398,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
-		        let filter: FilterProtocol = if let filter { filter } else if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        let filter: any FilterProtocol = if let filter { filter } else if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
 		        return Screen(analytics: analytics, service: service, filter: filter)
 		    }
 		}
@@ -14487,12 +14487,12 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        func __safeDI_filter() -> FilterProtocol {
+		        func __safeDI_filter() -> any FilterProtocol {
 		            _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.filter.service)
 		            return if let safeDIBuilder = safeDIOverrides.filter.safeDIBuilder { safeDIBuilder(service) } else { AppFilter(service: service) }
 		        }
-		        let filter: FilterProtocol = __safeDI_filter()
+		        let filter: any FilterProtocol = __safeDI_filter()
 		        return Screen(analytics: analytics, filter: filter)
 		    }
 		}
@@ -14558,7 +14558,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        init(
 		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIMockConfiguration = .init(),
-		            filter: ((Service) -> FilterProtocol)? = nil
+		            filter: ((Service) -> any FilterProtocol)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                analytics: analytics,
@@ -14569,7 +14569,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
 		        var service: Service.SafeDIMockConfiguration { __safeDI_storage.service }
-		        var filter: ((Service) -> FilterProtocol)? { __safeDI_storage.filter }
+		        var filter: ((Service) -> any FilterProtocol)? { __safeDI_storage.filter }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -14577,7 +14577,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            init(
 		                analytics: (() -> Analytics)?,
 		                service: Service.SafeDIMockConfiguration,
-		                filter: ((Service) -> FilterProtocol)?
+		                filter: ((Service) -> any FilterProtocol)?
 		            ) {
 		                self.analytics = analytics
 		                self.service = service
@@ -14586,7 +14586,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		            let analytics: (() -> Analytics)?
 		            let service: Service.SafeDIMockConfiguration
-		            let filter: ((Service) -> FilterProtocol)?
+		            let filter: ((Service) -> any FilterProtocol)?
 		        }
 		    }
 
@@ -14599,7 +14599,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(analytics, session) } else { Service(analytics: analytics, session: session) }
 		        }
 		        let service: Service = __safeDI_service()
-		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        let filter: any FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
 		        return Screen(analytics: analytics, service: service, filter: filter)
 		    }
 		}

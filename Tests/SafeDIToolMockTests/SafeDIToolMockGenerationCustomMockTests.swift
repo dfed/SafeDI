@@ -2103,32 +2103,32 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            childService: (() -> ChildServiceProtocol)? = nil
+		            childService: (() -> any ChildServiceProtocol)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                childService: childService
 		            )
 		        }
 
-		        var childService: (() -> ChildServiceProtocol)? { __safeDI_storage.childService }
+		        var childService: (() -> any ChildServiceProtocol)? { __safeDI_storage.childService }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
 		        private final class __safeDI_Storage {
 		            init(
-		                childService: (() -> ChildServiceProtocol)?
+		                childService: (() -> any ChildServiceProtocol)?
 		            ) {
 		                self.childService = childService
 		            }
 
-		            let childService: (() -> ChildServiceProtocol)?
+		            let childService: (() -> any ChildServiceProtocol)?
 		        }
 		    }
 
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let childService: ChildServiceProtocol = if let safeDIBuilder = safeDIOverrides.childService { safeDIBuilder() } else { ChildService.customMock() }
+		        let childService: any ChildServiceProtocol = if let safeDIBuilder = safeDIOverrides.childService { safeDIBuilder() } else { ChildService.customMock() }
 		        return Root(childService: childService)
 		    }
 		}
