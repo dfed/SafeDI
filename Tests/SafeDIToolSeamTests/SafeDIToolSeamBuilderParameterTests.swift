@@ -3901,6 +3901,96 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueBoundOutsideSendableFunctionOfferingOnlyFulfillingType_whenSeamOfAnotherModuleDeclaresValue() async {
+		// `Outer` fills `Inner`'s place with `DefaultService`, which holds a place of `Gadget` in a `SendableLazilyInstantiated`,
+		// a `@Sendable` function, and `LiveGadget` reads `logger`, which `Inner`, a seam of the module beneath, declares
+		// outside that function. Receiving `logger` on `Outer` leaves `Inner`'s declaration, and receiving it on `Inner` too
+		// leaves the field of `Inner`'s struct that `DefaultService`'s fill binds, so the error offers only the fulfilling type.
+		await assertThrowsMultiModuleError(inModule: "Upper", diagnostics: { fixtures in
+			"""
+			\(fixtures["Upper"]!["LiveGadget.swift"]):10:5: error: `LiveGadget` receives `logger: Logger`, which `Inner` declares outside the `@Sendable` function that builds `gadget: SendableLazilyInstantiated<any Gadget>`, and the values struct SafeDI hands the builder for `DefaultService`’s `gadget: SendableLazilyInstantiated<any Gadget>` (`gadget` of `gadgetSendableBuilder`) carries only what that function binds. Declare an @Instantiable type that fulfills `Gadget` in module `Middle` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Feature"]!["Inner.swift"]):8:5: note: `Inner` declares `logger: Logger` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.declaringSeamModules(liveGadgetInMiddle: false), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenModuleOfSeamWhoseSendableFunctionBuildsPlaceFulfillsIt() async throws {
+		// The remedy of the error above, applied as written: `LiveGadget` is declared in `Middle`, so `Outer` fills the place
+		// itself and `LiveGadget` reads `Inner`'s `logger`, as inline does.
+		let modules = Self.declaringSeamModules(liveGadgetInMiddle: true)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Middle"]?.generatedFiles == ["Middle.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Outer {
+		    /// Code you write and code SafeDI generates can both call this initializer.
+		    public init() {
+		        func __safeDI_inner() -> Inner {
+		            _ = Inner.__safeDI_Inner_36832EB779318D6A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_serviceBuilder_Inner_service(_ scope: Inner.SafeDIScope_Service.service_Values) -> any Service {
+		                let logger = scope.logger
+		                func __safeDI_service() -> DefaultService {
+		                    @Sendable func __safeDI_gadget() -> LiveGadget {
+		                        LiveGadget(logger: logger)
+		                    }
+		                    let gadget = SendableLazilyInstantiated<any Gadget>(__safeDI_gadget)
+		                    return DefaultService(gadget: gadget)
+		                }
+		                let service: any Service = __safeDI_service()
+		                return service
+		            }
+		            func __safeDI_serviceBuilder_Inner() -> Inner.SafeDIScope_Service.__safeDI_Builder<any Service> {
+		                .init(service: { scope in __safeDI_serviceBuilder_Inner_service(scope) })
+		            }
+		            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Inner())
+		        }
+		        let inner: Inner = __safeDI_inner()
+		        self.init(inner: inner)
+		    }
+		}
+
+		extension Outer {
+		    public enum __safeDI_Outer_CBF29CE484222325 {}
+		}
+		"""])
+		#expect(output.modules["Upper"]?.generatedFiles == ["Upper.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Middle)
+		import Middle
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_outer() -> Outer {
+		            _ = Outer.__safeDI_Outer_CBF29CE484222325.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Outer()
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(outer: outer)
+		    }
+		}
+		"""])
+		guard compileVerificationIsEnabled else { return }
+		let inline = [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [modules.flatMap(\.swiftFileContent).map { $0.components(separatedBy: "\n").filter { !$0.hasPrefix("import ") }.joined(separator: "\n") }.joined(separator: "\n\n")])]
+		let inlineOutput = try await executeSafeDIToolMultiModuleTest(modules: inline, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		try await expectDifferentialValuesAgree(
+			feature: Self.differentialValuePath(of: output, modules: modules),
+			knownRight: Self.differentialValuePath(of: inlineOutput, modules: inline),
+			probes: [DifferentialValueProbe("{ let root = Root(); return ((root.outer.inner.service as! DefaultService).gadget.instance as! LiveGadget).logger === root.outer.inner.logger }()")],
+			filesToDelete: &filesToDelete,
+		)
+	}
+
 	@Test(arguments: [(serviceAFileName: "SeamB.swift", serviceBFileName: "SeamA.swift"), (serviceAFileName: "SeamA.swift", serviceBFileName: "SeamB.swift")])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarryNamingEachSeamsPlace_whenOneReaderFillsPlacesOfTwoSeamsBuildingOneTypeDeclaredInTwoFiles(serviceAFileName: String, serviceBFileName: String) async {
@@ -7620,6 +7710,30 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 	/// `App`'s root of the canonical hole, which instantiates `service`.
 	private static let canonicalRoot = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service"])
+
+	/// Three modules: `Feature`'s seam `Inner` builds `logger` and holds a place of `Service`; `Middle`'s seam `Outer` builds
+	/// `Inner` and fills its place with `DefaultService`, which holds a place of `Gadget` in a `SendableLazilyInstantiated`;
+	/// `LiveGadget`, which receives `logger`, fulfills `Gadget` in `Upper`, or, where `liveGadgetInMiddle`, in `Middle`;
+	/// `Upper`'s `Root` builds `Outer`.
+	private static func declaringSeamModules(liveGadgetInMiddle: Bool) -> [ModuleFixture] {
+		let liveGadget = seamFixtureType(named: "LiveGadget", isFinalClass: true, declarations: ["@Received let logger: Logger"], conformances: ", Gadget")
+			.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Gadget.self])\n")
+		return [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				seamFixtureType(named: "Logger", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+				"public protocol Service: Sendable {}\n\npublic protocol Gadget: Sendable {}",
+				seamFixtureType(named: "Inner", isSeam: true, declarations: ["@Instantiated let logger: Logger", "@Instantiated let service: any Service"], conformances: ", Sendable"),
+			]),
+			ModuleFixture(name: "Middle", packageName: "Mid", swiftFileContent: ([
+				seamFixtureType(named: "DefaultService", declarations: ["@Instantiated let gadget: SendableLazilyInstantiated<any Gadget>"], conformances: ", Service")
+					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Service.self])\n"),
+				seamFixtureType(named: "Outer", isSeam: true, declarations: ["@Instantiated let inner: Inner"]),
+			] + (liveGadgetInMiddle ? [liveGadget] : [])).map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+			ModuleFixture(name: "Upper", packageName: "Other", swiftFileContent: ((liveGadgetInMiddle ? [] : [liveGadget]) + [
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let outer: Outer"]),
+			]).map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
+		]
+	}
 
 	/// Holes beneath an `Instantiator` (`ServiceI`), a `SendableInstantiator` (`ServiceS`), and two nested ones
 	/// (`ServiceN`), each instantiating `analytics` and a non-`Sendable` `session`, the owner instantiating a
