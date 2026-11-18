@@ -5654,7 +5654,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			// A `__safeDI_<label>_received` function is named apart, with underscores appended, from every name in scope
 			// where it is declared or read (see `namesReceivedFunctionsAvoid`).
-			var names = GeneratedNameAllocator(reserving: namesReceivedFunctionsAvoid(
+			var names = LoopMemberNames(reserving: namesReceivedFunctionsAvoid(
 				orderedChildren: orderedChildren,
 				childBuilderFunctionNames: childBuilderFunctionNames,
 				loopMembers: orderedChildren.compactMap { loopByGenerator[ObjectIdentifier($0.generator)] == nil ? nil : $0.generator },
@@ -5673,13 +5673,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// `let` of its own – in its body (`InstantiatorBindingLines.prelude`) and in its fills, which this function
 				// generates (`SeamHoles.holdsLoopPayloadsInBoxes`) – a deliberate gap: a public mock's payloads were never builder
 				// structs, so its loops capture what they captured before.
-				if let typeName = boxedLoops[loop], let arguments = boxedArgumentsByLoop[loop], valuesBindingMemberIndexByLoop[loop] == index {
-					let loopLevelsName = names.claim(ReservedName.loopLevelsName(of: functionName))
+				let box = boxedLoops[loop].flatMap { typeName in boxedArgumentsByLoop[loop].map { (typeName: typeName, arguments: $0) } }
+				let claimedNames = names.claim(
+					forMemberBuiltBy: functionName,
+					bindsLoopsBox: box != nil && valuesBindingMemberIndexByLoop[loop] == index,
+					takesCycleParameters: !child.generator.cycleParameters.isEmpty,
+				)
+				if let loopLevelsName = claimedNames.loopLevelsName, let box {
 					loopLevelsNameByLoop[loop] = loopLevelsName
-					valuesBindingLinesByLoop[loop] = Self.loopLevelsBinding(named: loopLevelsName, ofType: typeName, arguments: arguments)
+					valuesBindingLinesByLoop[loop] = Self.loopLevelsBinding(named: loopLevelsName, ofType: box.typeName, arguments: box.arguments)
 				}
-				if !child.generator.cycleParameters.isEmpty {
-					functionName = names.claim(ReservedName.receivedBuilderFunctionName(of: functionName))
+				if let receivedFunctionName = claimedNames.receivedFunctionName {
+					functionName = receivedFunctionName
 					receivedFunctionNameByIndex[index] = functionName
 				}
 				loopMemberDeclarationsByLoop[loop, default: [:]][property] = child.generator.loopRebindingDeclaration(functionName: functionName)
