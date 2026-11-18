@@ -230,8 +230,9 @@ public struct SeamSignature: Sendable {
 	public struct Hole: Sendable {
 		/// A value in scope at the site, which the scope struct the builder is handed carries.
 		public struct Field: Sendable {
-			public init(property: Property, access: AccessLevel, accessCause: TypeAccessProof.Cause? = nil, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool = false, parameterTakingType: TypeDescription? = nil, deferral: Parameter.Deferral = .none, bindsMemo: Bool = false, isSeamParameter: Bool = false, seamParameterOrigin: SeamParameterOrigin? = nil) {
+			public init(property: Property, access: AccessLevel, accessCause: TypeAccessProof.Cause? = nil, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool = false, parameterTakingType: TypeDescription? = nil, deferral: Parameter.Deferral = .none, bindsMemo: Bool = false, isSeamParameter: Bool = false, isBoundByPublicMockRoot: Bool = false, seamParameterOrigin: SeamParameterOrigin? = nil) {
 				self.property = property
+				self.isBoundByPublicMockRoot = isBoundByPublicMockRoot
 				self.bindsMemo = bindsMemo
 				self.deferral = deferral
 				self.isSeamParameter = isSeamParameter
@@ -293,6 +294,11 @@ public struct SeamSignature: Sendable {
 			/// seam again inside a fill passes it the nearest declaration of its label there, which a place of the seam opened
 			/// again carries too.
 			public let isSeamParameter: Bool
+			/// Whether the field is bound by a public mock's root, before its tree, from a value it receives: a parameter of
+			/// `mock()`, or a received dependency the mock builds where its caller passes `nil`. A call of the mock from another
+			/// module's generated mock hands it such a value from the caller's scope, whose own declaration a fill then reads
+			/// (`Scope`'s `callersOwnLabels(amongLabelsOf:at:reading:handedFrom:by:)`).
+			public let isBoundByPublicMockRoot: Bool
 			/// For a field bound from a parameter of a seam, which a public mock's root level never is, that parameter's
 			/// receives and the seam's declaration; `nil` for a field bound from a declaration inside the tree.
 			public let seamParameterOrigin: SeamParameterOrigin?

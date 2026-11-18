@@ -792,6 +792,8 @@ extension DependencyTreeGenerator {
 		var alias: SeamSignature.Hole.UncarriedDeclaration.AliasOrigin?
 		/// For a parameter of a seam, its receives and the seam's declaration (`SeamSignature.Hole.Field.seamParameterOrigin`).
 		var seamParameterOrigin: SeamSignature.Hole.Field.SeamParameterOrigin?
+		/// Whether a public mock's root binds it from a value it receives (`SeamSignature.Hole.Field.isBoundByPublicMockRoot`).
+		var isBoundByPublicMockRoot = false
 	}
 
 	/// The fields of `site`'s place, the declarations on its path that carry no field, the declarations a cycle hands the
@@ -866,6 +868,7 @@ extension DependencyTreeGenerator {
 				isReceivedOnlyIfAvailable: parameter.isOnlyIfAvailable,
 			)
 			parameterDeclaration.deferral = parameter.deferral
+			parameterDeclaration.isBoundByPublicMockRoot = bindsReceivesAgain
 			// A public mock's root level binds a receive again where its nearest declaration does not provide its form, so
 			// its parameters say nothing about the forms a fill may receive.
 			if !bindsReceivesAgain {
@@ -1057,6 +1060,10 @@ extension DependencyTreeGenerator {
 				let isLoopMemberBuildingSite = position < pathPosition
 					&& frame.generator.areMembersOfOneLoop(child.generator, frame.orderedChildren[pathPosition].generator)
 				var pathDeclaration = declaration(of: property, isBoundBeforeSite: position < pathPosition && !isLoopMemberBuildingSite)
+				// A public mock's root binds each received dependency it promotes, which it builds where its caller passes `nil`, among
+				// the mocked type's own children.
+				pathDeclaration.isBoundByPublicMockRoot = bindsReceivesAgain && level == 0
+					&& !instantiable.dependencies.contains { $0.property.label == property.label && !$0.source.isReceived }
 				if case let .aliased(fulfillingProperty, _, _)? = instantiable.dependencies.first(where: { $0.property == property })?.source {
 					// An alias binds its label to `fulfillingProperty`: the seam's, to the caller's, and any other type's, to one
 					// the seam's tree binds.
@@ -1106,6 +1113,7 @@ extension DependencyTreeGenerator {
 						parameterTakingType: declaration.parameterTakingType,
 						deferral: declaration.deferral,
 						isSeamParameter: declaration.frameLevel < 0,
+						isBoundByPublicMockRoot: declaration.isBoundByPublicMockRoot,
 						seamParameterOrigin: declaration.seamParameterOrigin,
 					))
 				} else if declaration.frameLevel >= 0, let innermostFunction = sendableFunctions.last {
