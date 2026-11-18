@@ -6744,8 +6744,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let functionParameters = cycleParameters.map(\.property)
 				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
 
-				let nonEmptyGeneratedProperties = generatedProperties.filter { !$0.isEmpty }
-				let hasGeneratedContent = !nonEmptyGeneratedProperties.isEmpty
+				let body = BuilderBody(statements: generatedProperties)
+				let hasGeneratedContent = body.hasStatements
 				let propertyDeclaration = BindingDeclaration(
 					property: property,
 					rule: .constant(
@@ -6764,7 +6764,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				} else {
 					"""
 					\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
-					\(nonEmptyGeneratedProperties.joined(separator: "\n"))
+					\(body.statements.joined(separator: "\n"))
 					\(Self.standardIndent)return \(returnLineSansReturn)\(constructionLineEnd)
 					}
 
