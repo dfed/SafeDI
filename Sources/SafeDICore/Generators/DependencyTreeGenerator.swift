@@ -9096,12 +9096,17 @@ public actor DependencyTreeGenerator {
 	/// (`canBeHole`). Where a spelling cannot be one, which only hand-written code builds, the place is not filled, and the
 	/// type is among `typesNoDeclarationCanFulfillByCalledType`, which production reports
 	/// (`validateFillsInstantiateOnlyWhatCanBeFulfilled`).
+	///
+	/// A gate then passes a hole type of a called type up whole, every place of it, where the twin fills it: a re-entered
+	/// called type whose fill reads a lazy value beside its place's fields (`holeTypesTheFillGatesPassUp(of:in:)`).
+	/// Contract rule 7 lists the difference (`seam-and-mock-contract.md`).
 	private func holesFilled(
 		byCallsOf publicMockCalls: [TypeDescription: PublicMockCall],
 		in typeDescriptionToScopeMap: [TypeDescription: Scope],
 	) -> (filledHoles: [TypeDescription: [SeamSignature.Hole]], typesNoDeclarationCanFulfillByCalledType: [TypeDescription: Set<TypeDescription>]) {
 		guard let emittingModule = emittingModuleToCheck else { return ([:], [:]) }
-		var filledHoles = [TypeDescription: [SeamSignature.Hole]]()
+		var fills = [GatedFill]()
+		var receivedPropertiesCache = ReceivedPropertiesCache()
 		var typesNoDeclarationCanFulfillByCalledType = [TypeDescription: Set<TypeDescription>]()
 		for calledType in publicMockCalls.keys.sorted() {
 			guard let publicMockCall = publicMockCalls[calledType] else { continue }
@@ -9132,10 +9137,135 @@ public actor DependencyTreeGenerator {
 				}
 				// A route on which no level binds a value the fill reads hands the fill the caller's, as production's root
 				// dispatcher does (`PublicMockLevelFunctions`), so the place is filled on every route.
-				filledHoles[calledType, default: []].append(hole)
+				fills.append(GatedFill(calledType: calledType, hole: hole, fulfillingScope: fulfillingScope, cache: &receivedPropertiesCache))
 			}
 		}
+		let holeTypesPassedUp = Self.holeTypesTheFillGatesPassUp(of: fills, in: publicMockCalls)
+		var filledHoles = [TypeDescription: [SeamSignature.Hole]]()
+		for fill in fills where !holeTypesPassedUp.contains(fill.key) {
+			filledHoles[fill.calledType, default: []].append(fill.hole)
+		}
 		return (filledHoles, typesNoDeclarationCanFulfillByCalledType)
+	}
+
+	/// A place `holesFilled(byCallsOf:in:)` would fill, with what its fill's tree reads and calls.
+	private struct GatedFill {
+		init(calledType: TypeDescription, hole: SeamSignature.Hole, fulfillingScope: Scope, cache: inout ReceivedPropertiesCache) {
+			self.calledType = calledType
+			self.hole = hole
+			// A field is read by value, only if available, and as a lazily instantiated property's instance too.
+			var fieldForms = Set<Property>()
+			for field in hole.fields {
+				for form in [field.property] + [field.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding].compactMap(\.self) {
+					fieldForms.insert(form)
+					fieldForms.insert(form.asOptionalProperty)
+				}
+			}
+			received = DependencyTreeGenerator.collectReceivedProperties(from: fulfillingScope, cache: &cache).received
+			receivedBesideFields = received.subtracting(fieldForms)
+			var calledTypes = Set<TypeDescription>()
+			var visitedScopes = Set<ObjectIdentifier>()
+			// A stack of its own, since a tree can be as deep as the module has types.
+			var scopesToVisit = [fulfillingScope]
+			while let scope = scopesToVisit.popLast() {
+				guard visitedScopes.insert(ObjectIdentifier(scope)).inserted else { continue }
+				if let publicMockCall = scope.publicMockCall {
+					calledTypes.insert(publicMockCall.type)
+				}
+				for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
+					scopesToVisit.append(childScope)
+				}
+			}
+			calledTypesInTree = calledTypes
+		}
+
+		let calledType: TypeDescription
+		let hole: SeamSignature.Hole
+		/// Everything the fill's tree receives.
+		let received: Set<Property>
+		/// What the fill's tree receives beside the values the place's scope struct carries.
+		let receivedBesideFields: Set<Property>
+		/// The types whose public mocks the fill's tree calls.
+		let calledTypesInTree: Set<TypeDescription>
+
+		var key: HoleTypeOfCall {
+			HoleTypeOfCall(calledType: calledType, holeType: hole.holeType)
+		}
+
+		/// The values the fill reads, beside the place's fields, held in a `LazilyInstantiated` or
+		/// `SendableLazilyInstantiated`.
+		var lazyValuesReadBesideFields: Set<Property> {
+			receivedBesideFields.filter { $0.typeDescription.unwrapped.lazilyInstantiatedInstanceType != nil }
+		}
+	}
+
+	/// A hole type of a called type, which a gate passes up whole.
+	private struct HoleTypeOfCall: Hashable {
+		let calledType: TypeDescription
+		let holeType: SeamSignature.HoleType
+	}
+
+	/// The hole types of the called types that the calling mock passes up whole, every place of them, where its production
+	/// twin fills them, the difference contract rule 7 lists (`seam-and-mock-contract.md`, `public-mock-builders.md`). The
+	/// twin fills these places, but the calling mock cannot hand each route's fill the lazy value the twin hands it, so it
+	/// takes the builder, as it did before its fills read the caller's values:
+	/// - **Re-entry.** A called type is re-entered when the tree of a fill of one of its places calls its public mock again,
+	///   or calls a public mock whose builders reach its places. A hole type of a re-entered called type is passed up when a
+	///   fill of one of its places reads, beside the place's fields, a `LazilyInstantiated` or `SendableLazilyInstantiated`
+	///   value: the called mock binds the value by value, so no level of the re-entered call holds the wrapper the twin
+	///   hands that fill.
+	/// - Then, as a fill never passes a place up, a fill whose tree calls a public mock that now passes a builder up is not
+	///   filled either, until none is: its hole type is passed up too.
+	/// A hole type is never passed up in part, so no builder is half filled. Every other place is filled as before: a fill
+	/// that reads only its place's fields, or values by value, whether or not its called type is re-entered, and a called
+	/// type re-entered only through another call's fill: its fill calls a second called type, whose own fill calls the first
+	/// again (`Scope`'s re-entering call hands that fill the caller's wrapper).
+	private static func holeTypesTheFillGatesPassUp(of fills: [GatedFill], in publicMockCalls: [TypeDescription: PublicMockCall]) -> Set<HoleTypeOfCall> {
+		var calledTypesByCalledType = [TypeDescription: Set<TypeDescription>]()
+		for fill in fills {
+			calledTypesByCalledType[fill.calledType, default: []].formUnion(fill.calledTypesInTree)
+		}
+		var passedUp = Set<HoleTypeOfCall>()
+		for (calledType, calledTypesInFills) in calledTypesByCalledType {
+			let sites = Set(publicMockCalls[calledType]?.holes.map(\.site) ?? [])
+			let isReentered = calledTypesInFills.contains { calledTypeInFill in
+				calledTypeInFill == calledType || publicMockCalls[calledTypeInFill]?.holes.contains { sites.contains($0.site) } == true
+			}
+			for fill in fills where fill.calledType == calledType && isReentered && !fill.lazyValuesReadBesideFields.isEmpty {
+				passedUp.insert(fill.key)
+			}
+		}
+		// The builders each call passes up with every fill filled, which a fill that calls the mock receives already.
+		let builderPropertiesPassedUpByEveryFill = builderPropertiesPassedUp(by: fills, in: publicMockCalls)
+		while !passedUp.isEmpty {
+			let builderProperties = builderPropertiesPassedUp(by: fills.filter { !passedUp.contains($0.key) }, in: publicMockCalls).subtracting(builderPropertiesPassedUpByEveryFill)
+			var passesUpMore = false
+			for fill in fills where !fill.received.isDisjoint(with: builderProperties) && passedUp.insert(fill.key).inserted {
+				passesUpMore = true
+			}
+			guard passesUpMore else { break }
+		}
+		return passedUp
+	}
+
+	/// The properties under which a fill's tree receives the builders the calls of `publicMockCalls` pass up when the places
+	/// of `fills` are filled.
+	private static func builderPropertiesPassedUp(by fills: [GatedFill], in publicMockCalls: [TypeDescription: PublicMockCall]) -> Set<Property> {
+		var filledHolesByCalledType = [TypeDescription: [SeamSignature.Hole]]()
+		for fill in fills {
+			filledHolesByCalledType[fill.calledType, default: []].append(fill.hole)
+		}
+		var builderProperties = Set<Property>()
+		for var publicMockCall in publicMockCalls.values {
+			publicMockCall.filledHoles = filledHolesByCalledType[publicMockCall.type, default: []]
+			let passedUpLabels = Set(publicMockCall.passedUpBuilders.map(\.label))
+			for parameter in publicMockCall.passedParameters {
+				if let builder = parameter.builder, passedUpLabels.contains(builder.label) {
+					builderProperties.insert(parameter.dependency.property)
+				}
+			}
+		}
+		return builderProperties
 	}
 
 	/// The types the scopes of the mock tree rooted at `scope`, in a map built without holes, instantiate as properties no
