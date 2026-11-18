@@ -151,6 +151,10 @@ struct PublicMockLevelFunctions: Sendable {
 			var members = [Member]()
 			let payloadHidesNot = labelsPayloadHidesNot(of: dispatcher)
 			for dispatcherCase in dispatcher.cases {
+				// A call declares level functions only for the builders it fills, and it fills every place of such a builder
+				// (`DependencyTreeGenerator.holesFilled(byCallsOf:in:)` decides per hole type, and a gate passes a hole type up
+				// whole), so every case of their dispatchers has a target, which is a fill, a level of this call, or a level an
+				// enclosing call declares: no input reaches the `continue`, nor a case that emits no member.
 				guard let target = dispatcherCase.target else { continue }
 				// A root level's payload carries the called mock's copy of a value the function takes of the caller's scope, which the
 				// function hands on in its own form instead where that is the form a fill reads.
@@ -158,7 +162,10 @@ struct PublicMockLevelFunctions: Sendable {
 					.filter { !payloadHidesNot.contains($0.key) || ownEnvironment[$0.key] == nil }
 				if let fillParameters = fillParametersByKey[target.key] {
 					// The fill takes each value it reads beside the payload from this function's own parameter: a value no level on the
-					// routes binds is the caller's, which the root level function takes (`callerReads`).
+					// routes binds is the caller's, which the root level function takes (`callerReads`). A label the case's type binds
+					// later is never one of them: the payload carries each value the type builds before the place, and a value it builds
+					// after the place, which a fill reads, is production's error (`DependencyTreeGenerator.validateFills`). Nor does a level
+					// bind a value in a form that does not provide the one the fill reads: that is production's hidden-receive error.
 					let arguments = fillParameters.compactMap { parameter -> Argument? in
 						let label = parameter.property.label
 						if let carried = carriedByName[label] {
