@@ -225,6 +225,14 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// `HoleLoop` declaring `holeContext` again, so a fill that reads it gets the nearest level's value inline and the
 	/// public mock rejects the graph (`declarationBoundOnCycleReentry`).
 	case holeLoopDeclaresContextAgain
+	/// Seed 157's shape, read from the draw: a consumer module that cannot build `T6` inline – the construction `T6`'s mock
+	/// uses, its `customMock` where it names one and else its initializer, is `internal`, or `package` and the module is in
+	/// the other package – calls `T6`'s public mock and declares the fill, which reads the `holeContext` `T6` binds outside
+	/// the `@Sendable` function that builds `holeHost: SendableLazilyInstantiated<HoleHost>`, with the hole declared
+	/// `Instantiator<Hole>` on `HoleHost` inside a `HoleLoop` that does not declare `holeContext` again. The calling mock
+	/// reports its production twin's error (`boundOutsideSendableFunction`, contract rule 7), where a consumer that builds
+	/// `T6` inline reads `holeContext` as the known-right path does.
+	case holeFillReadsContextBoundOutsideSendableFunction
 	/// On a stream of its own (`publicMockHoleAttributesRandomSeedMask`): `T6` spelling `mockAttributes: "@MainActor"`; and
 	/// `T6` naming a hand-written `customMock` that `T6Deck`, another `.public` type of its module, builds it with, once
 	/// where `T6` instantiates nothing but its hole, so that neither function of its mock takes `safeDIOverrides`.
@@ -2928,11 +2936,10 @@ extension GraphFuzzerToolRuns {
 		case let (.rejected(diagnostics), .accepted?):
 			let features = GraphFuzzerPublicMockDraw.drawFeatures(of: fixture)
 			let drawsStaleValueRead = features.isSuperset(of: [.holeLoopDeclaresContextAgain, .holeFillReceivesField, .consumerReachesHoleTypeWithFill])
-			let drawsFieldReadBeneathSendableWrapper = features.isSuperset(of: [.holeBeneathSendableWrapper, .holeFillReceivesField, .consumerReachesHoleTypeWithFill])
 			guard !GraphFuzzerOracle.isPublicMockOnlyRejection(
 				diagnostics: diagnostics,
 				staleValueLoopTypeName: drawsStaleValueRead ? "\(fixture.typeNamePrefix)HoleLoop" : nil,
-				sendableFunctionDeclaringTypeName: drawsFieldReadBeneathSendableWrapper ? "\(fixture.typeNamePrefix)T6" : nil,
+				sendableFunctionCarryTypeNamePrefix: features.contains(.holeFillReadsContextBoundOutsideSendableFunction) ? fixture.typeNamePrefix : nil,
 			) else { return nil }
 			return GraphFuzzerFailure(
 				seed: fixture.seed,
@@ -3056,26 +3063,27 @@ extension GraphFuzzerOracle {
 	static let publicMockStaleValueErrorMarker = "the same values at every level of that cycle"
 
 	/// What the error says that a tree filling a seam's place inside a `@Sendable` function reports for a fill that reads a
-	/// value the seam's tree declares outside that function (`boundOutsideSendableFunction`), which a public mock reports as
-	/// its production twin does (contract rule 7): inline, the fill reads the value its caller declares, so only a graph whose
-	/// fill reads `holeContext`, which `T6` instantiates, beneath a `Sendable` wrapper may report it
-	/// (`GraphFuzzerPublicMockDrawFeature.holeBeneathSendableWrapper`, `holeFillReceivesField`).
-	static let publicMockSendableFunctionCarryErrorMarker = "carries only what that function binds"
+	/// value the seam's tree declares outside that function (`boundOutsideSendableFunction`), which a calling mock reports as
+	/// its production twin does (contract rule 7): inline, and in a consumer that builds the public mock's type inline, the
+	/// fill reads the value its caller declares, so only a graph drawing seed 157's shape may report it
+	/// (`GraphFuzzerPublicMockDrawFeature.holeFillReadsContextBoundOutsideSendableFunction`).
+	static let publicMockSendableFunctionCarryErrorMarker = "only what that function binds"
 
 	/// Whether every error in `diagnostics`, a rejection of a `generateMockPublic` graph as drawn, is one of a public
 	/// mock's own (`publicMockOnlyErrorMarkers`); where `staleValueLoopTypeName` names the graph's `HoleLoop`, the error of
 	/// a fill reading the `holeContext` that type declares again (`publicMockStaleValueErrorMarker`); or, where
-	/// `sendableFunctionDeclaringTypeName` names the graph's `T6`, the error of a fill reading the `holeContext` that type
-	/// declares outside a `@Sendable` function above the hole (`publicMockSendableFunctionCarryErrorMarker`).
-	static func isPublicMockOnlyRejection(diagnostics: String, staleValueLoopTypeName: String? = nil, sendableFunctionDeclaringTypeName: String? = nil) -> Bool {
+	/// `sendableFunctionCarryTypeNamePrefix` is the graph's type name prefix, the error of a fill reading the `holeContext`
+	/// its `T6` declares outside the `@Sendable` function that builds `holeHost: SendableLazilyInstantiated<HoleHost>`
+	/// (`publicMockSendableFunctionCarryErrorMarker`).
+	static func isPublicMockOnlyRejection(diagnostics: String, staleValueLoopTypeName: String? = nil, sendableFunctionCarryTypeNamePrefix: String? = nil) -> Bool {
 		let errors = diagnostics.split(separator: "\n").filter { $0.contains(": error: ") }
 		return !errors.isEmpty && errors.allSatisfy { error in
 			if publicMockOnlyErrorMarkers.contains(where: { error.contains($0) }) {
 				true
 			} else if let staleValueLoopTypeName, error.contains(publicMockStaleValueErrorMarker) {
 				error.contains("receives `holeContext: ") && error.contains("`\(staleValueLoopTypeName)`")
-			} else if let sendableFunctionDeclaringTypeName, error.contains(publicMockSendableFunctionCarryErrorMarker) {
-				error.contains("receives `holeContext: ") && error.contains("which `\(sendableFunctionDeclaringTypeName)` declares outside the `@Sendable` function that builds `")
+			} else if let prefix = sendableFunctionCarryTypeNamePrefix, error.contains(publicMockSendableFunctionCarryErrorMarker) {
+				error.contains("receives `holeContext: \(prefix)HoleContext`, which `\(prefix)T6` declares outside the `@Sendable` function that builds `holeHost: SendableLazilyInstantiated<\(prefix)HoleHost>`")
 			} else {
 				false
 			}
@@ -3700,6 +3708,25 @@ extension GraphFuzzerPublicMockDraw {
 			}
 			if let fillModule, reachingModules.contains(fillModule) {
 				features.insert(.consumerReachesHoleTypeWithFill)
+				// Seed 157's shape: the fill's module calls `T6`'s public mock, since it cannot reach the construction `T6`'s mock
+				// uses, and the fill reads the `holeContext` `T6` binds outside the `@Sendable` function above the hole.
+				let constructionAccess = if holeLeaf.arguments.contains("customMockName:") {
+					types.lines.first { $0.contains("static func customMock(") && $0.hasSuffix(") -> \(holeLeafName) {") }.map { line in
+						["public", "package"].first { line.hasPrefix($0 + " ") } ?? "internal"
+					} ?? "internal"
+				} else {
+					holeLeaf.initializerAccess
+				}
+				let fillModuleCallsPublicMock = constructionAccess == "internal" || constructionAccess == "package" && fillModule == .otherPackageCaller
+				if fillModuleCallsPublicMock,
+				   features.contains(.holeFillReceivesField),
+				   holeLeaf.properties.contains(where: { $0.label == "holeHost" && $0.type == "SendableLazilyInstantiated<\(hostName)>" }),
+				   holeProperty?.type.hasPrefix("Instantiator<") == true,
+				   let loop = types.declarations["\(prefix)HoleLoop"],
+				   !loop.properties.contains(where: { $0.label == "holeContext" })
+				{
+					features.insert(.holeFillReadsContextBoundOutsideSendableFunction)
+				}
 			}
 			if reachingModules.contains(where: { $0 != fillModule }) {
 				features.insert(.consumerReachesHoleTypeWithoutFill)
