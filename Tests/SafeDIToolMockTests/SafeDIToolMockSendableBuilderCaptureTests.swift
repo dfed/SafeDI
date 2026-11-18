@@ -468,12 +468,13 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 		}
 	}
 
-	@Test(arguments: MockCaptureCaller.allCases, ["Widget", "Gizmo"])
+	@Test(arguments: [MockCaptureCaller.internal, .listed], ["Widget", "Gizmo"])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsCaptureError_whenPromotedSiblingReceivesInstantiatorUnderLabelOfLazilyInstantiatedMockCannotBuild(caller: MockCaptureCaller, builtType: String) async {
 		// `Screen` receives `settingsBuilder`, which its mock builds at its root, and declares `gizmo` as a
 		// `LazilyInstantiated<Gizmo>`, which provides no `Instantiator`: `Settings` receives its `Instantiator` from
-		// outside the tree, a parameter of `mock()` that its `@Sendable` builder function cannot capture.
+		// outside the tree, a parameter of `mock()` that its `@Sendable` builder function cannot capture. A public mock is
+		// rejected first, for the hole it would bind apart from its label (the test below).
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
@@ -489,6 +490,150 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 				activeCompilationConditions: ["DEBUG"],
 			)
 		}
+	}
+
+	@Test(arguments: ["Instantiator<Widget>", "Instantiator<Gizmo>", "SendableInstantiator<Widget>"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsHoleBoundApartError_whenPromotedSiblingReceivesWrapperUnderLabelOfLazilyInstantiatedHoleInPublicMock(receivedType: String) async {
+		// A public mock would build `Screen`’s `gizmo` at the site of its hole and bind it apart from `Settings`’s `gizmo`,
+		// which `mock()` takes under the label, so it is rejected before the capture check runs, whether or not `Settings`
+		// receives a `Sendable` wrapper. Its remedy, followed by the capture error’s, is applied in the test after next.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Screen.swift"]):8:5: error: SafeDI cannot generate the public mock of `Screen`: the mock builds `gizmo: LazilyInstantiated<Gizmo>`, which `Screen` instantiates, with a builder `mock()` is passed, and `Settings` receives `gizmo: \(receivedType)` with the same label, so the mock holds two values labeled `gizmo` and cannot hand `gizmo` to the builder `mock()` is passed. Declare `gizmo: LazilyInstantiated<Gizmo>` on `Screen` under another label to fix.
+				\(fixtures["Settings.swift"]):7:5: note: `gizmo: \(receivedType)` is received here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.promotedSiblingScreenFiles(caller: .public, gizmoType: "LazilyInstantiated<Gizmo>", settingsReceive: "gizmo: \(receivedType)"),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				activeCompilationConditions: ["DEBUG"],
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsCaptureError_whenPublicMockDeclaresHoleUnderAnotherLabelAndPromotedSiblingReceivesInstantiator() async {
+		// The hole bound apart's remedy applied: `Screen` declares the hole as `screenGizmo`, so the public mock binds no
+		// hole apart, and `Settings`’s `gizmo: Instantiator<Widget>`, which `mock()` takes, meets the capture check.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Settings.swift"]):7:5: error: @Received property `gizmo: Instantiator<Widget>` cannot be received inside a `@Sendable` function in chain: Screen -> Settings. SafeDI builds `settingsBuilder: SendableInstantiator<Settings>` on `Screen` in a `@Sendable` function, which cannot capture `gizmo: Instantiator<Widget>`, which the tree of `Screen` receives from outside it, because `Instantiator<Widget>` is not `Sendable`. Declare `gizmo` as `SendableInstantiator<Widget>` where it is declared and where it is received as `Instantiator<Widget>` to fix. `SendableInstantiator<Widget>` builds `Widget` in a `@Sendable` function, so what the tree of `Widget` receives from outside that function must be `Sendable` too.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.promotedSiblingScreenFiles(caller: .public, gizmoLabel: "screenGizmo", gizmoType: "LazilyInstantiated<Gizmo>", settingsReceive: "gizmo: Instantiator<Widget>"),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				activeCompilationConditions: ["DEBUG"],
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_generatesMock_whenPublicMockDeclaresHoleUnderAnotherLabelAndPromotedSiblingReceivesSendableInstantiator() async throws {
+		// Both remedies applied: `Screen` declares the hole as `screenGizmo`, and `Settings` receives `gizmo` as
+		// `SendableInstantiator<Widget>`, a parameter of `mock()` its `@Sendable` builder function may capture.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.promotedSiblingScreenFiles(caller: .public, gizmoLabel: "screenGizmo", gizmoType: "LazilyInstantiated<Gizmo>", settingsReceive: "gizmo: SendableInstantiator<Widget>"),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			activeCompilationConditions: ["DEBUG"],
+		)
+
+		#expect(output.mockFiles == ["Screen+SafeDIMock.swift": """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    nonisolated public enum SafeDIMockScope_Gizmo {
+		        nonisolated public struct screenGizmo_Values {
+		            public let gizmo: SendableInstantiator<Widget>
+		            public let settingsBuilder: SendableInstantiator<Settings>
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let screenGizmo: (screenGizmo_Values) -> __safeDI_Built
+
+		            public init(screenGizmo: @escaping (screenGizmo_Values) -> __safeDI_Built) {
+		                self.screenGizmo = screenGizmo
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.screenGizmo = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                settingsBuilder: settingsBuilder
+		            )
+		        }
+
+		        public var settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)? { __safeDI_storage.settingsBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)?
+		            ) {
+		                self.settingsBuilder = settingsBuilder
+		            }
+
+		            let settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)?
+		        }
+		    }
+
+		    public static func mock(
+		        gizmo: SendableInstantiator<Widget>,
+		        gizmoBuilder: @escaping () -> Gizmo,
+		        settingsBuilder: SendableInstantiator<Settings>? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        Screen.__safeDI_mock(gizmo: gizmo, gizmoBuilder: .init(__safeDI_noScope: gizmoBuilder), settingsBuilder: settingsBuilder, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        gizmo: SendableInstantiator<Widget>,
+		        gizmoBuilder __safeDI_gizmoBuilder: Screen.SafeDIMockScope_Gizmo.__safeDI_Builder<Gizmo>,
+		        settingsBuilder: SendableInstantiator<Settings>? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let __safeDI_settingsBuilder__safeDIBuilder = safeDIOverrides.settingsBuilder
+		        @Sendable func __safeDI_settingsBuilder() -> Settings {
+		            if let safeDIBuilder = __safeDI_settingsBuilder__safeDIBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
+		        }
+		        let settingsBuilder = if let settingsBuilder { settingsBuilder } else { SendableInstantiator<Settings>(__safeDI_settingsBuilder) }
+		        func __safeDI_screenGizmo() -> Gizmo {
+		            __safeDI_gizmoBuilder.screenGizmo(SafeDIMockScope_Gizmo.screenGizmo_Values(gizmo: gizmo, settingsBuilder: settingsBuilder))
+		        }
+		        let screenGizmo = LazilyInstantiated<Gizmo>(__safeDI_screenGizmo)
+		        return Screen(settingsBuilder: settingsBuilder, screenGizmo: screenGizmo)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_mock_16339E378B198D4E {}
+		}
+		#endif
+		"""])
 	}
 
 	@Test(arguments: MockCaptureCaller.allCases, ["Widget", "Gizmo"])
@@ -932,12 +1077,12 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 		"""])
 	}
 
-	@Test(arguments: MockCaptureCaller.allCases)
+	@Test(arguments: [MockCaptureCaller.internal, .listed])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_generatesMock_whenPromotedSiblingReceivesSendableInstantiatorTheErrorSuggests(caller: MockCaptureCaller) async throws {
 		// The remedy the capture error above states: `Settings` receives `gizmo` as `SendableInstantiator<Widget>`, a
 		// parameter of `mock()` named apart from `Screen`’s `gizmo`, which its `@Sendable` builder function may capture. A
-		// public mock builds `Screen`’s `gizmo` through the builder of its hole, under a name of its own.
+		// public mock is rejected for the hole it would bind apart, whose remedy is applied above.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: Self.promotedSiblingScreenFiles(caller: caller, gizmoType: "LazilyInstantiated<Gizmo>", settingsReceive: "gizmo: SendableInstantiator<Widget>"),
 			swiftFileContentByFilePath: caller.configurationFiles,
@@ -946,196 +1091,55 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 			activeCompilationConditions: ["DEBUG"],
 		)
 
-		switch caller {
-		case .internal:
-			#expect(output.mockFiles == ["Screen+SafeDIMock.swift": """
-			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-			// Any modifications made to this file will be overwritten on subsequent builds.
-			// Please refrain from editing this file directly.
+		let importLines = caller == .listed ? "#if canImport(SafeDI)\nimport SafeDI\n#endif\n\n" : ""
+		#expect(output.mockFiles == ["Screen+SafeDIMock.swift": """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
 
-			#if DEBUG
-			extension Screen {
-			    /// Overrides for the mock dependency tree.
-			    struct SafeDIOverrides {
-			        init(
-			            settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)? = nil
-			        ) {
-			            __safeDI_storage = __safeDI_Storage(
-			                settingsBuilder: settingsBuilder
-			            )
-			        }
+		\(importLines)#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                settingsBuilder: settingsBuilder
+		            )
+		        }
 
-			        var settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)? { __safeDI_storage.settingsBuilder }
+		        var settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)? { __safeDI_storage.settingsBuilder }
 
-			        private let __safeDI_storage: __safeDI_Storage
+		        private let __safeDI_storage: __safeDI_Storage
 
-			        private final class __safeDI_Storage: Sendable {
-			            init(
-			                settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)?
-			            ) {
-			                self.settingsBuilder = settingsBuilder
-			            }
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)?
+		            ) {
+		                self.settingsBuilder = settingsBuilder
+		            }
 
-			            let settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)?
-			        }
-			    }
+		            let settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)?
+		        }
+		    }
 
-			    static func mock(
-			        gizmo_SendableInstantiator__Widget: SendableInstantiator<Widget>,
-			        gizmo: LazilyInstantiated<Gizmo>,
-			        safeDIOverrides: SafeDIOverrides = .init()
-			    ) -> Screen {
-			        let __safeDI_settingsBuilder__safeDIBuilder = safeDIOverrides.settingsBuilder
-			        @Sendable func __safeDI_settingsBuilder() -> Settings {
-			            let gizmo: SendableInstantiator<Widget> = gizmo_SendableInstantiator__Widget
-			            return if let safeDIBuilder = __safeDI_settingsBuilder__safeDIBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
-			        }
-			        let settingsBuilder = SendableInstantiator<Settings>(__safeDI_settingsBuilder)
-			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo)
-			    }
-			}
-			#endif
-			"""])
-		case .listed:
-			#expect(output.mockFiles == ["Screen+SafeDIMock.swift": """
-			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-			// Any modifications made to this file will be overwritten on subsequent builds.
-			// Please refrain from editing this file directly.
-
-			#if canImport(SafeDI)
-			import SafeDI
-			#endif
-
-			#if DEBUG
-			extension Screen {
-			    /// Overrides for the mock dependency tree.
-			    struct SafeDIOverrides {
-			        init(
-			            settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)? = nil
-			        ) {
-			            __safeDI_storage = __safeDI_Storage(
-			                settingsBuilder: settingsBuilder
-			            )
-			        }
-
-			        var settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)? { __safeDI_storage.settingsBuilder }
-
-			        private let __safeDI_storage: __safeDI_Storage
-
-			        private final class __safeDI_Storage: Sendable {
-			            init(
-			                settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)?
-			            ) {
-			                self.settingsBuilder = settingsBuilder
-			            }
-
-			            let settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)?
-			        }
-			    }
-
-			    static func mock(
-			        gizmo_SendableInstantiator__Widget: SendableInstantiator<Widget>,
-			        gizmo: LazilyInstantiated<Gizmo>,
-			        safeDIOverrides: SafeDIOverrides = .init()
-			    ) -> Screen {
-			        let __safeDI_settingsBuilder__safeDIBuilder = safeDIOverrides.settingsBuilder
-			        @Sendable func __safeDI_settingsBuilder() -> Settings {
-			            let gizmo: SendableInstantiator<Widget> = gizmo_SendableInstantiator__Widget
-			            return if let safeDIBuilder = __safeDI_settingsBuilder__safeDIBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
-			        }
-			        let settingsBuilder = SendableInstantiator<Settings>(__safeDI_settingsBuilder)
-			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo)
-			    }
-			}
-			#endif
-			"""])
-		case .public:
-			#expect(output.mockFiles == ["Screen+SafeDIMock.swift": """
-			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-			// Any modifications made to this file will be overwritten on subsequent builds.
-			// Please refrain from editing this file directly.
-
-			#if DEBUG
-			extension Screen {
-			    nonisolated public enum SafeDIMockScope_Gizmo {
-			        nonisolated public struct gizmo_Values {
-			            public let settingsBuilder: SendableInstantiator<Settings>
-			        }
-
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let gizmo: (gizmo_Values) -> __safeDI_Built
-
-			            public init(gizmo: @escaping (gizmo_Values) -> __safeDI_Built) {
-			                self.gizmo = gizmo
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.gizmo = { _ in __safeDI_builder() }
-			            }
-			        }
-			    }
-
-			    /// Overrides for the mock dependency tree.
-			    nonisolated public struct SafeDIOverrides {
-			        public init(
-			            settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)? = nil
-			        ) {
-			            __safeDI_storage = __safeDI_Storage(
-			                settingsBuilder: settingsBuilder
-			            )
-			        }
-
-			        public var settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)? { __safeDI_storage.settingsBuilder }
-
-			        private let __safeDI_storage: __safeDI_Storage
-
-			        private final class __safeDI_Storage {
-			            init(
-			                settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)?
-			            ) {
-			                self.settingsBuilder = settingsBuilder
-			            }
-
-			            let settingsBuilder: (@Sendable (SendableInstantiator<Widget>) -> Settings)?
-			        }
-			    }
-
-			    public static func mock(
-			        gizmo: SendableInstantiator<Widget>,
-			        gizmoBuilder: @escaping () -> Gizmo,
-			        settingsBuilder: SendableInstantiator<Settings>? = nil,
-			        safeDIOverrides: SafeDIOverrides = .init()
-			    ) -> Screen {
-			        Screen.__safeDI_mock(gizmo: gizmo, gizmoBuilder: .init(__safeDI_noScope: gizmoBuilder), settingsBuilder: settingsBuilder, safeDIOverrides: safeDIOverrides)
-			    }
-
-			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
-			    public static func __safeDI_mock(
-			        gizmo: SendableInstantiator<Widget>,
-			        gizmoBuilder __safeDI_gizmoBuilder: Screen.SafeDIMockScope_Gizmo.__safeDI_Builder<Gizmo>,
-			        settingsBuilder: SendableInstantiator<Settings>? = nil,
-			        safeDIOverrides: SafeDIOverrides = .init()
-			    ) -> Screen {
-			        let __safeDI_settingsBuilder__safeDIBuilder = safeDIOverrides.settingsBuilder
-			        @Sendable func __safeDI_settingsBuilder() -> Settings {
-			            if let safeDIBuilder = __safeDI_settingsBuilder__safeDIBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
-			        }
-			        let settingsBuilder = if let settingsBuilder { settingsBuilder } else { SendableInstantiator<Settings>(__safeDI_settingsBuilder) }
-			        func __safeDI_gizmo() -> Gizmo {
-			            __safeDI_gizmoBuilder.gizmo(SafeDIMockScope_Gizmo.gizmo_Values(settingsBuilder: settingsBuilder))
-			        }
-			        let gizmo_LazilyInstantiated__Gizmo = LazilyInstantiated<Gizmo>(__safeDI_gizmo)
-			        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo_LazilyInstantiated__Gizmo)
-			    }
-			}
-
-			extension Screen {
-			    public enum __safeDI_Screen_mock_226824262CEE472D {}
-			}
-			#endif
-			"""])
+		    static func mock(
+		        gizmo_SendableInstantiator__Widget: SendableInstantiator<Widget>,
+		        gizmo: LazilyInstantiated<Gizmo>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let __safeDI_settingsBuilder__safeDIBuilder = safeDIOverrides.settingsBuilder
+		        @Sendable func __safeDI_settingsBuilder() -> Settings {
+		            let gizmo: SendableInstantiator<Widget> = gizmo_SendableInstantiator__Widget
+		            return if let safeDIBuilder = __safeDI_settingsBuilder__safeDIBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
+		        }
+		        let settingsBuilder = SendableInstantiator<Settings>(__safeDI_settingsBuilder)
+		        return Screen(settingsBuilder: settingsBuilder, gizmo: gizmo)
+		    }
 		}
+		#endif
+		"""])
 	}
 
 	// MARK: Private
@@ -1164,12 +1168,13 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 	}
 
 	/// `Screen`, mocked as `caller` says, receives `settingsBuilder: SendableInstantiator<Settings>`, which its mock builds
-	/// at its root, and declares `gizmo: <gizmoType>` of `Gizmo`, which is no `@Instantiable`, with `gizmoAttribute`;
+	/// at its root, and declares `<gizmoLabel>: <gizmoType>` of `Gizmo`, which is no `@Instantiable`, with `gizmoAttribute`;
 	/// `Settings`, which is not `Sendable`, so that it may hold a wrapper that is not, receives `settingsReceive` with
 	/// `settingsReceiveAttribute`. `Widget` is no `@Instantiable` either.
 	private static func promotedSiblingScreenFiles(
 		caller: MockCaptureCaller,
 		gizmoAttribute: String = "@Instantiated",
+		gizmoLabel: String = "gizmo",
 		gizmoType: String,
 		settingsReceiveAttribute: String = "@Received",
 		settingsReceive: String,
@@ -1178,12 +1183,12 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 			"""
 			\(caller.attribute)
 			public final class Screen: Instantiable {
-			    public init(settingsBuilder: SendableInstantiator<Settings>, gizmo: \(gizmoType)) {
+			    public init(settingsBuilder: SendableInstantiator<Settings>, \(gizmoLabel): \(gizmoType)) {
 			        fatalError("SafeDI doesn't inspect the initializer body")
 			    }
 
 			    @Received let settingsBuilder: SendableInstantiator<Settings>
-			    \(gizmoAttribute) let gizmo: \(gizmoType)
+			    \(gizmoAttribute) let \(gizmoLabel): \(gizmoType)
 			}
 
 			public final class Gizmo: Instantiable, Sendable {}
