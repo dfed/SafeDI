@@ -1793,6 +1793,7 @@ private struct ScopeGeneratorUnderConstruction {
 			propertiesToGenerate: childGenerators,
 			// A scope that closes a cycle creates no children.
 			propertiesToDeclare: isPropertyCycle ? [] : scope.propertiesToDeclare,
+			instantiatedDependenciesNotGenerated: isPropertyCycle ? [] : scope.instantiatedDependenciesNotGenerated,
 			unavailableOptionalProperties: unavailableOptionalProperties,
 			receivesPassedNil: receivesPassedNil,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
