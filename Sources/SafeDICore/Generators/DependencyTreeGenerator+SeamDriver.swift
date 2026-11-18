@@ -538,6 +538,11 @@ extension DependencyTreeGenerator {
 		}
 	}
 
+	/// The enums `seamRoot`'s signature declares itself, rather than carries from a seam it reaches.
+	private static func ownScopeEnums(of seamRoot: ScopeGenerator.SeamRoot) -> [SeamSignature.ScopeEnum] {
+		seamRoot.signature.scopeEnums.filter { $0.key.seamType == seamRoot.signature.seamType }
+	}
+
 	/// The passes a strongly connected component of `seamCount` seams may take to settle before
 	/// `signaturesDidNotSettle` is reported. Each pass adds at least one parameter or receiver to the component's
 	/// signatures, or strengthens a parameter's form, or ends the computation (see `seamSignatures`), so a
@@ -602,8 +607,26 @@ extension DependencyTreeGenerator {
 		// first: each strongly connected component of the seam-reaches-seam graph, in reverse topological order, sees
 		// the final signatures of the seams it reaches outside it, and only seams that reach one another are
 		// computed again until none changes.
+		// Every seam's latest root, the other modules' from `fixedSignatures`, and every enum a seam's builders reach, read
+		// from the signature of the seam that declares it: a copy another seam carries can be from an earlier pass, and
+		// copies of different ages taken from different neighbors would keep a cycle of seams from settling. Built once
+		// and brought up to date after each pass with the component's own seams, so that a module of seams that reach
+		// none of one another – a component each – costs a pass per seam, not a pass per seam over every seam.
+		var knownSeamRoots = fixedSignatures.mapValues { Optional($0) }
+		for (seamType, seamRoot) in seamRoots {
+			knownSeamRoots[seamType] = seamRoot
+		}
+		var ownScopeEnums = [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]()
+		for case let seamRoot? in knownSeamRoots.values {
+			for scopeEnum in Self.ownScopeEnums(of: seamRoot) {
+				ownScopeEnums[scopeEnum.key] = scopeEnum
+			}
+		}
+		// Each seam's position in `seamInstantiables`, so that a component's seams are listed in that order without a
+		// scan of every seam per component.
+		let seamIndicesBySeamType = Dictionary(grouping: seamInstantiables.indices, by: { seamInstantiables[$0].concreteInstantiable })
 		for component in Self.stronglyConnectedComponents(of: seamInstantiables, in: instantiables, among: ownSeamTypes) {
-			let componentSeams = seamInstantiables.filter { component.contains($0.concreteInstantiable) }
+			let componentSeams = component.flatMap { seamIndicesBySeamType[$0] ?? [] }.sorted().map { seamInstantiables[$0] }
 			let reachableTypeDescriptions = Self.typesReachable(fromRoots: component, in: instantiables)
 			// A component settles in a fixed point in which every input to `seamRoot` only grows: a tree built with more
 			// parameters in scope receives no less from outside it, each label's form only strengthens (`X?` received
@@ -621,19 +644,6 @@ extension DependencyTreeGenerator {
 			var failedSeamsOfLastPass = Set<TypeDescription>()
 			var settled = false
 			for _ in 0..<Self.seamSignatureComputationLimit(forComponentOf: component.count) {
-				var knownSeamRoots = fixedSignatures.mapValues { Optional($0) }
-				for (seamType, seamRoot) in seamRoots {
-					knownSeamRoots[seamType] = seamRoot
-				}
-				// Every enum a seam's builders reach is read from the signature of the seam that declares it, as this pass's
-				// trees were built from: a copy another seam carries can be from an earlier pass, and copies of different
-				// ages taken from different neighbors would keep a cycle of seams from settling.
-				var ownScopeEnums = [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]()
-				for case let seamRoot? in knownSeamRoots.values {
-					for scopeEnum in seamRoot.signature.scopeEnums where scopeEnum.key.seamType == seamRoot.signature.seamType {
-						ownScopeEnums[scopeEnum.key] = scopeEnum
-					}
-				}
 				let scopeMap = Self.createSeamScopeMapping(
 					in: instantiables,
 					reachableTypeDescriptions: reachableTypeDescriptions,
@@ -680,6 +690,22 @@ extension DependencyTreeGenerator {
 						// Building the tree threw: an erased instantiator whose generic argument mismatches its type.
 						passErrors.append(.sourceLocated(error))
 						passFailedSeams.insert(seam.concreteInstantiable)
+					}
+				}
+				// The pass read every seam as the pass before left it; the next reads what this one found.
+				for seam in componentSeams {
+					let seamType = seam.concreteInstantiable
+					if case let previousSeamRoot?? = knownSeamRoots[seamType] {
+						for scopeEnum in Self.ownScopeEnums(of: previousSeamRoot) {
+							ownScopeEnums[scopeEnum.key] = nil
+						}
+					}
+					let seamRoot = seamRoots[seamType] ?? nil
+					knownSeamRoots[seamType] = .some(seamRoot)
+					if let seamRoot {
+						for scopeEnum in Self.ownScopeEnums(of: seamRoot) {
+							ownScopeEnums[scopeEnum.key] = scopeEnum
+						}
 					}
 				}
 				if !changed {
