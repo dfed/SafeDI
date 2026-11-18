@@ -5755,7 +5755,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let parametersByKey = fillParametersByKey.merging(dispatcherParametersByKey) { fillParameters, _ in fillParameters }
 		// A public mock's level function holds the body of a fill it hands each value in the form the fill takes it, under
 		// its own label, and declares no function inside the closure its struct stores.
-		let publicMockInlinableFillKeys = publicMockLevelFunctions?.keysOfFillsCalledWithOwnValues
+		let fillInlining = FillInlining(
+			inlinableFillKeys: inlinableFillKeys,
+			publicMockInlinableFillKeys: publicMockLevelFunctions?.keysOfFillsCalledWithOwnValues,
+			overrideFillKeys: overrideFillKeys,
+			keysTargetedByBuilderStructDispatchers: Set(callDispatchers.filter(\.returnsBuilderStruct).flatMap { $0.cases.compactMap(\.target?.key) }),
+		)
 		for (index, child) in orderedChildren.enumerated() where child.generator.fillEmitsCode {
 			var builderFunctionNames = childBuilderFunctionNames?[index].flatMap(\.self)
 				?? BuilderFunctionNames(fillIsSendable: buildsInSendableFunction(ofFill: child.generator))
@@ -5780,16 +5785,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				fillPlaceBindings: fillPlaceBindings,
 			)
 			if let key = child.generator.fillKey,
-			   inlinableFillKeys.contains(key),
-			   publicMockInlinableFillKeys?.contains(key) ?? true,
-			   // An override closure calls the fill's function.
-			   !overrideFillKeys.contains(key),
+			   fillInlining.mayHold(key),
 			   let inlinedFill = Self.inlinedFill(of: child.generator, code: code, leadingMemberWhitespace: leadingMemberWhitespace),
-			   // A builder struct's member holds the fill's body in a closure, inside which no function is declared: a body that
-			   // declares one, which can be isolated as the code around the closure is, is called by name instead.
-			   !(child.generator.fillDeclaresFunction(fillPlaceBindings: fillPlaceBindings) && (publicMockInlinableFillKeys != nil || callDispatchers.contains { dispatcher in
-			   	dispatcher.returnsBuilderStruct && dispatcher.cases.contains { $0.target?.key == key }
-			   }))
+			   !fillInlining.keepsFunction(key, declaresFunction: child.generator.fillDeclaresFunction(fillPlaceBindings: fillPlaceBindings))
 			{
 				inlinedFills[key] = inlinedFill
 			} else {
