@@ -2220,7 +2220,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		)
 		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
 			"""
-			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `Relay` builds where it calls `SubB`, but `Relay` passes the builder for `SubB`’s `second: any Second` (`second` of `secondBuilder`) on from its own caller, which cannot hand it `Relay`’s values. Declare `@Received let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies, so `Relay` fills the builder itself.
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `Relay` builds where it calls `SubB`, but `Relay` passes the builder for `SubB`’s `second: any Second` (`second` of `secondBuilder`) on from its own caller, which cannot hand it `Relay`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies, so `Relay` fills the builder itself.
 			\(fixtures["Feature"]!["Relay.swift"]):8:5: note: `Relay` declares `x: X` here.
 			"""
 		}

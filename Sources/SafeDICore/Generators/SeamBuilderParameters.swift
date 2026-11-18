@@ -1605,7 +1605,7 @@ extension DependencyTreeGenerator {
 			// `nil`, which the fill's tree passes it too, unless the property is an instantiator, which is handed a wrapper of
 			// its own (see `instantiatorBuildingSite`).
 			guard !onlyIfAvailable || ScopeGenerator.isBuilder(hole.property) || !isHolesOwnProperty(property) else { return }
-			let reader = DependencyTreeGeneratorError.FillFinding.Reader(property: property, type: instantiable.concreteInstantiable, declarationLocation: declarationLocation, passingCall: passingCall)
+			let reader = DependencyTreeGeneratorError.FillFinding.Reader(property: property, type: instantiable.concreteInstantiable, declarationLocation: declarationLocation, isOnlyIfAvailable: onlyIfAvailable, fillingModule: callerModule, passingCall: passingCall)
 			let sameLabelFields = fields.filter { $0.property.label == property.label }
 			// A value a cycle in the seam's tree hands the site's owner when it builds it again is wrong at every level but the
 			// first, whether a field carries the label or the fill reads it from the caller's scope.
@@ -1912,9 +1912,21 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			let property: Property
 			let type: TypeDescription
 			let declarationLocation: Dependency.DeclarationLocation?
+			/// Whether the reader receives it only if available.
+			let isOnlyIfAvailable: Bool
+			/// The module that generates the fill, which sees the reader's type.
+			let fillingModule: ModuleIdentity
 			/// For a receive of a seam's call, which passes it on to the seam's tree: the type that makes the call, the call's
 			/// property, and where that property is declared.
 			var passingCall: PassingCall?
+
+			/// A declaration that receives the reader's property as the reader does: only if available, as an optional, where
+			/// the reader receives it only if available.
+			var receiveSpelling: String {
+				isOnlyIfAvailable
+					? "@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true) let \((property.typeDescription.isOptional ? property : property.asOptionalProperty).asSource)"
+					: "@\(Dependency.Source.receivedRawValue) let \(property.asSource)"
+			}
 		}
 
 		/// A call of a seam, by `callingType`'s `property`, declared at `declarationLocation`.
@@ -2292,7 +2304,9 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 						message += " Instantiate `\(declaration.property.label)` outside `\(seam.asSource)` and declare `@\(Dependency.Source.receivedRawValue) let \(declaration.property.asSource)` on `\(seam.asSource)`, so the \(buildersPossessive) caller reads its own, or \(fulfillRemedy(of: sendablePlaces))."
 					}
 					if !plainPlaces.isEmpty {
-						message += " Declare `@\(Dependency.Source.receivedRawValue) let \(reader.property.asSource)` on \(listed(seamsInPlaceOrder(plainPlaces))), so SafeDI hands it to the builder\(namesSeveralBuilders ? "s" : ""), or \(fulfillRemedy(of: plainPlaces))."
+						// The called seam receives the value as the reader does: a required receive of an optional there is
+						// unfulfilled where the caller binds the value itself.
+						message += " Declare `\(reader.receiveSpelling)` on \(listed(seamsInPlaceOrder(plainPlaces))), so SafeDI hands it to the builder\(namesSeveralBuilders ? "s" : ""), or \(fulfillRemedy(of: plainPlaces))."
 					}
 					return message
 				}
