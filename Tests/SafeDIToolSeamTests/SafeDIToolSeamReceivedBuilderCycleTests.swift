@@ -1627,14 +1627,16 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarry_whenImplementationsOfTwoHolesReceiveEachOthersInstantiators(onlyIfAvailable: Bool) async {
 		// `DefaultDetail` and `DefaultSettings` fill `Screen`'s two holes and receive each other's instantiators. Inline, the
 		// two are a loop. `Screen`'s module sees neither receive, so it builds `detailBuilder` first, and the scope its
-		// builder is handed does not carry `settingsBuilder`, which `Screen` builds after it.
+		// builder is handed does not carry `settingsBuilder`, which `Screen` builds after it. `DefaultSettings` receives the
+		// `detailBuilder` `Screen` instantiates, so no type above `Screen` can build `settingsBuilder`: one type of `App` that
+		// instantiates both, in place of both, puts the loop in one tree.
 		let receive = onlyIfAvailable
 			? "@Received(onlyIfAvailable: true) let settingsBuilder: ErasedInstantiator<(), any Settings>?"
 			: "@Received let settingsBuilder: ErasedInstantiator<(), any Settings>"
 		let property = onlyIfAvailable ? "settingsBuilder: ErasedInstantiator<(), any Settings>?" : "settingsBuilder: ErasedInstantiator<(), any Settings>"
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultDetail.swift"]):9:5: error: `DefaultDetail` receives `\(property)`, which `Screen`’s tree builds only after it calls the builder for `Screen`’s `detailBuilder: ErasedInstantiator<(), any Detail>` (`detailBuilder` of `defaultDetail_DetailBuilder`), so SafeDI does not hand it to that builder. Instantiate `settingsBuilder` on a type above `Screen`, and receive it on `Screen` in place of its @Instantiated declaration, so that the caller’s tree builds it, or declare an @Instantiable type that fulfills `DefaultDetail` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultDetail.swift"]):9:5: error: `DefaultDetail` receives `\(property)`, which `Screen`’s tree builds only after it calls the builder for `Screen`’s `detailBuilder: ErasedInstantiator<(), any Detail>` (`detailBuilder` of `defaultDetail_DetailBuilder`), so SafeDI does not hand it to that builder. Declare `settingsBuilder` and `detailBuilder` on one type of module `App` instead, and have `Screen` instantiate a protocol that type fulfills in their place, so that type’s tree builds both, or declare an @Instantiable type that fulfills `DefaultDetail` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Screen.swift"]):9:5: note: `Screen` declares `settingsBuilder: ErasedInstantiator<(), any Settings>` here.
 			"""
 		}) {
