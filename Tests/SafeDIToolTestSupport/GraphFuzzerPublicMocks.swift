@@ -1670,7 +1670,7 @@ struct GraphFuzzerPublicMockDraw {
 		// in every graph, three in five of the rest draw it too (`publicMockSendableWrapperRandomSeedMask`).
 		let drawsWrapperBesideMainStream = sendableWrapperRandom.percentChance(60)
 		let wrapperModuleRoll = sendableWrapperRandom.integer(in: 0...1)
-		let wrapperModule: GraphFuzzerModule? = if isSendableGraph && random.percentChance(70) {
+		let wrapperModule: GraphFuzzerModule? = if isSendableGraph, random.percentChance(70) {
 			random.element(of: consumerModules)
 		} else if isSendableGraph, drawsWrapperBesideMainStream {
 			consumerModules[wrapperModuleRoll % consumerModules.count]
