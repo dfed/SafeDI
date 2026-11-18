@@ -2937,8 +2937,14 @@ extension GraphFuzzerToolRuns {
 	var publicMockAcceptanceFailure: GraphFuzzerFailure? {
 		switch (firstOutcome, knownRightOutcome) {
 		case let (.rejected(diagnostics), .accepted?):
-			let drawsStaleValueRead = GraphFuzzerPublicMockDraw.drawFeatures(of: fixture).isSuperset(of: [.holeLoopDeclaresContextAgain, .holeFillReceivesField, .consumerReachesHoleTypeWithFill])
-			guard !GraphFuzzerOracle.isPublicMockOnlyRejection(diagnostics: diagnostics, staleValueLoopTypeName: drawsStaleValueRead ? "\(fixture.typeNamePrefix)HoleLoop" : nil) else { return nil }
+			let features = GraphFuzzerPublicMockDraw.drawFeatures(of: fixture)
+			let drawsStaleValueRead = features.isSuperset(of: [.holeLoopDeclaresContextAgain, .holeFillReceivesField, .consumerReachesHoleTypeWithFill])
+			let drawsFieldReadBeneathSendableWrapper = features.isSuperset(of: [.holeBeneathSendableWrapper, .holeFillReceivesField, .consumerReachesHoleTypeWithFill])
+			guard !GraphFuzzerOracle.isPublicMockOnlyRejection(
+				diagnostics: diagnostics,
+				staleValueLoopTypeName: drawsStaleValueRead ? "\(fixture.typeNamePrefix)HoleLoop" : nil,
+				sendableFunctionDeclaringTypeName: drawsFieldReadBeneathSendableWrapper ? "\(fixture.typeNamePrefix)T6" : nil,
+			) else { return nil }
 			return GraphFuzzerFailure(
 				seed: fixture.seed,
 				kind: .publicMockRejectsGraphKnownRightAccepts,
@@ -3060,16 +3066,27 @@ extension GraphFuzzerOracle {
 	/// (`GraphFuzzerPublicMockDrawFeature.holeLoopDeclaresContextAgain`).
 	static let publicMockStaleValueErrorMarker = "the same values at every level of that cycle"
 
+	/// What the error says that a tree filling a seam's place inside a `@Sendable` function reports for a fill that reads a
+	/// value the seam's tree declares outside that function (`boundOutsideSendableFunction`), which a public mock reports as
+	/// its production twin does (contract rule 7): inline, the fill reads the value its caller declares, so only a graph whose
+	/// fill reads `holeContext`, which `T6` instantiates, beneath a `Sendable` wrapper may report it
+	/// (`GraphFuzzerPublicMockDrawFeature.holeBeneathSendableWrapper`, `holeFillReceivesField`).
+	static let publicMockSendableFunctionCarryErrorMarker = "carries only what that function binds"
+
 	/// Whether every error in `diagnostics`, a rejection of a `generateMockPublic` graph as drawn, is one of a public
-	/// mock's own (`publicMockOnlyErrorMarkers`), or, where `staleValueLoopTypeName` names the graph's `HoleLoop`, the
-	/// error of a fill reading the `holeContext` that type declares again (`publicMockStaleValueErrorMarker`).
-	static func isPublicMockOnlyRejection(diagnostics: String, staleValueLoopTypeName: String? = nil) -> Bool {
+	/// mock's own (`publicMockOnlyErrorMarkers`); where `staleValueLoopTypeName` names the graph's `HoleLoop`, the error of
+	/// a fill reading the `holeContext` that type declares again (`publicMockStaleValueErrorMarker`); or, where
+	/// `sendableFunctionDeclaringTypeName` names the graph's `T6`, the error of a fill reading the `holeContext` that type
+	/// declares outside a `@Sendable` function above the hole (`publicMockSendableFunctionCarryErrorMarker`).
+	static func isPublicMockOnlyRejection(diagnostics: String, staleValueLoopTypeName: String? = nil, sendableFunctionDeclaringTypeName: String? = nil) -> Bool {
 		let errors = diagnostics.split(separator: "\n").filter { $0.contains(": error: ") }
 		return !errors.isEmpty && errors.allSatisfy { error in
 			if publicMockOnlyErrorMarkers.contains(where: { error.contains($0) }) {
 				true
-			} else if let staleValueLoopTypeName {
-				error.contains(publicMockStaleValueErrorMarker) && error.contains("receives `holeContext: ") && error.contains("`\(staleValueLoopTypeName)`")
+			} else if let staleValueLoopTypeName, error.contains(publicMockStaleValueErrorMarker) {
+				error.contains("receives `holeContext: ") && error.contains("`\(staleValueLoopTypeName)`")
+			} else if let sendableFunctionDeclaringTypeName, error.contains(publicMockSendableFunctionCarryErrorMarker) {
+				error.contains("receives `holeContext: ") && error.contains("which `\(sendableFunctionDeclaringTypeName)` declares outside the `@Sendable` function that builds `")
 			} else {
 				false
 			}
