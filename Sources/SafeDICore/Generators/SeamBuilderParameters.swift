@@ -942,6 +942,7 @@ extension DependencyTreeGenerator {
 			// its parameters say nothing about the forms a fill may receive.
 			if !bindsReceivesAgain {
 				parameterDeclaration.seamParameterOrigin = SeamSignature.Hole.Field.SeamParameterOrigin(
+					seamType: seam.concreteInstantiable,
 					seamDeclarationLocation: seam.declarationLocation,
 					isPassThrough: parameter.isPassThrough,
 					// The seam's own property is received by the seam itself, where it declares it.
@@ -1030,7 +1031,7 @@ extension DependencyTreeGenerator {
 						)
 					}
 					let fieldAccess = access(of: field.property, declaredBy: instantiables[field.declaringType]?.moduleName)
-					declare(PathDeclaration(
+					var fieldDeclaration = PathDeclaration(
 						property: field.property,
 						isBoundBeforeSite: true,
 						sendableDepth: sendableDepth,
@@ -1041,7 +1042,12 @@ extension DependencyTreeGenerator {
 						isReceivedOnlyIfAvailable: field.isReceivedOnlyIfAvailable,
 						parameterTakingType: field.parameterTakingType,
 						frameLevel: level,
-					))
+					)
+					// A field bound from a parameter of the filled seam is still that seam's parameter: a fill of a place this seam passes
+					// up that reads the label in a form no one parameter takes with it gives that seam's tree two forms, which its caller
+					// reports as one module reports it (`parameterReceivedInAnotherForm`), rather than passing the reader `nil`.
+					fieldDeclaration.seamParameterOrigin = field.seamParameterOrigin
+					declare(fieldDeclaration)
 				}
 				endLevel(builtType: nil, nextProperty: frame.orderedChildren[frame.nextPosition - 1].generator.property)
 				continue
@@ -1854,7 +1860,18 @@ extension DependencyTreeGenerator {
 			}
 			return readers.min { [$0.declarationLocation].lexicographicallyPrecedes([$1.declarationLocation], by: Dependency.DeclarationLocation.precedesInSourceOrder) }
 		}
+		/// Each receive the fill's tree resolves outside it, by label, once per declaration, in the order the walk first meets
+		/// them – each type before the types beneath it, siblings in declaration order, as the seam's own tree lists its
+		/// receivers – with whether it is required: the seam's tree, as the caller fills it, receives each.
+		var fillTreeReceiversByLabel = [String: [(receiver: DependencyTreeGeneratorError.SeamError.Receiver, isRequired: Bool)]]()
+		/// The seam parameters a reader in the fill's tree receives in another form, each once per label and seam, with the index
+		/// of its finding, whose receivers and remedy are completed once the walk has met every receive of the label.
+		var twoFormsFindings = [(index: Int, label: String, origin: SeamSignature.Hole.Field.SeamParameterOrigin, originRequiredProperties: Set<Property>)]()
 		func checkReceive(of property: Property, by instantiable: Instantiable, declaredAt declarationLocation: Dependency.DeclarationLocation?, onlyIfAvailable: Bool, passingCall: DependencyTreeGeneratorError.FillFinding.PassingCall? = nil) {
+			let fillTreeReceiver = DependencyTreeGeneratorError.SeamError.Receiver(property: property, declaringType: instantiable.concreteInstantiable, declarationLocation: declarationLocation, aliasProperty: nil, isInstantiateMethodParameter: false)
+			if !fillTreeReceiversByLabel[property.label, default: []].contains(where: { $0.receiver.property == property && $0.receiver.declaringType == fillTreeReceiver.declaringType && $0.receiver.declarationLocation == declarationLocation }) {
+				fillTreeReceiversByLabel[property.label, default: []].append((fillTreeReceiver, !onlyIfAvailable))
+			}
 			// Inline, a receive only if available of the property the fill builds finds it still being built and is handed
 			// `nil`, which the fill's tree passes it too, unless the property is an instantiator, which is handed a wrapper of
 			// its own (see `instantiatorBuildingSite`).
@@ -1941,8 +1958,8 @@ extension DependencyTreeGenerator {
 				// the value too: generation found it (`ScopeGenerator.fillPlainMemoRoutesOfSendableWrapperReads`). Where the tree reads
 				// the label inside a `@Sendable` function, the fill binds the memo's value rather than the memo
 				// (`ScopeGenerator.fillDeferredLabelsReadInsideSendableFunction`), which the wrapper's reader cannot take either. A read of the
-				// optional wrapper only if available is a deliberate leniency: generation leaves it out (`fillSendableWrapperReads`),
-				// and the fill builds it where one module rejects the graph for reading the label in two forms.
+				// optional wrapper only if available, which generation leaves out (`fillSendableWrapperReads`), is the deferring seam's
+				// two forms below (`parameterReceivedInAnotherForm`), as one module reports it.
 				findings.append(.init(hole: hole, kind: .sendableWrapperReadBesidePlainMemo(reader: reader, memo: memo, instanceReader: instanceReader, routes: routes)))
 			} else if sameLabelFields.isEmpty, let declarations = hole.uncarriedDeclarations.first(where: { $0.property.label == property.label }).map({ [$0] })
 				// A call inside a fill that passes it to a seam passing the site up hands it that seam's copy of the hole,
@@ -1967,20 +1984,19 @@ extension DependencyTreeGenerator {
 			          // and provides only what it provides.
 			          !origin.isPassThrough || DependencyTreeGenerator.providingForm(among: [field.property, onlyIfAvailable && !property.typeDescription.isOptional ? property.asOptionalProperty : property]) == nil
 			{
-				let receivers = origin.receivers.map {
-					DependencyTreeGeneratorError.SeamError.Receiver(property: $0.property, declaringType: $0.declaringType, declarationLocation: $0.declarationLocation, aliasProperty: $0.aliasProperty, isInstantiateMethodParameter: $0.isInstantiateMethodParameter)
-				} + [DependencyTreeGeneratorError.SeamError.Receiver(property: property, declaringType: instantiable.concreteInstantiable, declarationLocation: declarationLocation, aliasProperty: nil, isInstantiateMethodParameter: false)]
-				// A receive of the parameter's own form is required where the parameter is; the reader's where it is.
-				var requiredProperties = Set(field.isReceivedOnlyIfAvailable ? [] : origin.receivers.map(\.property).filter { $0 == field.property })
-				if !onlyIfAvailable {
-					requiredProperties.insert(property)
+				// One finding per label and seam, which names every receive of the label in the fill's tree, as the seam names
+				// every receive of its own tree: the receivers and remedy are completed after the walk.
+				if !twoFormsFindings.contains(where: { $0.label == property.label && $0.origin.seamType == origin.seamType }) {
+					// A receive of the parameter's own form is required where the parameter is.
+					twoFormsFindings.append((findings.count, property.label, origin, Set(field.isReceivedOnlyIfAvailable ? [] : origin.receivers.map(\.property).filter { $0 == field.property })))
+					findings.append(.init(hole: hole, kind: .parameterReceivedInAnotherForm(
+						label: property.label,
+						receivers: [],
+						remedy: .receiveTheSameWay,
+						seamType: origin.seamType,
+						seamDeclarationLocation: origin.seamDeclarationLocation,
+					)))
 				}
-				findings.append(.init(hole: hole, kind: .parameterReceivedInAnotherForm(
-					label: property.label,
-					receivers: receivers,
-					remedy: DependencyTreeGenerator.labelCollisionRemedy(among: receivers.map(\.property), requiredProperties: requiredProperties),
-					seamDeclarationLocation: origin.seamDeclarationLocation,
-				)))
 			} else if sameLabelFields.isEmpty, let hidings = hidden.pathDeclarations[property.label] {
 				// The seam whose call these fills are records the same for a place inside this fill that a caller of it fills
 				// (`unreadableInsideFills(_:placeFields:fillingModule:)`), which the branch above reports with this message.
@@ -2048,6 +2064,22 @@ extension DependencyTreeGenerator {
 			} else {
 				visit(generator, parent: parent, providedProperties: providedProperties, fillAncestors: fillAncestors, judgesClosers: judgesClosers)
 			}
+		}
+		// The seam's tree, as the caller fills it, receives the label at the parameter's receivers and at every receive of it in
+		// the fill's tree, which the error names as the seam names its own tree's, so it reads as one module's.
+		for (index, label, origin, originRequiredProperties) in twoFormsFindings {
+			let fillTreeReceivers = fillTreeReceiversByLabel[label, default: []]
+			let receivers = origin.receivers.map {
+				DependencyTreeGeneratorError.SeamError.Receiver(property: $0.property, declaringType: $0.declaringType, declarationLocation: $0.declarationLocation, aliasProperty: $0.aliasProperty, isInstantiateMethodParameter: $0.isInstantiateMethodParameter)
+			} + fillTreeReceivers.map(\.receiver)
+			let requiredProperties = originRequiredProperties.union(fillTreeReceivers.filter(\.isRequired).map(\.receiver.property))
+			findings[index] = .init(hole: hole, kind: .parameterReceivedInAnotherForm(
+				label: label,
+				receivers: receivers,
+				remedy: DependencyTreeGenerator.labelCollisionRemedy(among: receivers.map(\.property), requiredProperties: requiredProperties),
+				seamType: origin.seamType,
+				seamDeclarationLocation: origin.seamDeclarationLocation,
+			))
 		}
 		return findings
 	}
@@ -2278,13 +2310,14 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			/// The routes to the places of the hole's case, nested by type, hold `label`, which the one fill of the case reads,
 			/// as `fields`, whose forms differ in more than optionality: no one parameter takes them all.
 			case fieldFormsDifferBetweenPlaces(label: String, fields: [SeamSignature.Hole.Field], seamModule: ModuleIdentity)
-			/// The reader receives `label`, which a parameter of the seam whose tree holds the site carries in a form no one
-			/// parameter takes together with the reader's (`DependencyTreeGenerator.providingForm(among:)`), or which the seam's
-			/// own property carries in a form that does not provide the reader's: the seam's tree, as the caller fills it,
-			/// receives the label in two forms, which the seam reports where its own tree holds both (`parametersShareLabel`),
-			/// and the fill would be handed another value than inline. Reported as the seam reports it, at the seam, with a
-			/// note at each of `receivers`: the parameter's, then the reader.
-			case parameterReceivedInAnotherForm(label: String, receivers: [SeamError.Receiver], remedy: SeamError.LabelCollisionRemedy, seamDeclarationLocation: Dependency.DeclarationLocation?)
+			/// The reader receives `label`, which a parameter of `seamType` carries in a form no one parameter takes together
+			/// with the reader's (`DependencyTreeGenerator.providingForm(among:)`), or which the seam's own property carries in
+			/// a form that does not provide the reader's: the seam's tree, as the caller fills it, receives the label in two
+			/// forms, which the seam reports where its own tree holds both (`parametersShareLabel`), and the fill would be
+			/// handed another value than inline. The seam is the one whose tree holds the site, or the one whose struct a fill
+			/// on the site's path binds the field from (`SeamSignature.Hole.Field.SeamParameterOrigin`). Reported as the seam
+			/// reports it, at the seam, with a note at each of `receivers`: the parameter's, then the reader.
+			case parameterReceivedInAnotherForm(label: String, receivers: [SeamError.Receiver], remedy: SeamError.LabelCollisionRemedy, seamType: TypeDescription, seamDeclarationLocation: Dependency.DeclarationLocation?)
 			/// The places of the hole's case, nested by type, are reached from both the inner seam's plain root enum and its
 			/// `@Sendable` one, and the one fill of the case builds `place`, a place `callerModule` cannot fill, or passes one up,
 			/// whose case would carry the scope value of either root enum.
@@ -2367,7 +2400,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 		/// forms, which the seam reports per label at its own declaration, the label.
 		var key: String {
 			let location = sourceDiagnostics.first?.location.map { "\($0.filePath):\($0.line):\($0.column)" } ?? ""
-			if case let .parameterReceivedInAnotherForm(label, _, _, _) = kind {
+			if case let .parameterReceivedInAnotherForm(label, _, _, _, _) = kind {
 				return "\(kindName) \(location) \(label)"
 			} else {
 				return "\(kindName) \(location)"
@@ -2897,9 +2930,9 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 				] + fields.dropFirst().map { field in
 					SourceDiagnostic(severity: .note, location: field.declarationLocation, message: "`\(field.declaringType.asSource)` declares `\(field.property.asSource)` here.")
 				}
-			case let .parameterReceivedInAnotherForm(label, receivers, remedy, seamDeclarationLocation):
+			case let .parameterReceivedInAnotherForm(label, receivers, remedy, seamType, seamDeclarationLocation):
 				return [
-					SourceDiagnostic(severity: .error, location: seamDeclarationLocation, message: SeamError.labelCollisionMessage(seamName: seamName, label: label, receivers: receivers, remedy: remedy)),
+					SourceDiagnostic(severity: .error, location: seamDeclarationLocation, message: SeamError.labelCollisionMessage(seamName: "`\(seamType.asSource)`", label: label, receivers: receivers, remedy: remedy)),
 				] + SeamError.receiverNotes(receivers)
 			case let .placeInsideFillOfCaseOfBothRootEnums(place, callerModule, seamModule):
 				let placeDescription = "`\(place.ownerType.asSource)`’s `\(place.property.asSource)`"
