@@ -152,16 +152,22 @@ struct ConstructionMemo {
 	}
 
 	/// The first entry of `key` whose reads `context` answers alike, with those reads as `context` answers them, or `nil`.
-	/// An entry whose generator is among `siblings`, the generators of the place's siblings, is never reused: a scope's
-	/// children are told apart by their generators (a mock root can list one property twice).
-	func reuse(of key: Key, in context: ConstructionContext, besides siblings: Set<ObjectIdentifier>) -> Reuse? {
+	/// A generator a sibling of the place holds is reused too: a scope tells its children apart by their indices.
+	/// - Parameter draw: The sharing schedule's draw for this lookup, test only (`ConstructionSharingSchedule`): whether the
+	///   place builds again, and the order the candidates are asked in.
+	func reuse(of key: Key, in context: ConstructionContext, drawing draw: ConstructionSharingSchedule.Draw? = nil) -> Reuse? {
 		guard let candidates = entriesByKey[key] else { return nil }
-		for entry in candidates where !siblings.contains(ObjectIdentifier(entry.generator)) {
-			if let reads = entry.reads.answeredAlike(in: context) {
-				return Reuse(entry: entry, reads: reads)
+		guard let draw else {
+			for entry in candidates {
+				if let reads = entry.reads.answeredAlike(in: context) {
+					return Reuse(entry: entry, reads: reads)
+				}
 			}
+			return nil
 		}
-		return nil
+		return draw.reuse(among: candidates) { entry in
+			entry.reads.answeredAlike(in: context).map { Reuse(entry: entry, reads: $0) }
+		}
 	}
 
 	/// The generator the pass before built settled at the place `key` names, when `key`'s other fields equal the key it was
@@ -172,11 +178,10 @@ struct ConstructionMemo {
 	/// and loops of builders, and its children, each settled in turn), so building the place from `G` takes the steps that
 	/// building it from `G′` took, which built `G`: the key's other fields and the reads are what the memo compares within a
 	/// pass. This memo is the pass before's.
-	func settledReuse(of key: Key, in context: ConstructionContext, besides siblings: Set<ObjectIdentifier>) -> Reuse? {
+	func settledReuse(of key: Key, in context: ConstructionContext) -> Reuse? {
 		guard let previousPassGenerator = key.previousPassGenerator,
 		      let (storedKey, entry) = entriesByGenerator[previousPassGenerator],
 		      entry.isSettled,
-		      !siblings.contains(previousPassGenerator),
 		      storedKey == key.withPreviousPassGenerator(storedKey.previousPassGenerator),
 		      let reads = entry.reads.answeredAlike(in: context)
 		else { return nil }

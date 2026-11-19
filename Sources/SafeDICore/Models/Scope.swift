@@ -522,6 +522,29 @@ final class Scope: Hashable {
 			// A place whose generator the pass before built settled is reused across passes only while the passes share
 			// the place-holding properties every place's build reads.
 			let settledPassMemo = placeHoldingPropertiesByType == placeHoldingPropertiesOfPreviousPass ? previousPassMemo : nil
+			if previousPassGenerator == nil, ConstructionMemo.isEnabled, ConstructionSharingSchedule.current?.offersLaterPlacesCandidates == true {
+				// The sharing oracle offers each place what a place after it built: the first pass starts from what a
+				// discarded build of the same pass stored, which the schedule asks newest first.
+				var discardedGeneratorsToStart = generatorsToStart
+				_ = try createScopeGenerator(
+					for: property,
+					nearestDeclarations: nearestDeclarations,
+					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+					seamRoot: seamRoot,
+					mockBuilders: mockBuilders,
+					erasedToConcreteExistential: erasedToConcreteExistential,
+					forMockGeneration: forMockGeneration,
+					startsCodeGeneration: startsCodeGeneration,
+					validatesForwardedProperties: validatesForwardedProperties,
+					declaredTypeNames: declaredTypeNames,
+					previousPassGenerator: nil,
+					generatorsToStart: &discardedGeneratorsToStart,
+					placeHoldingPropertiesByType: placeHoldingPropertiesByType,
+					memo: &passMemo,
+					settledPassMemo: nil,
+					graph: graph,
+				)
+			}
 			scopeGenerator = try createScopeGenerator(
 				for: property,
 				nearestDeclarations: nearestDeclarations,
@@ -618,6 +641,9 @@ final class Scope: Hashable {
 			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 		)]
 		let reusesGenerators = ConstructionMemo.isEnabled
+		// The sharing oracle's schedule, test only, and how many lookups it has drawn for (`ConstructionSharingSchedule`).
+		let sharingSchedule = ConstructionSharingSchedule.current
+		var lookupCount = 0
 		// The generators whose code this pass started or collected, each of which a place that reuses it does not start again.
 		var startedGenerators = Set<ObjectIdentifier>()
 		// Every generator this pass started or collected, in order: what each place's build started is the part of it from
@@ -632,9 +658,10 @@ final class Scope: Hashable {
 					let key = reusesGenerators
 						? scopeGeneratorsUnderConstruction[index].memoKey(ofChildBuilding: scope, as: property, erasedToConcreteExistential: erasedToConcreteExistential)
 						: nil
-					if let key, let reuse = memo.reuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext, besides: scopeGeneratorsUnderConstruction[index].childGeneratorIdentifiers) {
+					let draw = key == nil ? nil : sharingSchedule?.draw(atLookup: &lookupCount)
+					if let key, let reuse = memo.reuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext, drawing: draw) {
 						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
-					} else if let key, let reuse = settledPassMemo?.settledReuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext, besides: scopeGeneratorsUnderConstruction[index].childGeneratorIdentifiers) {
+					} else if let key, let reuse = settledPassMemo?.settledReuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext) {
 						// The pass before built this place's generator settled: building the place again would build it again.
 						// Its code starts as the build would have started it, and the memo holds it for the places after it.
 						for generator in reuse.entry.startedBeneath where startedGenerators.insert(ObjectIdentifier(generator)).inserted {
@@ -1352,16 +1379,7 @@ private struct ScopeGeneratorUnderConstruction {
 	}
 
 	/// The generators created so far for `propertiesToGenerate`, in order, followed by those of `fillsOfThisCall`.
-	private(set) var childGenerators = [ScopeGenerator]() {
-		didSet {
-			if let lastGenerator = childGenerators.last, childGenerators.count > oldValue.count {
-				childGeneratorIdentifiers.insert(ObjectIdentifier(lastGenerator))
-			}
-		}
-	}
-
-	/// The identities of `childGenerators`, none of which a child of this scope reuses (see `ConstructionMemo`).
-	private(set) var childGeneratorIdentifiers = Set<ObjectIdentifier>()
+	private(set) var childGenerators = [ScopeGenerator]()
 	/// How many scopes this scope's subtree has so far: itself, and every scope created beneath it. An alias or a hole,
 	/// which generates a line or two, is not counted.
 	private(set) var subtreeScopeCount = 1
