@@ -7577,7 +7577,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// The public mock corpus's same-supply defect: an internal calling mock takes `hole: S128_Hole` (seed 128), which the
 	/// calling-mock clause of contract rule 7, in the planned builder structs' last mock slice, removes. Seeds 230 and 539
 	/// show its other form: a type a mock builds with its hand-written mock (`customMockName`) takes the hole's value as
-	/// that mock's parameter, which stays a flat parameter, as a hand-written mock's parameters are its API.
+	/// that mock's parameter, which stays a flat parameter, as a hand-written mock's parameters are its API. Seeds 79 and
+	/// 658 show a third: the calling mock builds a promoted `HoleHost` from the hole's flat value and passes it to the called
+	/// public mock (`S79_T6.__safeDI_mock(…, holeHostBuilder:)`).
 	private static let callingMockTakesHoleValueReason = "An internal calling mock passes the called public mock's hole up as the hole's value, or the wrapper its place spells, rather than filling it where the app fills or taking one builder per filling type, returned type and family (contract rules 7 and 8), or a type built with its hand-written mock takes that value or wrapper as the hand-written mock's parameter, so changing the place's wrapper changes the parameter's type or its label"
 
 	/// Transitional: owned by the change that gives every public mock builder one form, which empties these seeds. The
@@ -8384,7 +8386,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockParametersSortedByLabelReason,
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
-			seeds: [103, 106, 167, 251, 351, 433, 528, 562, 771, 836, 947],
+			seeds: [103, 106, 167, 251, 351, 433, 514, 528, 562, 771, 836, 947],
 		),
 		// The base corpus's shape, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy
 		// cycle through it, in the gating draw of the shape #702 fixed, a `.public` type that builds itself again through
@@ -8395,8 +8397,8 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: lazyCycleConfigurationFieldReason,
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [
-				3, 33, 99, 171, 186, 213, 265, 289, 301, 302, 387, 468, 539, 542, 549, 561, 566, 572, 574, 583, 598,
-				612, 616, 618, 649, 653, 659, 669, 677, 697, 701, 703, 717, 730, 825, 832, 833, 840, 884, 897, 907, 909,
+				3, 33, 99, 104, 112, 186, 194, 213, 265, 289, 301, 302, 387, 468, 539, 542, 549, 561, 566, 572, 574, 583,
+				598, 612, 616, 618, 649, 653, 659, 669, 677, 697, 701, 703, 717, 730, 825, 832, 833, 840, 884, 897, 907, 909,
 				944, 946,
 			],
 		),
@@ -8433,7 +8435,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockFormsNamedApartOrderReason,
 			signatures: [.renamedGraphDiffers(.mockCode)],
-			seeds: [18, 22, 156, 161, 326, 327, 474, 629, 881, 970, 977, 983],
+			seeds: [18, 22, 156, 161, 326, 327, 474, 629, 731, 881, 977, 983],
 		),
 		// The retention oracle's written exception until the leak fix gives a public mock builders that keep only what their
 		// fill reads: a public mock hands each place's case the values of every level on the way to it, and the builder
@@ -8457,7 +8459,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "\(lazyCycleConfigurationFieldReason); and \(publicMockFormsNamedApartOrderReason)",
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence), .renamedGraphDiffers(.mockCode)],
-			seeds: [47, 221, 242, 381, 821, 880, 886],
+			seeds: [47, 221, 242, 381, 452, 821, 880, 886],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(publicMockParametersSortedByLabelReason); and \(lazyCycleConfigurationFieldReason)",
@@ -8520,7 +8522,8 @@ struct SafeDIToolGraphFuzzerTests {
 		],
 		labels: [],
 		sameSupply: [
-			122, 128, 136, 145, 230, 266, 332, 352, 411, 427, 539, 580, 681, 740, 786, 814, 823, 827, 853, 977,
+			79, 122, 128, 136, 145, 230, 266, 332, 352, 411, 420, 427, 539, 580, 658, 681, 740, 786, 814, 823, 827, 853,
+			977,
 		],
 		sameSupplyReason: callingMockTakesHoleValueReason,
 		sameSupplyBuilderKindFlips: [406, 463],
