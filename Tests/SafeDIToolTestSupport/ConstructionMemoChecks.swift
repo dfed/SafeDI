@@ -36,8 +36,34 @@ enum ConstructionMemoChecks {
 			if let difference = difference(between: treeBuiltWithMemo, and: treeBuiltWithoutMemo) {
 				Issue.record(Comment(rawValue: difference))
 			}
+			if let sharedGenerator = generatorSharedWithoutMemo(in: treeBuiltWithoutMemo) {
+				Issue.record(Comment(rawValue: sharedGenerator))
+			}
 			enclosingObserver?(treeBuiltWithMemo, treeBuiltWithoutMemo)
 		}
+	}
+
+	/// The structural check: a description of a generator the tree built without the memo holds at two places, or `nil`
+	/// when it holds none. A place shares a generator only through the memo, whose lookup and store each need the place's
+	/// key (`Scope.createScopeGenerator`), so a generator reached at two places of a tree had a key at both; a tree built
+	/// without the memo has no key at any place and must hold a generator at one place only. A second way of sharing that
+	/// bypassed the memo's key would show here.
+	static func generatorSharedWithoutMemo(in treeBuiltWithoutMemo: Any) -> String? {
+		var placesByGenerator = [ObjectIdentifier: Int]()
+		var stack = [(generator: treeBuiltWithoutMemo as AnyObject, path: [String]())]
+		while let (generator, path) = stack.popLast() {
+			let identifier = ObjectIdentifier(generator)
+			placesByGenerator[identifier, default: 0] += 1
+			guard placesByGenerator[identifier] == 1 else {
+				return "The tree built without the construction memo holds one generator at two places; the second is at child path \(path)."
+			}
+			for child in Mirror(reflecting: generator).children where child.label == "propertiesToGenerate" {
+				for (index, childGenerator) in ((child.value as? [AnyObject]) ?? []).enumerated() {
+					stack.append((childGenerator, path + [String(index)]))
+				}
+			}
+		}
+		return nil
 	}
 
 	/// The first line at which the descriptions of the two trees differ, with the line of each, or `nil` when the two
