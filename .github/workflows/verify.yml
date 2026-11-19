@@ -79,7 +79,7 @@ on:
         type: boolean
         default: false
       base:
-        description: With `pins`, the commit or branch the coverage report lists changes since, or empty for the merge base with main.
+        description: The commit or branch the coverage reports list changes since (the tests' report of every whole-suite `release` run, and with `pins` the corpora's), or empty for the merge base with main.
         required: false
         default: ''
   # Only to warm the two modes' build caches, which a dispatched run on any
@@ -375,21 +375,22 @@ jobs:
         uses: ./.github/actions/restore-shared-compile-checks
         with:
           identity: ${{ needs.verify.outputs.identity }}
-      # The bundle is built for coverage, which nothing here reads, so its
-      # profiles go to the runner's temporary directory.
+      # The bundle is built for coverage, and "Report Changed Lines No Verify
+      # Test Executed on Linux" reads the profiles its processes write.
       # The limit is twice the slowest group's time with every compile check
       # compiling: the seam tests took 5.5 minutes, the mock tests 5.0, the
       # seam smoke seeds 3.4, the other smoke tests 1.9 and the other three
       # groups 1.2 to 1.3 (run 43766692766). The seam tests have since taken
       # 6.5 (run 44097575826).
       - name: Test
+        id: tests
         timeout-minutes: 13
         shell: bash
         env:
           SELECTION: ${{ matrix.selection }}
           GROUP: ${{ matrix.group }}
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
-          LLVM_PROFILE_FILE: ${{ runner.temp }}/verify-tests-%p.profraw
+          LLVM_PROFILE_FILE: ${{ runner.temp }}/verify-profiles/verify-tests-%p.profraw
         run: |
           set -o pipefail
           # shellcheck disable=SC2086 # The selection is words to split.
@@ -404,6 +405,34 @@ jobs:
         with:
           name: verify-test-count-${{ matrix.group }}
           path: verify-test-count
+          retention-days: 1
+          # A re-run of the job replaces what an earlier attempt uploaded.
+          overwrite: true
+      # The artifact always holds the group's outcome and, when its tests
+      # wrote one, their profile, also when a test failed: a failing run's
+      # coverage is still most of the answer, and the report names the group.
+      - name: Merge the Group's Profile
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          GROUP: ${{ matrix.group }}
+          OUTCOME: ${{ steps.tests.outcome }}
+        run: |
+          mkdir -p verify-profile
+          echo "$OUTCOME" > verify-profile/outcome.txt
+          shopt -s nullglob
+          profiles=("$RUNNER_TEMP"/verify-profiles/*.profraw)
+          if [ ${#profiles[@]} -gt 0 ]; then
+            llvm-profdata merge -sparse "${profiles[@]}" -o "verify-profile/$GROUP.profdata"
+          else
+            echo "The group's tests wrote no coverage profile."
+          fi
+      - name: Upload the Group's Profile
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: verify-profile-${{ matrix.group }}
+          path: verify-profile/
           retention-days: 1
           # A re-run of the job replaces what an earlier attempt uploaded.
           overwrite: true
@@ -450,6 +479,79 @@ jobs:
       coverage: true
       base: ${{ inputs.base }}
       bundle: verify-test-bundle
+
+  # The changed lines under Sources/ and Plugins/ that none of the seven
+  # groups' tests executed, in the run's summary, so that a change's coverage
+  # is known from the Verify run that tests it and not first from a pull
+  # request's "Check Line Coverage on Linux", which waits for both platforms'
+  # full test jobs. It costs the run no build and no test: the bundle is
+  # already built for coverage and the groups already write profiles.
+  # Advisory: it fails only when it cannot report, it runs when a group's
+  # tests failed, and it reads Linux alone, so the check stays the gate
+  # (.github/scripts/report-verify-coverage.sh says what it cannot see).
+  # The job's limit is "Report Changed Lines No Fuzzer Graph Executed on
+  # Linux"'s, which does the same work over more profiles; neither step that
+  # can hang here has been measured in this job yet.
+  verify-coverage:
+    name: Report Changed Lines No Verify Test Executed on Linux
+    needs: [verify, verify-tests]
+    if: ${{ !cancelled() && needs.verify.result == 'success' && needs.verify.outputs.split == 'true' }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+        with:
+          # Every branch's history, so any base is present.
+          fetch-depth: 0
+      - name: Download Test Bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: verify-test-bundle
+      - name: Download the Groups' Profiles
+        uses: actions/download-artifact@v8
+        with:
+          pattern: verify-profile-*
+          path: verify-profiles
+      # Retried for the reason "Install curl for Codecov" in ci.yml gives.
+      - name: Install Python
+        uses: ./.github/actions/retry
+        with:
+          command: command -v python3 >/dev/null || { apt-get update && apt-get install -y --no-install-recommends python3; }
+      - name: Report
+        env:
+          BASE: ${{ inputs.base }}
+          # The groups of "Verify Tests on Linux"'s matrix.
+          EXPECTED_GROUPS: mocks seams dependency-trees tool fuzzer-seam-smoke fuzzer-smoke others
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          tar -xzf verify-test-bundle.tar.gz
+          mkdir -p verify-profiles
+          if [ -z "$BASE" ]; then
+            base=origin/main
+          elif ! base=$(git rev-parse --verify --quiet "$BASE^{commit}" || git rev-parse --verify --quiet "origin/$BASE^{commit}"); then
+            echo "::error::The base '$BASE' names no commit of this repository."
+            exit 1
+          fi
+          .github/scripts/report-verify-coverage.sh \
+            .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest verify-profiles \
+            "$base" "$RUNNER_TEMP/verify-coverage" "$EXPECTED_GROUPS"
+      - name: Upload Coverage
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: verify-coverage
+          path: ${{ runner.temp }}/verify-coverage/
+          if-no-files-found: ignore
+          retention-days: 3
+          # A re-run of the job replaces what an earlier attempt uploaded.
+          overwrite: true
 
   # Fails unless all seven groups reported and their test counts sum to the
   # bundle's, which any selection that drops or repeats tests breaks. It only
