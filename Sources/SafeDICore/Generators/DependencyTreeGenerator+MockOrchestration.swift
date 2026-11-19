@@ -25,6 +25,10 @@ extension DependencyTreeGenerator {
 		currentModuleSourceFilePaths: Set<String>? = nil,
 		additionalMocksToGenerate: Set<String> = [],
 	) async throws -> MockGenerationResult {
+		// The span of planning and building each mock root, and of checking the calls of other modules' public mocks, ends
+		// once their errors are reported; it ends here at a throw before that.
+		var endOfMockConstruction = GenerationPhaseObservation.observer?([.mockPlans, .mockConstruction])
+		defer { endOfMockConstruction?() }
 		var receivedPropertiesCache = ReceivedPropertiesCache()
 		let mockScopes = try await mockScopes(
 			additionalMocksToGenerate: additionalMocksToGenerate,
@@ -128,6 +132,8 @@ extension DependencyTreeGenerator {
 		if let error = DependencyTreeGeneratorError.reportingAll(of: mockRootErrors) {
 			throw error
 		}
+		endOfMockConstruction?()
+		endOfMockConstruction = nil
 		// From here on, the module's mock roots are handled together. These passes gate emitting the module's
 		// mocks and read nothing a single root's report needs, so
 		// `requirements(forTypeNamed:generatesMock:mockEmittingModule:)` deliberately does not run them. A check that
@@ -138,11 +144,19 @@ extension DependencyTreeGenerator {
 		// builder the same scope values at every level of a cycle, as a seam does, so its fills are judged as
 		// `generatePerRootCodeTrees` judges a seam's. The check judges each fill against the access the calling module
 		// has, which `query needs` has no module to read, so the query does not run it.
-		try Self.validateFills(
-			inTreesRootedAt: mockRoots.map(\.scopeGenerator),
-			callerModule: seams.currentModule,
-		)
-		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: mockRoots)
+		do {
+			let end = GenerationPhaseObservation.observer?([.wholeModuleGates])
+			defer { end?() }
+			try Self.validateFills(
+				inTreesRootedAt: mockRoots.map(\.scopeGenerator),
+				callerModule: seams.currentModule,
+			)
+			try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: mockRoots)
+		}
+
+		// The span of the mock output holds the third whole-module gate, `validateConfigurationsAreBuiltOneWay`.
+		let endOfMockOutput = GenerationPhaseObservation.observer?([.mockOutput])
+		defer { endOfMockOutput?() }
 
 		// Compute the global cycle edges across all mock-reachable types. Per-tree
 		// cycle detection (`isPropertyCycle`) breaks at a different edge depending

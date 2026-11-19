@@ -232,14 +232,27 @@ public actor DependencyTreeGenerator {
 	}
 
 	public func generatePerRootCodeTrees() async throws -> [GeneratedRoot] {
-		let rootScopeGenerators = try rootScopeGenerators
-		try Self.validateFills(
-			inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator),
-			callerModule: seams.currentModule,
-		)
-		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: rootScopeGenerators.map { ($0.instantiable, $0.scopeGenerator) })
-		try await validateNoSeamTierOmitsProvidedValue(inTreesRootedAt: rootScopeGenerators)
+		let rootScopeGenerators: [RootScopeInfo]
+		do {
+			// The getter validates, computes the seams' signatures and builds the production trees in one pass, so the
+			// three phases are one span until they are separated.
+			let end = GenerationPhaseObservation.observer?([.validation, .signatures, .productionConstruction])
+			defer { end?() }
+			rootScopeGenerators = try self.rootScopeGenerators
+		}
+		do {
+			let end = GenerationPhaseObservation.observer?([.wholeModuleGates])
+			defer { end?() }
+			try Self.validateFills(
+				inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator),
+				callerModule: seams.currentModule,
+			)
+			try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: rootScopeGenerators.map { ($0.instantiable, $0.scopeGenerator) })
+			try await validateNoSeamTierOmitsProvidedValue(inTreesRootedAt: rootScopeGenerators)
+		}
 
+		let end = GenerationPhaseObservation.observer?([.productionOutput])
+		defer { end?() }
 		let generatedRoots = try await withThrowingTaskGroup(
 			of: GeneratedRoot?.self,
 			returning: [GeneratedRoot].self,
@@ -315,6 +328,9 @@ public actor DependencyTreeGenerator {
 	var memoizedPublicMockContext: PublicMockContext?
 
 	public func generateDOTTree() async throws -> String {
+		// The span holds the validation and construction of the production trees, which the getter repeats here.
+		let end = GenerationPhaseObservation.observer?([.dot])
+		defer { end?() }
 		let rootScopeGenerators = try rootScopeGenerators
 
 		let dependencyTree = try await withThrowingTaskGroup(

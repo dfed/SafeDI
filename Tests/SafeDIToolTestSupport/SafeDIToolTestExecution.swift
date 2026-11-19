@@ -79,6 +79,7 @@ func executeSafeDIToolTest(
 	verificationCompilerSettings: VerificationCompilerSettings = VerificationCompilerSettings(),
 	swiftFileContentAfterScan: [String]? = nil,
 	recordDirectory: URL? = ExpectationRecording.directoryFromEnvironment,
+	environment: [String: String] = ProcessInfo.processInfo.environment,
 	sourceLocation: SourceLocation = #_sourceLocation,
 ) async throws -> TestOutput {
 	await ProcessSlots.shared.takePlaceInLine(for: Test.current?.id)
@@ -336,7 +337,7 @@ func executeSafeDIToolTest(
 		do {
 			// Every place's levels must hold its scope struct's fields (`SeamPlaceLevels.pathStructMismatches`).
 			generateOutput = try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
-				try await tool.generate()
+				try await tool.generate(environment: environment)
 			}
 		} catch {
 			throw SafeDIToolTestError(underlyingError: error, fixtures: fixtures, recordingRunDirectories: recordingRunDirectories)

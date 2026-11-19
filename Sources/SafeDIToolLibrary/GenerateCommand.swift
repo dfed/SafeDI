@@ -151,10 +151,23 @@ public struct Generate: AsyncParsableCommand {
 
 	/// Parses, validates, and writes the configured outputs.
 	/// Throws `SourceLocatedError`s as-is so tests can inspect their diagnostics; `run()` formats them for the build log.
-	/// - Parameter buildLog: Learns how the project spells its files, which decides how `run()` prints diagnostics.
+	/// - Parameters:
+	///   - buildLog: Learns how the project spells its files, which decides how `run()` prints diagnostics.
+	///   - environment: The environment the run reads `SAFEDI_PHASE_TIMES_OUTPUT` from (`PhaseTimes`). Tests pass
+	///     their own, since tests that run at once share the process's.
 	/// - Returns: Warnings about the module, which do not stop generation, and the modules this run read.
 	@discardableResult
-	public func generate(buildLog: BuildLog = BuildLog()) async throws -> Output {
+	public func generate(
+		buildLog: BuildLog = BuildLog(),
+		environment: [String: String] = ProcessInfo.processInfo.environment,
+	) async throws -> Output {
+		try await PhaseTimes.recording(environment: environment) {
+			try await generateOutputs(buildLog: buildLog)
+		}
+	}
+
+	/// `generate(buildLog:environment:)`, with its spans recorded where the environment asks.
+	private func generateOutputs(buildLog: BuildLog) async throws -> Output {
 		if swiftSourcesFilePath == nil, include.isEmpty {
 			throw ValidationError("Must provide 'swift-sources-file-path' or '--include'.")
 		}
