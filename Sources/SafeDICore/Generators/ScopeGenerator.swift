@@ -684,8 +684,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A fill some route hands the memo of a label its tree also reads as a `SendableLazilyInstantiated` takes that wrapper
 		// as the memo where every route can hand it (`FillDispatcher.memosHanded(toFillOf:labels:readingSendableWrapper:among:)`):
 		// the pass before finds those reads. Nearly no scope calls such a seam. A read of the optional wrapper only if available
-		// is left out, a deliberate leniency that `DependencyTreeGenerator.validateFills` keeps too: the fill builds it where
-		// one module rejects the graph for reading the label in two forms. So is a label the fill takes as the place's field.
+		// is left out: no one parameter takes it together with the memo's instance, so `DependencyTreeGenerator.validateFills`
+		// reports the deferring seam's tree receiving the label in two forms (`parameterReceivedInAnotherForm`), as one module
+		// reports that seam. So is a label the fill takes as the place's field.
 		var fillSendableWrapperReads = [String: [String: Property]]()
 		for fill in children where !fill.fillLabelsHandedAsMemo.isEmpty {
 			guard let key = fill.fillKey, let built = fill.children.first else { continue }
@@ -13220,7 +13221,8 @@ extension SeamSignature.Hole.Field {
 	/// `LazilyInstantiated` (or `SendableLazilyInstantiated`), under the field's label, so the fill's tree reads its instance
 	/// where it reads the value and the value is created when the tree reads it, as inline. The field keeps its own property,
 	/// which decides what it satisfies; only the type it is bound as (`boundTypeAsFunctionParameter`) and the spelling of its
-	/// reads change (`Scope.fillUnderConstruction`).
+	/// reads change (`Scope.fillUnderConstruction`). It stays the seam's parameter (`seamParameterOrigin`), which a place inside
+	/// the fill carries on (`SeamBuilderParameters.fields(of:)`).
 	var bindingItsMemo: SeamSignature.Hole.Field {
 		SeamSignature.Hole.Field(
 			property: property,
@@ -13234,6 +13236,7 @@ extension SeamSignature.Hole.Field {
 			bindsMemo: true,
 			isSeamParameter: isSeamParameter,
 			isBoundByPublicMockRoot: isBoundByPublicMockRoot,
+			seamParameterOrigin: seamParameterOrigin,
 		)
 	}
 
