@@ -22,6 +22,17 @@ The shapes (every name invented; `--shapes` picks among them, default all):
   E32-inline           the same graph, eight layers deep, with every type in the root's module and no seam.
   D20                  twenty screens with the same edges, each a seam in a module of its own, and a root with a
                        generated mock in module `App`: 22 modules.
+  E24-public-mock      E24-seam with a public mock: `Home` is also `generateMock: .public`, every other type of
+                       `Feature` but `Service` is `internal`, so `App` cannot build `Home`'s tree, and `App`'s root
+                       generates a mock, which calls `Home`'s public mock and fills its hole with `LiveApi`.
+  E24-fill             E24-seam with holes at every level: each screen also instantiates `any Store`, which only
+                       `LiveStore` in `App` fulfills, so `App` fills two holes with places in every layer.
+  E24-sendable-builder E24-seam built through `SendableInstantiator`s, with every type `Sendable`, so the hole's
+                       places are inside `@Sendable` functions and `Home` takes, and `App` fills, `@Sendable`
+                       builder structs.
+  E24-lazy             E24-seam whose root holds `service` as a `LazilyInstantiated`, which the screens receive by
+                       value and the models as the wrapper, and whose screens each hold their model as a
+                       `LazilyInstantiated`.
 
 How it measures: one untimed run of each tool per shape, then N (default 5) timed runs of each, alternating base and
 head so that a busy moment on the machine falls on both. The figure compared is the median wall time. CPU time (user
@@ -48,19 +59,19 @@ NOISE_FLOOR_SECONDS = 0.1
 # MARK: Shapes
 
 
-def declaration(attribute, name, properties, conformances="Instantiable", access="public "):
+def declaration(attribute, name, properties, conformances="Instantiable", access="public ", initializer_access="public "):
     """One `@Instantiable` class whose initializer takes and stores `properties`: (macro, label, type) each."""
     parameters = ", ".join(f"{label}: {type_}" for _, label, type_ in properties)
-    lines = [attribute, f"{access}final class {name}: {conformances} {{", f"\tpublic init({parameters}) {{"]
+    lines = [attribute, f"{access}final class {name}: {conformances} {{", f"\t{initializer_access}init({parameters}) {{"]
     lines += [f"\t\tself.{label} = {label}" for _, label, _ in properties]
     lines += ["\t}", ""]
-    lines += [f"\t{macro} public let {label}: {type_}" for macro, label, type_ in properties]
+    lines += [f"\t{macro} {initializer_access}let {label}: {type_}" for macro, label, type_ in properties]
     lines += ["}", ""]
     return "\n".join(lines) + "\n"
 
 
-def builder(screen):
-    return ("@Instantiated", f"screen{screen}Builder", f"Instantiator<Screen{screen}>")
+def builder(screen, wrapper="Instantiator"):
+    return ("@Instantiated", f"screen{screen}Builder", f"{wrapper}<Screen{screen}>")
 
 
 def next_layer(screen, count):
@@ -72,21 +83,43 @@ def next_layer(screen, count):
         return [(layer + 1) * 4 + position for position in range(4) if position != screen % 4]
 
 
-def shape_e(count, seam):
-    """Returns the shape's modules, in build order: (name, the modules it depends on, its source)."""
-    feature = "import SafeDI\n\npublic protocol Api: AnyObject {}\n\n"
+def shape_e(count, seam, variant=None):
+    """Returns the shape's modules, in build order: (name, the modules it depends on, its source).
+
+    `variant` is None, or one of "public-mock", "fill", "sendable-builder" and "lazy", as the module's docstring
+    describes them."""
+    sendable = variant == "sendable-builder"
+    conformances = "Instantiable, Sendable" if sendable else "Instantiable"
+    wrapper = "SendableInstantiator" if sendable else "Instantiator"
+    # A type of `Feature` that `App` names stays public; under a public mock, the rest of the tree is internal.
+    inner = {"access": "", "initializer_access": ""} if variant == "public-mock" else {}
+    protocols = "public protocol Api: AnyObject, Sendable {}\n\n" if sendable else "public protocol Api: AnyObject {}\n\n"
+    if variant == "fill":
+        protocols += "public protocol Store: AnyObject {}\n\n"
+    feature = "import SafeDI\n\n" + protocols
     if seam:
         feature += "#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n\n"
-    feature += declaration("@Instantiable", "Service", [])
-    feature += declaration("@Instantiable(generateDependencyTree: true)" if seam else "@Instantiable", "Home", [builder(screen) for screen in range(4)])
-    received = [("@Received", "id", "Int"), ("@Received", "service", "Service")]
+    feature += declaration("@Instantiable", "Service", [], conformances=conformances)
+    home_attribute = "@Instantiable(generateDependencyTree: true, generateMock: .public)" if variant == "public-mock" else "@Instantiable(generateDependencyTree: true)" if seam else "@Instantiable"
+    feature += declaration(home_attribute, "Home", [builder(screen, wrapper) for screen in range(4)], conformances=conformances, initializer_access="" if variant == "public-mock" else "public ")
+    service = ("@Received", "service", "Service")
     for screen in range(count):
         children = next_layer(screen, count)
-        properties = [("@Forwarded", "id", "Int"), ("@Received", "service", "Service"), ("@Instantiated", f"model{screen}", f"Model{screen}")]
-        feature += declaration("@Instantiable", f"Screen{screen}", properties + [builder(child) for child in children])
-        feature += declaration("@Instantiable", f"Model{screen}", received + ([] if children else [("@Instantiated", "api", "any Api")]))
-    app = declaration("@Instantiable(fulfillingAdditionalTypes: [(any Api).self])", "LiveApi", received, conformances="Instantiable, Api")
-    app += declaration("@Instantiable(isRoot: true)", "Root", [("@Instantiated", "service", "Service"), ("@Instantiated", "home", "Home")])
+        model = ("@Instantiated", f"model{screen}", f"LazilyInstantiated<Model{screen}>" if variant == "lazy" else f"Model{screen}")
+        properties = [("@Forwarded", "id", "Int"), service, model] + [builder(child, wrapper) for child in children]
+        if variant == "fill":
+            properties.append(("@Instantiated", "store", "any Store"))
+        feature += declaration("@Instantiable", f"Screen{screen}", properties, conformances=conformances, **inner)
+        model_service = ("@Received", "service", "LazilyInstantiated<Service>") if variant == "lazy" else service
+        received = [("@Received", "id", "Int"), model_service]
+        feature += declaration("@Instantiable", f"Model{screen}", received + ([] if children else [("@Instantiated", "api", "any Api")]), conformances=conformances, **inner)
+    received = [("@Received", "id", "Int"), ("@Received", "service", "Service")]
+    app = declaration("@Instantiable(fulfillingAdditionalTypes: [(any Api).self])", "LiveApi", received, conformances=f"{conformances}, Api")
+    if variant == "fill":
+        app += declaration("@Instantiable(fulfillingAdditionalTypes: [(any Store).self])", "LiveStore", received, conformances="Instantiable, Store")
+    root_service = ("@Instantiated", "service", "LazilyInstantiated<Service>" if variant == "lazy" else "Service")
+    root_attribute = "@Instantiable(isRoot: true, generateMock: true)" if variant == "public-mock" else "@Instantiable(isRoot: true)"
+    app += declaration(root_attribute, "Root", [root_service, ("@Instantiated", "home", "Home")])
     if seam:
         return [("Feature", [], feature), ("App", ["Feature"], "import Feature\nimport SafeDI\n\n" + app)]
     else:
@@ -115,6 +148,10 @@ SHAPES = {
     "E24-seam": lambda: shape_e(24, seam=True),
     "E32-inline": lambda: shape_e(32, seam=False),
     "D20": lambda: shape_d(20),
+    "E24-public-mock": lambda: shape_e(24, seam=True, variant="public-mock"),
+    "E24-fill": lambda: shape_e(24, seam=True, variant="fill"),
+    "E24-sendable-builder": lambda: shape_e(24, seam=True, variant="sendable-builder"),
+    "E24-lazy": lambda: shape_e(24, seam=True, variant="lazy"),
 }
 
 
