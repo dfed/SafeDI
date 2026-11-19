@@ -1,0 +1,195 @@
+name: Probe Latest Swift Groups
+
+# A scratch copy of ci.yml's Latest Swift jobs, to measure them without a
+# pull request. Never merged.
+on:
+  push:
+    branches:
+      - claude/latest-swift-groups-probe
+
+permissions: {}
+
+jobs:
+  changes:
+    name: Detect Changed Files
+    runs-on: ubuntu-latest
+    outputs:
+      source: 'true'
+    steps:
+      - run: 'true'
+
+  # The whole suite on the newest Swift release, one job per group of test
+  # targets, as "Verify Tests on Linux" in verify.yml splits it. In one job
+  # this was the last check of a pull request to report by half an hour or
+  # more: of the 2.3.0 stack's run 44594501340, every other job had ended 40
+  # minutes after the push, and this one was cut off at 73 with its tests
+  # still running. A debug build runs the tests slower than the pinned jobs'
+  # release build, and this job compiles every test's generated code (see
+  # the test step), so its time is the suite's, which four cores bound.
+  # Linux runners are plentiful, so each group builds for itself from the
+  # same cache rather than taking a bundle from a build job: the toolchain
+  # floats, and where its build system puts a test bundle is one of the
+  # things this job exists to notice. "Build and Test on Latest Swift" below
+  # reports the groups under the one name the job had.
+  linux-latest-swift-group:
+    name: Build and Test on Latest Swift (${{ matrix.group }})
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    runs-on: ubuntu-latest
+    # `swift:latest` floats to the newest Swift release so this job
+    # catches toolchain changes (e.g. SwiftPM's `swiftbuild` build
+    # system and its new `.build` layout) before anyone pins to them.
+    # Runs on Linux rather than macOS to save runner minutes. Coverage
+    # is deliberately not collected or uploaded here: the pinned `spm`
+    # and `linux` jobs own the Codecov report, and a second upload
+    # from a different toolchain would skew it.
+    container: swift:latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # verify.yml's groups, selection for selection: "Check Every Verify
+        # Test Ran Once" proves there that they run each test once, and
+        # "Build and Test on Latest Swift" below proves it here.
+        include:
+          - group: mocks
+            selection: --filter ^SafeDIToolMockTests\.
+          - group: seams
+            selection: --filter ^SafeDIToolSeamTests\.
+          - group: dependency-trees
+            selection: --filter ^SafeDIToolDependencyTreeTests\.
+          - group: tool
+            selection: --filter ^SafeDIToolTests\.
+          - group: fuzzer-seam-smoke
+            selection: --filter ^SafeDIToolFuzzerTests\.SafeDIToolGraphFuzzerTests/seamSmokeSeeds
+          - group: fuzzer-smoke
+            selection: --filter ^SafeDIToolFuzzerTests\.SafeDIToolGraphFuzzerTests/ --skip ^SafeDIToolFuzzerTests\.SafeDIToolGraphFuzzerTests/seamSmokeSeeds
+          - group: others
+            selection: --skip ^SafeDIToolMockTests\. --skip ^SafeDIToolSeamTests\. --skip ^SafeDIToolDependencyTreeTests\. --skip ^SafeDIToolTests\. --skip ^SafeDIToolFuzzerTests\.SafeDIToolGraphFuzzerTests/
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Print Swift Version
+        id: swift
+        run: |
+          swift --version
+          echo "version=$(swift --version 2>&1 | grep -m1 -oE 'Swift version [0-9.]+' | awk '{print $3}')" >> "$GITHUB_OUTPUT"
+      # The toolchain floats, so the key carries the version printed
+      # above: a new release starts from an empty cache. The groups restore
+      # one cache and, where no cache has the key yet, each tries to save
+      # it; the first to finish does.
+      - name: Cache Build Directory
+        uses: actions/cache@v6
+        with:
+          path: .build
+          key: spm-debug-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            spm-debug-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-
+      - name: Resolve Package Dependencies
+        uses: ./.github/actions/retry
+        with:
+          command: swift package resolve
+      # Swift Build (the default build system from Swift 6.4) compiles a
+      # target only after the targets that the graph SwiftPM hands it
+      # names as its dependencies. A full build can hide a missing edge
+      # by compiling the imported module first by chance, so this builds
+      # the support target the `SafeDITool` test targets share on its
+      # own, from an empty scratch path rather than the cached `.build`:
+      # it fails whenever that graph omits a module the support target
+      # imports, which `SafeDIToolTestSupport` depending on the
+      # executable target `SafeDITool` did. One group does it for all.
+      - name: Build the SafeDITool Test Support Target Alone with Swift Build
+        if: ${{ matrix.group == 'others' }}
+        # Measured 26 s on a 10-core Mac (Swift 6.4.2, swift-syntax built
+        # from source into the empty scratch path) and 1.9 minutes on the
+        # 4-core Linux runner (run 44594501340).
+        timeout-minutes: 15
+        run: swift build --build-system swiftbuild --traits sourceBuild --target SafeDIToolTestSupport --scratch-path "$RUNNER_TEMP/swiftbuild-test-support"
+      # LATEST_SWIFT_GROUP_LIMIT_COMMENT
+      #
+      # No cache of passed compile checks here, deliberately: this job
+      # compiles every test's generated code on every run, so a check the
+      # pinned jobs skip because it passed in an earlier run is still
+      # compiled once per run, by a third compiler.
+      - name: Build and Test Framework
+        timeout-minutes: 100
+        shell: bash
+        env:
+          SELECTION: ${{ matrix.selection }}
+          GROUP: ${{ matrix.group }}
+        run: |
+          set -o pipefail
+          # shellcheck disable=SC2086 # The selection is words to split.
+          swift test --traits sourceBuild $SELECTION 2>&1 | tee "$RUNNER_TEMP/latest-swift-test-output.txt"
+          # The tests the group ran: Swift Build makes one bundle per test
+          # target and each reports its own count, so the counts are summed.
+          mkdir -p latest-swift-test-count
+          grep -oE 'Test run with [0-9]+ tests? in [0-9]+ suites?' "$RUNNER_TEMP/latest-swift-test-output.txt" | awk '{ sum += $4 } END { if (NR > 0) print sum }' > "latest-swift-test-count/$GROUP.txt"
+          test -s "latest-swift-test-count/$GROUP.txt"
+          echo "The group ran $(cat "latest-swift-test-count/$GROUP.txt") tests."
+      # A listing ignores `--filter` and `--skip`, so one group lists every
+      # test of the build it just made, for the count the groups must add up
+      # to.
+      - name: Count Every Test
+        if: ${{ matrix.group == 'others' }}
+        shell: bash
+        run: |
+          swift test list --skip-build --traits sourceBuild > "$RUNNER_TEMP/latest-swift-tests.txt"
+          tests=$(LC_ALL=C sort -u "$RUNNER_TEMP/latest-swift-tests.txt" | wc -l)
+          test "$tests" -gt 0
+          echo "$tests" > latest-swift-test-count/every-test.txt
+          echo "The build lists $tests tests."
+      - name: Upload the Group's Test Count
+        uses: actions/upload-artifact@v7
+        with:
+          name: latest-swift-test-count-${{ matrix.group }}
+          path: latest-swift-test-count
+          retention-days: 1
+          # A re-run of the job replaces what an earlier attempt uploaded.
+          overwrite: true
+
+  # Reports the seven groups under the name the one job that ran them had,
+  # and fails unless every group passed and their test counts sum to the
+  # count the build lists, which any selection that drops or repeats a test
+  # breaks. It only reads results and counts, so it needs no container. It
+  # fails when a group failed or did not run although the change has source:
+  # skipped, it would satisfy a required check.
+  linux-latest-swift:
+    name: Build and Test on Latest Swift
+    needs: [changes, linux-latest-swift-group]
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require the Seven Groups
+        env:
+          GROUPS_RESULT: ${{ needs.linux-latest-swift-group.result }}
+        run: |
+          echo "Build and Test on Latest Swift (seven groups): $GROUPS_RESULT"
+          test "$GROUPS_RESULT" = success
+      - name: Download the Groups' Test Counts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: latest-swift-test-count-*
+          path: latest-swift-test-counts
+          merge-multiple: true
+      - name: Compare the Groups' Tests With the Build's
+        env:
+          # The count of groups in the matrix above.
+          EXPECTED_GROUPS: 7
+        run: |
+          every_test=$(cat latest-swift-test-counts/every-test.txt)
+          groups=0
+          sum=0
+          for count in latest-swift-test-counts/*.txt; do
+            [ "$(basename "$count")" != every-test.txt ] || continue
+            echo "$(basename "$count" .txt): $(cat "$count") tests"
+            groups=$((groups + 1))
+            sum=$((sum + $(cat "$count")))
+          done
+          echo "The $groups groups ran $sum tests; the build lists $every_test."
+          test "$groups" -eq "$EXPECTED_GROUPS"
+          test "$sum" -eq "$every_test"
+
