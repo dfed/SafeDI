@@ -127,7 +127,7 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case closureDefault
 	/// A `.public` type on no actor that builds a dependency, so that its mock has a `SafeDIOverrides`, and that takes an
 	/// optional-typed default-valued parameter, which its `mock()` takes as an internal mock does
-	/// (`GraphFuzzerFixture.publicMockOwnOptionalDefaultProbes`).
+	/// (`GraphFuzzerFixture.publicMockTypesTakingOwnOptionalName`).
 	case ownOptionalDefaultOnNonisolatedTypeThatBuilds
 	/// A child's default naming its own static member.
 	case childDefaultNamingOwnStaticMember
