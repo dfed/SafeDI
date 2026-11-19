@@ -1592,11 +1592,12 @@ private struct ScopeGeneratorUnderConstruction {
 	/// (`CallersOwnLabels.mockRootBindingByLabel`).
 	///
 	/// Any other label keeps its field, which the levels on each route hand the fill. A level of the called mock that
-	/// declares the label again hands its own value, which inline reads there. Where no level on a route binds a form that
-	/// provides the one the fill reads, the route passes the place up, and the calling mock names a builder it does not
-	/// declare: a level that holds only the called mock's by-value copy cannot hand a fill that reads the caller's
-	/// `LazilyInstantiated`. That is a known defect (`public-mock-builders.md`, "The caller's own value") on a route to one
-	/// place of a case whose other place a level that declares the label again hides the copy from.
+	/// declares the label again hands its own value, which inline reads there. A level that holds only the called mock's
+	/// by-value copy cannot hand a fill that reads the caller's `LazilyInstantiated`, so where a level that declares the
+	/// label again hides the copy from one place of a case and the copy reaches another, the fills of that hole type read
+	/// different wrappers, and `DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)` passes it up
+	/// whole before any fill is generated (`SafeDIToolCallingMockMirrorsProductionTests`'
+	/// `whenPlacesOfOneHoleTypeReadDifferentLazyValuesBesideTheirFields`).
 	private static func callersOwnLabels(
 		amongLabelsOf fields: [SeamSignature.Hole.Field],
 		carrying carriedLabels: Set<String>,
