@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import Foundation
 import SafeDICore
 import Testing
 
@@ -460,4 +461,24 @@ private struct InlineBytes: Hashable {
 /// `LocalArchetypeRequirementCollector`).
 private func inlineBytes(of value: some Any) -> InlineBytes {
 	InlineBytes(of: value)
+}
+
+extension ConstructionSharingSchedule {
+	/// The schedule the graph fuzzer's second run of a graph follows: of three modes, chosen by the graph's seed so that
+	/// every graph is judged by one and the corpus by all three, each place shares the newest alike candidate a discarded
+	/// build of the same pass stored, takes a drawn candidate or builds again, or both. Running every graph under several
+	/// schedules would cost a run of the tool each; `SAFEDI_SHARING_ORACLE_SCHEDULE=<n>` picks the schedule numbered `n`
+	/// instead, so a dispatched run can sweep a corpus under twenty of them.
+	public static func sharingOracleSchedule(forGraphSeed graphSeed: UInt64) -> ConstructionSharingSchedule {
+		let scheduleNumber = ProcessInfo.processInfo.environment["SAFEDI_SHARING_ORACLE_SCHEDULE"].flatMap(UInt64.init) ?? graphSeed
+		let scheduleSeed = mixed(graphSeed &+ scheduleNumber &* 0xD1B5_4A32_D192_ED03)
+		switch scheduleNumber % 3 {
+		case 0:
+			return ConstructionSharingSchedule(seed: nil, offersLaterPlacesCandidates: true)
+		case 1:
+			return ConstructionSharingSchedule(seed: scheduleSeed, offersLaterPlacesCandidates: false)
+		default:
+			return ConstructionSharingSchedule(seed: scheduleSeed, offersLaterPlacesCandidates: true)
+		}
+	}
 }

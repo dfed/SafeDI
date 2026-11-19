@@ -521,6 +521,10 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 	private enum MemoSetting: CaseIterable {
 		case shared
 		case sharedInReverseOrder
+		/// Shared by a drawn schedule: each lookup builds again or asks its candidates in a drawn order.
+		case sharedByDrawnSchedule
+		/// Shared from a discarded build of each first pass, newest candidate first, and by a drawn schedule.
+		case sharedWithLaterPlacesCandidates
 		case off
 
 		func run<T>(_ body: () async throws -> T) async throws -> T {
@@ -529,6 +533,10 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 				try await body()
 			case .sharedInReverseOrder:
 				try await ConstructionMemoOracle.$buildsMockRootsInReverseOrder.withValue(true) { try await body() }
+			case .sharedByDrawnSchedule:
+				try await ConstructionSharingSchedule.$current.withValue(ConstructionSharingSchedule(seed: 7, offersLaterPlacesCandidates: false)) { try await body() }
+			case .sharedWithLaterPlacesCandidates:
+				try await ConstructionSharingSchedule.$current.withValue(ConstructionSharingSchedule(seed: 11, offersLaterPlacesCandidates: true)) { try await body() }
 			case .off:
 				try await ConstructionMemo.$isEnabled.withValue(false) { try await body() }
 			}
