@@ -2604,6 +2604,9 @@ enum GraphFuzzerGenerator {
 		let name: String
 		let type: String
 		var defaultValue: String?
+		/// Whether a type that stores every parameter it takes stores this one. A function type is not stored: its
+		/// declaration cannot spell `@escaping`, and the differential value comparator cannot compare its values.
+		var isStored = true
 
 		/// The parameter as declared: `title: String = "default"`, `_ note: String = ""`.
 		var declaration: String {
@@ -2727,6 +2730,7 @@ enum GraphFuzzerGenerator {
 			retentionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.retentionRandomSeedMask)
 			retentionLoopRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.retentionLoopRandomSeedMask)
 			builderReceivedBesideReceiveLeftNilRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.builderReceivedBesideReceiveLeftNilRandomSeedMask)
+			sendableOnlyInsideClosureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.sendableOnlyInsideClosureRandomSeedMask)
 			keywordLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.keywordLabelRandomSeedMask)
 
 			fillCallRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.fillCallRandomSeedMask)
@@ -2988,6 +2992,12 @@ enum GraphFuzzerGenerator {
 				// it builds are `@unchecked Sendable` in a `Sendable` graph, where their protocols are `Sendable`.
 				var owner = motifType(8, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "t9", type: typeName(9))])
 				owner.defaultValuedParameters = [ParameterDeclaration(name: "formatter", type: nonSendableHelperTypeName("Formatter"), defaultValue: "\(nonSendableHelperTypeName("Formatter"))()")]
+				// Half the time, from a stream of its own so that every other graph is drawn as before, a default-valued
+				// closure whose type is `@Sendable` only inside it, which the `Sendable` configuration must still mark
+				// `@Sendable`.
+				if sendableOnlyInsideClosureRandom.percentChance(50) {
+					owner.defaultValuedParameters.append(ParameterDeclaration(name: "handler", type: "@escaping (@Sendable () -> Void) -> Void", defaultValue: "{ _ in }", isStored: false))
+				}
 				owner.additionalDeclarations.append("public final class \(nonSendableHelperTypeName("Formatter")) {\n\tpublic init() {}\n}")
 				var leaf = motifType(9, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "engine", type: nonSendableHelperTypeName("Engine"))])
 				leaf.additionalDeclarations.append("public final class \(nonSendableHelperTypeName("Engine")) {\n\tpublic init() {}\n}")
@@ -3092,6 +3102,8 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let builderReceivedBesideReceiveLeftNilRandomSeedMask: UInt64 = 0x73656C6652656376
+		/// The stream of the `Sendable` builder motif's closure default that is `@Sendable` only inside its type.
+		private static let sendableOnlyInsideClosureRandomSeedMask: UInt64 = 0x53656E64496E7369
 
 		/// The name of a helper type the `Sendable` builder motif declares, which is never `Sendable`.
 		private func nonSendableHelperTypeName(_ name: String) -> String {
@@ -3200,6 +3212,7 @@ enum GraphFuzzerGenerator {
 		/// Draws only `appendBuilderReceivedBesideReceiveLeftNilMotif`'s choices: whether a graph without another motif
 		/// ends with it, and its shapes.
 		private var builderReceivedBesideReceiveLeftNilRandom: GraphFuzzerRandomNumberGenerator
+		private var sendableOnlyInsideClosureRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `labelingHoleOwnersAsKeywords`' choices: whether a graph's seam builds `HoleOwner` under keyword labels,
 		/// and which.
 		private var keywordLabelRandom: GraphFuzzerRandomNumberGenerator
@@ -9042,7 +9055,7 @@ enum GraphFuzzerGenerator {
 			// When every parameter is stored, the extended type takes and stores what `instantiate(…)` is passed. In a
 			// mixed graph that can be a wrapper that is not `Sendable`, so the type is then `@unchecked Sendable`, as the
 			// graph's types are.
-			let storedParameters = storesEveryParameter ? parameters : []
+			let storedParameters = storesEveryParameter ? parameters.filter(\.isStored) : []
 			let sendableConformance = switch (sendability, storedParameters.isEmpty) {
 			case (.nonSendable, _):
 				""
@@ -9177,7 +9190,7 @@ enum GraphFuzzerGenerator {
 			let spelledInitializerAccess = declaration.initializerAccess ?? declaration.access
 			let narrowestNamedAccess = (declaration.properties.map(\.type) + declaration.defaultValuedParameters.map(\.type)).map(narrowestProofTypeAccess(in:)).min() ?? .public
 			let initializerAccess = min(spelledInitializerAccess, declaration.effectiveAccess) <= narrowestNamedAccess ? spelledInitializerAccess : narrowestNamedAccess
-			let storedParameters = storesEveryParameter ? declaration.defaultValuedParameters : []
+			let storedParameters = storesEveryParameter ? declaration.defaultValuedParameters.filter(\.isStored) : []
 			if let guardedMockParameter = declaration.guardedMockParameter {
 				lines += guardedMockParameter.bodyLines(ofTypeNamed: declaration.name)
 			} else if declaration.properties.isEmpty, storedParameters.isEmpty {

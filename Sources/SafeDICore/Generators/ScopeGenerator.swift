@@ -11412,8 +11412,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Default-valued parameters.
 		for defaultParameter in node.defaultParameters {
 			let typeSource = defaultParameter.valueTypeDescription.asSource
-			// Only add @Sendable if this struct requires it AND the type doesn't already have it.
-			let closureSendable = (requiresSendable && !typeSource.contains("@Sendable")) ? "@Sendable " : ""
+			// Only add @Sendable if this struct requires it AND the type isn't already `@Sendable` at its top: a closure that
+			// takes or returns a `@Sendable` function, which its spelling mentions, is not itself `@Sendable`.
+			let closureSendable = (requiresSendable && !defaultParameter.valueTypeDescription.isSendableFunction) ? "@Sendable " : ""
 			if defaultParameter.isAutoclosure, !requiresSendable {
 				// An `@autoclosure` parameter is evaluated where the type is built: the struct stores a closure that
 				// returns the value, which its initializer takes as an autoclosure, as the parameter does, and the mock
@@ -11422,14 +11423,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				appendField(named: defaultParameter.label, typeSource: "() -> \(typeSource)", parameterTypeSource: "@escaping () -> \(typeSource)", isProvenSendable: false)
 			} else if defaultParameter.isClosureType, !defaultParameter.isAutoclosure {
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(closureSendable)@escaping \(typeSource) = \(defaultExpression(defaultParameter))")
-				// The storage is proven `Sendable` only where the stored function type is `@Sendable` at its top: by the attribute
-				// added here, or by its own spelling. `closureSendable` reads the spelling's text, so a type that spells
-				// `@Sendable` only inside it stays unproven.
+				// Where the struct requires it, the stored function type is `@Sendable` at its top, by the attribute added here
+				// or by its own spelling, so the storage is proven `Sendable`.
 				appendField(
 					named: defaultParameter.label,
 					typeSource: "\(closureSendable)\(typeSource)",
 					parameterTypeSource: "\(closureSendable)@escaping \(typeSource)",
-					isProvenSendable: requiresSendable && (!closureSendable.isEmpty || defaultParameter.valueTypeDescription.isSendableFunction),
+					isProvenSendable: requiresSendable,
 				)
 			} else if requiresSendable {
 				// A `@Sendable` builder function cannot capture the value when its type is not `Sendable`, and
