@@ -13305,7 +13305,6 @@ extension Instantiable {
 				.createMockInitializerArgumentList(
 					given: dependencies,
 					unavailableProperties: unavailableProperties,
-					isLeftToItsDefault: \.isLeftToItsDefault,
 				)
 		} else {
 			return try initializerToUse?
@@ -13414,45 +13413,6 @@ extension SeamCall {
 	/// comment saying what to do then.
 	func guardLine(for concreteType: TypeDescription) -> String {
 		"_ = \(concreteType.asSource).\(guardTypeName).self\(comment.lineEnd(for: concreteType))"
-	}
-}
-
-extension Initializer.Argument {
-	/// Whether a generated mock leaves this argument to its default rather than take a value for it: an argument without a
-	/// label, which a call does not name, and a throwing `@autoclosure` whose default itself throws (`defaultValueThrows`),
-	/// which a mock could take only as a closure that throws, and so could not call where it builds the type, outside any
-	/// function that throws. The initializer evaluates such a default itself, as in production.
-	var isLeftToItsDefault: Bool {
-		hasDefaultValue && (label == "_" || defaultValueThrows)
-	}
-
-	/// Whether this argument is a throwing `@autoclosure` whose default throws: one that holds a `try` that is neither
-	/// `try?` nor `try!` outside every closure the default declares. Decided from the default's syntax, never its text.
-	private var defaultValueThrows: Bool {
-		guard let defaultValueExpression,
-		      case let .attributed(.closure(_, _, doesThrow, _, _), _, attributes) = typeDescription,
-		      doesThrow,
-		      attributes.contains("autoclosure")
-		else { return false }
-		let visitor = ThrowingTryVisitor(viewMode: .sourceAccurate)
-		visitor.walk(Parser.parse(source: defaultValueExpression))
-		return visitor.findsThrowingTry
-	}
-}
-
-/// Finds a `try` that throws out of the expression it walks: one that is neither `try?` nor `try!`, outside every closure the
-/// expression declares, whose body throws to the closure's caller.
-private final class ThrowingTryVisitor: SyntaxVisitor {
-	private(set) var findsThrowingTry = false
-
-	override func visit(_ node: TryExprSyntax) -> SyntaxVisitorContinueKind {
-		// A `try?` or `try!` handles what any `try` inside it throws, and one plain `try` settles it.
-		findsThrowingTry = findsThrowingTry || node.questionOrExclamationMark == nil
-		return .skipChildren
-	}
-
-	override func visit(_: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
-		.skipChildren
 	}
 }
 

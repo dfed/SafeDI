@@ -858,6 +858,7 @@ extension Initializer.Argument: BinarySchemaMember {
 				BinaryLayoutField("innerLabel", \.innerLabel),
 				BinaryLayoutField("typeDescription", \.typeDescription),
 				BinaryLayoutField("defaultValueExpression", \.defaultValueExpression),
+				BinaryLayoutField("defaultValueThrows", \.defaultValueThrows),
 			],
 			unwrittenProperties: [],
 		)
@@ -869,6 +870,7 @@ extension Initializer.Argument: BinarySchemaMember {
 			innerLabel: reader.read(),
 			typeDescription: reader.read(),
 			defaultValueExpression: reader.read() as String?,
+			defaultValueThrows: reader.read(),
 		)
 	}
 
@@ -877,6 +879,7 @@ extension Initializer.Argument: BinarySchemaMember {
 		writer.write(innerLabel)
 		writer.write(typeDescription)
 		writer.write(defaultValueExpression)
+		writer.write(defaultValueThrows)
 	}
 }
 
