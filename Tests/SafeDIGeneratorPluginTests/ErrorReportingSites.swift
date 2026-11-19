@@ -35,12 +35,11 @@ extension ErrorReportingSite {
 	static let byErrorType: [String: ErrorReportingSite] = [
 		// Each loop over roots, mock roots, or trees catches it and joins what it caught.
 		"DependencyTreeGenerator.DependencyTreeGeneratorError": .joinedWithTheErrorsOfOtherRoots,
-		// Thrown while a root's generator is built: for production roots after every validation passed, and for mock
-		// roots inside the mock-root loop, which it escapes, discarding the errors of the mock roots validated before it.
-		// Nothing joins it, and `generate` prints it.
+		// Thrown while a root's, a seam's or a mock root's generator is built. Each loop over them catches it, wraps it
+		// in `DependencyTreeGeneratorError.sourceLocated`, and joins it with the other roots' errors.
 		"ErasedInstantiatorForwardedPropertiesMismatchError": ErrorReportingSite(
-			path: "Sources/SafeDIToolLibrary/GenerateCommand.swift",
-			code: "catch let error as any SourceLocatedError",
+			path: "Sources/SafeDICore/Generators/DependencyTreeGenerator.swift",
+			code: "errors.append(.sourceLocated(error))",
 		),
 		// The macros attach them to the declaration as diagnostics; neither is thrown.
 		"FixableInjectableError": .macroDiagnostic,

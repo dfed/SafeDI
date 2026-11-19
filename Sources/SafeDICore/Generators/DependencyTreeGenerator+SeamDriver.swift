@@ -425,10 +425,15 @@ extension DependencyTreeGenerator {
 			},
 			checkingSeamTrees: generatedSeams.map { (instantiable: $0.seam, scope: $0.rootScope) },
 		)
-		var rootScopeGenerators = [RootScopeInfo]()
+		// Frozen before the roots are built, so that building them captures no part of the seam world, which the seams'
+		// trees read after them.
+		var frozenRoots = [(typeDescription: TypeDescription, scope: Scope, table: ScopeTable, record: ScopeRecord)]()
 		for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
 			let (table, record) = seamWorld.frozenScopeMap.freezing(rootScope: scope)
-			try rootScopeGenerators.append(RootScopeInfo(
+			frozenRoots.append((typeDescription, scope, table, record))
+		}
+		var rootScopeGenerators = try Self.buildingEachRoot(of: frozenRoots) { typeDescription, scope, table, record in
+			try RootScopeInfo(
 				typeDescription: typeDescription,
 				instantiable: scope.instantiable,
 				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
@@ -439,7 +444,7 @@ extension DependencyTreeGenerator {
 					erasedToConcreteExistential: false,
 					declaredTypeNames: declaredTypeNames,
 				),
-			))
+			)
 		}
 		for (seam, seamRoot, seamRootScope) in generatedSeams {
 			var seamRoot = seamRoot

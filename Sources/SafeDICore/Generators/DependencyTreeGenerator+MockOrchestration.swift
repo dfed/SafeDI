@@ -108,6 +108,10 @@ extension DependencyTreeGenerator {
 				mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
 			} catch let error as DependencyTreeGeneratorError {
 				mockRootErrors.append(error)
+			} catch let error as any SourceLocatedError {
+				// Building the mock root's tree threw: an erased instantiator whose first generic argument mismatches its
+				// type. It is reported beside the other mock roots' errors, as a seam's is.
+				mockRootErrors.append(.sourceLocated(error))
 			}
 		}
 		// A call of another module's public mock that would pass `nil` for a value the tree holds is rejected before any

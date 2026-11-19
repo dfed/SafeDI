@@ -577,10 +577,9 @@ public actor DependencyTreeGenerator {
 					},
 				)
 				rootsOfOtherModules = rootScopesToGenerate.rootsOfOtherModules
-				var roots = [RootScopeInfo]()
-				for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
+				return try Self.buildingEachRoot(of: rootScopesToGenerate.rootScopes) { typeDescription, scope in
 					let (table, record) = validatedWorld.frozenScopeMap.freezing(rootScope: scope)
-					try roots.append(RootScopeInfo(
+					return try RootScopeInfo(
 						typeDescription: typeDescription,
 						instantiable: scope.instantiable,
 						sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
@@ -591,9 +590,8 @@ public actor DependencyTreeGenerator {
 							erasedToConcreteExistential: false,
 							declaredTypeNames: declaredTypeNames,
 						),
-					))
+					)
 				}
-				return roots
 			}
 			let seamWorldRoots = try seamWorldRootScopeGenerators(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, unreadTypeComment: unreadTypeComment)
 			rootsOfOtherModules = seamWorldRoots.rootsOfOtherModules
@@ -604,6 +602,26 @@ public actor DependencyTreeGenerator {
 			GenerationLayerObservation.record(.dependencyTree(of: root.typeDescription), inRunOf: seams.currentModule.moduleName)
 		}
 		return DependencyTrees(roots: rootScopeGenerators, validatedScopes: validatedScopes, rootsOfOtherModules: rootsOfOtherModules)
+	}
+
+	/// The roots' trees, each built on its own, or every error building them found: each root reports the first error
+	/// its tree's construction throws, and the roots' errors are joined in source order (`reportingAll(of:)`), so
+	/// which root sorts first by type never decides which error is reported.
+	static func buildingEachRoot<Root>(of roots: [Root], _ build: (Root) throws -> RootScopeInfo) throws -> [RootScopeInfo] {
+		var builtRoots = [RootScopeInfo]()
+		var errors = [DependencyTreeGeneratorError]()
+		for root in roots {
+			do {
+				try builtRoots.append(build(root))
+			} catch let error as any SourceLocatedError {
+				// Building a tree throws only an erased instantiator whose first generic argument mismatches its type.
+				errors.append(.sourceLocated(error))
+			}
+		}
+		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
+			throw error
+		}
+		return builtRoots
 	}
 
 	/// Rejects each label that a type a dependency cycle builds again, in the trees `generators` root, receives in forms
