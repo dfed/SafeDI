@@ -1679,7 +1679,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                let service: any Service = __safeDI_service()
 			                return service
 			            }
-			            @Sendable func __safeDI_serviceSendableBuilder_Inner_Screen_Scope_service(_ scope: Inner.SafeDIMockScope_Service.Screen_Scope.service_Values, __safeDI_inner_serviceSendableBuilder: SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Inner_Screen_Scope_service(_ scope: Inner.SafeDIMockScope_Service.Screen_Scope.service_Values, __safeDI_inner_serviceSendableBuilder: SafeDIMockScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> any Service {
 			                func __safeDI_service() -> DefaultService {
 			                    let gadget: any Gadget = __safeDI_inner_serviceSendableBuilder.gadget(SafeDIMockScope_Gadget.DefaultService_Scope.gadget_Values())
 			                    return DefaultService(gadget: gadget)
@@ -1752,7 +1752,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			    ) -> Root {
 			        let id: Int? = safeDIOverrides.id
 			        func __safeDI_outer() -> Outer {
-			            @Sendable func __safeDI_gadgetBuilder_Outer_DefaultService_Scope_gadget(_ scope: Outer.SafeDIMockScope_Gadget.DefaultService_Scope.gadget_Values, id: Int?) -> any Gadget {
+			            @Sendable nonisolated func __safeDI_gadgetBuilder_Outer_DefaultService_Scope_gadget(_ scope: Outer.SafeDIMockScope_Gadget.DefaultService_Scope.gadget_Values, id: Int?) -> any Gadget {
 			                let gadget: any Gadget = LiveGadget(id: id)
 			                return gadget
 			            }

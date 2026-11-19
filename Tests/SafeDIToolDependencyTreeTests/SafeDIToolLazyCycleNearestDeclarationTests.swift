@@ -1090,8 +1090,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		extension App {
 		    public convenience init() {
 		        let session = Session()
-		        @Sendable func __safeDI_screenBuilder(session: Session) -> Screen {
-		            @Sendable func __safeDI_stepBuilder() -> Step {
+		        @Sendable nonisolated func __safeDI_screenBuilder(session: Session) -> Screen {
+		            @Sendable nonisolated func __safeDI_stepBuilder() -> Step {
 		                let session = Session()
 		                let screenBuilder = SendableInstantiator<Screen> {
 		                    __safeDI_screenBuilder(session: session)
@@ -1148,8 +1148,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        let __safeDI_screenBuilder__screenBuilder_stepBuilder_safeDIBuilder = safeDIOverrides.screenBuilder.stepBuilder.safeDIBuilder
 		        let __safeDI_screenBuilder__screenBuilder_stepBuilder_session_safeDIBuilder = safeDIOverrides.screenBuilder.stepBuilder.session
 		        let __safeDI_screenBuilder__safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder
-		        @Sendable func __safeDI_screenBuilder(session: Session) -> Screen {
-		            @Sendable func __safeDI_stepBuilder() -> Step {
+		        @Sendable nonisolated func __safeDI_screenBuilder(session: Session) -> Screen {
+		            @Sendable nonisolated func __safeDI_stepBuilder() -> Step {
 		                let session = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_stepBuilder_session_safeDIBuilder { safeDIBuilder() } else { Session() }
 		                let screenBuilder = SendableInstantiator<Screen> {
 		                    __safeDI_screenBuilder(session: session)
@@ -1781,10 +1781,10 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        let __safeDI_hostBuilder__hostBuilder_t3Builder_t0Builder_safeDIBuilder = safeDIOverrides.hostBuilder.t3Builder.t0Builder.safeDIBuilder
 		        let __safeDI_hostBuilder__hostBuilder_t3Builder_t0Builder_session_safeDIBuilder = safeDIOverrides.hostBuilder.t3Builder.t0Builder.session
 		        let __safeDI_hostBuilder__safeDIBuilder = safeDIOverrides.hostBuilder.safeDIBuilder
-		        @Sendable func __safeDI_hostBuilder() -> Host {
+		        @Sendable nonisolated func __safeDI_hostBuilder() -> Host {
 		            let session = if let safeDIBuilder = __safeDI_hostBuilder__hostBuilder_session_safeDIBuilder { safeDIBuilder() } else { Session() }
-		            @Sendable func __safeDI_t3Builder(session: Session) -> T3 {
-		                @Sendable func __safeDI_t0Builder() -> T0 {
+		            @Sendable nonisolated func __safeDI_t3Builder(session: Session) -> T3 {
+		                @Sendable nonisolated func __safeDI_t0Builder() -> T0 {
 		                    let session = if let safeDIBuilder = __safeDI_hostBuilder__hostBuilder_t3Builder_t0Builder_session_safeDIBuilder { safeDIBuilder() } else { Session() }
 		                    let t3Builder = SendableInstantiator<T3> {
 		                        __safeDI_t3Builder(session: session)
@@ -5744,10 +5744,10 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		try await expectGeneratedTree(of: fixture, root: "Root", equals: """
 		extension Root {
 		    public convenience init() {
-		\(rootYBuilderDeclaration)        @Sendable func __safeDI_t3Builder(yBuilder: Instantiator<Y>?) -> T3 {
+		\(rootYBuilderDeclaration)        @Sendable nonisolated func __safeDI_t3Builder(yBuilder: Instantiator<Y>?) -> T3 {
 		            let w = W(yBuilder: yBuilder)
 		            func __safeDI_t0Builder() -> T0 {
-		                @Sendable func __safeDI_zBuilder() -> Z {
+		                @Sendable nonisolated func __safeDI_zBuilder() -> Z {
 		                    func __safeDI_yBuilder() -> Y {
 		                        Y()
 		                    }

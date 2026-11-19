@@ -325,7 +325,7 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let __safeDI_settingsBuilder__safeDIBuilder = safeDIOverrides.settingsBuilder
-			        @Sendable func __safeDI_settingsBuilder() -> Settings {
+			        @Sendable nonisolated func __safeDI_settingsBuilder() -> Settings {
 			            if let safeDIBuilder = __safeDI_settingsBuilder__safeDIBuilder { safeDIBuilder(gizmo.instance) } else { Settings(gizmo: gizmo.instance) }
 			        }
 			        let settingsBuilder = SendableInstantiator<Settings>(__safeDI_settingsBuilder)
@@ -396,12 +396,12 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 			        gizmoSendableBuilder __safeDI_gizmoSendableBuilder: Screen.SafeDISendableMockScope_Gizmo.__safeDI_Builder<Gizmo>,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        @Sendable func __safeDI_gizmo() -> Gizmo {
+			        @Sendable nonisolated func __safeDI_gizmo() -> Gizmo {
 			            __safeDI_gizmoSendableBuilder.gizmo(SafeDISendableMockScope_Gizmo.gizmo_Values())
 			        }
 			        let gizmo = SendableLazilyInstantiated<Gizmo>(__safeDI_gizmo)
 			        let __safeDI_settingsBuilder__safeDIBuilder = safeDIOverrides.settingsBuilder
-			        @Sendable func __safeDI_settingsBuilder() -> Settings {
+			        @Sendable nonisolated func __safeDI_settingsBuilder() -> Settings {
 			            if let safeDIBuilder = __safeDI_settingsBuilder__safeDIBuilder { safeDIBuilder(gizmo.instance) } else { Settings(gizmo: gizmo.instance) }
 			        }
 			        let settingsBuilder = SendableInstantiator<Settings>(__safeDI_settingsBuilder)
@@ -456,7 +456,7 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let __safeDI_settingsBuilder__safeDIBuilder = safeDIOverrides.settingsBuilder
-			        @Sendable func __safeDI_settingsBuilder() -> Settings {
+			        @Sendable nonisolated func __safeDI_settingsBuilder() -> Settings {
 			            if let safeDIBuilder = __safeDI_settingsBuilder__safeDIBuilder { safeDIBuilder(gizmo.instance) } else { Settings(gizmo: gizmo.instance) }
 			        }
 			        let settingsBuilder = SendableInstantiator<Settings>(__safeDI_settingsBuilder)
@@ -617,7 +617,7 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let __safeDI_settingsBuilder__safeDIBuilder = safeDIOverrides.settingsBuilder
-		        @Sendable func __safeDI_settingsBuilder() -> Settings {
+		        @Sendable nonisolated func __safeDI_settingsBuilder() -> Settings {
 		            if let safeDIBuilder = __safeDI_settingsBuilder__safeDIBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 		        }
 		        let settingsBuilder = if let settingsBuilder { settingsBuilder } else { SendableInstantiator<Settings>(__safeDI_settingsBuilder) }
@@ -732,7 +732,7 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let __safeDI_settingsBuilder__safeDIBuilder = safeDIOverrides.settingsBuilder
-		        @Sendable func __safeDI_settingsBuilder() -> Settings {
+		        @Sendable nonisolated func __safeDI_settingsBuilder() -> Settings {
 		            let gizmo: SendableInstantiator<Widget> = gizmo_SendableInstantiator__Widget
 		            return if let safeDIBuilder = __safeDI_settingsBuilder__safeDIBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 		        }
@@ -809,7 +809,7 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let __safeDI_settingsBuilder__safeDIBuilder = safeDIOverrides.settingsBuilder
-			        @Sendable func __safeDI_settingsBuilder() -> Settings {
+			        @Sendable nonisolated func __safeDI_settingsBuilder() -> Settings {
 			            let gizmo: SendableInstantiator<Widget> = gizmo_SendableInstantiator__Widget
 			            return if let safeDIBuilder = __safeDI_settingsBuilder__safeDIBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
@@ -880,7 +880,7 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 		    ) -> Screen {
 		        let gizmo_SendableInstantiator__Widget: SendableInstantiator<Widget>? = safeDIOverrides.gizmo_SendableInstantiator__Widget
 		        let __safeDI_settingsBuilder__safeDIBuilder = safeDIOverrides.settingsBuilder
-		        @Sendable func __safeDI_settingsBuilder() -> Settings {
+		        @Sendable nonisolated func __safeDI_settingsBuilder() -> Settings {
 		            let gizmo: SendableInstantiator<Widget>? = gizmo_SendableInstantiator__Widget
 		            return if let safeDIBuilder = __safeDI_settingsBuilder__safeDIBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 		        }
@@ -957,7 +957,7 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let __safeDI_settingsBuilder__safeDIBuilder = safeDIOverrides.settingsBuilder
-			        @Sendable func __safeDI_settingsBuilder() -> Settings {
+			        @Sendable nonisolated func __safeDI_settingsBuilder() -> Settings {
 			            let gizmo: SendableInstantiator<Widget>? = gizmo_SendableInstantiator__Widget
 			            return if let safeDIBuilder = __safeDI_settingsBuilder__safeDIBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 			        }
@@ -1066,7 +1066,7 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let __safeDI_settingsBuilder__safeDIBuilder = safeDIOverrides.settingsBuilder
-		        @Sendable func __safeDI_settingsBuilder() -> Settings {
+		        @Sendable nonisolated func __safeDI_settingsBuilder() -> Settings {
 		            if let safeDIBuilder = __safeDI_settingsBuilder__safeDIBuilder { safeDIBuilder(gizmo.instance) } else { Settings(gizmo: gizmo.instance) }
 		        }
 		        let settingsBuilder = SendableInstantiator<Settings>(__safeDI_settingsBuilder)
@@ -1130,7 +1130,7 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let __safeDI_settingsBuilder__safeDIBuilder = safeDIOverrides.settingsBuilder
-		        @Sendable func __safeDI_settingsBuilder() -> Settings {
+		        @Sendable nonisolated func __safeDI_settingsBuilder() -> Settings {
 		            let gizmo: SendableInstantiator<Widget> = gizmo_SendableInstantiator__Widget
 		            return if let safeDIBuilder = __safeDI_settingsBuilder__safeDIBuilder { safeDIBuilder(gizmo) } else { Settings(gizmo: gizmo) }
 		        }

@@ -4242,7 +4242,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
 		extension Root {
 		    public init() {
-		        @Sendable func __safeDI_user() -> User {
+		        @Sendable nonisolated func __safeDI_user() -> User {
 		            User()
 		        }
 		        let user = SendableLazilyInstantiated<User>(__safeDI_user)
@@ -4387,7 +4387,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_user user: SendableLazilyInstantiated<User>) {
-		        @Sendable func __safeDI_detailBuilder() -> Detail {
+		        @Sendable nonisolated func __safeDI_detailBuilder() -> Detail {
 		            Detail(user: user.instance)
 		        }
 		        let detailBuilder = SendableInstantiator<Detail>(__safeDI_detailBuilder)
@@ -4403,7 +4403,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
 		extension Root {
 		    public init() {
-		        @Sendable func __safeDI_user() -> User {
+		        @Sendable nonisolated func __safeDI_user() -> User {
 		            User()
 		        }
 		        let user = SendableLazilyInstantiated<User>(__safeDI_user)
@@ -6605,7 +6605,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_screen() -> Screen {
-		            @Sendable func __safeDI_detailBuilder() -> Detail {
+		            @Sendable nonisolated func __safeDI_detailBuilder() -> Detail {
 		                Detail(cache: nil)
 		            }
 		            let detailBuilder = SendableInstantiator<Detail>(__safeDI_detailBuilder)

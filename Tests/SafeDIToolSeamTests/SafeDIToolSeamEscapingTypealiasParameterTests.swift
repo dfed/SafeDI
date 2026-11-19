@@ -603,7 +603,7 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_onTap: @autoclosure @escaping @Sendable () -> SendableTap) {
 		        let onTap = SendableLazilyInstantiated<SendableTap>(__safeDI_onTap)
-		        @Sendable func __safeDI_readerBuilder() -> SendableReader {
+		        @Sendable nonisolated func __safeDI_readerBuilder() -> SendableReader {
 		            SendableReader(onTap: onTap.instance)
 		        }
 		        let readerBuilder = SendableInstantiator<SendableReader>(__safeDI_readerBuilder)

@@ -3346,7 +3346,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 			    ) -> Panel {
 			        let api: any Api = __safeDI_apiBuilder.api(SafeDIMockScope_Api.api_Values())
 			        let __safeDI_heldBuilder__safeDIBuilder = safeDIOverrides.heldBuilder
-			        @Sendable func __safeDI_heldBuilder() -> Held {
+			        @Sendable nonisolated func __safeDI_heldBuilder() -> Held {
 			            let __safeDI_gadgetSendableBuilder_heldBuilder = __safeDI_gadgetSendableBuilder.heldBuilder(SafeDISendableMockScope_Gadget.heldBuilder_Values())
 			            let gadget: any Gadget = __safeDI_gadgetSendableBuilder_heldBuilder.gadget(SafeDIMockScope_Gadget.Held_Scope.gadget_Values())
 			            return if let safeDIBuilder = __safeDI_heldBuilder__safeDIBuilder { safeDIBuilder(gadget) } else { Held(gadget: gadget) }
@@ -4949,7 +4949,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_heldBuilder__safeDIBuilder = safeDIOverrides.heldBuilder
-		        @Sendable func __safeDI_heldBuilder() -> Panel {
+		        @Sendable nonisolated func __safeDI_heldBuilder() -> Panel {
 		            func __safeDI_serviceBuilder_Panel_service() -> any Service {
 		                func __safeDI_service() -> DefaultService {
 		                    let tracker = Tracker()
@@ -5061,7 +5061,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_heldBuilder__safeDIBuilder = safeDIOverrides.heldBuilder
-		        @Sendable func __safeDI_heldBuilder() -> Panel {
+		        @Sendable nonisolated func __safeDI_heldBuilder() -> Panel {
 		            func __safeDI_serviceBuilder_Panel_service() -> any Service {
 		                func __safeDI_service() -> DefaultService {
 		                    let tracker = Tracker()

@@ -8524,8 +8524,8 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    ) -> Root {
 		        func __safeDI_alpha() -> AlphaProtocol {
 		            let __safeDI_beta__safeDIBuilder = safeDIOverrides.alpha.beta.safeDIBuilder
-		            @Sendable func __safeDI_beta() -> Beta {
-		                @Sendable func __safeDI_alphaBuilder() -> Alpha {
+		            @Sendable nonisolated func __safeDI_beta() -> Beta {
+		                @Sendable nonisolated func __safeDI_alphaBuilder() -> Alpha {
 		                    let beta = SendableInstantiator<Beta>(__safeDI_beta)
 		                    func __safeDI_gamma() -> Gamma {
 		                        return Gamma(flag: Gamma.SafeDIMockConfiguration().flag())

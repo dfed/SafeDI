@@ -171,7 +171,7 @@ struct SafeDIToolGraphFuzzerTests {
 		}
 		"""
 		#expect(features(receivingEachOther, [:]) == [.buildersReceivingEachOther])
-		#expect(features(receivingEachOther.replacingOccurrences(of: "Instantiator<", with: "SendableInstantiator<").replacingOccurrences(of: "func __safeDI_", with: "@Sendable func __safeDI_"), [:]) == [.sendableBuildersReceivingEachOther])
+		#expect(features(receivingEachOther.replacingOccurrences(of: "Instantiator<", with: "SendableInstantiator<").replacingOccurrences(of: "func __safeDI_", with: "@Sendable nonisolated func __safeDI_"), [:]) == [.sendableBuildersReceivingEachOther])
 		let selfReceiving = """
 		extension Root {
 		    public convenience init() {
@@ -210,11 +210,11 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(features("""
 		extension Root {
 		    public convenience init() {
-		        @Sendable func __safeDI_screenBuilder(session: Session) -> Screen {
+		        @Sendable nonisolated func __safeDI_screenBuilder(session: Session) -> Screen {
 		            let screenBuilder = SendableInstantiator<Screen> {
 		                __safeDI_screenBuilder(session: session)
 		            }
-		            @Sendable func __safeDI_stepBuilder() -> Step {
+		            @Sendable nonisolated func __safeDI_stepBuilder() -> Step {
 		                let session = Session()
 		                let screenBuilder = SendableInstantiator<Screen> {
 		                    __safeDI_screenBuilder(session: session)
@@ -224,7 +224,7 @@ struct SafeDIToolGraphFuzzerTests {
 		            let stepBuilder = SendableInstantiator<Step>(__safeDI_stepBuilder)
 		            return Screen(session: session, stepBuilder: stepBuilder, detail: Detail(screenBuilder: screenBuilder))
 		        }
-		        @Sendable func __safeDI_screenBuilder_received() -> Screen {
+		        @Sendable nonisolated func __safeDI_screenBuilder_received() -> Screen {
 		            __safeDI_screenBuilder(session: session)
 		        }
 		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder_received)
@@ -3205,7 +3205,7 @@ struct SafeDIToolGraphFuzzerTests {
 		extension S731_Root0 {
 		    public convenience init() {
 		        let t1 = S731_T1()
-		        @Sendable func __safeDI_lazyT0() -> S731_T0 {
+		        @Sendable nonisolated func __safeDI_lazyT0() -> S731_T0 {
 		            #sourceLocation(file: "S731_T0.swift", line: 9)
 		            let anyT1Alias: S731_AnyT1? = S731_AnyT1(t1)
 		            #sourceLocation()

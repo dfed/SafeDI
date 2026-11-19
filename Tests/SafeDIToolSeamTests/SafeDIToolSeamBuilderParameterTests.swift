@@ -1182,8 +1182,8 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			                }
 			                return __safeDI_lazyUserService()
 			            }
-			            @Sendable func __safeDI_userServiceSendableBuilder_ServiceW_sendableLazyUserService() -> any UserService {
-			                @Sendable func __safeDI_sendableLazyUserService() -> DefaultUserService {
+			            @Sendable nonisolated func __safeDI_userServiceSendableBuilder_ServiceW_sendableLazyUserService() -> any UserService {
+			                @Sendable nonisolated func __safeDI_sendableLazyUserService() -> DefaultUserService {
 			                    DefaultUserService(analytics: analytics)
 			                }
 			                return __safeDI_sendableLazyUserService()
@@ -2122,10 +2122,10 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			    public init() {
 			        func __safeDI_flow() -> Flow {
 			            _ = Flow.__safeDI_Flow_5ADD8C93A7172FFC.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            @Sendable func __safeDI_routerSendableBuilder_Flow_Profile_Scope_router(_ scope: Flow.SafeDIScope_Router.Profile_Scope.router_Values) -> any Router {
+			            @Sendable nonisolated func __safeDI_routerSendableBuilder_Flow_Profile_Scope_router(_ scope: Flow.SafeDIScope_Router.Profile_Scope.router_Values) -> any Router {
 			                let analytics = scope.analytics
 			                func __safeDI_router() -> DefaultRouter {
-			                    @Sendable func __safeDI_flowBuilder() -> Flow {
+			                    @Sendable nonisolated func __safeDI_flowBuilder() -> Flow {
 			                        _ = Flow.__safeDI_Flow_5ADD8C93A7172FFC.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			                        return Flow(__safeDI_routerSendableBuilder: __safeDI_routerSendableBuilder_Flow())
 			                    }
@@ -2179,7 +2179,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 			    public init() {
 			        func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_521F623FBCB760D4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            @Sendable func __safeDI_userServiceBuilder_Inner_Profile_Scope_userService(_ scope: Inner.SafeDIScope_UserService.Profile_Scope.userService_Values) -> any UserService {
+			            @Sendable nonisolated func __safeDI_userServiceBuilder_Inner_Profile_Scope_userService(_ scope: Inner.SafeDIScope_UserService.Profile_Scope.userService_Values) -> any UserService {
 			                func __safeDI_userService() -> DefaultUserService {
 			                    func __safeDI_shellBuilder() -> Shell {
 			                        _ = Shell.__safeDI_Shell_601F3B52A2BF7C2C.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
@@ -3938,7 +3938,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		            func __safeDI_serviceBuilder_Inner_service(_ scope: Inner.SafeDIScope_Service.service_Values) -> any Service {
 		                let logger = scope.logger
 		                func __safeDI_service() -> DefaultService {
-		                    @Sendable func __safeDI_gadget() -> LiveGadget {
+		                    @Sendable nonisolated func __safeDI_gadget() -> LiveGadget {
 		                        LiveGadget(logger: logger)
 		                    }
 		                    let gadget = SendableLazilyInstantiated<any Gadget>(__safeDI_gadget)

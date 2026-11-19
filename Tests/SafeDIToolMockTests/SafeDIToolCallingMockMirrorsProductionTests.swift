@@ -3291,7 +3291,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		let sendable = wrapper == .sendableLazilyInstantiated ? "@Sendable " : ""
 		var logBinding = "        func __safeDI_log() -> Log {\n            if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }\n        }\n"
 		if wrapper == .sendableLazilyInstantiated {
-			logBinding = "        let __safeDI_log__safeDIBuilder = safeDIOverrides.log\n        @Sendable func __safeDI_log() -> Log {\n            if let safeDIBuilder = __safeDI_log__safeDIBuilder { safeDIBuilder() } else { Log() }\n        }\n"
+			logBinding = "        let __safeDI_log__safeDIBuilder = safeDIOverrides.log\n        @Sendable nonisolated func __safeDI_log() -> Log {\n            if let safeDIBuilder = __safeDI_log__safeDIBuilder { safeDIBuilder() } else { Log() }\n        }\n"
 		}
 		logBinding += "        let log = \(wrapper.name)<Log>(__safeDI_log)\n"
 		let label = call.label

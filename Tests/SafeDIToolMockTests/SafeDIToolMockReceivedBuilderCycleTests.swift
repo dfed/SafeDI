@@ -967,11 +967,11 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    ) -> A {
 			        let __safeDI_bBuilder__safeDIBuilder = safeDIOverrides.bBuilder
 			        let __safeDI_aBuilder__safeDIBuilder = safeDIOverrides.aBuilder
-			        @Sendable func __safeDI_bBuilder() -> B {
+			        @Sendable nonisolated func __safeDI_bBuilder() -> B {
 			            let aBuilder = SendableInstantiator<A>(__safeDI_aBuilder)
 			            return if let safeDIBuilder = __safeDI_bBuilder__safeDIBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
 			        }
-			        @Sendable func __safeDI_aBuilder() -> A {
+			        @Sendable nonisolated func __safeDI_aBuilder() -> A {
 			            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
 			            return if let safeDIBuilder = __safeDI_aBuilder__safeDIBuilder { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
 			        }
@@ -1224,11 +1224,11 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			    ) -> A {
 			        let __safeDI_bBuilder__safeDIBuilder = safeDIOverrides.bBuilder
 			        let __safeDI_xBuilder__safeDIBuilder = safeDIOverrides.xBuilder
-			        @Sendable func __safeDI_bBuilder() -> B {
+			        @Sendable nonisolated func __safeDI_bBuilder() -> B {
 			            let xBuilder = SendableInstantiator<X>(__safeDI_xBuilder)
 			            return if let safeDIBuilder = __safeDI_bBuilder__safeDIBuilder { safeDIBuilder(xBuilder) } else { B(xBuilder: xBuilder) }
 			        }
-			        @Sendable func __safeDI_xBuilder() -> X {
+			        @Sendable nonisolated func __safeDI_xBuilder() -> X {
 			            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
 			            return if let safeDIBuilder = __safeDI_xBuilder__safeDIBuilder { safeDIBuilder(bBuilder) } else { X(bBuilder: bBuilder) }
 			        }
@@ -3227,7 +3227,7 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Node {
 			        let __safeDI_nodeBuilder__safeDIBuilder = safeDIOverrides.nodeBuilder
-			        @Sendable func __safeDI_nodeBuilder() -> Node {
+			        @Sendable nonisolated func __safeDI_nodeBuilder() -> Node {
 			            let nodeBuilder = SendableInstantiator<Node>(__safeDI_nodeBuilder)
 			            #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 4)
 			            let childBuilder: SendableInstantiator<Node> = nodeBuilder

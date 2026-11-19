@@ -1354,7 +1354,7 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
 			        let __safeDI_shared__safeDIBuilder = safeDIOverrides.shared
-			        @Sendable func __safeDI_shared() -> \(spellings.mockedType) {
+			        @Sendable nonisolated func __safeDI_shared() -> \(spellings.mockedType) {
 			            if let safeDIBuilder = __safeDI_shared__safeDIBuilder { safeDIBuilder() } else { DefaultService() }
 			        }
 			        let shared = SendableLazilyInstantiated<\(spellings.mockedType)>(__safeDI_shared)
@@ -2051,7 +2051,7 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
 			        let __safeDI_shared__safeDIBuilder = safeDIOverrides.shared
-			        @Sendable func __safeDI_shared() -> any Service {
+			        @Sendable nonisolated func __safeDI_shared() -> any Service {
 			            if let safeDIBuilder = __safeDI_shared__safeDIBuilder { safeDIBuilder() } else { DefaultService() }
 			        }
 			        let shared = SendableLazilyInstantiated<any Service>(__safeDI_shared)

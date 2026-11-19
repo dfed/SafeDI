@@ -166,9 +166,9 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 			    ) -> Hub {
 			        let user = if let user { user } else if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 			        let __safeDI_x__safeDIBuilder = safeDIOverrides.x.safeDIBuilder
-			        @Sendable func __safeDI_x() -> X {
+			        @Sendable nonisolated func __safeDI_x() -> X {
 			            let __safeDI_apiSendableBuilder_x_Sendable = __safeDI_apiSendableBuilder.x_Sendable(SafeDISendableMockScope_Api.x_Sendable_Values())
-			            @Sendable func __safeDI_bBuilder() -> B {
+			            @Sendable nonisolated func __safeDI_bBuilder() -> B {
 			                let __safeDI_apiSendableBuilder_bBuilder = __safeDI_apiSendableBuilder_x_Sendable.bBuilder(SafeDISendableMockScope_Api.X_Scope.bBuilder_Values())
 			                let user: Draft = user_Draft
 			                let x: X = __safeDI_x()
@@ -532,9 +532,9 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 			    ) -> Hub {
 			        let user = if let user { user } else if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 			        let __safeDI_x__safeDIBuilder = safeDIOverrides.x.safeDIBuilder
-			        @Sendable func __safeDI_x() -> X {
+			        @Sendable nonisolated func __safeDI_x() -> X {
 			            let __safeDI_apiSendableBuilder_x_Sendable = __safeDI_apiSendableBuilder.x_Sendable(SafeDISendableMockScope_Api.x_Sendable_Values())
-			            @Sendable func __safeDI_bBuilder() -> B {
+			            @Sendable nonisolated func __safeDI_bBuilder() -> B {
 			                let __safeDI_apiSendableBuilder_bBuilder = __safeDI_apiSendableBuilder_x_Sendable.bBuilder(SafeDISendableMockScope_Api.X_Scope.bBuilder_Values())
 			                let user: Draft = user_Draft
 			                let x: X = __safeDI_x()
@@ -880,7 +880,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 			    ) -> Hub {
 			        let user = if let user { user } else if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 			        let __safeDI_bBuilder__safeDIBuilder = safeDIOverrides.bBuilder
-			        @Sendable func __safeDI_bBuilder() -> B {
+			        @Sendable nonisolated func __safeDI_bBuilder() -> B {
 			            let __safeDI_apiSendableBuilder_bBuilder = __safeDI_apiSendableBuilder.bBuilder(SafeDISendableMockScope_Api.bBuilder_Values())
 			            let user: Draft = user_Draft
 			            let api: any Api = __safeDI_apiSendableBuilder_bBuilder.api(SafeDIMockScope_Api.B_Scope.api_Values(user: user))
@@ -1918,9 +1918,9 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 	    ) -> Hub {
 	        let user = if let user { user } else if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 	        let __safeDI_x__safeDIBuilder = safeDIOverrides.x.safeDIBuilder
-	        @Sendable func __safeDI_x() -> X {
+	        @Sendable nonisolated func __safeDI_x() -> X {
 	            let __safeDI_apiSendableBuilder_x_Sendable = __safeDI_apiSendableBuilder.x_Sendable(SafeDISendableMockScope_Api.x_Sendable_Values())
-	            @Sendable func __safeDI_bBuilder() -> B {
+	            @Sendable nonisolated func __safeDI_bBuilder() -> B {
 	                let __safeDI_apiSendableBuilder_bBuilder = __safeDI_apiSendableBuilder_x_Sendable.bBuilder(SafeDISendableMockScope_Api.X_Scope.bBuilder_Values())
 	                let user: Draft = user_Draft
 	                let x: X = __safeDI_x()

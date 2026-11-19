@@ -1708,7 +1708,7 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Detail {
 			        let __safeDI_panelBuilder__safeDIBuilder = safeDIOverrides.panelBuilder
-			        @Sendable func __safeDI_panelBuilder() -> Panel {
+			        @Sendable nonisolated func __safeDI_panelBuilder() -> Panel {
 			            let __safeDI_apiSendableBuilder_panelBuilder = __safeDI_apiSendableBuilder.panelBuilder(SafeDISendableMockScope_Api.panelBuilder_Values())
 			            let api: any Api = __safeDI_apiSendableBuilder_panelBuilder.api(SafeDIMockScope_Api.Panel_Scope.api_Values())
 			            return if let safeDIBuilder = __safeDI_panelBuilder__safeDIBuilder { safeDIBuilder(api) } else { Panel(api: api) }

@@ -1561,8 +1561,8 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		    public init() {
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_B0BAFA8048953EBC.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable func __safeDI_serviceSendableBuilder_Host_service() -> any Service {
-		                @Sendable func __safeDI_service() -> ServiceImpl {
+		            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Host_service() -> any Service {
+		                @Sendable nonisolated func __safeDI_service() -> ServiceImpl {
 		                    ServiceImpl()
 		                }
 		                return __safeDI_service()
@@ -1586,8 +1586,8 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		    public init() {
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_B0BAFA8048953EBC.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable func __safeDI_serviceSendableBuilder_Host_service() -> any Service {
-		                @Sendable func __safeDI_service() -> ServiceImpl {
+		            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Host_service() -> any Service {
+		                @Sendable nonisolated func __safeDI_service() -> ServiceImpl {
 		                    ServiceImpl()
 		                }
 		                return __safeDI_service()

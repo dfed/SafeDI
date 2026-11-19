@@ -817,7 +817,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    ) -> Root {
 		        let __safeDI_childBuilder__childBuilder_flag = safeDIOverrides.childBuilder.flag
 		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder
-		        @Sendable func __safeDI_childBuilder(name: String) -> Child {
+		        @Sendable nonisolated func __safeDI_childBuilder(name: String) -> Child {
 		            if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(name, __safeDI_childBuilder__childBuilder_flag()) } else { Child(name: name, flag: __safeDI_childBuilder__childBuilder_flag()) }
 		        }
 		        let childBuilder = SendableInstantiator<Child> {
@@ -1279,7 +1279,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		    ) -> Root {
 		        let __safeDI_childBuilder__childBuilder_flag = safeDIOverrides.childBuilder.flag
 		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder
-		        @Sendable func __safeDI_childBuilder(name: String) -> Child {
+		        @Sendable nonisolated func __safeDI_childBuilder(name: String) -> Child {
 		            if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(name, __safeDI_childBuilder__childBuilder_flag()) } else { Child(name: name, flag: __safeDI_childBuilder__childBuilder_flag()) }
 		        }
 		        let childBuilder = SendableErasedInstantiator<String, Child> {
@@ -2071,7 +2071,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        let __safeDI_childBuilder__childBuilder_returning = safeDIOverrides.childBuilder.returning
 		        let __safeDI_childBuilder__childBuilder_top = safeDIOverrides.childBuilder.top
 		        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder
-		        @Sendable func __safeDI_childBuilder() -> Child {
+		        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 		            if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(__safeDI_childBuilder__childBuilder_plain, __safeDI_childBuilder__childBuilder_taking, __safeDI_childBuilder__childBuilder_returning, __safeDI_childBuilder__childBuilder_top) } else { Child(plain: __safeDI_childBuilder__childBuilder_plain, taking: __safeDI_childBuilder__childBuilder_taking, returning: __safeDI_childBuilder__childBuilder_returning, top: __safeDI_childBuilder__childBuilder_top) }
 		        }
 		        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
