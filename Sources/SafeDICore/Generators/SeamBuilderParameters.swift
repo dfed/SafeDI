@@ -1903,14 +1903,16 @@ extension DependencyTreeGenerator {
 		}
 		func checkReceive(of property: Property, by instantiable: Instantiable, declaredAt declarationLocation: Dependency.DeclarationLocation?, onlyIfAvailable: Bool, passingCall: DependencyTreeGeneratorError.FillFinding.PassingCall? = nil) {
 			// The seam's tree, as the caller fills it, receives the label wherever the fill's tree resolves it outside the fill,
-			// where the fill's field of the label is that seam's parameter. Where the place's field is no seam's parameter but
-			// a declaration further out, which the levels hand on past a seam that defers the label (`FillDispatcher.Case.handsOn`),
-			// and some route hands the fill that seam's memo, which the fill binds in its place (`ScopeGenerator.fillMemoOriginsByLabel`),
-			// the tree of each seam whose memo it is receives the label there. A field a public mock's root binds names no seam's
+			// where the fill's field of the label is that seam's parameter. Where some route hands the fill the memo of a seam that
+			// defers the label, which the fill binds in the field's place (`ScopeGenerator.fillMemoOriginsByLabel`), the tree of
+			// each seam whose memo it is receives the label there too: the place's field is then a declaration further out, which
+			// the levels hand on past that seam (`FillDispatcher.Case.handsOn`), or the parameter of another seam, further out,
+			// that passes the place up and receives the label itself. A memo of the field's own seam is that parameter, whose
+			// receives are recorded once. A field a public mock's root binds names no seam's
 			// tree here: its origin serves only the check of an optional wrapper the fill requires the instance of
 			// (`publicMockHandsOptionalWrapperOfRequiredValue`), the deliberate gap of contract rule 7.
 			let fieldOrigin = fields.first(where: { $0.property.label == property.label }).flatMap { $0.isBoundByPublicMockRoot ? nil : $0.seamParameterOrigin }
-			let memoOrigins = fieldOrigin == nil ? fill.fillMemoOriginsByLabel[property.label] ?? [] : []
+			let memoOrigins = (fill.fillMemoOriginsByLabel[property.label] ?? []).filter { $0.seamType != fieldOrigin?.seamType }
 			for origin in [fieldOrigin].compactMap(\.self) + memoOrigins {
 				seamTreeReceives.add(
 					DependencyTreeGeneratorError.SeamError.Receiver(property: property, declaringType: instantiable.concreteInstantiable, declarationLocation: declarationLocation, aliasProperty: nil, isInstantiateMethodParameter: false),
