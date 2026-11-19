@@ -2604,6 +2604,9 @@ enum GraphFuzzerGenerator {
 		let name: String
 		let type: String
 		var defaultValue: String?
+		/// Whether a type that stores every parameter it takes stores this one. A function type is not stored: its
+		/// declaration cannot spell `@escaping`, and the differential value comparator cannot compare its values.
+		var isStored = true
 
 		/// The parameter as declared: `title: String = "default"`, `_ note: String = ""`.
 		var declaration: String {
@@ -2727,6 +2730,7 @@ enum GraphFuzzerGenerator {
 			retentionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.retentionRandomSeedMask)
 			retentionLoopRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.retentionLoopRandomSeedMask)
 			builderReceivedBesideReceiveLeftNilRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.builderReceivedBesideReceiveLeftNilRandomSeedMask)
+			throwingAutoclosureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.throwingAutoclosureRandomSeedMask)
 			keywordLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.keywordLabelRandomSeedMask)
 
 			fillCallRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.fillCallRandomSeedMask)
@@ -3092,6 +3096,8 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let builderReceivedBesideReceiveLeftNilRandomSeedMask: UInt64 = 0x73656C6652656376
+		/// The stream of the extension's throwing `@autoclosure` parameter.
+		private static let throwingAutoclosureRandomSeedMask: UInt64 = 0x5468726F77417574
 
 		/// The name of a helper type the `Sendable` builder motif declares, which is never `Sendable`.
 		private func nonSendableHelperTypeName(_ name: String) -> String {
@@ -3200,6 +3206,7 @@ enum GraphFuzzerGenerator {
 		/// Draws only `appendBuilderReceivedBesideReceiveLeftNilMotif`'s choices: whether a graph without another motif
 		/// ends with it, and its shapes.
 		private var builderReceivedBesideReceiveLeftNilRandom: GraphFuzzerRandomNumberGenerator
+		private var throwingAutoclosureRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `labelingHoleOwnersAsKeywords`' choices: whether a graph's seam builds `HoleOwner` under keyword labels,
 		/// and which.
 		private var keywordLabelRandom: GraphFuzzerRandomNumberGenerator
@@ -9034,6 +9041,17 @@ enum GraphFuzzerGenerator {
 					parameters.append(parameter)
 				}
 			}
+			// Half the time, from a stream of its own so that every other graph is drawn as before, a throwing
+			// `@autoclosure`, whose default throws half of those times: a mock takes it as an autoclosure that does not
+			// throw, or leaves it to a default that throws.
+			let throwingAutoclosureDefault: String? = if throwingAutoclosureRandom.percentChance(50) {
+				throwingAutoclosureRandom.percentChance(50) ? "try \(throwingAttemptCountFunctionName)()" : "3"
+			} else {
+				nil
+			}
+			if let throwingAutoclosureDefault {
+				parameters.append(ParameterDeclaration(name: "attemptCount", type: "@autoclosure () throws -> Int", defaultValue: throwingAutoclosureDefault, isStored: false))
+			}
 			// An unlabeled default-valued parameter last, which a generated call leaves to its default.
 			if random.percentChance(20) {
 				parameters.append(ParameterDeclaration(argumentLabel: "_", name: "note", type: "String", defaultValue: "\"\""))
@@ -9042,7 +9060,7 @@ enum GraphFuzzerGenerator {
 			// When every parameter is stored, the extended type takes and stores what `instantiate(…)` is passed. In a
 			// mixed graph that can be a wrapper that is not `Sendable`, so the type is then `@unchecked Sendable`, as the
 			// graph's types are.
-			let storedParameters = storesEveryParameter ? parameters : []
+			let storedParameters = storesEveryParameter ? parameters.filter(\.isStored) : []
 			let sendableConformance = switch (sendability, storedParameters.isEmpty) {
 			case (.nonSendable, _):
 				""
@@ -9071,11 +9089,19 @@ enum GraphFuzzerGenerator {
 				lines += storedParameters.map { "\tpublic let \($0.storedDeclaration)" }
 			}
 			lines.append("}")
+			if throwingAutoclosureDefault != nil {
+				lines += ["", "public func \(throwingAttemptCountFunctionName)() throws -> Int { 3 }"]
+			}
 			return lines.joined(separator: "\n") + "\n"
 		}
 
 		private var extensionTypeName: String {
 			"\(prefix)Ext"
+		}
+
+		/// The function that throws which the extension's throwing `@autoclosure` default calls.
+		private var throwingAttemptCountFunctionName: String {
+			"\(prefix)attemptCount"
 		}
 
 		// MARK: Emission
@@ -9177,7 +9203,7 @@ enum GraphFuzzerGenerator {
 			let spelledInitializerAccess = declaration.initializerAccess ?? declaration.access
 			let narrowestNamedAccess = (declaration.properties.map(\.type) + declaration.defaultValuedParameters.map(\.type)).map(narrowestProofTypeAccess(in:)).min() ?? .public
 			let initializerAccess = min(spelledInitializerAccess, declaration.effectiveAccess) <= narrowestNamedAccess ? spelledInitializerAccess : narrowestNamedAccess
-			let storedParameters = storesEveryParameter ? declaration.defaultValuedParameters : []
+			let storedParameters = storesEveryParameter ? declaration.defaultValuedParameters.filter(\.isStored) : []
 			if let guardedMockParameter = declaration.guardedMockParameter {
 				lines += guardedMockParameter.bodyLines(ofTypeNamed: declaration.name)
 			} else if declaration.properties.isEmpty, storedParameters.isEmpty {

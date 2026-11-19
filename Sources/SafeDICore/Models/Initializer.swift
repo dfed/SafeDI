@@ -296,9 +296,13 @@ public struct Initializer: Codable, Hashable, Sendable {
 	/// and default-valued non-dependency arguments. Used in mock generation where
 	/// default-valued parameters are bubbled up to the root mock method and
 	/// dependency arguments are fulfilled from the tree.
+	/// - Parameter isLeftToItsDefault: Whether the mock leaves a default-valued non-dependency argument to its default,
+	///   which the list then leaves out: one without a label, and whatever else the generator decides
+	///   (`Initializer.Argument.isLeftToItsDefault`).
 	func createMockInitializerArgumentList(
 		given dependencies: [Dependency],
 		unavailableProperties: Set<Property>? = nil,
+		isLeftToItsDefault: (Argument) -> Bool = { $0.label == "_" },
 	) -> String {
 		var parts = [String]()
 		for argument in arguments {
@@ -308,7 +312,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 				} else {
 					parts.append("\(argument.label.spelledAsArgumentLabel): \(argument.innerLabel)")
 				}
-			} else if argument.hasDefaultValue, argument.label != "_" {
+			} else if argument.hasDefaultValue, !isLeftToItsDefault(argument) {
 				parts.append("\(argument.label.spelledAsArgumentLabel): \(argument.label)")
 			}
 			// Arguments that don't match a dependency and have no default are

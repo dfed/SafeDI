@@ -1037,7 +1037,7 @@ The fields of `SafeDIOverrides` and `SafeDIMockConfiguration` are read-only comp
 
 > **Note:** Pass the builder in parentheses, as in `.init(StubNoteStorage.init)` above. Swift gives a trailing closure to the first closure field, which may not be the builder.
 
-A labeled default-valued `@autoclosure` parameter, such as `retries: @autoclosure () -> Int = 3`, is evaluated each time the mock builds the type, as in production. You pass a value, as in `Service.mock(retries: 5)`, and a builder closure is handed an `Int`.
+A labeled default-valued `@autoclosure` parameter, such as `retries: @autoclosure () -> Int = 3`, is evaluated each time the mock builds the type, as in production. You pass a value, as in `Service.mock(retries: 5)`, and a builder closure is handed an `Int`. The mock takes a throwing `@autoclosure` as one that does not throw, so the value you pass cannot throw; when the default itself throws, as `= try loadRetries()` does, the mock takes no parameter for it and the initializer evaluates the default.
 
 Closure fields on `SafeDIMockConfiguration` are not `@Sendable`, so an override can capture mutable test state that is not `Sendable`. Beneath a [`Sendable` wrapper](#sendable-wrappers), what you hand the mock for a type there must be `Sendable`: its override closures are `@Sendable`, and so are its default-valued initializer parameters and the dependencies it instantiates that the mock cannot build. The mock takes each of these values as a `@Sendable` autoclosure, and evaluates it each time it builds the type, as production does. You still write a value, as in `Root.mock(service: MockService())`, but it cannot capture non-`Sendable` test state, such as a `MockService` held in a `let` outside the call.
 
