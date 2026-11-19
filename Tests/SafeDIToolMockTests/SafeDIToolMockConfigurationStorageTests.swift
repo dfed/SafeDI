@@ -818,6 +818,13 @@ struct SafeDIToolMockConfigurationStorageTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Service {
+			        Service.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Service {
 			        func __safeDI_child() -> Child {
 			            let grand = if let safeDIBuilder = safeDIOverrides.child.grand { safeDIBuilder() } else { Grand() }
 			            return Child.__safeDI_init(grand: grand, capacity: safeDIOverrides.child.capacity, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
