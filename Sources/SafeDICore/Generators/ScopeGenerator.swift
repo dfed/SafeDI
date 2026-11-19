@@ -373,7 +373,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				children: propertiesToGenerate,
 				forwardedProperties: forwardedProperties,
 				cycleParameters: cycleParameters,
-				receivedProperties: receives.receivedProperties,
 			)
 		} else {
 			[]
@@ -1080,7 +1079,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		children: [ScopeGenerator],
 		forwardedProperties: Set<Property>,
 		cycleParameters: [CycleParameter],
-		receivedProperties: Set<Property>,
 	) -> [Property] {
 		// The function rebinds what its tree receives inside its loop, in the order its body first receives each, except a
 		// label its own parameters name: the body reads the parameter.
@@ -1088,20 +1086,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for parameter in cycleParameters {
 			parameterLabels.insert(parameter.property.label)
 		}
-		// The forms of each label, in property order: a mock root can promote a label in two forms, both on one loop.
+		// The forms of each label, in property order.
 		var reboundFormsByLabel = [String: [Property]]()
 		for reboundProperty in reboundProperties.sorted() where !parameterLabels.contains(reboundProperty.label) {
 			reboundFormsByLabel[reboundProperty.label, default: []].append(reboundProperty)
-		}
-		// Of a label promoted in two forms, the function rebinds each form its body reads – the form a receive names, or
-		// the non-optional one where a required optional receive has no form of its own – and none it does not read, which
-		// would be an unused binding. Each label is decided on its own, so the order of the dictionary reaches nothing.
-		for (label, forms) in reboundFormsByLabel where forms.count > 1 {
-			let readForms = forms.filter { form in
-				receivedProperties.contains(form)
-					|| (!form.typeDescription.isOptional && receivedProperties.contains(form.asOptionalProperty) && !forms.contains(form.asOptionalProperty))
-			}
-			reboundFormsByLabel[label] = readForms.isEmpty ? nil : readForms
 		}
 		let firstReceives = inOrderTheBodyFirstReceives(
 			ofLabels: reboundFormsByLabel,
@@ -2989,7 +2977,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							label: parameter.property.label,
 							typeDescription: .simple(
 								name: isSendable ? Dependency.sendableLazilyInstantiatedType : Dependency.lazilyInstantiatedType,
-								generics: [parameter.deferredValueType],
+								generics: [parameter.property.typeDescription],
 							),
 						),
 						instanceProperty: parameter.property,
@@ -4029,8 +4017,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The received properties that some receiver in this subtree requires — a `@Received`
 	/// dependency, or the fulfilling property of an aliased one, that is not `onlyIfAvailable`.
 	let requiredReceivedProperties: Set<Property>
-	/// The unwrapped forms of the optional `requiredReceivedProperties`, which a sibling of the
-	/// non-optional form fulfills. Few receives are both required and optional, so this stays small.
+	/// The unwrapped forms of the optional `requiredReceivedProperties`, which a mock root's promoted sibling of the
+	/// non-optional form fulfills: a mock promotes one `x: X` for a required `x: X?` that a forwarded optional fulfills
+	/// in production and a required `x: X` elsewhere in its tree. Few receives are both required and optional, so this
+	/// stays small.
 	private let unwrappedOptionalRequiredReceivedProperties: Set<Property>
 	/// Unwrapped versions of the received properties that every receiver in this subtree receives
 	/// `@Received(onlyIfAvailable: true)`, directly or through an alias. A property some receiver
@@ -4841,8 +4831,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					dependencies.insert(sibling.index)
 				}
 			}
-			// A required optional property can resolve to a sibling of its non-optional form:
-			// in a mock, or through an `onlyIfAvailable` receive of it above the receiver.
+			// A required optional property resolves to a mock root's promoted sibling of its non-optional form, which the
+			// mock promotes once for both forms.
 			for property in scope.unwrappedOptionalRequiredReceivedProperties {
 				if let siblingIndex = siblingIndexByProperty[property] {
 					dependencies.insert(siblingIndex)
@@ -7500,7 +7490,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			guard case let .deferred(isSendable) = parameter.deferral, autoclosureCallByLabel[parameter.property.label] == nil else { return nil }
 			let wrapperType = TypeDescription.simple(
 				name: isSendable ? Dependency.sendableLazilyInstantiatedType : Dependency.lazilyInstantiatedType,
-				generics: [parameter.deferredValueType],
+				generics: [parameter.property.typeDescription],
 			)
 			return "\(bodyIndent)let \(parameter.property.label) = \(wrapperType.asSource)(\(parameter.internalName))"
 		}
@@ -9731,8 +9721,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				!Self.isElidedInCallSite(argument, dependencyInnerLabels: dependencyInnerLabels)
 			}
 			self.callSiteArguments = callSiteArguments
-			// A builder closure's parameter cannot be spelled `X!`, so an implicitly unwrapped argument is taken as `X?`,
-			// as Swift types the initializer's own parameter; force-unwrapping it would trap where the value is `nil`.
 			// The override closure of a call of another module's public mock passes what it is handed on to that `mock()`, so
 			// a function spelled as a name, such as an erased instantiator's `Builder`, is handed `@escaping` where the called
 			// mock takes it so (`PublicMockCall.typesDeclaredEscaping`).
@@ -9745,7 +9733,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// its own, and which the node is not told. The bindings of the arguments in the type's builder function share the
 			// gap (`emitReceiverBindings`).
 			builderParameterTypes = callSiteArguments.map { argument in
-				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription).asFunctionParameter(amongTypesDeclaredEscaping: builderTypesDeclaredEscaping).implicitlyUnwrappedOptionalSpelledAsOptional
+				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription).asFunctionParameter(amongTypesDeclaredEscaping: builderTypesDeclaredEscaping)
 			}
 			needsConfigurationStruct = childItems?.containsPropertyNode == true || !defaultParameters.isEmpty || isPropertyCycle
 			subtreeCallsPublicMock = publicMockCall != nil || childItems?.propertyNodes.contains(where: \.subtreeCallsPublicMock) == true
@@ -11478,11 +11466,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// value and the mock calls it where it builds the type, which evaluates the default once per
 				// construction, as production does. The initializer takes the value as an autoclosure, so a
 				// caller still passes a value. Swift rejects `@Sendable` on a typealias, so a typealiased function
-				// type is stored this way too, even when the parameter is declared `@escaping`. A closure's return type
-				// cannot be spelled `X!`, so an implicitly unwrapped value is returned as `X?`, which the parameter accepts.
-				let returnTypeSource = defaultParameter.valueTypeDescription.implicitlyUnwrappedOptionalSpelledAsOptional.asSource
-				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): @autoclosure @escaping @Sendable () -> \(returnTypeSource) = \(autoclosureDefault(defaultExpression(defaultParameter)))")
-				appendField(named: defaultParameter.label, typeSource: "@Sendable () -> \(returnTypeSource)", parameterTypeSource: "@escaping @Sendable () -> \(returnTypeSource)", isProvenSendable: true)
+				// type is stored this way too, even when the parameter is declared `@escaping`.
+				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): @autoclosure @escaping @Sendable () -> \(typeSource) = \(autoclosureDefault(defaultExpression(defaultParameter)))")
+				appendField(named: defaultParameter.label, typeSource: "@Sendable () -> \(typeSource)", parameterTypeSource: "@escaping @Sendable () -> \(typeSource)", isProvenSendable: true)
 			} else {
 				// A parameter declared `@escaping` is of a function type, which the initializer stores, so it takes the
 				// value `@escaping` too, also when the type is a typealias of a function type.

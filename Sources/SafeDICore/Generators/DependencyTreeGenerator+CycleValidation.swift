@@ -132,11 +132,7 @@ extension DependencyTreeGenerator {
 				onlyIfAvailableAliasFulfillingPropertyByProperty[property] = fulfillingProperty
 				namedChild = childBindingOnlyIfAvailableAlias(of: fulfillingProperty)
 			} else {
-				// An alias of a child's optional form is assigned from that child, as a required receive of it is fulfilled.
-				let fulfillingProperties = fulfillingProperty.typeDescription.isOptional
-					? [fulfillingProperty, fulfillingProperty.asUnwrappedProperty]
-					: [fulfillingProperty]
-				namedChild = fulfillingProperties.lazy.compactMap { childByProperty[$0] }.first
+				namedChild = childByProperty[fulfillingProperty]
 			}
 			if let namedChild {
 				aliasedChildByProperty[property] = NamedChild(index: namedChild.index, directness: 2 + aliasCount)

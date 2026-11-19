@@ -179,25 +179,13 @@ public struct SeamSignature: Sendable {
 			deferral != .none
 		}
 
-		/// The type a deferred parameter's autoclosure returns and its `LazilyInstantiated` holds: the parameter's type,
-		/// with an implicitly unwrapped optional spelled as its optional form, which an autoclosure's return type and a
-		/// generic argument cannot spell, and whose instance a receiver of the implicitly unwrapped type accepts.
-		public var deferredValueType: TypeDescription {
-			property.typeDescription.implicitlyUnwrappedOptionalSpelledAsOptional
-		}
-
 		/// The parameter as a tier's plain initializer declares it: by value, under its label alone. An underscored name
 		/// would keep the initializer out of the module's symbol graph, which is what documentation is generated from. No
 		/// parameter has a default, so every call passes every one.
 		func plainSpelling(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> String {
-			switch deferral {
-			case .none:
-				property.asFunctionParameterSyntax(amongTypesDeclaredEscaping: typesDeclaredEscaping).description
-			case .deferred:
-				// The closure of the initializer only generated code calls captures this parameter, so a function type is
-				// `@escaping` here even though that initializer takes it behind an `@autoclosure`.
-				Property(label: property.label, typeDescription: deferredValueType).asFunctionParameterSyntax(amongTypesDeclaredEscaping: typesDeclaredEscaping).description
-			}
+			// The closure of the initializer only generated code calls captures a deferred parameter, so a function type is
+			// `@escaping` here even though that initializer takes it behind an `@autoclosure`.
+			property.asFunctionParameterSyntax(amongTypesDeclaredEscaping: typesDeclaredEscaping).description
 		}
 
 		/// The parameter as the initializer only generated code calls declares it: under `generatedOnlyArgumentLabel`, a
@@ -208,7 +196,7 @@ public struct SeamSignature: Sendable {
 			case .none:
 				"\(generatedOnlyArgumentLabel) \(property.asFunctionParameterSyntax(amongTypesDeclaredEscaping: typesDeclaredEscaping).description)"
 			case let .deferred(isSendable):
-				"\(internalName == generatedOnlyArgumentLabel ? internalName : "\(generatedOnlyArgumentLabel) \(internalName)"): @autoclosure @escaping\(isSendable ? " @Sendable" : "") () -> \(deferredValueType.asSource)"
+				"\(internalName == generatedOnlyArgumentLabel ? internalName : "\(generatedOnlyArgumentLabel) \(internalName)"): @autoclosure @escaping\(isSendable ? " @Sendable" : "") () -> \(property.typeDescription.asSource)"
 			}
 		}
 
@@ -309,11 +297,10 @@ public struct SeamSignature: Sendable {
 			}
 
 			/// The type of the `LazilyInstantiated` (or `SendableLazilyInstantiated`) a deferred parameter's field holds,
-			/// or `nil` for a field held by value: the parameter's type, an implicitly unwrapped optional spelled as its
-			/// optional form, as the seam's tree holds it (`SeamSignature.Parameter.deferredValueType`).
+			/// or `nil` for a field held by value: a wrapper of the parameter's type, as the seam's tree holds it.
 			public var memoType: TypeDescription? {
 				guard case let .deferred(isSendable) = deferral else { return nil }
-				return .simple(name: isSendable ? Dependency.sendableLazilyInstantiatedType : Dependency.lazilyInstantiatedType, generics: [property.typeDescription.implicitlyUnwrappedOptionalSpelledAsOptional])
+				return .simple(name: isSendable ? Dependency.sendableLazilyInstantiatedType : Dependency.lazilyInstantiatedType, generics: [property.typeDescription])
 			}
 
 			/// The name of the stored property that holds a deferred parameter's memo inside the struct, beside the field's

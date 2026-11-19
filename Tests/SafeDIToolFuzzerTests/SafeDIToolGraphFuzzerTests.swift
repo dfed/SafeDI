@@ -7235,7 +7235,6 @@ struct SafeDIToolGraphFuzzerTests {
 		.formsSeam: 986,
 		.formsByValueReceive: 548,
 		.formsWrapperReceive: 685,
-		.formsRequiredOptionalReceive: 165,
 		.formsOptionalWrapperReceive: 210,
 		.formsSeamOwnReceive: 105,
 		.formsDetailInSendableBuilder: 66,
@@ -8789,7 +8788,7 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: mockParameterAndFieldOrderReason,
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
 			seeds: [
-				6, 36, 45, 55, 154, 157, 209, 281, 300, 371, 380, 381, 434, 476, 541, 548,
+				6, 7, 14, 36, 45, 55, 154, 157, 209, 281, 300, 371, 380, 381, 434, 476, 541, 548,
 				593, 657, 774, 808, 840, 903, 1_042, 1_073, 1_140, 1_185, 1_217, 1_300, 1_335, 1_369, 1_432,
 				1_563, 1_646, 1_664, 1_675, 1_742, 1_795, 1_817, 1_853, 1_867, 2_051, 2_057, 2_083, 2_149, 2_296, 2_337, 2_484,
 				2_626, 2_742, 2_791, 2_841, 2_916, 2_935, 3_160, 3_352, 3_470, 3_491, 3_513, 3_534, 3_537, 3_589, 3_600, 3_623,

@@ -1394,10 +1394,6 @@ extension DependencyTreeGenerator {
 				}
 			}
 
-			/// The first required optional receive this scope can resolve only to the property's non-optional form,
-			/// still being built, with that form's index on `instantiationStack`. It is a cycle, thrown after the
-			/// cycles below, which match only exact properties, so it is reported as a non-optional receive would be.
-			var optionalReceiveOfPropertyBeingBuilt: (receive: Scope.RequiredReceivedProperty, beingBuiltIndex: Int)?
 			for requiredReceivedProperty in scope.requiredReceivedProperties where validatesCycles {
 				let receivedProperty = requiredReceivedProperty.property
 				let parentContainsProperty = receivableProperties.contains(receivedProperty)
@@ -1407,13 +1403,7 @@ extension DependencyTreeGenerator {
 				let beingBuiltIndex = receivableProperties.contains(receivedProperty.asUnwrappedProperty)
 					? nil
 					: instantiationStack.firstIndex(of: receivedProperty.asUnwrappedProperty.asValidatedForDependencyCycles)
-				if receivedProperty.typeDescription.isOptional, let beingBuiltIndex {
-					// An instantiator still being built is rebound inside its own builder function, which provides its optional
-					// form too (see `ScopeGenerator.ReceivedBuilderLoops`).
-					if !ScopeGenerator.isBuilder(instantiationStack[beingBuiltIndex]) {
-						optionalReceiveOfPropertyBeingBuilt = optionalReceiveOfPropertyBeingBuilt ?? (requiredReceivedProperty, beingBuiltIndex)
-					}
-				} else if !cyclesOnly || beingBuiltIndex != nil {
+				if !cyclesOnly || beingBuiltIndex != nil {
 					// A mock binds every property its tree receives from above it, so there only a property still
 					// being built is unfulfillable. A non-optional one is a cycle, reported below.
 					// This property is in a dependency tree and is unfulfillable. Record the problem.
@@ -1488,35 +1478,6 @@ extension DependencyTreeGenerator {
 					),
 				)
 			}
-			if case let (receive, beingBuiltIndex)? = optionalReceiveOfPropertyBeingBuilt {
-				let beingBuiltProperty = instantiationStack[beingBuiltIndex]
-				let validatedReceivedProperty = receive.property.asValidatedForDependencyCycles
-				let lazilyInstantiatedProperties = Self.lazilyInstantiatedProperties(
-					closingCycleWith: receive.property,
-					validatedPropertiesInCycle: instantiationStack[0...beingBuiltIndex],
-					lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations,
-				)
-				if beingBuiltIndex == 0 {
-					throw DependencyTreeGeneratorError.dependencyReceivedInSameChainItIsInstantiated(
-						instantiated: beingBuiltProperty,
-						receivedPropertyChain: [validatedReceivedProperty],
-						declarationLocation: receive.declarationLocation,
-						lazilyInstantiatedProperties: lazilyInstantiatedProperties,
-						requiredOnlyIfAvailableAliases: [],
-					)
-				} else {
-					// A received cycle is never valid.
-					throw invalidCycleError(
-						propertiesInCycle: [validatedReceivedProperty] + instantiationStack[0...beingBuiltIndex],
-						declaredProperty: receive.aliasProperty ?? receive.property,
-						declarationLocation: receive.declarationLocation,
-						directParent: scope.instantiable.concreteInstantiable,
-						closingReceive: CycleClosingReceive(),
-						lazilyInstantiatedProperties: lazilyInstantiatedProperties,
-					)
-				}
-			}
-
 			var childClosestDeclarationByLabel = closestDeclarationByLabel
 			var childClosestDeclarationDepthByLabel = scopeToValidate.closestDeclarationDepthByLabel
 			enterDeclarations(of: scope, into: &childClosestDeclarationByLabel) {
