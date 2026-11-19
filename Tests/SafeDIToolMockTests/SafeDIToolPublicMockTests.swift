@@ -16428,7 +16428,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	#if DEBUG
 	func callPublicTiers() {
 	    _ = Service.mock()
-	    _ = Service.mock(retries: 9, analytics: LazilyInstantiated { Analytics() }, theme: Theme(), safeDIOverrides: .init(logger: .init(verbose: true), analytics: { Analytics() }, tokenCache: .init(capacity: 5), name: nil))
+	    _ = Service.mock(retries: 9, name: nil, analytics: LazilyInstantiated { Analytics() }, theme: Theme(), safeDIOverrides: .init(logger: .init(verbose: true), analytics: { Analytics() }, tokenCache: .init(capacity: 5)))
 	    _ = Service.__safeDI_Service_mock_8D69AB86D0326E72.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 	}
 
