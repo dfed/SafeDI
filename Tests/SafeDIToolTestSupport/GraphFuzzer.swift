@@ -9872,7 +9872,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 
 		/// The name of the builder function the line declares, when it declares one.
 		var declaredBuilderFunctionName: Substring? {
-			let declaration = content.hasPrefix("@Sendable ") ? content.dropFirst("@Sendable ".count) : content
+			let declaration = content.hasPrefix("@Sendable nonisolated ") ? content.dropFirst("@Sendable nonisolated ".count) : content
 			guard declaration.hasPrefix("func __safeDI_") else { return nil }
 			return declaration.dropFirst("func ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
 		}

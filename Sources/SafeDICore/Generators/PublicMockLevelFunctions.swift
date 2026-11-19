@@ -356,7 +356,7 @@ struct PublicMockLevelFunctions: Sendable {
 			}
 			parameterList += function.parameters.map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
 			let isSendable = sendableKeys.contains(dispatcher.key)
-			var lines = ["\(indent)\(ScopeGenerator.localFunctionPrefix(isSendable: isSendable, isNonisolated: true))func \(function.name)(\(parameterList.joined(separator: ", "))) -> \(builderType.asSource) {"]
+			var lines = ["\(indent)\(ScopeGenerator.localFunctionPrefix(isSendable: isSendable))func \(function.name)(\(parameterList.joined(separator: ", "))) -> \(builderType.asSource) {"]
 			// Laid out as a seam's caller lays out a level function (`FillDispatcher.structDeclaration`).
 			if members.allSatisfy({ $0.count == 1 }) {
 				lines.append("\(memberIndent).init(\(members.map { $0[0] }.joined(separator: ", ")))")

@@ -1324,8 +1324,6 @@ private struct ScopeGeneratorUnderConstruction {
 			ownerPropertyStack: childPropertyStack,
 			ownerConcreteTypeStack: childConcreteTypeStack,
 			ownerLazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
-			// A seam that declares builder structs spells the `@Sendable` functions of its sites, too, `nonisolated`.
-			sendableFunctionsAreNonisolated: seamHoles.declaresBuilderStructs,
 		))
 	}
 
@@ -1861,7 +1859,6 @@ private struct ScopeGeneratorUnderConstruction {
 			valuesBindings: seamHoles.valuesBindings(at: sitePath),
 			holdsLoopPayloadsInBoxes: seamHoles.holdsLoopPayloadsInBoxes,
 			memberCallsInsideFunction: seamHoles.memberCallsInsideFunction(at: sitePath),
-			sendableFunctionsAreNonisolated: seamHoles.declaresBuilderStructs,
 			isBuiltByFill: fill != nil,
 			fillReturnsWrapperBuilder: fill?.returnsWrapperBuilder ?? false,
 			innerScopesCalledWithForwardedValue: fill.map { $0.returnsWrapperBuilder ? $0.innerScopeParameters.map(\.property.label) : [] } ?? [],
@@ -2186,7 +2183,6 @@ struct SeamHoles {
 		carriedStructsByCall = [:]
 		namesBoundForBuilders = []
 		namesBoundForDeferredParameters = []
-		declaresBuilderStructs = false
 		holdsLoopPayloadsInBoxes = false
 		namesBoundBySeam = GenerationWork.Shared([])
 	}
@@ -2276,7 +2272,6 @@ struct SeamHoles {
 			valuesBindingsByPath[path] = orderedBindings.filter { !$0.isCalledInsideFunction }
 		}
 		self.memberCallsInsideFunctionByPath = memberCallsInsideFunctionByPath
-		declaresBuilderStructs = builders.contains(where: \.takesBuilderStruct)
 		self.seamType = seamType
 		self.sitesByPath = sitesByPath
 		self.passedUpHolesBySite = passedUpHolesBySite
@@ -2365,9 +2360,6 @@ struct SeamHoles {
 	/// The name each deferred parameter of the seam's generated initializer binds its autoclosure to, which the
 	/// initializer's body reads. Empty outside a seam's tree, and in a public mock's.
 	let namesBoundForDeferredParameters: Set<String>
-	/// Whether a builder of the seam takes a builder struct, so its tree spells every `@Sendable` local function it declares
-	/// `@Sendable nonisolated`, as a builder struct's `@Sendable` member is called at the top of one.
-	let declaresBuilderStructs: Bool
 	/// Whether the tree's scopes hold the payloads of a loop of builders in one box (`ScopeGenerator.boxedLoops`): only a
 	/// seam's own tree, whose initializer's extension declares the box's class. A public mock's tree, its fills included,
 	/// binds each payload in a `let` of its own, a deliberate gap: its payloads were never builder structs, and nothing in

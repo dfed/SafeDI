@@ -4284,7 +4284,7 @@ extension GraphFuzzerPublicMockDraw {
 				guard isConsumerFile else { continue }
 				// A fill, handed a place's values, or a dispatcher, which a call declares only with a fill; or a level function, which
 				// returns a level's builder struct.
-				if line.hasPrefix("func __safeDI_") || line.hasPrefix("@Sendable func __safeDI_") || line.hasPrefix("@Sendable nonisolated func __safeDI_"), line.contains("MockScope_"), line.contains("(_ scope: ") || line.contains(".__safeDI_Builder<") {
+				if line.hasPrefix("func __safeDI_") || line.hasPrefix("@Sendable nonisolated func __safeDI_"), line.contains("MockScope_"), line.contains("(_ scope: ") || line.contains(".__safeDI_Builder<") {
 					features.insert(.consumerFillsHole)
 				}
 				if line.contains(".__safeDI_mock(") {
