@@ -1926,7 +1926,7 @@ extension GraphFuzzerCallingMockDraw {
 	/// The called type's module of the fill that requires a value the called type receives only if available in a lazy
 	/// wrapper: the hole's protocol, the value, and the called type, a seam and public mock, which holds the place and
 	/// receives the wrapper only if available itself, through a sibling it instantiates, or both.
-	fileprivate var optionalWrapperValueModuleContent: String {
+	private var optionalWrapperValueModuleContent: String {
 		let place = holePlace(protocolName: names.hole, fillName: names.fill)
 		let value = names.value.lowercasedFirst
 		let sibling = names.sibling.lowercasedFirst
@@ -1974,7 +1974,7 @@ extension GraphFuzzerCallingMockDraw {
 	/// The caller's module of the fill that requires a value the called type receives only if available in a lazy wrapper:
 	/// the fill requires the value by value, and instantiates an `Instantiator` of the called type where the draw says so,
 	/// and the caller instantiates the value in the drawn wrapper beside the called type.
-	fileprivate func optionalWrapperValueCallerContent(_ form: Form) -> String {
+	private func optionalWrapperValueCallerContent(_ form: Form) -> String {
 		let value = names.value.lowercasedFirst
 		let inner = names.inner.lowercasedFirst
 		let wrapped = "\(optionalWrapperValue?.wrapper ?? "LazilyInstantiated")<\(names.value)>"
