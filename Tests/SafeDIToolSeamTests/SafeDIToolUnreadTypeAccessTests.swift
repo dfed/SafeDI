@@ -1597,12 +1597,13 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsErrorNamingEnclosingInstantiable_whenParameterNamesTypeNestedInItThatNoModuleInfoRecords() async {
-		// N4: `Base`'s `.safedi` records no declaration of `Shelf.Label`, whose file holds no SafeDI marker and no `package`:
-		// it counts as the `package` `@Instantiable` `Shelf` that encloses it does.
+	mutating func generate_throwsErrorNamingEnclosingInstantiable_whenParameterNamesPublicTypeNestedInItsExtensionInFileWithoutMarker() async {
+		// N4: `Base`'s `.safedi` records `Shelf.Label`, a `public` type nested in an extension of `Shelf` in a file that holds
+		// no SafeDI marker and no `package`, as it records every `public` nested type: it is as `package` as the
+		// `@Instantiable` `Shelf` its extension extends.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `label: Shelf.Label`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Shelf.Label` is nested in `Shelf`, whose own `@Instantiable` declaration is `package`. Declare `Shelf` `public`; declare `Screen` `package`; receive `label` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`’s `public` access requires, cannot take `label: Shelf.Label`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Shelf.Label` is `package`: it is declared inside an extension of `Shelf`, whose own `@Instantiable` declaration is `package`. Declare `Shelf` `public`; declare `Screen` `package`; receive `label` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Screen.swift"]):10:5: note: `Screen` receives `label: Shelf.Label` here.
 			"""
 		}) {
