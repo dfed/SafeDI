@@ -559,6 +559,10 @@ struct PublicMockEmission: Sendable {
 	/// For each node at the mock root's level that the mock builds for a received dependency, the parameter that
 	/// holds a value its caller passed instead, by the node's property. Empty beneath the mock root's level.
 	let promotedParameterNames: [Property: String]
+	/// The names of the parameters among `promotedParameterNames`' that the function only generated code calls takes as the
+	/// wrapper the node builds (`PublicMockParameter.generatedOnlyWrapper`), which the node binds in place of the wrapper it
+	/// builds where the caller passed one.
+	var wrapperParameterNames = Set<String>()
 	/// What the module's public mocks share.
 	let context: PublicMockContext
 	/// The concrete types whose configurations a `@Sendable` builder function reads, which hold each default as a
@@ -707,6 +711,12 @@ struct PublicMockParameter: Sendable {
 	/// taken by value, the wrapper it builds, which a calling mock that can build it builds in its place, as the inline
 	/// mock would, and passes the instance of.
 	var builtWrapper: Property?
+	/// For the instance of a `LazilyInstantiated` or `SendableLazilyInstantiated` the mocked type's tree receives, which
+	/// `mock()` takes by value, the wrapper the function only generated code calls takes in its place, so that a generated
+	/// caller hands the called mock the wrapper it holds rather than its instance, as the inline mock hands it: nothing reads
+	/// the instance at the call, and the fills of the called mock's places hold the caller's own wrapper. `nil` for every
+	/// other parameter, and in a mock with no such function (`PublicMockPlan.takesBuilderStruct`).
+	var generatedOnlyWrapper: GeneratedOnlyWrapper?
 	/// For a builder, the builder, whose places a module calling the mock that sees a type that fulfills them fills.
 	var builder: SeamSignature.Builder?
 	/// For a builder, the first place it reaches, whose property's type the builder returns.
@@ -731,6 +741,24 @@ struct PublicMockParameter: Sendable {
 			parameter.role = .received(Property(label: parameter.name, typeDescription: property.typeDescription), isRequired: isRequired)
 		}
 		return parameter
+	}
+
+	/// The wrapper the function only generated code calls takes in place of the instance `mock()` takes (see
+	/// `generatedOnlyWrapper`).
+	struct GeneratedOnlyWrapper: Sendable {
+		/// The wrapper's type, optional where `mock()` takes the instance optionally.
+		let type: TypeDescription
+		/// The name the function binds the parameter to, which the mock's body binds the wrapper under where `mock()` makes it.
+		let internalName: String
+
+		/// The value `mock()` passes for the parameter it takes as `parameterName`: the wrapper made around the instance.
+		func wrapping(_ parameterName: String) -> String {
+			if case let .optional(wrapperType) = type {
+				"\(parameterName).map { instance in \(wrapperType.asSource) { instance } }"
+			} else {
+				"\(type.asSource) { \(parameterName) }"
+			}
+		}
 	}
 
 	/// What a parameter of a public mock stands for.
@@ -802,6 +830,7 @@ extension ScopeGenerator {
 	) -> PublicMockPlan {
 		let treePropertyNodes = parameters.parameterTree.propertyNodes
 		var plan = publicMockPlan(
+			generatedOnlyWrappers: generatedOnlyWrappers(of: instantiable, parameters: parameters, parameterNames: parameterNames),
 			of: instantiable,
 			forwardedDependencies: parameters.forwardedDependencies,
 			forwardedDefaults: parameters.forwardedParameterDefaults,
@@ -824,6 +853,41 @@ extension ScopeGenerator {
 		plan.noTierParameters = noTierParameters(in: parameters.parameterTree, leftOut: parameters.receivedOnlyByPublicMockCallsLeftOut)
 		plan.unpresentedHoles = unpresentedHoles(of: plan, in: parameters.parameterTree)
 		return plan
+	}
+
+	/// The wrapper the function only generated code calls of a public mock of `instantiable`, a mock root with `parameters`,
+	/// takes in place of each instance `mock()` takes (`PublicMockParameter.generatedOnlyWrapper`), by the parameter's name:
+	/// for each received instance the mock wraps once, and for each received `LazilyInstantiated` the mock builds when
+	/// passed `nil`, which `mock()` takes as its instance. Applied only where the mock has such a function.
+	static func generatedOnlyWrappers(of instantiable: Instantiable, parameters: MockRootParameters, parameterNames: MockRootParameterNames) -> [String: PublicMockParameter.GeneratedOnlyWrapper] {
+		let topLevelNames = mockRootTopLevelNames(of: parameters, parameterNames: parameterNames)
+		let wrappers = mockRootWrappers(of: instantiable, parameters: parameters, parameterNames: parameterNames, topLevelNames: topLevelNames)
+		// The instance a received wrapper holds, as `mock()` takes it, with the wrapper's type as the function takes it. The
+		// instance of a dependency the mocked type instantiates is its own, which no caller holds. Deliberate gaps, which "A lazy
+		// value a call hands over" in `public-mock-builders.md` states: an instance with a hand-written mock to default to is
+		// taken by value, which the mock resolves to that default, and so is one the mock wraps in both kinds of wrapper
+		// (below), so a call hands either its instance; and where the tree also receives the instance by value, the body reads
+		// it from the wrapper when the mock is built (`generateMockRootCode`'s bindings).
+		var candidates = [(instanceName: String, wrapper: PublicMockParameter.GeneratedOnlyWrapper)]()
+		for wrapper in wrappers {
+			switch wrapper.instanceSource {
+			case let .parameter(name, isMockedTypesOwn):
+				guard !isMockedTypesOwn, parameters.flatReceivedParameterMockDefaults[wrapper.instanceProperty] == nil else { continue }
+				candidates.append((name, PublicMockParameter.GeneratedOnlyWrapper(type: wrapper.property.typeDescription, internalName: wrapper.bindingName)))
+			case let .optionalParameter(name):
+				candidates.append((name, PublicMockParameter.GeneratedOnlyWrapper(type: .optional(wrapper.property.typeDescription), internalName: wrapper.bindingName)))
+			}
+		}
+		// An instance the mock wraps in both kinds of wrapper is taken by value: no caller holds both under one label.
+		var candidateCountByInstanceName = [String: Int]()
+		for candidate in candidates {
+			candidateCountByInstanceName[candidate.instanceName, default: 0] += 1
+		}
+		var generatedOnlyWrappers = [String: PublicMockParameter.GeneratedOnlyWrapper]()
+		for candidate in candidates where candidateCountByInstanceName[candidate.instanceName] == 1 {
+			generatedOnlyWrappers[candidate.instanceName] = candidate.wrapper
+		}
+		return generatedOnlyWrappers
 	}
 
 	/// The places the enums of `plan`'s builders reach that the mock never hands them (see
@@ -910,7 +974,11 @@ extension ScopeGenerator {
 	///   - hasOverrides: Whether the mock has a `SafeDIOverrides`, which holds the mocked type's own optional-typed
 	///     defaults unless `mock()` is isolated to a global actor; otherwise each is a parameter defaulting to its
 	///     provider.
+	///   - generatedOnlyWrappers: The wrapper the function only generated code calls takes in place of the instance `mock()`
+	///     takes, by the parameter's name (`generatedOnlyWrappers(of:parameters:parameterNames:)`), which a mock with that
+	///     function takes.
 	static func publicMockPlan(
+		generatedOnlyWrappers: [String: PublicMockParameter.GeneratedOnlyWrapper],
 		of instantiable: Instantiable,
 		forwardedDependencies: [Dependency],
 		forwardedDefaults: [String: ForwardedParameterDefault],
@@ -1079,11 +1147,17 @@ extension ScopeGenerator {
 		for (node, name) in promotedNodes {
 			promotedParameterCountByName[labelOrName(of: node, named: name), default: 0] += 1
 		}
+		var generatedOnlyWrappers = generatedOnlyWrappers
 		for (node, name) in promotedNodes {
 			let parameterProperty = publicMockParameterProperty(of: node)
 			let preferredName = labelOrName(of: node, named: name)
 			let parameterName = leadingParameterNames.contains(preferredName) || promotedParameterCountByName[preferredName, default: 0] > 1 ? name : preferredName
 			promotedParameterNames[node.property] = parameterName
+			// A `LazilyInstantiated` the mock builds when passed `nil` is taken as the wrapper by the function only generated
+			// code calls, which binds the wrapper the caller passed in place of the one it builds.
+			if node.property.propertyType.isLazilyInstantiated {
+				generatedOnlyWrappers[parameterName] = PublicMockParameter.GeneratedOnlyWrapper(type: .optional(node.property.typeDescription.unwrapped), internalName: parameterName)
+			}
 			optionalReceivedParameters.append(PublicMockParameter(name: parameterName, type: parameterProperty.typeDescription, typeSource: parameterProperty.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: parameterProperty.typeDescription, receivedAs: node.propertyLabel), accessCause: cause(of: parameterProperty.typeDescription, receivedAs: node.propertyLabel), role: .received(parameterProperty, isRequired: false), isBuiltWhenNil: true, builtWrapper: node.property.propertyType.isLazilyInstantiated ? node.property : nil))
 		}
 		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
@@ -1092,6 +1166,13 @@ extension ScopeGenerator {
 		optionalReceivedParameters.sort { ($0.name, $0.typeSource) < ($1.name, $1.typeSource) }
 
 		var parameters = leadingParameters + optionalReceivedParameters
+		// A mock that takes a builder struct has a function only generated code calls, which takes the wrapper a generated caller
+		// holds in place of each instance `mock()` takes of a value its tree receives lazily.
+		if builders.contains(where: \.takesBuilderStruct) {
+			for index in parameters.indices {
+				parameters[index].generatedOnlyWrapper = generatedOnlyWrappers[parameters[index].name]
+			}
+		}
 		if hasOverrides {
 			let overridesType = TypeDescription.simple(name: ReservedName.mockOverridesTypeName)
 			parameters.append(PublicMockParameter(name: ReservedName.mockOverridesParameterName, type: overridesType, typeSource: overridesType.asSource, defaultSource: ".init()", defaultKind: .expression, access: .public, role: .overrides))
@@ -1107,6 +1188,10 @@ extension ScopeGenerator {
 			hash.combine((parameter.typeWithoutAny ?? parameter.type.withoutAny).asSource)
 			hash.combine(parameter.access.spelledOnGeneratedDeclaration)
 			hash.combine(parameter.defaultKind.rawValue)
+			// Only where the function only generated code calls takes a wrapper, so every other mock hashes what it always hashed.
+			if let generatedOnlyWrapper = parameter.generatedOnlyWrapper {
+				hash.combine("wrapper \(generatedOnlyWrapper.type.withoutAny.asSource)")
+			}
 		}
 		// After every parameter, the builders among them and every enum they reach, as a seam hashes them.
 		SeamSignature.combine(scopeEnums: SeamSignature.scopeEnumShapes(of: shapedBuilders?.scopeEnums ?? [], holes: holes), hashesLabelsBoundLater: true, into: &hash)
@@ -1229,6 +1314,8 @@ extension ScopeGenerator {
 				let arguments = parameters.map { parameter in
 					let value = if parameter.builder?.takesBuilderStruct == true {
 						".init(\(ReservedName.noScopeArgumentLabel): \(parameter.name))"
+					} else if let generatedOnlyWrapper = parameter.generatedOnlyWrapper {
+						generatedOnlyWrapper.wrapping(parameter.name)
 					} else {
 						parameter.name
 					}
@@ -1241,6 +1328,10 @@ extension ScopeGenerator {
 				appendSignature(functionName: ReservedName.publicMockFunctionName) { parameter in
 					if let builder = parameter.builder, builder.takesBuilderStruct {
 						"\(parameter.name.spelledAsArgumentLabel) \(builder.internalName): \(parameter.typeSource)"
+					} else if let generatedOnlyWrapper = parameter.generatedOnlyWrapper, generatedOnlyWrapper.internalName != parameter.name {
+						"\(parameter.name.spelledAsArgumentLabel) \(generatedOnlyWrapper.internalName): \(generatedOnlyWrapper.type.asSource)"
+					} else if let generatedOnlyWrapper = parameter.generatedOnlyWrapper {
+						"\(parameter.name.spelledAsArgumentLabel): \(generatedOnlyWrapper.type.asSource)"
 					} else {
 						"\(parameter.name.spelledAsArgumentLabel): \(parameter.typeSource)"
 					}
@@ -1256,6 +1347,8 @@ extension ScopeGenerator {
 				let arguments = plan.parameters.filter { $0.access >= narrowerTier }.map { parameter in
 					let value = if parameter.access >= tier, takesBuilderStruct, let builder = parameter.builder, builder.takesBuilderStruct {
 						builder.internalName
+					} else if parameter.access >= tier, takesBuilderStruct, let generatedOnlyWrapper = parameter.generatedOnlyWrapper {
+						generatedOnlyWrapper.internalName
 					} else if parameter.access >= tier {
 						parameter.name(inTier: tier)
 					} else if parameter.defaultKind == .provider, let defaultSource = parameter.defaultSource {
@@ -1756,6 +1849,12 @@ struct PublicMockCall: Sendable {
 		return builders.filter { !calledBuilders.sitesReachedOnItsRoutes(by: $0, in: enumsByKey).isSubset(of: filledSites) }
 	}
 
+	/// The type `mock()` takes the value the leaf receives as `label` as, where the call passes the function only generated code
+	/// calls the wrapper of it instead (`PassedParameter.mockParameterType`), or `nil`.
+	func mockParameterType(ofLabel label: String) -> TypeDescription? {
+		passedParameters.first { $0.dependency.property.label == label }?.mockParameterType
+	}
+
 	/// Whether the leaf that makes the call receives `property` as a builder it passes up, which an internal mock takes as a
 	/// parameter of its own (see `passedUpBuilders`).
 	func passesUpBuilder(receivedAs property: Property) -> Bool {
@@ -1778,6 +1877,10 @@ extension PublicMockCall {
 		/// The wrapper the called mock builds when the call passes `nil`, for a lazily instantiated dependency it takes by
 		/// value (`PublicMockParameter.builtWrapper`).
 		var builtWrapper: Property?
+		/// Where the call passes the function only generated code calls the wrapper of a value the mock's tree receives lazily
+		/// (`PublicMockParameter.generatedOnlyWrapper`), which `type` and the leaf's dependency spell, the type `mock()` takes
+		/// the value as, by value, which the call's override closure is handed.
+		var mockParameterType: TypeDescription?
 		/// For a builder, the builder (`PublicMockParameter.builder`).
 		let builder: SeamSignature.Builder?
 	}

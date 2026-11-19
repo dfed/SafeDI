@@ -4469,8 +4469,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	nonisolated var publicMockOverrideBuilders: [String: PublicMockOverrideBuilder]? {
 		guard let publicMockCall, !publicMockCall.takesOverrides else { return nil }
 		let builderLabels = Set(builderCallArguments.map(\.label))
+		// Each parameter as `mock()` takes it, which the closure is typed by: by value where the call passes the function only
+		// generated code calls the caller's wrapper, so a fill that reads the wrapper is handed nothing the closure takes.
 		let parameterTypesByLabel = Dictionary(
-			(builtInstantiable?.mockInitializer?.arguments ?? []).filter { !builderLabels.contains($0.innerLabel) }.map { ($0.innerLabel, $0.typeDescription) },
+			(builtInstantiable?.mockInitializer?.arguments ?? []).filter { !builderLabels.contains($0.innerLabel) }.map { ($0.innerLabel, publicMockCall.mockParameterType(ofLabel: $0.innerLabel) ?? $0.typeDescription) },
 			uniquingKeysWith: { first, _ in first },
 		)
 		var buildersByLabel = [String: PublicMockOverrideBuilder]()
@@ -7547,6 +7549,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// and type a forwarded property of the mocked type has. Such an entry is named after its `LazilyInstantiated`,
 		/// and no receive of the forwarded property is passed it.
 		let lazilyInstantiatedPropertyByInstanceBesideForwardedProperty: [Property: Property]
+		/// The instances of `lazilyInstantiatedReceivedProperties`, by value, that a receiver in the tree receives by value too,
+		/// in its non-optional or optional form, which the mock's body reads besides the wrapper.
+		let instancesReceivedByValue: Set<Property>
 		/// The properties only the calls of other modules' public mocks in the tree receive that the mock takes no
 		/// parameter or override for (`receivedOnlyByPublicMockCallsLeftOut`).
 		let receivedOnlyByPublicMockCallsLeftOut: Set<Property>
@@ -8036,6 +8041,64 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 	}
 
+	/// A `LazilyInstantiated` or `SendableLazilyInstantiated` a mock root binds around an instance `mock()` takes, because
+	/// the mock's tree receives the wrapper and the mock cannot build it.
+	struct MockRootWrapper {
+		/// Where the instance the wrapper holds comes from.
+		enum InstanceSource {
+			/// A required parameter of `mock()`, named `name`: a received dependency, or, when `isMockedTypesOwn`, the parameter of
+			/// a dependency the mocked type instantiates, which `mock()` always takes.
+			case parameter(name: String, isMockedTypesOwn: Bool)
+			/// A parameter or override of `mock()` that holds the instance optionally, named `name`: a received dependency
+			/// every receiver receives only if available, or a required receive of an optional wrapper.
+			case optionalParameter(name: String)
+		}
+
+		/// The wrapper, unwrapped: `x: LazilyInstantiated<X>` for a receive of `x: LazilyInstantiated<X>?` too.
+		let property: Property
+		/// The name the mock binds the wrapper under (`MockRootTopLevelNames.lazilyInstantiatedBindingNames`).
+		let bindingName: String
+		let instanceSource: InstanceSource
+		/// The by-value property the wrapper holds the instance of, as `mock()` takes it.
+		let instanceProperty: Property
+	}
+
+	/// The wrappers a mock root with `parameters` binds around the instances `mock()` takes, in the order the mock binds
+	/// them (see `MockRootWrapper`).
+	static func mockRootWrappers(
+		of instantiable: Instantiable,
+		parameters: MockRootParameters,
+		parameterNames: MockRootParameterNames,
+		topLevelNames: MockRootTopLevelNames,
+	) -> [MockRootWrapper] {
+		let treePropertyNodes = parameters.parameterTree.propertyNodes
+		let mockedTypeUncoveredDependencies = Self.uncoveredInstantiatedDependencies(ofMockedType: instantiable, treePropertyNodes: treePropertyNodes, holeSiteProperties: Set(parameters.parameterTree.holeSiteProperties))
+		// safedi-source-rule: allow uniqueKeysWithValues — the keys are the elements of a set, `receivedParameterProperties`.
+		let flatReceivedNameByProperty = Dictionary(uniqueKeysWithValues: zip(parameters.flatReceivedProperties, parameterNames.flatReceivedNames))
+		var wrappers = [MockRootWrapper]()
+		for (lazilyInstantiatedProperty, bindingName) in zip(topLevelNames.lazilyInstantiatedPropertiesToBind, topLevelNames.lazilyInstantiatedBindingNames) {
+			let instanceProperty = lazilyInstantiatedProperty.asValidatedForDependencyCycles
+			// A required receive of an optional `LazilyInstantiated` is handed an optional instance.
+			let optionalInstanceProperty = Property(label: instanceProperty.label, typeDescription: .optional(instanceProperty.typeDescription))
+			// The parameter may be named apart from its label.
+			let instanceSource: MockRootWrapper.InstanceSource = if let instanceName = flatReceivedNameByProperty[instanceProperty] {
+				.parameter(name: instanceName, isMockedTypesOwn: false)
+			} else if mockedTypeUncoveredDependencies.contains(where: { $0.property == instanceProperty }),
+			          let uncoveredParameter = parameters.flatUncoveredParameters.first(where: { $0.property == instanceProperty })
+			{
+				// The instance is the parameter of a dependency the mocked type instantiates, which is always passed.
+				.parameter(name: uncoveredParameter.label, isMockedTypesOwn: true)
+			} else if let instanceName = flatReceivedNameByProperty[optionalInstanceProperty] {
+				.optionalParameter(name: instanceName)
+			} else {
+				// The instance is an `onlyIfAvailable` override, which may be named apart from its label.
+				.optionalParameter(name: parameterNames.onlyIfAvailableOverrides.first { $0.receivedProperty.asUnwrappedProperty == instanceProperty }?.name ?? instanceProperty.label)
+			}
+			wrappers.append(MockRootWrapper(property: lazilyInstantiatedProperty, bindingName: bindingName, instanceSource: instanceSource, instanceProperty: instanceProperty))
+		}
+		return wrappers
+	}
+
 	/// The parameters this scope's `mock()` takes as a mock root. See `MockRootParameters`.
 	/// - Parameter mockDefaults: The hand-written mock a flat parameter of each type defaults to.
 	func mockRootParameters(instantiable: Instantiable, mockDefaults: [TypeDescription: FlatParameterMockDefault]) async -> MockRootParameters {
@@ -8367,6 +8430,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			seamMockBuilders: seamMockBuilders,
 			lazilyInstantiatedReceivedProperties: lazilyInstantiatedReceivedProperties,
 			lazilyInstantiatedPropertyByInstanceBesideForwardedProperty: lazilyInstantiatedPropertyByInstanceBesideForwardedProperty,
+			instancesReceivedByValue: Set(lazilyInstantiatedReceivedProperties.lazy.map(\.asUnwrappedProperty.asValidatedForDependencyCycles).filter { instanceProperty in
+				receivedProperties.contains(instanceProperty) || receivedProperties.contains(instanceProperty.asOptionalProperty)
+			}),
 			receivedOnlyByPublicMockCallsLeftOut: receivedOnlyByPublicMockCallsLeftOut,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 			mockBuilders: mockBuilders,
@@ -8579,8 +8645,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				flatParameterDisambiguationMap[property.label, default: [:]][property.typeDescription] = builder.internalName
 			}
 		}
-		// safedi-source-rule: allow uniqueKeysWithValues — the keys are the elements of a set, `receivedParameterProperties`.
-		let flatReceivedNameByProperty = Dictionary(uniqueKeysWithValues: zip(flatReceivedProperties, flatReceivedNames))
 		// A builder the tree passes up that a `@Sendable` builder function captures is taken `@Sendable`.
 		let sendablePassedUpBuilders = parameters.parameterTree.passedUpBuildersCapturedBySendableFunctions
 		let flatReceivedParameters = zip(flatReceivedProperties, flatReceivedNames).map { property, name in
@@ -8596,30 +8660,39 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		let onlyIfAvailableOverrides = parameterNames.onlyIfAvailableOverrides
 		let topLevelNames = Self.mockRootTopLevelNames(of: parameters, parameterNames: parameterNames)
-		let lazilyInstantiatedPropertiesToBind = topLevelNames.lazilyInstantiatedPropertiesToBind
-		let lazilyInstantiatedInstanceProperties = lazilyInstantiatedPropertiesToBind.map(\.asValidatedForDependencyCycles)
-		let lazilyInstantiatedBindingNames = topLevelNames.lazilyInstantiatedBindingNames
+		let publicMockPlan = publicMock.map { publicMock in
+			Self.publicMockPlan(
+				of: instantiable,
+				parameters: parameters,
+				parameterNames: parameterNames,
+				context: publicMock,
+			)
+		}
+		// A public mock's parameters have names of their own, which the function's signature declares.
+		let generatedOnlyWrapperByParameterName = Dictionary((publicMockPlan?.parameters ?? []).compactMap { parameter in
+			parameter.generatedOnlyWrapper.map { (parameter.name, $0) }
+		}, uniquingKeysWith: { first, _ in first })
 		var lazilyInstantiatedBindings = [String]()
-		for index in lazilyInstantiatedPropertiesToBind.indices {
-			let lazilyInstantiatedProperty = lazilyInstantiatedPropertiesToBind[index]
-			let instanceProperty = lazilyInstantiatedInstanceProperties[index]
-			let bindingName = lazilyInstantiatedBindingNames[index]
-			let wrapperTypeSource = lazilyInstantiatedProperty.typeDescription.asSource
-			// A required receive of an optional `LazilyInstantiated` is handed an optional instance.
-			let optionalInstanceProperty = Property(label: instanceProperty.label, typeDescription: .optional(instanceProperty.typeDescription))
-			// The parameter may be named apart from its label.
-			if let instanceName = flatReceivedNameByProperty[instanceProperty] {
+		for wrapper in Self.mockRootWrappers(of: instantiable, parameters: parameters, parameterNames: parameterNames, topLevelNames: topLevelNames) {
+			let bindingName = wrapper.bindingName
+			let wrapperTypeSource = wrapper.property.typeDescription.asSource
+			switch wrapper.instanceSource {
+			case let .parameter(name: instanceName, _) where generatedOnlyWrapperByParameterName[instanceName] != nil:
+				// The function only generated code calls takes the wrapper itself, under the binding's name. A deliberate gap,
+				// which `generatedOnlyWrappers(of:parameters:parameterNames:)` and "A lazy value a call hands over" in
+				// `public-mock-builders.md` state: where a receiver in the tree takes the value by value, the body reads the
+				// instance here, when the mock is built, as the call read it before, where inline reads it when that receiver is
+				// built.
+				if parameters.instancesReceivedByValue.contains(wrapper.instanceProperty) {
+					lazilyInstantiatedBindings.append("\(bodyIndent)let \(instanceName) = \(bindingName).\(Dependency.lazilyInstantiatedInstancePropertyName)")
+				}
+			case let .optionalParameter(name: instanceName) where generatedOnlyWrapperByParameterName[instanceName] != nil:
+				if parameters.instancesReceivedByValue.contains(wrapper.instanceProperty) {
+					lazilyInstantiatedBindings.append("\(bodyIndent)let \(instanceName) = \(bindingName)?.\(Dependency.lazilyInstantiatedInstancePropertyName)")
+				}
+			case let .parameter(name: instanceName, _):
 				lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(wrapperTypeSource) { \(instanceName) }")
-			} else if mockedTypeUncoveredDependencies.contains(where: { $0.property == instanceProperty }),
-			          let uncoveredParameter = flatUncoveredParameters.first(where: { $0.property == instanceProperty })
-			{
-				// The instance is the parameter of a dependency the mocked type instantiates, which is always passed.
-				lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(wrapperTypeSource) { \(uncoveredParameter.label) }")
-			} else if let instanceName = flatReceivedNameByProperty[optionalInstanceProperty] {
-				lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(instanceName).map { instance in \(wrapperTypeSource) { instance } }")
-			} else {
-				// The instance is an `onlyIfAvailable` override, which may be named apart from its label.
-				let instanceName = onlyIfAvailableOverrides.first { $0.receivedProperty.asUnwrappedProperty == instanceProperty }?.name ?? instanceProperty.label
+			case let .optionalParameter(name: instanceName):
 				lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(instanceName).map { instance in \(wrapperTypeSource) { instance } }")
 			}
 		}
@@ -8638,14 +8711,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			|| !flatUncoveredParameters.isEmpty
 			|| !parameters.seamMockBuilders.isEmpty
 			|| (publicMock != nil && !onlyIfAvailableOverrides.isEmpty)
-		let publicMockPlan = publicMock.map { publicMock in
-			Self.publicMockPlan(
-				of: instantiable,
-				parameters: parameters,
-				parameterNames: parameterNames,
-				context: publicMock,
-			)
-		}
 
 		guard hasTree || hasFlatParameters else {
 			let argumentList = try instantiable.generateArgumentList(
@@ -8983,6 +9048,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				publicMock: publicMock.map { publicMock in
 					PublicMockEmission(
 						promotedParameterNames: publicMockPlan?.promotedParameterNames ?? [:],
+						wrapperParameterNames: Set(generatedOnlyWrapperByParameterName.keys),
 						context: publicMock,
 						sendableConfigurationTypeNames: context.sendableConfigurationTypeNames,
 					)
@@ -9586,8 +9652,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// feature. The argument reads whichever declaration of its label is nearest above the node, which a type between
 			// the node and the mock root can declare in a spelling of its own, and which the node is not told. The bindings of
 			// the arguments in the type's builder function share the gap (`emitReceiverBindings`).
+			// A value the call passes the function only generated code calls as the wrapper the caller holds, the closure takes
+			// as `mock()` takes it, by value (`PublicMockCall.PassedParameter.mockParameterType`).
 			builderParameterTypes = callSiteArguments.map { argument in
-				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription).asFunctionParameter(amongTypesDeclaredEscaping: builderTypesDeclaredEscaping).implicitlyUnwrappedOptionalSpelledAsOptional
+				let typeDescription = publicMockCall?.mockParameterType(ofLabel: argument.innerLabel) ?? argument.typeDescription
+				return (typeDescription.strippingEscaping.autoclosureValueType ?? typeDescription).asFunctionParameter(amongTypesDeclaredEscaping: builderTypesDeclaredEscaping).implicitlyUnwrappedOptionalSpelledAsOptional
 			}
 			needsConfigurationStruct = childItems?.containsPropertyNode == true || !defaultParameters.isEmpty || isPropertyCycle
 			subtreeCallsPublicMock = publicMockCall != nil || childItems?.propertyNodes.contains(where: \.subtreeCallsPublicMock) == true
@@ -9925,14 +9994,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// `arguments`, those of the call site, as this node's override closure is handed them: each builder of a call of another
 		/// module's public mock as `publicMockOverrideBuilders` says, which reads the values the call passes the called mock.
 		private func overrideArguments(_ arguments: [String], overrideReachable: Bool, handWrittenMockDefaultParameters: [DefaultParameter]) -> [String] {
-			guard let publicMockOverrideBuilders, !publicMockOverrideBuilders.isEmpty else { return arguments }
+			guard let publicMockCall else { return arguments }
 			let surfacedArguments = surfacedCallSiteArguments(
 				overrideReachable: overrideReachable,
 				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 			)
 			let argumentByLabel = Dictionary(zip(surfacedArguments.map(\.innerLabel), arguments), uniquingKeysWith: { first, _ in first })
 			return zip(surfacedArguments, arguments).map { argument, value in
-				publicMockOverrideBuilders[argument.innerLabel]?.expression(argumentByLabel: argumentByLabel) ?? value
+				if let builderExpression = publicMockOverrideBuilders?[argument.innerLabel]?.expression(argumentByLabel: argumentByLabel) {
+					builderExpression
+				} else if publicMockCall.mockParameterType(ofLabel: argument.innerLabel) != nil {
+					// The closure takes by value what the call passes as the caller's wrapper: its instance, read where the
+					// closure is called. A wrapper the call passes optionally may be held optionally or not.
+					if value == "nil" {
+						value
+					} else if case let .optional(wrapperType) = argument.typeDescription {
+						"(\(value) as \(TypeDescription.optional(wrapperType).asSource))?.\(Dependency.lazilyInstantiatedInstancePropertyName)"
+					} else {
+						"\(value).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+					}
+				} else {
+					value
+				}
 			}
 		}
 
@@ -12174,8 +12257,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"\(bindingNamesPassedByName[argument.innerLabel] ?? argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 		} else if dependency.source.isReceived,
 		          let bindingName = lazilyInstantiatedBindingNames[argument.innerLabel]?[dependency.property.typeDescription]
+		          ?? node.publicMockCall.flatMap({ _ in lazilyInstantiatedBindingNames[argument.innerLabel]?[dependency.property.typeDescription.unwrapped] })
 		{
-			// The `LazilyInstantiated` the mock wrapped around the instance it was passed.
+			// The `LazilyInstantiated` the mock wrapped around the instance it was passed: also for a call of another module's
+			// public mock that takes the wrapper only if available, whose receive no binding is named for, since a mock binds
+			// nothing for what only such calls receive only if available.
 			bindingName
 		} else if case .instantiated = dependency.source,
 		          let parameterName = uncoveredDependencyNames[argument.innerLabel]?[dependency.property.typeDescription]
@@ -12533,6 +12619,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) async -> InstantiatorBindingLines {
 		let forwardedProperties = node.forwardedProperties.sorted()
 		let innerIndent = "\(indent)\(standardIndent)"
+		// Whether the node is a `LazilyInstantiated` the mock builds for a received dependency, which the function only
+		// generated code calls takes as the wrapper itself: a caller that holds the wrapper passes it.
+		let takesCallersWrapper = promotedParameterName.map { publicMock?.wrapperParameterNames.contains($0) == true } ?? false
 		// The parameters of the builder function a lazy cycle closes on, when this node declares it.
 		let ownCycleParameters = node.isPropertyCycle ? [] : node.cycleParameters
 		let ownCycleParameterForms = ownCycleParameters.flatMap(\.providedForms).sorted()
@@ -12717,7 +12806,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// A public mock takes a lazily instantiated dependency it builds by value, so its builder function returns
 			// the value its caller passed, if any – unless a cycle closes on the function, whose cycle-closing scopes build
 			// the declaration they repeat again, as production does: then the wrapper's closure returns it instead.
-			let constructionExpression = if let promotedParameterName, node.property.propertyType.isLazilyInstantiated, !node.isReferencedByCycleClosingScope {
+			// The function only generated code calls takes the wrapper itself, which the binding takes in place of the one the
+			// builder function's wrapper would build (`takesCallersWrapper`).
+			let constructionExpression = if let promotedParameterName, node.property.propertyType.isLazilyInstantiated, !node.isReferencedByCycleClosingScope, !takesCallersWrapper {
 				passing(promotedParameterName, orBuilding: builtConstructionExpression)
 			} else {
 				builtConstructionExpression
@@ -12736,7 +12827,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// The builder function now returns the property type directly (including
 		// wrapping for erasedToConcreteExistential), so no outer wrapping needed.
-		let instantiatorConstruction = if let promotedParameterName, node.property.propertyType.isLazilyInstantiated, node.isReferencedByCycleClosingScope {
+		let instantiatorConstruction = if let promotedParameterName, node.property.propertyType.isLazilyInstantiated, node.isReferencedByCycleClosingScope, !takesCallersWrapper {
 			"""
 			\(unwrappedTypeDescription) {
 			\(indent)\(standardIndent)\(passing(promotedParameterName, orBuilding: "\(functionName)(\(forwardedArguments))"))
@@ -12756,6 +12847,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		} else if let promotedParameterName, !node.property.propertyType.isLazilyInstantiated {
 			// A public mock takes an instantiator it builds for a received dependency as itself.
 			lines.binding.append("\(indent)let \(outerBinding) = \(passing(promotedParameterName, orBuilding: instantiatorConstruction))")
+		} else if let promotedParameterName, takesCallersWrapper {
+			lines.binding.append("\(indent)let \(outerBinding) = \(promotedParameterName) ?? \(instantiatorConstruction)")
 		} else {
 			lines.binding.append("\(indent)let \(outerBinding) = \(instantiatorConstruction)")
 		}

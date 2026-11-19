@@ -5200,17 +5200,16 @@ struct HoleBoundApartControl: CustomTestStringConvertible, Sendable {
 			        settingsBuilder: Instantiator<Settings>? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        Screen.__safeDI_mock(gizmo: gizmo, gizmoBuilder: .init(__safeDI_noScope: gizmoBuilder), settingsBuilder: settingsBuilder, safeDIOverrides: safeDIOverrides)
+			        Screen.__safeDI_mock(gizmo: LazilyInstantiated<Other> { gizmo }, gizmoBuilder: .init(__safeDI_noScope: gizmoBuilder), settingsBuilder: settingsBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
-			        gizmo: Other,
+			        gizmo gizmo_lazilyInstantiated: LazilyInstantiated<Other>,
 			        gizmoBuilder __safeDI_gizmoBuilder: Screen.SafeDIMockScope_Gizmo.__safeDI_Builder<Gizmo>,
 			        settingsBuilder: Instantiator<Settings>? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        let gizmo_lazilyInstantiated = LazilyInstantiated<Other> { gizmo }
 			        func __safeDI_settingsBuilder() -> Settings {
 			            if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(gizmo_lazilyInstantiated) } else { Settings(gizmo: gizmo_lazilyInstantiated) }
 			        }
@@ -5221,7 +5220,7 @@ struct HoleBoundApartControl: CustomTestStringConvertible, Sendable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_mock_100F7858ECAD73B9 {}
+			    public enum __safeDI_Screen_mock_6646CF993C9DC1C8 {}
 			}
 			#endif
 			""" },

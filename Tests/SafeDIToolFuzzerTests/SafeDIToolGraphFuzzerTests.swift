@@ -8215,6 +8215,9 @@ struct SafeDIToolGraphFuzzerTests {
 		.sharedConstructionPublicMockWithoutMockFirst: 101,
 		.holeHandWrittenMockBuiltInPublicMock: 86,
 		.holeMockIsolatedToMainActor: 74,
+		// pins: derive on CI
+		.holeRootLevelBuildsWrapper: 18,
+		.holeRootLevelHoldsWrapperOnlyIfAvailable: 19,
 		.overrideClosureCall: 324,
 		.overrideClosureCallCanHand: 180,
 		.overrideClosureCallFillReadsCalledMocksOtherPlace: 37,
@@ -8241,7 +8244,8 @@ struct SafeDIToolGraphFuzzerTests {
 		.consumerFillsHole: 3,
 		.consumerInline: 37,
 		.consumerPassesHoleBuilderUp: 14,
-		.consumerPassesInstance: 46,
+		// A call of a public mock that takes a builder struct hands it the wrapper the caller holds, not its instance.
+		.consumerPassesInstance: 44,
 		// pins: derive on CI
 		.consumerPassesLevelFunctionsStruct: 0,
 		.consumerSendableFactory: 17,
@@ -8391,23 +8395,6 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(.mockCode)],
 			seeds: [18, 22, 156, 161, 326, 327, 474, 629, 881, 970, 977, 983],
 		),
-		// The retention oracle's written exception until the leak fix gives a public mock builders that keep only what their
-		// fill reads: a public mock hands each place's case the values of every level on the way to it, and the builder
-		// function of an instantiator on that way captures them, so holding the instantiator keeps them alive, as a
-		// hand-written builder's levels' values stay alive. It shows in each gating draw – the retention draw's
-		// `RetainNavigator`, bound before `retainDetailBuilder`; the place inside a fill's `PlaceInFillDefault`, with the
-		// `PlaceInFillLive` it holds, and `PlaceInFillTag`, bound before `placeInFillInnerScreenBuilder`, and the
-		// `PlaceInFillLive` the fill holds, bound before the builders of its loop, `placeInFillLoopABuilder` and
-		// `placeInFillLoopBBuilder`, and those builders, bound before `placeInFillInnerScreenBuilder`; the shape #702
-		// fixed's `SelfToken` and `SelfPart`, with the `SelfLive` it holds, bound before `selfNodeBuilder` – in the hole
-		// draw's `Session`, bound before `T6`'s `holeBuilder`, and in the values `T6`'s mock binds at its root level
-		// (`HoleSession`, `HoleToken`, `HoleContext`, `Session`, and the two forms `HoleDraft` and `HoleSibling`), bound
-		// before `holeBuilder`, `holeHostBuilder` and `holeHost`.
-		GraphFuzzerKnownIssue(
-			reason: publicMockLeakReason,
-			signatures: publicMockLeakSignatures,
-			seeds: [339],
-		),
 		// The root-level stream's label in two forms in a graph with a lazy cycle whose back-edge the move across wrapper
 		// names moves: `SelfStep`'s, or the stale-value draw's loop around `T6`'s hole (`HoleHost` and `HoleLoop`).
 		GraphFuzzerKnownIssue(
@@ -8504,42 +8491,7 @@ struct SafeDIToolGraphFuzzerTests {
 		to: publicMockKnownIssues,
 	)
 
-	/// What a public mock's leak keeps alive in the public mock corpus's graphs, each type after its graph's prefix with what
-	/// is held and both counts, as the corpus run observed.
-	private static let publicMockLeakSignatures: [GraphFuzzerKnownIssue.Signature] = [
-		"_HoleContext alive holding t6.holeHostBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_HoleDraft alive holding t6.holeHost once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_HoleDraft alive holding t6.holeHostBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_HoleDraft alive holding t6Second.holeHost once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_HoleSession alive holding t6.holeBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_HoleSession alive holding t6Second.holeBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_HoleSibling alive holding t6.holeHost once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_HoleSibling alive holding t6.holeHostBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_HoleSibling alive holding t6Second.holeHost once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_HoleToken alive holding t6.holeHost once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_PlaceInFillDefault alive holding placeInFillOuter.placeInFillInner.placeInFillInnerScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_PlaceInFillLive alive holding placeInFillOuter.placeInFillInner.placeInFillInnerScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_PlaceInFillLive alive holding placeInFillOuter.placeInFillInner.placeInFillService.placeInFillLoopABuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_PlaceInFillLive alive holding placeInFillOuter.placeInFillInner.placeInFillService.placeInFillLoopBBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_PlaceInFillLoopA> alive holding placeInFillOuter.placeInFillInner.placeInFillInnerScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_PlaceInFillLoopB> alive holding placeInFillOuter.placeInFillInner.placeInFillInnerScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_PlaceInFillTag alive holding placeInFillOuter.placeInFillInner.placeInFillInnerScreenBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_PlaceInFillTag alive holding placeInFillOuter.placeInFillInner.placeInFillService.placeInFillLoopABuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_PlaceInFillTag alive holding placeInFillOuter.placeInFillInner.placeInFillService.placeInFillLoopBBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_RetainNavigator alive holding retainHome.retainDetailBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_SelfLive alive holding selfNode.selfNodeBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_SelfLive alive holding selfNode.selfStep.selfNodeBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_SelfPart alive holding selfNode.selfNodeBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_SelfPart alive holding selfNode.selfStep.selfNodeBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_SelfToken alive holding selfNode.selfNodeBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_SelfToken alive holding selfNode.selfStep.selfNodeBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_Session alive holding t6.holeBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-		"_Session alive holding t6.holeHost once the probe's value is released: 1 on the feature path, 0 on the known-right path",
-	].map { .publicMockRetainsWhatKnownRightFrees(containing: $0) }
-
 	private static let publicMockParametersSortedByLabelReason = "A public mock's parameters are sorted by label (decision 27), so reversing the labels reorders a `.public` consumer's `mock()` and the parameters it surfaces from its leaves (Intended: CLAUDE.md's \"What may follow names\" allows a label sort of equivalent parameters, so the rename oracle's reordering here is expected, not a defect)"
-
-	private static let publicMockLeakReason = "A public mock hands each place's case the values of every level on the way to it, which the builder function of an instantiator on that way captures, so holding the instantiator keeps them alive where the known-right path, which builds the tree inline, frees them, until the leak fix gives a public mock builders that keep only what their fill reads"
 
 	private static let publicMockBuilderOrderReason = "A mock's parameters are sorted by label, and a builder's label begins with its hole type's name, so moving type names across wrapper names moves a consumer's builder among its other parameters (Intended: CLAUDE.md's \"What may follow names\" allows a label sort of equivalent parameters, so the rename oracle's reordering here is expected, not a defect)"
 
@@ -8596,15 +8548,17 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeFillReceivesField: 56,
 		.holeFillReceivesNonField: 40,
 		.holeFillReceivesFormBoundAgain: 25,
-		.holeFillReceivesRootLevelValue: 38,
-		.holeFillReceivesRootLevelWrapper: 15,
+		.holeFillReceivesRootLevelValue: 36,
+		.holeFillReceivesRootLevelWrapper: 13,
 		.holeForwardsValue: 43,
 		.holeInsideLoop: 131,
 		.holeLoopDeclaresContextAgain: 74,
 		.holeMockIsolatedToMainActor: 93,
 		.holeOnPublicMockType: 228,
+		.holeRootLevelBuildsWrapper: 20,
 		.holeRootLevelHoldsValues: 111,
 		.holeRootLevelHoldsWrapper: 91,
+		.holeRootLevelHoldsWrapperOnlyIfAvailable: 21,
 		.holeRootReceivesLabelInTwoForms: 92,
 		.holeScopeHoldsPackageValue: 103,
 		.holeScopeHoldsPublicValue: 225,

@@ -877,11 +877,12 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func leafCalls_readCallOfGeneratedOnlyMockFunction_whenCalledMockTakesBuilders() {
 		// A consumer calls a public mock that takes builders through its function only generated code calls, directly
-		// (`t6`) or inside the leaf's eraser (`anyT0`), handing it a wrapper's instance as `mock(` would.
+		// (`t6`) or inside the leaf's eraser (`anyT0`). That function takes the wrapper the caller holds, so an instance it is
+		// handed is no stated early read (M8.32 reads `mock(` calls alone).
 		let mock = "import FuzzFeature\n\nextension S1_T8 {\n    static func mock() -> S1_T8 {\n        let holeSession = LazilyInstantiated<S1_HoleSession>(__safeDI_holeSession)\n        let anyT0 = S1_AnyT0(S1_T0.__safeDI_mock(theme: nil, s1_HoleBuilder: __safeDI_s1_HoleBuilder_S1_T0()))\n        let t6 = S1_T6.__safeDI_mock(holeSession: holeSession.instance, s1_HoleBuilder: __safeDI_s1_HoleBuilder_S1_T6(), safeDIOverrides: safeDIOverrides.t6)\n        return S1_T8(anyT0: anyT0, t6: t6, holeSession: holeSession)\n    }\n}\n"
 		#expect(GraphFuzzerOracle.leafCalls(ofMockedType: "S1_T8", in: ["FuzzOther/S1_T8+SafeDIMock.swift": mock], prefix: "S1_") == [
 			GraphFuzzerOracle.PublicMockLeafCall(leafLabel: "anyT0", passedLabels: ["s1_HoleBuilder"], instanceLabels: []),
-			GraphFuzzerOracle.PublicMockLeafCall(leafLabel: "t6", passedLabels: ["holeSession", "s1_HoleBuilder"], instanceLabels: ["holeSession"]),
+			GraphFuzzerOracle.PublicMockLeafCall(leafLabel: "t6", passedLabels: ["holeSession", "s1_HoleBuilder"], instanceLabels: []),
 		])
 	}
 
@@ -889,10 +890,11 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func leafCalls_readCallOfPromotingPublicMock_whenConsumerBuildsPromoteNode() {
 		// A consumer that builds `PromoteNode` calls its public mock, which promotes the `PromoteOther` its tree receives
-		// lazily, handing it the instance of the wrapper the consumer's mock binds.
+		// lazily, through the function only generated code calls, which takes the wrapper the consumer's mock binds: an
+		// instance it is handed is no stated early read.
 		let mock = "import FuzzFeature\n\nextension S1_PromoteScreen {\n    static func mock() -> S1_PromoteScreen {\n        let promoteOther = LazilyInstantiated<S1_PromoteOther>(__safeDI_promoteOther)\n        let promoteNode = S1_PromoteNode.__safeDI_mock(promoteApiBuilder: __safeDI_promoteApiBuilder_PromoteNode(), promoteOther: promoteOther.instance, safeDIOverrides: safeDIOverrides.promoteNode)\n        return S1_PromoteScreen(promoteNode: promoteNode)\n    }\n}\n"
 		#expect(GraphFuzzerOracle.leafCalls(ofMockedType: "S1_PromoteScreen", in: ["FuzzApp/S1_PromoteScreen+SafeDIMock.swift": mock], prefix: "S1_") == [
-			GraphFuzzerOracle.PublicMockLeafCall(leafLabel: "promoteNode", passedLabels: ["promoteApiBuilder", "promoteOther"], instanceLabels: ["promoteOther"]),
+			GraphFuzzerOracle.PublicMockLeafCall(leafLabel: "promoteNode", passedLabels: ["promoteApiBuilder", "promoteOther"], instanceLabels: []),
 		])
 	}
 
@@ -949,15 +951,15 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func statedPublicMockValueDivergences_exemptOnlyWhatLeafCallsExplain_whenConsumerCallsPublicMocks() async throws {
 		// The two divergences section 5 states, derived from the leaf calls of graphs shaped as the fuzzer draws them.
-		// M8.32: a consumer passes `analytics.instance` of the wrapper it holds; the leaf's re-made wrapper, which the value
-		// comparator compares by its instance, agrees, and the early read is exempt (seed 901), through a call of the
-		// function only generated code calls too (seed 906) – unless the leaf wraps a new instance, which still fails
-		// (seed 902). M8.9b: two
+		// M8.32: a consumer passes `analytics.instance` of the wrapper it holds to `mock(`; the leaf's re-made wrapper, which
+		// the value comparator compares by its instance, agrees, and the early read is exempt (seed 901) – unless the leaf
+		// wraps a new instance, which still fails (seed 902). A call of the function only generated code calls is handed the
+		// caller's wrapper, so passing it an instance is no stated divergence and still fails (seed 906). M8.9b: two
 		// leaves each build the `session` their caller in another package cannot name (seed 903), or one builds it and the
 		// other, receiving it only if available, holds `nil` (seed 905) – but a caller that holds `session` itself and passes
-		// it to neither leaf still fails (seed 904). M8.32 through the call of a public mock that promotes the lazily received
-		// dependency, `PromoteNode`'s: the early read of the instance the call is handed is exempt (seed 907), but an early
-		// read in a call handed `nil` still fails (seed 908).
+		// it to neither leaf still fails (seed 904). The call of a public mock that promotes the lazily received dependency,
+		// `PromoteNode`'s, calls the function only generated code calls: an early read of an instance it is handed still fails
+		// (seed 907), as does one in a call handed `nil` (seed 908).
 		var filesToDelete = [URL]()
 		defer {
 			for fileToDelete in filesToDelete {
@@ -985,8 +987,11 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		#expect(remaining[1] == [DifferentialValueDifference(probe: "S902_T8.mock()", path: ["<4>.instance"], feature: "<4>.instance: <6> S902_Analytics (built before the probe's value)", knownRight: "<4>.instance: <5> S902_Analytics (seen, first at <3>.instance)")])
 		#expect(remaining[2] == [])
 		#expect(remaining[4] == [])
-		#expect(remaining[5] == [])
-		#expect(remaining[6] == [])
+		#expect(remaining[5] == [
+			DifferentialValueDifference(probe: "S906_T8.mock()", path: ["<3>.instance"], feature: "<3>.instance: <5> S906_Analytics (built before the probe's value)", knownRight: "<3>.instance: <5> S906_Analytics"),
+			DifferentialValueDifference(probe: "S906_T8.mock()", path: ["<4>.instance"], feature: "<4>.instance: <5> S906_Analytics (built before the probe's value) (seen, first at <3>.instance)", knownRight: "<4>.instance: <5> S906_Analytics (seen, first at <3>.instance)"),
+		])
+		#expect(remaining[6] == [DifferentialValueDifference(probe: "S907_PromoteScreen.mock()", path: ["<4>.instance"], feature: "<4>.instance: <5> S907_PromoteOther (built before the probe's value)", knownRight: "<4>.instance: <5> S907_PromoteOther")])
 		#expect(remaining[7] == [DifferentialValueDifference(probe: "S908_PromoteScreen.mock()", path: ["<4>.instance"], feature: "<4>.instance: <5> S908_PromoteOther (built before the probe's value)", knownRight: "<4>.instance: <5> S908_PromoteOther")])
 		#expect(remaining[3] == [DifferentialValueDifference(probe: "S904_T7.mock()", path: ["<1> S904_T7", "t0", "session"], feature: "session: <4> S904_Session", knownRight: "session: <2> S904_Session (seen, first at <1> S904_T7 > session)"), DifferentialValueDifference(probe: "S904_T7.mock()", path: ["<1> S904_T7", "t1", "session"], feature: "session: <6> S904_Session", knownRight: "session: <2> S904_Session (seen, first at <1> S904_T7 > session)")])
 	}

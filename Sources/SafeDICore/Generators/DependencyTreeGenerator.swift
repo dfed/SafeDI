@@ -4157,17 +4157,22 @@ public actor DependencyTreeGenerator {
 					case let .received(property, isRequired):
 						// A required parameter the declaring module named apart from another of its label – a dependency it cannot
 						// build – has no default to leave it to, so the leaf receives it under the parameter's name, which the
-						// calling mock then takes it by.
+						// calling mock then takes it by. Where the function only generated code calls takes the wrapper of a value
+						// the mock's tree receives lazily, the leaf receives the wrapper, which the caller hands on as it holds it.
 						PublicMockCall.PassedParameter(
 							name: parameter.name,
-							type: parameter.type,
+							type: parameter.generatedOnlyWrapper?.type ?? parameter.type,
 							dependency: Dependency(
-								property: isRequired && parameter.name != property.label ? Property(label: parameter.name, typeDescription: property.typeDescription) : property,
+								property: Property(
+									label: isRequired && parameter.name != property.label ? parameter.name : property.label,
+									typeDescription: parameter.generatedOnlyWrapper?.type ?? property.typeDescription,
+								),
 								source: .received(onlyIfAvailable: !isRequired),
 								declarationLocation: ownPlan.instantiable.declarationLocation,
 							),
 							isBuiltWhenNil: parameter.isBuiltWhenNil,
 							builtWrapper: parameter.builtWrapper,
+							mockParameterType: parameter.generatedOnlyWrapper.map { _ in parameter.type },
 							builder: parameter.builder,
 						)
 					case .constructionDefault, .overrides:
