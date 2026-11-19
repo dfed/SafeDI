@@ -14880,9 +14880,12 @@ enum GraphFuzzerOracle {
 			fixture: fixture,
 			firstOutcome: firstOutcome,
 			// The second run creates the mock roots in reverse order, so that a construction memo shared between them
-			// carries other roots' generators to each; it must still give the first run's outcome.
+			// carries other roots' generators to each, and shares generators between places by a schedule of its seed
+			// (`ConstructionSharingSchedule.sharingOracleSchedule(forGraphSeed:)`); it must still give the first run's outcome.
 			secondOutcome: ConstructionMemoOracle.$buildsMockRootsInReverseOrder.withValue(true) {
-				try await toolOutcome(of: fixture)
+				try await ConstructionSharingSchedule.$current.withValue(.sharingOracleSchedule(forGraphSeed: fixture.seed)) {
+					try await toolOutcome(of: fixture)
+				}
 			},
 			renamedOutcomes: renamedOutcomes,
 			inlineOutcome: inlineOutcome,

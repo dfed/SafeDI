@@ -61,6 +61,39 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_changesGeneratorHeldAtSomePlace_whenSharingScheduleDrawsBuildingAgain() async throws {
+		// `X` is built at four places, each of which finds a candidate. A drawn schedule builds some of them again, and the
+		// observer says so, while the generated files stay those of the run that shares wherever it can.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let a: A", "@Instantiated let b: B", "@Instantiated let c: C", "@Instantiated let d: D"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let x: X"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let x: X"]),
+			seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Instantiated let x: X"]),
+			seamFixtureType(named: "D", isFinalClass: true, declarations: ["@Instantiated let x: X"]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: ["@Instantiated let y: Y"]),
+			seamFixtureType(named: "Y", isFinalClass: true, declarations: []),
+		]
+		let shared = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		var observedChanges = [Bool]()
+		for seed in UInt64(0)..<8 {
+			let (stream, continuation) = AsyncStream.makeStream(of: Bool.self)
+			let scheduled = try await ConstructionSharingSchedule.$current.withValue(ConstructionSharingSchedule(seed: seed, offersLaterPlacesCandidates: seed.isMultiple(of: 2))) { [fixture] in
+				try await ConstructionSharingSchedule.$observer.withValue({ continuation.yield($0) }) {
+					try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+				}
+			}
+			continuation.finish()
+			for await changesHeldGenerator in stream {
+				observedChanges.append(changesHeldGenerator)
+			}
+			#expect(scheduled.dependencyTreeFiles == shared.dependencyTreeFiles)
+		}
+		#expect(observedChanges.contains(true))
+		#expect(observedChanges.contains(false))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_generatesSameTreeWithMemoAsWithout_whenLazilyInstantiatedInstancesInScopeDifferWhereReadsDoNot() async throws {
 		// `C` is built beneath `Root`, where `x`'s instance is in scope through its wrapper, and beneath `D`, whose own `x`
 		// hides the wrapper; `C`'s tree reads no `x`.
@@ -162,6 +195,13 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
+	/// The sharing oracle's schedules: newest candidate first from a discarded build, and two seeds of drawn sharing.
+	private static let sharingSchedules = [
+		ConstructionSharingSchedule(seed: nil, offersLaterPlacesCandidates: true),
+		ConstructionSharingSchedule(seed: 3, offersLaterPlacesCandidates: false),
+		ConstructionSharingSchedule(seed: 5, offersLaterPlacesCandidates: true),
+	]
+
 	/// Generates `fixture` with the memo and without it, expects the same generated files, and returns them.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	@discardableResult
@@ -172,6 +212,13 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 		}
 		#expect(!withMemo.dependencyTreeFiles.isEmpty)
 		#expect(withMemo.dependencyTreeFiles == withoutMemo.dependencyTreeFiles)
+		// Which alike candidate a place takes, and whether it shares at all, reaches no output.
+		for schedule in Self.sharingSchedules {
+			let scheduled = try await ConstructionSharingSchedule.$current.withValue(schedule) { [fixture] in
+				try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			}
+			#expect(scheduled.dependencyTreeFiles == withMemo.dependencyTreeFiles)
+		}
 		return withMemo.dependencyTreeFiles
 	}
 }
