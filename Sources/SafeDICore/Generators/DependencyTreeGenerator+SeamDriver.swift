@@ -419,7 +419,7 @@ extension DependencyTreeGenerator {
 			},
 			checkingSeamTrees: generatedSeams.map { (instantiable: $0.seam, scope: $0.rootScope) },
 		)
-		var rootScopeGenerators = try rootScopesToGenerate.rootScopes.map { typeDescription, scope in
+		var rootScopeGenerators = try Self.buildingEachRoot(of: rootScopesToGenerate.rootScopes) { typeDescription, scope in
 			try RootScopeInfo(
 				typeDescription: typeDescription,
 				instantiable: scope.instantiable,
