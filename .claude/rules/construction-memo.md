@@ -50,7 +50,11 @@ Construction reads the scopes through `ConstructionGraph`, a `Sendable` snapshot
 | `placeHoldingProperties` | From `placeHoldingPropertiesByType`, above. |
 | Children and everything aggregated from them | Built from the same inputs, or reused under the same rule at the child's own place. |
 
-Walks of a finished tree that key by a generator's identity rely on a shared generator having the same subtree at each place: `SeamBuilderParameters`' nested cycle parameter bindings (the first place's binding is each place's) and its declarations between a closed-on scope and its closers (a closed-on scope on a site's path holds a hole and is never shared). `SeamBuilderParameters`' `placesByGenerator` reads a tree beside a site's path at that tree's own path, so it relies on more: every tree it finds a place in holds a hole or passes one up, and is never shared, while a tree that can be shared holds no place at any path.
+Walks of a finished tree that key by a generator's identity rely on a shared generator having the same subtree at each place: `SeamBuilderParameters`' nested cycle parameter bindings (the first place's binding is each place's) and its declarations between a closed-on scope and its closers (a closed-on scope on a site's path holds a hole and is never shared). `SeamBuilderParameters`' `placesByTreePath` keys each place by its tree path, never by a generator, so two places one generator holds are two entries. A scope tells its children apart by their index in `propertiesToGenerate` (`OrderedChild.index`, `ReceivedBuilderLoops.loopByChildIndex`), never by generator, so siblings may share one generator: a mock root that lists a property twice generates only the first.
+
+## The sharing oracle
+
+Which alike candidate a place takes reaches no output, and neither does whether it shares at all. `ConstructionSharingSchedule` (test only, a task-local) makes both an input: per memo lookup of a pass, in walk order, a seeded draw builds the place again or asks the candidates in a permuted order, and `offersLaterPlacesCandidates` first fills the pass's memo with a discarded build of the same pass and asks newest first, so a place is offered what a place after it built. The graph fuzzer's second run of every graph follows a schedule its seed picks (`sharingOracleSchedule(forGraphSeed:)`; `SAFEDI_SHARING_ORACLE_SCHEDULE=<n>` picks another, for sweeps) and must equal the first run (`runsDiffer`). A new identity-keyed map over generators fails it.
 
 ## State a mock emission writes to a non-root generator
 

@@ -5143,15 +5143,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return sharedLabels
 	}
 
-	/// Whether `child` and `other`, two of this scope's children, are members of one loop of builders (see
-	/// `ReceivedBuilderLoops`).
-	nonisolated func areMembersOfOneLoop(_ child: ScopeGenerator, _ other: ScopeGenerator) -> Bool {
-		// Siblings never share a generator (`ConstructionMemo` reuses none among one scope's children), so each finds its own index.
-		guard !receivedBuilderLoops.loopByChildIndex.isEmpty,
-		      let childIndex = propertiesToGenerate.firstIndex(where: { $0 === child }),
-		      let otherIndex = propertiesToGenerate.firstIndex(where: { $0 === other }),
-		      let loop = receivedBuilderLoops.loopByChildIndex[childIndex]
-		else { return false }
+	/// Whether the children at `childIndex` and `otherIndex` of `propertiesToGenerate` are members of one loop of builders
+	/// (see `ReceivedBuilderLoops`).
+	nonisolated func areMembersOfOneLoop(childAt childIndex: Int, _ otherIndex: Int) -> Bool {
+		guard let loop = receivedBuilderLoops.loopByChildIndex[childIndex] else { return false }
 		return receivedBuilderLoops.loopByChildIndex[otherIndex] == loop
 	}
 
@@ -5326,6 +5321,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// A child in `orderedPropertiesToGenerate`, with what it is generated with.
 	struct OrderedChild {
 		let generator: ScopeGenerator
+		/// The child's index in `propertiesToGenerate`, which tells it apart from its siblings: two children of one scope can
+		/// hold one generator (a construction memo can hand a place a generator a sibling holds).
+		let index: Int
 		/// The child's `unavailableProperties`, given the properties this scope generates before it.
 		let unavailableProperties: Set<Property>
 		/// The `propertiesGeneratedLater` to generate the child with (see `generateCode`).
@@ -5368,7 +5366,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) -> [OrderedChild] {
 		let propertiesNotGeneratedBefore = propertiesGeneratedLater
 		var orderedChildren = [OrderedChild]()
-		for (index, childGenerator) in orderedIndices.lazy.map({ self.propertiesToGenerate[$0] }).enumerated() {
+		for (index, childIndex) in orderedIndices.enumerated() {
+			let childGenerator = propertiesToGenerate[childIndex]
 			let childPropertiesGeneratedLater = Self.propertiesGeneratedLater(
 				thanChildAt: index,
 				receivedOnlyIfAvailableBy: childGenerator,
@@ -5384,6 +5383,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			)
 			orderedChildren.append(OrderedChild(
 				generator: childGenerator,
+				index: childIndex,
 				unavailableProperties: childUnavailableProperties,
 				propertiesGeneratedLater: childPropertiesGeneratedLater,
 			))
@@ -5664,14 +5664,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var boxedArgumentsByLoop = [Int: [String]]()
 		var loopLevelsNameByLoop = [Int: String]()
 		if !receivedBuilderLoops.loopByChildIndex.isEmpty {
-			// Siblings never share a generator (`ConstructionMemo` reuses none among one scope's children), so a child's
-			// generator tells it apart from its siblings, though another scope of the tree can hold the same generator.
-			let loopByGenerator = Dictionary(
-				receivedBuilderLoops.loopByChildIndex.map { (ObjectIdentifier(propertiesToGenerate[$0.key]), $0.value) },
-				uniquingKeysWith: { first, _ in first },
-			)
+			// A child is told apart from its siblings by its index, never by its generator, which a sibling can hold too.
+			let loopByChildIndex = receivedBuilderLoops.loopByChildIndex
 			for (index, child) in orderedChildren.enumerated() where !child.generator.isAlias {
-				guard let loop = loopByGenerator[ObjectIdentifier(child.generator)] else { continue }
+				guard let loop = loopByChildIndex[child.index] else { continue }
 				if boxedLoops[loop] != nil {
 					boxedArgumentsByLoop[loop, default: []] += child.generator.valuesBindingArguments
 				} else {
@@ -5686,11 +5682,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			var names = GeneratedNameAllocator(reserving: namesReceivedFunctionsAvoid(
 				orderedChildren: orderedChildren,
 				childBuilderFunctionNames: childBuilderFunctionNames,
-				loopMembers: orderedChildren.compactMap { loopByGenerator[ObjectIdentifier($0.generator)] == nil ? nil : $0.generator },
+				loopMembers: orderedChildren.compactMap { loopByChildIndex[$0.index] == nil ? nil : $0.generator },
 				enclosingFunctionNames: enclosingFunctionNames,
 			))
 			for (index, child) in orderedChildren.enumerated() where !child.generator.isAlias {
-				guard let property = child.generator.property, let loop = loopByGenerator[ObjectIdentifier(child.generator)] else { continue }
+				guard let property = child.generator.property, let loop = loopByChildIndex[child.index] else { continue }
 				let childBuilderFunctionNames = childBuilderFunctionNames?[index] ?? nil
 				var functionName = if child.generator.closesPropertyCycle {
 					child.generator.closedOnFunctionName(builtFor: property, enclosingFunctionNames: childBuilderFunctionNames?.enclosingFunctionNames ?? [:])
@@ -5717,7 +5713,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// A rename this body declares of a member is rebound under its own label, wrapping the member's function.
 			for child in orderedChildren where child.generator.isAlias {
 				guard case let .alias(property, fulfillingProperty, _, _, _) = child.generator.scopeData,
-				      let loop = loopByGenerator[ObjectIdentifier(child.generator)],
+				      let loop = loopByChildIndex[child.index],
 				      let memberFunction = memberFunctionByProperty[fulfillingProperty],
 				      let declaration = child.generator.loopRebindingDeclaration(ofRenameOf: memberFunction)
 				else { continue }
@@ -5791,11 +5787,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			var builderFunctionNames = childBuilderFunctionNames?[index].flatMap(\.self)
 				?? BuilderFunctionNames(fillIsSendable: buildsInSendableFunction(ofFill: child.generator))
 			builderFunctionNames.fillTakesPayloadFields = child.generator.fillKey.map(overrideFillKeys.contains) ?? false
-			// Siblings never share a generator (`ConstructionMemo` reuses none among one scope's children), so the fill finds its own index.
-			if !loopMemberDeclarationsByLoop.isEmpty,
-			   let childIndex = propertiesToGenerate.firstIndex(where: { $0 === child.generator }),
-			   let loop = receivedBuilderLoops.loopByChildIndex[childIndex]
-			{
+			if !loopMemberDeclarationsByLoop.isEmpty, let loop = receivedBuilderLoops.loopByChildIndex[child.index] {
 				builderFunctionNames.loopMemberDeclarations = loopMemberDeclarationsByLoop[loop, default: [:]]
 				builderFunctionNames.receivedFunctionName = receivedFunctionNameByIndex[index]
 				if !child.generator.isAlias {
@@ -10351,18 +10343,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var items = [MockTreeItem]()
 		// The loop of builders each child is on, and the members of loops on a mock root that nothing outside their loop
 		// reads (see `ReceivedBuilderLoops`). Nearly every scope holds no loop.
-		// Siblings never share a generator (`ConstructionMemo` reuses none among one scope's children), so a child's generator
-		// tells it apart from its siblings, though another scope of the tree can hold the same generator.
-		var loopByGenerator = [ObjectIdentifier: Int]()
-		var membersReadOnlyInsideTheirLoop = Set<ObjectIdentifier>()
-		if !receivedBuilderLoops.loopByChildIndex.isEmpty {
-			for (index, loop) in receivedBuilderLoops.loopByChildIndex {
-				loopByGenerator[ObjectIdentifier(propertiesToGenerate[index])] = loop
-			}
-			for index in loopMembersReadOnlyInsideTheirLoop() {
-				membersReadOnlyInsideTheirLoop.insert(ObjectIdentifier(propertiesToGenerate[index]))
-			}
-		}
+		// A child is told apart from its siblings by its index, never by its generator, which a sibling can hold too.
+		let loopByChildIndex = receivedBuilderLoops.loopByChildIndex
+		let membersReadOnlyInsideTheirLoop = loopByChildIndex.isEmpty ? [] : Set(loopMembersReadOnlyInsideTheirLoop())
 
 		// Roots only appear at the top level, never as children here — so the
 		// `.root` case is not part of the reachable pattern space and is omitted.
@@ -10394,7 +10377,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					declarationReference: declarationReference,
 					// An alias whose fulfilling property is unavailable is declared `nil`, as production declares it.
 					isBoundToNil: Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: childUnavailableProperties),
-					loop: loopByGenerator[ObjectIdentifier(childGenerator)],
+					loop: loopByChildIndex[child.index],
 				)))
 			} else if case let .property(childInstantiable, childProperty, _, erasedToConcreteExistential, isPropertyCycle, _) = childGenerator.scopeData {
 				let isInstantiator = !childProperty.propertyType.isConstant
@@ -10483,9 +10466,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					callSiteLazilyInstantiatedInstanceProperties: childGenerator.callSiteLazilyInstantiatedInstanceProperties,
 					buildsInSendableFunction: childGenerator.buildsInSendableFunction,
 					requiresSendable: childInsideSendable,
-					loop: loopByGenerator[ObjectIdentifier(childGenerator)],
+					loop: loopByChildIndex[child.index],
 					reboundProperties: childGenerator.reboundProperties,
-					isReadOutsideItsLoop: !membersReadOnlyInsideTheirLoop.contains(ObjectIdentifier(childGenerator)),
+					isReadOutsideItsLoop: !membersReadOnlyInsideTheirLoop.contains(child.index),
 				)))
 			}
 		}
