@@ -9008,7 +9008,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				lines.append(Self.publicSafeDIOverridesStruct(
 					rootChildren: treePropertyNodes,
 					rootLabelMap: rootLabelMap,
-					defaultFields: publicMockPlan.defaultFields,
 					mockedType: instantiable,
 					context: publicMock,
 					indent: indent,
@@ -9295,7 +9294,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let returnArgumentList = try generateReturnArgumentList(
 			instantiable: instantiable,
 			disambiguationMap: returnDisambiguationMap,
-			defaultValues: publicMockPlan?.constructionDefaultValues ?? [:],
 		)
 		let mockMethodName = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
 		let returnConstruction = if instantiable.mockInitializer != nil {
@@ -9339,12 +9337,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// disambiguated name and this map remaps the reference. Flat-received
 	/// parameter renames must NOT be merged in: they target a separate mock
 	/// parameter, and the root's own dep must reference its own parameter.
-	/// - Parameter defaultValues: What a public mock passes for the mocked type's own default-valued parameters, by label,
-	///   when not the binding of the label.
 	private func generateReturnArgumentList(
 		instantiable: Instantiable,
 		disambiguationMap: [String: [TypeDescription: String]] = [:],
-		defaultValues: [String: String] = [:],
 	) throws -> String {
 		let constructionInitializer: Initializer? = if let mockInitializer = instantiable.mockInitializer {
 			mockInitializer
@@ -9395,7 +9390,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// `mock()` takes an `@autoclosure` parameter as an autoclosure, or a public mock as a closure, and
 				// passes its call, so the value is evaluated where the type is built.
 				let parameterValue = argument.typeDescription.strippingEscaping.autoclosureValueType == nil ? argument.label : "\(argument.label)()"
-				parts.append("\(argument.label.spelledAsArgumentLabel): \(defaultValues[argument.label] ?? parameterValue)")
+				parts.append("\(argument.label.spelledAsArgumentLabel): \(parameterValue)")
 			}
 		}
 		return parts.joined(separator: ", ")
