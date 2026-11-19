@@ -116,8 +116,12 @@ jobs:
       split: ${{ steps.split.outputs.split }}
       tests: ${{ steps.count.outputs.tests }}
     steps:
+      # Every branch's history, so that "Find an Earlier Verify Run's Build"
+      # can tell which earlier runs built an ancestor of this commit.
       - name: Checkout Repo
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       # The whole suite in release mode runs in "Verify Tests on Linux"
       # below, one job per group of test targets, from the bundle this job
       # builds. A filter runs here as one process, and fast mode needs one.
@@ -175,6 +179,105 @@ jobs:
           restore-keys: |
             verify-release-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ github.sha }}-
             verify-release-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-
+      # A cache is readable only from its own branch and main, and a run is
+      # usually dispatched on a scratch ref that is deleted when it ends, so
+      # the build above is main's: for a branch that changes SafeDICore, as
+      # every branch of a stack does, a start that rebuilds nearly everything
+      # (20.1 minutes on the 2.3.0 stack, run 44595917463, where a build from
+      # nothing takes 23 to 26). An artifact is readable from every branch,
+      # so each whole-suite run uploads its build directory ("Upload Build
+      # Directory for Later Runs" below) and the next run of a commit above
+      # it starts from that: the newest such build whose commit is an
+      # ancestor of this one, or this one, and is not on main, where the
+      # cache above is at least as new. Sources are stamped by content, so a
+      # build from any commit is a correct start, as main's is; an ancestor's
+      # is the closest. The artifact's name carries a hash of the compiler's
+      # version and the build's arguments, so a build is a start only for
+      # the compiler and flags that made it. Only a build that a dispatched
+      # run of this workflow in this repository uploaded counts: a pull
+      # request from a fork can upload an artifact of any name from ci.yml.
+      # Nothing here fails the job: whatever goes wrong, the build starts
+      # from the cache above.
+      - name: Name the Build Directory Artifact
+        id: build-artifact
+        if: ${{ inputs.mode == 'release' }}
+        run: |
+          compiler=$(swift --version 2>&1)
+          hash=$(printf '%s\n%s' "$RELEASE_SWIFT_TEST_ARGUMENTS" "$compiler" | sha256sum | cut -c1-16)
+          test "${#hash}" -eq 16
+          echo "name=verify-release-build-$hash" >> "$GITHUB_OUTPUT"
+      - name: Find an Earlier Verify Run's Build
+        id: earlier-build
+        if: ${{ inputs.mode == 'release' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/github-script@v8
+        env:
+          ARTIFACT_NAME: ${{ steps.build-artifact.outputs.name }}
+        with:
+          script: |
+            const { execFileSync } = require('child_process')
+            const git = (...arguments_) => execFileSync('git', ['-c', `safe.directory=${process.env.GITHUB_WORKSPACE}`, ...arguments_], { cwd: process.env.GITHUB_WORKSPACE, stdio: ['ignore', 'pipe', 'ignore'] })
+            const isAncestor = (ancestor, descendant) => {
+              try {
+                git('merge-base', '--is-ancestor', ancestor, descendant)
+                return true
+              } catch {
+                return false
+              }
+            }
+            const { data } = await github.rest.actions.listArtifactsForRepo({
+              ...context.repo,
+              name: process.env.ARTIFACT_NAME,
+              per_page: 50,
+            })
+            const candidates = data.artifacts
+              .filter(artifact => !artifact.expired && artifact.workflow_run && /^[0-9a-f]{40}$/.test(artifact.workflow_run.head_sha || ''))
+              .sort((first, second) => Date.parse(second.created_at) - Date.parse(first.created_at))
+            core.info(`${candidates.length} builds named ${process.env.ARTIFACT_NAME}.`)
+            for (const artifact of candidates) {
+              const commit = artifact.workflow_run.head_sha
+              if (artifact.workflow_run.id === context.runId) { continue }
+              if (!isAncestor(commit, 'HEAD')) { continue }
+              if (isAncestor(commit, 'origin/main')) {
+                core.info(`The build of ${commit} is of a commit on main; the cache is at least as new.`)
+                break
+              }
+              const { data: run } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: artifact.workflow_run.id })
+              if (run.path !== '.github/workflows/verify.yml' || run.event !== 'workflow_dispatch' || !run.head_repository || run.head_repository.id !== run.repository.id) {
+                core.info(`The build of ${commit} is not a dispatched Verify run's of this repository.`)
+                continue
+              }
+              core.info(`Starting from the build of ${commit} (run ${run.id}, ${artifact.size_in_bytes} bytes).`)
+              core.setOutput('run', String(run.id))
+              core.setOutput('commit', commit)
+              return
+            }
+            core.info('No earlier Verify run built an ancestor of this commit that is not on main.')
+      - name: Download the Earlier Run's Build
+        id: download-earlier-build
+        if: ${{ inputs.mode == 'release' && steps.earlier-build.outputs.run != '' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ steps.build-artifact.outputs.name }}
+          run-id: ${{ steps.earlier-build.outputs.run }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/earlier-build
+      # The cache's build goes only once the earlier run's has unpacked, so a
+      # download cut short leaves the cache's.
+      - name: Unpack the Earlier Run's Build
+        if: ${{ inputs.mode == 'release' && steps.download-earlier-build.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          mkdir "$RUNNER_TEMP/earlier-build/unpacked"
+          tar -xzf "$RUNNER_TEMP/earlier-build/verify-release-build.tar.gz" -C "$RUNNER_TEMP/earlier-build/unpacked"
+          test -d "$RUNNER_TEMP/earlier-build/unpacked/.build"
+          rm -rf .build
+          mv "$RUNNER_TEMP/earlier-build/unpacked/.build" .build
+          rm -rf "$RUNNER_TEMP/earlier-build"
       # The key is the warming job's: a hit is never re-saved, so it holds
       # the build's arguments and the compiler's version. This job saves no
       # build: when the key hashed this workflow instead, each branch a run
@@ -254,6 +357,34 @@ jobs:
           name: verify-test-bundle
           path: verify-test-bundle.tar.gz
           retention-days: 1
+          # A re-run of the job replaces what an earlier attempt uploaded.
+          overwrite: true
+      # The whole build directory, for "Find an Earlier Verify Run's Build"
+      # of a later run. After the bundle, and never failing the job: the
+      # tests wait on this job, not on a later run's start. The fastest
+      # compression, since the runners' network is faster than gzip.
+      - name: Package Build Directory for Later Runs
+        id: package-build
+        if: ${{ steps.split.outputs.split == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          mkdir "$RUNNER_TEMP/build-for-later-runs"
+          tar --use-compress-program='gzip -1' -cf "$RUNNER_TEMP/build-for-later-runs/verify-release-build.tar.gz" .build
+          ls -l "$RUNNER_TEMP/build-for-later-runs"
+      - name: Upload Build Directory for Later Runs
+        if: ${{ steps.split.outputs.split == 'true' && steps.package-build.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.build-artifact.outputs.name }}
+          path: ${{ runner.temp }}/build-for-later-runs/verify-release-build.tar.gz
+          # A stack is verified many times a day, so the newest build is
+          # rarely a day old; two days span a night.
+          retention-days: 2
+          # The archive is compressed already.
+          compression-level: 0
           # A re-run of the job replaces what an earlier attempt uploaded.
           overwrite: true
       - name: Restore Passed Compile Checks
