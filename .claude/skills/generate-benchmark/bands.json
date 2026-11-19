@@ -1,0 +1,4 @@
+{"_comment": "How much HEAD may exceed BASE: CPU and peak memory 3%; wall the shape's own spread between two builds of one commit, measured on a Linux cloud machine, clamped to 3%-6%. The E6d shapes' spreads were not measured, so they take 3%, as does any shape not listed. N1-200 is judged on minimums, because its runs are few and long.",
+ "cpu": 0.03, "memory": 0.03,
+ "wall": {"E6d-1200": 0.03, "E6d-1200-inline": 0.03, "E6d-600": 0.03, "E6d-600-inline": 0.03, "N1-200": 0.06, "N1-40": 0.05, "N5i-10": 0.033, "N5i-8": 0.03, "N5inline-10": 0.053, "N5inline-8": 0.03, "issue646-12": 0.056, "issue646-16": 0.03, "issue646-mock-12": 0.03},
+ "minimums": ["N1-200"]}
