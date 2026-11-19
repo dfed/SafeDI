@@ -23,8 +23,9 @@ extension DependencyTreeGenerator {
 	/// seam: those the roots' trees reach outside every seam's tree, the fills this module generates for the holes of the
 	/// foreign seams they call included, and those a seam's tree reaches through a dependency that cannot be a hole
 	/// (`canBeHole`), since only hand-written code could build its type.
-	func typesReachableOutsideSeamTrees() throws -> Set<TypeDescription> {
-		let foreignSeamRoots = try foreignSeamRoots.get()
+	/// - Parameter foreignSeamRoots: The signatures of the foreign seams this module's trees reach
+	///   (`computeForeignSeamRoots()`).
+	func typesReachableOutsideSeamTrees(foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?]) throws -> Set<TypeDescription> {
 		/// The seam `typeDescription` is, when its tree is another tree's leaf: one with a signature, generated here or
 		/// in another module.
 		func isSeamWithTree(_ instantiable: Instantiable) -> Bool {
@@ -176,7 +177,7 @@ extension DependencyTreeGenerator {
 		return typeDescriptionToScopeMap
 	}
 
-	/// What creating an instance of an `@Instantiable` type reads by value, for `generateWarnings()`.
+	/// What creating an instance of an `@Instantiable` type reads by value, for `generateWarnings(validatedScopes:)`.
 	///
 	/// Creating a type creates its constant dependencies along with it, and theirs. A dependency behind an
 	/// `Instantiator` is created later, when asked for. A lazily instantiated dependency is created along with

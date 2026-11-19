@@ -20,22 +20,28 @@
 
 extension DependencyTreeGenerator {
 	/// Generates mock code for all `@Instantiable` types.
-	public func generateMockCode(
+	/// - Parameter publicMockContext: The context the module's public mocks share (`makePublicMockContext()`), or `nil`
+	///   when the module declares no public mock.
+	func generateMockCode(
 		mockConditionalCompilation: String?,
-		currentModuleSourceFilePaths: Set<String>? = nil,
-		additionalMocksToGenerate: Set<String> = [],
+		currentModuleSourceFilePaths: Set<String>?,
+		additionalMocksToGenerate: Set<String>,
+		publicMockContext: PublicMockContext?,
 	) async throws -> MockGenerationResult {
 		var receivedPropertiesCache = ReceivedPropertiesCache()
+		// The plans of the public mocks of other modules this module's mock trees call, computed once each.
+		var foreignPublicMockPlans = PublicMockPlans()
 		let mockScopes = try await mockScopes(
 			additionalMocksToGenerate: additionalMocksToGenerate,
 			mockEmittingModule: emittingModuleToCheck,
 			receivedPropertiesCache: &receivedPropertiesCache,
+			foreignPublicMockPlans: &foreignPublicMockPlans,
 		)
 		let typeDescriptionToScopeMap = mockScopes.typeDescriptionToScopeMap
 		let flatParameterMockDefaults = mockScopes.flatParameterMockDefaults
-
-		// The public mocks of the module share one context, built only when the module declares one.
-		let publicMockContext = typeDescriptionToFulfillingInstantiableMap.values.contains(where: { $0.generateMock == .public }) ? publicMockContext : nil
+		// The mock scopes the plans of the module's own public mocks are built from, as each module that calls one computes
+		// it, once built (`publicMockPlan(ofOwnType:mockScopes:publicMockContext:foreignPublicMockPlans:)`).
+		var ownPublicMockPlanScopes: MockScopes?
 
 		// Create mock-root ScopeGenerators using the production Scope tree.
 		var seen = Set<TypeDescription>()
@@ -77,6 +83,7 @@ extension DependencyTreeGenerator {
 					// because it is listed, so removing it from the list is also a fix.
 					generatedMockReason: instantiable.generatesMock && isDeclaredInCurrentModule ? .generateMock : .additionalMocksToGenerate,
 					mockScopes: rootMockScopes,
+					publicMockContext: publicMockContext,
 					emittingModule: emittingModuleToCheck,
 					receivedPropertiesCache: &receivedPropertiesCache,
 					childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
@@ -85,7 +92,12 @@ extension DependencyTreeGenerator {
 				)
 				if instantiable.generateMock == .public, let publicMockContext {
 					var findings = await mockRoot.publicMockFindings(of: instantiable, context: publicMockContext, mockDefaults: flatParameterMockDefaults)
-					if findings.isEmpty, let finding = try await callersViewFinding(of: instantiable) {
+					if findings.isEmpty, let finding = try await callersViewFinding(
+						of: instantiable,
+						publicMockContext: publicMockContext,
+						ownPlanScopes: &ownPublicMockPlanScopes,
+						foreignPublicMockPlans: &foreignPublicMockPlans,
+					) {
 						findings.append(finding)
 					}
 					guard findings.isEmpty else {
@@ -136,7 +148,7 @@ extension DependencyTreeGenerator {
 
 		// A mock fills another module's public mock's holes as a tree fills a seam's, and the public mock hands each hole's
 		// builder the same scope values at every level of a cycle, as a seam does, so its fills are judged as
-		// `generatePerRootCodeTrees` judges a seam's. The check judges each fill against the access the calling module
+		// `generatedCode(of:)` judges a seam's. The check judges each fill against the access the calling module
 		// has, which `query needs` has no module to read, so the query does not run it.
 		try Self.validateFills(
 			inTreesRootedAt: mockRoots.map(\.scopeGenerator),
@@ -379,24 +391,6 @@ extension DependencyTreeGenerator {
 		)
 	}
 
-	/// The context every public mock of the module shares: one proof of every type's access over the module's
-	/// declarations, the module of each type, and the names of the module-level configurations.
-	/// `makePublicMockContext()`, made once.
-	var publicMockContext: PublicMockContext {
-		if let memoizedPublicMockContext {
-			return memoizedPublicMockContext
-		}
-		let context = makePublicMockContext()
-		memoizedPublicMockContext = context
-		return context
-	}
-
-	/// The comment the `public` declarations this module generates carry, naming the types they name that it reads no
-	/// declaration of, or `nil` when the run writes none (`SeamResolution.carriesUnreadTypeComment`). Over the
-	/// declarations the module's own seams and public mocks are computed from, as `publicMockContext` reads them.
-	var unreadTypeComment: UnreadTypeComment? {
-		publicMockContext.unreadTypeComment
-	}
 
 	/// Which declarations a mention in each module of a view can name, the view being `viewer`'s, over `instantiables` and
 	/// `plainTypeDeclarations`; every one when the run is not told what each module reads, or knows no viewer.
@@ -410,7 +404,11 @@ extension DependencyTreeGenerator {
 		return TypeAccessProof.ModuleReach(viewer: viewer, instantiables: instantiables.values, plainTypeDeclarations: plainTypeDeclarations, modulesReadByRunOfModule: modulesReadByRunOfModule)
 	}
 
-	private func makePublicMockContext() -> PublicMockContext {
+	/// The context every public mock of the module shares: one proof of every type's access over the module's
+	/// declarations, the module of each type, and the names of the module-level configurations; and the comment the
+	/// `public` declarations this module generates carry, naming the types they name that it reads no declaration of, or
+	/// `nil` when the run writes none (`SeamResolution.carriesUnreadTypeComment`). Made once by each call that needs it.
+	func makePublicMockContext() -> PublicMockContext {
 		var moduleNameByType = [TypeDescription: String]()
 		for instantiable in typeDescriptionToFulfillingInstantiableMap.values {
 			if let moduleName = instantiable.moduleName {
@@ -484,10 +482,12 @@ extension DependencyTreeGenerator {
 	///   - additionalMocksToGenerate: The names of the types whose mocks are generated because they are listed.
 	///   - mockEmittingModule: The module the mocks compile in, whose access to each hand-written mock decides which
 	///     flat parameters default to one, or `nil` when no access needs checking (`emittingModuleToCheck`).
+	///   - foreignPublicMockPlans: The plans of the public mocks of other modules the call has computed, which this adds to.
 	func mockScopes(
 		additionalMocksToGenerate: Set<String>,
 		mockEmittingModule: EmittingModule?,
 		receivedPropertiesCache: inout ReceivedPropertiesCache,
+		foreignPublicMockPlans: inout PublicMockPlans,
 	) async throws -> MockScopes {
 		GenerationLayerObservation.record(.mockScopes(ofModule: seams.currentModule.moduleName), inRunOf: seams.currentModule.moduleName)
 		// Build a map of erased wrapper types → concrete fulfilling types.
@@ -530,7 +530,7 @@ extension DependencyTreeGenerator {
 		var typeDescriptionToScopeMap = createMockTypeDescriptionToScopeMapping(publicMockCalls: [:])
 		// Every type built inline, the types whose public mocks the trees call among them, with this module's fills.
 		let inlineTypeDescriptionToScopeMap = typeDescriptionToScopeMap
-		var publicMockCalls = try await publicMockCalls(in: typeDescriptionToScopeMap)
+		var publicMockCalls = try await publicMockCalls(in: typeDescriptionToScopeMap, foreignPublicMockPlans: &foreignPublicMockPlans)
 		let generatesPublicMock = typeDescriptionToFulfillingInstantiableMap.values.contains(where: { $0.generateMock == .public })
 		// Each kind of mock fills the same places and takes a builder for what a fill instantiates that nothing fulfills: a
 		// public mock through a hole of its own tree, an internal mock as a seam's internal mock does
@@ -703,6 +703,7 @@ extension DependencyTreeGenerator {
 		scope: Scope,
 		generatedMockReason: GeneratedMockReason?,
 		mockScopes: MockScopes,
+		publicMockContext: PublicMockContext?,
 		emittingModule: EmittingModule?,
 		receivedPropertiesCache: inout ReceivedPropertiesCache,
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
@@ -756,6 +757,7 @@ extension DependencyTreeGenerator {
 			typeDescriptionToScopeMap: mockScopes.typeDescriptionToScopeMap,
 			flatParameterMockDefaults: mockScopes.flatParameterMockDefaults,
 			erasedToConcreteTypeMap: mockScopes.erasedToConcreteTypeMap,
+			publicMockContext: publicMockContext,
 			emittingModule: emittingModule,
 			receivedPropertiesCache: &receivedPropertiesCache,
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
