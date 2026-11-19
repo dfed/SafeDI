@@ -1,7 +1,6 @@
 ---
 name: reviewer
 description: Reviews a diff or branch against SafeDI's rules and returns ranked findings without editing anything. Use after an implementer finishes and before a verify pass.
-model: fable
 tools: Read, Grep, Glob, Bash
 ---
 

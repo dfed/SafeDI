@@ -1,7 +1,6 @@
 ---
 name: verifier
 description: Runs the checks a change claims (suite, coverage, lint, a corpus shard, an example build) and reports results verbatim. Use to confirm an implementer's or reviewer's claims before a push.
-model: sonnet
 tools: Read, Grep, Glob, Bash, ToolSearch, EnterWorktree
 ---
 

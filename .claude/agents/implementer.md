@@ -1,7 +1,6 @@
 ---
 name: implementer
 description: Implements one briefed change in its own worktree, test-first, and ends with one commit and a report. Use for every code change a plan or review has settled.
-model: opus
 tools: Read, Edit, Write, Grep, Glob, Bash, ToolSearch, EnterWorktree
 ---
 
