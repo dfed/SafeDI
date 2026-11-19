@@ -2906,7 +2906,7 @@ struct SafeDIToolGraphFuzzerTests {
 		}
 	}
 
-	@Test(arguments: [UInt64(654), 1870])
+	@Test(arguments: [UInt64(654), 1_870])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_rejectBothBuildsWithEachDeferringSeamsTwoForms_whenCarriedLevelsFillReadsOptionalSendableWrapper(seed: UInt64) async throws {
 		// `CarriedInner` defers `carriedToken` in a `LazilyInstantiated`, `CarriedInnerB` `@Sendable`, and
