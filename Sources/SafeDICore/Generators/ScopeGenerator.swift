@@ -73,7 +73,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		isBuiltByFill: Bool = false,
 		fillReturnsWrapperBuilder: Bool = false,
 		innerScopesCalledWithForwardedValue: [String] = [],
-		fill: (hole: SeamSignature.Hole, key: String, functionName: String, boundLabels: Set<String>, fields: [SeamSignature.Hole.Field], caseHoles: [SeamSignature.Hole], emitsCode: Bool, callerReads: FillCallerReads, labelsHandedAsMemo: Set<String>, plainMemoRoutesOfSendableWrapperReads: [String: [FillDispatcher.PlainMemoRoute]])? = nil,
+		fill: (hole: SeamSignature.Hole, key: String, functionName: String, boundLabels: Set<String>, fields: [SeamSignature.Hole.Field], caseHoles: [SeamSignature.Hole], emitsCode: Bool, callerReads: FillCallerReads, labelsHandedAsMemo: Set<String>, plainMemoRoutesOfSendableWrapperReads: [String: [FillDispatcher.PlainMemoRoute]], memoOriginsByLabel: [String: [SeamSignature.Hole.Field.SeamParameterOrigin]])? = nil,
 		constructsWithHandWrittenMock: Bool = false,
 		cycleParameters: [CycleParameter] = [],
 		builtCycleParameters: [CycleParameter] = [],
@@ -107,6 +107,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fillBindsDeferredFieldsFromStruct = fill.map { fill in fill.hole.innerSeamType != nil && fill.fields.contains { $0.isDeferredParameter && fill.boundLabels.contains($0.property.label) } } ?? false
 		fillLabelsHandedAsMemo = fill?.labelsHandedAsMemo ?? []
 		fillPlainMemoRoutesOfSendableWrapperReads = fill?.plainMemoRoutesOfSendableWrapperReads ?? [:]
+		fillMemoOriginsByLabel = fill?.memoOriginsByLabel ?? [:]
 		fillFields = fill?.fields ?? []
 		fillCaseHoles = fill?.caseHoles ?? []
 		fillEmitsCode = fill?.emitsCode ?? true
@@ -684,8 +685,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A fill some route hands the memo of a label its tree also reads as a `SendableLazilyInstantiated` takes that wrapper
 		// as the memo where every route can hand it (`FillDispatcher.memosHanded(toFillOf:labels:readingSendableWrapper:among:)`):
 		// the pass before finds those reads. Nearly no scope calls such a seam. A read of the optional wrapper only if available
-		// is left out, a deliberate leniency that `DependencyTreeGenerator.validateFills` keeps too: the fill builds it where
-		// one module rejects the graph for reading the label in two forms. So is a label the fill takes as the place's field.
+		// is left out: no one parameter takes it together with the memo's instance, so `DependencyTreeGenerator.validateFills`
+		// reports the deferring seam's tree receiving the label in two forms (`parameterReceivedInAnotherForm`), as one module
+		// reports that seam. So is a label the fill takes as the place's field.
 		var fillSendableWrapperReads = [String: [String: Property]]()
 		for fill in children where !fill.fillLabelsHandedAsMemo.isEmpty {
 			guard let key = fill.fillKey, let built = fill.children.first else { continue }
@@ -1239,6 +1241,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fillBindsDeferredFieldsFromStruct = false
 		fillLabelsHandedAsMemo = []
 		fillPlainMemoRoutesOfSendableWrapperReads = [:]
+		fillMemoOriginsByLabel = [:]
 		fillFields = []
 		fillCaseHoles = []
 		fillEmitsCode = true
@@ -1346,6 +1349,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fillBindsDeferredFieldsFromStruct = false
 		fillLabelsHandedAsMemo = []
 		fillPlainMemoRoutesOfSendableWrapperReads = [:]
+		fillMemoOriginsByLabel = [:]
 		fillFields = []
 		fillCaseHoles = []
 		fillEmitsCode = true
@@ -1384,6 +1388,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		returnsWrapperBuilder: Bool = false,
 		labelsHandedAsMemo: Set<String> = [],
 		plainMemoRoutesOfSendableWrapperReads: [String: [FillDispatcher.PlainMemoRoute]] = [:],
+		memoOriginsByLabel: [String: [SeamSignature.Hole.Field.SeamParameterOrigin]] = [:],
 		child: ScopeGenerator,
 	) {
 		self.init(
@@ -1408,7 +1413,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			isPropertyCycle: false,
 			builtInlineSeamComment: nil,
 			fillReturnsWrapperBuilder: returnsWrapperBuilder,
-			fill: (hole, key, functionName, boundLabels, fields, caseHoles, emitsCode, callerReads, labelsHandedAsMemo, plainMemoRoutesOfSendableWrapperReads),
+			fill: (hole, key, functionName, boundLabels, fields, caseHoles, emitsCode, callerReads, labelsHandedAsMemo, plainMemoRoutesOfSendableWrapperReads, memoOriginsByLabel),
 		)
 	}
 
@@ -1790,6 +1795,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		struct HandedMemos {
 			var memoByLabel = [String: HandedMemo]()
 			var plainMemoRoutesOfSendableWrapperReads = [String: [PlainMemoRoute]]()
+			/// By each label of `memoByLabel`, the deferred parameters whose memos the routes hand, in the order the routes are
+			/// met: which seam's error validation reports first is decided by where the seam is declared.
+			var memoOriginsByLabel = [String: [SeamSignature.Hole.Field.SeamParameterOrigin]]()
 		}
 
 		/// What the routes to a fill or dispatcher hand of one label: the memos of deferred parameters levels on carried routes
@@ -1797,11 +1805,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		private struct HandedForms: Equatable {
 			var memos = Set<HandedMemo>()
 			var plainMemoRoutes = Set<PlainMemoRoute>()
+			/// The seams whose deferred parameters the memos are, in the order the routes are first met, which only grows.
+			var memoSeamTypes = [TypeDescription]()
 			var handsValue = false
 
 			mutating func formUnion(_ other: HandedForms) {
 				memos.formUnion(other.memos)
 				plainMemoRoutes.formUnion(other.plainMemoRoutes)
+				memoSeamTypes += other.memoSeamTypes.filter { !memoSeamTypes.contains($0) }
 				handsValue = handsValue || other.handsValue
 			}
 		}
@@ -1837,6 +1848,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			let keys = [fillKey] + dispatchers.map(\.key)
 			var handedMemos = HandedMemos()
+			// A seam has one parameter of a label, so its seam names each memo's parameter.
+			var memoOriginBySeamType = [TypeDescription: SeamSignature.Hole.Field.SeamParameterOrigin]()
 			for label in labels {
 				// What the routes to each node hand so far, which only grows.
 				var handedByKey = [String: HandedForms]()
@@ -1850,6 +1863,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							if dispatcherCase.carriedLabels.contains(label) {
 								if dispatcherCase.carriesDeferredFields, let field = dispatcherCase.values?.first(where: { $0.property.label == label && $0.isDeferredParameter }) {
 									handed.memos.insert(HandedMemo(property: field.property, deferral: field.deferral))
+									if let origin = field.seamParameterOrigin, !handed.memoSeamTypes.contains(origin.seamType) {
+										handed.memoSeamTypes.append(origin.seamType)
+										memoOriginBySeamType[origin.seamType] = origin
+									}
 									if field.deferral == .deferred(isSendable: false), let seamType = dispatcher.seamType {
 										handed.plainMemoRoutes.insert(PlainMemoRoute(seamType: seamType, receivingType: field.declaringType, receivedProperty: field.property, receivedAt: field.declarationLocation))
 									}
@@ -1878,6 +1895,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let takesSendableWrapperReadToo = readingSendableWrapper[label] == memo.property && memo.deferral == .deferred(isSendable: true)
 				let takenMemo = handed.memos.count == 1 && (!handed.handsValue || takesSendableWrapperReadToo) ? memo : HandedMemo(property: property, deferral: .deferred(isSendable: false))
 				handedMemos.memoByLabel[label] = takenMemo
+				handedMemos.memoOriginsByLabel[label] = handed.memoSeamTypes.compactMap { memoOriginBySeamType[$0] }
 				if takenMemo.deferral == .deferred(isSendable: false), readingSendableWrapper[label] == takenMemo.property.asUnwrappedProperty, !handed.plainMemoRoutes.isEmpty {
 					handedMemos.plainMemoRoutesOfSendableWrapperReads[label] = handed.plainMemoRoutes.sorted { lhs, rhs in
 						lhs.seamType.asSource < rhs.seamType.asSource || (lhs.seamType.asSource == rhs.seamType.asSource && [lhs.receivedAt].lexicographicallyPrecedes([rhs.receivedAt], by: Dependency.DeclarationLocation.precedesInSourceOrder))
@@ -4283,6 +4301,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// (`FillDispatcher.memosHanded(toFillOf:labels:readingSendableWrapper:among:)`): no such memo is the wrapper, so
 	/// `DependencyTreeGenerator.validateFills(inTreesRootedAt:callerModule:)` reports the read. Empty for every other generator.
 	let fillPlainMemoRoutesOfSendableWrapperReads: [String: [FillDispatcher.PlainMemoRoute]]
+
+	/// For a fill, by each label some route hands it as the memo of a seam's deferred parameter
+	/// (`FillDispatcher.memosHanded(toFillOf:labels:readingSendableWrapper:among:)`), each such parameter: the seam's tree, as
+	/// the caller fills it, receives the label wherever the fill's tree reads that memo, so
+	/// `DependencyTreeGenerator.validateFills(inTreesRootedAt:callerModule:)` judges the fill's reads against the parameter. Empty
+	/// for every other generator.
+	let fillMemoOriginsByLabel: [String: [SeamSignature.Hole.Field.SeamParameterOrigin]]
 
 	/// For a fill, the fields of its hole's struct it binds from the struct (see `fillStructBoundLabels`), in
 	/// field order. Empty for every other generator.
@@ -13321,7 +13346,8 @@ extension SeamSignature.Hole.Field {
 	/// `LazilyInstantiated` (or `SendableLazilyInstantiated`), under the field's label, so the fill's tree reads its instance
 	/// where it reads the value and the value is created when the tree reads it, as inline. The field keeps its own property,
 	/// which decides what it satisfies; only the type it is bound as (`boundTypeAsFunctionParameter`) and the spelling of its
-	/// reads change (`Scope.fillUnderConstruction`).
+	/// reads change (`Scope.fillUnderConstruction`). It stays the seam's parameter (`seamParameterOrigin`), which a place inside
+	/// the fill carries on (`SeamBuilderParameters.fields(of:)`).
 	var bindingItsMemo: SeamSignature.Hole.Field {
 		SeamSignature.Hole.Field(
 			property: property,
@@ -13335,6 +13361,7 @@ extension SeamSignature.Hole.Field {
 			bindsMemo: true,
 			isSeamParameter: isSeamParameter,
 			isBoundByPublicMockRoot: isBoundByPublicMockRoot,
+			seamParameterOrigin: seamParameterOrigin,
 		)
 	}
 
