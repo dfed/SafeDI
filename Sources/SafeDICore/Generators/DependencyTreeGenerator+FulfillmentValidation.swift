@@ -224,17 +224,21 @@ extension DependencyTreeGenerator {
 	/// seam's own module, which cannot see the fill, judged the parameter without them. So a fill that receives the label
 	/// in a form no one parameter carries together with the forms the seam's tree receives is rejected as its inline build
 	/// is, with the same error. A hole this module does not fill has no scope, and its tree ends there.
-	func inlineTreesOfForeignSeamsWithHoles(in typeDescriptionToScopeMap: [TypeDescription: Scope], foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?]) throws -> [ScopeGenerator] {
-		try foreignSeamTypesWithHoles(among: foreignSeamRoots).compactMap { typeDescriptionToScopeMap[$0] }.map { scope in
-			try scope.createScopeGenerator(
+	func inlineTreesOfForeignSeamsWithHoles(in typeDescriptionToScopeMap: [TypeDescription: Scope], frozenScopeMap: FrozenScopeMap, foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?]) throws -> [ScopeGenerator] {
+		var generators = [ScopeGenerator]()
+		for scope in foreignSeamTypesWithHoles(among: foreignSeamRoots).compactMap({ typeDescriptionToScopeMap[$0] }) {
+			let (table, record) = frozenScopeMap.freezing(rootScope: scope)
+			try generators.append(record.createScopeGenerator(
+				in: table,
 				for: nil,
 				lazilyInstantiatedInstanceProperties: [],
 				erasedToConcreteExistential: false,
 				startsCodeGeneration: false,
 				validatesForwardedProperties: false,
 				declaredTypeNames: declaredTypeNames,
-			)
+			))
 		}
+		return generators
 	}
 
 	/// An alias that a receive of its property resolves to: the nearest scope above the receiver that provides the
