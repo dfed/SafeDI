@@ -759,16 +759,12 @@ struct PublicMockPlan: Sendable {
 	let tiers: [AccessLevel]
 	/// The empty enum every call names, whose name hashes the signature.
 	let guardTypeName: String
-	/// The members of `SafeDIOverrides` that hold the mocked type's own optional-typed default-valued parameters.
-	let defaultFields: [PublicStructMember]
 	/// The static methods in the mocked type's extension that evaluate its own optional-typed defaults.
 	let providerDeclarations: [String]
 	/// The lines that resolve each parameter taken as `T? = nil` in place of a non-optional default, before the tree.
 	let defaultResolutions: [String]
 	/// The parameter each node at the mock root's level built for a received dependency is passed by.
 	let promotedParameterNames: [Property: String]
-	/// What the construction of the mocked type passes for each of its own default-valued parameters, by label.
-	let constructionDefaultValues: [String: String]
 	/// Every place the builders `mock()` takes reach, in the order they reach them: the mock's own, and those the calls of
 	/// other modules' public mocks in its tree pass up.
 	var holes = [SeamSignature.Hole]()
@@ -907,9 +903,9 @@ extension ScopeGenerator {
 	///   - forwardedDefaults: The default an internal mock gives each forwarded parameter, by label.
 	///   - flatReceivedParameterMockDefaults: The hand-written mock an internal mock defaults each of
 	///     `flatReceivedParameters` to, which a public mock takes as `T? = nil` too.
-	///   - hasOverrides: Whether the mock has a `SafeDIOverrides`, which holds the mocked type's own optional-typed
-	///     defaults unless `mock()` is isolated to a global actor; otherwise each is a parameter defaulting to its
-	///     provider.
+	///   - hasOverrides: Whether the mock has a `SafeDIOverrides`. The mocked type's own optional-typed defaults are
+	///     parameters of `mock()` that default to their providers either way, as an internal mock's are, so that neither the
+	///     type's isolation nor whether it builds anything moves one.
 	static func publicMockPlan(
 		of instantiable: Instantiable,
 		forwardedDependencies: [Dependency],
@@ -941,8 +937,6 @@ extension ScopeGenerator {
 		var leadingParameters = [PublicMockParameter]()
 		var defaultResolutions = [String]()
 		var providerDeclarations = [String]()
-		var defaultFields = [PublicStructMember]()
-		var constructionDefaultValues = [String: String]()
 		let bodyIndent = "\(standardIndent)\(standardIndent)"
 		/// The parameter of a default-valued `type` taken as `T? = nil`, resolved in the body to the default, whose access
 		/// is `type`'s.
@@ -952,14 +946,12 @@ extension ScopeGenerator {
 			return PublicMockParameter(name: name, type: optionalType, typeSource: optionalType.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: type, receivedAs: nil), role: role)
 		}
 		// A `mock()` isolated to a global actor evaluates the type's own defaults as an internal mock does, in its own
-		// isolation, where a default may read the actor's state: each is a parameter of `mock()`, never a field of the
-		// nonisolated `SafeDIOverrides` initializer, and its provider shares the isolation.
+		// isolation, where a default may read the actor's state: its providers share the isolation.
 		let mockIsolation: String? = if instantiable.generatedMockIsGlobalActorIsolated {
 			instantiable.declarationIsolation.flatMap { $0 == "nonisolated" ? nil : $0 } ?? Initializer.globalActorAttribute(in: instantiable.mockAttributes)
 		} else {
 			nil
 		}
-		let ownDefaultsAreFields = hasOverrides && mockIsolation == nil
 		/// The provider of an optional-typed default, and how a declaration names it.
 		func provider(named label: String, type: TypeDescription, access: AccessLevel, expression: String) -> String {
 			let isPublic = access == .public
@@ -1004,24 +996,11 @@ extension ScopeGenerator {
 					role: .constructionDefault,
 				))
 			} else if type.isOptional {
+				// A parameter of `mock()` with the declaration's default, as an internal mock takes it, never a field of
+				// `SafeDIOverrides`, so that the type's isolation and whether it builds anything never move it.
 				let isNilLiteral = rootDefault.defaultExpression == "nil"
 				let providerCall = isNilLiteral ? "nil" : provider(named: rootDefault.label, type: type, access: typeAccess, expression: rootDefault.defaultExpression)
-				if ownDefaultsAreFields {
-					defaultFields.append(publicDefaultMember(
-						name: rootDefault.label,
-						valueType: type,
-						access: typeAccess,
-						defaultExpression: providerCall,
-						omittedValue: providerCall,
-						requiresSendable: false,
-						documentation: isNilLiteral
-							? "The value of `\(typeName)`’s `\(rootDefault.label.spelledWithoutBackticks)`, `nil` unless set."
-							: "The default of `\(typeName)`’s `\(rootDefault.label.spelledWithoutBackticks)` unless set; `.init(\(rootDefault.label.spelledAsArgumentLabel): nil)` passes `nil`.",
-					))
-					constructionDefaultValues[rootDefault.label] = "\(ReservedName.mockOverridesParameterName).\(rootDefault.label)"
-				} else {
-					leadingParameters.append(PublicMockParameter(name: rootDefault.label, type: type, typeSource: type.asSource, defaultSource: providerCall, defaultKind: isNilLiteral ? .nilValue : .provider, access: typeAccess, role: .constructionDefault))
-				}
+				leadingParameters.append(PublicMockParameter(name: rootDefault.label, type: type, typeSource: type.asSource, defaultSource: providerCall, defaultKind: isNilLiteral ? .nilValue : .provider, access: typeAccess, role: .constructionDefault))
 			} else {
 				leadingParameters.append(optionalParameter(named: rootDefault.label, type: type, resolvedTo: rootDefault.defaultExpression, role: .constructionDefault))
 			}
@@ -1114,11 +1093,9 @@ extension ScopeGenerator {
 			parameters: parameters,
 			tiers: tiers,
 			guardTypeName: "\(ReservedName.builderFunctionNamePrefix)\(instantiable.concreteInstantiable.asIdentifier)_mock_\(hash.hexadecimal)",
-			defaultFields: defaultFields,
 			providerDeclarations: providerDeclarations,
 			defaultResolutions: defaultResolutions,
 			promotedParameterNames: promotedParameterNames,
-			constructionDefaultValues: constructionDefaultValues,
 		)
 		plan.holes = holes
 		plan.builders = builders
@@ -1279,12 +1256,11 @@ extension ScopeGenerator {
 
 extension ScopeGenerator {
 	/// The `public struct SafeDIOverrides` of a public mock: a member for each node at the mock root's level, as an
-	/// internal mock's holds it, then the mocked type's own optional-typed defaults, each as visible as its types,
-	/// with an initializer for each access a member has.
+	/// internal mock's holds it, each as visible as its types, with an initializer for each access a member has. The
+	/// mocked type's own default-valued parameters are parameters of `mock()` (`publicMockPlan`).
 	static func publicSafeDIOverridesStruct(
 		rootChildren: [MockParameterNode],
 		rootLabelMap: [String: [TypeDescription: String]],
-		defaultFields: [PublicStructMember],
 		mockedType: Instantiable,
 		context: PublicMockContext,
 		indent: String,
@@ -1299,7 +1275,7 @@ extension ScopeGenerator {
 				admittedModules: [context.moduleName, mockedType.moduleName, context.moduleNameByType[child.concreteType]],
 				requiresSendable: false,
 			)
-		} + defaultFields
+		}
 		var lines = [String]()
 		lines.append("\(indent)/// Overrides for the mock dependency tree.")
 		// `nonisolated`, as the module-level configuration is: in a module whose declarations default to the main actor, a

@@ -8232,6 +8232,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.carrierBeforeSiblingBetweenSiblings: 0,
 		.carrierBeforeSiblingThroughSameModuleSeam: 0,
 		.carrierBeforeSiblingBeneathConfiguredChild: 0,
+		.ownOptionalDefaultOnNonisolatedTypeThatBuilds: 0,
 	]
 
 	/// The least share of the public mock corpus's accepted graphs, whether or not they fail, whose generated code shows
@@ -8689,6 +8690,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.optionalDefaultOfPublicType: 267,
 		.optionalDefaultOfUnprovenType: 325,
 		.otherPackageConsumerModuleOnly: 301,
+		.ownOptionalDefaultOnNonisolatedTypeThatBuilds: 592,
 		.seamDependency: 35,
 		.seamDependencyChain: 31,
 		.packageInitializer: 797,

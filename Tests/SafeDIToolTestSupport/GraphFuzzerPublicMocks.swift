@@ -125,6 +125,10 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case optionalDefaultOfUnprovenType
 	case nonOptionalDefault
 	case closureDefault
+	/// A `.public` type on no actor that builds a dependency, so that its mock has a `SafeDIOverrides`, and that takes an
+	/// optional-typed default-valued parameter, which its `mock()` takes as an internal mock does
+	/// (`GraphFuzzerFixture.publicMockOwnOptionalDefaultProbes`).
+	case ownOptionalDefaultOnNonisolatedTypeThatBuilds
 	/// A child's default naming its own static member.
 	case childDefaultNamingOwnStaticMember
 	/// A `@MainActor` child with an isolated or a `nonisolated` initializer, and an isolated one that spells `@MainActor`
@@ -408,6 +412,7 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 			|| rawValue.hasPrefix("unbuildableValuePublicMockCall") && self != .unbuildableValuePublicMockCallTierOmits
 			|| rawValue.hasPrefix("carrierBeforeSibling")
 			|| self == .holeMockIsolatedToMainActor || self == .holeHandWrittenMockBuiltInPublicMock
+			|| self == .ownOptionalDefaultOnNonisolatedTypeThatBuilds
 	}
 
 	/// Whether the retention oracle's gating draw (`retentionPublicMockValueBeforeBuilder…`) draws this shape, whose
@@ -3614,6 +3619,9 @@ extension GraphFuzzerPublicMockDraw {
 			if types.declarations[leafName]?.arguments.contains("customMockName: \"customMock\"") == true {
 				features.insert(.customMockName)
 			}
+			if let leaf = types.declarations[leafName], leaf.takesOwnOptionalDefaultOnNonisolatedTypeThatBuilds {
+				features.insert(.ownOptionalDefaultOnNonisolatedTypeThatBuilds)
+			}
 		}
 		for childName in childNames {
 			guard let child = types.declarations[childName] else { continue }
@@ -4257,6 +4265,18 @@ extension GraphFuzzerPublicMockDraw {
 				return GraphFuzzerOracle.topLevelParameters(String(initializerLine[start.upperBound..<end.lowerBound]))
 					.map { $0.trimmingCharacters(in: .whitespaces) }
 					.filter { $0.contains(" = ") }
+			}
+
+			/// Whether the type's `mock()` takes an optional-typed default-valued parameter of its initializer, which a public
+			/// mock once held in `SafeDIOverrides` where the type is on no actor and builds a dependency: the type is
+			/// `.public`, builds through its initializer rather than a hand-written mock, which takes no default, and
+			/// instantiates a dependency on no actor.
+			var takesOwnOptionalDefaultOnNonisolatedTypeThatBuilds: Bool {
+				arguments.contains("generateMock: .public")
+					&& !arguments.contains("customMockName:")
+					&& !isMainActor
+					&& properties.contains { $0.attribute.hasPrefix("@Instantiated") }
+					&& defaultParameters.contains { $0.contains("? = ") }
 			}
 		}
 
