@@ -14876,17 +14876,38 @@ enum GraphFuzzerOracle {
 			}
 			drawnHolePlaces = GraphFuzzerGenerator.drawnHolePlaces(forSeed: fixture.seed, features: drawnFeatures)
 		}
+		// The second run creates the mock roots in reverse order, so that a construction memo shared between them carries
+		// other roots' generators to each, and shares generators between places by a schedule of its seed
+		// (`ConstructionSharingSchedule.sharingOracleSchedule(forGraphSeed:)`); it must still give the first run's outcome.
+		// With `SAFEDI_SHARING_ORACLE_REPORT` set, it prints how many of its memo lookups with a candidate the schedule
+		// changed the generator of (`sharing-draws <seed> <changed> <lookups>`), so a corpus run shows whether the
+		// schedule moved anything there.
+		let reportsSharingDraws = ProcessInfo.processInfo.environment["SAFEDI_SHARING_ORACLE_REPORT"] != nil
+		let (sharingDraws, sharingDrawContinuation) = AsyncStream<Bool>.makeStream()
+		let sharingDrawObserver: (@Sendable (Bool) -> Void)? = reportsSharingDraws ? { @Sendable changesHeldGenerator in sharingDrawContinuation.yield(changesHeldGenerator) } : nil
+		let secondOutcome = try await ConstructionMemoOracle.$buildsMockRootsInReverseOrder.withValue(true) {
+			try await ConstructionSharingSchedule.$current.withValue(.sharingOracleSchedule(forGraphSeed: fixture.seed)) {
+				try await ConstructionSharingSchedule.$observer.withValue(sharingDrawObserver) {
+					try await toolOutcome(of: fixture)
+				}
+			}
+		}
+		sharingDrawContinuation.finish()
+		if reportsSharingDraws {
+			var lookupCount = 0
+			var changedCount = 0
+			for await changesHeldGenerator in sharingDraws {
+				lookupCount += 1
+				if changesHeldGenerator {
+					changedCount += 1
+				}
+			}
+			print("sharing-draws \(fixture.seed) \(changedCount) \(lookupCount)")
+		}
 		return try await GraphFuzzerToolRuns(
 			fixture: fixture,
 			firstOutcome: firstOutcome,
-			// The second run creates the mock roots in reverse order, so that a construction memo shared between them
-			// carries other roots' generators to each, and shares generators between places by a schedule of its seed
-			// (`ConstructionSharingSchedule.sharingOracleSchedule(forGraphSeed:)`); it must still give the first run's outcome.
-			secondOutcome: ConstructionMemoOracle.$buildsMockRootsInReverseOrder.withValue(true) {
-				try await ConstructionSharingSchedule.$current.withValue(.sharingOracleSchedule(forGraphSeed: fixture.seed)) {
-					try await toolOutcome(of: fixture)
-				}
-			},
+			secondOutcome: secondOutcome,
 			renamedOutcomes: renamedOutcomes,
 			inlineOutcome: inlineOutcome,
 			visibleOutcome: visibleOutcome,
