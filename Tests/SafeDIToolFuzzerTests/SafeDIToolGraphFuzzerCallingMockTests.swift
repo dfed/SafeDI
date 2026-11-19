@@ -1313,7 +1313,8 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	/// holds a builder of the enclosing called type. The calling mock's call inside the fill re-enters the root level
 	/// function of the call that encloses it, as the twin's call re-enters the enclosing seam call's, so it passes up no
 	/// place, and the called type the third module's type builds through its builder, which runs the re-entered level
-	/// function, is the twin's.
+	/// function, holds the caller's instance of the `LazilyInstantiated` value the graph also draws, as the twin's does
+	/// (`enclosingCalledTypeLazyValueWrapper`).
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func callingMock_reentersEnclosingCallsRootLevel_whenDrawnFillHoldsBuilderOfEnclosingCalledType() async throws {
@@ -1375,7 +1376,9 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	/// The graphs of the shape whose fill holds a builder of the enclosing called type draw each builder, each caller kind
 	/// and each place in the pinned number of graphs, and, for each caller kind, a fill that also instantiates what nothing
-	/// fulfills. A `LazilyInstantiated` is drawn beside a deferred place only.
+	/// fulfills and an enclosing called type that receives the caller's value in each wrapper only if available, each wrapper
+	/// in at least ten graphs. A `LazilyInstantiated` builder is drawn beside a deferred place only, and a `LazilyInstantiated`
+	/// value never beside a `SendableInstantiator`.
 	@Test
 	func fillHoldsBuilderOfEnclosingCalledTypeDraw_drawsEachBuilder_inPinnedNumberOfGraphs() {
 		let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .fillHoldsBuilderOfEnclosingCalledType }
@@ -1386,12 +1389,41 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			if draw.reenteringFillInstantiatesWhatNothingFulfills {
 				counts["reenteringFillInstantiatesWhatNothingFulfills \(draw.cell.caller.rawValue)", default: 0] += 1
 			}
+			if let wrapper = draw.enclosingCalledTypeLazyValueWrapper {
+				counts["value \(wrapper) \(draw.cell.caller.rawValue)", default: 0] += 1
+			}
 		}
 		print("calling-mock builders of the enclosing called type \(counts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
 
-		#expect(counts == ["instantiator plain": 18, "instantiator deferred": 11, "sendableInstantiator plain": 12, "sendableInstantiator deferred": 11, "lazilyInstantiated deferred": 8, "internal": 20, "public": 20, "listed": 20, "reenteringFillInstantiatesWhatNothingFulfills internal": 13, "reenteringFillInstantiatesWhatNothingFulfills public": 12, "reenteringFillInstantiatesWhatNothingFulfills listed": 11])
+		#expect(counts == ["instantiator plain": 18, "instantiator deferred": 11, "sendableInstantiator plain": 12, "sendableInstantiator deferred": 11, "lazilyInstantiated deferred": 8, "internal": 20, "public": 20, "listed": 20, "reenteringFillInstantiatesWhatNothingFulfills internal": 13, "reenteringFillInstantiatesWhatNothingFulfills public": 12, "reenteringFillInstantiatesWhatNothingFulfills listed": 11, "value LazilyInstantiated internal": 5, "value LazilyInstantiated public": 6, "value LazilyInstantiated listed": 5, "value SendableLazilyInstantiated internal": 6, "value SendableLazilyInstantiated public": 9, "value SendableLazilyInstantiated listed": 10])
 		#expect(GraphFuzzerCallingMockDraw(seed: 0).enclosingBuilder == nil)
 		#expect(!GraphFuzzerCallingMockDraw(seed: 0).reenteringFillInstantiatesWhatNothingFulfills)
+		#expect(GraphFuzzerCallingMockDraw(seed: 0).enclosingCalledTypeLazyValueWrapper == nil)
+		for wrapper in ["LazilyInstantiated", "SendableLazilyInstantiated"] {
+			#expect(draws.filter { $0.enclosingCalledTypeLazyValueWrapper == wrapper }.count >= 10, "\(wrapper)")
+		}
+		#expect(!draws.contains { $0.enclosingBuilder == .sendableInstantiator && $0.enclosingCalledTypeLazyValueWrapper == "LazilyInstantiated" })
+	}
+
+	/// Seeds 790 and 791 draw the first graphs of `fillHoldsBuilderOfEnclosingCalledType` whose enclosing called type receives
+	/// the caller's value only if available (`enclosingCalledTypeLazyValueWrapper`), in a `LazilyInstantiated` and a
+	/// `SendableLazilyInstantiated`: the call of the third module's public mock inside the fill hands it the instance of the
+	/// called mock's wrapper of the caller's value (`value?.instance`), so the called type the third module's type builds
+	/// again holds the caller's instance, as the twin's does. Each fails with the call passing `nil` instead, as it did before
+	/// the fill's optional wrapper offered its instance (`Property.asOptionalLazilyInstantiatedInstanceProperty`).
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: [UInt64(790), 791])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_handsCalledTypeBuiltAgainCallersInstance_whenDrawnEnclosingCalledTypeReceivesCallersLazyValueOnlyIfAvailable(seed: UInt64) async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: seed)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: seed)
+
+		#expect(draw.cell.shape == .fillHoldsBuilderOfEnclosingCalledType)
+		#expect(draw.enclosingCalledTypeLazyValueWrapper == (seed == 790 ? "LazilyInstantiated" : "SendableLazilyInstantiated"))
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.passUps.map(\.label) == [])
+		#expect(result.comparedValues)
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
 	}
 
 	/// Seed 762 draws a graph of `fillReceivesCallersLazyValueBelowCalledRoot/public/plain` whose called type holds a second
@@ -1774,6 +1806,14 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 						buildersOfReenteringFillsInstantiatingWhatNothingFulfills.insert(builder)
 					}
 				}
+				let wrappers = Set(draws.compactMap(\.enclosingCalledTypeLazyValueWrapper))
+				for wrapper in wrappers {
+					if let first = draws.first(where: { $0.enclosingCalledTypeLazyValueWrapper == wrapper }) {
+						firstSeeds.insert(first.seed)
+					}
+				}
+				#expect(Set(compared.compactMap(\.enclosingCalledTypeLazyValueWrapper)) == wrappers, "\(cell)")
+				let comparesReenteringFillInstantiatingWhatNothingFulfills = compared.contains { $0.reenteringFillInstantiatesWhatNothingFulfills }
 				#expect(Set(compared.compactMap { $0.enclosingBuilder?.rawValue }) == Set(builders), "\(cell)")
 				#expect(Set(compared.filter(\.reenteringFillInstantiatesWhatNothingFulfills).compactMap { $0.enclosingBuilder?.rawValue }) == buildersOfReenteringFillsInstantiatingWhatNothingFulfills, "\(cell)")
 				#expect(Set(compared.map(\.seed)) == firstSeeds, "\(cell)")
@@ -2135,19 +2175,22 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	/// type's root, the first graph of each cell with each call it draws (`CallerLazyValue.Call`), and the first that draws
 	/// a second place whose fill calls the called type again, and a place built in a `@Sendable` function too, whose mocks
 	/// only a compile judges; and, in the shape whose fill holds a builder of the enclosing called type, the first graph of
-	/// each cell with each builder it draws (`GraphFuzzerCallingMockDraw.EnclosingBuilder`), and the first with each builder
+	/// each cell with each builder it draws (`GraphFuzzerCallingMockDraw.EnclosingBuilder`), the first with each builder
 	/// whose fill also instantiates what nothing fulfills (`reenteringFillInstantiatesWhatNothingFulfills`), whose
 	/// re-entered level function, and, beside a `SendableInstantiator`, the no-scope initializer of the fill's plain level,
-	/// only a compile judges. The other graphs of a probed cell differ from a compared one only in names and in variations
-	/// the tool run alone judges, and pass on their tool runs alone, the seam built again's too.
+	/// only a compile judges, and the first whose enclosing called type receives the caller's value in each wrapper
+	/// (`enclosingCalledTypeLazyValueWrapper`), whose instance only the values show. The other graphs of a probed cell
+	/// differ from a compared one only in names and in variations the tool run alone judges, and pass on their tool runs
+	/// alone, the seam built again's too.
 	static func comparesValues(ofSeed seed: UInt64) -> Bool {
 		comparedSeeds.contains(seed)
 	}
 
 	/// The first seed of each cell and leaf position, and of each cell and call of the shape that draws one, and of each
 	/// cell and variation of that shape drawn after the call, in the corpus, among that shape's graphs that state probes;
-	/// and the first of each cell and builder of the shape whose fill holds a builder of the enclosing called type, and the
-	/// first of each cell and builder of that shape whose fill also instantiates what nothing fulfills.
+	/// and the first of each cell and builder of the shape whose fill holds a builder of the enclosing called type, the
+	/// first of each cell and builder of that shape whose fill also instantiates what nothing fulfills, and the first of
+	/// each cell of that shape whose enclosing called type receives the caller's value in each wrapper.
 	static let comparedSeeds: Set<UInt64> = {
 		var seenCellsAndPositions = Set<String>()
 		var seenCellsAndCalls = Set<String>()
@@ -2169,6 +2212,9 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 				seeds.insert(seed)
 			}
 			if draw.reenteringFillInstantiatesWhatNothingFulfills, let builder = draw.enclosingBuilder, seenCellsAndCalls.insert("\(draw.cell) \(builder) reenteringFillInstantiatesWhatNothingFulfills").inserted {
+				seeds.insert(seed)
+			}
+			if let wrapper = draw.enclosingCalledTypeLazyValueWrapper, seenCellsAndCalls.insert("\(draw.cell) \(wrapper)").inserted {
 				seeds.insert(seed)
 			}
 		}

@@ -304,6 +304,17 @@ struct GraphFuzzerCallingMockDraw {
 		// `@Sendable` family's struct, whose no-scope initializer takes a `@Sendable` builder
 		// (`ScopeGenerator.LevelBuilderForms.takesSendableBuilder(atLevel:)`).
 		reenteringFillInstantiatesWhatNothingFulfills = enclosingBuilder != nil && random.element(of: [false, true])
+		// Drawn after everything else, and only for its shape, so the graphs drawn before it keep their values. Beside a
+		// `SendableInstantiator`, which builds the called type inside a `@Sendable` function, only the `Sendable` wrapper: a
+		// `LazilyInstantiated` read there is an error, in production too.
+		enclosingCalledTypeLazyValueWrapper = switch enclosingBuilder {
+		case .instantiator?, .lazilyInstantiated?:
+			random.element(of: [nil, "SendableLazilyInstantiated", "LazilyInstantiated"])
+		case .sendableInstantiator?:
+			random.element(of: [nil, "SendableLazilyInstantiated"])
+		case nil:
+			nil
+		}
 		// Drawn after everything else, and only for the control, so no other graph changes.
 		callsMixedFormMock = cell.shape == .noVisibleImplementation && random.element(of: [false, true])
 	}
@@ -463,6 +474,14 @@ struct GraphFuzzerCallingMockDraw {
 	/// builder through the struct of its own level, which the call inside the fill hands on to the level function it
 	/// re-enters (`PublicMockLevelFunctions.Member.reentry`).
 	let reenteringFillInstantiatesWhatNothingFulfills: Bool
+
+	/// For the shape whose fill holds a builder of the enclosing called type, the wrapper, `LazilyInstantiated` or
+	/// `SendableLazilyInstantiated`, the caller instantiates `value` in, which the enclosing called type receives only if
+	/// available as that wrapper's optional, or `nil` where it receives nothing. The called type's public mock takes the
+	/// value as `Value?` and binds its own wrapper of it, which the call inside the fill, building the called type again
+	/// through the third module's public mock, hands on through the optional (`value?.instance`), so the called type built
+	/// again holds the caller's instance, as inline.
+	let enclosingCalledTypeLazyValueWrapper: String?
 
 	/// The protocol no declaration fulfills that the fill instantiates where `reenteringFillInstantiatesWhatNothingFulfills`,
 	/// and the plain class a probe hands its builder.
@@ -908,7 +927,21 @@ struct GraphFuzzerCallingMockDraw {
 		case .deferred:
 			"(\(caller), \(caller).\(place).instantiate(7), re-entered \(names.inner), its \(placeLabel).instantiate(7))"
 		}
-		return [DifferentialValueProbe(name: name, expression: probe(of: calls.mock), knownRightExpression: probe(of: calls.twin))]
+		let wholeProbe = DifferentialValueProbe(name: name, expression: probe(of: calls.mock), knownRightExpression: probe(of: calls.twin))
+		guard let wrapper = enclosingCalledTypeLazyValueWrapper else { return [wholeProbe] }
+		// Where the enclosing called type receives the caller's lazily held value, whether it and the one built again hold the
+		// caller's instance, in a probe of its own, so its reads of the instances leave the first probe's wrappers unread.
+		let value = names.value.lowercasedFirst
+		let inner = names.inner.lowercasedFirst
+		func instanceProbe(of call: String) -> String {
+			"{ let caller = \(call); let reentered = \(reentered); return (caller.\(inner).\(value)?.instance === caller.\(value).instance, reentered.\(value)?.instance === caller.\(value).instance) }()"
+		}
+		let instanceProbe = DifferentialValueProbe(name: "(\(names.inner) holds the caller’s \(value), re-entered \(names.inner) holds it)", expression: instanceProbe(of: calls.mock), knownRightExpression: instanceProbe(of: calls.twin))
+		// A `LazilyInstantiated`'s state, which the comparator describes, differs by two known differences of a call of a public
+		// mock (`public-mock-builders.md`, "A lazy value a call hands over"): the call reads the caller's wrapper at the call,
+		// and the called mock wraps the instance again, in a wrapper whose instance nothing has read. So beside it only the
+		// instances are compared. A `SendableLazilyInstantiated` keeps its state where the comparator cannot see it.
+		return wrapper == "LazilyInstantiated" ? [instanceProbe] : [wholeProbe, instanceProbe]
 	}
 
 	/// The second place's protocol, the label of the level that holds it and its own, and the type that fills it, of the
@@ -1173,17 +1206,40 @@ struct GraphFuzzerCallingMockDraw {
 		let attribute = form == .mock && fillHoles?.calledTypeIsSeam == false && cell.shape != .seamCallerFillSharesBuilder
 			? "@Instantiable(generateMock: .public)"
 			: "@Instantiable(generateDependencyTree: true, generateMock: .public)"
-		var content = """
-		import SafeDI
+		var content: String
+		if let wrapper = enclosingCalledTypeLazyValueWrapper {
+			// The enclosing called type receives the caller's value only if available, as an optional wrapper.
+			let value = names.value.lowercasedFirst
+			content = """
+			import SafeDI
 
-		public protocol \(names.hole): AnyObject {}
+			public protocol \(names.hole): AnyObject {}
 
-		\(attribute)
-		public final class \(names.inner): Instantiable {
-		    init(\(place.label): \(place.type)) { self.\(place.label) = \(place.label) }
-		    \(place.attribute) public let \(place.label): \(place.type)
+			@Instantiable
+			public final class \(names.value): Instantiable, Sendable {
+			    public init() {}
+			}
+
+			\(attribute)
+			public final class \(names.inner): Instantiable {
+			    init(\(place.label): \(place.type), \(value): \(wrapper)<\(names.value)>?) { self.\(place.label) = \(place.label); self.\(value) = \(value) }
+			    \(place.attribute) public let \(place.label): \(place.type)
+			    @Received(onlyIfAvailable: true) public let \(value): \(wrapper)<\(names.value)>?
+			}
+			"""
+		} else {
+			content = """
+			import SafeDI
+
+			public protocol \(names.hole): AnyObject {}
+
+			\(attribute)
+			public final class \(names.inner): Instantiable {
+			    init(\(place.label): \(place.type)) { self.\(place.label) = \(place.label) }
+			    \(place.attribute) public let \(place.label): \(place.type)
+			}
+			"""
 		}
-		"""
 		if callsMixedFormMock {
 			let mixedPlace = mixedFormPlace
 			content += """
@@ -1514,7 +1570,12 @@ struct GraphFuzzerCallingMockDraw {
 				instantiated.append((label: Self.beaconProtocol.lowercasedFirst, type: "any \(Self.beaconProtocol)"))
 			}
 			declarations.append(fillDeclaration(named: names.fill, protocolName: names.hole, received: nil, instantiated: instantiated, isPublic: callerIsPublic))
-			declarations.append(callerDeclaration(form, properties: [(names.inner.lowercasedFirst, names.inner)]))
+			var properties = [(label: names.inner.lowercasedFirst, type: names.inner)]
+			if let wrapper = enclosingCalledTypeLazyValueWrapper {
+				// The value the enclosing called type receives only if available, which the caller holds lazily.
+				properties.append((label: names.value.lowercasedFirst, type: "\(wrapper)<\(names.value)>"))
+			}
+			declarations.append(callerDeclaration(form, properties: properties))
 		case .appOnlyScreenInLoop, .seamBuiltAgain, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot:
 			break
 		}
