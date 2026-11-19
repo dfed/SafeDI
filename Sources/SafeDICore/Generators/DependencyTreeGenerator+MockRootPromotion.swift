@@ -33,6 +33,8 @@ extension DependencyTreeGenerator {
 	/// - Parameter scopesWithValidatedDeclarations: The scopes of `typeDescriptionToScopeMap` whose trees' declarations are
 	///   already known to repeat no dependency label and to declare no rename the macro rejects, shared across mock roots:
 	///   a scope's tree is the same whichever mock root builds it, so a tree validated once is not walked again.
+	/// - Parameter publicMockContext: The context the module's public mocks share (`makePublicMockContext()`), which a public
+	///   mock's root reads, or `nil` when the module declares no public mock.
 	/// - Parameter emittingModule: The module the mock's code compiles in, whose access to each type the mock constructs
 	///   is checked, or `nil` to check none.
 	func createMockRootScopeGenerator(
@@ -41,6 +43,7 @@ extension DependencyTreeGenerator {
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
 		flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault],
 		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
+		publicMockContext: PublicMockContext?,
 		emittingModule: EmittingModule?,
 		receivedPropertiesCache cache: inout ReceivedPropertiesCache,
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
@@ -479,7 +482,7 @@ extension DependencyTreeGenerator {
 		// another module's public mock passes up the places it cannot fill: `mock()` takes builders for them, shaped as a
 		// seam's are. The sites' fields are what is in scope there, read from the tree as a seam's are, and the tree is built
 		// again so that each site calls its builder, and each call hands its builders up.
-		guard instantiable.generateMock == .public, generator.containsBuildSite || generator.passesUpBuilder else { return generator }
+		guard instantiable.generateMock == .public, let publicMockContext, generator.containsBuildSite || generator.passesUpBuilder else { return generator }
 		// The root level holds what `mock()` binds under its bare label before its tree, as a seam's holds its parameters; the
 		// builders do not change what it binds, so the generator built without them gives it.
 		let rootLevel = await Self.publicMockRootLevel(
