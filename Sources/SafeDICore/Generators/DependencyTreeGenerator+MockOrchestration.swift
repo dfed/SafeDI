@@ -446,9 +446,10 @@ extension DependencyTreeGenerator {
 	struct MockScopes {
 		/// These scopes, with the tree of a public mock built from `publicMockTypeDescriptionToScopeMap`.
 		func forMockRoot(_ instantiable: Instantiable) -> MockScopes {
-			guard instantiable.generateMock == .public, let publicMockTypeDescriptionToScopeMap else { return self }
+			guard instantiable.generateMock == .public, let publicMockTypeDescriptionToScopeMap, let frozenPublicMockScopeMap else { return self }
 			var mockScopes = self
 			mockScopes.typeDescriptionToScopeMap = publicMockTypeDescriptionToScopeMap
+			mockScopes.frozenScopeMap = frozenPublicMockScopeMap
 			return mockScopes
 		}
 
@@ -464,6 +465,10 @@ extension DependencyTreeGenerator {
 		/// `@Instantiated` property's type has no declaration (`createMockTypeDescriptionToScopeMapping`). `nil` when the
 		/// module declares no public mock.
 		var publicMockTypeDescriptionToScopeMap: [TypeDescription: Scope]?
+		/// `typeDescriptionToScopeMap`, frozen, which every mock root's tree is built from.
+		var frozenScopeMap: FrozenScopeMap
+		/// `publicMockTypeDescriptionToScopeMap`, frozen.
+		let frozenPublicMockScopeMap: FrozenScopeMap?
 		/// The hand-written mock a flat parameter of `mock()` of each type defaults to
 		/// (`flatParameterMockDefaults(in:emittingModule:)`).
 		let flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault]
@@ -605,13 +610,16 @@ extension DependencyTreeGenerator {
 				result[instantiable.concreteInstantiable, default: []].insert(instantiable.mockDeclarationLocation)
 			}
 
+		let publicMockTypeDescriptionToScopeMap = generatesPublicMock
+			? createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCalls, buildsHoles: true)
+			: nil
 		return MockScopes(
 			erasureDeclarations: erasureDeclarations,
 			erasedToConcreteTypeMap: erasedToConcreteTypeMap,
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
-			publicMockTypeDescriptionToScopeMap: generatesPublicMock
-				? createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCalls, buildsHoles: true)
-				: nil,
+			publicMockTypeDescriptionToScopeMap: publicMockTypeDescriptionToScopeMap,
+			frozenScopeMap: FrozenScopeMap(freezing: typeDescriptionToScopeMap.lazy.map { (key: $0.key, scope: $0.value) }),
+			frozenPublicMockScopeMap: publicMockTypeDescriptionToScopeMap.map { map in FrozenScopeMap(freezing: map.lazy.map { (key: $0.key, scope: $0.value) }) },
 			flatParameterMockDefaults: flatParameterMockDefaults(in: typeDescriptionToScopeMap, emittingModule: mockEmittingModule),
 			handWrittenMockLocationsByConcreteType: handWrittenMockLocationsByConcreteType,
 		)
@@ -755,6 +763,7 @@ extension DependencyTreeGenerator {
 			for: instantiable,
 			scope: scope,
 			typeDescriptionToScopeMap: mockScopes.typeDescriptionToScopeMap,
+			frozenScopeMap: mockScopes.frozenScopeMap,
 			flatParameterMockDefaults: mockScopes.flatParameterMockDefaults,
 			erasedToConcreteTypeMap: mockScopes.erasedToConcreteTypeMap,
 			publicMockContext: publicMockContext,

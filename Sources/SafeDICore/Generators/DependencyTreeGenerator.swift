@@ -543,7 +543,9 @@ public actor DependencyTreeGenerator {
 				let foreignSeamHoles = foreignSeamRoots.compactMapValues { $0?.signature.holes }
 				throw error.markingCyclesClosedInSeamFills(DependencyTreeGeneratorError.SeamFillDeclarations.ofFills(ofHolesOf: foreignSeamHoles, in: typeDescriptionToScopeMap))
 			}
-			inlineForeignSeamTrees = try inlineTreesOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap, foreignSeamRoots: foreignSeamRoots)
+			// Every tree built from the validated scopes reads them frozen, once.
+			let frozenScopeMap = FrozenScopeMap(freezing: typeDescriptionToScopeMap.lazy.map { (key: $0.key, scope: $0.value) })
+			inlineForeignSeamTrees = try inlineTreesOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap, frozenScopeMap: frozenScopeMap, foreignSeamRoots: foreignSeamRoots)
 			validatedScopes = Set(typeDescriptionToScopeMap.values)
 			// A module whose declarations hold no seam generates from the validated scopes.
 			// One that holds a seam generates from a second map, in which every reach of a seam is a call to
@@ -559,19 +561,23 @@ public actor DependencyTreeGenerator {
 					},
 				)
 				rootsOfOtherModules = rootScopesToGenerate.rootsOfOtherModules
-				return try rootScopesToGenerate.rootScopes.map { typeDescription, scope in
-					try RootScopeInfo(
+				var roots = [RootScopeInfo]()
+				for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
+					let (table, record) = frozenScopeMap.freezing(rootScope: scope)
+					try roots.append(RootScopeInfo(
 						typeDescription: typeDescription,
 						instantiable: scope.instantiable,
 						sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
-						scopeGenerator: scope.createScopeGenerator(
+						scopeGenerator: record.createScopeGenerator(
+							in: table,
 							for: nil,
 							lazilyInstantiatedInstanceProperties: [],
 							erasedToConcreteExistential: false,
 							declaredTypeNames: declaredTypeNames,
 						),
-					)
+					))
 				}
+				return roots
 			}
 			let seamWorldRoots = try seamWorldRootScopeGenerators(foreignSeamRoots: foreignSeamRoots, unreadTypeComment: unreadTypeComment)
 			rootsOfOtherModules = seamWorldRoots.rootsOfOtherModules

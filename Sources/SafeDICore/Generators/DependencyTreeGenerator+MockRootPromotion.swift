@@ -41,6 +41,7 @@ extension DependencyTreeGenerator {
 		for instantiable: Instantiable,
 		scope: Scope,
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		frozenScopeMap: FrozenScopeMap,
 		flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault],
 		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
 		publicMockContext: PublicMockContext?,
@@ -446,8 +447,10 @@ extension DependencyTreeGenerator {
 		// The instances the tree reads by value through a wrapper a public mock takes as a parameter, which it reads as
 		// `<label>.instance` when it builds the type that reads it, as production reads a received wrapper's instance.
 		var instancesReadThroughWrapperParameters = Set<Property>()
+		let (mockRootTable, mockRootRecord) = frozenScopeMap.freezing(rootScope: mockRootScope)
 		func mockRootGenerator(builders: ShapedBuilders?) throws -> ScopeGenerator {
-			try mockRootScope.createScopeGenerator(
+			try mockRootRecord.createScopeGenerator(
+				in: mockRootTable,
 				for: nil,
 				// The mock root binds every received property it does not promote, which encloses its whole tree.
 				nearestDeclarations: .binding(allReceived, passingNilTo: receivesPassedNil),
@@ -912,10 +915,15 @@ extension DependencyTreeGenerator {
 	/// of them rename, and the receives of its dependencies from above it, as `receivesPassedNilInMockTree` walks them.
 	/// A builder passed up to the mock's own parameter is read there, which the mock names apart from every label.
 	private static func declaredLabelsAndReceivesFromAbove(of scope: Scope) -> (declaredLabels: Set<String>, receives: [HidingReceive]) {
-		let scopeType = scope.instantiable.concreteInstantiable
-		let declaredLabels = Set(scope.instantiable.dependencies.lazy.filter { !$0.source.isReceived }.map(\.property.label))
-		let receives = scope.instantiable.dependencies.compactMap { dependency -> HidingReceive? in
-			guard !(scope.publicMockCall?.passesUpBuilder(receivedAs: dependency.property) ?? false) else { return nil }
+		declaredLabelsAndReceivesFromAbove(of: scope.instantiable, publicMockCall: scope.publicMockCall)
+	}
+
+	/// See `declaredLabelsAndReceivesFromAbove(of:)`: of the type `instantiable` declares, built by `publicMockCall`.
+	private static func declaredLabelsAndReceivesFromAbove(of instantiable: Instantiable, publicMockCall: PublicMockCall?) -> (declaredLabels: Set<String>, receives: [HidingReceive]) {
+		let scopeType = instantiable.concreteInstantiable
+		let declaredLabels = Set(instantiable.dependencies.lazy.filter { !$0.source.isReceived }.map(\.property.label))
+		let receives = instantiable.dependencies.compactMap { dependency -> HidingReceive? in
+			guard !(publicMockCall?.passesUpBuilder(receivedAs: dependency.property) ?? false) else { return nil }
 			return Self.propertyReceivedFromAbove(byReceiveOf: dependency, onTypeDeclaring: declaredLabels).map {
 				HidingReceive(dependency: dependency, property: $0.property, isRequired: $0.isRequired, hidingType: scopeType)
 			}
@@ -1125,8 +1133,8 @@ extension DependencyTreeGenerator {
 	/// The properties each required receive of the type of `scope` reads from above it, by label, as
 	/// `receivesPassedNilInMockTree` walks them: each pins the declaration of its label that every receive of it beneath
 	/// the type reads, back to a type that declares the label.
-	static func propertiesReadByRequiredReceivesFromAbove(of scope: Scope) -> [(label: String, propertiesRead: Set<Property>)] {
-		declaredLabelsAndReceivesFromAbove(of: scope).receives.compactMap { receive in
+	static func propertiesReadByRequiredReceivesFromAbove(of scope: ScopeRecord) -> [(label: String, propertiesRead: Set<Property>)] {
+		declaredLabelsAndReceivesFromAbove(of: scope.instantiable, publicMockCall: scope.publicMockCall).receives.compactMap { receive in
 			receive.isRequired ? (receive.property.label, receive.propertiesRead) : nil
 		}
 	}
