@@ -1330,13 +1330,14 @@ jobs:
       # Runs the bundle as `swift test` would, in one process. Only that
       # process writes to the profile folder: every process a test starts gets
       # an LLVM_PROFILE_FILE of its own in the test's temporary directory.
-      # A time limit for the macOS job's reason: twice the slowest suite,
-      # which took 13.5 to 17.8 minutes with every compile check compiling
-      # (the runs "Build Tests on Linux" names; 15 to 20 in Verify's runs of
-      # the suite in one process, as verify.yml says) and 7.5 with the checks
-      # skipped (run 43765011597).
+      # A time limit for the macOS job's reason: twice the slowest suite.
+      # It took 13.5 to 17.8 minutes with every compile check compiling (the
+      # runs "Build Tests on Linux" names; 15 to 20 in Verify's runs of the
+      # suite in one process, as verify.yml says) and 7.5 with the checks
+      # skipped (run 43765011597); the 2.3.0 stack's suite took 34.9 (run
+      # 44545790927), and run 44573505588 passed 40 still running.
       - name: Test
-        timeout-minutes: 40
+        timeout-minutes: 70
         env:
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
           LLVM_PROFILE_FILE: ${{ runner.temp }}/unit-suite-profiles/unit-suite-%p.profraw
