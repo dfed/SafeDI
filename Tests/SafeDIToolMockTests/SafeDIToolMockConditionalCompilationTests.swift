@@ -1891,6 +1891,69 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtInactiveClauseInDeclaringModule_whenCallingModuleComputesCalledPublicMockWithoutClausesCondition() async {
+		// `Core`, built with `FEATURE`, generates `Service`'s public mock, whose tree builds `DefaultUserService` with its
+		// hand-written mock. `App`, of another package, cannot build `Service`'s tree, whose `Store` is internal, so its mock
+		// calls the public mock, whose plan `App`'s run computes from `Core`'s files as the plugin hands them, read without
+		// `FEATURE`: that computation fails, and `App` reports its error.
+		await assertThrowsMultiModuleError(
+			inModule: "App",
+			diagnostics: { fixtures in
+				"""
+				\(Self.path(of: "DefaultUserService.swift", in: "Core", fixtures: fixtures, integration: .swiftPackagePlugin)):3:5: error: \(Self.message(clause: "#if FEATURE"))
+				"""
+			},
+		) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Core", packageName: "core", swiftFileContent: [
+						Self.analytics,
+						"""
+						@Instantiable
+						struct Store: Instantiable {
+						    init() {}
+						}
+						""",
+						"""
+						@Instantiable(generateMock: .public)
+						public struct Service: Instantiable {
+						    init(analytics: Analytics, userService: DefaultUserService, store: Store) {
+						        self.analytics = analytics
+						        self.userService = userService
+						        self.store = store
+						    }
+
+						    @Instantiated let analytics: Analytics
+						    @Instantiated let userService: DefaultUserService
+						    @Instantiated let store: Store
+						}
+						""",
+					], swiftFileContentByFilePath: [
+						"DefaultUserService.swift": Self.defaultUserService(),
+					], activeCompilationConditions: ["DEBUG", "FEATURE"]),
+					ModuleFixture(name: "App", packageName: "app", swiftFileContent: [
+						"""
+						import Core
+
+						@Instantiable(generateMock: true)
+						public struct Screen: Instantiable {
+						    public init(service: Service) {
+						        self.service = service
+						    }
+
+						    @Instantiated let service: Service
+						}
+						""",
+					], dependencies: ["Core"], activeCompilationConditions: ["DEBUG"]),
+				],
+				integration: .swiftPackagePlugin,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_passesDependencyToOtherModulesMock_whenClauseDeclaringItIsActive() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.inlineModules(activeCompilationConditions: ["FEATURE"]),

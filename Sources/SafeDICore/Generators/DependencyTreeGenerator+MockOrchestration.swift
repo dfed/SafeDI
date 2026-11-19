@@ -489,6 +489,7 @@ extension DependencyTreeGenerator {
 		mockEmittingModule: EmittingModule?,
 		receivedPropertiesCache: inout ReceivedPropertiesCache,
 	) async throws -> MockScopes {
+		GenerationLayerObservation.record(.mockScopes(ofModule: seams.currentModule.moduleName), inRunOf: seams.currentModule.moduleName)
 		// Build a map of erased wrapper types → concrete fulfilling types.
 		// This lets mocks construct types like AnyUserService(DefaultUserService())
 		// even when the erased type isn't directly @Instantiable.
