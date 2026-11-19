@@ -51,7 +51,7 @@ public struct ConstructionSharingSchedule: Sendable {
 	func draw(atLookup lookupCount: inout Int) -> Draw {
 		let lookup = lookupCount
 		lookupCount += 1
-		let mixed = seed.map { Self.mixed($0 &+ UInt64(lookup) &* 0x9E37_79B9_7F4A_7C15) }
+		let mixed = seed.map { Self.mixed($0 &+ UInt64(lookup) &* 0x9E3779B97F4A7C15) }
 		return Draw(
 			buildsAgain: mixed.map { $0 % 4 == 0 } ?? false,
 			permutationSeed: mixed.map { Self.mixed($0) },
@@ -99,9 +99,9 @@ public struct ConstructionSharingSchedule: Sendable {
 
 	/// SplitMix64's output function, so that each lookup's draw is the same on every run and platform.
 	public static func mixed(_ value: UInt64) -> UInt64 {
-		var mixed = value &+ 0x9E37_79B9_7F4A_7C15
-		mixed = (mixed ^ (mixed >> 30)) &* 0xBF58_476D_1CE4_E5B9
-		mixed = (mixed ^ (mixed >> 27)) &* 0x94D0_49BB_1331_11EB
+		var mixed = value &+ 0x9E3779B97F4A7C15
+		mixed = (mixed ^ (mixed >> 30)) &* 0xBF58476D1CE4E5B9
+		mixed = (mixed ^ (mixed >> 27)) &* 0x94D049BB133111EB
 		return mixed ^ (mixed >> 31)
 	}
 }

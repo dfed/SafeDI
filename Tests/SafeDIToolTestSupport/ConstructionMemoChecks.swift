@@ -471,7 +471,7 @@ extension ConstructionSharingSchedule {
 	/// instead, so a dispatched run can sweep a corpus under twenty of them.
 	public static func sharingOracleSchedule(forGraphSeed graphSeed: UInt64) -> ConstructionSharingSchedule {
 		let scheduleNumber = ProcessInfo.processInfo.environment["SAFEDI_SHARING_ORACLE_SCHEDULE"].flatMap(UInt64.init) ?? graphSeed
-		let scheduleSeed = mixed(graphSeed &+ scheduleNumber &* 0xD1B5_4A32_D192_ED03)
+		let scheduleSeed = mixed(graphSeed &+ scheduleNumber &* 0xD1B54A32D192ED03)
 		switch scheduleNumber % 3 {
 		case 0:
 			return ConstructionSharingSchedule(seed: nil, offersLaterPlacesCandidates: true)
