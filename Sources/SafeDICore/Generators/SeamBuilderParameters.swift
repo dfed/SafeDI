@@ -37,13 +37,15 @@ extension DependencyTreeGenerator {
 	/// field, and hide the farther declarations of their label, which Swift would bind instead. In a public mock's tree
 	/// (`bindsReceivesAgain`), a receive the mock binds again (`mockBindsAgain(receiving:beneath:)`) is a declaration of the
 	/// scope that makes it, bound before its children, and `parameters` are the mock's root level
-	/// (`PublicMockRootLevel`), whose `namesApartAtRoot` no level declares.
+	/// (`PublicMockRootLevel`), whose `namesApartAtRoot` no level declares and whose `receiversByParameter` are the declarations
+	/// that receive each parameter's own form (`PublicMockRootLevel.receiversByField`).
 	static func holes(
 		of seam: Instantiable,
 		generator: ScopeGenerator,
 		bindsReceivesAgain: Bool = false,
 		namesApartAtRoot: PublicMockRootLevel.NamesApart = .init(),
 		parameters: [SeamSignature.Parameter],
+		receiversByParameter: [Property: [SeamSignature.Receiver]] = [:],
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
 	) -> [SeamSignature.Hole] {
@@ -80,6 +82,7 @@ extension DependencyTreeGenerator {
 				bindsReceivesAgain: bindsReceivesAgain,
 				namesApartAtRoot: namesApartAtRoot,
 				parameters: parameters,
+				receiversByParameter: receiversByParameter,
 				seamTypeAccess: seamTypeAccess,
 				proof: proof,
 				instantiables: instantiables,
@@ -865,6 +868,7 @@ extension DependencyTreeGenerator {
 		bindsReceivesAgain: Bool,
 		namesApartAtRoot: PublicMockRootLevel.NamesApart,
 		parameters: [SeamSignature.Parameter],
+		receiversByParameter: [Property: [SeamSignature.Receiver]],
 		seamTypeAccess: AccessLevel,
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
@@ -939,17 +943,17 @@ extension DependencyTreeGenerator {
 			parameterDeclaration.deferral = parameter.deferral
 			parameterDeclaration.isBoundByPublicMockRoot = bindsReceivesAgain
 			// A public mock's root level binds a receive again where its nearest declaration does not provide its form, so
-			// its parameters say nothing about the forms a fill may receive.
-			if !bindsReceivesAgain {
-				parameterDeclaration.seamParameterOrigin = SeamSignature.Hole.Field.SeamParameterOrigin(
-					seamDeclarationLocation: seam.declarationLocation,
-					isPassThrough: parameter.isPassThrough,
-					// The seam's own property is received by the seam itself, where it declares it.
-					receivers: parameter.receivers.isEmpty
-						? [SeamSignature.Receiver(property: parameter.property, declaringType: parameterDeclaration.declaringType, declarationLocation: parameterDeclaration.declarationLocation, access: parameter.access)]
-						: parameter.receivers,
-				)
-			}
+			// its parameters say little about the forms a fill may receive: only that an optional wrapper, which its tree
+			// receives only if available, gives a fill no value (`findingsOfFill`).
+			parameterDeclaration.seamParameterOrigin = SeamSignature.Hole.Field.SeamParameterOrigin(
+				seamDeclarationLocation: seam.declarationLocation,
+				isPassThrough: parameter.isPassThrough,
+				// The seam's own property is received by the seam itself, where it declares it. A public mock's root level records
+				// its receivers apart (`PublicMockRootLevel.receiversByField`).
+				receivers: receiversByParameter[parameter.property] ?? (parameter.receivers.isEmpty
+					? [SeamSignature.Receiver(property: parameter.property, declaringType: parameterDeclaration.declaringType, declarationLocation: parameterDeclaration.declarationLocation, access: parameter.access)]
+					: parameter.receivers),
+			)
 			declare(parameterDeclaration)
 		}
 		var sendableDepth = 0
@@ -1598,10 +1602,13 @@ extension DependencyTreeGenerator {
 	/// generated outside the seam's module cannot refer to. Each finding once, by kind and location: the findings of several
 	/// fills that differ only in the places they name are one that names every such place (`FillFinding.adding(_:to:)`),
 	/// since the place declared first is a fact of file names; findings that differ otherwise are each reported, none picked,
-	/// in the order `FillFinding.precedesInSourceOrder` gives, which includes the file of each place.
+	/// in the order `FillFinding.precedesInSourceOrder` gives, which includes the file of each place. A finding about a
+	/// mock's code alone is reported only where the build compiles the generated mocks (`compilesGeneratedMocks`): a build
+	/// that leaves the mock condition inactive never compiles it.
 	static func validateFills(
 		inTreesRootedAt generators: [ScopeGenerator],
 		callerModule: ModuleIdentity,
+		compilesGeneratedMocks: Bool = true,
 	) throws {
 		// The findings of each key, in the order the keys are first met, those that differ only in the places they name merged.
 		var keys = [String]()
@@ -1621,7 +1628,7 @@ extension DependencyTreeGenerator {
 			var generatorsToVisit = [(generator: root, hidden: FillReentryHidings?.none, fillsOfCall: [ScopeGenerator](), isFillOfPublicMockCall: false, inheritedCalledCopyDeclarations: [String: [SeamSignature.Hole.UncarriedDeclaration]]())]
 			while let (generator, hidden, fillsOfCall, isFillOfPublicMockCall, inheritedCalledCopyDeclarations) = generatorsToVisit.popLast() {
 				if let hole = generator.fillHole, let child = generator.children.first {
-					findingsOfFill(of: hole, fill: generator, child: child, fillsOfCall: fillsOfCall, hidden: hidden ?? FillReentryHidings(), requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule).forEach(record)
+					findingsOfFill(of: hole, fill: generator, child: child, fillsOfCall: fillsOfCall, hidden: hidden ?? FillReentryHidings(), requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule, compilesGeneratedMocks: compilesGeneratedMocks).forEach(record)
 				}
 				// A seam call's children are its fills, which are judged against the calls inside any of them. A public mock's call
 				// inside one of its fills that re-enters a level function the call declares hands it only what that call reads of its
@@ -1759,6 +1766,8 @@ extension DependencyTreeGenerator {
 	///   - fillsOfCall: The fills of the seam call that declares this fill, which decide whether a type above the seam can
 	///     build a declaration whose tree holds the places they fill.
 	///   - hidden: What the calls inside the fills of the seam call that declares this fill hide from it.
+	///   - compilesGeneratedMocks: Whether the build compiles the generated mocks, where a finding about a mock's code alone
+	///     is reported.
 	private static func findingsOfFill(
 		of hole: SeamSignature.Hole,
 		fill: ScopeGenerator,
@@ -1767,6 +1776,7 @@ extension DependencyTreeGenerator {
 		hidden: FillReentryHidings,
 		requirement: AccessRequirement,
 		callerModule: ModuleIdentity,
+		compilesGeneratedMocks: Bool,
 	) -> [DependencyTreeGeneratorError.FillFinding] {
 		var findings = [DependencyTreeGeneratorError.FillFinding]()
 		// The hole says which module declares each seam: this run may know a seam only through a module that calls it.
@@ -1959,7 +1969,31 @@ extension DependencyTreeGenerator {
 						findings.append(.init(hole: hole, kind: .declarationBoundAfterSite(reader: reader, declaration: declaration, seamModule: seamModule)))
 					}
 				}
+			} else if compilesGeneratedMocks,
+			          let field = sameLabelFields.first,
+			          field.isBoundByPublicMockRoot,
+			          let origin = field.seamParameterOrigin,
+			          !onlyIfAvailable,
+			          field.property.typeDescription.isOptional,
+			          field.property.asLazilyInstantiatedInstanceProperty == property
+			{
+				// A called public mock's tree receives a wrapper only if available, which the mock binds as the field, an optional
+				// wrapper, where the reader requires its instance: no value of the field gives it one. The production twin reports
+				// the label its seam's tree receives in two forms here (the branch below), so the calling mock reports it at the
+				// same sites, the mocked type's declaration and each receiver. Only where the build compiles the generated mocks:
+				// elsewhere the mock, which no other code reads, is never compiled, and the fill is generated as it is.
+				let receivers = origin.receivers.map {
+					DependencyTreeGeneratorError.SeamError.Receiver(property: $0.property, declaringType: $0.declaringType, declarationLocation: $0.declarationLocation, aliasProperty: $0.aliasProperty, isInstantiateMethodParameter: $0.isInstantiateMethodParameter)
+				} + [DependencyTreeGeneratorError.SeamError.Receiver(property: property, declaringType: instantiable.concreteInstantiable, declarationLocation: declarationLocation, aliasProperty: nil, isInstantiateMethodParameter: false)]
+				findings.append(.init(hole: hole, kind: .publicMockHandsOptionalWrapperOfRequiredValue(
+					label: property.label,
+					field: field,
+					receivers: receivers,
+					remedy: DependencyTreeGenerator.labelCollisionRemedy(among: receivers.map(\.property), requiredProperties: [property]),
+					mockedTypeDeclarationLocation: origin.seamDeclarationLocation,
+				)))
 			} else if let field = sameLabelFields.first,
+			          !field.isBoundByPublicMockRoot,
 			          let origin = field.seamParameterOrigin,
 			          // A pass-through takes each form its receivers receive, so where one parameter can take the reader's form
 			          // too, the seam would take that parameter, which provides the field's form: inline reads the caller's
@@ -1996,9 +2030,9 @@ extension DependencyTreeGenerator {
 				checkReadFromCallersScope(of: property, by: reader, onlyIfAvailable: onlyIfAvailable)
 			}
 			// A field of the label with another type that no parameter binds is the inline hidden-label error, which validation
-			// reported. A public mock's root level, which binds a receive again where its declaration does not provide the
-			// form, carries no parameter origin: a fill of a public mock's place that receives a root-level value in another
-			// form is judged by nothing here.
+			// reported. A public mock's root level binds a receive again where its declaration does not provide the form, so a
+			// fill of a public mock's place that receives a root-level value in another form is judged here only where the
+			// field is an optional wrapper and the fill requires its instance.
 		}
 		/// Checks the receives of `generator`'s scope and queues the scopes beneath it. A fill nested in this one is no scope
 		/// of its own: what it builds is judged for receives as this tree's, and its closers by `validateFills`.
@@ -2285,6 +2319,11 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			/// and the fill would be handed another value than inline. Reported as the seam reports it, at the seam, with a
 			/// note at each of `receivers`: the parameter's, then the reader.
 			case parameterReceivedInAnotherForm(label: String, receivers: [SeamError.Receiver], remedy: SeamError.LabelCollisionRemedy, seamDeclarationLocation: Dependency.DeclarationLocation?)
+			/// The reader requires the instance of `field`, the optional `LazilyInstantiated` or `SendableLazilyInstantiated` a
+			/// called public mock's root binds where its tree receives `label` only if available, which gives the fill no value.
+			/// The production twin reports `parameterReceivedInAnotherForm` there, so the calling mock reports at the same sites:
+			/// the mocked type's declaration, with a note at each of `receivers`, the field's, then the reader.
+			case publicMockHandsOptionalWrapperOfRequiredValue(label: String, field: SeamSignature.Hole.Field, receivers: [SeamError.Receiver], remedy: SeamError.LabelCollisionRemedy, mockedTypeDeclarationLocation: Dependency.DeclarationLocation?)
 			/// The places of the hole's case, nested by type, are reached from both the inner seam's plain root enum and its
 			/// `@Sendable` one, and the one fill of the case builds `place`, a place `callerModule` cannot fill, or passes one up,
 			/// whose case would carry the scope value of either root enum.
@@ -2369,6 +2408,8 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			let location = sourceDiagnostics.first?.location.map { "\($0.filePath):\($0.line):\($0.column)" } ?? ""
 			if case let .parameterReceivedInAnotherForm(label, _, _, _) = kind {
 				return "\(kindName) \(location) \(label)"
+			} else if case let .publicMockHandsOptionalWrapperOfRequiredValue(label, _, _, _, _) = kind {
+				return "\(kindName) \(location) \(label)"
 			} else {
 				return "\(kindName) \(location)"
 			}
@@ -2423,6 +2464,8 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 				"fieldFormsDifferBetweenPlaces"
 			case .parameterReceivedInAnotherForm:
 				"parameterReceivedInAnotherForm"
+			case .publicMockHandsOptionalWrapperOfRequiredValue:
+				"publicMockHandsOptionalWrapperOfRequiredValue"
 			case .placeInsideFillOfCaseOfBothRootEnums:
 				"placeInsideFillOfCaseOfBothRootEnums"
 			}
@@ -2900,6 +2943,10 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			case let .parameterReceivedInAnotherForm(label, receivers, remedy, seamDeclarationLocation):
 				return [
 					SourceDiagnostic(severity: .error, location: seamDeclarationLocation, message: SeamError.labelCollisionMessage(seamName: seamName, label: label, receivers: receivers, remedy: remedy)),
+				] + SeamError.receiverNotes(receivers)
+			case let .publicMockHandsOptionalWrapperOfRequiredValue(label, field, receivers, remedy, mockedTypeDeclarationLocation):
+				return [
+					SourceDiagnostic(severity: .error, location: mockedTypeDeclarationLocation, message: "SafeDI cannot fill \(namedBuilders) in a call of \(seamName)’s mock: its tree receives `\(label)` as \(SeamError.receivedForms(of: receivers)), so the mock hands the builder only `\(field.property.asSource)`, which holds no value where its caller passes none. \(SeamError.labelCollisionRemedyText(seamName: seamName, label: label, remedy: remedy))"),
 				] + SeamError.receiverNotes(receivers)
 			case let .placeInsideFillOfCaseOfBothRootEnums(place, callerModule, seamModule):
 				let placeDescription = "`\(place.ownerType.asSource)`’s `\(place.property.asSource)`"

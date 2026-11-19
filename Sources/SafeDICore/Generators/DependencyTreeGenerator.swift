@@ -25,8 +25,9 @@ public actor DependencyTreeGenerator {
 	///   - importStatements: The imports generated dependency-tree code needs.
 	///   - mockImportStatements: The imports generated mock code needs.
 	///   - compilesGeneratedMocks: Whether the build compiles the generated mocks
-	///     (`ConditionalCompilationEvaluator.compilesGeneratedMocks`). A call of a hand-written mock, or a calling mock's
-	///     fill of a place it cannot fill, that a build compiles no generated mock in is never compiled, so each is checked
+	///     (`ConditionalCompilationEvaluator.compilesGeneratedMocks`). A call of a hand-written mock, a calling mock's fill
+	///     of a place it cannot fill, and a calling mock's fill that a called public mock hands only an optional wrapper of
+	///     a value the fill requires, that a build compiles no generated mock in are never compiled, so each is checked
 	///     only where they are compiled.
 	///   - emittingModule: The module the generated code compiles in, which decides what access each declaration the
 	///     generated code constructs needs, or `nil` to check no access, as `SafeDITool query` does.
@@ -433,6 +434,7 @@ public actor DependencyTreeGenerator {
 		try Self.validateFills(
 			inTreesRootedAt: mockRoots.map(\.scopeGenerator),
 			callerModule: seams.currentModule,
+			compilesGeneratedMocks: compilesGeneratedMocks,
 		)
 		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: mockRoots)
 
@@ -2830,8 +2832,17 @@ public actor DependencyTreeGenerator {
 			/// the seam in a form no one parameter takes together with the parameter's: the seam's tree, as the caller fills it,
 			/// receives `label` as `receivers` do.
 			static func labelCollisionMessage(seamName: String, label: String, receivers: [Receiver], remedy: LabelCollisionRemedy) -> String {
-				let forms = receivers.map { "`\($0.property.asSource)` on `\($0.declaringType.asSource)`" }.joined(separator: " and ")
-				let remedyText = switch remedy {
+				"SafeDI cannot generate the dependency tree of \(seamName): its tree receives `\(label)` as \(receivedForms(of: receivers)), and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. \(labelCollisionRemedyText(seamName: seamName, label: label, remedy: remedy))"
+			}
+
+			/// The forms `receivers` receive a label in, each with its type, as a sentence lists them.
+			static func receivedForms(of receivers: [Receiver]) -> String {
+				receivers.map { "`\($0.property.asSource)` on `\($0.declaringType.asSource)`" }.joined(separator: " and ")
+			}
+
+			/// The remedy `remedy` names for a tree of `seamName` that receives `label` in two forms.
+			static func labelCollisionRemedyText(seamName: String, label: String, remedy: LabelCollisionRemedy) -> String {
+				switch remedy {
 				case .rename:
 					"Rename one of the properties, or @\(Dependency.Source.instantiatedRawValue) one of them inside the tree."
 				case .receiveOneWrapperKind:
@@ -2841,7 +2852,6 @@ public actor DependencyTreeGenerator {
 				case let .declareProvidingForm(providingForm):
 					"Receive `\(label)` the same way in every type of the tree, or declare it on \(seamName) as the form that provides the others: `@\(Dependency.Source.receivedRawValue) let \(label): \(providingForm)`."
 				}
-				return "SafeDI cannot generate the dependency tree of \(seamName): its tree receives `\(label)` as \(forms), and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. \(remedyText)"
 			}
 
 			/// A note at each of `receivers`, in their order.
@@ -6839,6 +6849,7 @@ public actor DependencyTreeGenerator {
 			bindsReceivesAgain: true,
 			namesApartAtRoot: rootLevel.namesApart,
 			parameters: rootLevel.parameters,
+			receiversByParameter: rootLevel.receiversByField,
 			proof: publicMockContext.proof,
 			instantiables: typeDescriptionToFulfillingInstantiableMap,
 		)
@@ -6899,6 +6910,10 @@ public actor DependencyTreeGenerator {
 		let parameters: [SeamSignature.Parameter]
 		/// What the root binds only under names apart.
 		let namesApart: NamesApart
+		/// The declarations in the mock's tree that receive each of `parameters`' own forms, in tree order, by the parameter's
+		/// property: what a seam's parameter records as its receivers, which a fill's diagnostic names as the twin's does
+		/// (`SeamSignature.Hole.Field.seamParameterOrigin`). A parameter no declaration receives in its own form has none.
+		let receiversByField: [Property: [SeamSignature.Receiver]]
 
 		/// What a public mock's root binds only under names apart, which no field of its root level holds.
 		struct NamesApart {
@@ -7008,12 +7023,39 @@ public actor DependencyTreeGenerator {
 		// A child holds its label bare unless the root's children share it, or a field holds it.
 		let labelsChildrenShare = generator.labelsChildrenShare
 		let labelsChildrenHoldBare = Set(generator.children.compactMap(\.property?.label)).subtracting(labelsChildrenShare)
+		// The declarations in the tree that receive each field's own form, in tree order, as a seam's parameter records them. A
+		// form the mocked type's own received or forwarded property provides is received by the mocked type alone, as the
+		// twin's seam takes that property as its own parameter, whose receiver is the seam: the types beneath it receive the
+		// form from the mocked type.
+		let accessByField = Dictionary(fields.map { ($0.property, $0.access) }, uniquingKeysWith: { first, _ in first })
+		var formsMockedTypeProvides = Set<Property>()
+		for dependency in instantiable.dependencies where dependency.source.isReceived || dependency.source == .forwarded {
+			formsMockedTypeProvides.formUnion(Self.formsProvided(by: dependency.property))
+		}
+		var receiversByField = [Property: [SeamSignature.Receiver]]()
+		for (index, receiver) in ScopeGenerator.treeReceivers(in: parameters.parameterTree, mockedType: instantiable).enumerated() {
+			// An alias received only if available spells its fulfilling property non-optional, as its receiver records it, and
+			// receives the field's optional form.
+			let (receivedProperty, receivedForm, aliasProperty): (Property?, Property?, Property?) = switch receiver.dependency.source {
+			case .received:
+				(receiver.dependency.property, receiver.dependency.property, nil)
+			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+				(fulfillingProperty, onlyIfAvailable ? fulfillingProperty.asOptionalProperty : fulfillingProperty, receiver.dependency.property)
+			case .instantiated, .forwarded:
+				(nil, nil, nil)
+			}
+			// The mocked type's own dependencies come first.
+			let isMockedTypesOwn = index < instantiable.dependencies.count
+			guard let receivedProperty, let receivedForm, let access = accessByField[receivedForm], isMockedTypesOwn || !formsMockedTypeProvides.contains(receivedForm) else { continue }
+			receiversByField[receivedForm, default: []].append(SeamSignature.Receiver(property: receivedProperty, declaringType: receiver.declaringType, declarationLocation: receiver.dependency.declarationLocation, access: access, aliasProperty: aliasProperty))
+		}
 		return PublicMockRootLevel(
 			parameters: fields,
 			namesApart: PublicMockRootLevel.NamesApart(
 				labels: labelsBoundApart.union(labelsChildrenShare).subtracting(fieldLabels).subtracting(labelsChildrenHoldBare),
 				wrappers: Set(parameters.lazilyInstantiatedReceivedProperties),
 			),
+			receiversByField: receiversByField,
 		)
 	}
 

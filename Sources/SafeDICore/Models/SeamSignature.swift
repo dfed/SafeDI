@@ -299,8 +299,9 @@ public struct SeamSignature: Sendable {
 			/// module's generated mock hands it such a value from the caller's scope, whose own declaration a fill then reads
 			/// (`Scope`'s `callersOwnLabels(amongLabelsOf:at:reading:handedFrom:by:)`).
 			public let isBoundByPublicMockRoot: Bool
-			/// For a field bound from a parameter of a seam, which a public mock's root level never is, that parameter's
-			/// receives and the seam's declaration; `nil` for a field bound from a declaration inside the tree.
+			/// For a field bound from a parameter of a seam, or a value a public mock's root level binds from what it receives
+			/// (`isBoundByPublicMockRoot`), that parameter's receives and the seam's or mocked type's declaration; `nil` for a
+			/// field bound from a declaration inside the tree.
 			public let seamParameterOrigin: SeamParameterOrigin?
 
 			/// Whether the field is bound from a deferred parameter (`SeamSignature.Parameter.isDeferred`).

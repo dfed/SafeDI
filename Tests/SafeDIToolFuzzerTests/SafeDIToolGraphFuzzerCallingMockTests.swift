@@ -801,7 +801,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			await sitesByShape[shape, default: []].append(try GraphFuzzerCallingMockCheck.run(GraphFuzzerCallingMockDraw(seed: seed).graph, seed: seed).twinSites)
 		}
 
-		#expect(sitesByShape.keys.sorted() == [.outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill])
+		#expect(sitesByShape.keys.sorted() == [.outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillRequiresValueCalledTypeReceivesInOptionalWrapper])
 		#expect(sitesByShape.values.allSatisfy { $0.allSatisfy { $0 != nil } })
 		for (shape, sites) in sitesByShape {
 			for (otherShape, otherSites) in sitesByShape where otherShape != shape {
@@ -1426,6 +1426,63 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
 	}
 
+	/// Seed 850 draws the first graph of `fillRequiresValueCalledTypeReceivesInOptionalWrapper/internal/plain`, the first of
+	/// its block: an internal calling mock whose fill requires the value the called type's tree receives only if available
+	/// in a lazy wrapper. It reports, at the twin's sites, that the called mock hands the fill only that optional wrapper.
+	/// It fails with that report removed (`findingsOfFill`'s `publicMockHandsOptionalWrapperOfRequiredValue`), when the mock
+	/// is accepted, and its fill passes the wrapper where the fill requires its instance.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_reportsErrorAtTwinsSites_whenDrawnFillRequiresValueCalledTypeReceivesInOptionalWrapper() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 850)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 850)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillRequiresValueCalledTypeReceivesInOptionalWrapper, caller: .internal, place: .plain))
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.mockSites != nil && result.mockSites == result.twinSites)
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
+	/// Seed 858 draws the first graph of `fillRequiresValueCalledTypeReceivesInOptionalWrapper` whose called type and the
+	/// sibling it instantiates both receive the value only if available (`calledTypeReceivesBesideSibling`): the twin’s seam
+	/// takes the called type’s own property as its parameter, which the sibling receives from the called type, so its notes
+	/// name the called type and the fill, and the calling mock’s must too. It fails with the mock’s notes naming the sibling
+	/// as well, as they did before a public mock’s root level left out the receivers of a form the mocked type provides
+	/// (`DependencyTreeGenerator.publicMockRootLevel`).
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_reportsTwinsNotes_whenDrawnCalledTypeAndSiblingReceiveValueInOptionalWrapper() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 858)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 858)
+
+		#expect(draw.optionalWrapperValue?.calledTypeReceivesBesideSibling == true)
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.mockSites != nil && result.mockSites == result.twinSites)
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
+	/// The graphs of the shape whose fill requires a value the called type receives only if available in a lazy wrapper draw
+	/// each wrapper, each receiver and each fill, with and without a build of the called type again, in the pinned number
+	/// of graphs, and each caller kind in twenty.
+	@Test
+	func fillRequiresValueCalledTypeReceivesInOptionalWrapperDraw_drawsEachVariation_inPinnedNumberOfGraphs() {
+		let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .fillRequiresValueCalledTypeReceivesInOptionalWrapper }
+		var counts = [String: Int]()
+		for draw in draws {
+			let value = draw.optionalWrapperValue
+			let receiver = value?.siblingReceives == true ? (value?.calledTypeReceivesBesideSibling == true ? "calledTypeAndSibling" : "sibling") : "calledType"
+			counts["\(value?.wrapper ?? "none") \(receiver) \(value?.fillCallsAgain == true ? "callsAgain" : "callsOnce")", default: 0] += 1
+			counts[draw.cell.caller.rawValue, default: 0] += 1
+		}
+		print("calling-mock fills requiring a value received in an optional wrapper \(counts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
+
+		#expect(counts == ["LazilyInstantiated calledType callsAgain": 13, "LazilyInstantiated calledType callsOnce": 8, "LazilyInstantiated sibling callsAgain": 5, "LazilyInstantiated sibling callsOnce": 2, "LazilyInstantiated calledTypeAndSibling callsAgain": 1, "LazilyInstantiated calledTypeAndSibling callsOnce": 1, "SendableLazilyInstantiated calledType callsAgain": 7, "SendableLazilyInstantiated calledType callsOnce": 12, "SendableLazilyInstantiated sibling callsAgain": 4, "SendableLazilyInstantiated sibling callsOnce": 4, "SendableLazilyInstantiated calledTypeAndSibling callsAgain": 2, "SendableLazilyInstantiated calledTypeAndSibling callsOnce": 1, "internal": 20, "public": 20, "listed": 20])
+		#expect(GraphFuzzerCallingMockDraw(seed: 0).optionalWrapperValue == nil)
+		#expect(draws.first { $0.optionalWrapperValue?.calledTypeReceivesBesideSibling == true }?.seed == 858)
+	}
+
 	/// Seed 762 draws a graph of `fillReceivesCallersLazyValueBelowCalledRoot/public/plain` whose called type holds a second
 	/// place whose fill instantiates a value of its own under the value's label and builds the called type again, while
 	/// the place's fill reads the value's instance and the called type keeps its copy
@@ -1847,7 +1904,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	@Test
 	func drawnCells_coverEveryCell_whenCorpusDrawsTenGraphsPerCell() {
-		#expect(GraphFuzzerCallingMockCell.all.count == 85)
+		#expect(GraphFuzzerCallingMockCell.all.count == 91)
 		#expect(GraphFuzzerCallingMockCell.drawnCells == GraphFuzzerCallingMockCell.all)
 		#expect(Self.callingMockCorpusSeedCount == GraphFuzzerCallingMockCell.drawnCells.count * 10)
 		#expect(GraphFuzzerCallingMockCell.firstSeeds.map(GraphFuzzerCallingMockCell.cell(ofSeed:)) == GraphFuzzerCallingMockCell.all)
