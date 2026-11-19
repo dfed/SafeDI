@@ -202,12 +202,13 @@ struct GenerationJobsTests {
 		let heldJobCount = width == 1 ? 1 : min(width, jobCount)
 		let holder = JobHolder(holding: width == 1 ? [1] : Set(0..<heldJobCount))
 		let recorder = JobRecorder()
-		let thrown = Mutex<(any Error)?>(nil)
-		let returned = Mutex(false)
-		await withTaskGroup(of: Void.self) { testGroup in
+		// The call's outcome comes back as the child task's result rather than through a captured `Mutex`: Swift 6.2
+		// rejects a closure passed to `addTask` that captures a local `Mutex` ("passing closure as a 'sending' parameter
+		// risks causing data races"), since it captures the noncopyable value by reference.
+		let callOutcome = await withTaskGroup(of: Result<[Result<Int, JobFailure>], any Error>.self) { testGroup in
 			testGroup.addTask {
 				do {
-					_ = try await GenerationJobs.$width.withValue(width) {
+					return try await .success(GenerationJobs.$width.withValue(width) {
 						try await GenerationJobs.$completionObserver.withValue(holder.arrive) {
 							try await GenerationJobs.results(of: (0..<jobCount).map { GenerationJob($0) }) { (job: consuming Int) throws(JobFailure) -> Int in
 								let job = job
@@ -219,20 +220,20 @@ struct GenerationJobsTests {
 								return job
 							}
 						}
-					}
-					returned.withLock { $0 = true }
+					})
 				} catch {
-					thrown.withLock { $0 = error }
+					return .failure(error)
 				}
 			}
 			await holder.waitUntilHeld(heldJobCount)
 			testGroup.cancelAll()
 			await holder.releaseAll()
+			return await testGroup.next()
 		}
 
 		let startedJobs = width == 1 ? [0, 1] : Array(0..<heldJobCount)
-		#expect(returned.withLock { $0 } == false)
-		#expect(thrown.withLock { $0 is CancellationError })
+		// The call returned nothing, and threw `CancellationError`.
+		#expect(throws: CancellationError.self) { try callOutcome?.get() }
 		#expect(recorder.startedJobs.sorted() == startedJobs)
 		#expect(recorder.completedJobs.sorted() == startedJobs)
 	}
