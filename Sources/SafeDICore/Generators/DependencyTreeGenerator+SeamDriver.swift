@@ -78,22 +78,10 @@ extension DependencyTreeGenerator {
 	}
 
 	/// The signature of each foreign seam this module's trees reach, by concrete type, or `nil` for a seam whose
-	/// generated signature equals its own initializer's (see `seamRoots`), computed before the inlined trees are
-	/// validated: a module info this run lacks is then reported with its remedy, rather than as the dependencies
-	/// that module's declarations would have fulfilled.
-	///
-	/// Memoized by hand rather than declared `lazy`, as is `seamRoots`: inside a closure, a lazy initializer of an
-	/// actor's property cannot call an actor-isolated function on every supported compiler. Swift 6.2.0 rejects a
-	/// call to a local function that captures `self` ("actor-isolated default value in a actor-isolated context"),
-	/// and Swift 6.4 a call to a method or a computed property ("cannot use default value from different instance").
-	var foreignSeamRoots: Result<[TypeDescription: ScopeGenerator.SeamRoot?], any Error> {
-		let foreignSeamRoots = memoizedForeignSeamRoots ?? Result { try computeForeignSeamRoots() }
-		memoizedForeignSeamRoots = foreignSeamRoots
-		return foreignSeamRoots
-	}
-
-	/// Computes `foreignSeamRoots`.
-	private func computeForeignSeamRoots() throws -> [TypeDescription: ScopeGenerator.SeamRoot?] {
+	/// generated signature equals its own initializer's (see `computeSeamRoots(foreignSeamRoots:)`), computed once per
+	/// run, before the inlined trees are validated: a module info this run lacks is then reported with its remedy, rather
+	/// than as the dependencies that module's declarations would have fulfilled.
+	func computeForeignSeamRoots() throws -> [TypeDescription: ScopeGenerator.SeamRoot?] {
 		var seamRoots = [TypeDescription: ScopeGenerator.SeamRoot?]()
 		var errors = [DependencyTreeGeneratorError]()
 		// Only the foreign seams this module's trees reach are computed, each from what its module sees, and a seam
@@ -176,17 +164,9 @@ extension DependencyTreeGenerator {
 	/// The signature of each seam this module generates or calls, by concrete type, or `nil` for a seam whose
 	/// generated signature would equal its own initializer's – one with no `@Instantiated` or aliased dependency and
 	/// no pass-through – which is built with that initializer wherever a tree reaches it, as any other type is, and
-	/// whose file holds no code. Memoized by hand rather than declared `lazy`, for the reason `foreignSeamRoots` gives:
-	/// `generateDOTTree()`, run after `generatePerRootCodeTrees()`, reads it again.
-	private var seamRoots: Result<[TypeDescription: ScopeGenerator.SeamRoot?], any Error> {
-		let seamRoots = memoizedSeamRoots ?? Result { try computeSeamRoots() }
-		memoizedSeamRoots = seamRoots
-		return seamRoots
-	}
-
-	/// Computes `seamRoots`.
-	private func computeSeamRoots() throws -> [TypeDescription: ScopeGenerator.SeamRoot?] {
-		var seamRoots = try foreignSeamRoots.get()
+	/// whose file holds no code. Computed once per run, from the signatures of the foreign seams, `foreignSeamRoots`.
+	private func computeSeamRoots(foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?]) throws -> [TypeDescription: ScopeGenerator.SeamRoot?] {
+		var seamRoots = foreignSeamRoots
 		GenerationLayerObservation.record(.seamSignatures(ofModule: seams.currentModule.moduleName, inCallersView: false), inRunOf: seams.currentModule.moduleName)
 		let ownComputation = try Self.seamSignatures(
 			forSeams: generatedSeamTypes,
@@ -389,9 +369,16 @@ extension DependencyTreeGenerator {
 	}
 
 	/// The generators of the trees this module generates, in a world where every reach of a seam calls its generated
-	/// initializer: the roots of the dependency tree, then the seams this module generates, each with its signature.
-	func seamWorldRootScopeGenerators() throws -> [RootScopeInfo] {
-		let seamRoots = try seamRoots.get()
+	/// initializer: the roots of the dependency tree, then the seams this module generates, each with its signature; and
+	/// the roots another module declares, in type order.
+	/// - Parameters:
+	///   - foreignSeamRoots: The signatures of the foreign seams this module's trees reach (`computeForeignSeamRoots()`).
+	///   - unreadTypeComment: The comment the `public` initializers of the seams this module generates carry.
+	func seamWorldRootScopeGenerators(
+		foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?],
+		unreadTypeComment: UnreadTypeComment?,
+	) throws -> (roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable]) {
+		let seamRoots = try computeSeamRoots(foreignSeamRoots: foreignSeamRoots)
 		// The generated code ends each construction with the comment the validated scopes would carry, the call of a
 		// seam's tier included, whose construction the leaf's initializer at the tier's level describes.
 		let seamScopeMap = Self.createSeamScopeMapping(
@@ -432,7 +419,7 @@ extension DependencyTreeGenerator {
 			},
 			checkingSeamTrees: generatedSeams.map { (instantiable: $0.seam, scope: $0.rootScope) },
 		)
-		var rootScopeGenerators = try rootScopesToGenerate.map { typeDescription, scope in
+		var rootScopeGenerators = try rootScopesToGenerate.rootScopes.map { typeDescription, scope in
 			try RootScopeInfo(
 				typeDescription: typeDescription,
 				instantiable: scope.instantiable,
@@ -461,7 +448,7 @@ extension DependencyTreeGenerator {
 				),
 			))
 		}
-		return rootScopeGenerators
+		return (rootScopeGenerators, rootScopesToGenerate.rootsOfOtherModules)
 	}
 
 	/// The declaration a receiver is: one type's receive of one property, declared at one location.
