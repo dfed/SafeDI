@@ -18,8 +18,8 @@ A limit is reported as
   whose code is fine;
 - `long` when it is over three times the longest, and more than five minutes over twice the longest;
 - `ok` otherwise, and `unmeasured` when no given run ran the step to success.
-For each short or long limit the report ends with the comment the step should carry: the measurement and the run it
-came from.
+For each short limit the report ends with the limit and comment the step should carry: the measurement and the run
+it came from. A long limit's row already gives the rule's figure.
 
 With --check, exits 1 when any limit is short or any step ran out of its limit. A step that downloads (a package
 resolve, a tool install) keeps a limit sized for a slow network, so a `long` verdict is for a person to judge and
@@ -253,7 +253,7 @@ def report(limits, run_count, out):
                 (outcome, where, str(limit.minutes), str(len(limit.measurements)), f"{longest:.1f}", f"{median:.1f}",
                  str(rule_minutes(longest)), limit.description)
             )
-            if outcome in ("short", "long"):
+            if outcome == "short":
                 count = len(limit.measurements)
                 comments.append(
                     f"{where} {limit.description}\n"
