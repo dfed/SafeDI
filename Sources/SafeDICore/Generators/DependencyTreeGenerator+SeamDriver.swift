@@ -146,6 +146,7 @@ extension DependencyTreeGenerator {
 			// A module info a build wrote holds seams that module's own run validated from the declarations it saw,
 			// which this run reads the same way; one from a run that failed, or that was given other declarations,
 			// can hold a tree this run cannot build, which is reported with the other seam errors.
+			GenerationLayerObservation.record(.seamSignatures(ofModule: module.moduleName, inCallersView: false), inRunOf: seams.currentModule.moduleName)
 			let computation = try Self.seamSignatures(
 				forSeams: Set(module.seams.map(\.type)),
 				in: moduleSeam.visibleInstantiables,
@@ -186,6 +187,7 @@ extension DependencyTreeGenerator {
 	/// Computes `seamRoots`.
 	private func computeSeamRoots() throws -> [TypeDescription: ScopeGenerator.SeamRoot?] {
 		var seamRoots = try foreignSeamRoots.get()
+		GenerationLayerObservation.record(.seamSignatures(ofModule: seams.currentModule.moduleName, inCallersView: false), inRunOf: seams.currentModule.moduleName)
 		let ownComputation = try Self.seamSignatures(
 			forSeams: generatedSeamTypes,
 			in: typeDescriptionToFulfillingInstantiableMap,
@@ -211,6 +213,7 @@ extension DependencyTreeGenerator {
 		if let callersVisibleInstantiables = seams.callersVisibleInstantiables, !ownComputation.seamRoots.isEmpty {
 			let unseenDeclarations = Set(typeDescriptionToFulfillingInstantiableMap.values.map(\.concreteInstantiable))
 				.subtracting(callersVisibleInstantiables.values.map(\.concreteInstantiable))
+			GenerationLayerObservation.record(.seamSignatures(ofModule: seams.currentModule.moduleName, inCallersView: true), inRunOf: seams.currentModule.moduleName)
 			let callersComputation = try Self.seamSignatures(
 				forSeams: generatedSeamTypes,
 				in: callersVisibleInstantiables,

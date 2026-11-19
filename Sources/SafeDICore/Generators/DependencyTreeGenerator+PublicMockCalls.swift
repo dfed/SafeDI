@@ -176,7 +176,11 @@ extension DependencyTreeGenerator {
 			)
 			publicMockGeneratorsByModuleName[moduleName] = generator
 		}
-		return try await generator.publicMockPlan(ofOwnType: type)
+		// The generator computes for this run, or for the run this generator computes for in turn.
+		let run = GenerationLayerObservation.runOfOtherModulesGenerator ?? GenerationLayerObservation.Run(moduleName: seams.currentModule.moduleName)
+		return try await GenerationLayerObservation.$runOfOtherModulesGenerator.withValue(run) {
+			try await generator.publicMockPlan(ofOwnType: type)
+		}
 	}
 
 	/// The finding that the modules calling the public mock of `instantiable` compute another signature for it, when
