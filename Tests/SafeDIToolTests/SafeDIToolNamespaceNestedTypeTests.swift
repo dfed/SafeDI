@@ -2372,6 +2372,67 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 		Self.expectAppGeneratedThing(of: output, under: integration, thingType: "Namespace.Thing", configType: "Namespace.Config")
 	}
 
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsTopLevelType_whenModulesOwnInstantiableTypeSharesNameOfDependencysNamespaceThatNestsTypeOfSameName(integration: MultiModuleIntegration) async throws {
+		// `App`'s own `Theme` shadows `Core`'s throughout `App`, so `Style` inside it is `Core`'s top-level `Style`, not
+		// `Core`'s `Theme.Style`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.core(declaring: [
+					"Theme.swift": """
+					public enum Theme {
+					    public struct Style: Sendable {
+					        public init() {}
+					    }
+					}
+
+					public struct Style: Sendable {
+					    public init() {}
+					}
+					""",
+				]),
+				ModuleFixture(
+					name: "App",
+					packageName: "pkg",
+					swiftFileContentByFilePath: [
+						"Theme.swift": """
+						import Core
+						import SafeDI
+
+						@Instantiable(generateMock: true)
+						public final class Theme: Instantiable {
+						    public init(style: Style) {
+						        self.style = style
+						    }
+
+						    @Forwarded let style: Style
+						}
+						""",
+						"Root.swift": """
+						import Core
+						import SafeDI
+
+						@Instantiable(isRoot: true)
+						public final class Root: Instantiable {
+						    public init(thingBuilder: Instantiator<Theme>) {
+						        self.thingBuilder = thingBuilder
+						    }
+
+						    @Instantiated let thingBuilder: Instantiator<Theme>
+						}
+						""",
+					],
+					dependencies: ["Core"],
+				),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		Self.expectAppGeneratedThing(of: output, under: integration, thingType: "Theme", configType: "Style", forwardedLabel: "style", mockFileStem: "Theme")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
