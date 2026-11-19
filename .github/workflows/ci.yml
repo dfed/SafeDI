@@ -2034,8 +2034,20 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
-  linux-latest-swift:
-    name: Build and Test on Latest Swift
+  # The newest Swift release builds the tests once here, and "Test on Latest
+  # Swift" below runs them in seven jobs from this build, as "Verify Tests on
+  # Linux" in verify.yml runs Verify's. In one job the build and the suite
+  # were the last check of a pull request to report by half an hour or more:
+  # of the 2.3.0 stack's run 44594501340, every other job had ended 40
+  # minutes after the push, and this one was cut off at 73 with its tests
+  # still running. A debug build runs the tests slower than the pinned jobs'
+  # release build, and these jobs compile every test's generated code (see
+  # the test step), so the suite's time is what four cores bound; seven
+  # runners bound it seven times less. The groups take the build from here
+  # rather than each building it, which would hold six more runners for the
+  # length of a build while the fuzzer's shards wait for one.
+  linux-latest-swift-build:
+    name: Build Tests on Latest Swift
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
@@ -2049,6 +2061,8 @@ jobs:
     container: swift:latest
     permissions:
       contents: read
+    outputs:
+      tests: ${{ steps.count.outputs.tests }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
@@ -2081,32 +2095,164 @@ jobs:
       # executable target `SafeDITool` did.
       - name: Build the SafeDITool Test Support Target Alone with Swift Build
         # Measured 26 s on a 10-core Mac (Swift 6.4.2, swift-syntax built
-        # from source into the empty scratch path); set from this job's
-        # first runs on the 4-core Linux runner, which has no measurement yet.
+        # from source into the empty scratch path) and 1.9 minutes on the
+        # 4-core Linux runner (run 44594501340).
         timeout-minutes: 15
         run: swift build --build-system swiftbuild --traits sourceBuild --target SafeDIToolTestSupport --scratch-path "$RUNNER_TEMP/swiftbuild-test-support"
-      # A time limit for the macOS job's reason: about twice the longest
-      # duration measured. On 2026-11-15, eight successful runs of this
-      # step took 18.5 to 32.6 minutes (median 19.3; the longest was main's
-      # run 43721724778), and the step of a pull request's run 43726656460
-      # reached the 35-minute limit after its tests had passed. The tests
-      # alone take about 5.5 minutes; the rest is the build, and the compile
-      # of the code each test generates, which the builder-surface check
-      # added tool runs to. Twice 35 minutes is 70. The 2.3.0 stack's run
-      # 44594501340 (job 135809244065) reached those 70 minutes with its
-      # tests still running, not hung: its first bundle passed 1,493 tests
-      # in 623 seconds, and the rest ran past the limit. The stack added
-      # 1,016 tests, doubled the seam corpus to 2,000 seeds, grew the smoke
-      # seeds from 29 to 40, and added a value-memo suite of about 18
-      # minutes, and this job compiles every check (below), so it has 100.
+      # LATEST_SWIFT_BUILD_LIMIT_COMMENT
+      - name: Build Tests
+        timeout-minutes: 60
+        run: swift build --build-tests --traits sourceBuild
+      # A listing ignores `--filter` and `--skip`, so the groups cannot list
+      # what they would run; this lists every test of the build, for the
+      # count the groups' tests must add up to.
+      - name: Count Every Test
+        id: count
+        shell: bash
+        run: |
+          swift test list --skip-build --traits sourceBuild > "$RUNNER_TEMP/latest-swift-tests.txt"
+          tests=$(LC_ALL=C sort -u "$RUNNER_TEMP/latest-swift-tests.txt" | wc -l)
+          test "$tests" -gt 0
+          echo "tests=$tests" >> "$GITHUB_OUTPUT"
+          echo "The build lists $tests tests."
+      # The whole build directory, whatever layout this toolchain's build
+      # system gives it, since where a test bundle lands is one of the things
+      # these jobs exist to notice; less what only a later build reads
+      # (object files and the compiler's dependency records) and the
+      # dependencies' repositories, which the checkouts were cloned from.
+      # The fastest compression: the runners' network is faster than gzip.
+      - name: Package Build Directory
+        run: |
+          tar --use-compress-program='gzip -1' -cf latest-swift-build.tar.gz \
+            --exclude='*.o' --exclude='*.d' --exclude='*.dia' --exclude='*.swiftdeps' --exclude='.build/repositories' \
+            .build
+          ls -l latest-swift-build.tar.gz
+      - name: Upload Build Directory
+        uses: actions/upload-artifact@v7
+        with:
+          name: latest-swift-build
+          path: latest-swift-build.tar.gz
+          retention-days: 1
+          # The archive is compressed already.
+          compression-level: 0
+          # A re-run of the job replaces what an earlier attempt uploaded.
+          overwrite: true
+
+  linux-latest-swift-group:
+    name: Test on Latest Swift (${{ matrix.group }})
+    needs: [changes, linux-latest-swift-build]
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux-latest-swift-build.result == 'success' }}
+    runs-on: ubuntu-latest
+    container: swift:latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # verify.yml's groups, selection for selection: "Check Every Verify
+        # Test Ran Once" proves there that they run each test once, and
+        # "Build and Test on Latest Swift" below proves it here.
+        include:
+          - group: mocks
+            selection: --filter ^SafeDIToolMockTests\.
+          - group: seams
+            selection: --filter ^SafeDIToolSeamTests\.
+          - group: dependency-trees
+            selection: --filter ^SafeDIToolDependencyTreeTests\.
+          - group: tool
+            selection: --filter ^SafeDIToolTests\.
+          - group: fuzzer-seam-smoke
+            selection: --filter ^SafeDIToolFuzzerTests\.SafeDIToolGraphFuzzerTests/seamSmokeSeeds
+          - group: fuzzer-smoke
+            selection: --filter ^SafeDIToolFuzzerTests\.SafeDIToolGraphFuzzerTests/ --skip ^SafeDIToolFuzzerTests\.SafeDIToolGraphFuzzerTests/seamSmokeSeeds
+          - group: others
+            selection: --skip ^SafeDIToolMockTests\. --skip ^SafeDIToolSeamTests\. --skip ^SafeDIToolDependencyTreeTests\. --skip ^SafeDIToolTests\. --skip ^SafeDIToolFuzzerTests\.SafeDIToolGraphFuzzerTests/
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Download Build Directory
+        uses: actions/download-artifact@v8
+        with:
+          name: latest-swift-build
+      - name: Unpack Build Directory
+        run: |
+          tar -xzf latest-swift-build.tar.gz
+          rm latest-swift-build.tar.gz
+      # LATEST_SWIFT_GROUP_LIMIT_COMMENT
       #
-      # No cache of passed compile checks here, deliberately: this job
-      # compiles every test's generated code on every run, so a check the
+      # No cache of passed compile checks here, deliberately: these jobs
+      # compile every test's generated code on every run, so a check the
       # pinned jobs skip because it passed in an earlier run is still
       # compiled once per run, by a third compiler.
-      - name: Build and Test Framework
-        timeout-minutes: 100
-        run: swift test --traits sourceBuild
+      - name: Test
+        timeout-minutes: 60
+        shell: bash
+        env:
+          SELECTION: ${{ matrix.selection }}
+          GROUP: ${{ matrix.group }}
+        run: |
+          set -o pipefail
+          # shellcheck disable=SC2086 # The selection is words to split.
+          swift test --skip-build --traits sourceBuild $SELECTION 2>&1 | tee "$RUNNER_TEMP/latest-swift-test-output.txt"
+          # The tests the group ran: Swift Build makes one bundle per test
+          # target and each reports its own count, so the counts are summed.
+          mkdir -p latest-swift-test-count
+          grep -oE 'Test run with [0-9]+ tests? in [0-9]+ suites?' "$RUNNER_TEMP/latest-swift-test-output.txt" | awk '{ sum += $4 } END { if (NR > 0) print sum }' > "latest-swift-test-count/$GROUP.txt"
+          test -s "latest-swift-test-count/$GROUP.txt"
+          echo "The group ran $(cat "latest-swift-test-count/$GROUP.txt") tests."
+      - name: Upload the Group's Test Count
+        uses: actions/upload-artifact@v7
+        with:
+          name: latest-swift-test-count-${{ matrix.group }}
+          path: latest-swift-test-count
+          retention-days: 1
+          # A re-run of the job replaces what an earlier attempt uploaded.
+          overwrite: true
+
+  # Reports the build and the seven groups under the name the one job that
+  # did both had, and fails unless every group passed and their test counts
+  # sum to the count the build lists, which any selection that drops or
+  # repeats a test breaks. It only reads results and counts, so it needs no
+  # container. It fails when a group failed or did not run although the
+  # change has source: skipped, it would satisfy a required check.
+  linux-latest-swift:
+    name: Build and Test on Latest Swift
+    needs: [changes, linux-latest-swift-build, linux-latest-swift-group]
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require the Build and the Seven Groups
+        env:
+          BUILD_RESULT: ${{ needs.linux-latest-swift-build.result }}
+          GROUPS_RESULT: ${{ needs.linux-latest-swift-group.result }}
+        run: |
+          echo "Build Tests on Latest Swift: $BUILD_RESULT"
+          echo "Test on Latest Swift (seven groups): $GROUPS_RESULT"
+          test "$BUILD_RESULT" = success
+          test "$GROUPS_RESULT" = success
+      - name: Download the Groups' Test Counts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: latest-swift-test-count-*
+          path: latest-swift-test-counts
+          merge-multiple: true
+      - name: Compare the Groups' Tests With the Build's
+        env:
+          BUILD_TESTS: ${{ needs.linux-latest-swift-build.outputs.tests }}
+          # The count of groups in the matrix above.
+          EXPECTED_GROUPS: 7
+        run: |
+          groups=$(find latest-swift-test-counts -name '*.txt' | wc -l)
+          sum=0
+          for count in latest-swift-test-counts/*.txt; do
+            echo "$(basename "$count" .txt): $(cat "$count") tests"
+            sum=$((sum + $(cat "$count")))
+          done
+          echo "The $groups groups ran $sum tests; the build lists $BUILD_TESTS."
+          test "$groups" -eq "$EXPECTED_GROUPS"
+          test "$sum" -eq "$BUILD_TESTS"
 
   readme-validation:
     name: Check Markdown links
