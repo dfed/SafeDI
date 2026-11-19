@@ -61,14 +61,6 @@ indirect enum ArgumentSource: Hashable, Sendable {
 			value
 		}
 	}
-
-	/// Of `arguments`, the ones a call's fills read of one label of the caller's scope, the one the call hands: a value
-	/// before `nil`, then the spelling that sorts first. Every fill of a call reads the caller's own declarations, so
-	/// fills that read the label in one form read the same argument, and the spelling decides only between two forms
-	/// (`.claude/rules/emission-decisions.md`, "One preference for a caller's argument"). `nil` for no arguments.
-	static func preferredCallerArgument(among arguments: some Sequence<ArgumentSource>) -> ArgumentSource? {
-		arguments.min { ($0 == .nil ? 1 : 0, $0.spelled) < ($1 == .nil ? 1 : 0, $1.spelled) }
-	}
 }
 
 /// An argument of a call: its label, and where its value comes from.
