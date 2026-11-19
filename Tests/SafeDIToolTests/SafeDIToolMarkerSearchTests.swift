@@ -232,6 +232,53 @@ struct SafeDIToolMarkerSearchTests: ~Copyable {
 		#expect(!Self.typeDeclarationWords(of: "let `package` = Package()").mayDeclareTypeOtherModulesCanName)
 	}
 
+	@Test(arguments: [
+		// A type keyword inside the braces of a type declaration or an extension.
+		(text: "public enum Namespace {\n    public struct Config {}\n}", findsKeyword: true),
+		(text: "extension Namespace {\n    class Config {}\n}", findsKeyword: true),
+		// Type keywords after braces that closed: one top-level type after another.
+		(text: "public struct First {}\npublic struct Second {\n}", findsKeyword: false),
+		// A type keyword before every brace.
+		(text: "public typealias Config = Int\nlet value = { 1 }()", findsKeyword: false),
+	] as [(text: String, findsKeyword: Bool)])
+	func typeDeclarationWords_findsTypeKeywordInsideBraces_onlyWhenAnOpeningBraceBeforeItIsUnclosed(text: String, findsKeyword: Bool) {
+		#expect(Self.typeDeclarationWords(of: text).holdsTypeKeywordInsideBraces == findsKeyword)
+	}
+
+	@Test(arguments: [
+		// A string literal.
+		"public enum Namespace {\n    static let brace = \"}\"\n    public struct Config {}\n}",
+		// A line comment.
+		"public enum Namespace { // }\n    public struct Config {}\n}",
+		// A block comment, whose closing brace is on a line of its own.
+		"public enum Namespace {\n    /*\n    }\n    */\n    public struct Config {}\n}",
+		// A multi-line string literal.
+		"public enum Namespace {\n    static let text = \"\"\"\n    }\n    \"\"\"\n    public struct Config {}\n}",
+		// An extended regular expression literal.
+		"public enum Namespace {\n    static let pattern = #/\n    }\n    /#\n    public struct Config {}\n}",
+		// Backticks string literals hold, which enclose the namespace's opening brace.
+		"let tick = \"`\"; public enum Namespace { let other = \"`\"\n    public struct Config {}\n}",
+	])
+	func typeDeclarationWords_findsTypeKeywordInsideBraces_whenCommentOrLiteralMayHideBraceBeforeIt(text: String) {
+		// Counted as written, no brace is open before `struct`, so only a count that distrusts them finds it inside braces.
+		#expect(Self.typeDeclarationWords(of: text).holdsTypeKeywordInsideBraces)
+	}
+
+	@Test(arguments: [
+		(text: "public enum Namespace {\n    public struct Config {}\n}", mayDeclare: true),
+		(text: "extension Namespace {\n    open class Config {}\n}", mayDeclare: true),
+		(text: "public extension Namespace {\n    struct Config {}\n}", mayDeclare: true),
+		// Neither `public` nor `open`: a nested type of no wider access needs no record.
+		(text: "enum Namespace {\n    struct Config {}\n}", mayDeclare: false),
+		(text: "enum Namespace {\n    struct Config { let isPublicly = true }\n}", mayDeclare: false),
+		// `public` without a nested type: a top-level type needs no record.
+		(text: "public struct Config {}", mayDeclare: false),
+	] as [(text: String, mayDeclare: Bool)])
+	func typeDeclarationWords_mayDeclareTypeOtherModulesCanName_onlyWhenPublicWordAccompaniesTypeKeywordInsideBraces(text: String, mayDeclare: Bool) {
+		// A `public` or `open` type nested in another is one another module names only through its record.
+		#expect(Self.typeDeclarationWords(of: text).mayDeclareTypeOtherModulesCanName == mayDeclare)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

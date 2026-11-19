@@ -774,6 +774,7 @@ struct SafeDIToolReservedTypeNameTests: ~Copyable {
 		// The file holds no SafeDI marker, and names a reserved prefix after a type keyword only in a comment, so it is
 		// parsed for a reserved name and declares none. It contributes nothing else: `Service.Nested`, which a parse for the
 		// module’s kept names would read, stays out of the `.safedi`, which is what it would hold without the reserved word.
+		// `Service.Nested` is `internal`, so no module that reads the `.safedi` names it either.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Feature", packageName: "pkg", swiftFileContentByFilePath: [
@@ -786,7 +787,7 @@ struct SafeDIToolReservedTypeNameTests: ~Copyable {
 					"Service+Nested.swift": """
 					// Naming a struct SafeDIScope_Service would collide with a seam’s enum.
 					extension Service {
-					    public struct Nested {}
+					    struct Nested {}
 					}
 					""",
 				]),
