@@ -467,9 +467,10 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func publicMock_documentsKeywordLabelsWithoutBackticks_whenOwnAndChildDefaultsHaveKeywordLabels() async throws {
-		// A public mock's documentation names a keyword label as prose does, and its example call spells the label as a
-		// call does.
+	mutating func publicMock_documentsChildKeywordLabelWithoutBackticksAndTakesOwnAsParameter_whenOwnAndChildDefaultsHaveKeywordLabels() async throws {
+		// A public mock's documentation of a child's default names its keyword label as prose does, and `mock()` takes the
+		// mocked type's own keyword-labeled default as a parameter, spelled as a call spells it, which its body reads
+		// escaped.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -548,48 +549,42 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 			    /// Overrides for the mock dependency tree.
 			    nonisolated public struct SafeDIOverrides {
 			        public init(
-			            session: __safeDI_Session_MockConfiguration = .init(),
-			            `default`: String? = Service.__safeDI_publicMockDefault_default()
+			            session: __safeDI_Session_MockConfiguration = .init()
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
-			                session: session,
-			                default: `default`
+			                session: session
 			            )
 			        }
 
 			        public var session: __safeDI_Session_MockConfiguration { __safeDI_storage.session }
-			        /// The default of `Service`’s `default` unless set; `.init(default: nil)` passes `nil`.
-			        public var `default`: String? { __safeDI_storage.`default` }
 
 			        private let __safeDI_storage: __safeDI_Storage
 
 			        private final class __safeDI_Storage {
 			            init(
-			                session: __safeDI_Session_MockConfiguration,
-			                `default`: String?
+			                session: __safeDI_Session_MockConfiguration
 			            ) {
 			                self.session = session
-			                self.`default` = `default`
 			            }
 
 			            let session: __safeDI_Session_MockConfiguration
-			            let `default`: String?
 			        }
 			    }
 
 			    public static func mock(
+			        default: String? = Service.__safeDI_publicMockDefault_default(),
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Service {
 			        func __safeDI_session() -> Session {
 			            return Session.__safeDI_init(value: safeDIOverrides.session.`inout`, safeDIBuilder: safeDIOverrides.session.safeDIBuilder)
 			        }
 			        let session: Session = __safeDI_session()
-			        return Service(session: session, default: safeDIOverrides.`default`)
+			        return Service(session: session, default: `default`)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_mock_51799E6AA5E7B634 {}
+			    public enum __safeDI_Service_mock_0D35743F246CE46F {}
 			}
 			#endif
 			""",
