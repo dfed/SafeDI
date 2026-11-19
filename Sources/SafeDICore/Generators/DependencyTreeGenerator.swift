@@ -453,6 +453,9 @@ public actor DependencyTreeGenerator {
 				return try seamWorldRootScopeGenerators()
 			}()
 			try Self.validateCycleLabelsArePassable(inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator) + inlineForeignSeamTrees)
+			for root in rootScopeGenerators {
+				GenerationLayerObservation.record(.dependencyTree(of: root.typeDescription), inRunOf: seams.currentModule.moduleName)
+			}
 			return rootScopeGenerators
 		}
 	}
