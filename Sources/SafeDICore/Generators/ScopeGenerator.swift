@@ -2643,6 +2643,27 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			|| field.asLazilyInstantiatedInstancePropertyOfDeclaredBinding.map { receivedProperties.contains($0) || receivedProperties.contains($0.asOptionalProperty) } == true
 	}
 
+	/// For a fill, the field it binds from its struct whose memo serves a read of `property`, a `LazilyInstantiated` or
+	/// `SendableLazilyInstantiated` in its tree: a field of the label and of the wrapper's instance, bound from a parameter
+	/// deferred in a wrapper of the read's own kind, whose memo the fill binds (`bindsMemo`) because its tree reads the value,
+	/// so the memo it binds under the label is a wrapper the read takes, of the instance inline holds. A tree that reads only
+	/// the wrapper binds no memo. `nil` for every other property, and for a generator that is no fill.
+	///
+	/// One predicate for validation, which lets such a read through (`DependencyTreeGenerator.validateFills`), and for a
+	/// seam's parameters, which then take none for it (`DependencyTreeGenerator.receivers(in:of:instantiables:)`), so the
+	/// two cannot disagree.
+	nonisolated func fillBoundMemo(servingWrapperRead property: Property) -> SeamSignature.Hole.Field? {
+		guard let instance = property.asLazilyInstantiatedInstanceProperty, let built = children.first else { return nil }
+		let deferral = SeamSignature.Parameter.Deferral.deferred(isSendable: property.propertyType == .sendableLazilyInstantiated)
+		return fillBoundFields.first { field in
+			field.property.label == property.label
+				&& field.bindsMemo
+				&& field.deferral == deferral
+				&& field.property.asUnwrappedProperty == instance.asUnwrappedProperty
+				&& built.reads(field.property)
+		}
+	}
+
 	/// The hole this generator is the fill of, or `nil` for every generator that is no fill.
 	nonisolated var fillHole: SeamSignature.Hole? {
 		if case let .fill(hole, _) = scopeData {

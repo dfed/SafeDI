@@ -1793,13 +1793,10 @@ extension DependencyTreeGenerator {
 		}
 		/// Whether the fill binds a memo of the label of `property`, a `LazilyInstantiated` or `SendableLazilyInstantiated` it
 		/// receives, of the wrapper's own kind, which the tree reads where it reads that wrapper. The fill binds the memo where
-		/// its tree reads the memo's instance; a tree that reads only the wrapper reads the caller's scope.
+		/// its tree reads the memo's instance; a tree that reads only the wrapper reads the caller's scope. The seam whose fill
+		/// this is asks the same of its parameters (`ScopeGenerator.fillBoundMemo(servingWrapperRead:)`).
 		func readsMemoOfItsOwnKind(_ property: Property) -> Bool {
-			guard let instance = property.asLazilyInstantiatedInstanceProperty else { return false }
-			let isSendable = property.propertyType == .sendableLazilyInstantiated
-			return fill.fillStructBoundLabels.contains(property.label) && fill.fillFields.contains { field in
-				field.property.label == property.label && field.bindsMemo && field.deferral == .deferred(isSendable: isSendable) && field.property.asUnwrappedProperty == instance.asUnwrappedProperty && child.reads(field.property)
-			}
+			fill.fillBoundMemo(servingWrapperRead: property) != nil
 		}
 		/// The declaration of the wrapper `property` that a field of its label, a parameter of a seam whose struct carries it, hides
 		/// on the place's path, with that field, where `property` is a `LazilyInstantiated` or `SendableLazilyInstantiated` the

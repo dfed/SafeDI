@@ -5640,14 +5640,16 @@ public actor DependencyTreeGenerator {
 		var keptDeclarationIndices = [ReceiverDeclaration: Int]()
 		var parameterReads = ParameterReads()
 		/// A generator to visit, with what the scopes enclosing it provide, whether it is built inside a `@Sendable`
-		/// function, and the labels the scopes enclosing it declare or forward.
+		/// function, the labels the scopes enclosing it declare or forward, and, by label, the nearest fill enclosing it that
+		/// binds the label from its struct, where no scope between declares it.
 		struct Frame {
 			let generator: ScopeGenerator
 			let providedProperties: Set<Property>
 			let insideSendable: Bool
 			let declaredLabels: Set<String>
+			let fillsBindingLabels: [String: ScopeGenerator]
 		}
-		var generatorsToVisit = [Frame(generator: generator, providedProperties: [], insideSendable: false, declaredLabels: [])]
+		var generatorsToVisit = [Frame(generator: generator, providedProperties: [], insideSendable: false, declaredLabels: [], fillsBindingLabels: [:])]
 		while let frame = generatorsToVisit.popLast() {
 			let visited = frame.generator
 			let providedProperties = frame.providedProperties
@@ -5691,6 +5693,9 @@ public actor DependencyTreeGenerator {
 				func isProvided(_ property: Property, by providedProperties: Set<Property>) -> Bool {
 					providedProperties.contains(property)
 						|| (property.typeDescription.isOptional && providedProperties.contains(property.asUnwrappedProperty))
+						// A wrapper whose memo the nearest fill binding its label binds, of the wrapper's own kind, which validation lets
+						// the read take too.
+						|| frame.fillsBindingLabels[property.label]?.fillBoundMemo(servingWrapperRead: property) != nil
 				}
 				let initializerAccess = parameterAccess(instantiable.effectiveInitializerAccess)
 				/// The parameter of the seam this scope calls that passes `property`, if the scope calls one.
@@ -5761,6 +5766,14 @@ public actor DependencyTreeGenerator {
 			// the instance of each lazily instantiated one – beside what encloses it.
 			let childProvidedProperties = providedProperties.union(visited.providedProperties)
 			let childDeclaredLabels = frame.declaredLabels.union(visited.providedProperties.map(\.label))
+			// A declaration of a label hides an enclosing fill's binding of it; a fill's own binding is nearer than either.
+			var childFillsBindingLabels = frame.fillsBindingLabels
+			for property in visited.providedProperties where !childFillsBindingLabels.isEmpty {
+				childFillsBindingLabels[property.label] = nil
+			}
+			for label in visited.fillStructBoundLabels {
+				childFillsBindingLabels[label] = visited
+			}
 			let firstChildIndex = generatorsToVisit.endIndex
 			for child in visited.children {
 				// A fill binds the fields of the hole's struct its tree reads, which hide every declaration of their labels
@@ -5771,6 +5784,7 @@ public actor DependencyTreeGenerator {
 					providedProperties: childProvidedProperties,
 					insideSendable: frame.insideSendable || child.buildsInSendableFunction || visited.buildsInSendableFunction(ofFill: child),
 					declaredLabels: fillFieldLabels.isEmpty ? childDeclaredLabels : childDeclaredLabels.union(fillFieldLabels),
+					fillsBindingLabels: childFillsBindingLabels,
 				))
 			}
 			generatorsToVisit[firstChildIndex...].reverse()
