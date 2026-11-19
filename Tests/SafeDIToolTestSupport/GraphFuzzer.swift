@@ -11750,11 +11750,11 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		let levelFunction = try! NSRegularExpression(pattern: #"^( *)(?:@Sendable )?(?:nonisolated )?func (__safeDI_\w+)\([^)]*\) -> (\w+)\.(SafeDI(?:Sendable)?Scope_\w+(?:\.\w+_Scope)*)\.__safeDI_Builder<(.*) \{$"#)
 		let calledLevelFunction = try! NSRegularExpression(pattern: #"\bin (__safeDI_\w+)\(\)"#)
 		// A fill takes a case's payload; a dispatcher, the enum, which is no fill.
-		let fillDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+_Scope_*)?\.\w+_Values"#)
-		let dispatcherDeclaration = try! NSRegularExpression(pattern: #"^ *(?:@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?(?:, [^)]*)?\) -> "#)
+		let fillDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable nonisolated )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+_Scope_*)?\.\w+_Values"#)
+		let dispatcherDeclaration = try! NSRegularExpression(pattern: #"^ *(?:@Sendable nonisolated )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?(?:, [^)]*)?\) -> "#)
 		// A dispatcher that returns a level's builder struct, which a call passes by calling it.
 		let levelFunctionDeclaration = try! NSRegularExpression(pattern: #"^ *(?:@Sendable (?:nonisolated )?)?func (__safeDI_\w+)\([^)]*\) -> (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?\.__safeDI_Builder<"#)
-		let enclosingDispatcherDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func __safeDI_\w+\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?(?:, [^)]*)?\) -> "#)
+		let enclosingDispatcherDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable nonisolated )?func __safeDI_\w+\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?(?:, [^)]*)?\) -> "#)
 		// A case holding its fill's body ends its line at the colon; one that calls a fill or a dispatcher returns on its line.
 		let inlinedFillCase = try! NSRegularExpression(pattern: #"^( *)case (?:let )?\.[^:]+:$"#)
 		func firstMatch(_ expression: NSRegularExpression, in line: String) -> [String]? {
