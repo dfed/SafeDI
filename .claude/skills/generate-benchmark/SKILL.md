@@ -24,7 +24,7 @@ It never touches the checkout it is run from. Everything it makes is under `WORK
 
 ## The steps
 
-1. **`tests`** runs `Scripts/byte-identical-gate.sh BASE HEAD`, which fails when the change edits an existing line under `Tests/`: a step that must leave generated code alone may add tests and may not change an expectation. A line `./CLI/lint.sh` rewrites passes when its commit holds nothing else.
+1. **`tests`** runs `Scripts/byte-identical-gate.sh BASE HEAD`, which fails when the change edits an existing line under `Tests/`: a step that must leave generated code alone may add tests and may not change an expectation. The script does not know a formatting change from any other: when it fails on a line `./CLI/lint.sh` rewrote, in a commit that holds only lint's changes, pass that line by hand and say so in the report.
 2. **`suite`** runs the suite without `SafeDIToolFuzzerTests`, in a debug build, three times: twice at `BASE`, the first filling a passed-compile-check file (`.claude/rules/passed-compile-checks.md`), and once at `HEAD` reading it. A fixture's compile check is keyed by its generated code, so at `HEAD` "Compile checks: 0 compiled" means no existing fixture's generated code changed; any that compile belong to tests the change adds, which the log names. A value comparison program that fails to compile or run is never kept and so compiles on every run: compare `HEAD`'s "Value comparison programs" count with `BASE`'s second run, not with 0.
 3. **`generate`** builds a release `SafeDITool` at `BASE`, `HEAD` and tag 2.2.0, then `stage2.py` runs `generate` on each shape, per module in build order as the Bazel rule and the Tuist plugin run it. Each round runs the three tools in a rotated order; a run's wall and CPU are summed over the modules and its peak memory is the largest module's. It prints each tool's median and range, then a verdict per shape.
 
@@ -39,11 +39,11 @@ It never touches the checkout it is run from. Everything it makes is under `WORK
 - `N5i-8`, `N5i-10`: layers of four screens where every screen is a seam and opens three screens of the next layer. `N5inline-8`, `N5inline-10` are the same graph without seams in one module, which is how a 2.2.0 user writes it: compare 2.2.0 with these. 2.2.0's tool also runs on the `N5i` sources, but its macros reject `generateDependencyTree`, so that row is not a build a 2.2.0 user has.
 - `E6d-600`, `E6d-1200`: that many independent seams, each with a hole the root's module fills; `-inline` is the same without seams.
 
-A tool that rejects a shape is printed as "rejected" with the start of its error, and the shape has no verdict.
+A tool that rejects a shape is printed as "rejected" with the start of its error. A shape `BASE` or `HEAD` rejects fails the verdict as not judged, since nothing was measured; 2.2.0 rejecting a shape only leaves its row empty.
 
 ## Reading the verdict
 
-`bands.json` holds how much `HEAD` may exceed `BASE`: 3% for CPU and for peak memory, and for wall the shape's own spread between two builds of one commit, clamped to 3%–6%. `N1-200` is judged on minimums, the others on medians. The last line is `GATE PASSED` or `GATE FAILED on <shapes>`, and the script exits 1 on a failure.
+`bands.json` holds how much `HEAD` may exceed `BASE`: 3% for CPU and for peak memory, and for wall the shape's own spread between two builds of one commit, clamped to 3%–6%. The `E6d` shapes' spreads were not measured, so they take 3%, as does any shape `bands.json` does not list. `N1-200` is judged on minimums, the others on medians. The last line is `GATE PASSED` or `GATE FAILED on <shapes>`, and the script exits 1 on a failure.
 
 - Peak memory repeats within about 2% between runs, so a memory failure is real when the two ranges do not overlap.
 - Wall and CPU are only as good as the machine is quiet. The verdict table gives each tool's spread (range over median); when spreads are several times the band, run again on an idle machine before believing a wall or CPU failure, or a pass that sits just under the line.

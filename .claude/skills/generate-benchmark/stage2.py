@@ -107,7 +107,11 @@ def main(argv):
         print("\n| shape | judged on | HEAD/BASE wall | HEAD/BASE CPU | HEAD/BASE memory | wall band | BASE spread wall/CPU | HEAD spread wall/CPU | verdict |\n|---|---|---|---|---|---|---|---|---|")
         failures = []
         for shape, results, rejected in summary:
-            if "BASE" in rejected or "HEAD" in rejected: continue
+            if "BASE" in rejected or "HEAD" in rejected:
+                # A shape BASE or HEAD rejects was not measured, so it cannot pass.
+                failures.append(shape)
+                print(f"| {shape} | | | | | | | | FAIL: not judged, {' and '.join(label for label in ('BASE', 'HEAD') if label in rejected)} rejected it |")
+                continue
             pick = min if shape in bands.get("minimums", []) else statistics.median
             q = [pick(r[i] for r in results["HEAD"]) / pick(r[i] for r in results["BASE"]) for i in range(3)]
             spread = lambda label, i: (max(r[i] for r in results[label]) - min(r[i] for r in results[label])) / statistics.median(r[i] for r in results[label])
@@ -119,6 +123,8 @@ def main(argv):
             verdict = "pass" if not problems else "FAIL: " + ", ".join(problems)
             if problems: failures.append(shape)
             print(f"| {shape} | {'minimum' if pick is min else 'median'} | {q[0]:.3f} | {q[1]:.3f} | {q[2]:.3f} | {wall_band:.1%} | {spread('BASE',0):.1%} / {spread('BASE',1):.1%} | {spread('HEAD',0):.1%} / {spread('HEAD',1):.1%} | {verdict} |")
+        if not summary:
+            failures.append("no shape")
         print("\nGATE " + ("PASSED" if not failures else "FAILED on " + ", ".join(failures)))
         if failures:
             sys.exit(1)

@@ -18,7 +18,7 @@ for t in $out/*.tmp; do
   d=${t%.tmp}; mkdir -p $d; : > $d/modules.txt
   for m in $(cat $t/modules.txt); do
     mkdir -p $d/$m; cp $t/$m/Sources/*.swift $d/$m/
-    deps=$( [ -f $t/$m/dependencies.txt ] && grep -v '^$' $t/$m/dependencies.txt | paste -sd, || true)
+    deps=$( [ -f $t/$m/dependencies.txt ] && grep -v '^$' $t/$m/dependencies.txt | paste -sd, - || true)
     echo "$m $deps" >> $d/modules.txt
   done
   rm -rf $t
