@@ -1395,7 +1395,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		}
 		print("calling-mock builders of the enclosing called type \(counts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
 
-		#expect(counts == ["instantiator plain": 18, "instantiator deferred": 11, "sendableInstantiator plain": 12, "sendableInstantiator deferred": 11, "lazilyInstantiated deferred": 8, "internal": 20, "public": 20, "listed": 20, "reenteringFillInstantiatesWhatNothingFulfills internal": 13, "reenteringFillInstantiatesWhatNothingFulfills public": 12, "reenteringFillInstantiatesWhatNothingFulfills listed": 11, "value LazilyInstantiated internal": 5, "value LazilyInstantiated public": 6, "value LazilyInstantiated listed": 5, "value SendableLazilyInstantiated internal": 6, "value SendableLazilyInstantiated public": 9, "value SendableLazilyInstantiated listed": 10])
+		#expect(counts == ["instantiator plain": 18, "instantiator deferred": 11, "sendableInstantiator plain": 12, "sendableInstantiator deferred": 11, "lazilyInstantiated deferred": 8, "internal": 20, "public": 20, "listed": 20, "reenteringFillInstantiatesWhatNothingFulfills internal": 13, "reenteringFillInstantiatesWhatNothingFulfills public": 12, "reenteringFillInstantiatesWhatNothingFulfills listed": 11, "value LazilyInstantiated internal": 5, "value LazilyInstantiated public": 6, "value LazilyInstantiated listed": 5, "value SendableLazilyInstantiated internal": 8, "value SendableLazilyInstantiated public": 5, "value SendableLazilyInstantiated listed": 8])
 		#expect(GraphFuzzerCallingMockDraw(seed: 0).enclosingBuilder == nil)
 		#expect(!GraphFuzzerCallingMockDraw(seed: 0).reenteringFillInstantiatesWhatNothingFulfills)
 		#expect(GraphFuzzerCallingMockDraw(seed: 0).enclosingCalledTypeLazyValueWrapper == nil)
@@ -1405,13 +1405,13 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(!draws.contains { $0.enclosingBuilder == .sendableInstantiator && $0.enclosingCalledTypeLazyValueWrapper == "LazilyInstantiated" })
 	}
 
-	/// Seeds 790 and 791 draw the first graphs of `fillHoldsBuilderOfEnclosingCalledType` whose enclosing called type receives
+	/// Seeds 790 and 794 draw the first graphs of `fillHoldsBuilderOfEnclosingCalledType` whose enclosing called type receives
 	/// the caller's value only if available (`enclosingCalledTypeLazyValueWrapper`), in a `LazilyInstantiated` and a
 	/// `SendableLazilyInstantiated`: the call of the third module's public mock inside the fill hands it the instance of the
 	/// called mock's wrapper of the caller's value (`value?.instance`), so the called type the third module's type builds
 	/// again holds the caller's instance, as the twin's does. Each fails with the call passing `nil` instead, as it did before
 	/// the fill's optional wrapper offered its instance (`Property.asOptionalLazilyInstantiatedInstanceProperty`).
-	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: [UInt64(790), 791])
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"), arguments: [UInt64(790), 794])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func callingMock_handsCalledTypeBuiltAgainCallersInstance_whenDrawnEnclosingCalledTypeReceivesCallersLazyValueOnlyIfAvailable(seed: UInt64) async throws {
 		let draw = GraphFuzzerCallingMockDraw(seed: seed)
