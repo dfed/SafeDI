@@ -2855,17 +2855,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return heldTaskCount
 	}
 
-	func generateDOT() async throws -> String {
+	func generateDOT() async -> String {
 		// A fill is drawn as the property it fills, which its child builds, so the seam call's edge leads to that
 		// property's own edges rather than to an edge from the property to itself.
 		if case .fill = scopeData, let child = propertiesToGenerate.first {
-			return try await child.generateDOT()
+			return await child.generateDOT()
 		} else {
 			let orderedPropertiesToGenerate = Array(orderedPropertiesToGenerate)
 			let instantiatedProperties = orderedPropertiesToGenerate.map(\.scopeData.asDOTNode)
 			var childDOTs = [String]()
 			for orderedPropertyToGenerate in orderedPropertiesToGenerate {
-				let childDOT = try await orderedPropertyToGenerate.generateDOT()
+				let childDOT = await orderedPropertyToGenerate.generateDOT()
 				if !childDOT.isEmpty {
 					childDOTs.append(childDOT)
 				}

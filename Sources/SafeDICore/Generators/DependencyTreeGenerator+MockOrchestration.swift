@@ -171,20 +171,11 @@ extension DependencyTreeGenerator {
 		// shared across every root that references the type, so the annotation
 		// has to agree — union all roots' sendable references once, then pass it
 		// down to each root's emission.
-		let sendableConfigurationTypeNames: Set<String> = await withTaskGroup(
-			of: Set<String>.self,
-			returning: Set<String>.self,
-		) { taskGroup in
-			for (_, mockRoot) in mockRoots {
-				taskGroup.addTask {
-					await mockRoot.collectSendableConfigurationTypeNames()
-				}
-			}
-			var union = Set<String>()
-			for await result in taskGroup {
-				union.formUnion(result)
-			}
-			return union
+		let sendableConfigurationTypeNames: Set<String> = try await GenerationJobs.results(of: mockRoots.map { GenerationJob($0.scopeGenerator) }) { mockRoot in
+			await mockRoot.collectSendableConfigurationTypeNames()
+		}
+		.reduce(into: Set<String>()) { union, outcome in
+			union.formUnion(outcome.get())
 		}
 
 		// A type with a hand-written mock configures every property with the defaults the mock declares, whether
@@ -203,48 +194,52 @@ extension DependencyTreeGenerator {
 			}
 
 		// Generate mock code and collect configuration types in parallel.
-		let generatedRoots = try await withThrowingTaskGroup(
-			of: GeneratedMockRoot.self,
-			returning: [GeneratedMockRoot].self,
-		) { taskGroup in
-			for (instantiable, mockRoot) in mockRoots {
-				taskGroup.addTask {
-					async let code = mockRoot.generateCode(
-						codeGeneration: .mock(ScopeGenerator.MockContext(
-							mockConditionalCompilation: mockConditionalCompilation,
-							flatParameterMockDefaults: flatParameterMockDefaults,
-							cycleEdges: cycleEdges,
-							handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
-							sendableConfigurationTypeNames: sendableConfigurationTypeNames,
-							publicMockContext: publicMockContext,
-						)),
-					)
-					let isPublicMock = instantiable.generateMock == .public
-					async let configurationTypes = mockRoot.collectConfigurationTypes(
-						isPublicMock: isPublicMock,
-						handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
-					)
-					async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
-					let publicConstructionNodes = isPublicMock ? await mockRoot.collectPublicConstructionNodes() : []
-					return try await GeneratedMockRoot(
-						root: GeneratedRoot(
-							typeDescription: instantiable.concreteInstantiable,
-							sourceFilePath: instantiable.sourceFilePath,
-							code: code,
-							fulfillers: fulfillers,
-						),
-						configurationTypes: configurationTypes,
-						isPublicMock: isPublicMock,
-						publicConstructionNodes: publicConstructionNodes,
-					)
-				}
-			}
-			var results = [GeneratedMockRoot]()
-			for try await result in taskGroup {
-				results.append(result)
-			}
-			return results
+		let outcomes = try await GenerationJobs.results(of: mockRoots.map { GenerationJob($0) }) { mockRootInfo in
+			let (instantiable, mockRoot) = mockRootInfo
+			try Self.outputJobObserver?(instantiable.concreteInstantiable)
+			async let code = mockRoot.generateCode(
+				codeGeneration: .mock(ScopeGenerator.MockContext(
+					mockConditionalCompilation: mockConditionalCompilation,
+					flatParameterMockDefaults: flatParameterMockDefaults,
+					cycleEdges: cycleEdges,
+					handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+					sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+					publicMockContext: publicMockContext,
+				)),
+			)
+			let isPublicMock = instantiable.generateMock == .public
+			async let configurationTypes = mockRoot.collectConfigurationTypes(
+				isPublicMock: isPublicMock,
+				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+			)
+			async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
+			let publicConstructionNodes = isPublicMock ? await mockRoot.collectPublicConstructionNodes() : []
+			return try await GeneratedMockRoot(
+				root: GeneratedRoot(
+					typeDescription: instantiable.concreteInstantiable,
+					sourceFilePath: instantiable.sourceFilePath,
+					code: code,
+					fulfillers: fulfillers,
+				),
+				configurationTypes: configurationTypes,
+				isPublicMock: isPublicMock,
+				publicConstructionNodes: publicConstructionNodes,
+			)
 		}
+		var generatedRoots = [GeneratedMockRoot]()
+		var outputFailures = [any Error]()
+		for outcome in outcomes {
+			switch outcome {
+			case let .success(generatedRoot):
+				generatedRoots.append(generatedRoot)
+			case let .failure(error):
+				outputFailures.append(error)
+			}
+		}
+		// A failure with no source location is thrown alone, the one of the mock root first in type order. That is a name
+		// order, which the mock roots' order is: the stated exception for an error with no location, such as the one the
+		// deliberate gap in `Initializer.createDependencyAndArgumentBinding(given:)` throws.
+		try Self.reportOutputFailures(outputFailures)
 
 		// The second whole-module gate, not run by `requirements(forTypeNamed:generatesMock:mockEmittingModule:)`; see
 		// the note above `validateSendableBuildersCaptureNoNonSendableWrapper`.

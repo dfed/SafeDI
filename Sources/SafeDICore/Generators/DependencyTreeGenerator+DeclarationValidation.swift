@@ -37,20 +37,11 @@ extension DependencyTreeGenerator {
 		else { return }
 		// Two paths can reach one receiver through the same chain of types, so identical captures are reported once.
 		// The trees are walked in parallel: the captures are a set, which the error sorts into source order.
-		let captures = await withTaskGroup(
-			of: [ScopeGenerator.NonSendableWrapperCapture].self,
-			returning: Set<ScopeGenerator.NonSendableWrapperCapture>.self,
-		) { taskGroup in
-			for root in roots {
-				taskGroup.addTask {
-					await root.scopeGenerator.nonSendableWrapperCaptures(ofTreeRootedAt: root.instantiable)
-				}
-			}
-			var captures = Set<ScopeGenerator.NonSendableWrapperCapture>()
-			for await rootCaptures in taskGroup {
-				captures.formUnion(rootCaptures)
-			}
-			return captures
+		let captures = try await GenerationJobs.results(of: roots.map { GenerationJob($0) }) { root in
+			await root.scopeGenerator.nonSendableWrapperCaptures(ofTreeRootedAt: root.instantiable)
+		}
+		.reduce(into: Set<ScopeGenerator.NonSendableWrapperCapture>()) { captures, outcome in
+			captures.formUnion(outcome.get())
 		}
 		if !captures.isEmpty {
 			throw DependencyTreeGeneratorError.nonSendableWrapperCapturedBySendableBuilder(Array(captures))

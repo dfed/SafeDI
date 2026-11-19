@@ -253,29 +253,30 @@ public actor DependencyTreeGenerator {
 
 		let end = GenerationPhaseObservation.observer?([.productionOutput])
 		defer { end?() }
-		let generatedRoots = try await withThrowingTaskGroup(
-			of: GeneratedRoot?.self,
-			returning: [GeneratedRoot].self,
-		) { taskGroup in
-			for rootInfo in rootScopeGenerators {
-				taskGroup.addTask {
-					let code = try await rootInfo.scopeGenerator.generateCode()
-					return await GeneratedRoot(
-						typeDescription: rootInfo.typeDescription,
-						sourceFilePath: rootInfo.sourceFilePath,
-						code: code,
-						fulfillers: rootInfo.scopeGenerator.fulfillersOfTree(buildingMock: false),
-					)
-				}
-			}
-			var generatedRoots = [GeneratedRoot]()
-			for try await generatedRoot in taskGroup {
-				if let generatedRoot {
-					generatedRoots.append(generatedRoot)
-				}
-			}
-			return generatedRoots
+		let outcomes = try await GenerationJobs.results(of: rootScopeGenerators.map { GenerationJob($0) }) { rootInfo in
+			try Self.outputJobObserver?(rootInfo.typeDescription)
+			let code = try await rootInfo.scopeGenerator.generateCode()
+			return await GeneratedRoot(
+				typeDescription: rootInfo.typeDescription,
+				sourceFilePath: rootInfo.sourceFilePath,
+				code: code,
+				fulfillers: rootInfo.scopeGenerator.fulfillersOfTree(buildingMock: false),
+			)
 		}
+		var generatedRoots = [GeneratedRoot]()
+		var outputFailures = [any Error]()
+		for outcome in outcomes {
+			switch outcome {
+			case let .success(generatedRoot):
+				generatedRoots.append(generatedRoot)
+			case let .failure(error):
+				outputFailures.append(error)
+			}
+		}
+		// A failure with no source location is thrown alone, the one of the root first in type order. That is a name order,
+		// which the roots' order is: the stated exception for an error with no location, such as the one the deliberate gap
+		// in `Initializer.createDependencyAndArgumentBinding(given:)` throws.
+		try Self.reportOutputFailures(outputFailures)
 		if let observer = HeldCodeTasks.observer {
 			for rootInfo in rootScopeGenerators {
 				let heldTaskCount = await rootInfo.scopeGenerator.codeTasksHeldInTree()
@@ -333,19 +334,13 @@ public actor DependencyTreeGenerator {
 		defer { end?() }
 		let rootScopeGenerators = try rootScopeGenerators
 
-		let dependencyTree = try await withThrowingTaskGroup(
-			of: String.self,
-			returning: String.self,
-		) { taskGroup in
-			for rootInfo in rootScopeGenerators {
-				taskGroup.addTask { try await rootInfo.scopeGenerator.generateDOT() }
-			}
-			var generatedRoots = [String]()
-			for try await generatedRoot in taskGroup {
-				generatedRoots.append(generatedRoot)
-			}
-			return generatedRoots.removingEmpty().sorted().joined(separator: "\n\n")
+		let dependencyTree = try await GenerationJobs.results(of: rootScopeGenerators.map { GenerationJob($0.scopeGenerator) }) { scopeGenerator in
+			await scopeGenerator.generateDOT()
 		}
+		.map { $0.get() }
+		.removingEmpty()
+		.sorted()
+		.joined(separator: "\n\n")
 
 		return """
 		\(dependencyTree)
@@ -470,6 +465,31 @@ public actor DependencyTreeGenerator {
 			}()
 			try Self.validateCycleLabelsArePassable(inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator) + inlineForeignSeamTrees)
 			return rootScopeGenerators
+		}
+	}
+
+	/// Called, when set, by each output job with the type of its root before it generates the root's code, production or
+	/// mock; it may throw, and what it throws is that job's failure. Set by tests, which reach the report of output
+	/// failures through it; never by the tool.
+	@TaskLocal static var outputJobObserver: (@Sendable (_ rootType: TypeDescription) throws -> Void)?
+
+	/// Throws what the output jobs of a module's roots that failed report, given their failures in the order of their
+	/// jobs: every failure located in source, joined in source order, so that each failing root reports its error and the
+	/// order the jobs complete in decides nothing; or, when any failure has no location, the first such failure alone.
+	/// A `CancellationError` is never among them: the helper throws that itself.
+	static func reportOutputFailures(_ failures: [any Error]) throws {
+		var locatedFailures = [DependencyTreeGeneratorError]()
+		for failure in failures {
+			if let failure = failure as? DependencyTreeGeneratorError {
+				locatedFailures.append(failure)
+			} else if let failure = failure as? any SourceLocatedError {
+				locatedFailures.append(.sourceLocated(failure))
+			} else {
+				throw failure
+			}
+		}
+		if let error = DependencyTreeGeneratorError.reportingAll(of: locatedFailures) {
+			throw error
 		}
 	}
 
