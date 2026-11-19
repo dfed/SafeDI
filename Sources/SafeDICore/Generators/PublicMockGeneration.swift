@@ -546,7 +546,7 @@ extension ScopeGenerator {
 	/// lazily instantiated node is taken as the wrapper its tree receives, as the type's initializer takes it, so a caller
 	/// hands its own wrapper and nothing is built until the tree reads it.
 	static func publicMockParameterProperty(of node: MockParameterNode) -> Property {
-		Property(label: node.propertyLabel, typeDescription: .optional(node.typeDescription.implicitlyUnwrappedOptionalSpelledAsOptional.unwrapped))
+		Property(label: node.propertyLabel, typeDescription: .optional(node.typeDescription.unwrapped))
 	}
 }
 

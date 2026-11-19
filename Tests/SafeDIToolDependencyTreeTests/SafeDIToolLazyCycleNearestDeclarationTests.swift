@@ -4023,10 +4023,10 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsDependencyCycleError_whenTypeBuiltAsParameterLabelRequiresLabel() async {
 		// `X` requires `renamed`, which it is built as: the error the tree without the cycle reports.
-		let fixture = Self.typeBuiltAsParameterLabelFixture(xDeclares: ["@Received let renamed: X?"])
+		let fixture = Self.typeBuiltAsParameterLabelFixture(xDeclares: ["@Received let renamed: X"])
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["X.swift"]):7:5: error: Dependency cycle: @Instantiated `renamed: X` -> @Received `renamed: X?`. `renamed: X` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+			\(fixtures["X.swift"]):7:5: error: Dependency cycle: @Instantiated `renamed: X` -> @Received `renamed: X`. `renamed: X` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 			"""
 		}) {
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
