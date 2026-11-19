@@ -1377,15 +1377,12 @@ private struct ScopeGeneratorUnderConstruction {
 	}
 
 	/// The generators created so far for `propertiesToGenerate`, in order, followed by those of `fillsOfThisCall`.
-	private(set) var childGenerators = [ScopeGenerator]() {
-		didSet {
-			if let lastGenerator = childGenerators.last, childGenerators.count > oldValue.count {
-				childGeneratorIdentifiers.insert(ObjectIdentifier(lastGenerator))
-			}
-		}
-	}
+	private(set) var childGenerators = [ScopeGenerator]()
 
-	/// The identities of `childGenerators`, none of which a child of this scope reuses (see `ConstructionMemo`).
+	/// The identities of the generators among `childGenerators` that `add(childGenerator:createdBy:readsAnsweredAbove:isSettled:)`
+	/// and `add(reusing:)` added, none of which a child of this scope reuses (see `ConstructionMemo`): the others, an alias's
+	/// and a hole's, are never a memo's entry. Kept beside the array, not by an observer of it, which would copy the array at
+	/// each append.
 	private(set) var childGeneratorIdentifiers = Set<ObjectIdentifier>()
 	/// How many scopes this scope's subtree has so far: itself, and every scope created beneath it. An alias or a hole,
 	/// which generates a line or two, is not counted.
@@ -1413,6 +1410,7 @@ private struct ScopeGeneratorUnderConstruction {
 	///   - isSettled: `child.isSettled(building: childGenerator)`.
 	mutating func add(childGenerator: ScopeGenerator, createdBy child: ScopeGeneratorUnderConstruction, readsAnsweredAbove: ConstructionLog, isSettled: Bool) {
 		childGenerators.append(childGenerator)
+		childGeneratorIdentifiers.insert(ObjectIdentifier(childGenerator))
 		subtreeScopeCount += child.subtreeScopeCount
 		if child.startsCodeBeneathALargeSubtree {
 			childGeneratorsStartingBeneathALargeSubtree.append(childGenerator)
@@ -1431,6 +1429,7 @@ private struct ScopeGeneratorUnderConstruction {
 	/// child of this scope may.
 	mutating func add(reusing reuse: ConstructionMemo.Reuse) {
 		childGenerators.append(reuse.entry.generator)
+		childGeneratorIdentifiers.insert(ObjectIdentifier(reuse.entry.generator))
 		subtreeScopeCount += reuse.entry.subtreeScopeCount
 		if mayStartCodeEarly, reuse.entry.subtreeScopeCount < Self.scopeCountOfLargeSubtree {
 			childGeneratorsStartingBeneathALargeSubtree.append(reuse.entry.generator)
