@@ -245,18 +245,22 @@ public struct SeamSignature: Sendable {
 				self.seamParameterOrigin = seamParameterOrigin
 			}
 
-			/// What a field bound from a parameter of the seam whose tree holds the site says about that parameter: where
-			/// the seam is declared, whether the parameter passes a receive through or is the seam's own property, and the
-			/// receives in its tree the parameter passes its value to (the seam's own receive, for its own property). A fill
-			/// whose tree receives the label in a form no one parameter takes together with the parameter's gives the seam's
-			/// tree the label in two forms, which the seam reports where it sees both.
+			/// What a field bound from a parameter of a seam says about that parameter: which seam it is and where it is
+			/// declared, whether the parameter passes a receive through or is the seam's own property, and the receives in
+			/// its tree the parameter passes its value to (the seam's own receive, for its own property). The seam is the one
+			/// whose tree holds the site, or, for a field a fill on the site's path binds from the struct of a seam it fills,
+			/// that seam, whose parameter the field still is. A fill whose tree receives the label in a form no one parameter
+			/// takes together with the parameter's gives that seam's tree the label in two forms, which the seam reports
+			/// where it sees both.
 			public struct SeamParameterOrigin: Sendable {
-				public init(seamDeclarationLocation: Dependency.DeclarationLocation?, isPassThrough: Bool, receivers: [Receiver]) {
+				public init(seamType: TypeDescription, seamDeclarationLocation: Dependency.DeclarationLocation?, isPassThrough: Bool, receivers: [Receiver]) {
+					self.seamType = seamType
 					self.seamDeclarationLocation = seamDeclarationLocation
 					self.isPassThrough = isPassThrough
 					self.receivers = receivers
 				}
 
+				public let seamType: TypeDescription
 				public let seamDeclarationLocation: Dependency.DeclarationLocation?
 				public let isPassThrough: Bool
 				public let receivers: [Receiver]
