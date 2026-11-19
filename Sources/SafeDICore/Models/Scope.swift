@@ -979,6 +979,7 @@ private struct ScopeGeneratorUnderConstruction {
 					}
 					fillsOfThisCall[index].fill.labelsHandedAsMemo = Set(handedMemos.memoByLabel.keys)
 					fillsOfThisCall[index].fill.plainMemoRoutesOfSendableWrapperReads = handedMemos.plainMemoRoutesOfSendableWrapperReads
+					fillsOfThisCall[index].fill.memoOriginsByLabel = handedMemos.memoOriginsByLabel
 				}
 			}
 			// A fill a level function calls of an instantiator's place returns the builder its wrapper keeps: every fill of a
@@ -1108,6 +1109,9 @@ private struct ScopeGeneratorUnderConstruction {
 		/// `SendableLazilyInstantiated` too, the routes that hand a seam's `LazilyInstantiated`
 		/// (`ScopeGenerator.FillDispatcher.HandedMemos`), which validation reports.
 		var plainMemoRoutesOfSendableWrapperReads = [String: [ScopeGenerator.FillDispatcher.PlainMemoRoute]]()
+		/// By each of `labelsHandedAsMemo`, the deferred parameters whose memos the routes hand
+		/// (`ScopeGenerator.FillDispatcher.HandedMemos.memoOriginsByLabel`), which validation judges the fill's reads against.
+		var memoOriginsByLabel = [String: [SeamSignature.Hole.Field.SeamParameterOrigin]]()
 	}
 
 	/// The parameters a fill of `hole` takes the scope values the seam whose tree holds `hole` handed it under, for the call at
@@ -1883,6 +1887,7 @@ private struct ScopeGeneratorUnderConstruction {
 				returnsWrapperBuilder: fill.returnsWrapperBuilder,
 				labelsHandedAsMemo: fill.labelsHandedAsMemo,
 				plainMemoRoutesOfSendableWrapperReads: fill.plainMemoRoutesOfSendableWrapperReads,
+				memoOriginsByLabel: fill.memoOriginsByLabel,
 				child: builtGenerator,
 			)
 		} else {
