@@ -41,6 +41,7 @@ extension DependencyTreeGenerator {
 		for instantiable: Instantiable,
 		scope: Scope,
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		frozenScopeMap: FrozenScopeMap,
 		flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault],
 		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
 		publicMockContext: PublicMockContext?,
@@ -444,8 +445,10 @@ extension DependencyTreeGenerator {
 		// Build the final ScopeGenerator once. The mock root binds every received
 		// property it does not promote — as a `mock()` parameter or a `SafeDIOverrides`
 		// entry — so each is receivable throughout the tree.
+		let (mockRootTable, mockRootRecord) = frozenScopeMap.freezing(rootScope: mockRootScope)
 		func mockRootGenerator(builders: ShapedBuilders?) throws -> ScopeGenerator {
-			try mockRootScope.createScopeGenerator(
+			try mockRootRecord.createScopeGenerator(
+				in: mockRootTable,
 				for: nil,
 				// The mock root binds every received property it does not promote, which encloses its whole tree.
 				nearestDeclarations: .binding(allReceived, passingNilTo: receivesPassedNil),

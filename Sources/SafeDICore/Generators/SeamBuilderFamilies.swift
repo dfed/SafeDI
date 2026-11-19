@@ -27,7 +27,7 @@
 /// claims its builders' internal names, then the functions that build its wrapper places, then the payloads it binds; a
 /// filler's body claims its fills, then its dispatchers; a mock's scope claims each function's locals in the order the
 /// mock's body walk reads the overrides (`ScopeGenerator.SendableOverrideExtractor`).
-struct GeneratedNameAllocator {
+struct GeneratedNameAllocator: Sendable {
 	init(reserving names: Set<String>) {
 		taken = names
 		consulted = NamesConsultedInTurn([])

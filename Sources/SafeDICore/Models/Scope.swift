@@ -222,7 +222,7 @@ final class Scope: Hashable {
 
 	/// The created property that provides each form, for `createdBinding(of:)`. A type's labels are distinct, so no two
 	/// of its created properties provide one form.
-	private lazy var createdBindings: [Property: Property] = {
+	private(set) lazy var createdBindings: [Property: Property] = {
 		var createdBindings = [Property: Property]()
 		for dependency in instantiable.dependencies where !dependency.source.isReceived {
 			for form in CycleParameter.forms(providedBy: dependency.property) where createdBindings[form] == nil {
@@ -275,11 +275,11 @@ final class Scope: Hashable {
 		+ instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property)
 
 	/// The labels of `declaredProperties`.
-	fileprivate lazy var declaredLabels = Set(declaredProperties.map(\.label))
+	private(set) lazy var declaredLabels = Set(declaredProperties.map(\.label))
 
 	/// `declaredProperties` in `Property` order, each with the forms it provides (`CycleParameter.forms(providedBy:)`),
 	/// which every tree that builds this scope declares beneath it.
-	fileprivate lazy var sortedDeclaredPropertyForms: [(property: Property, forms: Set<Property>)] = declaredProperties
+	private(set) lazy var sortedDeclaredPropertyForms: [(property: Property, forms: Set<Property>)] = declaredProperties
 		.sorted()
 		.map { (property: $0, forms: CycleParameter.forms(providedBy: $0)) }
 
@@ -287,7 +287,7 @@ final class Scope: Hashable {
 	/// instantiated property this scope declares. A mock root can declare a property itself and also be given
 	/// a promoted lazily instantiated property with the same label. Types that receive the property by value
 	/// are then built with the root's own. Read only once `propertiesToGenerate` is complete.
-	fileprivate lazy var declaredLazilyInstantiatedInstanceProperties = Set(
+	private(set) lazy var declaredLazilyInstantiatedInstanceProperties = Set(
 		(
 			propertiesToGenerate.compactMap(\.lazilyInstantiatedInstanceProperty)
 				+ instantiatedDependenciesNotGenerated.compactMap(\.lazilyInstantiatedInstanceProperty)
@@ -368,7 +368,9 @@ final class Scope: Hashable {
 				nil
 			}
 		}
+}
 
+extension ScopeRecord {
 	/// Creates the generator of the tree this scope creates. The generators of the scopes in the tree are
 	/// created depth first, each after the generators of the scopes it creates, with a stack of the scopes
 	/// whose generator is under construction, since a tree can be as deep as the module has types.
@@ -405,6 +407,7 @@ final class Scope: Hashable {
 	/// (`ScopeGenerator.startsAsCarrier(_:)`). The order decides nothing a pass creates, so the graph of
 	/// the pass after is the same.
 	func createScopeGenerator(
+		in table: ScopeTable,
 		for property: Property?,
 		nearestDeclarations: NearestDeclarations = NearestDeclarations(),
 		lazilyInstantiatedInstanceProperties: Set<Property>,
@@ -428,6 +431,7 @@ final class Scope: Hashable {
 				generatorsToStart = []
 			}
 			scopeGenerator = try createScopeGenerator(
+				in: table,
 				for: property,
 				nearestDeclarations: nearestDeclarations,
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -463,6 +467,7 @@ final class Scope: Hashable {
 	/// - Parameter generatorsToStart: `nil` to start each generator's code as it is created, or where to collect the
 	///   generators whose code to start, in the order they are created.
 	private func createScopeGenerator(
+		in table: ScopeTable,
 		for property: Property?,
 		nearestDeclarations: NearestDeclarations,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
@@ -478,6 +483,7 @@ final class Scope: Hashable {
 		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?,
 	) throws -> ScopeGenerator {
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
+			table: table,
 			scope: self,
 			property: property,
 			propertyStack: [],
@@ -517,7 +523,7 @@ final class Scope: Hashable {
 						onlyIfAvailable: onlyIfAvailable,
 						declarationReference: declarationReference,
 					)
-				case let .hole(property, erasedToConcreteExistential, _):
+				case let .hole(property, erasedToConcreteExistential):
 					scopeGeneratorsUnderConstruction[index].addHoleGenerator(
 						property: property,
 						erasedToConcreteExistential: erasedToConcreteExistential,
@@ -541,15 +547,16 @@ final class Scope: Hashable {
 	}
 }
 
-/// A scope whose generator `Scope.createScopeGenerator` is creating, with what the generator is created from once
+/// A scope whose generator `ScopeRecord.createScopeGenerator` is creating, with what the generator is created from once
 /// the generators of the scopes it creates exist.
-private struct ScopeGeneratorUnderConstruction {
+private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// - Parameters:
 	///   - concreteTypeStack: The concrete types of the scopes `propertyStack`'s properties are built for, beside it.
 	///   - fillPathStackCount: How many of the outermost entries of `propertyStack` are the path of the seam whose hole the
 	///     enclosing fill fills (`SeamSignature.Hole.fillPropertyStack`): none outside a fill, and a nested fill's are its own.
 	init(
-		scope: Scope,
+		table: ScopeTable,
+		scope: ScopeRecord,
 		property: Property?,
 		propertyStack: [Property],
 		concreteTypeStack: [TypeDescription],
@@ -719,6 +726,7 @@ private struct ScopeGeneratorUnderConstruction {
 		self.unavailableOptionalProperties = unavailableOptionalProperties
 		self.receivesPassedNil = receivesPassedNil
 		self.aliasBindings = aliasBindings
+		self.table = table
 		self.scope = scope
 		self.property = property
 		// A scope that closes a cycle creates no children.
@@ -792,7 +800,7 @@ private struct ScopeGeneratorUnderConstruction {
 		// pass names both, fills first, then dispatchers, apart from what encloses the call: the
 		// fills and dispatchers enclosing it, and the names the seam whose tree holds it binds for its builders, which a call
 		// inside it passes by name and which a closer declaration would shadow.
-		var fillsOfThisCall = [(fill: Fill, scope: Scope)]()
+		var fillsOfThisCall = [(fill: Fill, scope: ScopeID)]()
 		var dispatchersOfThisCall = [ScopeGenerator.FillDispatcher]()
 		var namesOfThisCall = GeneratedNameAllocator(reserving: [])
 		if !holeArguments.isEmpty {
@@ -842,7 +850,7 @@ private struct ScopeGeneratorUnderConstruction {
 			var mockRootBindingByLabelByCaseKey = [String: [String: Property]]()
 			var fillsReenterCall = false
 			if scope.publicMockCall != nil, let calledBuilders = scope.calledBuilders {
-				fillsReenterCall = Self.callsInsideFills(of: holeArguments, reenter: calledBuilders)
+				fillsReenterCall = Self.callsInsideFills(of: holeArguments, in: table, reenter: calledBuilders)
 			}
 			if let publicMockCall = scope.publicMockCall {
 				for (caseKey, places) in placesByCaseKey {
@@ -1046,15 +1054,16 @@ private struct ScopeGeneratorUnderConstruction {
 	/// re-enters a level function the call that passes those fills declares for it: a call of the same builder, which
 	/// re-enters its root level function, or of another module's public mock that holds a builder of a type whose places
 	/// the call fills (`.inner`), which re-enters the level function of that type's enum.
-	private static func callsInsideFills(of holeArguments: [Scope.HoleArgument], reenter calledBuilders: CalledBuilders) -> Bool {
+	private static func callsInsideFills(of holeArguments: [ScopeRecord.HoleArgument], in table: ScopeTable, reenter calledBuilders: CalledBuilders) -> Bool {
 		let enumKeys = Set(calledBuilders.enumsByKey.keys)
-		var visited = Set<ObjectIdentifier>()
-		var scopesToVisit = holeArguments.compactMap { argument -> Scope? in
+		var visited = Set<ScopeID>()
+		var scopesToVisit = holeArguments.compactMap { argument -> ScopeID? in
 			guard case let .fill(_, scope) = argument else { return nil }
 			return scope
 		}
-		while let scope = scopesToVisit.popLast() {
-			guard visited.insert(ObjectIdentifier(scope)).inserted else { continue }
+		while let scopeID = scopesToVisit.popLast() {
+			guard visited.insert(scopeID).inserted else { continue }
+			let scope = table[scopeID]
 			if let innerBuilders = scope.calledBuilders, innerBuilders.enumsByKey.keys.contains(where: enumKeys.contains) {
 				return true
 			}
@@ -1069,7 +1078,7 @@ private struct ScopeGeneratorUnderConstruction {
 	}
 
 	/// A fill of a seam call: the hole it fills, its key (see `ScopeGenerator.fillKey(of:)`), and its function's name.
-	struct Fill {
+	struct Fill: Sendable {
 		/// The place the fill fills, without the declarations bound from the call's arguments that the caller binds itself
 		/// (`fillUnderConstruction`).
 		var hole: SeamSignature.Hole
@@ -1188,7 +1197,7 @@ private struct ScopeGeneratorUnderConstruction {
 	}
 
 	/// The next of `propertiesToGenerate` to create a generator for, or `nil` once every one has its generator.
-	mutating func nextPropertyToGenerate() -> Scope.PropertyToGenerate? {
+	mutating func nextPropertyToGenerate() -> ScopeRecord.PropertyToGenerate? {
 		guard nextPropertyIndex < propertiesToGenerate.count else { return nil }
 		let propertyToGenerate = propertiesToGenerate[nextPropertyIndex]
 		nextPropertyIndex += 1
@@ -1197,7 +1206,7 @@ private struct ScopeGeneratorUnderConstruction {
 
 	/// The next of `fillsOfThisCall` to create a generator for, once every one of `propertiesToGenerate` has its
 	/// generator, or `nil` once every fill has its generator.
-	mutating func nextFill() -> (fill: Fill, scope: Scope)? {
+	mutating func nextFill() -> (fill: Fill, scope: ScopeID)? {
 		guard nextFillIndex < fillsOfThisCall.count else { return nil }
 		let fill = fillsOfThisCall[nextFillIndex]
 		nextFillIndex += 1
@@ -1207,7 +1216,8 @@ private struct ScopeGeneratorUnderConstruction {
 	/// The scope under construction for the property a fill of this scope's seam call builds: the scope of the type
 	/// that fulfills the hole in the caller's declarations, built with the stack the seam whose tree holds the site
 	/// reaches it with, and with the fields of the site's scope struct in scope beside what encloses the call.
-	func fillUnderConstruction(fill: Fill, scope: Scope) throws -> ScopeGeneratorUnderConstruction {
+	func fillUnderConstruction(fill: Fill, scope scopeID: ScopeID) throws -> ScopeGeneratorUnderConstruction {
+		let scope = table[scopeID]
 		var fill = fill
 		let hole = fill.hole
 		try validateForwardedProperties(of: hole.property, declaredAt: hole.declarationLocation, on: hole.ownerType, seeingThroughModulesNamed: hole.declaringModuleNames, building: scope.instantiable)
@@ -1286,6 +1296,7 @@ private struct ScopeGeneratorUnderConstruction {
 			}
 		}
 		return ScopeGeneratorUnderConstruction(
+			table: table,
 			scope: scope,
 			property: hole.property,
 			propertyStack: hole.fillPropertyStack,
@@ -1335,10 +1346,11 @@ private struct ScopeGeneratorUnderConstruction {
 
 	/// The scope under construction for a scope this one instantiates.
 	func childUnderConstruction(
-		scope: Scope,
+		scope scopeID: ScopeID,
 		property: Property,
 		erasedToConcreteExistential: Bool,
 	) throws -> ScopeGeneratorUnderConstruction {
+		let scope = table[scopeID]
 		try validateForwardedProperties(
 			of: property,
 			declaredAt: self.scope.instantiable.dependencies.first(where: { $0.property == property })?.declarationLocation,
@@ -1347,6 +1359,7 @@ private struct ScopeGeneratorUnderConstruction {
 			building: scope.instantiable,
 		)
 		return ScopeGeneratorUnderConstruction(
+			table: table,
 			scope: scope,
 			property: property,
 			propertyStack: childPropertyStack,
@@ -1666,7 +1679,7 @@ private struct ScopeGeneratorUnderConstruction {
 	}
 
 	/// The sites of the places a call whose builders `holeArguments` are fills.
-	private static func filledSites(of holeArguments: [Scope.HoleArgument]) -> Set<SeamSignature.Hole.Site> {
+	private static func filledSites(of holeArguments: [ScopeRecord.HoleArgument]) -> Set<SeamSignature.Hole.Site> {
 		Set(holeArguments.compactMap { holeArgument in
 			if case let .fill(hole, _) = holeArgument {
 				hole.site
@@ -1937,14 +1950,16 @@ private struct ScopeGeneratorUnderConstruction {
 		}
 	}
 
-	private let scope: Scope
+	/// The table `scope` and the scopes it builds are records of.
+	private let table: ScopeTable
+	private let scope: ScopeRecord
 	private let property: Property?
 	/// Whether this scope is in the tree of a fill a mock declares, whose types are built as the mock's tree built
 	/// inline builds them: each with its hand-written mock where `mockReturnTypeIsCompatible` says the mock builds it.
 	private let buildsWithHandWrittenMocks: Bool
 	/// Whether the tree checks each erased instantiator against the type it builds (see `createScopeGenerator`).
 	private let validatesForwardedProperties: Bool
-	private let propertiesToGenerate: [Scope.PropertyToGenerate]
+	private let propertiesToGenerate: [ScopeRecord.PropertyToGenerate]
 	/// The index in `propertiesToGenerate` of the next property to create a generator for.
 	private var nextPropertyIndex = 0
 	private let childPropertyStack: [Property]
@@ -2009,10 +2024,10 @@ private struct ScopeGeneratorUnderConstruction {
 	/// name of its function; `nil` for every other scope.
 	private let fill: Fill?
 	/// How the seam call this scope makes passes each builder (see `Scope.holeArguments`).
-	private let holeArguments: [Scope.HoleArgument]
+	private let holeArguments: [ScopeRecord.HoleArgument]
 	/// The fills of `holeArguments` this scope's generator holds – those no enclosing call already fills – each with the
 	/// scope of the type that fulfills its hole.
-	private let fillsOfThisCall: [(fill: Fill, scope: Scope)]
+	private let fillsOfThisCall: [(fill: Fill, scope: ScopeID)]
 	/// The dispatchers this scope's seam call declares – those no enclosing call declares – in the order the call's arguments
 	/// first reach them.
 	private let dispatchersOfThisCall: [ScopeGenerator.FillDispatcher]
@@ -2170,7 +2185,7 @@ extension Instantiable {
 /// The holes of a seam's signature, as the generators of the seam's tree look them up: each site by its path, each
 /// hole the seam passes up by the inner seam's hole it passes, and the payloads the tree binds before building each property
 /// of a route to a place nested by type, by the property's path.
-struct SeamHoles {
+struct SeamHoles: Sendable {
 	/// No holes: a tree that is not a seam's, or a seam's tree without holes.
 	init() {
 		seamType = nil

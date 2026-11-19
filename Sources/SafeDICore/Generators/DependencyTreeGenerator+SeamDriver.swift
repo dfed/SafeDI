@@ -392,6 +392,8 @@ extension DependencyTreeGenerator {
 			checkingModule: emittingModuleToCheck,
 			builtInlineSeamComment: { self.builtInlineSeamComment(for: $0) },
 		)
+		// Every tree of the seam world reads its scopes frozen, once.
+		let frozenSeamScopeMap = FrozenScopeMap(freezing: seamScopeMap.lazy.map { (key: $0.key, scope: $0.value) })
 		// A root that calls a seam whose builder it cannot fill is reported before any tree is generated.
 		try Self.validateRootsFillEveryHole(
 			roots: rootInstantiables.sorted().compactMap { seamScopeMap[$0] },
@@ -419,18 +421,21 @@ extension DependencyTreeGenerator {
 			},
 			checkingSeamTrees: generatedSeams.map { (instantiable: $0.seam, scope: $0.rootScope) },
 		)
-		var rootScopeGenerators = try rootScopesToGenerate.rootScopes.map { typeDescription, scope in
-			try RootScopeInfo(
+		var rootScopeGenerators = [RootScopeInfo]()
+		for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
+			let (table, record) = frozenSeamScopeMap.freezing(rootScope: scope)
+			try rootScopeGenerators.append(RootScopeInfo(
 				typeDescription: typeDescription,
 				instantiable: scope.instantiable,
 				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
-				scopeGenerator: scope.createScopeGenerator(
+				scopeGenerator: record.createScopeGenerator(
+					in: table,
 					for: nil,
 					lazilyInstantiatedInstanceProperties: [],
 					erasedToConcreteExistential: false,
 					declaredTypeNames: declaredTypeNames,
 				),
-			)
+			))
 		}
 		for (seam, seamRoot, seamRootScope) in generatedSeams {
 			var seamRoot = seamRoot
@@ -442,6 +447,7 @@ extension DependencyTreeGenerator {
 				sourceFilePath: seam.sourceFilePath,
 				scopeGenerator: Self.seamRootGenerator(
 					rootScope: seamRootScope,
+					in: frozenSeamScopeMap,
 					seamRoot: seamRoot,
 					startsCodeGeneration: true,
 					declaredTypeNames: declaredTypeNames,
@@ -647,6 +653,7 @@ extension DependencyTreeGenerator {
 					checkingModule: checkingModule,
 				)
 				let scopeInstantiables = scopeMap.mapValues(\.instantiable)
+				let frozenScopeMap = FrozenScopeMap(freezing: scopeMap.lazy.map { (key: $0.key, scope: $0.value) })
 				var changed = false
 				var passErrors = [DependencyTreeGeneratorError]()
 				var passFailedSeams = Set<TypeDescription>()
@@ -658,6 +665,7 @@ extension DependencyTreeGenerator {
 					do {
 						let generator = try Self.seamRootGenerator(
 							rootScope: rootScope,
+							in: frozenScopeMap,
 							seamRoot: previousSeamRoot ?? initialSeamRoot(of: seam),
 							startsCodeGeneration: false,
 							declaredTypeNames: declaredTypeNames,
@@ -1103,6 +1111,7 @@ extension DependencyTreeGenerator {
 	/// as hidden, from the seam's own chain.
 	private static func seamRootGenerator(
 		rootScope: Scope,
+		in frozenScopeMap: FrozenScopeMap,
 		seamRoot: ScopeGenerator.SeamRoot,
 		startsCodeGeneration: Bool,
 		declaredTypeNames: DeclaredTypeNames,
@@ -1128,7 +1137,9 @@ extension DependencyTreeGenerator {
 				lazilyInstantiatedInstanceProperties.insert(property.asUnwrappedProperty)
 			}
 		}
-		return try rootScope.createScopeGenerator(
+		let (table, rootRecord) = frozenScopeMap.freezing(rootScope: rootScope)
+		return try rootRecord.createScopeGenerator(
+			in: table,
 			for: nil,
 			nearestDeclarations: nearestDeclarations,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
