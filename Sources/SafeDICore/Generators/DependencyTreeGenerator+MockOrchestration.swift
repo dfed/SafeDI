@@ -391,7 +391,6 @@ extension DependencyTreeGenerator {
 		)
 	}
 
-
 	/// Which declarations a mention in each module of a view can name, the view being `viewer`'s, over `instantiables` and
 	/// `plainTypeDeclarations`; every one when the run is not told what each module reads, or knows no viewer.
 	static func moduleReach(
