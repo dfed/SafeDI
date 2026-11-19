@@ -1,5 +1,5 @@
 name: Restore Shared Passed Compile Checks
-description: Adds the compile checks that passed in any run of this repository, under the same identity, to this run's file of passed checks.
+description: Adds the compile checks that passed in any run of this repository, under the same identity, to this run's file of passed checks, and the value comparison outputs the newest such runs printed to its directory of outputs.
 
 # A run restores its file of passed compile checks from its own branch's or
 # pull request's cache, or main's. It cannot read another branch's cache, so a
@@ -23,6 +23,17 @@ description: Adds the compile checks that passed in any run of this repository, 
 # which says which artifacts it trusts and how many requests it makes), which
 # every run can read whatever branch made them.
 #
+# The same artifacts carry what the value comparison's programs printed in
+# those runs (DifferentialValueOutputMemo.swift), which the last step adds to
+# `.compile-check-cache/value-outputs`, so a program another branch ran under
+# this identity runs nowhere else. Each output is named by its program's key,
+# which hashes everything that decides what the program prints but the macro
+# plugin, and the identity hashes the plugin's sources, so an output is read
+# only where the same program would print it. The shared list in main's cache
+# holds no outputs: it is saved again whenever it grows, and a list of outputs
+# would grow on nearly every run, by megabytes, while the cache that holds it
+# is shared with the builds every run restores.
+#
 # Call it after "Restore Passed Compile Checks", which restores
 # `.compile-check-cache`, from a job with `actions: read`, and give the step a
 # `timeout-minutes`. Without the permission the last step warns and adds
@@ -44,12 +55,17 @@ runs:
         key: shared-compile-checks-v1-${{ runner.os }}-${{ inputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
         restore-keys: |
           shared-compile-checks-v1-${{ runner.os }}-${{ inputs.identity }}-
-    # The lists earlier runs wrote of their own passes came back with the
-    # branch's cache. Nothing reads another run's list, so they only take room.
+    # The lists earlier runs wrote of their own passes, and of the value
+    # comparison outputs they wrote and used, came back with the branch's
+    # cache. Nothing reads another run's list, so they only take room.
     - shell: bash
       run: |
         if [ -d .compile-check-cache ]; then
-          find .compile-check-cache -name 'passed-in-run-*.txt' ! -name "passed-in-run-$GITHUB_RUN_ID.txt" -delete
+          find .compile-check-cache -maxdepth 1 \( -name 'passed-in-run-*.txt' -o -name 'value-outputs-*-in-run-*.txt' \) \
+            ! -name "passed-in-run-$GITHUB_RUN_ID.txt" \
+            ! -name "value-outputs-written-in-run-$GITHUB_RUN_ID.txt" \
+            ! -name "value-outputs-used-in-run-$GITHUB_RUN_ID.txt" \
+            -delete
         fi
     # Sorted and without duplicates, so the file a run saves does not grow by
     # the shared list on every run.
