@@ -1,0 +1,121 @@
+name: Probe
+
+# A bin/linux-probe run: builds SafeDITool and the SafeDI library for this commit on a Linux runner, then runs the
+# probe the commit carries under .probe/ (.probe/run.sh) and uploads .probe/out. linux-probe writes this file into a
+# scratch commit, pushes it to its own branch, and deletes the branch when the run ends. It runs only on pushes to
+# that branch, reads the repository and nothing else, and uses no secrets.
+on:
+  push:
+    branches:
+    - probe/349706a02-85042
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  probe:
+    name: Probe on Linux
+    runs-on: ubuntu-latest
+    # The Linux test job's container ("Build and Test on Linux" in ci.yml).
+    container: swift:6.2
+    timeout-minutes: 60
+    env:
+      PROBE_MODE: debug
+      # release: the arguments "Build and Test on Linux" builds with, so main's build cache (swift-syntax and the
+      # other dependencies, already compiled) applies and only SafeDI's own targets compile.
+      # debug: a plain debug build from nothing.
+      RELEASE_ARGUMENTS: -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
+      DEBUG_ARGUMENTS: --traits sourceBuild
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Restore only: a cache saved under this scratch branch could serve no other branch.
+      - name: Restore the Linux Test Job's Build Directory
+        if: ${{ env.PROBE_MODE == 'release' }}
+        uses: actions/cache/restore@v6
+        with:
+          path: .build
+          key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved', '.github/workflows/ci.yml') }}
+          restore-keys: |
+            spm-release-${{ runner.os }}-swift-6.2-
+      - name: Build SafeDITool and SafeDI
+        timeout-minutes: 40
+        run: |
+          set +e -o pipefail
+          mkdir -p .probe/out
+          git config --global --add safe.directory '*'
+          # zsh, for Scripts/multi-module-repro.sh, installs while Swift builds.
+          (apt-get update -q && apt-get install -y -q --no-install-recommends zsh) > "$RUNNER_TEMP/apt.log" 2>&1 &
+          apt=$!
+          if [ "$PROBE_MODE" = release ]; then arguments=$RELEASE_ARGUMENTS; else arguments=$DEBUG_ARGUMENTS; fi
+          echo "$arguments" > "$RUNNER_TEMP/arguments"
+          start=$(date +%s)
+          for attempt in 1 2 3 4; do swift package resolve && break; sleep 15; done
+          resolved=$(date +%s)
+          # SafeDI builds its macro executable too. The test support target, which a plain `swift build` also builds,
+          # is left out.
+          # shellcheck disable=SC2086 # The arguments are words to split.
+          { swift build $arguments --product SafeDITool && swift build $arguments --target SafeDI; } 2>&1 | tee .probe/out/build.log
+          status=$?
+          end=$(date +%s)
+          echo "probe-timing mode=$PROBE_MODE resolve_s=$((resolved - start)) build_s=$((end - resolved))" | tee -a .probe/out/build.log
+          wait $apt || { cat "$RUNNER_TEMP/apt.log"; echo "zsh did not install"; }
+          exit $status
+      - name: Run Probe
+        timeout-minutes: 30
+        run: |
+          # run.sh's status is reported in the last step, after the upload.
+          set +e
+          # shellcheck disable=SC2046 # The arguments are words to split.
+          bin=$(swift build $(cat "$RUNNER_TEMP/arguments") --show-bin-path)
+          macros=""
+          for candidate in "$bin/SafeDIMacros-tool" "$bin/SafeDIMacros"; do
+            if [ -f "$candidate" ]; then macros=$candidate; break; fi
+          done
+          # Linux's SafeDI.swiftmodule is a file; macOS's can be a folder.
+          modules="$bin/Modules"; [ -e "$modules/SafeDI.swiftmodule" ] || modules=$bin
+          export SAFEDI_REPO=$GITHUB_WORKSPACE SAFEDI_BIN=$bin SAFEDI_TOOL=$bin/SafeDITool SAFEDI_MACROS=$macros SAFEDI_MODULES=$modules
+          # A release build measures coverage; keep its profiles out of the probe's folders.
+          export LLVM_PROFILE_FILE=$RUNNER_TEMP/profraw/%p-%m.profraw
+          # Scripts/multi-module-repro.sh, with every `swift build` it runs answered by the build above, and its module
+          # search path test made to accept Linux's SafeDI.swiftmodule, a file where the script expects a folder.
+          SAFEDI_REPRO=""
+          if [ -f Scripts/multi-module-repro.sh ]; then
+            mkdir -p .probe-tools
+            {
+              echo '#!/bin/zsh'
+              echo 'swift() { if [[ "$1" == build ]]; then [[ " $* " == *" --show-bin-path "* ]] && print -r -- "$SAFEDI_BIN"; return 0; fi; command swift "$@"; }'
+              tail -n +2 Scripts/multi-module-repro.sh | sed 's#-d "$module_search_path/SafeDI.swiftmodule"#-e "$module_search_path/SafeDI.swiftmodule"#'
+            } > .probe-tools/multi-module-repro.sh
+            chmod +x .probe-tools/multi-module-repro.sh
+            SAFEDI_REPRO=$GITHUB_WORKSPACE/.probe-tools/multi-module-repro.sh
+          fi
+          export SAFEDI_REPRO
+          env | grep '^SAFEDI_' | sort
+          cd .probe
+          mkdir -p out
+          start=$(date +%s)
+          if [ -x run.sh ]; then ./run.sh 2>&1 | tee out/run.log; else bash run.sh 2>&1 | tee out/run.log; fi
+          status=${PIPESTATUS[0]}
+          echo "$status" > out/run-status
+          echo "probe-timing run_s=$(( $(date +%s) - start )) status=$status"
+      - name: Upload Probe Output
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: probe-out
+          path: .probe/out
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 3
+      - name: Report run.sh's Status
+        if: ${{ always() }}
+        run: |
+          test -f .probe/out/run-status || { echo "run.sh did not run"; exit 1; }
+          exit "$(cat .probe/out/run-status)"
