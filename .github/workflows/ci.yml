@@ -2092,14 +2092,20 @@ jobs:
       # reached the 35-minute limit after its tests had passed. The tests
       # alone take about 5.5 minutes; the rest is the build, and the compile
       # of the code each test generates, which the builder-surface check
-      # added tool runs to. Twice 35 minutes is 70.
+      # added tool runs to. Twice 35 minutes is 70. The 2.3.0 stack's run
+      # 44594501340 (job 135809244065) reached those 70 minutes with its
+      # tests still running, not hung: its first bundle passed 1,493 tests
+      # in 623 seconds, and the rest ran past the limit. The stack added
+      # 1,016 tests, doubled the seam corpus to 2,000 seeds, grew the smoke
+      # seeds from 29 to 40, and added a value-memo suite of about 18
+      # minutes, and this job compiles every check (below), so it has 100.
       #
       # No cache of passed compile checks here, deliberately: this job
       # compiles every test's generated code on every run, so a check the
       # pinned jobs skip because it passed in an earlier run is still
       # compiled once per run, by a third compiler.
       - name: Build and Test Framework
-        timeout-minutes: 70
+        timeout-minutes: 100
         run: swift test --traits sourceBuild
 
   readme-validation:

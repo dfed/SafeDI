@@ -1922,11 +1922,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			/// Whether the dispatcher returns the enum's builder struct (`FillDispatcher.returnsBuilderStruct`).
 			let returnsBuilderStruct: Bool
 
-			/// The key that identifies the dispatcher: the enum's, and, for an enum with a dispatcher for each family, the
-			/// family's.
-			func dispatcherKey(isSplit: Bool) -> String {
-				guard isSplit, let family else { return FillDispatcher.key(of: enumKey, returnsBuilderStruct: returnsBuilderStruct) }
-				return "\(FillDispatcher.key(of: enumKey)) on the \(family ? "@Sendable" : "plain") routes"
+			/// The key that identifies the dispatcher: the enum's.
+			var dispatcherKey: String {
+				FillDispatcher.key(of: enumKey, returnsBuilderStruct: returnsBuilderStruct)
 			}
 		}
 
@@ -1934,10 +1932,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// its arguments first reach them with an explicit stack: one for each enum that reaches a filled place, which no
 		/// enclosing call declares.
 		///
-		/// A public mock's caller passes up a place it does not fill, so a dispatcher that reaches one takes `passUp`. The plain and the `@Sendable` root enum of a hole type hold the same enums nested by type, but each one's
-		/// routes reach only its own places (`CalledBuilders.sitesReachedOnItsRoutes(by:in:)`): an enum whose places on the
-		/// routes of one root are all filled and on the other's are not has a dispatcher for each, so the builder of the root
-		/// whose routes fill every place takes no `passUp`, and the caller no builder to pass up.
+		/// A public mock's caller passes up a place it does not fill, so a dispatcher that reaches one takes `passUp`. The plain
+		/// and the `@Sendable` root enum of a hole type hold the same enums nested by type, but each one's routes reach only its
+		/// own places (`CalledBuilders.sitesReachedOnItsRoutes(by:in:)`). A caller fills every place of a hole type of a call or
+		/// none (`DependencyTreeGenerator.holesFilled(byCallsOf:in:)`), so an enum both roots reach is filled on both roots'
+		/// routes alike, and one dispatcher serves both.
 		/// - Parameters:
 		///   - enclosingCarriedInnerScopes: The structs each level function of `enclosingDispatchers` takes, by its key.
 		///   - decidesPerRoute: Whether the call is of a public mock (see `FillDispatcher.decidesPerRoute`).
@@ -2021,48 +2020,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			func takesPassUp(_ key: SeamSignature.ScopeEnum.Key, onRoutesOf family: Bool?) -> Bool {
 				!sitesReached(from: key, onRoutesOf: family).isSubset(of: filledSites)
 			}
-			// An enum both families reach has a dispatcher for each where one takes `passUp` and the other does not; otherwise
-			// one serves both.
-			var instancesToDeclare = [Instance]()
-			var splitKeys = Set<SeamSignature.ScopeEnum.Key>()
-			for key in reachedKeys {
-				let families = familiesByKey[key] ?? []
-				if decidesPerRoute, families.count > 1, Set(families.map { takesPassUp(key, onRoutesOf: $0) }).count > 1 {
-					splitKeys.insert(key)
-					instancesToDeclare += families.map { Instance(enumKey: key, family: $0, returnsBuilderStruct: returnsBuilderStruct(key)) }
-				} else {
-					instancesToDeclare.append(Instance(enumKey: key, family: families.count == 1 ? families.first : nil, returnsBuilderStruct: returnsBuilderStruct(key)))
-				}
+			/// The instance that dispatches the enum of `key`: one serves every family that reaches the enum, which a caller
+			/// fills on every family's routes alike.
+			func dispatcherInstance(of key: SeamSignature.ScopeEnum.Key) -> Instance {
+				Instance(enumKey: key, family: familiesByKey[key]?.count == 1 ? familiesByKey[key]?.first : nil, returnsBuilderStruct: returnsBuilderStruct(key))
 			}
-			/// The instance a case of a dispatcher for `family`'s routes hands the enum of `key` to.
-			func targetInstance(of key: SeamSignature.ScopeEnum.Key, onRoutesOf family: Bool?) -> Instance {
-				if splitKeys.contains(key), let family {
-					Instance(enumKey: key, family: family, returnsBuilderStruct: returnsBuilderStruct(key))
-				} else {
-					Instance(enumKey: key, family: familiesByKey[key]?.count == 1 ? familiesByKey[key]?.first : nil, returnsBuilderStruct: returnsBuilderStruct(key))
-				}
-			}
-			// The builder label of each family's root enum of a hole type, which names a dispatcher for that family's routes.
-			var rootBuilderLabelByFamily = [SeamSignature.HoleType: [Bool: String]]()
-			for builder in calledBuilders.builders {
-				rootBuilderLabelByFamily[builder.enumKey.holeType, default: [:]][builder.enumKey.isSendable] = enumsByKey[builder.enumKey]?.builderLabel
-			}
+			let instancesToDeclare = reachedKeys.map(dispatcherInstance(of:))
 			var dispatcherNames = enclosingDispatchers
 			for instance in instancesToDeclare {
 				guard let scopeEnum = enumsByKey[instance.enumKey] else { continue }
-				// An enum nested by type is named after its own enum too, and a dispatcher for one family's routes of an enum
-				// both reach after that family's builder.
+				// An enum nested by type is named after its own enum too.
 				let enumName = scopeEnum.rootTypeName == nil ? "" : "_\(scopeEnum.typeName)"
-				let builderLabel = splitKeys.contains(instance.enumKey)
-					? instance.family.flatMap { rootBuilderLabelByFamily[instance.enumKey.holeType]?[$0] } ?? scopeEnum.builderLabel
-					: scopeEnum.builderLabel
-				dispatcherNames[instance.dispatcherKey(isSplit: splitKeys.contains(instance.enumKey))] = names.claim(ScopeGenerator.functionName(toBuildPropertyNamed: "\(builderLabel.spelledWithoutBackticks)_\(DependencyTreeGenerator.seamStem(of: instance.enumKey.seamType))\(enumName)".spelledAsIdentifier))
+				dispatcherNames[instance.dispatcherKey] = names.claim(ScopeGenerator.functionName(toBuildPropertyNamed: "\(scopeEnum.builderLabel.spelledWithoutBackticks)_\(DependencyTreeGenerator.seamStem(of: instance.enumKey.seamType))\(enumName)".spelledAsIdentifier))
 			}
 			// The places a case nested by type stands for are filled by the fill of the first that the builders reach.
 			let holeIndexBySite = Dictionary(calledBuilders.holes.enumerated().map { ($0.element.site, $0.offset) }, uniquingKeysWith: { first, _ in first })
 			var dispatcherKeys = [String: SeamSignature.ScopeEnum.Key]()
 			for instance in instancesToDeclare {
-				dispatcherKeys[instance.dispatcherKey(isSplit: splitKeys.contains(instance.enumKey))] = instance.enumKey
+				dispatcherKeys[instance.dispatcherKey] = instance.enumKey
 			}
 			var dispatchers = instancesToDeclare.compactMap { instance -> FillDispatcher? in
 				let key = instance.enumKey
@@ -2073,12 +2048,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					case let .place(sites):
 						let rootKey = decidesPerRoute ? family.flatMap { rootKey(ofFamily: $0, holeType: key.holeType) } : nil
 						let sitesOnRoutes = rootKey.map { CalledBuilders.sites(Set(sites), onRoutesOf: $0, holeBySite: holesBySite) } ?? Set(sites)
-						guard let site = sites.filter({ filledSites.contains($0) && sitesOnRoutes.contains($0) }).min(by: { holeIndexBySite[$0, default: .max] < holeIndexBySite[$1, default: .max] }),
-						      let hole = holesBySite[site]
-						else {
-							let firstHole = sites.first.flatMap { holesBySite[$0] }
-							return Case(name: enumCase.name, carriesPayload: enumCase.values != nil, hasForwardedValue: firstHole?.forwardedType != nil, target: nil, values: enumCase.values?.fields, labelsBoundLater: enumCase.values?.labelsBoundLater ?? [])
-						}
+						// A dispatcher is declared for an enum only where its routes reach a filled place, and a caller fills every
+						// place of a hole type of a call or none, so some site of every place case is filled on the routes it serves.
+						guard let site = sites.filter({ filledSites.contains($0) && sitesOnRoutes.contains($0) }).min(by: { holeIndexBySite[$0, default: .max] < holeIndexBySite[$1, default: .max] }), let hole = holesBySite[site] else { return nil }
 						let targetKey = ScopeGenerator.fillKey(of: hole)
 						return Case(name: enumCase.name, carriesPayload: enumCase.values != nil, hasForwardedValue: hole.forwardedType != nil, target: Case.Target(name: fillNames[targetKey] ?? "", key: targetKey, takesPassUp: false), values: enumCase.values?.fields, labelsBoundLater: enumCase.values?.labelsBoundLater ?? [])
 					case let .nested(innerKey, _, _),
@@ -2086,14 +2058,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					     let .fill(_, _, innerKey, _, _):
 						// The routes this dispatcher serves reach the places of the enum the case holds that are on them.
 						let reachedSites = sitesReached(from: innerKey, onRoutesOf: family)
-						let target = targetInstance(of: innerKey, onRoutesOf: family)
+						let target = dispatcherInstance(of: innerKey)
 						var dispatcherCase = Case(name: enumCase.name, hasForwardedValue: false, target: nil, values: enumCase.values?.fields, labelsBoundLater: enumCase.values?.labelsBoundLater ?? [])
 						if case .fill = enumCase.kind {
 							dispatcherCase.isFillCase = true
 							dispatcherCase.carriedInnerKey = SeamSignature.ScopeEnum.carriedInnerKey(of: enumCase)
 						}
 						guard !reachedSites.isDisjoint(with: filledSites) else { return dispatcherCase }
-						let targetKey = target.dispatcherKey(isSplit: splitKeys.contains(innerKey))
+						let targetKey = target.dispatcherKey
 						return Case(
 							name: dispatcherCase.name,
 							hasForwardedValue: false,
@@ -2105,7 +2077,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						)
 					}
 				}
-				let dispatcherKey = instance.dispatcherKey(isSplit: splitKeys.contains(key))
+				let dispatcherKey = instance.dispatcherKey
 				// A seam's enum of a seam the called seam calls carries the deferred parameters that call passed.
 				let carriesDeferredFields = !decidesPerRoute && !calledSeamTypes.contains(key.seamType)
 				var dispatcher = FillDispatcher(
@@ -7997,46 +7969,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A builder the tree passes up from a call of another module's public mock is read by the leaf that makes the call,
 		// wherever it is in the tree, so its parameter is named apart from every label a scope enclosing the leaf declares,
 		// which would hide it there.
-		let passedUpBuilders = Self.passedUpBuilders(in: treePropertyNodes)
+		let hiddenPassedUpBuilders = Self.hiddenPassedUpBuilders(in: treePropertyNodes)
 		let preferredNames = parameters.flatReceivedProperties.map(\.label)
 		let namesInScope = Set(otherFlatLabels).union(treeBindingNames)
 		// The instance of a `LazilyInstantiated` beside a forwarded property is named after
 		// its `LazilyInstantiated`, and is only ever read by the wrapper bound below, so a
 		// receive of the forwarded property is not passed it.
-		var flatReceivedNames = Self.namesApart(
+		let flatReceivedNames = Self.namesApart(
 			preferredNames: preferredNames,
 			typeDescriptions: parameters.flatReceivedProperties.map { property in
 				parameters.lazilyInstantiatedPropertyByInstanceBesideForwardedProperty[property]?.typeDescription ?? property.typeDescription
 			},
 			namesInScope: namesInScope,
 			reservedNames: namesDeclaredInBuilderFunctions,
-			hiddenEntries: Set(parameters.flatReceivedProperties.indices.filter { passedUpBuilders.hidden.contains(parameters.flatReceivedProperties[$0]) }),
+			hiddenEntries: Set(parameters.flatReceivedProperties.indices.filter { hiddenPassedUpBuilders.contains(parameters.flatReceivedProperties[$0]) }),
 		)
-		// A passed-up builder named apart is named after the type whose mock it is passed to (`serviceBuilder_Panel`),
-		// unless that name is taken or two such builders would share it: then it keeps the name above.
-		let renamedPassedUpBuilderIndices = parameters.flatReceivedProperties.indices.filter { index in
-			passedUpBuilders.calledTypeByProperty[parameters.flatReceivedProperties[index]] != nil && flatReceivedNames[index] != preferredNames[index]
-		}
-		if !renamedPassedUpBuilderIndices.isEmpty {
-			let calledStemNames = renamedPassedUpBuilderIndices.compactMap { index -> (index: Int, name: String)? in
-				let property = parameters.flatReceivedProperties[index]
-				return passedUpBuilders.calledTypeByProperty[property].map { calledType in
-					(index, "\(property.label)_\(DependencyTreeGenerator.seamStem(of: calledType))".spelledAsIdentifier)
-				}
-			}
-			// Each name is decided on its own, against names none of these choices changes, so the order decides nothing.
-			let takenNames = namesInScope
-				.union(namesDeclaredInBuilderFunctions)
-				.union(preferredNames)
-				.union(flatReceivedNames)
-			var calledStemNameCounts = [String: Int]()
-			for calledStemName in calledStemNames {
-				calledStemNameCounts[calledStemName.name, default: 0] += 1
-			}
-			for calledStemName in calledStemNames where calledStemNameCounts[calledStemName.name] == 1 && !takenNames.contains(calledStemName.name) {
-				flatReceivedNames[calledStemName.index] = calledStemName.name
-			}
-		}
 		let onlyIfAvailableOverrides: [OnlyIfAvailableOverride] = if parameters.onlyIfAvailableReceivedProperties.isEmpty {
 			[]
 		} else {
@@ -11135,11 +11082,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// The builders an internal mock's tree `nodes` passes up from its calls of other modules' public mocks, which the mock
-	/// takes as parameters (see `PublicMockCall.passedUpBuilders`), each with the type whose mock it is passed to, and those
-	/// a scope beneath the mock root's level that encloses a leaf reading one declares the label of, which would hide the
-	/// parameter from that leaf.
-	private static func passedUpBuilders(in nodes: [MockParameterNode]) -> (calledTypeByProperty: [Property: TypeDescription], hidden: Set<Property>) {
-		var calledTypeByProperty = [Property: TypeDescription]()
+	/// takes as parameters (see `PublicMockCall.passedUpBuilders`), whose label a scope beneath the mock root's level that
+	/// encloses a leaf reading one declares, which would hide the parameter from that leaf.
+	private static func hiddenPassedUpBuilders(in nodes: [MockParameterNode]) -> Set<Property> {
 		var hidden = Set<Property>()
 		// A stack of the nodes left to visit, each with the labels the builder functions enclosing it declare, since a mock
 		// tree can be as deep as the module has types. A subtree that calls no public mock passes nothing up.
@@ -11149,9 +11094,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for dependency in node.dependencies {
 				switch dependency.source {
 				case .received:
-					// A builder's type names the called mock's own enum, so one type's mock is passed it, whichever call it is.
 					if let publicMockCall = node.publicMockCall, publicMockCall.passesUpBuilder(receivedAs: dependency.property) {
-						calledTypeByProperty[dependency.property] = node.concreteType
 						if labelsDeclaredAbove.contains(dependency.property.label) {
 							hidden.insert(dependency.property)
 						}
@@ -11162,7 +11105,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			nodesToVisit.append(contentsOf: node.propertyChildren.filter(\.subtreeCallsPublicMock).map { (node: $0, labelsDeclaredAbove: labelsDeclared) })
 		}
-		return (calledTypeByProperty, hidden)
+		return hidden
 	}
 
 	/// Each builder among `flatReceivedProperties` that the tree `nodes` passes up from a call of another module's public
