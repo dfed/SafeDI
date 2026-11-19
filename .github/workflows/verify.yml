@@ -291,6 +291,15 @@ jobs:
           else
             swift test $SWIFT_TEST_ARGUMENTS
           fi
+      # A run keeps in its branch's cache only the value comparison outputs it
+      # read or printed, since the restore adds other runs' outputs to the
+      # directory (.github/scripts/keep-value-outputs-used-in-run.sh says
+      # why). The cache only saves time, so this cannot fail the job.
+      - name: Keep the Value Comparison Outputs This Run Used
+        if: ${{ always() && steps.split.outputs.split == 'false' && hashFiles('.compile-check-cache/passed.txt') != '' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        run: .github/scripts/keep-value-outputs-used-in-run.sh .compile-check-cache "$GITHUB_RUN_ID"
       - name: Save Passed Compile Checks
         if: ${{ always() && steps.split.outputs.split == 'false' && hashFiles('.compile-check-cache/passed.txt') != '' }}
         uses: actions/cache/save@v6
@@ -408,17 +417,27 @@ jobs:
           retention-days: 1
           # A re-run of the job replaces what an earlier attempt uploaded.
           overwrite: true
+      # As in a job that saves its own cache: the group hands on only the
+      # value comparison outputs it read or printed.
+      - name: Keep the Value Comparison Outputs the Group Used
+        if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        run: .github/scripts/keep-value-outputs-used-in-run.sh .compile-check-cache "$GITHUB_RUN_ID"
       - name: Upload Passed Compile Checks of the Group
         if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: verify-passed-compile-checks-${{ matrix.group }}
-          # Every check the group's cache holds, for this branch's cache, and
-          # the ones the group itself passed, for the list all branches share.
+          # Every check the group's cache holds and every value comparison
+          # output it used, for this branch's cache, and the checks the group
+          # itself passed and outputs it printed, for other branches.
           path: |
             .compile-check-cache/passed.txt
             .compile-check-cache/passed-in-run-${{ github.run_id }}.txt
+            .compile-check-cache/value-outputs/
+            .compile-check-cache/value-outputs-written-in-run-${{ github.run_id }}.txt
           retention-days: 1
           include-hidden-files: true
           # A re-run of the job replaces what an earlier attempt uploaded.
@@ -522,6 +541,14 @@ jobs:
             # "Upload Passed Compile Checks to Share" uploads.
             find group-compile-checks -name "passed-in-run-$GITHUB_RUN_ID.txt" -exec cat {} + | LC_ALL=C sort -u > ".compile-check-cache/passed-in-run-$GITHUB_RUN_ID.txt"
             echo "Passed compile checks of $groups groups: $(wc -l < .compile-check-cache/passed.txt) together, $(wc -l < ".compile-check-cache/passed-in-run-$GITHUB_RUN_ID.txt") of them passed in this run."
+            # The outputs each group used, which are what its cache would have
+            # kept, and the list of those its processes printed, which is all
+            # the upload below shares. Two groups that used one output hold
+            # the same file, named by the program's key.
+            mkdir -p .compile-check-cache/value-outputs
+            find group-compile-checks -path '*/value-outputs/*' -type f -exec cp -t .compile-check-cache/value-outputs/ {} +
+            find group-compile-checks -name "value-outputs-written-in-run-$GITHUB_RUN_ID.txt" -exec cat {} + | LC_ALL=C sort -u > ".compile-check-cache/value-outputs-written-in-run-$GITHUB_RUN_ID.txt"
+            echo "Value comparison outputs of $groups groups: $(find .compile-check-cache/value-outputs -type f | wc -l) used, $(wc -l < ".compile-check-cache/value-outputs-written-in-run-$GITHUB_RUN_ID.txt") of them printed in this run."
           else
             echo "No group uploaded passed compile checks."
           fi
