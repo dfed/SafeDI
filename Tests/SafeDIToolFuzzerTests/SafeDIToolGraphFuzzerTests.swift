@@ -2726,6 +2726,21 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func wrapperParameterFailure_isNil_whenPublicMockTakesWrapperItsTreeReceives() {
+		// A public mock takes a value its tree receives lazily as the wrapper; its file declares the mock's guard enum.
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"@Instantiable(generateMock: .public)\npublic final class S1_Probe: Instantiable {\n\t@Received let value: LazilyInstantiated<S1_Value>\n}\n",
+		])
+		let outcome = GraphFuzzerToolOutcome.accepted(
+			generatedFiles: ["S1_Probe+SafeDIMock.swift": "extension S1_Probe {\n    public static func mock(\n        value: LazilyInstantiated<S1_Value>\n    ) -> S1_Probe {}\n}\n\nextension S1_Probe {\n    public enum __safeDI_S1_Probe_mock_0123456789ABCDEF {}\n}\n"],
+			warnings: [],
+		)
+		let runs = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: outcome, secondOutcome: outcome)
+
+		#expect(runs.wrapperParameterFailure == nil)
+	}
+
+	@Test
 	func wrapperParameterFailure_isNil_whenMockTakesLazilyInstantiatedPropertyTheMockedTypeForwards() {
 		let runs = Self.mockedProbe(declaring: "@Forwarded let value: LazilyInstantiated<S1_Value>", mockParameter: "value: LazilyInstantiated<S1_Value>")
 
@@ -8232,6 +8247,12 @@ struct SafeDIToolGraphFuzzerTests {
 		.carrierBeforeSiblingBetweenSiblings: 0,
 		.carrierBeforeSiblingThroughSameModuleSeam: 0,
 		.carrierBeforeSiblingBeneathConfiguredChild: 0,
+		.wrapperReadByValuePublicMock: 0,
+		.wrapperReadByValuePublicMockMockedTypeReadsValue: 0,
+		.wrapperReadByValuePublicMockMockedTypeReadsValueOnlyIfAvailable: 0,
+		.wrapperReadByValuePublicMockReaderThroughInstantiator: 0,
+		.wrapperReadByValuePublicMockSendably: 0,
+		.wrapperReadByValuePublicMockTreeReadsValue: 0,
 	]
 
 	/// The least share of the public mock corpus's accepted graphs, whether or not they fail, whose generated code shows
@@ -8248,7 +8269,6 @@ struct SafeDIToolGraphFuzzerTests {
 		.consumerFillsHole: 3,
 		.consumerInline: 37,
 		.consumerPassesHoleBuilderUp: 14,
-		.consumerPassesInstance: 46,
 		// pins: derive on CI
 		.consumerPassesLevelFunctionsStruct: 0,
 		.consumerSendableFactory: 17,
@@ -8267,6 +8287,8 @@ struct SafeDIToolGraphFuzzerTests {
 		// pins: derive on CI
 		.isolatedGeneratedOnlyMockFunction: 0,
 		.moduleConfiguration: 84,
+		// pins: derive on CI
+		.publicMockTakesWrapper: 0,
 		.publicTier: 100,
 		.secondTier: 60,
 		.sendableHoleBuilder: 2,
@@ -8275,7 +8297,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0x32FC07597301AF76
+	static let publicMockCorpusFixtureHash: UInt64 = 0x7739B847026BD418
 	static let publicMockCorpusAcceptedSeedCount = 858
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0x8682CE9AF6A5CE72
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -8306,7 +8328,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	/// The ordinary suite's batch of the public mock corpus: graphs the tool accepts – a consumer in the same package
-	/// calling a public mock with `analytics.instance` of the wrapper it holds, M8.32's stated divergence, of a `@MainActor`
+	/// calling a public mock with the `analytics` wrapper it holds, which the mock takes as that wrapper, of a `@MainActor`
 	/// type whose public tier passes its own provider-defaulted parameter on (seed 0); a consumer in the same package only
 	/// (seed 43); a `Sendable` wrapper above the leaf, a construction function isolated as the initializer
 	/// it calls, and a leaf reached through an `ErasedInstantiator` (seed 46); both consumer modules, a differing mock
@@ -8339,7 +8361,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 189, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x04FE31C25A70D217
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0xEA650D1A4DE6694E
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -8663,6 +8685,12 @@ struct SafeDIToolGraphFuzzerTests {
 		.carrierBeforeSiblingBetweenSiblings: 55,
 		.carrierBeforeSiblingThroughSameModuleSeam: 76,
 		.carrierBeforeSiblingBeneathConfiguredChild: 65,
+		.wrapperReadByValuePublicMock: 257,
+		.wrapperReadByValuePublicMockMockedTypeReadsValue: 78,
+		.wrapperReadByValuePublicMockMockedTypeReadsValueOnlyIfAvailable: 77,
+		.wrapperReadByValuePublicMockReaderThroughInstantiator: 129,
+		.wrapperReadByValuePublicMockSendably: 49,
+		.wrapperReadByValuePublicMockTreeReadsValue: 102,
 		.instantiableParameterType: 235,
 		.internalInitializer: 520,
 		.lazilyInstantiatedOmittedValueProvider: 58,

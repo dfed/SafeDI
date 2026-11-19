@@ -388,6 +388,22 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// `CarrierShelf`, a type `CarrierHome` builds, declares the three, so that `CarrierShelf`'s module-level configuration,
 	/// which `CarrierHome`'s overrides nest, takes them in declaration order.
 	case carrierBeforeSiblingBeneathConfiguredChild
+	/// On a stream of its own (`publicMockWrapperReadByValueRandomSeedMask`), a value a public mock takes as the wrapper its
+	/// tree receives that its tree also reads by value: `WrapNode`, a `.public` type of the declaring module, which cannot
+	/// build `WrapSession`, receives it and builds `WrapReader`, which receives it in the other form, one of them as a
+	/// `LazilyInstantiated` or, in a `Sendable` graph, now and then a `SendableLazilyInstantiated`, and the other by value.
+	/// `WrapScreen`, a mocked consumer, builds the wrapper and `WrapNode`, whose public mock it hands the wrapper.
+	case wrapperReadByValuePublicMock
+	/// `WrapNode` itself receives the value by value, and `WrapReader` the wrapper.
+	case wrapperReadByValuePublicMockMockedTypeReadsValue
+	/// `WrapNode` itself receives the value by value only if available, and `WrapReader` the wrapper.
+	case wrapperReadByValuePublicMockMockedTypeReadsValueOnlyIfAvailable
+	/// `WrapNode` receives the wrapper, and `WrapReader` the value by value.
+	case wrapperReadByValuePublicMockTreeReadsValue
+	/// The wrapper is a `SendableLazilyInstantiated`.
+	case wrapperReadByValuePublicMockSendably
+	/// `WrapNode` builds `WrapReader` through an `Instantiator`.
+	case wrapperReadByValuePublicMockReaderThroughInstantiator
 
 	/// The shapes of `overrideClosureCall` whose call can hand an override closure no builder a person writes, so that the
 	/// consumer's overrides hold no member for it.
@@ -395,7 +411,8 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 
 	/// Whether one of the gating draws (`selfBuildingPublicMock…`, `placeInsidePublicMockFill…`,
 	/// `retentionPublicMockValueBeforeBuilder…`, `sharedConstructionPublicMock…`, `keywordLabeledPublicMock…`,
-	/// `overrideClosure…`, `promotedHolePublicMock…`, `unbuildableValuePublicMockCall…`, `carrierBeforeSibling…`, and `T6`'s mock isolated to the main
+	/// `overrideClosure…`, `promotedHolePublicMock…`, `unbuildableValuePublicMockCall…`, `carrierBeforeSibling…`,
+	/// `wrapperReadByValuePublicMock…`, and `T6`'s mock isolated to the main
 	/// actor or built with its hand-written mock in another public mock) draws this shape, whose count in accepted graphs the
 	/// public mock corpus pins too (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
 	/// `unbuildableValuePublicMockCallTierOmits` is not one: the tool rejects every graph of it, which
@@ -407,6 +424,7 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 			|| rawValue.hasPrefix("overrideClosureCall") || rawValue.hasPrefix("promotedHolePublicMock")
 			|| rawValue.hasPrefix("unbuildableValuePublicMockCall") && self != .unbuildableValuePublicMockCallTierOmits
 			|| rawValue.hasPrefix("carrierBeforeSibling")
+			|| rawValue.hasPrefix("wrapperReadByValuePublicMock")
 			|| self == .holeMockIsolatedToMainActor || self == .holeHandWrittenMockBuiltInPublicMock
 	}
 
@@ -424,8 +442,8 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 /// What the generated code of a graph the tool accepts shows, read from it, never from the draw (section 6's output
 /// features). `publicMockCorpusOutputFeatureMinimumShares` pins each one the corpus shows; the consumer's call of a public
 /// mock (`consumerCall`, `consumerPassesInstance`) needs the consumer side.
-/// That no generated mock takes a `LazilyInstantiated` parameter for a receive is `wrapperParameterFailure`, an oracle
-/// every graph of every corpus passes.
+/// That no generated internal mock takes a `LazilyInstantiated` parameter for a receive is `wrapperParameterFailure`, an
+/// oracle every graph of every corpus passes.
 enum GraphFuzzerPublicMockOutputFeature: String, CaseIterable, Comparable {
 	/// A `public static func mock(`, and a second and a third tier of one type's mock.
 	case publicTier
@@ -445,8 +463,12 @@ enum GraphFuzzerPublicMockOutputFeature: String, CaseIterable, Comparable {
 	case forwardedProvider
 	/// A consumer's call of a `.public` type's mock, in a module other than the type's.
 	case consumerCall
-	/// A consumer's leaf call passing `.instance`.
+	/// A consumer's leaf call passing `.instance`, which only the gap "A lazy value a public mock takes" leaves
+	/// (`public-mock-builders.md`) and no smoke graph shows, so it has no minimum share.
 	case consumerPassesInstance
+	/// A parameter of a public mock's `mock()` that takes the `LazilyInstantiated` or `SendableLazilyInstantiated` its tree
+	/// receives, `analytics: LazilyInstantiated<Analytics>`, in the declaring module's file.
+	case publicMockTakesWrapper
 	/// A consumer's `SafeDIOverrides` entry typed `(@Sendable () -> `.
 	case consumerSendableFactory
 	/// A consumer's mock building a `.public` type inline, with its initializer or its `customMockName` method.
@@ -671,6 +693,8 @@ struct GraphFuzzerPublicMockDraw {
 		drawHoleLabelReceivedByPromotedSibling(random: &holeLabelRandom)
 		var carrierOrderRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockCarrierOrderRandomSeedMask)
 		drawCarrierBeforeSiblingPublicMock(random: &carrierOrderRandom)
+		var wrapperReadByValueRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockWrapperReadByValueRandomSeedMask)
+		drawWrapperReadByValuePublicMock(random: &wrapperReadByValueRandom)
 	}
 
 	/// The files of the graph, each beginning with its module's marker: as drawn, or, for the known-right path of the
@@ -802,6 +826,10 @@ struct GraphFuzzerPublicMockDraw {
 	/// Draws only a holder of a place declared before a sibling that holds none (`drawCarrierBeforeSiblingPublicMock`): rolls
 	/// added after the rest of the draw was pinned, so that its other shapes are drawn as before.
 	static let publicMockCarrierOrderRandomSeedMask: UInt64 = 0x7075626D6B636F72
+	/// Draws only a value a public mock takes as the wrapper its tree receives that its tree, or the mocked type itself, also
+	/// reads by value (`drawWrapperReadByValuePublicMock`): rolls added after the rest of the draw was pinned, so that its
+	/// other shapes are drawn as before.
+	static let publicMockWrapperReadByValueRandomSeedMask: UInt64 = 0x7075626D6B777276
 	/// Draws only whether a `Sendable` graph the main stream draws without a `Sendable` wrapper above a leaf (`T9`) draws one
 	/// anyway, and in which consumer module, so that a consumer's overrides hold a `@Sendable` factory
 	/// (`GraphFuzzerPublicMockOutputFeature.consumerSendableFactory`) in a share of the accepted graphs that clears its floor
@@ -1532,7 +1560,7 @@ struct GraphFuzzerPublicMockDraw {
 			} else {
 				rootLevelRoll < 3 ? .none : .values
 			}
-			// `holeSession` received lazily: `T6`'s mock takes the instance and binds the wrapper apart, which its root level holds.
+			// `holeSession` received lazily: `T6`'s mock takes the wrapper, which its root level holds.
 			rootLevelSessionType = rootLevelShape == .values && rootLevelRandom.percentChance(50) ? "LazilyInstantiated<\(sessionName)>" : sessionName
 			// The types `T6`'s mock cannot build conform to `Instantiable` by hand, proven `public` by `HoleProver`'s initializer.
 			switch rootLevelShape {
@@ -1641,11 +1669,11 @@ struct GraphFuzzerPublicMockDraw {
 			case .existential: Self.builderLabel(ofTypeNamed: protocolName)
 			case .erasedConstant, .erasedInstantiator: "\(Self.builderLabel(ofTypeNamed: fillName).dropLast("Builder".count))_\(erasedName)Builder"
 			}
-			// What the mock takes before its builders that it cannot build: `holeSession`, or both its forms, named apart and
-			// ordered by type.
+			// What the mock takes before its builders that it cannot build: `holeSession`, as the wrapper `T6` receives it lazily,
+			// or both its forms, named apart and ordered by type.
 			let leadingArguments = switch rootLevelShape {
 			case .none: ""
-			case .values: "holeSession: \(sessionName)(), "
+			case .values: rootLevelSessionType == sessionName ? "holeSession: \(sessionName)(), " : "holeSession: LazilyInstantiated { \(sessionName)() }, "
 			case .labelInTwoForms: "holeSession_\(draftName): \(draftName)(), holeSession_\(sessionName): \(sessionName)(), "
 			}
 			let call = if position.isSendable {
@@ -1879,8 +1907,8 @@ struct GraphFuzzerPublicMockDraw {
 					// level holds – `holeSession`, as `T6` receives it, `holeToken` only if available, or both – or, for one label in
 					// two forms, the form `HoleHost`'s level binds again. A place built inside a `@Sendable` function is handed none of
 					// it. A fill declared as an extension's `instantiate(…)` reads `holeSession` alone. No fill reads the instance of a
-					// `holeSession` `T6` receives lazily, which it would read through the wrapper `T6`'s mock makes, a divergence
-					// `SafeDIToolPublicMockRootLevelTests` states that the value oracle does not.
+					// `holeSession` `T6` receives lazily: the draw predates `T6`'s mock taking the wrapper, which a fill now reads as
+					// inline does.
 					let isExtensionFill = holeLeaf.spelling == .plain || holeLeaf.spelling == .instantiator
 					if !holeLeaf.position.isSendable, dependency == .none || dependency == .field && bindsContext {
 						let holeSession = Property(attribute: "@Received", label: "holeSession", type: rootLevelShape == .values ? rootLevelSessionType : name("HoleSession"))
@@ -2823,6 +2851,67 @@ struct GraphFuzzerPublicMockDraw {
 		live.arguments = ["fulfillingAdditionalTypes: [\(apiName).self]"]
 		files.append(File(module: .seamModule, declarations: declaringModuleDeclarations))
 		files.append(File(module: consumerModule, declarations: [Self.renderer(of: app), Self.renderer(of: live)]))
+	}
+
+	/// A value a public mock takes as the wrapper its tree receives that its tree also reads by value, in three graphs in ten:
+	/// `WrapNode`, a `.public` type of the declaring module with an `internal` initializer, so that a consumer calls its mock,
+	/// receives `wrapSession` and builds `WrapReader`, directly or, half the time, through an `Instantiator`, which receives it
+	/// in the other form. A third of the draws each, `WrapNode` receives the value by value and `WrapReader` the wrapper;
+	/// `WrapNode` receives it by value only if available and `WrapReader` the wrapper; or `WrapNode` receives the wrapper and
+	/// `WrapReader` the value. The wrapper is a `LazilyInstantiated`, or, in a graph whose types are all `Sendable`, half the
+	/// time a `SendableLazilyInstantiated`. `WrapSession` conforms to `Instantiable` by hand, so that the declaring module
+	/// cannot build it and `WrapNode`'s mock takes the wrapper, which hands its instance to each type that reads the value;
+	/// `WrapScreen`, a mocked consumer in one consumer module, `true` or, one draw in three, `.public`, builds the wrapper
+	/// through an extension of `WrapSession` of its own module, and `WrapNode`, whose mock it hands the wrapper. No reader is
+	/// built inside a `@Sendable` function, which cannot capture a `LazilyInstantiated` (the error
+	/// `SafeDIToolPublicMockLazyWrapperTests` covers). Every roll is made before any is read.
+	private mutating func drawWrapperReadByValuePublicMock(random: inout GraphFuzzerRandomNumberGenerator) {
+		let drawsShape = random.percentChance(30)
+		let formRoll = random.integer(in: 0...2)
+		let isSendablyWrapped = random.percentChance(50)
+		let readerThroughInstantiator = random.percentChance(50)
+		let consumerIsPublic = random.percentChance(33)
+		let consumerModuleRoll = random.integer(in: 0...1)
+		let consumerModules = consumerModules
+		guard drawsShape, !consumerModules.isEmpty, !hasDifferingMockCondition else { return }
+		let consumerModule = consumerModules[consumerModuleRoll % consumerModules.count]
+		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
+		let sessionName = name("WrapSession")
+		let wrapperType = "\(isSendableGraph && isSendablyWrapped ? "SendableLazilyInstantiated" : "LazilyInstantiated")<\(sessionName)>"
+		var reader = InstantiableClass(name: name("WrapReader"), conformances: conformances)
+		var node = InstantiableClass(name: name("WrapNode"), conformances: conformances)
+		node.mockGeneration = ".public"
+		node.initializerAccess = .internal
+		switch formRoll {
+		case 0:
+			node.properties = [Property(attribute: "@Received", label: "wrapSession", type: sessionName)]
+			reader.properties = [Property(attribute: "@Received", label: "wrapSession", type: wrapperType)]
+		case 1:
+			node.properties = [Property(attribute: "@Received(onlyIfAvailable: true)", label: "wrapSession", type: "\(sessionName)?")]
+			reader.properties = [Property(attribute: "@Received", label: "wrapSession", type: wrapperType)]
+		default:
+			node.properties = [Property(attribute: "@Received", label: "wrapSession", type: wrapperType)]
+			reader.properties = [Property(attribute: "@Received", label: "wrapSession", type: sessionName)]
+		}
+		node.properties.append(readerThroughInstantiator
+			? Property(attribute: "@Instantiated", label: "wrapReaderBuilder", type: "Instantiator<\(reader.name)>")
+			: Property(attribute: "@Instantiated", label: "wrapReader", type: reader.name))
+		var screen = InstantiableClass(name: name("WrapScreen"), conformances: conformances)
+		screen.mockGeneration = consumerIsPublic ? ".public" : "true"
+		screen.properties = [
+			Property(attribute: "@Instantiated", label: "wrapSession", type: wrapperType),
+			Property(attribute: "@Instantiated", label: "wrapNode", type: node.name),
+		]
+		// `WrapSession` conforms to `Instantiable` by hand, so that only the consumer's module, through an extension of its own,
+		// builds it.
+		let session: (Rendering) -> String = { rendering in
+			"\(rendering.modifier(.public))final class \(sessionName): Instantiable, Sendable {\n\t\(rendering.modifier(.public))init() {}\n}"
+		}
+		let sessionExtension: (Rendering) -> String = { rendering in
+			"@Instantiable(conformsElsewhere: true)\nextension \(sessionName) {\n\t\(rendering.modifier(.public))static func instantiate() -> \(sessionName) {\n\t\t\(sessionName)()\n\t}\n}"
+		}
+		files.append(File(module: .seamModule, declarations: [Self.renderer(of: node), Self.renderer(of: reader), session]))
+		files.append(File(module: consumerModule, declarations: [Self.renderer(of: screen), sessionExtension]))
 	}
 
 	/// Declares `Logger`, its production type `ConsoleLogger`, which instantiates `Level`, and a fake: a class at `package`
@@ -4051,6 +4140,24 @@ extension GraphFuzzerPublicMockDraw {
 			features.insert(.unbuildableValuePublicMockCall)
 			features.insert(cache.properties.contains { $0.type == "\(unreadableUnbuildableValueType)?" } ? .unbuildableValuePublicMockCallTierOmits : .unbuildableValuePublicMockCallPublicTier)
 		}
+		if let node = types.declarations["\(prefix)WrapNode"], let reader = types.declarations["\(prefix)WrapReader"], types.declarations["\(prefix)WrapScreen"] != nil {
+			features.insert(.wrapperReadByValuePublicMock)
+			if let nodeSession = node.properties.first(where: { $0.label == "wrapSession" }) {
+				if nodeSession.type.contains("LazilyInstantiated<") {
+					features.insert(.wrapperReadByValuePublicMockTreeReadsValue)
+				} else if nodeSession.attribute == "@Received(onlyIfAvailable: true)" {
+					features.insert(.wrapperReadByValuePublicMockMockedTypeReadsValueOnlyIfAvailable)
+				} else {
+					features.insert(.wrapperReadByValuePublicMockMockedTypeReadsValue)
+				}
+			}
+			if (node.properties + reader.properties).contains(where: { $0.type.hasPrefix("SendableLazilyInstantiated<") }) {
+				features.insert(.wrapperReadByValuePublicMockSendably)
+			}
+			if node.properties.contains(where: { $0.label == "wrapReaderBuilder" }) {
+				features.insert(.wrapperReadByValuePublicMockReaderThroughInstantiator)
+			}
+		}
 		if let home = types.declarations["\(prefix)LabelHome"], let hole = home.properties.first(where: { $0.attribute == "@Instantiated" }) {
 			features.insert(.holeLabelReceivedByPromotedSibling)
 			if hole.label == "labelGadget_lazilyInstantiated" {
@@ -4144,6 +4251,9 @@ extension GraphFuzzerPublicMockDraw {
 				}
 				if line.contains("?? (") {
 					features.insert(.defaultRewritten)
+				}
+				if !isConsumerFile, line.range(of: #"^\w+: (Sendable)?LazilyInstantiated<.+>(\? = nil)?,?$"#, options: .regularExpression) != nil {
+					features.insert(.publicMockTakesWrapper)
 				}
 				if line.hasPrefix("@usableFromInline nonisolated func __safeDI_"), line.contains("_mockDefault_") {
 					features.insert(.forwardedProvider)
