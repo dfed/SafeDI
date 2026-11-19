@@ -58,15 +58,21 @@ runs:
     # The lists earlier runs wrote of their own passes, and of the value
     # comparison outputs they wrote and used, came back with the branch's
     # cache. Nothing reads another run's list, so they only take room.
+    #
+    # The file of passed checks is made here when nothing restored one, since
+    # the steps that keep and upload the directory run only where it exists: a
+    # job whose tests run value comparison programs and pass no compile check,
+    # as the graph fuzzer's smoke tests do in Verify, still hands on what its
+    # programs printed.
     - shell: bash
       run: |
-        if [ -d .compile-check-cache ]; then
-          find .compile-check-cache -maxdepth 1 \( -name 'passed-in-run-*.txt' -o -name 'value-outputs-*-in-run-*.txt' \) \
-            ! -name "passed-in-run-$GITHUB_RUN_ID.txt" \
-            ! -name "value-outputs-written-in-run-$GITHUB_RUN_ID.txt" \
-            ! -name "value-outputs-used-in-run-$GITHUB_RUN_ID.txt" \
-            -delete
-        fi
+        mkdir -p .compile-check-cache
+        touch .compile-check-cache/passed.txt
+        find .compile-check-cache -maxdepth 1 \( -name 'passed-in-run-*.txt' -o -name 'value-outputs-*-in-run-*.txt' \) \
+          ! -name "passed-in-run-$GITHUB_RUN_ID.txt" \
+          ! -name "value-outputs-written-in-run-$GITHUB_RUN_ID.txt" \
+          ! -name "value-outputs-used-in-run-$GITHUB_RUN_ID.txt" \
+          -delete
     # Sorted and without duplicates, so the file a run saves does not grow by
     # the shared list on every run.
     - shell: bash
