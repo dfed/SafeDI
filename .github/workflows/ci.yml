@@ -2042,11 +2042,10 @@ jobs:
   # still running. A debug build runs the tests slower than the pinned jobs'
   # release build, and this job compiles every test's generated code (see
   # the test step), so its time is the suite's, which four cores bound.
-  # Linux runners are plentiful, so each group builds for itself from the
-  # same cache rather than taking a bundle from a build job: the toolchain
-  # floats, and where its build system puts a test bundle is one of the
-  # things this job exists to notice. "Build and Test on Latest Swift" below
-  # reports the groups under the one name the job had.
+  # Each group builds for itself from the same cache rather than taking a
+  # build directory from a build job, which was measured to report later
+  # (see the test step). "Build and Test on Latest Swift" below reports the
+  # groups under the one name the job had.
   linux-latest-swift-group:
     name: Build and Test on Latest Swift (${{ matrix.group }})
     needs: changes
@@ -2122,14 +2121,24 @@ jobs:
         # 4-core Linux runner (run 44594501340).
         timeout-minutes: 15
         run: swift build --build-system swiftbuild --traits sourceBuild --target SafeDIToolTestSupport --scratch-path "$RUNNER_TEMP/swiftbuild-test-support"
-      # LATEST_SWIFT_GROUP_LIMIT_COMMENT
+      # A time limit for the macOS job's reason: about twice the longest
+      # duration measured. On their first run (44625637732, 2026-11-19, the
+      # 2.3.0 stack's tests, the build restored from the cache) the groups'
+      # step took 17.6 minutes for mocks, 16.0 for fuzzer-seam-smoke, 14.0
+      # for seams, 11.2 for fuzzer-smoke, 9.4 for others, 5.3 for tool and
+      # 5.2 for dependency-trees, of which the build is 3 to 5. Twice 17.6
+      # is 35. A build job that hands the groups its build directory was
+      # measured beside it (run 44625836276): the build job took 9.6
+      # minutes and each group another minute to fetch its work, so the
+      # last group ended about 9 minutes later than here, for 12 fewer
+      # runner minutes.
       #
       # No cache of passed compile checks here, deliberately: this job
       # compiles every test's generated code on every run, so a check the
       # pinned jobs skip because it passed in an earlier run is still
       # compiled once per run, by a third compiler.
       - name: Build and Test Framework
-        timeout-minutes: 100
+        timeout-minutes: 35
         shell: bash
         env:
           SELECTION: ${{ matrix.selection }}
