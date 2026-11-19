@@ -1126,6 +1126,15 @@ jobs:
         run: |
           # shellcheck disable=SC2086 # The arguments are words to split.
           xcrun swift test --skip-build $SWIFT_TEST_ARGUMENTS
+      # A run keeps in its branch's cache only the value comparison outputs it
+      # read or printed, since the restore adds other runs' outputs to the
+      # directory (.github/scripts/keep-value-outputs-used-in-run.sh says
+      # why). The cache only saves time, so this cannot fail the job.
+      - name: Keep the Value Comparison Outputs This Run Used
+        if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        run: .github/scripts/keep-value-outputs-used-in-run.sh .compile-check-cache "$GITHUB_RUN_ID"
       - name: Save Passed Compile Checks
         if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
         uses: actions/cache/save@v6
@@ -1348,6 +1357,15 @@ jobs:
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
           LLVM_PROFILE_FILE: ${{ runner.temp }}/unit-suite-profiles/unit-suite-%p.profraw
         run: .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing
+      # A run keeps in its branch's cache only the value comparison outputs it
+      # read or printed, since the restore adds other runs' outputs to the
+      # directory (.github/scripts/keep-value-outputs-used-in-run.sh says
+      # why). The cache only saves time, so this cannot fail the job.
+      - name: Keep the Value Comparison Outputs This Run Used
+        if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        run: .github/scripts/keep-value-outputs-used-in-run.sh .compile-check-cache "$GITHUB_RUN_ID"
       - name: Save Passed Compile Checks
         if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
         uses: actions/cache/save@v6

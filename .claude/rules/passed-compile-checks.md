@@ -1,6 +1,7 @@
 ---
 paths:
   - ".github/scripts/compile-check-identity.sh"
+  - ".github/scripts/keep-value-outputs-used-in-run.sh"
   - ".github/workflows/share-compile-checks.yml"
   - ".github/workflows/ci.yml"
   - ".github/workflows/verify.yml"
@@ -16,7 +17,7 @@ paths:
 
 ## What the value comparison's programs printed
 
-The differential value comparator compiles, links and runs one program per path of each batch of graphs, through no compile check. `DifferentialValueOutputMemo` keeps what each program that exited with status 0 printed, one file per key in `value-outputs` beside the file of passed checks, so the job's cache of that directory carries it and the same identity names it. A later program with that key compiles and runs nothing.
+The differential value comparator compiles, links and runs one program per path of each batch of graphs, through no compile check. `DifferentialValueOutputMemo` keeps what each program that exited with status 0 printed, one file per key in `value-outputs` beside the file of passed checks, so the job's cache of that directory carries it and the same identity names it. A later program with that key compiles and runs nothing, on any branch whose job reads it (below).
 
 - **Only output is kept.** The judgment, exemptions and retention verdicts are computed from the output on every run, so a change to them needs no key. A program that fails to compile, link or run, or that a time limit stops, is never kept.
 - **The key is the program, not a graph.** A batch links several graphs into one executable, whose modules share static state, so the key covers the whole batch: every file, each module's layout and conditions, and `main.swift`, which spells the probes, samples, limits and retention.
@@ -27,3 +28,5 @@ The differential value comparator compiles, links and runs one program per path 
 - **This checkout's macro plugin is covered only by CI's identity**, which names the cache directory. Someone who sets the variable by hand and edits `Sources/SafeDIMacros` empties the directory.
 - **A process that cannot read the harness's sources** (a test bundle run away from its checkout) runs every program and keeps none.
 - **A test that counts the executables a comparison compiles** passes `memo: nil`.
+- **Outputs reach other branches as passes do, through artifacts only.** A process lists the keys it wrote and the keys it read or wrote beside the directory (`value-outputs-written-in-run-<run>.txt`, `value-outputs-used-in-run-<run>.txt`). `upload-passed-compile-checks` puts the outputs it wrote, never a restored one, in the run's artifact under `value-outputs/`, and `restore-from-artifacts.js` adds each output of the newest artifacts of the job's identity that the directory lacks. What makes a stale hit impossible is the pair: the file's name is the program's key (`build`: compiler, SDK, SafeDI module bytes, dependency versions; `harness`: describer, the four harness sources, runtime sources, a release's macros tool, loader variables; each module's name, package, dependencies, conditions, mock condition and normalized files; `main.swift`; the executable's name), and the artifact's identity covers the one input the key leaves out, this checkout's macro plugin, with the manifest, test arguments, compiler and the sharing actions. `share-compile-checks.yml` adds no outputs to main's shared list: that list is saved again whenever it grows, which outputs would make it do on nearly every run, by megabytes, in the cache quota the build caches need.
+- **A branch's cache keeps only what its run used.** The restore adds other runs' outputs to the directory, so before a job saves its cache `.github/scripts/keep-value-outputs-used-in-run.sh` deletes every output the run neither read nor wrote, and the whole directory when it used none. Verify's groups each do so and hand their outputs to the job that saves the run's cache. An output dropped this way is read again from its artifact while that is among the newest, and compiled otherwise; a filtered run keeps only its own tests' outputs.
