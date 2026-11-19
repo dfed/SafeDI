@@ -12,6 +12,13 @@
 // A run uploads only the checks its own test processes passed, so no line here was ever restored by its uploader.
 // Nothing here fails a job: whatever goes wrong is a warning, and the checks compile.
 //
+// The same artifacts carry, under `value-outputs/`, what the value comparison programs that run's test processes ran
+// printed, one file per program, named by the program's key (`DifferentialValueOutputMemo.swift`). Each one whose name
+// is a SHA-256 followed by `.txt` is added to `<directory>/value-outputs` when no file of that name is there, so that
+// this run reads it instead of compiling and running the program. An output is added only from an artifact of this
+// job's identity, read under the rules above: the key hashes everything that decides what the program prints but the
+// macro plugin, whose sources the identity hashes.
+//
 // What it costs: the token of a workflow may make 1,000 requests an hour for the whole repository, so this makes one
 // request to list the artifacts of this job's identity (the name holds the identity, so GitHub does the filtering),
 // and two for each of the newest `artifactsToRead` it has not read before: `artifacts-read.txt`, beside the list and
@@ -45,10 +52,17 @@ const requestsToLeave = 300
 // After this long, what was read is kept and the rest is left to compile. Reading 30 artifacts took 11.5 and 15.2
 // seconds (Verify runs 43952868099 and 43954840461).
 const timeLimitInMilliseconds = 90_000
-// A list of 3,400 keys is 220 KB, so nothing this repository uploads comes near.
+// A list of 3,400 keys is 220 KB, so no list this repository uploads comes near, and no output of a value comparison
+// program does: the upload leaves out a larger one.
 const largestFileInBytes = 8 * 1024 * 1024
+// An artifact is mostly the outputs of value comparison programs its run printed. A run that compiled and ran all
+// 3,024 of the suite's programs kept a branch cache of 8.5 MB, compressed as an artifact is.
+const largestArtifactInBytes = 64 * 1024 * 1024
+// What the files of one artifact may inflate to, together.
+const largestArtifactContentsInBytes = 256 * 1024 * 1024
 const workflowsWhoseArtifactsCount = ['.github/workflows/ci.yml', '.github/workflows/verify.yml']
 const keyPattern = /^[0-9a-f]{64}$/
+const valueOutputPattern = /^value-outputs\/([0-9a-f]{64})\.txt$/
 
 /// The files of a zip archive, by name. Reads sizes and offsets from the central directory, since an archive
 /// written as a stream (as `actions/upload-artifact` writes one) leaves them out of each file's own header.
@@ -66,6 +80,7 @@ function filesInZip(archive) {
 	const count = archive.readUInt16LE(end + 10)
 	let entry = archive.readUInt32LE(end + 16)
 	const files = new Map()
+	let inflated = 0
 	for (let index = 0; index < count; index += 1) {
 		if (archive.readUInt32LE(entry) !== 0x02014b50) {
 			throw new Error('the archive’s central directory is not one')
@@ -83,6 +98,10 @@ function filesInZip(archive) {
 		}
 		if (size > largestFileInBytes || compressedSize > largestFileInBytes) {
 			throw new Error(`${name} is larger than any list of passed checks`)
+		}
+		inflated += size
+		if (inflated > largestArtifactContentsInBytes) {
+			throw new Error('the archive’s files are larger together than any run uploads')
 		}
 		const start = header + 30 + archive.readUInt16LE(header + 26) + archive.readUInt16LE(header + 28)
 		if (start + compressedSize > archive.length) {
@@ -145,6 +164,8 @@ async function restore({ github, context, core, identity, os, directory, now = D
 	const linesAlreadyHere = together.size
 	// Only a list that is here can hold what an artifact added to it.
 	const readBefore = new Set(own.length > 0 ? linesOf(fileOfArtifactsRead) : [])
+	const outputs = path.join(directory, 'value-outputs')
+	let outputsAdded = 0
 	const counts = { read: 0, readBefore: 0, older: 0, expired: 0, ofThisRun: 0, ofAFork: 0, ofAnotherIdentity: 0, ofAnotherWorkflow: 0, unreadable: 0, leftUnread: 0 }
 	// Those another run of this repository uploaded, newest first, whatever order the listing came in.
 	const candidates = []
@@ -178,8 +199,8 @@ async function restore({ github, context, core, identity, os, directory, now = D
 		}
 		const run = artifact.workflow_run
 		try {
-			if (artifact.size_in_bytes > largestFileInBytes) {
-				throw new Error('the artifact is larger than any list of passed checks')
+			if (artifact.size_in_bytes > largestArtifactInBytes) {
+				throw new Error('the artifact is larger than any run uploads')
 			}
 			if (!whetherRunCounts.has(run.id)) {
 				requests += 1
@@ -212,6 +233,17 @@ async function restore({ github, context, core, identity, os, directory, now = D
 			for (const line of passed.toString('utf8').split('\n')) {
 				if (keyPattern.test(line)) {
 					together.add(line)
+				}
+			}
+			// Written beside its place and moved there, so that a test process never reads half of one.
+			for (const [name, contents] of files) {
+				const match = valueOutputPattern.exec(name)
+				const output = match && path.join(outputs, `${match[1]}.txt`)
+				if (output && !fs.existsSync(output)) {
+					fs.mkdirSync(outputs, { recursive: true })
+					fs.writeFileSync(`${output}.partial`, contents)
+					fs.renameSync(`${output}.partial`, output)
+					outputsAdded += 1
 				}
 			}
 			counts.read += 1
@@ -252,7 +284,8 @@ async function restore({ github, context, core, identity, os, directory, now = D
 	].filter(([count]) => count > 0).map(([count, what]) => `${count} ${what}`)
 	const summary = `Passed compile checks: ${linesAlreadyHere} already here, ${together.size} with the lists of ${counts.read} other runs`
 		+ ` (${listed.length} artifacts of this identity${skipped.length > 0 ? ': ' + skipped.join(', ') : ''}),`
-		+ ` in ${requests} requests and ${((now() - started) / 1000).toFixed(1)} seconds.`
+		+ ` in ${requests} requests and ${((now() - started) / 1000).toFixed(1)} seconds;`
+		+ ` ${outputsAdded} value comparison outputs added from those lists.`
 	core.info(summary)
 	return summary
 }
@@ -298,6 +331,18 @@ function zip(files, { streamed = true, compressed = true } = {}) {
 	return Buffer.concat([...parts, directoryBytes, end])
 }
 
+/// `archive` with every file's size in its central directory entry replaced by `size`, which is what a check of the
+/// sizes before inflating reads.
+function declaringSizes(archive, size) {
+	const copy = Buffer.from(archive)
+	for (let offset = 0; offset + 4 <= copy.length; offset += 1) {
+		if (copy.readUInt32LE(offset) === 0x02014b50) {
+			copy.writeUInt32LE(size, offset + 24)
+		}
+	}
+	return copy
+}
+
 /// Checks `restore` against fixtures it writes under `scratch`, a directory it makes and removes.
 async function selfTest(scratch) {
 	const assert = require('assert')
@@ -309,7 +354,7 @@ async function selfTest(scratch) {
 	/// Runs `restore` against `artifacts` (each `{ files | archive, run, expired, path, headRepositoryID, size, created }`,
 	/// listed newest first unless `created` says otherwise) with `existing` in the file and `existingRead` in the file of
 	/// artifacts read, and returns both files, the warnings, the summary and the requests made.
-	async function run({ artifacts, existing = null, existingRead = null, identityOfJob = identity, failListing = false, clock = null, requestsLeft = '900' }) {
+	async function run({ artifacts, existing = null, existingRead = null, existingOutputs = {}, identityOfJob = identity, failListing = false, clock = null, requestsLeft = '900' }) {
 		cases += 1
 		const directory = path.join(scratch, `case-${cases}`)
 		fs.mkdirSync(directory, { recursive: true })
@@ -322,6 +367,11 @@ async function selfTest(scratch) {
 			if (existingRead !== null) {
 				fs.mkdirSync(path.dirname(file), { recursive: true })
 				fs.writeFileSync(path.join(path.dirname(file), 'artifacts-read.txt'), existingRead)
+			}
+			const outputs = path.join(path.dirname(file), 'value-outputs')
+			for (const [name, contents] of Object.entries(existingOutputs)) {
+				fs.mkdirSync(outputs, { recursive: true })
+				fs.writeFileSync(path.join(outputs, name), contents)
 			}
 			const warnings = []
 			const requested = []
@@ -370,7 +420,10 @@ async function selfTest(scratch) {
 			const lines = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null
 			const fileOfArtifactsRead = path.join(path.dirname(file), 'artifacts-read.txt')
 			const read = fs.existsSync(fileOfArtifactsRead) ? fs.readFileSync(fileOfArtifactsRead, 'utf8') : null
-			return { lines, read, warnings, summary, requested, downloaded }
+			const outputsHere = fs.existsSync(outputs)
+				? Object.fromEntries(fs.readdirSync(outputs).sort().map(name => [name, fs.readFileSync(path.join(outputs, name), 'utf8')]))
+				: null
+			return { lines, read, outputs: outputsHere, warnings, summary, requested, downloaded }
 		} finally {
 			fs.rmSync(scratch, { recursive: true, force: true })
 		}
@@ -445,11 +498,50 @@ async function selfTest(scratch) {
 	assert.strictEqual(result.lines, null)
 	assert.match(result.warnings[0], /passed\.txt is larger than any list of passed checks$/)
 
-	// Refuses an artifact larger than any list, before downloading it.
-	result = await run({ artifacts: [{ files: list(key(1)), size: largestFileInBytes + 1 }, { files: list(key(2)) }] })
+	// Refuses an artifact larger than any run uploads, before downloading it, and reads one as large as a run's.
+	result = await run({ artifacts: [{ files: list(key(1)), size: largestArtifactInBytes + 1 }, { files: list(key(2)), size: 9 * 1024 * 1024 }] })
 	assert.strictEqual(result.lines, key(2) + '\n')
 	assert.deepStrictEqual(result.downloaded, [1])
-	assert.match(result.warnings[0], /artifact 0: the artifact is larger than any list of passed checks$/)
+	assert.match(result.warnings[0], /artifact 0: the artifact is larger than any run uploads$/)
+
+	// Refuses an archive whose files would inflate to more than any run uploads, before inflating them.
+	const many = {}
+	for (let index = 0; index <= largestArtifactContentsInBytes / largestFileInBytes; index += 1) {
+		many[`value-outputs/${key(index % 10).slice(0, 62)}${String(index).padStart(2, '0')}.txt`] = 'probe\n'
+	}
+	result = await run({ artifacts: [{ archive: declaringSizes(zip({ ...list(key(1)), ...many }), largestFileInBytes) }] })
+	assert.strictEqual(result.lines, null)
+	assert.strictEqual(result.outputs, null)
+	assert.match(result.warnings[0], /artifact 0: the archive’s files are larger together than any run uploads$/)
+
+	// Adds each value comparison output that is not here yet, and only a file of that directory named by a key.
+	const outputsOf = (keys, outputs) => ({ ...list(...keys), ...outputs })
+	result = await run({
+		artifacts: [
+			{ files: outputsOf([key(1)], {
+				[`value-outputs/${key(5)}.txt`]: 'five\n',
+				[`value-outputs/${key(6)}.txt`]: 'six from the newest run\n',
+				'value-outputs/not-a-key.txt': 'no\n',
+				[`value-outputs/${key(7)}.json`]: 'no\n',
+				[`elsewhere/${key(8)}.txt`]: 'no\n',
+				[`value-outputs/../${key(9)}.txt`]: 'no\n',
+			}) },
+			{ files: outputsOf([], { [`value-outputs/${key(6)}.txt`]: 'six from an older run\n', [`value-outputs/${key(4)}.txt`]: 'four\n' }) },
+		],
+		existingOutputs: { [`${key(5)}.txt`]: 'five, already here\n' },
+	})
+	assert.deepStrictEqual(result.outputs, {
+		[`${key(4)}.txt`]: 'four\n',
+		[`${key(5)}.txt`]: 'five, already here\n',
+		[`${key(6)}.txt`]: 'six from the newest run\n',
+	})
+	assert.strictEqual(result.lines, key(1) + '\n')
+	assert.deepStrictEqual(result.warnings, [])
+	assert.match(result.summary, /; 2 value comparison outputs added from those lists\.$/)
+
+	// Adds no output from a list made under another identity.
+	result = await run({ artifacts: [{ files: { 'identity.txt': 'b'.repeat(64) + '\n', 'passed.txt': '', [`value-outputs/${key(1)}.txt`]: 'one\n' } }] })
+	assert.strictEqual(result.outputs, null)
 
 	// Reads an archive Python's `zipfile` wrote to a stream, as `actions/upload-artifact` writes one: deflated, with
 	// no sizes in each file's own header and a data descriptor after it. This script's own `zip` did not write it.

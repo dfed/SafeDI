@@ -41,6 +41,12 @@ import Foundation
 ///
 /// The directory is `value-outputs`, beside the file `SAFEDI_COMPILE_CHECK_PASSED_CACHE` names, so that the job's
 /// cache of that file's directory carries it. When the variable is unset, as it is by default, every program runs.
+///
+/// A process that is part of a run also lists, beside the directory, the keys of the outputs it wrote
+/// (`fileOfKeysWrittenInThisRun`) and of every output it read or wrote (`fileOfKeysUsedInThisRun`), as
+/// `PassedCompileCheckCache` lists the checks its run passed. CI shares with other branches only what a run wrote,
+/// and keeps in a branch's cache only what its run used (`.github/actions/upload-passed-compile-checks`,
+/// `.github/scripts/keep-value-outputs-used-in-run.sh`).
 struct DifferentialValueOutputMemo: Sendable {
 	/// The memo beside the file the `SAFEDI_COMPILE_CHECK_PASSED_CACHE` environment variable names, or `nil` when it
 	/// names none. A process that uses it prints, when it exits, how many programs it ran and how many it read.
@@ -52,8 +58,37 @@ struct DifferentialValueOutputMemo: Sendable {
 		return DifferentialValueOutputMemo(directory: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent("value-outputs"))
 	}()
 
+	/// A memo of the outputs in `directory`, which lists what it reads and writes in files of `run` beside the
+	/// directory.
+	///
+	/// - Parameter run: A name for the run this process is part of, by default GitHub's identifier of the workflow run
+	///   (`GITHUB_RUN_ID`), or `nil` outside one, as `PassedCompileCheckCache` names its run.
+	init(directory: URL, run: String? = ProcessInfo.processInfo.environment["GITHUB_RUN_ID"]) {
+		self.directory = directory
+		if let run = PassedCompileCheckCache.nameOfRun(run) {
+			let parent = directory.deletingLastPathComponent()
+			fileOfKeysWrittenInThisRun = parent.appendingPathComponent("value-outputs-written-in-run-\(run).txt")
+			fileOfKeysUsedInThisRun = parent.appendingPathComponent("value-outputs-used-in-run-\(run).txt")
+		} else {
+			fileOfKeysWrittenInThisRun = nil
+			fileOfKeysUsedInThisRun = nil
+		}
+	}
+
 	/// The directory of outputs: one file per key.
 	let directory: URL
+
+	/// The file of the keys of the outputs the processes of this run wrote, one per line, beside `directory` and named
+	/// for the run, or `nil` when the process is part of no run. The directory also holds what the job restored into
+	/// it, so only this file says which outputs this run's programs printed. It is what
+	/// `.github/actions/upload-passed-compile-checks` uploads for other branches, so that no restored output, right or
+	/// wrong, reaches them through a run that did not print it.
+	let fileOfKeysWrittenInThisRun: URL?
+
+	/// The file of the keys of the outputs the processes of this run read or wrote, one per line, beside `directory`
+	/// and named for the run, or `nil` when the process is part of no run. CI keeps only these outputs in the branch's
+	/// cache, so that the outputs a job restores from other runs do not pile up in it.
+	let fileOfKeysUsedInThisRun: URL?
 
 	/// What the program whose key is `key` printed in an earlier run, or `nil` when no run recorded it. An answer
 	/// counts the program as read, and `nil` counts it as run.
@@ -63,6 +98,7 @@ struct DifferentialValueOutputMemo: Sendable {
 			return nil
 		}
 		tally.countRead()
+		list(key, in: fileOfKeysUsedInThisRun)
 		return output
 	}
 
@@ -88,7 +124,10 @@ struct DifferentialValueOutputMemo: Sendable {
 			try output.write(to: file(for: key), atomically: true, encoding: .utf8)
 		} catch {
 			tally.countNotKept()
+			return
 		}
+		list(key, in: fileOfKeysWrittenInThisRun)
+		list(key, in: fileOfKeysUsedInThisRun)
 	}
 
 	/// The key of the program that links `path`'s modules with `main` into `executableModuleName`: the SHA-256 of a
@@ -204,6 +243,13 @@ struct DifferentialValueOutputMemo: Sendable {
 
 	private func file(for key: String) -> URL {
 		directory.appendingPathComponent("\(key).txt")
+	}
+
+	/// Appends `key` to `file` when there is one. A list that cannot be written only costs a later run the output: CI
+	/// then neither shares it nor keeps it in the branch's cache.
+	private func list(_ key: String, in file: URL?) {
+		guard let file else { return }
+		try? PassedCompileCheckCache.append(key, to: file)
 	}
 
 	private func printTally() {
