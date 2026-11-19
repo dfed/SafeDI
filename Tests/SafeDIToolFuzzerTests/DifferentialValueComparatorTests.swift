@@ -2682,7 +2682,8 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test
 	func fixture_storesDefaultValuedInitializerParameter_whenAskedTo_forSeed17() {
-		// Seed 17's graph is the first with the `Sendable` builder motif, whose owner takes a default-valued `formatter`.
+		// Seed 17's graph is the first with the `Sendable` builder motif, whose owner takes a default-valued `formatter` and
+		// a closure default that is `@Sendable` only inside it, `handler`, which no stamp stores.
 		let ownerSource = { (storingEveryParameter: Bool) in
 			GraphFuzzerGenerator.fixture(forSeed: 17, storingEveryParameter: storingEveryParameter).swiftFileContent.first { $0.contains("class S17_T8:") }
 		}
@@ -2693,7 +2694,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		public final class S17_T8: Instantiable, S17_T8Protocol {
 			let differentialValueCreationStamp = S17_CreationStamp.next()
 
-			public init(t9: S17_T9, formatter: S17_Formatter = S17_Formatter()) {
+			public init(t9: S17_T9, formatter: S17_Formatter = S17_Formatter(), handler: @escaping (@Sendable () -> Void) -> Void = { _ in }) {
 				self.t9 = t9
 				self.formatter = formatter
 			}
@@ -2724,7 +2725,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		#expect(ownerSource(false) == """
 		@Instantiable
 		public final class S17_T8: Instantiable, S17_T8Protocol {
-			public init(t9: S17_T9, formatter: S17_Formatter = S17_Formatter()) {
+			public init(t9: S17_T9, formatter: S17_Formatter = S17_Formatter(), handler: @escaping (@Sendable () -> Void) -> Void = { _ in }) {
 				self.t9 = t9
 			}
 
