@@ -703,6 +703,178 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 		)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsValueSiteAWrapper_whenRootDeclaresValueAndCycleRedeclaresItLazily() async throws {
+		// `Root` declares `x` by value and `Mid` declares it again as a `LazilyInstantiated` between `A` and the call that builds `A` again. `A`'s function takes the wrapper: `Root`'s call wraps its own `x` without creating another, and `Mid`'s call hands its wrapper, so instantiating `Mid`'s `aBuilder` creates no `X`. The probe counts the `X`s that call creates: none.
+		try await expectTypeKeyTree(
+			of: [
+				Self.type("Root", isRoot: true, "@Instantiated let x: X", "@Instantiated let aBuilder: Instantiator<A>"),
+				Self.type("A", "@Instantiated let midBuilder: Instantiator<Mid>", "@Instantiated let dBuilder: Instantiator<D>"),
+				Self.type("Mid", "@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let aBuilder: Instantiator<A>"),
+				Self.type("D", "@Received let x: X"),
+				Self.stampedX,
+			],
+			equals: """
+			extension Root {
+			    public convenience init() {
+			        let x = X()
+			        func __safeDI_aBuilder(x: LazilyInstantiated<X>) -> A {
+			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+			            func __safeDI_dBuilder() -> D {
+			                D(x: x.instance)
+			            }
+			            let dBuilder = Instantiator<D>(__safeDI_dBuilder)
+			            return A(midBuilder: midBuilder, dBuilder: dBuilder)
+			        }
+			        func __safeDI_midBuilder() -> Mid {
+			            func __safeDI_x() -> X {
+			                X()
+			            }
+			            let x = LazilyInstantiated<X>(__safeDI_x)
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(x: x)
+			            }
+			            return Mid(x: x, aBuilder: aBuilder)
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(x: LazilyInstantiated<X> { x })
+			        }
+			        self.init(x: x, aBuilder: aBuilder)
+			    }
+			}
+			""",
+			probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("{ let root = Root(); let mid = root.aBuilder.instantiate().midBuilder.instantiate(); let before = Stamp.next(); _ = mid.aBuilder.instantiate(); return Stamp.next() - before - 1 }()")],
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsValueSiteAWrapper_whenRootDeclaresWrapperAndCycleRedeclaresItByValue() async throws {
+		// The mirror: `Root` declares `x` as a `LazilyInstantiated` and `Mid` declares it again by value. `A`'s function takes the wrapper, `Root`'s call hands its wrapper and `Mid`'s call wraps its own `x`. The probe counts the `X`s instantiating `Root`'s `aBuilder` creates: none.
+		try await expectTypeKeyTree(
+			of: [
+				Self.type("Root", isRoot: true, "@Instantiated let x: LazilyInstantiated<X>", "@Instantiated let aBuilder: Instantiator<A>"),
+				Self.type("A", "@Instantiated let midBuilder: Instantiator<Mid>", "@Instantiated let dBuilder: Instantiator<D>"),
+				Self.type("Mid", "@Instantiated let x: X", "@Instantiated let aBuilder: Instantiator<A>"),
+				Self.type("D", "@Received let x: X"),
+				Self.stampedX,
+			],
+			equals: """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_x() -> X {
+			            X()
+			        }
+			        let x = LazilyInstantiated<X>(__safeDI_x)
+			        func __safeDI_aBuilder(x: LazilyInstantiated<X>) -> A {
+			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+			            func __safeDI_dBuilder() -> D {
+			                D(x: x.instance)
+			            }
+			            let dBuilder = Instantiator<D>(__safeDI_dBuilder)
+			            return A(midBuilder: midBuilder, dBuilder: dBuilder)
+			        }
+			        func __safeDI_midBuilder() -> Mid {
+			            let x = X()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(x: LazilyInstantiated<X> { x })
+			            }
+			            return Mid(x: x, aBuilder: aBuilder)
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(x: x)
+			        }
+			        self.init(x: x, aBuilder: aBuilder)
+			    }
+			}
+			""",
+			probes: [DifferentialValueProbe("Root()"), DifferentialValueProbe("{ let root = Root(); let before = Stamp.next(); _ = root.aBuilder.instantiate(); return Stamp.next() - before - 1 }()")],
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesValueParameter_whenEveryCallSiteDeclaresValue() async throws {
+		// The near miss: `Root` and `Mid` both declare `x` by value, so `A`'s function takes `x: X` and no call makes a wrapper.
+		try await expectTypeKeyTree(
+			of: [
+				Self.type("Root", isRoot: true, "@Instantiated let x: X", "@Instantiated let aBuilder: Instantiator<A>"),
+				Self.type("A", "@Instantiated let midBuilder: Instantiator<Mid>", "@Instantiated let dBuilder: Instantiator<D>"),
+				Self.type("Mid", "@Instantiated let x: X", "@Instantiated let aBuilder: Instantiator<A>"),
+				Self.type("D", "@Received let x: X"),
+				Self.stampedX,
+			],
+			equals: """
+			extension Root {
+			    public convenience init() {
+			        let x = X()
+			        func __safeDI_aBuilder(x: X) -> A {
+			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+			            func __safeDI_dBuilder() -> D {
+			                D(x: x)
+			            }
+			            let dBuilder = Instantiator<D>(__safeDI_dBuilder)
+			            return A(midBuilder: midBuilder, dBuilder: dBuilder)
+			        }
+			        func __safeDI_midBuilder() -> Mid {
+			            let x = X()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(x: x)
+			            }
+			            return Mid(x: x, aBuilder: aBuilder)
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(x: x)
+			        }
+			        self.init(x: x, aBuilder: aBuilder)
+			    }
+			}
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsSharedTypeInOneFunction_whenTypeIsBuiltInsideAndOutsideCycle() async throws {
+		// `T` is built at `Root` outside a cycle and again inside `N`'s cycle, and both builds start `dep` before `a`, so one function serves both. No production tree starts one type's children in two orders: the re-creation that could (`Scope.swift:447`) runs only for a tree holding a hole's site (`ScopeGenerator.swift:1316`), and every build of a type starts its children in one order (`ScopeGenerator.swift:4661–4669`). The seam form of that pin is R2a's.
+		try await expectTypeKeyTree(
+			of: [
+				Self.type("Root", isRoot: true, "@Instantiated let t: T", "@Instantiated let nBuilder: Instantiator<N>"),
+				Self.type("T", "@Instantiated let a: A", "@Instantiated let dep: Dep"),
+				Self.type("A", "@Instantiated let nBuilder: Instantiator<N>"),
+				Self.type("N", "@Received(onlyIfAvailable: true) let dep: Dep?", "@Instantiated let tBuilder: Instantiator<T>"),
+				Self.type("Dep"),
+			],
+			equals: """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_t() -> T {
+			            let dep = Dep()
+			            let a: A = __safeDI_a(dep: dep)
+			            return T(a: a, dep: dep)
+			        }
+			        func __safeDI_a(dep: Dep?) -> A {
+			            let nBuilder = Instantiator<N> {
+			                __safeDI_nBuilder(dep: dep)
+			            }
+			            return A(nBuilder: nBuilder)
+			        }
+			        func __safeDI_nBuilder(dep: Dep?) -> N {
+			            let tBuilder = Instantiator<T>(__safeDI_t)
+			            return N(dep: dep, tBuilder: tBuilder)
+			        }
+			        let t: T = __safeDI_t()
+			        let nBuilder = Instantiator<N> {
+			            __safeDI_nBuilder(dep: nil)
+			        }
+			        self.init(t: t, nBuilder: nBuilder)
+			    }
+			}
+			""",
+		)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
