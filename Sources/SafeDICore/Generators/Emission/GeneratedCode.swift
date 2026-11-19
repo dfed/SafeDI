@@ -25,7 +25,7 @@
 /// it, and every scope's cache held its subtree's text. A level now holds its children's plans, and the root's plan is
 /// spelled once (`spelled`), each line written with the indentation of every level around it. The bytes are the ones
 /// re-indenting at every level wrote (`GeneratedCodeText.indentingNonEmptyLines`).
-indirect enum GeneratedCode: Sendable {
+indirect enum GeneratedCode: Hashable, Sendable {
 	/// Text, written as it is.
 	case text(String)
 	/// Pieces written one after another.
@@ -57,7 +57,7 @@ indirect enum GeneratedCode: Sendable {
 /// index at which the walk first reaches it (`PlaceIdentity`), counted by the body (`BuilderFunctionGraph.places(of:)`),
 /// never a scope's or a generator's identity, which two places can share: a plan is one generator's, and its walk index is
 /// its position in the body that writes it.
-struct PlacePlan: Sendable {
+struct PlacePlan: Hashable, Sendable {
 	/// What the graph holds for the place, which the oracle checks against what each kind holds.
 	let kind: PlaceKind
 	/// The names of the builder functions the place declares, in the order it declares them.
