@@ -82,9 +82,10 @@ enum GraphFuzzerRemedyKind: String, CaseIterable, Comparable {
 	/// is received only if available, since a required receive of an optional is not a shape anyone writes, so a site
 	/// whose error names such a form, or a form the oracle cannot read, gets no remedy.
 	case declareProvidingFormOnSeam = "declare-providing-form-on-seam"
-	/// "Give `x: Y` on `T` a different label to fix.", for a receive of `x` that a closer declaration of the label with
-	/// another type hides: `T`'s property takes the label `xRelabeled`, with its initializer parameter and assignment,
-	/// so the receive reaches the declaration above it. A hidden receive that is a required optional is not a shape anyone
+	/// "Give `x: Y` on `T` a different label to fix.", or "Give `x: Y` on `T` and `x: Z` on `U` each a different label to
+	/// fix.", for a receive of `x` that closer declarations of the label with other types hide: each property the errors at
+	/// the receive name, one error per chain, takes the label `xRelabeled`, with its initializer parameter and assignment,
+	/// so the receive reaches the declaration above them. A hidden receive that is a required optional is not a shape anyone
 	/// writes, and gets no remedy; nor does a hiding declaration that `T` renames, or whose new label `T` already declares.
 	case relabelHidingDeclaration = "relabel-hiding-declaration"
 	/// "Declare `@Received let x: X` on `S`, so SafeDI hands it to the builder", or its only-if-available spelling, for a
@@ -241,9 +242,16 @@ enum GraphFuzzerRemedies {
 		case declareAsSendableWrapper(label: String, declaringType: String?, sendableType: String, retypesReceive: Bool, receivedAs: String?)
 		case forwardReceive(label: String)
 		case declareProvidingFormOnSeam(collision: SeamLabelCollision, property: GraphFuzzerRemedyProperty)
-		case relabelHidingDeclaration(hiddenLabel: String, hidingProperty: GraphFuzzerRemedyProperty, declaringType: String)
+		/// Each declaration the error names, closest to the receive first.
+		case relabelHidingDeclarations(hiddenLabel: String, declarations: [HidingDeclaration])
 		/// The remedies the error of a seam's fill states, beside the one that fulfills the hole in the seam's module.
 		case seamFill([SeamFillRemedy])
+
+		/// A declaration that hides a receive, "`x: Y` on `T`" in the error's advice.
+		struct HidingDeclaration: Equatable {
+			let property: GraphFuzzerRemedyProperty
+			let declaringType: String
+		}
 
 		/// A remedy the error of a seam's fill states (`SeamFillRemedy.remedies(statedIn:notes:)`).
 		enum SeamFillRemedy: Equatable {
@@ -478,22 +486,30 @@ enum GraphFuzzerRemedies {
 				self = .declareProvidingFormOnSeam(collision: collision, property: GraphFuzzerRemedyProperty(attribute: "@Received", label: collision.label, type: String(type)))
 			} else if message.hasPrefix(unfulfilledPrefix), let hiddenRange = message.range(of: Self.hiddenMarker) {
 				// "@Received property `x: X` is hidden in chain: … `T` declares `x: Y` with the same label, so the types below
-				// `T` receive `x: Y` instead. Give `x: Y` on `T` a different label to fix."
+				// `T` receive `x: Y` instead. Give `x: Y` on `T` a different label to fix.", or, where declarations above `T`
+				// hide the receive too, "…, and above `T`, `U` declares `x: Z` with the same label too. Give `x: Y` on `T` and
+				// `x: Z` on `U` each a different label to fix." (a list joined as "`a`, `b`, and `c`" for three or more).
 				let spelledHiddenProperty = message[message.index(message.startIndex, offsetBy: unfulfilledPrefix.count)..<hiddenRange.lowerBound]
-				let givePrefix = " Give `"
-				let onMarker = "` on `"
-				let suffix = Self.hiddenSuffix
 				guard let hiddenLabel = Self.property(spelled: spelledHiddenProperty, attribute: "@Received")?.label,
-				      message.hasSuffix(suffix),
-				      let giveRange = message.range(of: givePrefix, options: .backwards),
-				      let onRange = message.range(of: onMarker, options: .backwards, range: giveRange.upperBound..<message.endIndex)
+				      message.hasSuffix(Self.hiddenSuffix),
+				      let giveRange = message.range(of: " Give `", options: .backwards)
 				else { return nil }
-				let declaringType = message[onRange.upperBound..<message.index(message.endIndex, offsetBy: -suffix.count)]
-				guard let hidingProperty = Self.property(spelled: message[giveRange.upperBound..<onRange.lowerBound], attribute: ""),
-				      hidingProperty.label == hiddenLabel,
-				      !declaringType.contains("`")
-				else { return nil }
-				self = .relabelHidingDeclaration(hiddenLabel: hiddenLabel, hidingProperty: hidingProperty, declaringType: String(declaringType))
+				let advice = message[message.index(before: giveRange.upperBound)..<message.index(message.endIndex, offsetBy: -Self.hiddenSuffix.count)]
+				let namesSeveral = advice.hasSuffix(Self.hiddenEachMarker)
+				// "`x: Y` on `T`", each separated from the next by ", ", " and " or ", and ", split at the backticks.
+				let parts = advice.dropLast(namesSeveral ? Self.hiddenEachMarker.count : 0).split(separator: "`", omittingEmptySubsequences: false)
+				guard parts.count % 4 == 1, parts.first == "", parts.last == "" else { return nil }
+				var declarations = [HidingDeclaration]()
+				for index in stride(from: 1, to: parts.count - 1, by: 4) {
+					guard parts[index + 1] == " on ",
+					      index + 3 == parts.count - 1 || [", ", " and ", ", and "].contains(String(parts[index + 3])),
+					      let hidingProperty = Self.property(spelled: parts[index], attribute: ""),
+					      hidingProperty.label == hiddenLabel
+					else { return nil }
+					declarations.append(HidingDeclaration(property: hidingProperty, declaringType: String(parts[index + 2])))
+				}
+				guard !declarations.isEmpty, namesSeveral == (declarations.count > 1) else { return nil }
+				self = .relabelHidingDeclarations(hiddenLabel: hiddenLabel, declarations: declarations)
 			} else if message.hasPrefix(Self.multipleFulfillersPrefix) {
 				// "Found multiple @Instantiable types or extensions that fulfill `P`. … If it names one type, keep one, and
 				// remove `P` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable."
@@ -594,7 +610,10 @@ enum GraphFuzzerRemedies {
 
 		/// What follows the property in the error of a receive a closer declaration of its label hides.
 		static let hiddenMarker = "` is hidden in chain: "
-		static let hiddenSuffix = "` a different label to fix."
+		/// What ends that error's advice, whether it names one declaration or several.
+		static let hiddenSuffix = " a different label to fix."
+		/// What precedes `hiddenSuffix` where the advice names several declarations.
+		static let hiddenEachMarker = " each"
 		/// What begins the error two `@Instantiable` declarations that fulfill one type each report.
 		static let multipleFulfillersPrefix = "Found multiple @Instantiable types or extensions that fulfill `"
 		/// What begins the error of an `@Instantiated` property whose type no declaration fulfills.
@@ -993,21 +1012,33 @@ enum GraphFuzzerRemedies {
 			description += " and decorates \(site) with `\(attribute)`"
 			edits.append((site.typeName, replacingSiteProperty(with: receive)))
 			return [remedy(.instantiateOnRootAndReceiveOnlyIfAvailable, description, editing: edits)].compactMap(\.self)
-		case let .relabelHidingDeclaration(hiddenLabel, hidingProperty, declaringType):
-			// Each error at the site may name another chain; all must name the same declaration.
+		case let .relabelHidingDeclarations(hiddenLabel, _):
+			// Each error at the site may name another chain, whose declarations differ where paths to the receive, or laps of
+			// a cycle, pass other types that declare the label: the remedy relabels every declaration any of them names, in
+			// the order the errors first name them, as a person reading each error at the receive would. Each takes the same
+			// new label, which no type of the graph receives.
 			let newLabel = "\(hiddenLabel)Relabeled"
-			guard statedRemedies.allSatisfy({ $0 == firstStatedRemedy }),
-			      hiddenLabel == site.label,
+			var declarations = [StatedRemedy.HidingDeclaration]()
+			for statedRemedy in statedRemedies {
+				guard case let .relabelHidingDeclarations(otherHiddenLabel, otherDeclarations)? = statedRemedy, otherHiddenLabel == hiddenLabel else { return [] }
+				for declaration in otherDeclarations where !declarations.contains(declaration) {
+					declarations.append(declaration)
+				}
+			}
+			guard hiddenLabel == site.label,
 			      siteProperty.attribute.hasPrefix("@Received"),
 			      !(siteProperty.type.hasSuffix("?") && !siteProperty.attribute.contains("onlyIfAvailable: true")),
 			      !files.contents.contains(where: { $0.contains("fulfilledByDependencyNamed: \"\(hiddenLabel)\"") })
 			else { return [] }
-			return [remedy(.relabelHidingDeclaration, "gives `\(hidingProperty.label): \(hidingProperty.type)` on `\(declaringType)` the label `\(newLabel)`", editing: [(declaringType, { properties in
-				guard properties.contains(where: { $0.label == hiddenLabel && $0.type == hidingProperty.type }),
-				      !properties.contains(where: { $0.label == newLabel })
-				else { return nil }
-				return properties.map { $0.label == hiddenLabel ? GraphFuzzerRemedyProperty(attribute: $0.attribute, label: newLabel, type: $0.type) : $0 }
-			})])].compactMap(\.self)
+			let relabeled = declarations.map { "`\($0.property.label): \($0.property.type)` on `\($0.declaringType)`" }
+			return [remedy(.relabelHidingDeclaration, "gives \(relabeled.joined(separator: " and ")) the label `\(newLabel)`", editing: declarations.map { declaration in
+				(declaration.declaringType, { properties in
+					guard properties.contains(where: { $0.label == hiddenLabel && $0.type == declaration.property.type }),
+					      !properties.contains(where: { $0.label == newLabel })
+					else { return nil }
+					return properties.map { $0.label == hiddenLabel ? GraphFuzzerRemedyProperty(attribute: $0.attribute, label: newLabel, type: $0.type) : $0 }
+				})
+			})].compactMap(\.self)
 		case let .receiveOnlyIfAvailable(label):
 			guard !judgesNoRequiredOptionalReceive(in: fixture), statedRemedies.allSatisfy({ $0 == firstStatedRemedy }), label == site.label, siteProperty.attribute == "@Received" else { return [] }
 			let property = GraphFuzzerRemedyProperty(attribute: "@Received(onlyIfAvailable: true)", label: label, type: siteProperty.type)

@@ -293,6 +293,36 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsHiddenErrorFromSeamsChainNamingEachHidingDeclarationInsideTheSeam_whenADeclarationAboveTheSeamHidesItsOwnReceive() async {
+		// The root's chain to `Reader` also passes `Mid`'s `user: Other`, but the seam binds the `user` it receives itself, so
+		// the seam's chain names only the declarations inside it, and `Mid`'s is reported at the seam's own receive.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated let mid: Mid"]),
+			seamFixtureType(named: "Mid", declarations: ["@Instantiated let user: Other", "@Instantiated let screen: Screen"]),
+			seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Received(onlyIfAvailable: true) let user: User?", "@Instantiated let left: Left"]),
+			seamFixtureType(named: "Left", declarations: ["@Instantiated let user: Name", "@Instantiated let inner: Inner"]),
+			seamFixtureType(named: "Inner", declarations: ["@Instantiated let user: Tag", "@Instantiated let reader: Reader"]),
+			seamFixtureType(named: "Reader", declarations: ["@Received(onlyIfAvailable: true) let user: User?"]),
+			seamFixtureType(named: "User", declarations: []),
+			seamFixtureType(named: "Name", declarations: []),
+			seamFixtureType(named: "Other", declarations: []),
+			seamFixtureType(named: "Tag", declarations: []),
+		]
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Screen -> Left -> Inner -> Reader. `Inner` declares `user: Tag` with the same label, so the types below `Inner` receive `user: Tag` instead, and above `Inner`, `Left` declares `user: Name` with the same label too. Give `user: Tag` on `Inner` and `user: Name` on `Left` each a different label to fix.
+			\(fixtures["Inner.swift"]):8:5: note: `user: Tag` is declared here
+			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
+			\(fixtures["Screen.swift"]):8:5: error: @Received property `user: User?` is hidden in chain: Root -> Mid -> Screen. `Mid` declares `user: Other` with the same label, so the types below `Mid` receive `user: Other` instead. Give `user: Other` on `Mid` a different label to fix.
+			\(fixtures["Mid.swift"]):8:5: note: `user: Other` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
 	// MARK: Aliases
 
 	@Test

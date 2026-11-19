@@ -3271,11 +3271,32 @@ public actor DependencyTreeGenerator {
 			let declaringType: TypeDescription
 			/// Whether `declaringType` is forwarded `property`, which the tree is then handed rather than builds.
 			let isForwarded: Bool
+			/// The declarations of the label that the scopes `declaringType` is built inside make on this path, which this one
+			/// hides, closest first. What a hidden receive's error names beside this declaration; no part of which declaration
+			/// this is, so `==` and `hash(into:)` leave it out, and the walk's memo of trees built again and the matching of a
+			/// seam's chain with a root's compare the closest declaration alone.
+			var enclosingDeclarations: [LabelDeclaration]
 
 			/// Whether a receive that resolves to any of `acceptedProperties` resolves to this declaration: the declaration is
 			/// one of them, or a lazily instantiated declaration whose instance is.
 			func fulfills(anyOf acceptedProperties: Set<Property>) -> Bool {
 				acceptedProperties.contains(property) || lazilyInstantiatedInstanceProperty.map(acceptedProperties.contains) ?? false
+			}
+
+			static func == (lhs: LabelDeclaration, rhs: LabelDeclaration) -> Bool {
+				lhs.property == rhs.property
+					&& lhs.lazilyInstantiatedInstanceProperty == rhs.lazilyInstantiatedInstanceProperty
+					&& lhs.declarationLocation == rhs.declarationLocation
+					&& lhs.declaringType == rhs.declaringType
+					&& lhs.isForwarded == rhs.isForwarded
+			}
+
+			func hash(into hasher: inout Hasher) {
+				hasher.combine(property)
+				hasher.combine(lazilyInstantiatedInstanceProperty)
+				hasher.combine(declarationLocation)
+				hasher.combine(declaringType)
+				hasher.combine(isForwarded)
 			}
 		}
 
@@ -3288,30 +3309,38 @@ public actor DependencyTreeGenerator {
 			let declarationLocation: Dependency.DeclarationLocation?
 			/// The closest declaration of the label, whose property differs from `property`.
 			let hidingDeclaration: LabelDeclaration
+			/// The declarations of the label above `hidingDeclaration` that hide the receive too, closest first: each one of
+			/// `hidingDeclaration.enclosingDeclarations` before the first that provides the receive, so relabeling every
+			/// declaration the error names leaves none between the receive and what provides it.
+			let enclosingHidingDeclarations: [LabelDeclaration]
 			let receiver: TypeDescription
 			/// The types of the properties the chain's scopes are built for (`ScreenProtocol`, `Instantiator<Screen>`),
 			/// innermost first, excluding `root`.
 			let parentStack: [TypeDescription]
 			let root: TypeDescription
 
-			/// An `error:` line that names the hiding declaration, since Xcode drops notes from build-tool output, and
-			/// a `note:` at the hiding declaration so command-line builds can navigate to it.
+			/// An `error:` line that names each hiding declaration, since Xcode drops notes from build-tool output, and
+			/// a `note:` at each hiding declaration so command-line builds can navigate to it.
 			var sourceDiagnostics: [SourceDiagnostic] {
 				let chain = ([receiver] + parentStack + [root]).reversed()
 				let hidingProperty = hidingDeclaration.property.asSource
 				let declaringType = hidingDeclaration.declaringType.asSource
-				return [
-					SourceDiagnostic(
-						severity: .error,
-						location: declarationLocation,
-						message: "@\(Dependency.Source.receivedRawValue) property `\(property.asSource)` is hidden in chain: \(chain.map(\.asSource).joined(separator: " -> ")). `\(declaringType)` declares `\(hidingProperty)` with the same label, so the types below `\(declaringType)` receive `\(hidingProperty)` instead. Give `\(hidingProperty)` on `\(declaringType)` a different label to fix.",
-					),
+				let hidingDeclarations = [hidingDeclaration] + enclosingHidingDeclarations
+				var message = "@\(Dependency.Source.receivedRawValue) property `\(property.asSource)` is hidden in chain: \(chain.map(\.asSource).joined(separator: " -> ")). `\(declaringType)` declares `\(hidingProperty)` with the same label, so the types below `\(declaringType)` receive `\(hidingProperty)` instead"
+				if enclosingHidingDeclarations.isEmpty {
+					message += ". Give `\(hidingProperty)` on `\(declaringType)` a different label to fix."
+				} else {
+					let enclosing = enclosingHidingDeclarations.map { "`\($0.declaringType.asSource)` declares `\($0.property.asSource)`" }
+					let relabeled = hidingDeclarations.map { "`\($0.property.asSource)` on `\($0.declaringType.asSource)`" }
+					message += ", and above `\(declaringType)`, \(enclosing.joinedAsList) with the same label too. Give \(relabeled.joinedAsList) each a different label to fix."
+				}
+				return [SourceDiagnostic(severity: .error, location: declarationLocation, message: message)] + hidingDeclarations.map {
 					SourceDiagnostic(
 						severity: .note,
-						location: hidingDeclaration.declarationLocation,
-						message: "`\(hidingProperty)` is declared here",
-					),
-				]
+						location: $0.declarationLocation,
+						message: "`\($0.property.asSource)` is declared here",
+					)
+				}
 			}
 		}
 
@@ -10255,6 +10284,10 @@ public actor DependencyTreeGenerator {
 		let declarationLocation: Dependency.DeclarationLocation?
 		/// The closest declaration of the label, whose property differs from `property`.
 		let hidingDeclaration: DependencyTreeGeneratorError.LabelDeclaration
+		/// See `DependencyTreeGeneratorError.HiddenReceivedProperty.enclosingHidingDeclarations`. Chains of one tree that
+		/// pass different declarations of the label above `hidingDeclaration` are reported apart, so relabeling every
+		/// declaration the errors at the receive name leaves none between the receive and what provides it.
+		let enclosingHidingDeclarations: [DependencyTreeGeneratorError.LabelDeclaration]
 		let receiver: TypeDescription
 		let root: TypeDescription
 	}
@@ -10814,6 +10847,7 @@ public actor DependencyTreeGenerator {
 					property: receivedProperty,
 					declarationLocation: dependency.declarationLocation,
 					hidingDeclaration: closestDeclaration,
+					enclosingHidingDeclarations: Array(closestDeclaration.enclosingDeclarations.prefix { !$0.fulfills(anyOf: acceptedProperties) }),
 					receiver: scope.instantiable.concreteInstantiable,
 					root: root,
 				)
@@ -10826,21 +10860,28 @@ public actor DependencyTreeGenerator {
 			}
 		}
 		/// Enters each property `scope` creates in `closestDeclarationByLabel` as the closest declaration of its label for the
-		/// scopes `scope` builds, calling `entering` with each label. One rule for the walk of a tree and the walk of a tree a
-		/// cycle-closing scope builds again.
+		/// scopes `scope` builds, with the declaration of the label it replaces there, and those that one hides, as its
+		/// `enclosingDeclarations`, calling `entering` with each label. One rule for the walk of a tree and the walk of a
+		/// tree a cycle-closing scope builds again.
 		func enterDeclarations(
 			of scope: Scope,
 			into closestDeclarationByLabel: inout [String: DependencyTreeGeneratorError.LabelDeclaration],
 			entering: (String) -> Void,
 		) {
 			for dependency in scope.instantiable.dependencies where scope.createdProperties.contains(dependency.property) {
-				closestDeclarationByLabel[dependency.property.label] = .init(
+				var declaration = DependencyTreeGeneratorError.LabelDeclaration(
 					property: dependency.property,
 					lazilyInstantiatedInstanceProperty: dependency.lazilyInstantiatedInstanceProperty,
 					declarationLocation: dependency.declarationLocation,
 					declaringType: scope.instantiable.concreteInstantiable,
 					isForwarded: dependency.isForwarded,
+					enclosingDeclarations: [],
 				)
+				if let replacedDeclaration = closestDeclarationByLabel[dependency.property.label] {
+					// A type a cycle builds again beneath itself declares the label again, one declaration named once.
+					declaration.enclosingDeclarations = ([replacedDeclaration] + replacedDeclaration.enclosingDeclarations).filter { $0 != declaration }
+				}
+				closestDeclarationByLabel[dependency.property.label] = declaration
 				entering(dependency.property.label)
 			}
 		}
@@ -11657,6 +11698,7 @@ public actor DependencyTreeGenerator {
 					property: hiddenReceive.property,
 					declarationLocation: hiddenReceive.declarationLocation,
 					hidingDeclaration: hiddenReceive.hidingDeclaration,
+					enclosingHidingDeclarations: hiddenReceive.enclosingHidingDeclarations,
 					receiver: hiddenReceive.receiver,
 					parentStack: chain.parentStack,
 					root: hiddenReceive.root,
