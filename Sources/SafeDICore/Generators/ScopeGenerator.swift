@@ -790,7 +790,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for property in child.receivedProperties where isReceivedFromAncestors(property, propertiesToDeclare: propertiesToDeclare, forwardedProperties: forwardedProperties) {
 				let isRequired = child.requiredReceivedProperties.contains(property)
 				guard isRequired || !providesAFormReadByOnlyIfAvailableReceive(of: property, propertiesToDeclare: propertiesToDeclare, forwardedProperties: forwardedProperties) else { continue }
-				receivedProperties.insert(property)
+				receivedProperties.insertKeepingMostExplicitSpelling(property)
 				if isRequired {
 					requiredReceivedProperties.insert(property)
 				}
@@ -821,10 +821,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					declaredProperties: aliasBindingDeclaredProperties,
 					forwardedProperties: forwardedProperties,
 				), !receivesPassedNil.contains(fulfillingProperty) else { continue }
-				receivedProperty = fulfillingProperty
+				receivedProperty = ValueSpellings.fulfillingProperty(fulfillingProperty, spelledAsAlias: dependency.property)
 				onlyIfAvailable = isOnlyIfAvailable
 			}
-			receivedProperties.insert(receivedProperty)
+			receivedProperties.insertKeepingMostExplicitSpelling(receivedProperty)
 			ownReceivedProperties.insert(receivedProperty)
 			if !onlyIfAvailable {
 				requiredReceivedProperties.insert(receivedProperty)
@@ -833,7 +833,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A scope that closes a lazy cycle passes the function it refers to what that function's body receives under each
 		// parameter's label, so it receives those forms as the body does.
 		for parameter in cycleParameters {
-			receivedProperties.formUnion(parameter.receivedForms)
+			receivedProperties.formUnionKeepingMostExplicitSpelling(parameter.receivedForms)
 			requiredReceivedProperties.formUnion(parameter.requiredForms)
 		}
 		return Receives(
@@ -1160,8 +1160,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			declarationReference: declarationReference,
 		)
 		// An alias a mock binds to `nil`, as production always does, reads nothing from above (see `receivesPassedNil` of
-		// the scope that declares it).
-		receivedProperties = fulfillingPropertyIsPassedNil ? [] : [fulfillingProperty]
+		// the scope that declares it). It receives its fulfilling property as its own property spells it
+		// (`ValueSpellings.fulfillingProperty(_:spelledAsAlias:)`).
+		receivedProperties = fulfillingPropertyIsPassedNil ? [] : [ValueSpellings.fulfillingProperty(fulfillingProperty, spelledAsAlias: property)]
 		receivedOnlyByPublicMockCalls = []
 		passedByPublicMockCalls = []
 		if onlyIfAvailable {
@@ -8071,18 +8072,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// How a mocked type spells each dependency it receives, directly or through an alias, which its mock declares wherever
-	/// it binds a form of that dependency it does not build itself: a promoted dependency
+	/// How a mock spells each dependency it binds in a form it does not build itself: a promoted dependency
 	/// (`DependencyTreeGenerator.createMockRootScopeGenerator`), a flat `mock()` parameter, and an `onlyIfAvailable` override
 	/// or parameter (`mockRootParameters`). `==` reads `any P` and `P` as one type, so the properties a mock's tree receives
-	/// hold whichever spelling a walk met first, often a receiver's deep in the tree, and a protocol the mocked type spells
-	/// with `any` would lose it in its own mock, which warns in a module that enables the `ExistentialAny` upcoming feature.
+	/// would hold whichever spelling a walk met first, and a protocol spelled with `any` could lose it in the mock, which
+	/// warns in a module that enables the `ExistentialAny` upcoming feature. A dependency the mocked type receives, directly
+	/// or through an alias, takes the mocked type's spelling; any other takes the most explicit of its receivers' spellings
+	/// in the tree (`ValueSpellings`), which the sets of received properties keep (`insertKeepingMostExplicitSpelling(_:)`).
 	///
 	/// A deliberate gap, commented where the closure types are built (`MockParameterNode.init`) and where the arguments are
 	/// bound (`emitReceiverBindings`): the override closure of a type the mock builds, and the bindings of its arguments in
 	/// that type's builder function, take that type's initializer's parameters as they are declared.
 	struct MockedTypeSpellings {
-		init(of instantiable: Instantiable) {
+		/// - Parameter treeReceivedProperties: The properties the mock's tree receives, each in its receivers' most explicit
+		///   spelling.
+		init(of instantiable: Instantiable, treeReceivedProperties: some Sequence<Property>) {
 			// An alias spells the dependency as its property's type does, where that type is the one `ofType:` names, and never
 			// as `ofType:` does: `Service.self` is an expression, which the `ExistentialAny` upcoming feature does not flag.
 			// A direct receive decides over an alias, whichever the type declares first; of two of one kind, the first decides.
@@ -8090,13 +8094,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for dependency in instantiable.dependencies {
 				switch dependency.source {
 				case .received:
-					let instanceProperty = Self.instanceProperty(of: dependency.property)
+					let instanceProperty = ValueSpellings.instanceProperty(of: dependency.property)
 					if spelledInstanceProperties[instanceProperty] == nil {
 						spelledInstanceProperties[instanceProperty] = instanceProperty
 					}
 				case let .aliased(fulfillingProperty, _, _):
-					let instanceProperty = Self.instanceProperty(of: fulfillingProperty)
-					let declaredInstanceProperty = Self.instanceProperty(of: Property(label: fulfillingProperty.label, typeDescription: dependency.property.typeDescription))
+					let instanceProperty = ValueSpellings.instanceProperty(of: fulfillingProperty)
+					let declaredInstanceProperty = ValueSpellings.instanceProperty(of: Property(label: fulfillingProperty.label, typeDescription: dependency.property.typeDescription))
 					if declaredInstanceProperty == instanceProperty, aliasSpelledInstanceProperties[instanceProperty] == nil {
 						aliasSpelledInstanceProperties[instanceProperty] = declaredInstanceProperty
 					}
@@ -8105,51 +8109,31 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			}
 			spelledInstanceProperties.merge(aliasSpelledInstanceProperties) { directlyReceivedProperty, _ in directlyReceivedProperty }
+			treeSpellings = ValueSpellings(of: treeReceivedProperties)
 		}
 
-		/// `property` with the mocked type's spelling of the dependency it is a form of: its optional, its unwrapped form,
-		/// and a `LazilyInstantiated` or `SendableLazilyInstantiated` of its instance are each a form of one dependency,
-		/// which the mock binds once. `property` itself when the mocked type receives no form of it.
+		/// `property` with the mock's spelling of the dependency it is a form of: its optional, its unwrapped form, and a
+		/// `LazilyInstantiated` or `SendableLazilyInstantiated` of its instance are each a form of one dependency, which the
+		/// mock binds once.
 		func spelling(of property: Property) -> Property {
-			guard !spelledInstanceProperties.isEmpty,
-			      let spelledInstanceProperty = spelledInstanceProperties[Self.instanceProperty(of: property)]
-			else { return property }
-			return Property(label: property.label, typeDescription: Self.typeDescription(property.typeDescription, spellingInstanceAs: spelledInstanceProperty.typeDescription))
+			let ownSpelling = spelledInstanceProperties.isEmpty ? nil : spelledInstanceProperties[ValueSpellings.instanceProperty(of: property)]
+			return if let ownSpelling {
+				ValueSpellings.property(property, spellingInstanceAs: ownSpelling)
+			} else {
+				treeSpellings.spelling(ofValueOf: property)
+			}
 		}
 
 		/// `properties`, each spelled as `spelling(of:)` spells it.
 		func spellings(of properties: Set<Property>) -> Set<Property> {
-			if spelledInstanceProperties.isEmpty {
-				properties
-			} else {
-				Set(properties.lazy.map(spelling(of:)))
-			}
+			Set(properties.lazy.map(spelling(of:)))
 		}
 
-		/// The mocked type's own spelling of the instance of each dependency it receives (`instanceProperty(of:)`), keyed by
-		/// that instance.
+		/// The mocked type's own spelling of the instance of each dependency it receives (`ValueSpellings.instanceProperty(of:)`),
+		/// keyed by that instance.
 		private var spelledInstanceProperties = [Property: Property]()
-
-		/// The instance of the dependency `property` is a form of: `property` unwrapped, and the instance of a lazily
-		/// instantiated property that creates a non-optional one.
-		private static func instanceProperty(of property: Property) -> Property {
-			let unwrappedProperty = property.asUnwrappedProperty
-			return unwrappedProperty.asLazilyInstantiatedInstanceProperty ?? unwrappedProperty
-		}
-
-		/// `typeDescription` with the instance `instanceProperty(of:)` reads spelled `instanceType`.
-		private static func typeDescription(_ typeDescription: TypeDescription, spellingInstanceAs instanceType: TypeDescription) -> TypeDescription {
-			if case let .optional(wrappedType) = typeDescription {
-				.optional(Self.typeDescription(wrappedType, spellingInstanceAs: instanceType))
-			} else if case let .simple(name, generics) = typeDescription,
-			          let lazilyInstantiatedInstanceType = typeDescription.lazilyInstantiatedInstanceType,
-			          !lazilyInstantiatedInstanceType.isOptional
-			{
-				.simple(name: name, generics: [instanceType] + generics.dropFirst())
-			} else {
-				instanceType
-			}
-		}
+		/// The most explicit spelling of each dependency the mock's tree receives.
+		private let treeSpellings: ValueSpellings
 	}
 
 	/// What a mock root binds at its body's top level, beside the mocked type's own aliases and sites of holes.
@@ -8282,11 +8266,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			passedByPublicMockCalls: passedByPublicMockCalls,
 			mockedType: instantiable,
 		)
-		// Each in the mocked type's own spelling where it receives the dependency, which the flat parameters and the
-		// `onlyIfAvailable` overrides and parameters declare. A deliberate gap, as in
-		// `DependencyTreeGenerator.createMockRootScopeGenerator`: where two receivers in the tree spell a dependency the mocked
-		// type does not receive apart, the mocked type declares no spelling to prefer, and the mock takes one of theirs.
-		let receivedProperties = MockedTypeSpellings(of: instantiable).spellings(of: receivedProperties.subtracting(receivedOnlyByPublicMockCallsLeftOut))
+		// Each in the mocked type's own spelling where it receives the dependency, and otherwise in the most explicit of its
+		// receivers' spellings in the tree, which the flat parameters and the `onlyIfAvailable` overrides and parameters declare.
+		let receivedProperties = MockedTypeSpellings(of: instantiable, treeReceivedProperties: receivedProperties).spellings(of: receivedProperties.subtracting(receivedOnlyByPublicMockCallsLeftOut))
 		let onlyIfAvailableUnwrappedReceivedProperties = receivedOnlyByPublicMockCalls.isEmpty
 			? onlyIfAvailableUnwrappedReceivedProperties
 			: onlyIfAvailableUnwrappedReceivedProperties.filter { property in
@@ -9442,8 +9424,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// name (`receivedBindingNamesPassedByName(to:flatParameterDisambiguationMap:lazilyInstantiatedBindingNames:)`).
 	///
 	/// A deliberate gap beside `MockedTypeSpellings`, as in `MockParameterNode.init`: each binding is spelled as the
-	/// receiving type declares the dependency, so a protocol it spells without `any`, which the mocked type spells with it,
-	/// warns here in a module that enables the `ExistentialAny` upcoming feature.
+	/// receiving type declares the dependency, so a protocol it spells without `any`, which the mocked type or another
+	/// receiver spells with it, warns here in a module that enables the `ExistentialAny` upcoming feature.
 	fileprivate static func emitReceiverBindings(
 		for dependencies: [Dependency],
 		unavailableProperties: Set<Property>,
@@ -9904,12 +9886,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// a function spelled as a name, such as an erased instantiator's `Builder`, is handed `@escaping` where the called
 			// mock takes it so (`PublicMockCall.typesDeclaredEscaping`).
 			let builderTypesDeclaredEscaping = publicMockCall?.typesDeclaredEscaping ?? []
-			// A deliberate gap beside `MockedTypeSpellings`, which spells what the mock root binds as the mocked type does:
-			// the closure takes each argument as the initializer declares it, so a protocol the type spells without `any`,
-			// which the mocked type spells with it, warns here in a module that enables the `ExistentialAny` upcoming
-			// feature. The argument reads whichever declaration of its label is nearest above the node, which a type between
-			// the node and the mock root can declare in a spelling of its own, and which the node is not told. The bindings of
-			// the arguments in the type's builder function share the gap (`emitReceiverBindings`).
+			// A deliberate gap beside `MockedTypeSpellings`, which spells what the mock root binds as the mocked type does, or
+			// as the most explicit of the tree's receivers does: the closure takes each argument as the initializer declares
+			// it, so a protocol the type spells without `any`, which the mocked type or another receiver spells with it, warns
+			// here in a module that enables the `ExistentialAny` upcoming feature. The argument reads whichever declaration of
+			// its label is nearest above the node, which a type between the node and the mock root can declare in a spelling of
+			// its own, and which the node is not told. The bindings of the arguments in the type's builder function share the
+			// gap (`emitReceiverBindings`).
 			builderParameterTypes = callSiteArguments.map { argument in
 				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription).asFunctionParameter(amongTypesDeclaredEscaping: builderTypesDeclaredEscaping).implicitlyUnwrappedOptionalSpelledAsOptional
 			}
