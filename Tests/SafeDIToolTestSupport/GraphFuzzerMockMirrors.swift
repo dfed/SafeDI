@@ -1413,7 +1413,8 @@ extension GraphFuzzerMockMirrorModel {
 	/// promoted dependency's tree, every receive of a label back to a type that declares it reads one declaration, so a
 	/// required receive there – above the receive only if available, on its type, or below it – pins that declaration to
 	/// a form, and a receive only if available that reads no form one declaration provides together with it gets `nil`.
-	/// A property is listed when its every receive there is pinned, each receive judged by its type, as the mock judges it.
+	/// A property is listed when its every receive there is pinned, each receive judged in its place, as the mock judges
+	/// it: a property some place reads keeps its override.
 	private func propertiesEveryReceiveOfWhichIsPassedNil(of mockRoot: MockRoot, mockedTypeName: String) -> Set<GraphFuzzerMirrorProperty> {
 		/// A receive of a dependency of a type, from above it.
 		struct Receive {
@@ -1485,7 +1486,7 @@ extension GraphFuzzerMockMirrorModel {
 			let declaredAbove: Set<String>
 		}
 		var pinned = Set<GraphFuzzerMirrorProperty>()
-		// The properties some receive reads: one that a visit of its type finds unpinned is read wherever its type is built.
+		// The properties some visit finds unpinned, which the mock offers an override for the places that read them.
 		var read = Set<GraphFuzzerMirrorProperty>()
 		let treeTypeNames = [mockedTypeName] + mockRoot.promotedChildren.compactMap { child -> String? in
 			guard case let .instantiated(_, scopeTypeName, _) = child else { return nil }
@@ -1676,6 +1677,14 @@ struct GraphFuzzerValueOraclePlan {
 			}
 		}
 		self.handWrittenMocksReturningAdditionalTypes = handWrittenMocksReturningAdditionalTypes
+		let pinnedScreenName = "\(fixture.typeNamePrefix)PinScreen"
+		pinnedPlacePair = fixture.swiftFileContent.contains { content in GraphFuzzerSourceLine.lines(of: content).contains { $0.declaredTypeName == pinnedScreenName } }
+			? DifferentialValueProbePair(
+				name: "\(pinnedScreenName).mock() against production",
+				featureExpression: "\(pinnedScreenName).mock()",
+				knownRightExpression: "\(fixture.typeNamePrefix)\(Self.pinnedPlaceRootName)().pinHost.pinMiddle.pinScreen",
+			)
+			: nil
 	}
 
 	let fixture: GraphFuzzerFixture
@@ -1709,6 +1718,17 @@ struct GraphFuzzerValueOraclePlan {
 	/// property of the type the mock returns is built with it (`mockReturnTypeIsCompatible`), so the builder of its
 	/// configuration takes the mock's parameters.
 	let handWrittenMocksReturningAdditionalTypes: [String: GraphFuzzerMockMirrorModel.HandWrittenMock]
+	/// In a graph that draws a type built twice with differing pins (`addingTypeBuiltTwiceWithDifferingPins`), `PinScreen`'s
+	/// mock against the `PinScreen` production builds in `PinHost`'s tree, which `ZPinRoot`, a root only the value-oracle
+	/// fixture declares, instantiates: the mock binds two forms of `pinToken`, which no mirror declares
+	/// (`GraphFuzzerMirrorSkip.twoFormsOfOneLabel`), and must pass `nil` to the one `PinLeaf` a required receive pins, as
+	/// production does, and the other the `PinToken` it builds. `nil` in every other graph.
+	let pinnedPlacePair: DifferentialValueProbePair?
+
+	/// The name, after the graph's prefix, of the root that builds `PinHost` in the value-oracle fixture of a graph with
+	/// a `pinnedPlacePair`. It is no root of the graph, whose mock the value oracle would make: a root's mock rejects
+	/// `PinHost`'s tree by design. It sorts after every type name of the graph, as a mirror's does.
+	static let pinnedPlaceRootName = "ZPinRoot"
 
 	/// The value-oracle fixture: `fixture`, or the same graph drawn storing every parameter, with `generateMock: true`
 	/// on every root and the mirrors' files after the graph's own, and, in the fixture the comparator compiles, the file
@@ -1721,19 +1741,44 @@ struct GraphFuzzerValueOraclePlan {
 			? DifferentialValueCreationStamp.property(counterNamed: counterName)
 			: nil
 		let conformance = Self.mirrorConformance(of: fixture)
-		return GraphFuzzerFixture(
-			seed: fixture.seed,
-			swiftFileContent: base.swiftFileContent.map { $0.replacingOccurrences(of: "@Instantiable(isRoot: true)\n", with: "@Instantiable(isRoot: true, generateMock: true)\n") }
-				+ mirrors.map { $0.source(conformance: conformance, stamp: stamp) }
-				+ (storingEveryParameter ? [GraphFuzzerOverrideSentinel.source(typeNamePrefix: fixture.typeNamePrefix)] : []),
-		)
+		var swiftFileContent = base.swiftFileContent.map { $0.replacingOccurrences(of: "@Instantiable(isRoot: true)\n", with: "@Instantiable(isRoot: true, generateMock: true)\n") }
+		swiftFileContent += mirrors.map { $0.source(conformance: conformance, stamp: stamp) }
+		if pinnedPlacePair != nil {
+			swiftFileContent.append(Self.pinnedPlaceRootSource(typeNamePrefix: fixture.typeNamePrefix, conformance: conformance, stamp: stamp))
+		}
+		if storingEveryParameter {
+			swiftFileContent.append(GraphFuzzerOverrideSentinel.source(typeNamePrefix: fixture.typeNamePrefix))
+		}
+		return GraphFuzzerFixture(seed: fixture.seed, swiftFileContent: swiftFileContent)
+	}
+
+	/// The source of the root that builds `PinHost` for `pinnedPlacePair`, which conforms to what the mirrors conform to.
+	private static func pinnedPlaceRootSource(typeNamePrefix: String, conformance: String, stamp: String?) -> String {
+		var lines = ["@Instantiable(isRoot: true)", "public final class \(typeNamePrefix)\(pinnedPlaceRootName): Instantiable\(conformance) {"]
+		if let stamp {
+			lines += ["\t\(stamp)", ""]
+		}
+		lines += [
+			"\tpublic init(pinHost: \(typeNamePrefix)PinHost) {",
+			"\t\tself.pinHost = pinHost",
+			"\t}",
+			"",
+			"\t@Instantiated let pinHost: \(typeNamePrefix)PinHost",
+			"}",
+		]
+		return lines.joined(separator: "\n") + "\n"
 	}
 
 	/// The pairs the oracle compares: each root's mock with its production build, then each mirrored mock with its
-	/// mirror's value. Never a mirror itself, which builds the mocked type's dependencies the mocked type does not hold.
+	/// mirror's value, then `pinnedPlacePair`. Never a mirror itself, which builds the mocked type's dependencies the
+	/// mocked type does not hold.
 	var probePairs: [DifferentialValueProbePair] {
-		rootTypeNames.map { DifferentialValueProbePair(name: "\($0).mock()", featureExpression: "\($0).mock()", knownRightExpression: "\($0)()") }
-			+ mirrors.map { DifferentialValueProbePair(name: "\($0.mockedTypeName).mock()", featureExpression: $0.featureExpression, knownRightExpression: $0.knownRightExpression) }
+		var pairs = rootTypeNames.map { DifferentialValueProbePair(name: "\($0).mock()", featureExpression: "\($0).mock()", knownRightExpression: "\($0)()") }
+		pairs += mirrors.map { DifferentialValueProbePair(name: "\($0.mockedTypeName).mock()", featureExpression: $0.featureExpression, knownRightExpression: $0.knownRightExpression) }
+		if let pinnedPlacePair {
+			pairs.append(pinnedPlacePair)
+		}
+		return pairs
 	}
 
 	/// The shapes the compared pairs show, each with the number of pairs that show it.
@@ -2017,6 +2062,9 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 	var overridePairCount = 0
 	var overridePairsSum = GraphFuzzerSeedSetSum()
 	var overrideFieldKindCounts = [GraphFuzzerOverrideFieldKind: Int]()
+	/// The compared pairs of a mock of a type built twice with differing pins against production's build of it
+	/// (`GraphFuzzerValueOraclePlan.pinnedPlacePair`).
+	var pinnedPlacePairCount = 0
 
 	/// Counts the skips and the drawn mock files R6 normalizes of a graph the value oracle inspected and, when its
 	/// value-oracle graph was compared, its pairs and their shapes.
@@ -2047,6 +2095,9 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 			overridePairsSum.add(member: "\(plan.fixture.seed):\(probe.mockedTypeName):\(probe.label)")
 			overrideFieldKindCounts[probe.fieldKind, default: 0] += 1
 		}
+		if plan.pinnedPlacePair != nil {
+			pinnedPlacePairCount += 1
+		}
 	}
 
 	/// The counts as one report field, `key=value` separated by commas, every key present: what
@@ -2066,6 +2117,7 @@ struct GraphFuzzerValueOracleCounts: Equatable {
 		fields.append("overridePairs=\(overridePairCount)")
 		fields.append("overridePairsSum=0x\(String(overridePairsSum.value, radix: 16, uppercase: true))")
 		fields += GraphFuzzerOverrideFieldKind.allCases.map { "override.\($0.rawValue)=\(overrideFieldKindCounts[$0, default: 0])" }
+		fields.append("pinnedPlacePairs=\(pinnedPlacePairCount)")
 		return fields.joined(separator: ",")
 	}
 

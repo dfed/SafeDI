@@ -679,13 +679,10 @@ private struct ScopeGeneratorUnderConstruction {
 			scope.createdBinding(of: property) ?? nearestDeclarations.binding(of: property)
 		}
 		// A receive a mock passes `nil` reads nothing above this scope, though the mock root binds a form of it, since
-		// production always passes it `nil` (see `NearestDeclarations.binding(_:passingNilTo:)`). The receives are keyed
-		// by type, not by place: a deliberate gap, since a type the mock's trees build twice, pinned in one place and not
-		// in the other, is listed in neither and keeps its override in both (see
-		// `DependencyTreeGenerator.receivesPassedNilInMockTree`).
+		// production always passes it `nil` in this place (see `NearestDeclarations.binding(_:passingNilTo:)`).
 		let concreteType = scope.instantiable.concreteInstantiable
-		func isPassedNilByMock(_ property: Property) -> Bool {
-			nearestDeclarations.passesNil(to: property, receivedBy: concreteType) && scope.createdBinding(of: property) == nil
+		func isPassedNilByMock(_ property: Property, receivedBy dependency: Dependency) -> Bool {
+			nearestDeclarations.passesNil(to: property, receivedBy: dependency, on: concreteType) && scope.createdBinding(of: property) == nil
 		}
 		var unavailableOptionalProperties = Set<Property>()
 		var receivesPassedNil = Set<Property>()
@@ -696,7 +693,7 @@ private struct ScopeGeneratorUnderConstruction {
 				break
 			case let .received(onlyIfAvailable):
 				guard onlyIfAvailable else { break }
-				if isPassedNilByMock(dependency.property) {
+				if isPassedNilByMock(dependency.property, receivedBy: dependency) {
 					receivesPassedNil.insert(dependency.property)
 					unavailableOptionalProperties.insert(dependency.property)
 				} else if binding(of: dependency.property) == nil {
@@ -706,7 +703,7 @@ private struct ScopeGeneratorUnderConstruction {
 				// An `onlyIfAvailable` alias is always declared: bound to its fulfilling property where a form of it is
 				// available, and to `nil` otherwise. The type declaring it is passed the alias either way.
 				guard onlyIfAvailable else { break }
-				if isPassedNilByMock(fulfillingProperty) {
+				if isPassedNilByMock(fulfillingProperty, receivedBy: dependency) {
 					receivesPassedNil.insert(fulfillingProperty)
 					unavailableOptionalProperties.insert(fulfillingProperty)
 				} else if let aliasBinding = binding(of: fulfillingProperty) {
@@ -756,6 +753,17 @@ private struct ScopeGeneratorUnderConstruction {
 				childNearestDeclarations.replaceLabels(of: declaredPropertyForms)
 			}
 		}
+		// In a mock, a required receive of this scope's type pins the declaration of its label the scopes beneath read, back
+		// to a declaration of the label. A mock root's own receives pin nothing in the trees of the dependencies it
+		// promotes, which production builds above the mocked type.
+		var promotedChildNearestDeclarations: NearestDeclarations?
+		if !isPropertyCycle, childNearestDeclarations.judgesPlacesPinnedFromAbove {
+			if property == nil {
+				promotedChildNearestDeclarations = childNearestDeclarations.sharingDeclarations()
+			}
+			childNearestDeclarations.recordRequiredReceives(of: scope)
+		}
+		self.promotedChildNearestDeclarations = promotedChildNearestDeclarations
 		// Each scope beneath shares these, rather than copying them.
 		self.childNearestDeclarations = childNearestDeclarations.sharingDeclarations()
 		// The functions enclosing the scopes this scope builds that lazy cycles close on, by the property each builds:
@@ -1340,7 +1348,7 @@ private struct ScopeGeneratorUnderConstruction {
 			propertyStack: childPropertyStack,
 			concreteTypeStack: childConcreteTypeStack,
 			fillPathStackCount: fillPathStackCount,
-			nearestDeclarations: childNearestDeclarations,
+			nearestDeclarations: promotedChildNearestDeclarations.flatMap { childNearestDeclarations.isPromotedByMockRoot(property) ? $0 : nil } ?? childNearestDeclarations,
 			lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 			seamRoot: nil,
 			seamHoles: seamHoles,
@@ -1980,6 +1988,9 @@ private struct ScopeGeneratorUnderConstruction {
 	/// The nearest declaration of each label, as the scopes this scope builds see it before they are built: those
 	/// enclosing this scope, with this scope's own declarations in place of every other of their labels.
 	private let childNearestDeclarations: NearestDeclarations
+	/// At a mock root whose places a required receive above may pin, `childNearestDeclarations` without the mocked type's
+	/// own required receives, which the trees of the dependencies the root promotes see; `nil` elsewhere.
+	private let promotedChildNearestDeclarations: NearestDeclarations?
 	/// The properties this scope's builder function rebinds as a member of a loop of builders (see
 	/// `ScopeGenerator.ReceivedBuilderLoops`), which the pass before found.
 	private let reboundProperties: Set<Property>
@@ -2461,6 +2472,23 @@ struct SeamHoles {
 
 // MARK: - NearestDeclarations
 
+/// The receives only if available in a mock's trees that production passes `nil`, since a required receive of their
+/// label pins the declaration they read to a form they cannot read, as
+/// `DependencyTreeGenerator.receivesPassedNilInMockTree` finds them.
+struct MockReceivesPassedNil: Sendable {
+	/// By label and then by the concrete type that declares each, the receives a required receive on their own type, or
+	/// beneath it, pins: production passes them `nil` wherever their type is built. Each is the property it receives, an
+	/// alias's fulfilling property.
+	var pinnedWhereverBuilt = [String: [TypeDescription: Set<Property>]]()
+	/// The labels of which a required receive above some receive only if available pins it. Production passes such a
+	/// receive `nil` only in the places beneath a required receive that pins it, so the mock judges each place against
+	/// the required receives above it (`NearestDeclarations.recordRequiredReceives(of:)`).
+	var labelsPinnedFromAbove = Set<String>()
+	/// Where `labelsPinnedFromAbove` holds any label, the properties of the children the mock root promotes, whose trees
+	/// production builds above the mocked type, so that the mocked type's own required receives pin nothing in them.
+	var promotedProperties = Set<Property>()
+}
+
 /// The nearest declaration of a label on the path from a tree's root to a scope, as `Scope.createScopeGenerator` judges
 /// what a scope receives only if available against it: each form the declaration provides, with the declared property
 /// that binds it, and the forms of the label being built between that declaration and the scope.
@@ -2472,10 +2500,17 @@ struct NearestDeclaration: Sendable {
 	/// The forms of the label being built between the declaration and the scope: a receive of one of them reads a
 	/// declaration that is not built yet.
 	var formsBeingBuilt = Set<Property>()
-	/// The receives of the label only if available that read none of the declaration's forms, by the concrete type that
-	/// declares each: the property each receives (an alias's fulfilling property). Only a mock root's bindings hold any
-	/// (see `NearestDeclarations.binding(_:passingNilTo:)`), so a declaration nearer the receive reads as production's.
+	/// The receives of the label only if available that read none of the declaration's forms wherever their type is
+	/// built, by the concrete type that declares each: the property each receives (an alias's fulfilling property). Only
+	/// a mock root's bindings hold any (see `NearestDeclarations.binding(_:passingNilTo:)`), so a declaration nearer the
+	/// receive reads as production's.
 	var receivesPassedNil = [TypeDescription: Set<Property>]()
+	/// Whether a required receive of the label above a receive of it only if available can pin this declaration to a
+	/// form the receive cannot read, in some place of the receive: only a mock root's bindings do.
+	var judgesPlacesPinnedFromAbove = false
+	/// What each required receive of the label between this declaration and the scope reads, where
+	/// `judgesPlacesPinnedFromAbove`: each pins this declaration to its form (`NearestDeclarations.recordRequiredReceives(of:)`).
+	var propertiesReadByRequiredReceivesAbove = [Set<Property>]()
 	/// Whether a mock root binds the declaration, from a value its tree receives, which it can name apart from its label
 	/// (`NearestDeclarations.binding(_:passingNilTo:)`), rather than a scope of the tree: false where the mock binds it as
 	/// the root's one declaration of the label, under the label (`NearestDeclarations.markBoundUnderLabelByRoot`).
@@ -2513,6 +2548,8 @@ struct NearestDeclarations: Sendable {
 		var sharing = Self()
 		sharing.enclosingLayer = Layer(declarations: changedDeclarations, enclosingLayer: enclosingLayer)
 		sharing.holdsReceivesPassedNil = holdsReceivesPassedNil
+		sharing.judgesPlacesPinnedFromAbove = judgesPlacesPinnedFromAbove
+		sharing.mockRootPromotedProperties = mockRootPromotedProperties
 		return sharing
 	}
 
@@ -2550,6 +2587,12 @@ struct NearestDeclarations: Sendable {
 	/// Whether a declaration enclosing the whole tree holds `NearestDeclaration.receivesPassedNil`, which only a mock
 	/// root's can, so that no other tree looks for one.
 	private var holdsReceivesPassedNil = false
+	/// Whether a declaration enclosing the whole tree has `NearestDeclaration.judgesPlacesPinnedFromAbove`, which only a
+	/// mock root's can, so that no other tree records its required receives.
+	private(set) var judgesPlacesPinnedFromAbove = false
+	/// The properties of the children a mock root promotes, where `judgesPlacesPinnedFromAbove` (see
+	/// `MockReceivesPassedNil.promotedProperties`).
+	private var mockRootPromotedProperties = Set<Property>()
 
 	/// Makes `nearestDeclaration` the nearest declaration of `label`.
 	private mutating func set(_ nearestDeclaration: NearestDeclaration, for label: String) {
@@ -2560,32 +2603,63 @@ struct NearestDeclarations: Sendable {
 extension NearestDeclarations {
 	/// The declarations a mock root's tree is enclosed by: each of `boundProperties`, the received properties the mock
 	/// binds, in `Property` order, each form bound to the first property that provides it. The mock binds each form once
-	/// and names every binding apart, so no binding hides another. A receive in `receivesPassedNil`, by label and then by
-	/// the concrete type that declares it, reads none of them: production always passes it `nil`, since another receive
-	/// of its label pins the one declaration both read to a form it cannot read (see
-	/// `DependencyTreeGenerator.receivesPassedNilInMockTree`).
+	/// and names every binding apart, so no binding hides another. A receive `receivesPassedNil` lists reads none of them
+	/// in the places it says: production always passes it `nil` there, since another receive of its label pins the one
+	/// declaration both read to a form it cannot read (see `DependencyTreeGenerator.receivesPassedNilInMockTree`).
 	static func binding(
 		_ boundProperties: some Collection<Property>,
-		passingNilTo receivesPassedNil: [String: [TypeDescription: Set<Property>]] = [:],
+		passingNilTo receivesPassedNil: MockReceivesPassedNil = MockReceivesPassedNil(),
 	) -> Self {
 		var nearestDeclarations = Self()
 		for boundProperty in boundProperties.sorted() {
 			nearestDeclarations.join(boundProperty, providing: CycleParameter.forms(providedBy: boundProperty))
 			nearestDeclarations.markBoundByMockRoot(boundProperty.label)
 		}
-		for (label, receivesPassedNilByType) in receivesPassedNil {
+		for (label, receivesPassedNilByType) in receivesPassedNil.pinnedWhereverBuilt {
 			var nearestDeclaration = nearestDeclarations[label] ?? NearestDeclaration()
 			nearestDeclaration.receivesPassedNil = receivesPassedNilByType
 			nearestDeclarations.set(nearestDeclaration, for: label)
 			nearestDeclarations.holdsReceivesPassedNil = true
 		}
+		for label in receivesPassedNil.labelsPinnedFromAbove {
+			var nearestDeclaration = nearestDeclarations[label] ?? NearestDeclaration()
+			nearestDeclaration.judgesPlacesPinnedFromAbove = true
+			nearestDeclarations.set(nearestDeclaration, for: label)
+			nearestDeclarations.holdsReceivesPassedNil = true
+			nearestDeclarations.judgesPlacesPinnedFromAbove = true
+		}
+		nearestDeclarations.mockRootPromotedProperties = receivesPassedNil.promotedProperties
 		return nearestDeclarations.sharingDeclarations()
 	}
 
-	/// Whether a receive of `property` only if available on `receivingType` reads none of the forms the nearest
-	/// declaration of its label binds, which a mock passes `nil` as production does.
-	func passesNil(to property: Property, receivedBy receivingType: TypeDescription) -> Bool {
-		holdsReceivesPassedNil && self[property.label]?.receivesPassedNil[receivingType]?.contains(property) == true
+	/// Whether a receive of `property` only if available, by `dependency` on `receivingType`, reads none of the forms
+	/// the nearest declaration of its label binds in this place, which a mock passes `nil` as production does: wherever
+	/// its type is built, or beneath a required receive of its label that pins the declaration to a form it cannot read.
+	func passesNil(to property: Property, receivedBy dependency: Dependency, on receivingType: TypeDescription) -> Bool {
+		guard holdsReceivesPassedNil, let nearestDeclaration = self[property.label] else { return false }
+		return nearestDeclaration.receivesPassedNil[receivingType]?.contains(property) == true
+			|| nearestDeclaration.propertiesReadByRequiredReceivesAbove.contains {
+				DependencyTreeGenerator.requiredReceive(reading: $0, pinsReceiveOf: dependency)
+			}
+	}
+
+	/// Records what each required receive of the type of `scope` reads, of a label whose nearest declaration
+	/// `judgesPlacesPinnedFromAbove`, for the scopes beneath it: each pins that declaration to its form.
+	mutating func recordRequiredReceives(of scope: Scope) {
+		for (label, propertiesRead) in DependencyTreeGenerator.propertiesReadByRequiredReceivesFromAbove(of: scope) {
+			if var nearestDeclaration = self[label],
+			   nearestDeclaration.judgesPlacesPinnedFromAbove,
+			   !nearestDeclaration.propertiesReadByRequiredReceivesAbove.contains(propertiesRead)
+			{
+				nearestDeclaration.propertiesReadByRequiredReceivesAbove.append(propertiesRead)
+				set(nearestDeclaration, for: label)
+			}
+		}
+	}
+
+	/// Whether `property` is that of a child a mock root promotes, whose tree production builds above the mocked type.
+	func isPromotedByMockRoot(_ property: Property) -> Bool {
+		mockRootPromotedProperties.contains(property)
 	}
 
 	/// The binding a receive of `property` only if available reads, or `nil` when the property is unavailable: the

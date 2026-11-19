@@ -6765,7 +6765,7 @@ public actor DependencyTreeGenerator {
 		}
 		let labelsBoundInSeveralForms = Set(formsByLabel.lazy.filter { $0.value.count > 1 }.map(\.key))
 		let receivesPassedNil = labelsBoundInSeveralForms.isEmpty
-			? [:]
+			? MockReceivesPassedNil()
 			: try Self.receivesPassedNilInMockTree(
 				labels: labelsBoundInSeveralForms,
 				of: instantiable,
@@ -7337,18 +7337,22 @@ public actor DependencyTreeGenerator {
 		return propertiesRead
 	}
 
-	/// The receives only if available that a mock passes `nil`, as production does wherever its trees are built, by
-	/// label and then by the concrete type that declares each: the property each receives, an alias's fulfilling
-	/// property. In production every receive of a label in the mocked type's own tree, or in a promoted dependency's
-	/// tree, back to a type in it that declares the label, resolves to the one declaration of the label above that tree –
-	/// above the mocked type for its own tree, and above a promoted dependency's tree, which is built above the mocked
-	/// type. A required receive of one of `labels` there, above a receive only if available, on its type, or beneath it,
-	/// pins that declaration to its form, so the receive only if available, which reads no form one declaration provides
-	/// together with it, is passed `nil` wherever the tree is built. The mock root binds the other form for the receivers
-	/// that read it, so the mock passes the receive `nil` itself, and offers it nothing. The mock keys a receive by the
-	/// type that declares it, so one is listed only where every visit of its type in the trees finds it pinned: a deliberate
-	/// gap, since a type the trees build twice, pinned in one place and not in the other, keeps its override in both, as
-	/// `ScopeGeneratorUnderConstruction` reads the receives by type (see `.claude/rules/mock-root-promotion.md`).
+	/// The receives only if available that a mock passes `nil`, as production does wherever its trees are built. In
+	/// production every receive of a label in the mocked type's own tree, or in a promoted dependency's tree, back to a
+	/// type in it that declares the label, resolves to the one declaration of the label above that tree – above the mocked
+	/// type for its own tree, and above a promoted dependency's tree, which is built above the mocked type. A required
+	/// receive of one of `labels` there, above a receive only if available, on its type, or beneath it, pins that
+	/// declaration to its form, so the receive only if available, which reads no form one declaration provides together
+	/// with it, is passed `nil` wherever the tree is built. The mock root binds the other form for the receivers that read
+	/// it, so the mock passes the receive `nil` itself, and offers it nothing where no other receive reads that form.
+	///
+	/// A required receive on the receiving type, or beneath it, pins the receive wherever the type is built, so the walk
+	/// lists those by the concrete type that declares each (`MockReceivesPassedNil.pinnedWhereverBuilt`). One above it
+	/// pins it only in the places beneath that required receive, so the walk lists only its label
+	/// (`MockReceivesPassedNil.labelsPinnedFromAbove`), and the mock judges each place of a receive of the label against
+	/// the required receives above that place (`NearestDeclarations.recordRequiredReceives(of:)`): a type the trees build
+	/// twice, pinned in one place and not in the other, is passed `nil` in the one and keeps what the mock binds in the
+	/// other, as in production.
 	///
 	/// Two required receives of a label that no one declaration provides together pin it to two forms, so production can
 	/// build neither one beneath or beside the other: the walk throws for the first such receive, walking the mocked
@@ -7366,7 +7370,7 @@ public actor DependencyTreeGenerator {
 		of instantiable: Instantiable,
 		scope mockedTypeScope: Scope,
 		promotedChildren: ArraySlice<Scope.PropertyToGenerate>,
-	) throws -> [String: [TypeDescription: Set<Property>]] {
+	) throws -> MockReceivesPassedNil {
 		var walkedScopes = Set<HiddenReceivedPropertyScopeVisit>()
 		var scopesToWalk = [ScopeToWalkForHiddenReceivedProperty]()
 		// The mocked type's own tree is walked first: it is what the mock builds above its promoted children's trees.
@@ -7392,9 +7396,7 @@ public actor DependencyTreeGenerator {
 				declaredLabels: [],
 			))
 		}
-		// The receives only if available each visit finds pinned, and those a visit finds unpinned, by label and type.
-		var receivesFoundPassedNil = [String: [TypeDescription: Set<Property>]]()
-		var receivesFoundRead = [String: [TypeDescription: Set<Property>]]()
+		var receivesPassedNil = MockReceivesPassedNil()
 		// The scope walked next is the last one on the stack, so the first goes last.
 		scopesToWalk.reverse()
 		while let scopeToWalk = scopesToWalk.popLast() {
@@ -7449,20 +7451,18 @@ public actor DependencyTreeGenerator {
 					func pins(_ requiredReceivePropertiesRead: Set<Property>) -> Bool {
 						!Self.oneDeclarationFulfills(propertiesRead, and: requiredReceivePropertiesRead)
 					}
-					let isPassedNil: Bool
-					if scopeToWalk.requiredReceivesAboveByLabel[label, default: []].contains(where: { pins($0.propertiesRead) })
-						|| receivesOfLabel.contains(where: { $0.isRequired && pins($0.propertiesRead) })
-					{
-						isPassedNil = true
+					let isPinnedWhereverBuilt: Bool
+					if receivesOfLabel.contains(where: { $0.isRequired && pins($0.propertiesRead) }) {
+						isPinnedWhereverBuilt = true
 					} else {
 						let propertiesReadBeneath = requiredPropertiesReadBeneath ?? Self.propertiesReadByRequiredReceives(of: label, beneath: scope)
 						requiredPropertiesReadBeneath = propertiesReadBeneath
-						isPassedNil = propertiesReadBeneath.contains(where: pins)
+						isPinnedWhereverBuilt = propertiesReadBeneath.contains(where: pins)
 					}
-					if isPassedNil {
-						receivesFoundPassedNil[label, default: [:]][scopeType, default: []].insert(receive.property)
-					} else {
-						receivesFoundRead[label, default: [:]][scopeType, default: []].insert(receive.property)
+					if isPinnedWhereverBuilt {
+						receivesPassedNil.pinnedWhereverBuilt[label, default: [:]][scopeType, default: []].insert(receive.property)
+					} else if scopeToWalk.requiredReceivesAboveByLabel[label, default: []].contains(where: { pins($0.propertiesRead) }) {
+						receivesPassedNil.labelsPinnedFromAbove.insert(label)
 					}
 				}
 			}
@@ -7503,17 +7503,30 @@ public actor DependencyTreeGenerator {
 			// The scope walked next is the last one on the stack, so the first child goes last.
 			scopesToWalk[firstChildIndex...].reverse()
 		}
-		// A receive some visit finds unpinned keeps what the mock binds for it everywhere.
-		var receivesPassedNil = [String: [TypeDescription: Set<Property>]]()
-		for (label, propertiesByType) in receivesFoundPassedNil {
-			for (type, properties) in propertiesByType {
-				let propertiesPassedNil = properties.subtracting(receivesFoundRead[label]?[type] ?? [])
-				if !propertiesPassedNil.isEmpty {
-					receivesPassedNil[label, default: [:]][type] = propertiesPassedNil
-				}
+		if !receivesPassedNil.labelsPinnedFromAbove.isEmpty {
+			// The mocked type's own receives are above its own children, not above the children it promotes, whose trees
+			// production builds above it.
+			for case let .instantiated(promotedProperty, _, _) in promotedChildren {
+				receivesPassedNil.promotedProperties.insert(promotedProperty)
 			}
 		}
 		return receivesPassedNil
+	}
+
+	/// The properties each required receive of the type of `scope` reads from above it, by label, as
+	/// `receivesPassedNilInMockTree` walks them: each pins the declaration of its label that every receive of it beneath
+	/// the type reads, back to a type that declares the label.
+	static func propertiesReadByRequiredReceivesFromAbove(of scope: Scope) -> [(label: String, propertiesRead: Set<Property>)] {
+		declaredLabelsAndReceivesFromAbove(of: scope).receives.compactMap { receive in
+			receive.isRequired ? (receive.property.label, receive.propertiesRead) : nil
+		}
+	}
+
+	/// Whether a required receive that reads `requiredReceivePropertiesRead` pins the declaration a receive only if
+	/// available of `dependency` reads to a form it cannot read, so that production passes it `nil`, as
+	/// `receivesPassedNilInMockTree` judges it.
+	static func requiredReceive(reading requiredReceivePropertiesRead: Set<Property>, pinsReceiveOf dependency: Dependency) -> Bool {
+		!oneDeclarationFulfills(propertiesRead(byReceiveOf: dependency), and: requiredReceivePropertiesRead)
 	}
 
 	/// The property a receive of `dependency` reads from above the type that declares it, which declares
