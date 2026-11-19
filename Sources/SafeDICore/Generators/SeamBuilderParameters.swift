@@ -1007,7 +1007,14 @@ extension DependencyTreeGenerator {
 					sendableDepth += 1
 					sendableFunctions.append((filledHole.property, .other))
 				}
-				for field in frame.generator.fillFields where frame.generator.fillStructBoundLabels.contains(field.property.label) && !uncarriedLabels.contains(field.property.label) {
+				for boundField in frame.generator.fillFields where frame.generator.fillStructBoundLabels.contains(boundField.property.label) && !uncarriedLabels.contains(boundField.property.label) {
+					// A label some route hands the fill as a memo is declared, for the places inside the fill, as the place's own field of
+					// it, the declaration inline reads there, such as a wrapper a type further out declares, whose levels hand it on to a
+					// fill of such a place that reads that wrapper alone (`ScopeGenerator.fillLabelsReadOnlyAsPlaceField`); the memo
+					// is the value the route hands this fill.
+					let field = frame.generator.fillLabelsHandedAsMemo.contains(boundField.property.label)
+						? frame.generator.fillCaseHoles.lazy.flatMap(\.fields).first { $0.property.label == boundField.property.label } ?? boundField
+						: boundField
 					// A parameter of the seam whose struct carries the field hides a declaration of another form above the call, which
 					// a seam on the route to the place that passes it up, or a scope above the call, binds: kept apart, while the field
 					// stays the nearest declaration of its label (`SeamSignature.Hole.DeclarationHiddenByField`).

@@ -30,6 +30,9 @@ import Testing
 /// Where the filling module is a seam's, `Top`'s, and the fill's tree reads the value and its wrapper, the memo of `Inner`'s
 /// deferred parameter that the fill binds serves the wrapper's read too, as validation lets it: `Top` takes no parameter
 /// for it, so a caller of `Top` passes nothing it does not have.
+///
+/// Where the place is one `Outer` passes up from inside its own fill of `Inner`'s place, and the fill reads the wrapper
+/// alone, the levels hand the fill `Outer`'s wrapper, which `Outer`'s level carries: the declaration inline reads.
 struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 	// MARK: Initialization
 
@@ -1015,6 +1018,523 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		}
 	}
 
+	// MARK: A place passed up from inside a fill, whose fill reads a carried level's wrapper alone
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_levelFunctionsHandCarriedWrapper_whenFillReadsSendableWrapperAlone() async throws {
+		let modules = Self.carriedWrapperModules()
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Session)
+		import Session
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_outer() -> Outer {
+		            _ = Outer.__safeDI_Outer_0063408F9815A8F7.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		                .init(inner_serviceBuilder: { values in __safeDI_gizmoBuilder_Outer_Inner(token: values.token) })
+		            }
+		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
+		                .init(gizmo: { _ in
+		                    let gizmo: any Gizmo = GizmoImpl(token: token)
+		                    return gizmo
+		                })
+		            }
+		            func __safeDI_gizmoBuilder_Outer_Inner(token: SendableLazilyInstantiated<Token>) -> Inner.SafeDIScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		                .init(service: { _ in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: token) })
+		            }
+		            return Outer(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Outer())
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(outer: outer)
+		    }
+		}
+		"""])
+		try await expectValues(of: output, modules: modules, equalThoseOf: Self.oneModule(modules), probe: Self.gizmoBesideRootProbe())
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_levelFunctionsHandCarriedWrapper_whenFillReadsPlainWrapperAlone() async throws {
+		let modules = Self.carriedWrapperModules(outerWrapper: "LazilyInstantiated", innerDefersSendable: false)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Session)
+		import Session
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_outer() -> Outer {
+		            _ = Outer.__safeDI_Outer_392DA55AEDC9C293.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		                .init(inner_serviceBuilder: { values in __safeDI_gizmoBuilder_Outer_Inner(token: values.token) })
+		            }
+		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: LazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
+		                .init(gizmo: { _ in
+		                    let gizmo: any Gizmo = GizmoImpl(token: token)
+		                    return gizmo
+		                })
+		            }
+		            func __safeDI_gizmoBuilder_Outer_Inner(token: LazilyInstantiated<Token>) -> Inner.SafeDIScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		                .init(service: { _ in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: token) })
+		            }
+		            return Outer(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Outer())
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(outer: outer)
+		    }
+		}
+		"""])
+		try await expectValues(of: output, modules: modules, equalThoseOf: Self.oneModule(modules), probe: Self.gizmoBesideRootProbe())
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_levelFunctionsHandCarriedWrapper_whenFillReadsSendableWrapperAloneThatInnerSeamDefersPlainly() async throws {
+		let modules = Self.carriedWrapperModules(innerDefersSendable: false)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Session)
+		import Session
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_outer() -> Outer {
+		            _ = Outer.__safeDI_Outer_E6EF6E9EBBE294F5.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		                .init(inner_serviceBuilder: { values in __safeDI_gizmoBuilder_Outer_Inner(token: values.token) })
+		            }
+		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
+		                .init(gizmo: { _ in
+		                    let gizmo: any Gizmo = GizmoImpl(token: token)
+		                    return gizmo
+		                })
+		            }
+		            func __safeDI_gizmoBuilder_Outer_Inner(token: SendableLazilyInstantiated<Token>) -> Inner.SafeDIScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		                .init(service: { _ in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: token) })
+		            }
+		            return Outer(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Outer())
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(outer: outer)
+		    }
+		}
+		"""])
+		try await expectValues(of: output, modules: modules, equalThoseOf: Self.oneModule(modules), probe: Self.gizmoBesideRootProbe())
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_levelFunctionsHandCarriedWrapper_whenFillReadsSendableWrapperAloneOnlyIfAvailable() async throws {
+		let modules = Self.carriedWrapperModules(gizmoReadsOnlyIfAvailable: true)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Session)
+		import Session
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_outer() -> Outer {
+		            _ = Outer.__safeDI_Outer_0063408F9815A8F7.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		                .init(inner_serviceBuilder: { values in __safeDI_gizmoBuilder_Outer_Inner(token: values.token) })
+		            }
+		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
+		                .init(gizmo: { _ in
+		                    let gizmo: any Gizmo = GizmoImpl(token: token)
+		                    return gizmo
+		                })
+		            }
+		            func __safeDI_gizmoBuilder_Outer_Inner(token: SendableLazilyInstantiated<Token>) -> Inner.SafeDIScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		                .init(service: { _ in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: token) })
+		            }
+		            return Outer(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Outer())
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(outer: outer)
+		    }
+		}
+		"""])
+		// No values are compared: where `Outer` builds `GizmoImpl` itself, or in one module, `Inner`'s tree reads `token` in
+		// two forms, which SafeDI rejects, the leniency for an optional wrapper read only if available that
+		// `seam-hole-fills.md` describes.
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_levelFunctionsHandCarriedWrapper_whenFillingSeamsFillReadsSendableWrapperAlone() async throws {
+		// `Hub`, a seam, fills the place, so it takes no parameter for the wrapper its fill reads.
+		let modules = Self.carriedWrapperModules(fillingSeam: true)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Session)
+		import Session
+		#endif
+
+		extension Hub {
+		    /// Code you write and code SafeDI generates can both call this initializer.
+		    public convenience init() {
+		        func __safeDI_outer() -> Outer {
+		            _ = Outer.__safeDI_Outer_0063408F9815A8F7.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		                .init(inner_serviceBuilder: { values in __safeDI_gizmoBuilder_Outer_Inner(token: values.token) })
+		            }
+		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
+		                .init(gizmo: { _ in
+		                    let gizmo: any Gizmo = GizmoImpl(token: token)
+		                    return gizmo
+		                })
+		            }
+		            func __safeDI_gizmoBuilder_Outer_Inner(token: SendableLazilyInstantiated<Token>) -> Inner.SafeDIScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		                .init(service: { _ in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: token) })
+		            }
+		            return Outer(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Outer())
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(outer: outer)
+		    }
+		}
+
+		extension Hub {
+		    public enum __safeDI_Hub_CBF29CE484222325 {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Session)
+		import Session
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_hub() -> Hub {
+		            _ = Hub.__safeDI_Hub_CBF29CE484222325.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Hub()
+		        }
+		        let hub: Hub = __safeDI_hub()
+		        self.init(hub: hub)
+		    }
+		}
+		"""])
+		try await expectValues(of: output, modules: modules, equalThoseOf: Self.oneModule(modules), probe: Self.gizmoBesideRootProbe(path: "root.hub.outer"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_levelFunctionsHandCarriedWrapper_whenSwiftPackagePluginGeneratesFillReadingSendableWrapperAlone() async throws {
+		let modules = Self.carriedWrapperModules()
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .swiftPackagePlugin, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["GizmoImpl+SafeDI.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Session)
+		import Session
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_outer() -> Outer {
+		            _ = Outer.__safeDI_Outer_0063408F9815A8F7.self // If this line does not compile, add the SafeDI plugin to the target that declares Outer.
+		            func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		                .init(inner_serviceBuilder: { values in __safeDI_gizmoBuilder_Outer_Inner(token: values.token) })
+		            }
+		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
+		                .init(gizmo: { _ in
+		                    let gizmo: any Gizmo = GizmoImpl(token: token)
+		                    return gizmo
+		                })
+		            }
+		            func __safeDI_gizmoBuilder_Outer_Inner(token: SendableLazilyInstantiated<Token>) -> Inner.SafeDIScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		                .init(service: { _ in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: token) })
+		            }
+		            return Outer(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Outer())
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(outer: outer)
+		    }
+		}
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_levelFunctionsHandCarriedWrapper_whenFillReadsWrapperAloneOfPlaceSeamPassesUpFromInsideItsFill() async throws {
+		// `Top` fills `Outer`'s place and passes up a place inside its fill, which `App` fills: the place's field of `token` is
+		// `Outer`'s wrapper, which `Outer`'s level carries, though `Top`'s fill takes `Inner`'s memo of it.
+		let modules = Self.deepCarriedWrapperModules()
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Session)
+		import Session
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_top() -> Top {
+		            _ = Top.__safeDI_Top_3AF5DBAAA75936B9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_gizmoBuilder_Top() -> Top.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		                .init(outer_gadgetBuilder: { _ in __safeDI_gizmoBuilder_Top_Outer() })
+		            }
+		            func __safeDI_gizmoBuilder_Top_GadgetImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo> {
+		                .init(gizmo: { _ in
+		                    let gizmo: any Gizmo = GizmoImpl(token: token)
+		                    return gizmo
+		                })
+		            }
+		            func __safeDI_gizmoBuilder_Top_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		                .init(inner_serviceBuilder: { values in __safeDI_gadgetBuilder_Outer_Inner(token: values.token) })
+		            }
+		            func __safeDI_gadgetBuilder_Outer_Inner(token: SendableLazilyInstantiated<Token>) -> Inner.SafeDIScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gadget.ServiceImpl_Scope.__safeDI_Builder<Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>>> {
+		                .init(service: { _ in __safeDI_gizmoBuilder_Top_Outer_ServiceImpl_Scope(token: token) })
+		            }
+		            func __safeDI_gizmoBuilder_Top_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gadget.ServiceImpl_Scope.__safeDI_Builder<Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		                .init(gadget: { _ in __safeDI_gizmoBuilder_Top_GadgetImpl_Scope(token: token) })
+		            }
+		            return Top(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Top())
+		        }
+		        let top: Top = __safeDI_top()
+		        self.init(top: top)
+		    }
+		}
+		"""])
+		try await expectValues(of: output, modules: modules, equalThoseOf: Self.oneModule(modules), probe: Self.gizmoBesideRootProbe(path: "root.top.outer"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_levelFunctionsHandInnerSeamsMemo_whenFillReadsValueOfPlaceSeamPassesUpFromInsideItsFill() async throws {
+		// The fill's tree reads the value, so it takes the memo of `Inner`'s level, as where `Top` recorded the memo's value.
+		let modules = Self.deepCarriedWrapperModules(gizmoReadsValue: true)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Session)
+		import Session
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_top() -> Top {
+		            _ = Top.__safeDI_Top_3AF5DBAAA75936B9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_gizmoBuilder_Top() -> Top.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		                .init(outer_gadgetBuilder: { _ in __safeDI_gizmoBuilder_Top_Outer() })
+		            }
+		            func __safeDI_gizmoBuilder_Top_GadgetImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo> {
+		                .init(gizmo: { _ in
+		                    let gizmo: any Gizmo = GizmoImpl(token: token.instance)
+		                    return gizmo
+		                })
+		            }
+		            func __safeDI_gizmoBuilder_Top_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		                .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner() })
+		            }
+		            func __safeDI_gadgetBuilder_Outer_Inner() -> Inner.SafeDIScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gadget.ServiceImpl_Scope.__safeDI_Builder<Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>>> {
+		                .init(service: { values in __safeDI_gizmoBuilder_Top_Outer_ServiceImpl_Scope(token: values.__safeDI_token) })
+		            }
+		            func __safeDI_gizmoBuilder_Top_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gadget.ServiceImpl_Scope.__safeDI_Builder<Top.SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		                .init(gadget: { _ in __safeDI_gizmoBuilder_Top_GadgetImpl_Scope(token: token) })
+		            }
+		            return Top(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Top())
+		        }
+		        let top: Top = __safeDI_top()
+		        self.init(top: top)
+		    }
+		}
+		"""])
+		try await expectValues(of: output, modules: modules, equalThoseOf: Self.oneModule(modules), probe: Self.gizmoBesideRootProbe(path: "root.top.outer"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_levelFunctionsHandInnerSeamsMemo_whenFillReadsSendableValueAndWrapper() async throws {
+		// The fill's tree reads the value, so it takes the memo of `Inner`'s level, which serves the wrapper's read too.
+		let modules = Self.carriedWrapperModules(gizmoReadsValueToo: true)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Session)
+		import Session
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_outer() -> Outer {
+		            _ = Outer.__safeDI_Outer_0063408F9815A8F7.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope_gizmo(_ scope: Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.gizmo_Values, token: SendableLazilyInstantiated<Token>) -> any Gizmo {
+		                func __safeDI_gizmo() -> GizmoImpl {
+		                    let wrapperReader = WrapperReader(token: token)
+		                    return GizmoImpl(token: token.instance, wrapperReader: wrapperReader)
+		                }
+		                let gizmo: any Gizmo = __safeDI_gizmo()
+		                return gizmo
+		            }
+		            func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		                .init(inner_serviceBuilder: { _ in __safeDI_gizmoBuilder_Outer_Inner() })
+		            }
+		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
+		                .init(gizmo: { scope in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope_gizmo(scope, token: token) })
+		            }
+		            func __safeDI_gizmoBuilder_Outer_Inner() -> Inner.SafeDIScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		                .init(service: { values in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: values.__safeDI_token) })
+		            }
+		            return Outer(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Outer())
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(outer: outer)
+		    }
+		}
+		"""])
+		try await expectValues(of: output, modules: modules, equalThoseOf: Self.oneModule(modules), probe: Self.gizmoBesideRootProbe())
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_seamTakesNoParameterForWrapperItsFillsMemoServes_whenFillingSeamsFillReadsSendableValueAndWrapperOnCarriedRoute() async throws {
+		// `Hub`'s fill takes the memo of `Inner`'s level, which serves the wrapper's read, so `Hub` takes no parameter for it.
+		let modules = Self.carriedWrapperModules(gizmoReadsValueToo: true, fillingSeam: true)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Session)
+		import Session
+		#endif
+
+		extension Hub {
+		    /// Code you write and code SafeDI generates can both call this initializer.
+		    public convenience init() {
+		        func __safeDI_outer() -> Outer {
+		            _ = Outer.__safeDI_Outer_0063408F9815A8F7.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope_gizmo(_ scope: Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.gizmo_Values, token: SendableLazilyInstantiated<Token>) -> any Gizmo {
+		                func __safeDI_gizmo() -> GizmoImpl {
+		                    let wrapperReader = WrapperReader(token: token)
+		                    return GizmoImpl(token: token.instance, wrapperReader: wrapperReader)
+		                }
+		                let gizmo: any Gizmo = __safeDI_gizmo()
+		                return gizmo
+		            }
+		            func __safeDI_gizmoBuilder_Outer() -> Outer.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
+		                .init(inner_serviceBuilder: { _ in __safeDI_gizmoBuilder_Outer_Inner() })
+		            }
+		            func __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: SendableLazilyInstantiated<Token>) -> Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo> {
+		                .init(gizmo: { scope in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope_gizmo(scope, token: token) })
+		            }
+		            func __safeDI_gizmoBuilder_Outer_Inner() -> Inner.SafeDIScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gizmo.ServiceImpl_Scope.__safeDI_Builder<any Gizmo>> {
+		                .init(service: { values in __safeDI_gizmoBuilder_Outer_ServiceImpl_Scope(token: values.__safeDI_token) })
+		            }
+		            return Outer(__safeDI_gizmoBuilder: __safeDI_gizmoBuilder_Outer())
+		        }
+		        let outer: Outer = __safeDI_outer()
+		        self.init(outer: outer)
+		    }
+		}
+
+		extension Hub {
+		    public enum __safeDI_Hub_CBF29CE484222325 {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+		#if canImport(Session)
+		import Session
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_hub() -> Hub {
+		            _ = Hub.__safeDI_Hub_CBF29CE484222325.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Hub()
+		        }
+		        let hub: Hub = __safeDI_hub()
+		        self.init(hub: hub)
+		    }
+		}
+		"""])
+		try await expectValues(of: output, modules: modules, equalThoseOf: Self.oneModule(modules), probe: Self.gizmoBesideRootProbe(path: "root.hub.outer"))
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -1210,6 +1730,246 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 	private static func leafBesideRootProbe(path: String, readerInInstantiator: Bool = false) -> DifferentialValueProbe {
 		let reader = readerInInstantiator ? ", (\(path).service as! ServiceImpl).wrapperReader.instantiate()" : ""
 		return DifferentialValueProbe(name: "root beside a leaf", expression: "{ () -> Any in\n\tlet root = Root()\n\treturn (root, \(path).leafBuilder.instantiate()\(reader))\n}()")
+	}
+
+	/// `Core`, which declares `Token`, `Leaf`, which receives it, and `Inner`, a seam that builds `Leaf` through an
+	/// instantiator, so it defers `token`, and holds a place of `Service`; `Session`, whose seam `Outer` declares `token`
+	/// as an `outerWrapper`, builds `Inner` and fills its place with `ServiceImpl`, which holds a place of `Gizmo` that
+	/// `Outer` passes up; and `App`, which fills it with `GizmoImpl`, which receives `Outer`'s wrapper alone, under
+	/// `Root`, which builds `Outer`.
+	/// - Parameters:
+	///   - outerWrapper: The wrapper `Outer` declares and `GizmoImpl` receives.
+	///   - innerDefersSendable: Whether `Inner` builds `Leaf` in a `SendableInstantiator`, so it defers `token`
+	///     `@Sendable`.
+	///   - gizmoReadsOnlyIfAvailable: Whether `GizmoImpl` receives the wrapper only if available.
+	///   - gizmoReadsValueToo: Whether `GizmoImpl` receives `token` by value and builds `WrapperReader`, which receives the
+	///     wrapper in its place.
+	///   - fillingSeam: Whether `Hub`, a seam of `Feature`, a module of its own beside `GizmoImpl`, builds `Outer` and fills
+	///     the place, under `Root`, which builds `Hub`.
+	private static func carriedWrapperModules(
+		outerWrapper: String = "SendableLazilyInstantiated",
+		innerDefersSendable: Bool = true,
+		gizmoReadsOnlyIfAvailable: Bool = false,
+		gizmoReadsValueToo: Bool = false,
+		fillingSeam: Bool = false,
+	) -> [ModuleFixture] {
+		let instantiator = innerDefersSendable ? "SendableInstantiator" : "Instantiator"
+		let wrapperType = "\(outerWrapper)<Token>\(gizmoReadsOnlyIfAvailable ? "?" : "")"
+		let received = gizmoReadsOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received"
+		let gizmoImplementation = if gizmoReadsValueToo {
+			"""
+			@Instantiable
+			public final class WrapperReader: Instantiable, @unchecked Sendable {
+				public init(token: \(wrapperType)) { self.token = token }
+				\(received) public let token: \(wrapperType)
+			}
+
+			@Instantiable(fulfillingAdditionalTypes: [Gizmo.self])
+			public final class GizmoImpl: Instantiable, Gizmo, @unchecked Sendable {
+				public init(token: Token, wrapperReader: WrapperReader) { self.token = token; self.wrapperReader = wrapperReader }
+				@Received public let token: Token
+				@Instantiated public let wrapperReader: WrapperReader
+			}
+			"""
+		} else {
+			"""
+			@Instantiable(fulfillingAdditionalTypes: [Gizmo.self])
+			public final class GizmoImpl: Instantiable, Gizmo, @unchecked Sendable {
+				public init(token: \(wrapperType)) { self.token = token }
+				\(received) public let token: \(wrapperType)
+			}
+			"""
+		}
+		var modules = [
+			ModuleFixture(name: "Core", packageName: "Min", swiftFileContent: ["""
+			import SafeDI
+
+			public protocol Service: Sendable {}
+
+			@Instantiable
+			public final class Token: Instantiable, @unchecked Sendable {
+				public init() {}
+			}
+
+			@Instantiable
+			public final class Leaf: Instantiable, @unchecked Sendable {
+				public init(token: Token) { self.token = token }
+				@Received public let token: Token
+			}
+
+			@Instantiable(generateDependencyTree: true)
+			public final class Inner: Instantiable, @unchecked Sendable {
+				public init(leafBuilder: \(instantiator)<Leaf>, service: any Service) {
+					self.leafBuilder = leafBuilder
+					self.service = service
+				}
+				@Instantiated public let leafBuilder: \(instantiator)<Leaf>
+				@Instantiated public let service: any Service
+			}
+			"""]),
+			ModuleFixture(name: "Session", packageName: "Min", swiftFileContent: ["""
+			import Core
+			import SafeDI
+
+			public protocol Gizmo: Sendable {}
+
+			@Instantiable(fulfillingAdditionalTypes: [Service.self])
+			public final class ServiceImpl: Instantiable, Service, @unchecked Sendable {
+				public init(gizmo: any Gizmo) { self.gizmo = gizmo }
+				@Instantiated public let gizmo: any Gizmo
+			}
+
+			@Instantiable(generateDependencyTree: true)
+			public final class Outer: Instantiable, @unchecked Sendable {
+				public init(token: \(outerWrapper)<Token>, inner: Inner) {
+					self.token = token
+					self.inner = inner
+				}
+				@Instantiated public let token: \(outerWrapper)<Token>
+				@Instantiated public let inner: Inner
+			}
+			"""], dependencies: ["Core"]),
+		]
+		if fillingSeam {
+			modules.append(ModuleFixture(name: "Feature", packageName: "Min", swiftFileContent: ["""
+			import Core
+			import Session
+			import SafeDI
+
+			\(gizmoImplementation)
+
+			@Instantiable(generateDependencyTree: true)
+			public final class Hub: Instantiable, @unchecked Sendable {
+				public init(outer: Outer) { self.outer = outer }
+				@Instantiated public let outer: Outer
+			}
+			"""], dependencies: ["Core", "Session"]))
+			modules.append(ModuleFixture(name: "App", packageName: "Min", swiftFileContent: ["""
+			import Feature
+			import SafeDI
+
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable, @unchecked Sendable {
+				public init(hub: Hub) { self.hub = hub }
+				@Instantiated public let hub: Hub
+			}
+			"""], dependencies: ["Core", "Session", "Feature"]))
+		} else {
+			modules.append(ModuleFixture(name: "App", packageName: "Min", swiftFileContent: ["""
+			import Core
+			import Session
+			import SafeDI
+
+			\(gizmoImplementation)
+
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable, @unchecked Sendable {
+				public init(outer: Outer) { self.outer = outer }
+				@Instantiated public let outer: Outer
+			}
+			"""], dependencies: ["Core", "Session"]))
+		}
+		return modules
+	}
+
+	/// `Core` and `Session` as `carriedWrapperModules` declares them, but for `ServiceImpl`'s place, of `Gadget`; `Feature`,
+	/// whose seam `Top` builds `Outer` and fills that place with `GadgetImpl`, which holds a place of `Gizmo` that `Top`
+	/// passes up; and `App`, which fills it with `GizmoImpl`, which receives `Outer`'s wrapper alone, or, where
+	/// `gizmoReadsValue`, the value, under `Root`, which builds `Top`.
+	private static func deepCarriedWrapperModules(gizmoReadsValue: Bool = false) -> [ModuleFixture] {
+		let gizmoToken = gizmoReadsValue ? "Token" : "SendableLazilyInstantiated<Token>"
+		return [
+			ModuleFixture(name: "Core", packageName: "Min", swiftFileContent: ["""
+			import SafeDI
+
+			public protocol Service: Sendable {}
+
+			@Instantiable
+			public final class Token: Instantiable, Sendable {
+				public init() {}
+			}
+
+			@Instantiable
+			public final class Leaf: Instantiable, Sendable {
+				public init(token: Token) { self.token = token }
+				@Received public let token: Token
+			}
+
+			@Instantiable(generateDependencyTree: true)
+			public final class Inner: Instantiable, Sendable {
+				public init(leafBuilder: SendableInstantiator<Leaf>, service: any Service) {
+					self.leafBuilder = leafBuilder
+					self.service = service
+				}
+				@Instantiated public let leafBuilder: SendableInstantiator<Leaf>
+				@Instantiated public let service: any Service
+			}
+			"""]),
+			ModuleFixture(name: "Session", packageName: "Min", swiftFileContent: ["""
+			import Core
+			import SafeDI
+
+			public protocol Gadget: Sendable {}
+
+			@Instantiable(fulfillingAdditionalTypes: [Service.self])
+			public final class ServiceImpl: Instantiable, Service, Sendable {
+				public init(gadget: any Gadget) { self.gadget = gadget }
+				@Instantiated public let gadget: any Gadget
+			}
+
+			@Instantiable(generateDependencyTree: true)
+			public final class Outer: Instantiable, Sendable {
+				public init(token: SendableLazilyInstantiated<Token>, inner: Inner) {
+					self.token = token
+					self.inner = inner
+				}
+				@Instantiated public let token: SendableLazilyInstantiated<Token>
+				@Instantiated public let inner: Inner
+			}
+			"""], dependencies: ["Core"]),
+			ModuleFixture(name: "Feature", packageName: "Min", swiftFileContent: ["""
+			import Core
+			import Session
+			import SafeDI
+
+			public protocol Gizmo: Sendable {}
+
+			@Instantiable(fulfillingAdditionalTypes: [Gadget.self])
+			public final class GadgetImpl: Instantiable, Gadget, Sendable {
+				public init(gizmo: any Gizmo) { self.gizmo = gizmo }
+				@Instantiated public let gizmo: any Gizmo
+			}
+
+			@Instantiable(generateDependencyTree: true)
+			public final class Top: Instantiable, Sendable {
+				public init(outer: Outer) { self.outer = outer }
+				@Instantiated public let outer: Outer
+			}
+			"""], dependencies: ["Core", "Session"]),
+			ModuleFixture(name: "App", packageName: "Min", swiftFileContent: ["""
+			import Core
+			import Feature
+			import SafeDI
+
+			@Instantiable(fulfillingAdditionalTypes: [Gizmo.self])
+			public final class GizmoImpl: Instantiable, Gizmo, Sendable {
+				public init(token: \(gizmoToken)) { self.token = token }
+				@Received public let token: \(gizmoToken)
+			}
+
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable, Sendable {
+				public init(top: Top) { self.top = top }
+				@Instantiated public let top: Top
+			}
+			"""], dependencies: ["Core", "Session", "Feature"]),
+		]
+	}
+
+	/// A probe that builds `Root`, then a `Leaf` through the instantiator of the `Inner` of the `Outer` at `path`: the
+	/// comparator then sees which `Token`, and which wrapper, `GizmoImpl` holds.
+	private static func gizmoBesideRootProbe(path: String = "root.outer") -> DifferentialValueProbe {
+		DifferentialValueProbe(name: "root beside a leaf", expression: "{ () -> Any in\n\tlet root = Root()\n\treturn (root, \(path).inner.leafBuilder.instantiate())\n}()")
 	}
 
 	/// Every declaration of `modules` in one module, which builds every seam's tree inline.

@@ -82,6 +82,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		reboundProperties: Set<Property> = [],
 		previousPassReceivedBuilderLoops: ReceivedBuilderLoops? = nil,
 		previousPassFillSendableWrapperReads: [String: [String: Property]] = [:],
+		previousPassFillLabelsReadOnlyAsPlaceField: [String: Set<String>] = [:],
 		previousPassPublicMockLevelReentries: [String: PublicMockLevelFunctions.Reentry] = [:],
 		enclosingLevelCalls: [String: PublicMockLevelFunctions.EnclosingLevelCall] = [:],
 		namesBoundBySeam: Set<String> = [],
@@ -238,10 +239,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		publicMockLevelReentries = fillReferences.publicMockLevelReentries
 		publicMockLevelReentriesChangedInTree = fillReferences.publicMockLevelReentries != previousPassPublicMockLevelReentries
 			|| propertiesToGenerate.contains(where: \.publicMockLevelReentriesChangedInTree)
-		let deferredFillLabels = Self.deferredFillLabels(children: propertiesToGenerate, previousPassFillSendableWrapperReads: previousPassFillSendableWrapperReads)
+		let deferredFillLabels = Self.deferredFillLabels(
+			children: propertiesToGenerate,
+			previousPassFillSendableWrapperReads: previousPassFillSendableWrapperReads,
+			previousPassFillLabelsReadOnlyAsPlaceField: previousPassFillLabelsReadOnlyAsPlaceField,
+		)
 		fillDeferredLabelsHiddenByReenteringCalls = deferredFillLabels.hiddenByReenteringCalls
 		fillDeferredLabelsReadInsideSendableFunction = deferredFillLabels.readInsideSendableFunction
 		fillSendableWrapperReads = deferredFillLabels.sendableWrapperReads
+		fillLabelsReadOnlyAsPlaceField = deferredFillLabels.readOnlyAsPlaceField
 		fillStructBoundLabelsChangedInTree = deferredFillLabels.fillStructBoundLabelsChangedInTree
 		self.propertiesToDeclare = propertiesToDeclare
 		self.instantiatedDependenciesNotGenerated = instantiatedDependenciesNotGenerated
@@ -613,7 +619,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	nonisolated private static func deferredFillLabels(
 		children: [ScopeGenerator],
 		previousPassFillSendableWrapperReads: [String: [String: Property]],
-	) -> (hiddenByReenteringCalls: [String: Set<String>], readInsideSendableFunction: [String: Set<String>], sendableWrapperReads: [String: [String: Property]], fillStructBoundLabelsChangedInTree: Bool) {
+		previousPassFillLabelsReadOnlyAsPlaceField: [String: Set<String>],
+	) -> (hiddenByReenteringCalls: [String: Set<String>], readInsideSendableFunction: [String: Set<String>], sendableWrapperReads: [String: [String: Property]], readOnlyAsPlaceField: [String: Set<String>], fillStructBoundLabelsChangedInTree: Bool) {
 		// A call's fills whose hole has a field bound from a deferred parameter read it from the caller's scope, unless a
 		// call inside one of them passes it on beneath another declaration of the label. Nearly no scope calls such a seam.
 		// A field every route hands as a carried level's memo is bound from what the fill is handed, never read from the caller.
@@ -657,16 +664,34 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				fillStructBoundLabelsChangedInTree = true
 			}
 		}
+		// A fill some route hands the memo of a label its tree reads only as the place's own field of it, the wrapper a type
+		// further out declares, never as the memo's value nor at a site of its tree, takes that field on the next pass, as
+		// inline reads that declaration (`fillLabelsReadOnlyAsPlaceField`). A label once found stays found: no memo is handed
+		// on a later pass to show it. Nearly no scope calls such a seam.
+		var fillLabelsReadOnlyAsPlaceField = previousPassFillLabelsReadOnlyAsPlaceField
+		for fill in children where !fill.fillLabelsHandedAsMemo.isEmpty {
+			guard let key = fill.fillKey, let built = fill.children.first else { continue }
+			for field in fill.fillFields where fill.fillLabelsHandedAsMemo.contains(field.property.label) && !built.reads(field.property) && !built.fieldsCarriedBySites.contains(field.property) {
+				let placeField = fill.fillCaseHoles.lazy.flatMap(\.fields).first { $0.property.label == field.property.label }
+				if let placeField, built.reads(placeField.property) {
+					fillLabelsReadOnlyAsPlaceField[key, default: []].insert(field.property.label)
+				}
+			}
+		}
+		if fillLabelsReadOnlyAsPlaceField != previousPassFillLabelsReadOnlyAsPlaceField {
+			fillStructBoundLabelsChangedInTree = true
+		}
 		// A fill some route hands the memo of a label its tree also reads as a `SendableLazilyInstantiated` takes that wrapper
 		// as the memo where every route can hand it (`FillDispatcher.memosHanded(toFillOf:labels:readingSendableWrapper:among:)`):
 		// the pass before finds those reads. Nearly no scope calls such a seam. A read of the optional wrapper only if available
 		// is left out, a deliberate leniency that `DependencyTreeGenerator.validateFills` keeps too: the fill builds it where
-		// one module rejects the graph for reading the label in two forms.
+		// one module rejects the graph for reading the label in two forms. So is a label the fill takes as the place's field.
 		var fillSendableWrapperReads = [String: [String: Property]]()
 		for fill in children where !fill.fillLabelsHandedAsMemo.isEmpty {
 			guard let key = fill.fillKey, let built = fill.children.first else { continue }
 			var instancePropertyByLabel = [String: Property]()
-			for property in built.receivedProperties.sorted() where fill.fillLabelsHandedAsMemo.contains(property.label) && property.propertyType == .sendableLazilyInstantiated && !property.typeDescription.isOptional && instancePropertyByLabel[property.label] == nil {
+			let labelsReadOnlyAsPlaceField = fillLabelsReadOnlyAsPlaceField[key] ?? []
+			for property in built.receivedProperties.sorted() where fill.fillLabelsHandedAsMemo.contains(property.label) && !labelsReadOnlyAsPlaceField.contains(property.label) && property.propertyType == .sendableLazilyInstantiated && !property.typeDescription.isOptional && instancePropertyByLabel[property.label] == nil {
 				instancePropertyByLabel[property.label] = property.asLazilyInstantiatedInstanceProperty
 			}
 			if !instancePropertyByLabel.isEmpty {
@@ -677,7 +702,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		if fillSendableWrapperReads != previousPassFillSendableWrapperReads {
 			fillStructBoundLabelsChangedInTree = true
 		}
-		return (fillDeferredLabelsHiddenByReenteringCalls, fillDeferredLabelsReadInsideSendableFunction, fillSendableWrapperReads, fillStructBoundLabelsChangedInTree)
+		return (fillDeferredLabelsHiddenByReenteringCalls, fillDeferredLabelsReadInsideSendableFunction, fillSendableWrapperReads, fillLabelsReadOnlyAsPlaceField, fillStructBoundLabelsChangedInTree)
 	}
 
 	@inline(never)
@@ -1221,6 +1246,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fillDeferredLabelsHiddenByReenteringCalls = [:]
 		fillDeferredLabelsReadInsideSendableFunction = [:]
 		fillSendableWrapperReads = [:]
+		fillLabelsReadOnlyAsPlaceField = [:]
 		fillStructBoundLabelsChangedInTree = false
 		constructsWithHandWrittenMock = false
 		referencedFillNamesByKey = [:]
@@ -1327,6 +1353,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fillDeferredLabelsHiddenByReenteringCalls = [:]
 		fillDeferredLabelsReadInsideSendableFunction = [:]
 		fillSendableWrapperReads = [:]
+		fillLabelsReadOnlyAsPlaceField = [:]
 		fillStructBoundLabelsChangedInTree = false
 		constructsWithHandWrittenMock = false
 		referencedFillNamesByKey = [:]
@@ -1621,6 +1648,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				Set((values ?? []).filter { carriesDeferredFields || !$0.isDeferredParameter }.map(\.property.label))
 			}
 
+			/// Whether the case hands on, from its payload, `field`, a form a target takes of a label of `carriedLabels`: every
+			/// form but, for a deferred parameter's field, which holds the value and its memo, a wrapper a type further out
+			/// declares of the label, which a target that reads only that wrapper takes as the place's field
+			/// (`ScopeGenerator.fillLabelsReadOnlyAsPlaceField`), handed on from further out, as inline reads that declaration.
+			func handsOn(_ field: SeamSignature.Hole.Field) -> Bool {
+				guard let carried = values?.first(where: { $0.property.label == field.property.label }), carried.isDeferredParameter else { return true }
+				return field.bindsMemo || field.property.asUnwrappedProperty == carried.property.asUnwrappedProperty
+			}
+
 			struct Target: Sendable {
 				let name: String
 				let key: String
@@ -1697,8 +1733,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					for dispatcherCase in dispatcher.cases {
 						guard let target = dispatcherCase.target else { continue }
 						let carried = dispatcherCase.carriedLabels
-						for (label, forms) in formsByLabelByKey[target.key, default: [:]] where !carried.contains(label) {
-							for (property, field) in forms {
+						for (label, forms) in formsByLabelByKey[target.key, default: [:]] {
+							for (property, field) in forms where !carried.contains(label) || !dispatcherCase.handsOn(field) {
 								guard Self.handsForm(field, inPlaceOf: formsByLabelByKey[dispatcher.key]?[label]?[property]) else { continue }
 								formsByLabelByKey[dispatcher.key, default: [:]][label, default: [:]][property] = field
 								changed = true
@@ -2377,7 +2413,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// A level function an enclosing call declares takes the struct under its own name for it.
 					let argumentLabel = Self.isFill(target) ? label : target.reusedCarriedInnerScopes.first { $0.type == carriedInnerScope.type }?.upName ?? carriedInnerScope.upName
 					return ("\(argumentLabel.spelledAsArgumentLabel): \(carriedInnerScope.upName).\(dispatcherCase.name.spelledAsMemberReference)(\(payloadName))", true)
-				} else if readsOwnPayload, dispatcherCase.carriedLabels.contains(label) || (parameter.bindsMemo && dispatcherCase.values?.contains { $0.property.label == label } == true), let field = dispatcherCase.values?.first(where: { $0.property.label == label }) {
+				} else if readsOwnPayload, (dispatcherCase.carriedLabels.contains(label) && dispatcherCase.handsOn(parameter)) || (parameter.bindsMemo && dispatcherCase.values?.contains { $0.property.label == label } == true), let field = dispatcherCase.values?.first(where: { $0.property.label == label }) {
 					// A target that binds a deferred parameter's memo is handed the memo, whose instance it reads where it reads the
 					// value: also a deferred field `carriedLabels` leaves out, since the target binds the memo of the seam whose struct
 					// it is handed, as where a fill passed on beneath another declaration of the label builds the seam again
@@ -4194,10 +4230,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// that wrapper holds: the fill takes that wrapper as the memo where every route can hand it
 	/// (`FillDispatcher.memosHanded(toFillOf:labels:readingSendableWrapper:among:)`). Empty for nearly every scope.
 	let fillSendableWrapperReads: [String: [String: Property]]
+	/// For a seam call, by the key of each of its fills, the labels some route hands the fill as a memo
+	/// (`fillLabelsHandedAsMemo`) whose tree reads the label but neither the memo's value nor carries it to a site: it reads
+	/// the place's own field, the wrapper a type further out declares, as inline reads that declaration. The fill takes that
+	/// field rather than the memo, and the levels hand it on past the deferring seam's
+	/// (`FillDispatcher.Case.handsOn(_:)`). A label stays found on every later pass, where no memo is handed to show it.
+	/// Empty for nearly every scope.
+	let fillLabelsReadOnlyAsPlaceField: [String: Set<String>]
 	/// Whether a fill in this subtree binds other fields from its struct than its call's
 	/// `fillDeferredLabelsHiddenByReenteringCalls` ask, binds a memo `fillDeferredLabelsReadInsideSendableFunction` binds
-	/// by value, or reads a `SendableLazilyInstantiated` of a label it takes another memo of (`fillSendableWrapperReads`),
-	/// which another pass of `Scope.createScopeGenerator` corrects.
+	/// by value, reads a `SendableLazilyInstantiated` of a label it takes another memo of (`fillSendableWrapperReads`), or
+	/// takes a memo of a label its tree reads only as the place's field (`fillLabelsReadOnlyAsPlaceField`), which another
+	/// pass of `Scope.createScopeGenerator` corrects.
 	let fillStructBoundLabelsChangedInTree: Bool
 
 	/// For a fill, whether it binds a field bound from a deferred parameter from its struct, as its memo or by value

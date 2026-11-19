@@ -1828,6 +1828,10 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// Both seams defer `carriedToken` `@Sendable`, and the fill of `CarriedGizmo` reads the `SendableLazilyInstantiated`
 	/// beside the value, through `CarriedWrapperReader`.
 	case carriedLevelFillReadsSendableWrapper
+	/// The fill of `CarriedGizmo` reads the `SendableLazilyInstantiated` alone, through `CarriedWrapperReader`: where
+	/// `CarriedOuter` declares it, its level carries it, which the levels hand on past `CarriedInner`'s, as inline reads
+	/// `CarriedOuter`'s declaration (the generator once left it unhanded, so the fill read a name not in scope).
+	case carriedLevelFillReadsSendableWrapperAlone
 	/// `addingPassingUpCopyShapes`' tree: `Copy1Root` calls `Copy1Inner`, whose places in two files the roots' module fills,
 	/// each fill building a seam of its own that calls `Copy1Inner` again and passes both fills on.
 	case passingUpCopies
@@ -8482,7 +8486,10 @@ enum GraphFuzzerGenerator {
 		/// `CarriedWrapperReader`, which receives the `SendableLazilyInstantiated`: the fill takes the `Sendable` memo every
 		/// route hands, which the roots' module once handed as a `LazilyInstantiated` on `CarriedTop`'s own route
 		/// (`fillTakesSendableMemo`). A seam that defers the value in a `LazilyInstantiated` is not drawn beside the reader,
-		/// since SafeDI rejects that read (`sendableWrapperReadBesidePlainMemo`, `seam-hole-fills.md`).
+		/// since SafeDI rejects that read (`sendableWrapperReadBesidePlainMemo`, `seam-hole-fills.md`). In half of the graphs
+		/// with the reader, `CarriedGizmoImpl` reads the wrapper alone, through the reader: where `CarriedOuter` declares it,
+		/// the levels hand on the wrapper `CarriedOuter`'s level carries, past `CarriedInner`'s memo, which the roots' module
+		/// once left unhanded (`SafeDIToolSeamCarriedWrapperReadTests`).
 		///
 		/// `carriedLevelRandom` draws only for this pass, which runs after `addingFillCallShapes` and only in a graph another
 		/// pass split, so that every graph in one module, and every other draw of a graph it draws in, draws as before. A
@@ -8498,6 +8505,7 @@ enum GraphFuzzerGenerator {
 			let rootDeclaresDeferredValue = carriedLevelRandom.percentChance(50)
 			let topBuildsWorkerToo = carriedLevelRandom.percentChance(50)
 			let gizmoReadsSendableWrapper = carriedLevelRandom.percentChance(50)
+			let gizmoReadsWrapperAlone = carriedLevelRandom.percentChance(50)
 			guard !modulesOmittingPackageName.contains(.seamModule), sendability != .sendable else { return declarations }
 			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
 			let prefix = prefix
@@ -8574,7 +8582,9 @@ enum GraphFuzzerGenerator {
 			var root = instantiable("CarriedRoot", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "carriedTop", type: top.name)])
 			root.instantiableArguments = ["isRoot: true"]
 			if let token = deferredValueDeclarations.first {
-				gizmoImplementation.properties.append(PropertyDeclaration(attribute: "@Received", label: "carriedToken", type: token.name))
+				if !drawsWrapperReader || !gizmoReadsWrapperAlone {
+					gizmoImplementation.properties.append(PropertyDeclaration(attribute: "@Received", label: "carriedToken", type: token.name))
+				}
 				// `CarriedToken` is a type of the module two beneath the seam's module, which the roots' module does not import.
 				gizmoImplementation.imports.append(GraphFuzzerModule.seamDependencyBase.name)
 				if rootDeclaresDeferredValue {
@@ -10455,6 +10465,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 			if propertiesByType[prefix + "CarriedGizmoImpl"]?.contains(where: { $0.label == "carriedId" }) == true {
 				features.insert(.carriedLevelFillReadsForwarded)
+			}
+			if propertiesByType[prefix + "CarriedGizmoImpl"]?.contains(where: { $0.label == "carriedToken" }) != true, propertiesByType[prefix + "CarriedWrapperReader"] != nil {
+				features.insert(.carriedLevelFillReadsSendableWrapperAlone)
 			}
 			if propertiesByType[prefix + "CarriedGizmoImpl"]?.contains(where: { $0.label == "carriedToken" }) == true {
 				features.insert(.carriedLevelFillReadsDeferredValue)

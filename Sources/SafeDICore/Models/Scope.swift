@@ -958,15 +958,19 @@ private struct ScopeGeneratorUnderConstruction {
 			// hands such a memo takes a memo, so the value is created when its tree reads it on every route, as inline: its field
 			// is that parameter's, which it binds as the memo (`fillUnderConstruction`), and a route that hands another form makes
 			// the memo of what it hands (`FillDispatcher.memosHanded(toFillOf:labels:readingSendableWrapper:among:)`). A public mock's caller hands values.
+			// A fill whose tree reads a label only as the place's own field of it, the wrapper a type further out declares, takes
+			// that field, which the pass before found (`ScopeGenerator.fillLabelsReadOnlyAsPlaceField`): inline reads that
+			// declaration, which the levels hand on past the deferring seam's (`FillDispatcher.Case.handsOn(_:)`).
 			if scope.publicMockCall == nil, dispatchersOfThisCall.contains(where: { dispatcher in
 				dispatcher.cases.contains { $0.carriesDeferredFields && $0.values?.contains(where: \.isDeferredParameter) == true }
 			}) {
 				for index in fillsOfThisCall.indices where fillsOfThisCall[index].fill.emitsCode {
 					let fill = fillsOfThisCall[index].fill
 					let payloadLabels = Set(fill.hole.enumPlace?.values.map(\.property.label) ?? [])
+					let labelsReadOnlyAsPlaceField = previousPassGenerator?.fillLabelsReadOnlyAsPlaceField[fill.key] ?? []
 					let handedMemos = ScopeGenerator.FillDispatcher.memosHanded(
 						toFillOf: fill.key,
-						labels: Set(fill.fields.filter { !$0.isDeferredParameter && !payloadLabels.contains($0.property.label) }.map(\.property.label)),
+						labels: Set(fill.fields.filter { !$0.isDeferredParameter && !payloadLabels.contains($0.property.label) && !labelsReadOnlyAsPlaceField.contains($0.property.label) }.map(\.property.label)),
 						readingSendableWrapper: previousPassGenerator?.fillSendableWrapperReads[fill.key] ?? [:],
 						among: dispatchersOfThisCall,
 					)
@@ -1860,6 +1864,7 @@ private struct ScopeGeneratorUnderConstruction {
 			reboundProperties: reboundProperties,
 			previousPassReceivedBuilderLoops: previousPassGenerator?.receivedBuilderLoops,
 			previousPassFillSendableWrapperReads: previousPassGenerator?.fillSendableWrapperReads ?? [:],
+			previousPassFillLabelsReadOnlyAsPlaceField: previousPassGenerator?.fillLabelsReadOnlyAsPlaceField ?? [:],
 			previousPassPublicMockLevelReentries: previousPassGenerator?.publicMockLevelReentries ?? [:],
 			enclosingLevelCalls: scope.publicMockCall == nil ? [:] : enclosingLevelCalls,
 			namesBoundBySeam: GenerationWork.taking(seamHoles.namesBoundBySeam, by: .joiningNamesBoundBySeam),
