@@ -10210,6 +10210,64 @@ public actor DependencyTreeGenerator {
 		let lazilyInstantiatedDeclarations: [Property: Property]
 	}
 
+	/// A cycle-closing scope, which builds the tree of the scope it closes on again, with what the scopes it is built inside
+	/// give it there: what `validateTreeBuiltAgainByCycle` walks.
+	private struct CycleClosingScopeToValidate {
+		/// The scope the cycle closes on, whose tree is built again.
+		let scope: Scope
+		/// The property the cycle closes on, as cycle validation sees it.
+		let property: Property
+		/// The index in `propertyStack` of the scope the cycle closes on.
+		let closedOnIndex: Int
+		/// The scope the cycle-closing scope is a child of.
+		let cycleClosingScopeParent: Scope
+		/// The properties of the scopes the cycle-closing scope is built inside, innermost first.
+		let propertyStack: [Property]
+		/// The concrete types of those scopes, beside `propertyStack`.
+		let parentTypeStack: [TypeDescription]
+		/// The property each label names at the cycle-closing scope.
+		let closestDeclarationByLabel: [String: DependencyTreeGeneratorError.LabelDeclaration]
+		/// See `ScopeToValidate.closestDeclarationDepthByLabel`.
+		let closestDeclarationDepthByLabel: [String: Int]
+		/// The properties the scopes the cycle-closing scope is built inside make available to it.
+		let receivableProperties: Set<Property>
+		/// See `ScopeToValidate.receivableDepthByProperty`.
+		let receivableDepthByProperty: [Property: Int]
+	}
+
+	/// What the walk of a tree in `validatePropertiesAreFulfillable` validates next. A cycle-closing scope's tree built
+	/// again is walked in the cycle-closing scope's own turn, after the trees of the siblings declared before it, as the
+	/// walk of that tree walks its own children. So the walk meets the chains of scopes that reach a receive depth first
+	/// in declaration order: where two chains part, the one through the scope declared first, which is the one declared
+	/// first in source, since a type declares its properties in one file. The first chain it meets is the one reported
+	/// for a hidden receive (`hiddenReceivedProperties`), and the first error it throws, a receive of a declaration still
+	/// being built among them, is the first in that order; neither depends on names or files.
+	private enum TreeValidationStep {
+		case scope(ScopeToValidate)
+		case cycleClosingScope(CycleClosingScopeToValidate)
+	}
+
+	/// A received dependency that a closer declaration hides, as one root's tree reaches it: `hiddenReceivedProperties`
+	/// records each once for each root, whatever number of chains of scopes reach it.
+	private struct HiddenReceiveInTree: Hashable {
+		/// The property received: the fulfilling property for an aliased dependency, the declared property otherwise.
+		let property: Property
+		let declarationLocation: Dependency.DeclarationLocation?
+		/// The closest declaration of the label, whose property differs from `property`.
+		let hidingDeclaration: DependencyTreeGeneratorError.LabelDeclaration
+		let receiver: TypeDescription
+		let root: TypeDescription
+	}
+
+	/// The chain of scopes a hidden receive is reported from.
+	private struct HiddenReceiveChain {
+		/// The types of the properties the chain's scopes are built for, innermost first. See
+		/// `DependencyTreeGeneratorError.HiddenReceivedProperty.parentStack`.
+		let parentStack: [TypeDescription]
+		/// The concrete types of the chain's scopes, beside `parentStack`.
+		let parentTypeStack: [TypeDescription]
+	}
+
 	/// A scope of a tree that a cycle-closing scope builds again, which `validateTreeBuiltAgainByCycle` has yet to walk, with
 	/// what the scopes it is built inside give it there.
 	private struct ScopeBuiltAgain {
@@ -10319,9 +10377,11 @@ public actor DependencyTreeGenerator {
 				? .closesCycle
 				: declaration
 		}
-		/// Each hidden receive as reported, with the concrete types of every chain of scopes that reaches it, which its
-		/// rendering does not tell apart.
-		var hiddenReceivedProperties = [DependencyTreeGeneratorError.HiddenReceivedProperty: Set<[TypeDescription]>]()
+		/// Each hidden receive each root's tree reaches, with the one chain of scopes it is reported from: of every chain of
+		/// that tree that reaches it, the first the walk meets, which is the first in declaration order (see
+		/// `TreeValidationStep`). One report per receive keeps what is reported from depending on how many paths reach it,
+		/// which the walk of a tree a cycle builds again prunes.
+		var hiddenReceivedProperties = [HiddenReceiveInTree: HiddenReceiveChain]()
 		var renamesContradictingOwnProperties = Set<DependencyTreeGeneratorError.RenameContradictingOwnProperty>()
 		/// The properties a scope of `typeDescriptionToScopeMap` builds – instantiates, or renames another property to –
 		/// as cycle validation sees them. Most walks never ask, so the set is built the first time one does.
@@ -10637,7 +10697,7 @@ public actor DependencyTreeGenerator {
 			validatesCycles: Bool,
 			validatesHiddenProperties: Bool,
 		) throws {
-			var scopesToValidate = [ScopeToValidate(
+			var scopesToValidate = [TreeValidationStep.scope(ScopeToValidate(
 				scope: rootScope.scope,
 				receivableProperties: Set(rootScope.scope.properties).union(rootScope.receivedFromOutside),
 				receivableAliases: [:],
@@ -10648,18 +10708,41 @@ public actor DependencyTreeGenerator {
 				propertyStack: [],
 				parentTypeStack: [],
 				lazilyInstantiatedDeclarations: [:],
-			)]
+			))]
 			let mockRootForwardedProperties: Set<Property>? = rootScope.isMock ? rootScope.scope.instantiable.forwardedReceivableProperties : nil
-			while let scopeToValidate = scopesToValidate.popLast() {
-				try validatePropertiesAreFulfillable(
-					on: scopeToValidate,
-					boundProperties: rootScope.boundProperties,
-					mockRootForwardedProperties: mockRootForwardedProperties,
-					validatesCycles: validatesCycles,
-					validatesHiddenProperties: validatesHiddenProperties,
-					root: rootScope.scope.instantiable.concreteInstantiable,
-					scopesToValidate: &scopesToValidate,
-				)
+			let root = rootScope.scope.instantiable.concreteInstantiable
+			while let step = scopesToValidate.popLast() {
+				switch step {
+				case let .scope(scopeToValidate):
+					try validatePropertiesAreFulfillable(
+						on: scopeToValidate,
+						boundProperties: rootScope.boundProperties,
+						mockRootForwardedProperties: mockRootForwardedProperties,
+						validatesCycles: validatesCycles,
+						validatesHiddenProperties: validatesHiddenProperties,
+						root: root,
+						scopesToValidate: &scopesToValidate,
+					)
+				case let .cycleClosingScope(cycleClosingScope):
+					// The type the cycle-closing scope builds receives the nearest declaration of each label, which a scope
+					// between it and the scope it closes on can make: the generated code passes that declaration where the tree
+					// is built again.
+					try validateTreeBuiltAgainByCycle(
+						of: cycleClosingScope.scope,
+						for: cycleClosingScope.property,
+						closedOnIndex: cycleClosingScope.closedOnIndex,
+						cycleClosingScopeParent: cycleClosingScope.cycleClosingScopeParent,
+						propertyStack: cycleClosingScope.propertyStack,
+						parentTypeStack: cycleClosingScope.parentTypeStack,
+						closestDeclarationByLabel: cycleClosingScope.closestDeclarationByLabel,
+						closestDeclarationDepthByLabel: cycleClosingScope.closestDeclarationDepthByLabel,
+						receivableProperties: cycleClosingScope.receivableProperties,
+						receivableDepthByProperty: cycleClosingScope.receivableDepthByProperty,
+						validatesCycles: validatesCycles,
+						validatesHiddenProperties: validatesHiddenProperties,
+						root: root,
+					)
+				}
 			}
 		}
 		/// Records each dependency of `scope` that the closest declaration of the label it receives hides, among
@@ -10727,14 +10810,19 @@ public actor DependencyTreeGenerator {
 						|| !cyclesOnly && acceptedProperties.isDisjoint(with: firstBuildReceivableProperties)
 					else { continue }
 				}
-				hiddenReceivedProperties[.init(
+				let hiddenReceive = HiddenReceiveInTree(
 					property: receivedProperty,
 					declarationLocation: dependency.declarationLocation,
 					hidingDeclaration: closestDeclaration,
 					receiver: scope.instantiable.concreteInstantiable,
-					parentStack: propertyStack.map(\.typeDescription),
 					root: root,
-				), default: []].insert(parentTypeStack)
+				)
+				if hiddenReceivedProperties[hiddenReceive] == nil {
+					hiddenReceivedProperties[hiddenReceive] = HiddenReceiveChain(
+						parentStack: propertyStack.map(\.typeDescription),
+						parentTypeStack: parentTypeStack,
+					)
+				}
 			}
 		}
 		/// Enters each property `scope` creates in `closestDeclarationByLabel` as the closest declaration of its label for the
@@ -11100,7 +11188,7 @@ public actor DependencyTreeGenerator {
 			validatesCycles: Bool,
 			validatesHiddenProperties: Bool,
 			root: TypeDescription,
-			scopesToValidate: inout [ScopeToValidate],
+			scopesToValidate: inout [TreeValidationStep],
 		) throws {
 			let scope = scopeToValidate.scope
 			let receivableProperties = scopeToValidate.receivableProperties
@@ -11438,12 +11526,11 @@ public actor DependencyTreeGenerator {
 					if let closedOnIndex = childPropertyStack.indices.first(where: {
 						childPropertyStack[$0] == childProperty && childParentTypeStack[$0] == childScope.instantiable.concreteInstantiable
 					}) {
-						// There is a cycle in our scope tree. Do not re-enter it. The type the cycle-closing scope builds
-						// receives the nearest declaration of each label, which a scope between it and the scope it closes
-						// on can make: the generated code passes that declaration where the tree is built again.
-						try validateTreeBuiltAgainByCycle(
-							of: childScope,
-							for: childProperty,
+						// There is a cycle in our scope tree. Do not re-enter it: walk the tree the cycle-closing scope builds
+						// again, in its turn.
+						scopesToValidate.append(.cycleClosingScope(CycleClosingScopeToValidate(
+							scope: childScope,
+							property: childProperty,
 							closedOnIndex: closedOnIndex,
 							cycleClosingScopeParent: scope,
 							propertyStack: childPropertyStack,
@@ -11453,10 +11540,7 @@ public actor DependencyTreeGenerator {
 							// As the tree of any child is given them, without the property it builds.
 							receivableProperties: childReceivableProperties.subtracting(childPropertyToGenerate.receivableProperties),
 							receivableDepthByProperty: childReceivableDepthByProperty,
-							validatesCycles: validatesCycles,
-							validatesHiddenProperties: validatesHiddenProperties,
-							root: root,
-						)
+						)))
 						continue
 					}
 					// Neither the child nor, when it is lazily instantiated, its instance can be received in the tree it creates,
@@ -11468,7 +11552,7 @@ public actor DependencyTreeGenerator {
 					if let instanceProperty = childPropertyToGenerate.lazilyInstantiatedInstanceProperty {
 						receivablePropertiesInChildTree.remove(instanceProperty)
 					}
-					scopesToValidate.append(ScopeToValidate(
+					scopesToValidate.append(.scope(ScopeToValidate(
 						scope: childScope,
 						receivableProperties: receivablePropertiesInChildTree,
 						receivableAliases: childReceivableAliases,
@@ -11479,7 +11563,7 @@ public actor DependencyTreeGenerator {
 						propertyStack: childPropertyStack,
 						parentTypeStack: childParentTypeStack,
 						lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations.recordingLazilyInstantiated(declaredChildProperty),
-					))
+					)))
 				case .aliased, .hole:
 					// A hole's tree is a fill's, which the module that fills it validates: the validated scopes hold no
 					// hole, since they leave out a dependency no scope builds.
@@ -11536,43 +11620,47 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
-	/// `hiddenReceivedProperties` without each chain that reaches a receive through a seam this module generates
-	/// whose own tree reaches it the same way below the seam: the walk of the seam's tree reports that receive from
-	/// the seam's chain, on every path and whatever a caller holds, so the longer chain is the same error again. An
-	/// entry is matched by a seam's own entry of the same receive whose chain is strictly shorter, where the seam is
-	/// the scope at that depth on the entry's chain and the chains agree below it, between the seam and the receive;
-	/// the chains are matched by the concrete types of their scopes, since an entry names each by its property's type
-	/// (`ScreenProtocol`, `AnyScreen`), and an entry is dropped only when every chain of scopes it stands for is
-	/// matched. Nested seams therefore report the innermost seam's chain, sibling seams each their own, and a chain
-	/// that reaches the receive without passing through such a seam keeps its own; since every match is to a strictly
-	/// shorter entry, the shortest entries of each receive survive, and no receive loses its report.
-	private static func reportingEachSeamsChainOnce(_ hiddenReceivedProperties: [DependencyTreeGeneratorError.HiddenReceivedProperty: Set<[TypeDescription]>], seamTypes: Set<TypeDescription>) -> [DependencyTreeGeneratorError.HiddenReceivedProperty] {
+	/// The hidden receives `hiddenReceivedProperties` records, each from its root's one chain, without each chain that
+	/// reaches a receive through a seam this module generates whose own chain reaches it the same way below the seam: the
+	/// walk of the seam's tree reports that receive from the seam's chain, on every path and whatever a caller holds, so
+	/// the longer chain is the same error again. A chain is matched by a seam's own chain of the same receive that is
+	/// strictly shorter, where the seam is the scope at that depth on the chain and the chains agree below it, between the
+	/// seam and the receive; the chains are matched by the concrete types of their scopes, since a chain names each by its
+	/// property's type (`ScreenProtocol`, `AnyScreen`). Nested seams therefore report the innermost seam's chain, sibling
+	/// seams each their own, and a root whose chain reaches the receive without passing through such a seam keeps its own;
+	/// since every match is to a strictly shorter chain, the shortest chains of each receive survive, and no receive loses
+	/// its report.
+	private static func reportingEachSeamsChainOnce(_ hiddenReceivedProperties: [HiddenReceiveInTree: HiddenReceiveChain], seamTypes: Set<TypeDescription>) -> [DependencyTreeGeneratorError.HiddenReceivedProperty] {
 		struct HiddenReceive: Hashable {
 			let property: Property
 			let declarationLocation: Dependency.DeclarationLocation?
 			let hidingDeclaration: DependencyTreeGeneratorError.LabelDeclaration
 			let receiver: TypeDescription
 		}
-		typealias Entry = (hidden: DependencyTreeGeneratorError.HiddenReceivedProperty, parentTypeStacks: Set<[TypeDescription]>)
-		let entriesByReceive = Dictionary(grouping: hiddenReceivedProperties.map { Entry(hidden: $0.key, parentTypeStacks: $0.value) }) {
-			HiddenReceive(property: $0.hidden.property, declarationLocation: $0.hidden.declarationLocation, hidingDeclaration: $0.hidden.hidingDeclaration, receiver: $0.hidden.receiver)
+		let entriesByReceive = Dictionary(grouping: hiddenReceivedProperties) {
+			HiddenReceive(property: $0.key.property, declarationLocation: $0.key.declarationLocation, hidingDeclaration: $0.key.hidingDeclaration, receiver: $0.key.receiver)
 		}
 		var reported = [DependencyTreeGeneratorError.HiddenReceivedProperty]()
 		for sameReceive in entriesByReceive.values {
-			let fromSeams = sameReceive.filter { seamTypes.contains($0.hidden.root) }
-			for entry in sameReceive {
-				func isReportedFromSeamsChain(_ parentTypeStack: [TypeDescription]) -> Bool {
-					fromSeams.contains { fromSeam in
-						let depth = fromSeam.hidden.parentStack.count
-						return depth < entry.hidden.parentStack.count
-							&& parentTypeStack[depth] == fromSeam.hidden.root
-							&& Array(entry.hidden.parentStack.prefix(depth)) == fromSeam.hidden.parentStack
-							&& fromSeam.parentTypeStacks.contains(Array(parentTypeStack.prefix(depth)))
-					}
+			let fromSeams = sameReceive.filter { seamTypes.contains($0.key.root) }
+			func isReportedFromSeamsChain(_ chain: HiddenReceiveChain) -> Bool {
+				fromSeams.contains { fromSeam in
+					let depth = fromSeam.value.parentStack.count
+					return depth < chain.parentStack.count
+						&& chain.parentTypeStack[depth] == fromSeam.key.root
+						&& Array(chain.parentStack.prefix(depth)) == fromSeam.value.parentStack
+						&& Array(chain.parentTypeStack.prefix(depth)) == fromSeam.value.parentTypeStack
 				}
-				if !entry.parentTypeStacks.allSatisfy(isReportedFromSeamsChain) {
-					reported.append(entry.hidden)
-				}
+			}
+			for (hiddenReceive, chain) in sameReceive where !isReportedFromSeamsChain(chain) {
+				reported.append(.init(
+					property: hiddenReceive.property,
+					declarationLocation: hiddenReceive.declarationLocation,
+					hidingDeclaration: hiddenReceive.hidingDeclaration,
+					receiver: hiddenReceive.receiver,
+					parentStack: chain.parentStack,
+					root: hiddenReceive.root,
+				))
 			}
 		}
 		return reported
