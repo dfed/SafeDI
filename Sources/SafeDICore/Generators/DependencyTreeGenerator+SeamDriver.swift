@@ -419,6 +419,7 @@ extension DependencyTreeGenerator {
 			},
 			checkingSeamTrees: generatedSeams.map { (instantiable: $0.seam, scope: $0.rootScope) },
 		)
+		var constructionMemo = ConstructionMemo()
 		var rootScopeGenerators = try rootScopesToGenerate.rootScopes.map { typeDescription, scope in
 			try RootScopeInfo(
 				typeDescription: typeDescription,
@@ -429,6 +430,7 @@ extension DependencyTreeGenerator {
 					lazilyInstantiatedInstanceProperties: [],
 					erasedToConcreteExistential: false,
 					declaredTypeNames: declaredTypeNames,
+					constructionMemo: &constructionMemo,
 				),
 			)
 		}
@@ -1128,6 +1130,9 @@ extension DependencyTreeGenerator {
 				lazilyInstantiatedInstanceProperties.insert(property.asUnwrappedProperty)
 			}
 		}
+		// A seam's tree reads its own `SeamHoles`, constant within the tree but not across trees, so it keeps a memo of its
+		// own, for one pass: a seam without holes reuses its places within a pass, and one with holes stores none.
+		var constructionMemo = ConstructionMemo()
 		return try rootScope.createScopeGenerator(
 			for: nil,
 			nearestDeclarations: nearestDeclarations,
@@ -1136,6 +1141,7 @@ extension DependencyTreeGenerator {
 			erasedToConcreteExistential: false,
 			startsCodeGeneration: startsCodeGeneration,
 			declaredTypeNames: declaredTypeNames,
+			constructionMemo: &constructionMemo,
 		)
 	}
 
