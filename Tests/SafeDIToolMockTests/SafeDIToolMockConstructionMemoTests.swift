@@ -938,6 +938,28 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keysPlacesBuiltAtOnePlaceInMemo_whenMockRootsShareMemo() async throws {
+		// `P`'s mock builds `G`, which builds `H`, each at one place of its tree. The memo the mock roots share carries every
+		// place to the mock roots built after `P`, so each is keyed.
+		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
+		let fixture = [
+			Self.mockedType(named: "P", declarations: ["@Instantiated let g: G"]),
+			seamFixtureType(named: "G", isFinalClass: true, declarations: ["@Instantiated let h: H"]),
+			seamFixtureType(named: "H", isFinalClass: true, declarations: []),
+		]
+		_ = try await ConstructionMemoOracle.$keyedPlaceObserver.withValue({ continuation.yield($0) }) { [fixture] in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var keyedTypes = Set<String>()
+		for await keyedType in stream {
+			keyedTypes.insert(keyedType)
+		}
+		#expect(keyedTypes == ["G", "H"])
+	}
+
 	// MARK: Private
 
 	/// How the module's mock roots share the construction memo.

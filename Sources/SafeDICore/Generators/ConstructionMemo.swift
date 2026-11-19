@@ -513,4 +513,8 @@ public enum ConstructionMemoOracle {
 	/// Whether `DependencyTreeGenerator` creates its mock roots in reverse type order, so that a memo shared between them
 	/// carries other trees' generators to each; what it generates must not change.
 	@TaskLocal public static var buildsMockRootsInReverseOrder = false
+
+	/// Called with the concrete type of each place `Scope.createScopeGenerator` keys and looks up in a construction memo,
+	/// when set: by the tests, never by the tool. The oracle's own builds are not reported.
+	@TaskLocal public static var keyedPlaceObserver: (@Sendable (_ concreteType: String) -> Void)?
 }
