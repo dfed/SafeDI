@@ -108,19 +108,30 @@ enum GraphFuzzerBuilderSurface {
 
 	/// Each builder written by hand – in the call a public mock caller makes (`GraphFuzzerOracle.addingPublicMockCallers`),
 	/// which passes a closure that takes nothing where the generated `mock()` takes one – that takes a scope: a closure that
-	/// names a parameter, `{ _ in … }`, for a place that forwards nothing, which the call passes a builder `mock()` keeps over
-	/// its enum.
+	/// names a parameter, `{ _ in … }`, under a label that some generated `mock()` of the called type takes as a builder
+	/// that takes no forwarded value (`GraphFuzzerPublicMockBuilders.takesForwardedValue(builderType:)`), such as one
+	/// `mock()` keeps over its enum or an erased instantiator's `Builder` over `()`, or that no generated `mock()` of it
+	/// takes. Where every tier takes the label as a wrapper's `Builder` that takes what its place forwards, the closure takes
+	/// that value, not a scope. Every builder of the call is judged, in the order the call passes them.
 	static func handWrittenBuilderFindings(in generatedFiles: [String: String]) -> [Finding] {
 		var findings = [Finding]()
 		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName.hasSuffix(GraphFuzzerOracle.publicMockCallerFileSuffix) {
 			for line in contents.split(separator: "\n") {
 				let call = line.trimmingCharacters(in: .whitespaces)
-				guard call.contains(".mock("), let range = call.range(of: #"\w+: \{ _ in "#, options: .regularExpression) else { continue }
-				findings.append(Finding(
-					declaration: "the hand-written call `\(call)`",
-					parameter: String(call[range]).trimmingCharacters(in: .whitespaces),
-					reason: "takes a scope its place does not forward",
-				))
+				guard let calleeEnd = call.range(of: ".mock("), let callee = call[..<calleeEnd.lowerBound].split(separator: " ").last else { continue }
+				let builderTypes = Dictionary(grouping: GraphFuzzerPublicMockBuilders.builderParameters(of: String(callee), in: generatedFiles), by: \.label)
+				var searchStart = call.startIndex
+				while let range = call.range(of: #"\w+: \{ _ in "#, options: .regularExpression, range: searchStart..<call.endIndex) {
+					searchStart = range.upperBound
+					let parameter = call[range].trimmingCharacters(in: .whitespaces)
+					let types = builderTypes[String(parameter.prefix { $0 != ":" })] ?? []
+					guard types.isEmpty || !types.allSatisfy({ GraphFuzzerPublicMockBuilders.takesForwardedValue(builderType: $0.type) }) else { continue }
+					findings.append(Finding(
+						declaration: "the hand-written call `\(call)`",
+						parameter: parameter,
+						reason: "takes a scope its place does not forward",
+					))
+				}
 			}
 		}
 		return findings
