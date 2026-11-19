@@ -56,7 +56,7 @@ struct GenerationJobsTests {
 			let admittedCount = await gate.admittedCount(of: [])
 			#expect(await gate.violations == [], "width \(width), \(order)")
 			// The jobs that ran are exactly those admitted before the failure was collected, and the failing job is among them.
-			#expect(Set(await gate.arrivals(of: [])) == Set(0..<admittedCount), "width \(width), \(order)")
+			#expect(await Set(gate.arrivals(of: [])) == Set(0..<admittedCount), "width \(width), \(order)")
 			#expect(admittedCount == (order == .index && width > 1 && blockingIndex == failingIndex + 2 ? failingIndex + 2 : failingIndex + 1), "width \(width), \(order)")
 			for (index, outcome) in outcomes.enumerated() {
 				switch outcome {
@@ -70,7 +70,11 @@ struct GenerationJobsTests {
 			}
 			// The error a caller reports, the failure of the lowest index, is the failing job's.
 			let firstFailure = outcomes.lazy.compactMap { outcome -> JobFailure? in
-				if case let .failure(failure)? = outcome { failure } else { nil }
+				if case let .failure(failure)? = outcome {
+					failure
+				} else {
+					nil
+				}
 			}.first
 			#expect(firstFailure == JobFailure(index: failingIndex), "width \(width), \(order)")
 		}
@@ -192,7 +196,7 @@ struct GenerationJobsTests {
 
 	@Test(arguments: [(width: 4, jobCount: 20), (width: 4, jobCount: 3), (width: 1, jobCount: 3), (width: 1, jobCount: 2)])
 	@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)
-	func results_throwsCancellationErrorAfterEveryStartedJobFinishes_whenTheCallingTaskIsCancelledMidCall(width: Int, jobCount: Int) async throws {
+	func results_throwsCancellationErrorAfterEveryStartedJobFinishes_whenTheCallingTaskIsCancelledMidCall(width: Int, jobCount: Int) async {
 		// At width 4 every job in flight is held; at width 1, the last job of the first two. Job 0 fails before the call is
 		// cancelled, so a failure is collected and still reported nowhere.
 		let heldJobCount = width == 1 ? 1 : min(width, jobCount)
@@ -346,10 +350,10 @@ struct SplitMix64: RandomNumberGenerator {
 	}
 
 	mutating func next() -> UInt64 {
-		state &+= 0x9E37_79B9_7F4A_7C15
+		state &+= 0x9E3779B97F4A7C15
 		var value = state
-		value = (value ^ (value >> 30)) &* 0xBF58_476D_1CE4_E5B9
-		value = (value ^ (value >> 27)) &* 0x94D0_49BB_1331_11EB
+		value = (value ^ (value >> 30)) &* 0xBF58476D1CE4E5B9
+		value = (value ^ (value >> 27)) &* 0x94D049BB133111EB
 		return value ^ (value >> 31)
 	}
 

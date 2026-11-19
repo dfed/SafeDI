@@ -100,7 +100,7 @@ enum PhaseTimes {
 				peakResidentBytes = Int(usage.ru_maxrss)
 			#else
 				// Linux reports it in kilobytes.
-				peakResidentBytes = Int(usage.ru_maxrss) * 1024
+				peakResidentBytes = Int(usage.ru_maxrss) * 1_024
 			#endif
 		}
 

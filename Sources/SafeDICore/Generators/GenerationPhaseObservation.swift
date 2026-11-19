@@ -21,8 +21,8 @@
 /// The phases of a generation run whose time `SAFEDI_PHASE_TIMES_OUTPUT` records. Later pull requests may split a
 /// span into these phases, never rename one.
 public enum GenerationPhase: String, Sendable, CaseIterable {
-	case validation = "validation"
-	case signatures = "signatures"
+	case validation
+	case signatures
 	case productionConstruction = "production construction"
 	case mockPlans = "mock plans"
 	case mockConstruction = "mock construction"
