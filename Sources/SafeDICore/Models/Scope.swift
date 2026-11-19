@@ -629,6 +629,8 @@ final class Scope: Hashable {
 			previousPassGenerator: previousPassGenerator,
 			cycleParameterContexts: [:],
 			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
+			// A root's place is never stored.
+			recordsReads: false,
 		)]
 		let reusesGenerators = ConstructionMemo.isEnabled
 		let keyedPlaceObserver = ConstructionMemoOracle.keyedPlaceObserver
@@ -665,6 +667,7 @@ final class Scope: Hashable {
 							scope: scope,
 							property: property,
 							erasedToConcreteExistential: erasedToConcreteExistential,
+							isKeyed: key != nil,
 						)
 						child.memoKey = key
 						child.startLogIndex = startLog.count
@@ -752,13 +755,15 @@ private struct ScopeGeneratorUnderConstruction {
 		cycleParameterContexts: [ScopeGenerator.BuiltDeclaration: CycleParameterContext],
 		reboundProperties: Set<Property> = [],
 		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]? = nil,
+		recordsReads: Bool,
 	) {
 		self.placeHoldingPropertiesByType = placeHoldingPropertiesByType
 		self.depth = depth
+		self.recordsReads = recordsReads
 		// Every read of the context this scope inherits goes through `context`, logged, so a construction memo can tell
 		// whether another place inherits a context that answers the reads of this scope's subtree alike (see
 		// `ConstructionMemo`).
-		var log = ConstructionLog()
+		var log = ConstructionLog(recording: recordsReads)
 		let context = ConstructionContext(
 			propertyStack: propertyStack,
 			concreteTypeStack: concreteTypeStack,
@@ -1261,8 +1266,11 @@ private struct ScopeGeneratorUnderConstruction {
 	/// This scope's depth in the tree (see `init`).
 	let depth: Int
 	/// What this scope and the scopes beneath it whose generators exist read of the context above them (see
-	/// `ConstructionMemo`).
+	/// `ConstructionMemo`), recorded only where `recordsReads`.
 	private(set) var log: ConstructionLog
+	/// Whether this scope records what its subtree reads: where it has a construction memo key, or is beneath a scope that
+	/// has one, whose stored entry holds those reads. Elsewhere the reads are never stored, and no scope above keeps them.
+	let recordsReads: Bool
 	/// Whether this scope's generator may be stored in a construction memo, or reuse one stored there: neither it nor a
 	/// scope beneath it is a fill, is inside one, or is in a tree with holes.
 	private(set) var isMemoizable: Bool
@@ -1602,6 +1610,9 @@ private struct ScopeGeneratorUnderConstruction {
 			cycleParameterContexts: [:],
 			// A place inside the fill is a place of the type the fill builds, whose builds start their children in its order.
 			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
+			// A fill is never stored, and leaves every scope above it unstored, so its reads are recorded only as its
+			// enclosing scope's are.
+			recordsReads: recordsReads,
 		)
 	}
 
@@ -1623,10 +1634,12 @@ private struct ScopeGeneratorUnderConstruction {
 	}
 
 	/// The scope under construction for a scope this one instantiates.
+	/// - Parameter isKeyed: Whether the child has a construction memo key, so that its reads are recorded for its entry.
 	func childUnderConstruction(
 		scope: ConstructionScope,
 		property: Property,
 		erasedToConcreteExistential: Bool,
+		isKeyed: Bool,
 	) -> ScopeGeneratorUnderConstruction {
 		ScopeGeneratorUnderConstruction(
 			scope: scope,
@@ -1656,6 +1669,7 @@ private struct ScopeGeneratorUnderConstruction {
 			// The loops the pass before found among this scope's children.
 			reboundProperties: childReboundProperties,
 			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
+			recordsReads: recordsReads || isKeyed,
 		)
 	}
 
