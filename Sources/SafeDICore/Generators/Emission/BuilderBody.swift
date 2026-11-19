@@ -22,7 +22,7 @@
 /// child's code, a seam call's guard line, a member call, a fill place's binding, a loop member's rebinding. No statement
 /// is empty: every scope a body emits writes a line (`.claude/rules/emission-decisions.md`, "Empty chunks").
 struct BuilderBody: Hashable, Sendable {
-	let statements: [String]
+	let statements: [GeneratedCode]
 
 	/// Whether the body writes anything before its value. A constant whose body writes nothing is constructed in place,
 	/// with no builder function.
