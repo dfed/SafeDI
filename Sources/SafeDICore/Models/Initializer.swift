@@ -248,9 +248,6 @@ public struct Initializer: Codable, Hashable, Sendable {
 		for argument in arguments {
 			guard let dependency = dependencies.first(where: argument.isFulfilled(by:)) else {
 				guard argument.hasDefaultValue else {
-					// A deliberate gap: a fill's call of a hand-written mock that takes a dependency only an inactive clause
-					// declares still ends here in a build that compiles no generated mock, which the located check
-					// (`validateHandWrittenMocksTakeOnlyFulfilledParameters`) leaves alone, so that the inline shape builds there.
 					throw GenerationError.unexpectedArgument(argument.asProperty.asSource)
 				}
 				// We do not care about this argument because it has a default value.
@@ -278,18 +275,31 @@ public struct Initializer: Codable, Hashable, Sendable {
 	) throws(GenerationError) -> String {
 		try createDependencyAndArgumentBinding(given: dependencies)
 			.map {
-				if let unavailableProperties, unavailableProperties.contains($0.dependency.property) {
-					"\($0.argument.label.spelledAsArgumentLabel): nil"
-				} else if !lazilyInstantiatedInstanceProperties.isEmpty,
-				          $0.dependency.source.isReceived,
-				          let instanceRead = lazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceRead(of: $0.dependency.property)
-				{
-					"\($0.argument.label.spelledAsArgumentLabel): \($0.argument.innerLabel)\(instanceRead)"
-				} else {
-					"\($0.argument.label.spelledAsArgumentLabel): \($0.argument.innerLabel)"
-				}
+				Self.argument($0.argument, passing: $0.dependency, unavailableProperties: unavailableProperties, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties)
 			}
 			.joined(separator: ", ")
+	}
+
+	/// The argument list of a generated call of this hand-written mock that a fill makes: each argument one of `dependencies`
+	/// is passed to, as `createInitializerArgumentList` spells it, and each argument without a default value that none of
+	/// them is passed to, passed the value of its own name, in declaration order. Such an argument takes a dependency only
+	/// an `#if` clause the build does not select declares, in a build that compiles no generated mock, since
+	/// `DependencyTreeGenerator.validateHandWrittenMocksTakeOnlyFulfilledParameters` reports it in every other build: the
+	/// call is never compiled, as the same call outside a fill is not.
+	func createHandWrittenMockArgumentList(
+		given dependencies: [Dependency],
+		unavailableProperties: Set<Property>?,
+		lazilyInstantiatedInstanceProperties: Set<Property>,
+	) -> String {
+		var parts = [String]()
+		for argument in arguments {
+			if let dependency = dependencies.first(where: argument.isFulfilled(by:)) {
+				parts.append(Self.argument(argument, passing: dependency, unavailableProperties: unavailableProperties, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties))
+			} else if !argument.hasDefaultValue {
+				parts.append("\(argument.label.spelledAsArgumentLabel): \(argument.innerLabel)")
+			}
+		}
+		return parts.joined(separator: ", ")
 	}
 
 	/// Creates an argument list that includes ALL arguments — both dependency-matching
@@ -319,6 +329,26 @@ public struct Initializer: Codable, Hashable, Sendable {
 	}
 
 	// MARK: - Private
+
+	/// `argument` of a generated call, passed `dependency`: `nil` where it is unavailable, the instance of a received
+	/// property held as a `LazilyInstantiated` property's instance, and the property of its label otherwise.
+	private static func argument(
+		_ argument: Argument,
+		passing dependency: Dependency,
+		unavailableProperties: Set<Property>?,
+		lazilyInstantiatedInstanceProperties: Set<Property>,
+	) -> String {
+		if let unavailableProperties, unavailableProperties.contains(dependency.property) {
+			"\(argument.label.spelledAsArgumentLabel): nil"
+		} else if !lazilyInstantiatedInstanceProperties.isEmpty,
+		          dependency.source.isReceived,
+		          let instanceRead = lazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceRead(of: dependency.property)
+		{
+			"\(argument.label.spelledAsArgumentLabel): \(argument.innerLabel)\(instanceRead)"
+		} else {
+			"\(argument.label.spelledAsArgumentLabel): \(argument.innerLabel)"
+		}
+	}
 
 	/// The reasons this initializer cannot construct its type, whatever dependencies the type has. Generated code is
 	/// always in a file of its own, so it cannot call a `private` or `fileprivate` initializer. Any other access can

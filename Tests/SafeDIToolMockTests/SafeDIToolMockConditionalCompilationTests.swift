@@ -1867,6 +1867,82 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 		"""])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_generatesMockInsideFillWithoutError_whenBuildLeavesMockConditionInactive() async throws {
+		// `analytics`, which `DefaultUserService.mock(analytics:)` takes, is declared only inside `#if FEATURE`, so the fill's
+		// call of that mock passes it the value of its own name. A release build compiles no generated mock, so the call is
+		// never compiled, as the same call outside a fill is not
+		// (`generate_generatesMockWithoutError_whenBuildLeavesMockConditionInactive`).
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.fillModules(isReleaseConfiguration: true),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+
+		#if FEATURE
+		#error("SafeDI scanned this module assuming `#if FEATURE` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                analytics: analytics,
+		                service: service
+		            )
+		        }
+
+		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
+		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                analytics: (() -> Analytics)?,
+		                service: Service.SafeDIOverrides
+		            ) {
+		                self.analytics = analytics
+		                self.service = service
+		            }
+
+		            let analytics: (() -> Analytics)?
+		            let service: Service.SafeDIOverrides
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_service() -> Service {
+		            func __safeDI_defaultUserService_AnyUserServiceBuilder_Service() -> Service.SafeDIMockScope_DefaultUserService_AnyUserService.__safeDI_Builder<AnyUserService> {
+		                .init(userService: { _ in
+		                    let userService = AnyUserService(DefaultUserService.mock(analytics: analytics))
+		                    return userService
+		                })
+		            }
+		            _ = Service.__safeDI_Service_mock_040B79113D51A243.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Service.__safeDI_mock(defaultUserService_AnyUserServiceBuilder: __safeDI_defaultUserService_AnyUserServiceBuilder_Service(), analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        }
+		        let service: Service = __safeDI_service()
+		        return Screen(analytics: analytics, service: service)
+		    }
+		}
+		#endif
+		"""])
+	}
+
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorAtInactiveClauseInDeclaringModule_whenPublicMockBuildsOtherModulesTypeWithSuchMock(integration: MultiModuleIntegration) async {
@@ -2225,7 +2301,7 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 	/// `Core`, of package `pkg`, declares `Service`, whose public mock takes a builder for `userService`, which no type
 	/// `Core` sees fulfills; `App`, of package `app`, declares `DefaultUserService`, which fulfills it, and `Screen`, whose
 	/// mock calls `Service`'s, since `Service`'s `package` initializer and `Session` keep `App` from building it inline.
-	private static func fillModules(activeCompilationConditions: [String] = []) -> [ModuleFixture] {
+	private static func fillModules(activeCompilationConditions: [String] = [], isReleaseConfiguration: Bool = false) -> [ModuleFixture] {
 		[
 			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [
 				"""
@@ -2262,7 +2338,7 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 				    @Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true) let userService: AnyUserService
 				}
 				""",
-			], activeCompilationConditions: activeCompilationConditions),
+			], activeCompilationConditions: activeCompilationConditions, isReleaseConfiguration: isReleaseConfiguration),
 			ModuleFixture(name: "App", packageName: "app", swiftFileContent: [
 				"""
 				import Core
@@ -2280,7 +2356,7 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 				""",
 			], swiftFileContentByFilePath: [
 				"DefaultUserService.swift": defaultUserService(prefix: "import Core\n\n", conformances: "UserService, Instantiable"),
-			], dependencies: ["Core"], activeCompilationConditions: activeCompilationConditions),
+			], dependencies: ["Core"], activeCompilationConditions: activeCompilationConditions, isReleaseConfiguration: isReleaseConfiguration),
 		]
 	}
 

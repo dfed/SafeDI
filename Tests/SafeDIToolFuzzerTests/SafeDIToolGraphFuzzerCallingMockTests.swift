@@ -1233,6 +1233,58 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(GraphFuzzerCallingMockDraw(seed: 0).mockBuild == .compilesGeneratedMocks)
 	}
 
+	/// Seed 910 draws the first graph of `fillCallsMockTakingGuardedValueWhereMockConditionIsInactive/internal/plain`, the
+	/// first of its block: the fill that receives the caller's own value, whose hand-written mock also takes a value the
+	/// fill declares only inside an `#if` clause the build does not select, in a build that does not tell the tool the mock
+	/// condition is active. The tool reports that parameter only where the generated mocks compile, so the mock fills the
+	/// place with a call of the hand-written mock, as its twin fills it with the fill's initializer. With the fill's call
+	/// generated from the dependencies alone again (`Initializer.createInitializerArgumentList`), the mock stops at the
+	/// unlocated `unexpectedArgument`, which the check reports as `callingMockRejectsWhereTwinAccepts`.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_fillsPlace_whenDrawnFillCallsMockTakingGuardedValueWhereMockConditionIsInactive() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 910)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 910)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive, caller: .internal, place: .plain))
+		#expect(!draw.mockBuild.compilesGeneratedMocks)
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.mockSites == nil)
+		#expect(result.passUps.isEmpty)
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
+	/// The graphs of the shape whose fill's hand-written mock takes a value only an inactive clause declares draw each
+	/// build that leaves the mock condition inactive, each condition of the clause, each caller kind and each place, in the
+	/// pinned number of graphs, each at least ten.
+	@Test
+	func fillCallsMockTakingGuardedValueWhereMockConditionIsInactiveDraw_drawsEachBuild_inPinnedNumberOfGraphs() {
+		let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive }
+		var counts = [String: Int]()
+		for draw in draws {
+			counts["\(draw.mockBuild)", default: 0] += 1
+			counts["#if \(draw.guardedValueCondition ?? "none")", default: 0] += 1
+			counts[draw.cell.caller.rawValue, default: 0] += 1
+			counts[draw.cell.place.rawValue, default: 0] += 1
+		}
+		print("calling-mock fills whose mock takes a guarded value \(counts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
+
+		#expect(counts == [
+			"debugWithoutMockCondition": 33,
+			"release": 27,
+			"#if FUZZ_GUARD": 23,
+			"#if DEBUG": 37,
+			"internal": 20,
+			"public": 20,
+			"listed": 20,
+			"plain": 30,
+			"deferred": 30,
+		])
+		#expect(counts.values.allSatisfy { $0 >= 10 })
+		#expect(GraphFuzzerCallingMockDraw(seed: 0).guardedValueCondition == nil)
+	}
+
 	/// Seed 730 draws the first graph of `fillReceivesCallersLazyValueBelowCalledRoot/internal/plain`, the first of its
 	/// block: an internal calling mock whose call's place is a level below the called type's root, filled by a type that
 	/// receives the caller's lazily held value, which the called type's tree also receives, only if available. The caller
@@ -1904,7 +1956,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	@Test
 	func drawnCells_coverEveryCell_whenCorpusDrawsTenGraphsPerCell() {
-		#expect(GraphFuzzerCallingMockCell.all.count == 91)
+		#expect(GraphFuzzerCallingMockCell.all.count == 97)
 		#expect(GraphFuzzerCallingMockCell.drawnCells == GraphFuzzerCallingMockCell.all)
 		#expect(Self.callingMockCorpusSeedCount == GraphFuzzerCallingMockCell.drawnCells.count * 10)
 		#expect(GraphFuzzerCallingMockCell.firstSeeds.map(GraphFuzzerCallingMockCell.cell(ofSeed:)) == GraphFuzzerCallingMockCell.all)
