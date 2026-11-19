@@ -1468,9 +1468,12 @@ jobs:
         run: tar -xzf graph-fuzzer-test-bundle.tar.gz
       # A pass took about 6.3 minutes when four took 25.3 (run 43755152593)
       # and about 5.1 in run 43760851366, and up to 8.3 over forty passes
-      # since (run 44034763455); the limit is about twice the slowest.
+      # since (run 44034763455). The 2.3.0 stack's suite, 6,735 tests, took
+      # 12.5 to 16.1 minutes a pass (run 44243231996), and 13.0 in run
+      # 44545790927, whose other two passes the old limit of 17 cut off
+      # seven tests from the end; the limit is about twice the slowest, 18.
       - name: Run Tests
-        timeout-minutes: 17
+        timeout-minutes: 36
         env:
           SAFEDI_SKIP_COMPILE_CHECK: 1
           LLVM_PROFILE_FILE: ${{ runner.temp }}/repeat-tests-%p.profraw
