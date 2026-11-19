@@ -8955,10 +8955,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				"\(typeName)(\(argumentList))"
 			}
+			// A public mock's `mock()` calls the function only generated code calls, as every tier does (`publicMockTiers`).
 			let code = if let publicMockPlan {
 				"""
 				extension \(typeName) {
 				    \(mockAttributesPrefix)public static func mock() -> \(mockMethodReturnType) {
+				        \(typeName).\(ReservedName.publicMockFunctionName)()
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    \(mockAttributesPrefix)public static func \(ReservedName.publicMockFunctionName)() -> \(mockMethodReturnType) {
 				        \(construction)
 				    }
 				}
