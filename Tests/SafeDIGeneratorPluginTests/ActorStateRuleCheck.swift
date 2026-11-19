@@ -295,23 +295,23 @@ private final class AssignmentVisitor: SyntaxVisitor {
 	/// The roots of what `target` assigns to: one, or one for each element of a tuple.
 	private static func roots(of target: ExprSyntax) -> [Root] {
 		if let tuple = target.as(TupleExprSyntax.self) {
-			return tuple.elements.flatMap { roots(of: $0.expression) }
+			tuple.elements.flatMap { roots(of: $0.expression) }
 		} else if let memberAccess = target.as(MemberAccessExprSyntax.self) {
 			if let base = memberAccess.base, base.as(DeclReferenceExprSyntax.self)?.baseName.tokenKind == .keyword(.self) {
-				return [.member(memberAccess.declName.baseName.text)]
+				[.member(memberAccess.declName.baseName.text)]
 			} else {
-				return memberAccess.base.map(roots(of:)) ?? []
+				memberAccess.base.map(roots(of:)) ?? []
 			}
 		} else if let subscriptCall = target.as(SubscriptCallExprSyntax.self) {
-			return roots(of: subscriptCall.calledExpression)
+			roots(of: subscriptCall.calledExpression)
 		} else if let forceUnwrap = target.as(ForceUnwrapExprSyntax.self) {
-			return roots(of: forceUnwrap.expression)
+			roots(of: forceUnwrap.expression)
 		} else if let optionalChaining = target.as(OptionalChainingExprSyntax.self) {
-			return roots(of: optionalChaining.expression)
+			roots(of: optionalChaining.expression)
 		} else if let reference = target.as(DeclReferenceExprSyntax.self) {
-			return [.name(reference.baseName.text)]
+			[.name(reference.baseName.text)]
 		} else {
-			return []
+			[]
 		}
 	}
 }
