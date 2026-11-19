@@ -700,14 +700,13 @@ public struct Generate: AsyncParsableCommand {
 				}
 
 				// ---- Dependency tree ----
-				let dependencyTreeSourcesInOrder: [String]
-				if let manifest {
-					dependencyTreeSourcesInOrder = manifest.dependencyTreeGeneration.map(\.inputFilePath)
+				let dependencyTreeSourcesInOrder: [String] = if let manifest {
+					manifest.dependencyTreeGeneration.map(\.inputFilePath)
 				} else {
 					// Combined mode: enumerate current-module roots.
 					// Sort by source file path so the concatenated
 					// output is stable for stable inputs.
-					dependencyTreeSourcesInOrder = Set(
+					Set(
 						module.instantiables
 							.filter { $0.isRoot || ($0.generatesDependencyTree && $0.sourceFilePath.map(ownFilePaths.contains) == true) }
 							.compactMap(\.sourceFilePath),
@@ -723,7 +722,6 @@ public struct Generate: AsyncParsableCommand {
 
 				// ---- Mocks ----
 				if let mockResult = results.mocks {
-
 					var sourceFileToMockExtensions = [String: [DependencyTreeGenerator.GeneratedRoot]]()
 					var typeNameToMockExtensions = [String: [DependencyTreeGenerator.GeneratedRoot]]()
 					for mock in mockResult.generatedRoots {
