@@ -145,7 +145,7 @@ extension DependencyTreeGenerator {
 				)
 				let scopeReceived = scopeReceivedProperties.received
 				let scopeOnlyIfAvailable = scopeReceivedProperties.onlyIfAvailable
-				allReceived.formUnion(scopeReceived)
+				allReceived.formUnionKeepingMostExplicitSpelling(scopeReceived)
 				allOnlyIfAvailable.formUnion(scopeOnlyIfAvailable)
 				for newProperty in scopeReceived.subtracting(scopeOnlyIfAvailable) where allRequired.insert(newProperty).inserted {
 					worklist.append(newProperty)
@@ -170,7 +170,7 @@ extension DependencyTreeGenerator {
 					)
 					guard Self.inaccessibleConstructions(constructions, from: emittingModule, extendedTypes: extendedTypeDeclarations).isEmpty else { continue }
 				}
-				allReceived.insert(property)
+				allReceived.insertKeepingMostExplicitSpelling(property)
 				allRequired.insert(property)
 				worklist.append(property)
 			}
@@ -238,10 +238,9 @@ extension DependencyTreeGenerator {
 				&& !isProvidedByMockedTypeAlias(receivedProperty)
 				&& !instancePropertiesOfLazilyInstantiatedProperties.contains(receivedProperty.asUnwrappedProperty)
 		}
-		// A promoted dependency the mocked type receives takes its spelling, in the override and the binding. A deliberate gap,
-		// as in `ScopeGenerator.mockRootParameters`: where two receivers in the tree spell a dependency the mocked type does not
-		// receive apart, the mocked type declares no spelling to prefer, and the promoted dependency takes one of theirs.
-		let mockedTypeSpellings = ScopeGenerator.MockedTypeSpellings(of: instantiable)
+		// A promoted dependency the mocked type receives takes its spelling, in the override and the binding, and any other
+		// the most explicit of its receivers' spellings in the tree, as `ScopeGenerator.mockRootParameters` spells the rest.
+		let mockedTypeSpellings = ScopeGenerator.MockedTypeSpellings(of: instantiable, treeReceivedProperties: allReceived)
 		var promotedPropertiesToGenerate = [Scope.PropertyToGenerate]()
 		for receivedProperty in propertiesToPromote.sorted()
 			where receivedProperty.asUnwrappedProperty == receivedProperty || !propertiesToPromote.contains(receivedProperty.asUnwrappedProperty)

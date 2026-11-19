@@ -1046,7 +1046,7 @@ extension DependencyTreeGenerator {
 							|| (!propertiesToDeclare.contains(property.asUnwrappedProperty) && !forwardedProperties.contains(property.asUnwrappedProperty))
 					) && (!childOnlyIfAvailable.contains(property) || !declarations.providesAFormReadByOnlyIfAvailableReceive(of: property))
 				}
-			received.formUnion(childReceivedFromAncestors)
+			received.formUnionKeepingMostExplicitSpelling(childReceivedFromAncestors)
 			required.formUnion(childReceivedFromAncestors.subtracting(childOnlyIfAvailable))
 			for property in walkedChild.receivedProperties.passedByPublicMockCalls where !declarations.providesWhatPublicMockCallPasses(property) {
 				passedByPublicMockCalls.insert(property)
@@ -1073,7 +1073,7 @@ extension DependencyTreeGenerator {
 			}
 			let fillOnlyIfAvailable = walkedFill.receivedProperties.onlyIfAvailable
 			for property in walkedFill.receivedProperties.received where !isProvidedByFields(property) {
-				received.insert(property)
+				received.insertKeepingMostExplicitSpelling(property)
 				if fillOnlyIfAvailable.contains(property) {
 					onlyIfAvailable.insert(property)
 				} else {
@@ -1114,7 +1114,7 @@ extension DependencyTreeGenerator {
 			for dependency in scope.instantiable.dependencies where scope.publicMockCall == nil || dependency.source != .received(onlyIfAvailable: true) {
 				switch dependency.source {
 				case let .received(isOnlyIfAvailable):
-					received.insert(dependency.property)
+					received.insertKeepingMostExplicitSpelling(dependency.property)
 					if isOnlyIfAvailable {
 						onlyIfAvailable.insert(dependency.property)
 					} else {
@@ -1129,7 +1129,7 @@ extension DependencyTreeGenerator {
 						? !declarations.providesAFormReadByOnlyIfAvailableReceive(of: fulfillingProperty)
 						: !propertiesToDeclare.contains(fulfillingProperty) && !forwardedProperties.contains(fulfillingProperty)
 					else { break }
-					received.insert(fulfillingProperty)
+					received.insertKeepingMostExplicitSpelling(ValueSpellings.fulfillingProperty(fulfillingProperty, spelledAsAlias: dependency.property))
 					if isOnlyIfAvailable {
 						onlyIfAvailable.insert(fulfillingProperty)
 					} else {
