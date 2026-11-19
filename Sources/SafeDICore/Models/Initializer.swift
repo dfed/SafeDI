@@ -248,9 +248,6 @@ public struct Initializer: Codable, Hashable, Sendable {
 		for argument in arguments {
 			guard let dependency = dependencies.first(where: argument.isFulfilled(by:)) else {
 				guard argument.hasDefaultValue else {
-					// A deliberate gap: a fill's call of a hand-written mock that takes a dependency only an inactive clause
-					// declares still ends here in a build that compiles no generated mock, which the located check
-					// (`validateHandWrittenMocksTakeOnlyFulfilledParameters`) leaves alone, so that the inline shape builds there.
 					throw GenerationError.unexpectedArgument(argument.asProperty.asSource)
 				}
 				// We do not care about this argument because it has a default value.
@@ -395,7 +392,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 		static let dependenciesArgumentName: TokenSyntax = .identifier("buildSafeDIDependencies")
 
 		/// Whether `dependency` is passed to this argument.
-		fileprivate func isFulfilled(by dependency: Dependency) -> Bool {
+		func isFulfilled(by dependency: Dependency) -> Bool {
 			dependency.property.label == innerLabel
 				&& dependency.property.typeDescription.isEqualToFunctionArgument(typeDescription)
 		}

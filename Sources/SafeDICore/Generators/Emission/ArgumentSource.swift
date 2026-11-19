@@ -104,18 +104,51 @@ extension Initializer {
 	) throws(GenerationError) -> String {
 		try createDependencyAndArgumentBinding(given: dependencies)
 			.map {
-				let source: ArgumentSource = if let unavailableProperties, unavailableProperties.contains($0.dependency.property) {
-					.nil
-				} else if !lazilyInstantiatedInstanceProperties.isEmpty,
-				          $0.dependency.source.isReceived,
-				          let instanceSource = lazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceSource(of: $0.dependency.property, boundAs: $0.argument.innerLabel)
-				{
-					instanceSource
-				} else {
-					.binding(label: $0.argument.innerLabel)
-				}
-				return CallArgument(label: $0.argument.label, source: source).spelled
+				Self.argument($0.argument, passing: $0.dependency, unavailableProperties: unavailableProperties, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties).spelled
 			}
 			.joined(separator: ", ")
+	}
+
+	/// The argument list of a generated call of this hand-written mock that a fill makes: each argument one of `dependencies`
+	/// is passed to, as `createInitializerArgumentList` spells it, and each argument without a default value that none of
+	/// them is passed to, passed the value of its own name, in declaration order. Such an argument takes a dependency only
+	/// an `#if` clause the build does not select declares, in a build that compiles no generated mock, since
+	/// `DependencyTreeGenerator.validateHandWrittenMocksTakeOnlyFulfilledParameters` reports it in every other build: the
+	/// call is never compiled, as the same call outside a fill is not.
+	func createHandWrittenMockArgumentList(
+		given dependencies: [Dependency],
+		unavailableProperties: Set<Property>?,
+		lazilyInstantiatedInstanceProperties: Set<Property>,
+	) -> String {
+		var parts = [String]()
+		for argument in arguments {
+			if let dependency = dependencies.first(where: argument.isFulfilled(by:)) {
+				parts.append(Self.argument(argument, passing: dependency, unavailableProperties: unavailableProperties, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties).spelled)
+			} else if !argument.hasDefaultValue {
+				parts.append(CallArgument(label: argument.label, source: .binding(label: argument.innerLabel)).spelled)
+			}
+		}
+		return parts.joined(separator: ", ")
+	}
+
+	/// `argument` of a generated call, passed `dependency`: `nil` where it is unavailable, the instance of a received
+	/// property held as a `LazilyInstantiated` property's instance, and the property of its label otherwise.
+	private static func argument(
+		_ argument: Argument,
+		passing dependency: Dependency,
+		unavailableProperties: Set<Property>?,
+		lazilyInstantiatedInstanceProperties: Set<Property>,
+	) -> CallArgument {
+		let source: ArgumentSource = if let unavailableProperties, unavailableProperties.contains(dependency.property) {
+			.nil
+		} else if !lazilyInstantiatedInstanceProperties.isEmpty,
+		          dependency.source.isReceived,
+		          let instanceSource = lazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceSource(of: dependency.property, boundAs: argument.innerLabel)
+		{
+			instanceSource
+		} else {
+			.binding(label: argument.innerLabel)
+		}
+		return CallArgument(label: argument.label, source: source)
 	}
 }
