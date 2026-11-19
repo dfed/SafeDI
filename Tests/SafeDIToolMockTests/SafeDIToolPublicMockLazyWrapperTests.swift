@@ -835,6 +835,555 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 		)
 	}
 
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesWrappersInstanceToMockedType_whenMockedTypeReceivesLazilyReceivedValueByValue(isReceivedOnlyIfAvailable: Bool) async throws {
+		// `Screen` itself receives `session` by value – required, or only if available – and `Badge`, which it builds through an
+		// `Instantiator`, receives the wrapper, so `Screen`'s mock takes the wrapper and passes `Screen` its instance, as
+		// production does.
+		let modules = Self.modules(wrapper: "LazilyInstantiated", isReceivedOnlyIfAvailable: isReceivedOnlyIfAvailable, screenReadsSessionByValueAndBuildsBadgeReadingWrapper: true)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feed"]?.generatedFiles == [
+			"Feed.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            badgeBuilder: ((LazilyInstantiated<Session>) -> Badge)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                badgeBuilder: badgeBuilder
+			            )
+			        }
+
+			        public var badgeBuilder: ((LazilyInstantiated<Session>) -> Badge)? { __safeDI_storage.badgeBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                badgeBuilder: ((LazilyInstantiated<Session>) -> Badge)?
+			            ) {
+			                self.badgeBuilder = badgeBuilder
+			            }
+
+			            let badgeBuilder: ((LazilyInstantiated<Session>) -> Badge)?
+			        }
+			    }
+
+			    public static func mock(
+			        session: LazilyInstantiated<Session>,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        func __safeDI_badgeBuilder() -> Badge {
+			            if let safeDIBuilder = safeDIOverrides.badgeBuilder { safeDIBuilder(session) } else { Badge(session: session) }
+			        }
+			        let badgeBuilder = Instantiator<Badge>(__safeDI_badgeBuilder)
+			        return Screen(session: session.instance, badgeBuilder: badgeBuilder)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_mock_1237EAC7E69790A2 {}
+			}
+			#endif
+			""",
+		])
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feed)
+			import Feed
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Mid {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            session: (() -> Session)? = nil,
+			            screenBuilder: Screen.SafeDIOverrides = .init()
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                session: session,
+			                screenBuilder: screenBuilder
+			            )
+			        }
+
+			        public var session: (() -> Session)? { __safeDI_storage.session }
+			        public var screenBuilder: Screen.SafeDIOverrides { __safeDI_storage.screenBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                session: (() -> Session)?,
+			                screenBuilder: Screen.SafeDIOverrides
+			            ) {
+			                self.session = session
+			                self.screenBuilder = screenBuilder
+			            }
+
+			            let session: (() -> Session)?
+			            let screenBuilder: Screen.SafeDIOverrides
+			        }
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Mid {
+			        func __safeDI_session() -> Session {
+			            if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
+			        }
+			        let session = LazilyInstantiated<Session>(__safeDI_session)
+			        _ = Screen.__safeDI_Screen_mock_1237EAC7E69790A2.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			        func __safeDI_screenBuilder() -> Screen {
+			            Screen.mock(session: session, safeDIOverrides: safeDIOverrides.screenBuilder)
+			        }
+			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+			        return Mid(screenBuilder: screenBuilder, session: session)
+			    }
+			}
+
+			extension Mid {
+			    public enum __safeDI_Mid_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+
+			#if DEBUG
+			extension MidInternal {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            session: (() -> Session)? = nil,
+			            screenBuilder: Screen.SafeDIOverrides = .init()
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                session: session,
+			                screenBuilder: screenBuilder
+			            )
+			        }
+
+			        var session: (() -> Session)? { __safeDI_storage.session }
+			        var screenBuilder: Screen.SafeDIOverrides { __safeDI_storage.screenBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                session: (() -> Session)?,
+			                screenBuilder: Screen.SafeDIOverrides
+			            ) {
+			                self.session = session
+			                self.screenBuilder = screenBuilder
+			            }
+
+			            let session: (() -> Session)?
+			            let screenBuilder: Screen.SafeDIOverrides
+			        }
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> MidInternal {
+			        func __safeDI_session() -> Session {
+			            if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
+			        }
+			        let session = LazilyInstantiated<Session>(__safeDI_session)
+			        _ = Screen.__safeDI_Screen_mock_1237EAC7E69790A2.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			        func __safeDI_screenBuilder() -> Screen {
+			            Screen.mock(session: session, safeDIOverrides: safeDIOverrides.screenBuilder)
+			        }
+			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+			        return MidInternal(screenBuilder: screenBuilder, session: session)
+			    }
+			}
+			#endif
+			""",
+		])
+		let screenSession = isReceivedOnlyIfAvailable ? "screen.session!" : "screen.session"
+		try await expectValuesAgreeWithInlineMocks(
+			of: modules,
+			output: output,
+			probes: [DifferentialValueProbe(
+				"{ SessionCount.created = 0; let mid = Mid.mock(); let screen = mid.screenBuilder.instantiate(); let builtWithScreen = SessionCount.created; let badge = screen.badgeBuilder.instantiate(); return [builtWithScreen, SessionCount.created, \(screenSession) === mid.session.instance ? 1 : 0, badge.session === mid.session ? 1 : 0] }()",
+			)],
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsWrapperParameterNamedApartForInstance_whenMockedTypeTakesDefaultValuedParameterOfLabel() async throws {
+		// `Screen`'s initializer takes a default-valued `session: Int`, so its mock takes the wrapper `Badge` receives as
+		// `session_Session`, whose instance `Leaf`, beneath `Badge`, reads by value.
+		let modules = [
+			ModuleFixture(name: "Feed", packageName: "feedpkg", swiftFileContentByFilePath: [
+				"Screen.swift": """
+				import SafeDI
+
+				public enum SessionCount {
+				    nonisolated(unsafe) public static var created = 0
+				}
+
+				public final class Session: Instantiable, Sendable {
+				    public init() {
+				        SessionCount.created += 1
+				    }
+				}
+
+				@Instantiable(generateMock: .public)
+				public final class Screen: Instantiable {
+				    public init(badge: Badge, session: Int = 3) {
+				        self.badge = badge
+				    }
+
+				    @Instantiated public let badge: Badge
+				}
+
+				@Instantiable
+				public final class Badge: Instantiable {
+				    public init(session: LazilyInstantiated<Session>, leaf: Leaf) {
+				        self.session = session
+				        self.leaf = leaf
+				    }
+
+				    @Received public let session: LazilyInstantiated<Session>
+				    @Instantiated public let leaf: Leaf
+				}
+
+				@Instantiable
+				public final class Leaf: Instantiable {
+				    public init(session: Session) {
+				        self.session = session
+				    }
+
+				    @Received public let session: Session
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "apppkg", swiftFileContentByFilePath: [
+				"Mid.swift": """
+				import Feed
+				import SafeDI
+
+				@Instantiable(conformsElsewhere: true)
+				extension Session {
+				    public static func instantiate() -> Session {
+				        Session()
+				    }
+				}
+
+				@Instantiable(generateMock: true)
+				public final class Mid: Instantiable {
+				    public init(screenBuilder: Instantiator<Screen>, session: LazilyInstantiated<Session>) {
+				        self.screenBuilder = screenBuilder
+				        self.session = session
+				    }
+
+				    @Instantiated public let screenBuilder: Instantiator<Screen>
+				    @Instantiated public let session: LazilyInstantiated<Session>
+				}
+				""",
+			], dependencies: ["Feed"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feed"]?.generatedFiles == [
+			"Feed.swift": generatedFileHeader + """
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            badge: __safeDI_Feed_Badge_MockConfiguration = .init()
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                badge: badge
+			            )
+			        }
+
+			        public var badge: __safeDI_Feed_Badge_MockConfiguration { __safeDI_storage.badge }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                badge: __safeDI_Feed_Badge_MockConfiguration
+			            ) {
+			                self.badge = badge
+			            }
+
+			            let badge: __safeDI_Feed_Badge_MockConfiguration
+			        }
+			    }
+
+			    public static func mock(
+			        session: Int? = nil,
+			        session_Session: LazilyInstantiated<Session>,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        let session = session ?? (3)
+			        func __safeDI_badge() -> Badge {
+			            let leaf = if let safeDIBuilder = safeDIOverrides.badge.leaf { safeDIBuilder(session_Session.instance) } else { Leaf(session: session_Session.instance) }
+			            return Badge.__safeDI_init(session: session_Session, leaf: leaf, safeDIBuilder: safeDIOverrides.badge.safeDIBuilder)
+			        }
+			        let badge: Badge = __safeDI_badge()
+			        return Screen(badge: badge, session: session)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_mock_8D4E8D937DF23065 {}
+			}
+			#endif
+
+			#if DEBUG
+			/// Configuration for how `Badge` is constructed within the public mock trees of module `Feed`.
+			nonisolated public struct __safeDI_Feed_Badge_MockConfiguration {
+			    public init(
+			        leaf: ((Session) -> Leaf)? = nil,
+			        _ safeDIBuilder: ((LazilyInstantiated<Session>, Leaf) -> Badge)? = nil
+			    ) {
+			        __safeDI_storage = __safeDI_Storage(
+			            leaf: leaf,
+			            safeDIBuilder: safeDIBuilder
+			        )
+			    }
+
+			    public var leaf: ((Session) -> Leaf)? { __safeDI_storage.leaf }
+			    /// Overrides how `Badge` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public var safeDIBuilder: ((LazilyInstantiated<Session>, Leaf) -> Badge)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            leaf: ((Session) -> Leaf)?,
+			            safeDIBuilder: ((LazilyInstantiated<Session>, Leaf) -> Badge)?
+			        ) {
+			            self.leaf = leaf
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let leaf: ((Session) -> Leaf)?
+			        let safeDIBuilder: ((LazilyInstantiated<Session>, Leaf) -> Badge)?
+			    }
+			}
+
+			extension Badge {
+			    static func __safeDI_init(session: LazilyInstantiated<Session>, leaf: Leaf, safeDIBuilder: ((LazilyInstantiated<Session>, Leaf) -> Badge)?) -> Badge {
+			        if let safeDIBuilder { safeDIBuilder(session, leaf) } else { Badge(session: session, leaf: leaf) }
+			    }
+			}
+			#endif
+
+			""",
+		])
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feed)
+			import Feed
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			#if DEBUG
+			extension Mid {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            session: (() -> Session)? = nil,
+			            screenBuilder: Screen.SafeDIMockConfiguration = .init()
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                session: session,
+			                screenBuilder: screenBuilder
+			            )
+			        }
+
+			        var session: (() -> Session)? { __safeDI_storage.session }
+			        var screenBuilder: Screen.SafeDIMockConfiguration { __safeDI_storage.screenBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                session: (() -> Session)?,
+			                screenBuilder: Screen.SafeDIMockConfiguration
+			            ) {
+			                self.session = session
+			                self.screenBuilder = screenBuilder
+			            }
+
+			            let session: (() -> Session)?
+			            let screenBuilder: Screen.SafeDIMockConfiguration
+			        }
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Mid {
+			        func __safeDI_session() -> Session {
+			            if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
+			        }
+			        let session = LazilyInstantiated<Session>(__safeDI_session)
+			        func __safeDI_screenBuilder() -> Screen {
+			            func __safeDI_badge() -> Badge {
+			                let leaf = if let safeDIBuilder = safeDIOverrides.screenBuilder.badge.leaf { safeDIBuilder(session.instance) } else { Leaf(session: session.instance) }
+			                return if let safeDIBuilder = safeDIOverrides.screenBuilder.badge.safeDIBuilder { safeDIBuilder(session, leaf) } else { Badge(session: session, leaf: leaf) }
+			            }
+			            let badge: Badge = __safeDI_badge()
+			            return if let safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder { safeDIBuilder(badge, safeDIOverrides.screenBuilder.session) } else { Screen(badge: badge, session: safeDIOverrides.screenBuilder.session) }
+			        }
+			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+			        return Mid(screenBuilder: screenBuilder, session: session)
+			    }
+			}
+			#endif
+
+			#if DEBUG
+			extension Badge {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            leaf: ((Session) -> Leaf)? = nil,
+			            _ safeDIBuilder: ((LazilyInstantiated<Session>, Leaf) -> Badge)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                leaf: leaf,
+			                safeDIBuilder: safeDIBuilder
+			            )
+			        }
+
+			        var leaf: ((Session) -> Leaf)? { __safeDI_storage.leaf }
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        var safeDIBuilder: ((LazilyInstantiated<Session>, Leaf) -> Badge)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                leaf: ((Session) -> Leaf)?,
+			                safeDIBuilder: ((LazilyInstantiated<Session>, Leaf) -> Badge)?
+			            ) {
+			                self.leaf = leaf
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let leaf: ((Session) -> Leaf)?
+			            let safeDIBuilder: ((LazilyInstantiated<Session>, Leaf) -> Badge)?
+			        }
+			    }
+			}
+
+			extension Screen {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            badge: Badge.SafeDIMockConfiguration = .init(),
+			            session: Int = 3,
+			            _ safeDIBuilder: ((Badge, Int) -> Screen)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                badge: badge,
+			                session: session,
+			                safeDIBuilder: safeDIBuilder
+			            )
+			        }
+
+			        var badge: Badge.SafeDIMockConfiguration { __safeDI_storage.badge }
+			        var session: Int { __safeDI_storage.session }
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        var safeDIBuilder: ((Badge, Int) -> Screen)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                badge: Badge.SafeDIMockConfiguration,
+			                session: Int,
+			                safeDIBuilder: ((Badge, Int) -> Screen)?
+			            ) {
+			                self.badge = badge
+			                self.session = session
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let badge: Badge.SafeDIMockConfiguration
+			            let session: Int
+			            let safeDIBuilder: ((Badge, Int) -> Screen)?
+			        }
+			    }
+			}
+			#endif
+
+			""",
+		])
+		try await expectValuesAgreeWithInlineMocks(
+			of: modules,
+			output: output,
+			probes: [DifferentialValueProbe(
+				"{ SessionCount.created = 0; let mid = Mid.mock(); let builtWithMid = SessionCount.created; let screen = mid.screenBuilder.instantiate(); return [builtWithMid, SessionCount.created, screen.badge.session === mid.session ? 1 : 0, screen.badge.leaf.session === mid.session.instance ? 1 : 0] }()",
+			)],
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorThatTreeReceivesWrapperFromOutsideIt_whenSendableFunctionReadsInstanceOfWrapperParameter() async {
+		// `Screen`'s mock takes the `LazilyInstantiated` it receives, and `Badge`, built in a `@Sendable` function, receives
+		// its instance by value, which that function cannot capture, as no production tree can hold this shape.
+		let modules = [
+			ModuleFixture(name: "Feed", packageName: "feedpkg", swiftFileContentByFilePath: [
+				"Screen.swift": """
+				import SafeDI
+
+				public final class Session: Instantiable, Sendable {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: .public)
+				public final class Screen: Instantiable {
+				    init(session: LazilyInstantiated<Session>, badgeBuilder: SendableInstantiator<Badge>) {
+				        self.session = session
+				        self.badgeBuilder = badgeBuilder
+				    }
+
+				    @Received public let session: LazilyInstantiated<Session>
+				    @Instantiated public let badgeBuilder: SendableInstantiator<Badge>
+				}
+
+				@Instantiable
+				public final class Badge: Instantiable, Sendable {
+				    init(session: Session) {
+				        self.session = session
+				    }
+
+				    @Received let session: Session
+				}
+				""",
+			]),
+		]
+		await assertThrowsMultiModuleError(inModule: "Feed", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feed"]!["Screen.swift"]):24:5: error: @Received property `session: Session` cannot be received inside a `@Sendable` function in chain: Screen -> Badge. SafeDI builds `badgeBuilder: SendableInstantiator<Badge>` on `Screen` in a `@Sendable` function, which cannot capture `session: LazilyInstantiated<Session>`, which the tree of `Screen` receives from outside it, because `LazilyInstantiated<Session>` is not `Sendable`. Declare `session` as `SendableLazilyInstantiated<Session>` where it is declared and where it is received as `LazilyInstantiated<Session>` to fix. A `SendableLazilyInstantiated` requires its instance type, `Session`, to be `Sendable`.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesOptionalWrapperAndBindsCallersOrItsOwn_whenMockBuildsLazilyReceivedValue() async throws {
@@ -1228,6 +1777,7 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 		wrapper: String,
 		isReceivedOnlyIfAvailable: Bool = false,
 		screenBuildsBadgeReadingSessionByValue: Bool = false,
+		screenReadsSessionByValueAndBuildsBadgeReadingWrapper: Bool = false,
 		sessionAccess: String = "public",
 	) -> String {
 		let sessionType = isReceivedOnlyIfAvailable ? "\(wrapper)<Session>?" : "\(wrapper)<Session>"
@@ -1246,7 +1796,32 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 		}
 
 		"""
-		if screenBuildsBadgeReadingSessionByValue {
+		if screenReadsSessionByValueAndBuildsBadgeReadingWrapper {
+			// `Screen` receives `session` by value, as `Session` or, only if available, `Session?`, and `Badge`, which it builds,
+			// as the wrapper.
+			let screenSessionType = isReceivedOnlyIfAvailable ? "Session?" : "Session"
+			feed += """
+			@Instantiable(generateMock: .public)
+			public final class Screen: Instantiable {
+			    init(session: \(screenSessionType), badgeBuilder: Instantiator<Badge>) {
+			        self.session = session
+			        self.badgeBuilder = badgeBuilder
+			    }
+
+			    \(receive) public let session: \(screenSessionType)
+			    @Instantiated public let badgeBuilder: Instantiator<Badge>
+			}
+
+			@Instantiable
+			public final class Badge: Instantiable {
+			    init(session: \(wrapper)<Session>) {
+			        self.session = session
+			    }
+
+			    @Received public let session: \(wrapper)<Session>
+			}
+			"""
+		} else if screenBuildsBadgeReadingSessionByValue {
 			feed += """
 			@Instantiable(generateMock: .public)
 			public final class Screen: Instantiable {
@@ -1322,10 +1897,20 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 	}
 
 	/// `Feed` (`feed(…)`) and `App` (`app(wrapper:)`), in packages of their own.
-	private static func modules(wrapper: String, isReceivedOnlyIfAvailable: Bool = false, screenBuildsBadgeReadingSessionByValue: Bool = false) -> [ModuleFixture] {
+	private static func modules(
+		wrapper: String,
+		isReceivedOnlyIfAvailable: Bool = false,
+		screenBuildsBadgeReadingSessionByValue: Bool = false,
+		screenReadsSessionByValueAndBuildsBadgeReadingWrapper: Bool = false,
+	) -> [ModuleFixture] {
 		[
 			ModuleFixture(name: "Feed", packageName: "feedpkg", swiftFileContentByFilePath: [
-				"Screen.swift": feed(wrapper: wrapper, isReceivedOnlyIfAvailable: isReceivedOnlyIfAvailable, screenBuildsBadgeReadingSessionByValue: screenBuildsBadgeReadingSessionByValue),
+				"Screen.swift": feed(
+					wrapper: wrapper,
+					isReceivedOnlyIfAvailable: isReceivedOnlyIfAvailable,
+					screenBuildsBadgeReadingSessionByValue: screenBuildsBadgeReadingSessionByValue,
+					screenReadsSessionByValueAndBuildsBadgeReadingWrapper: screenReadsSessionByValueAndBuildsBadgeReadingWrapper,
+				),
 			]),
 			ModuleFixture(name: "App", packageName: "apppkg", swiftFileContentByFilePath: [
 				"Mid.swift": app(wrapper: wrapper),

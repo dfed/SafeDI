@@ -8240,6 +8240,18 @@ struct SafeDIToolGraphFuzzerTests {
 		.overrideClosureCallInternalCallerPassesPlaceUp: 86,
 		.overrideClosureCallPlaceIsErasedInstantiator: 91,
 		.overrideClosureCallPublicCallerPassesPlaceUp: 87,
+		// pins: derive on CI
+		.wrapperReadByValuePublicMock: 0,
+		// pins: derive on CI
+		.wrapperReadByValuePublicMockMockedTypeReadsValue: 0,
+		// pins: derive on CI
+		.wrapperReadByValuePublicMockMockedTypeReadsValueOnlyIfAvailable: 0,
+		// pins: derive on CI
+		.wrapperReadByValuePublicMockReaderThroughInstantiator: 0,
+		// pins: derive on CI
+		.wrapperReadByValuePublicMockSendably: 0,
+		// pins: derive on CI
+		.wrapperReadByValuePublicMockTreeReadsValue: 0,
 	]
 
 	/// The least share of the public mock corpus's accepted graphs, whether or not they fail, whose generated code shows
@@ -8284,7 +8296,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0x32FC07597301AF76
+	static let publicMockCorpusFixtureHash: UInt64 = 0x7739B847026BD418
 	static let publicMockCorpusAcceptedSeedCount = 858
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0x8682CE9AF6A5CE72
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -8348,7 +8360,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 189, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x04FE31C25A70D217
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0xEA650D1A4DE6694E
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -8668,6 +8680,12 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeLabelReceivedByPromotedSiblingHeldInInstantiator: 2,
 		.holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated: 3,
 		.holeLabelReceivedByPromotedSiblingEqualsGeneratedName: 2,
+		.wrapperReadByValuePublicMock: 257,
+		.wrapperReadByValuePublicMockMockedTypeReadsValue: 78,
+		.wrapperReadByValuePublicMockMockedTypeReadsValueOnlyIfAvailable: 77,
+		.wrapperReadByValuePublicMockReaderThroughInstantiator: 129,
+		.wrapperReadByValuePublicMockSendably: 49,
+		.wrapperReadByValuePublicMockTreeReadsValue: 102,
 		.instantiableParameterType: 235,
 		.internalInitializer: 520,
 		.lazilyInstantiatedOmittedValueProvider: 58,

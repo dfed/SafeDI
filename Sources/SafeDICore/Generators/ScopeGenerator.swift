@@ -2963,6 +2963,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				declarationsByLabel[parameter.property.label, default: []].append(declaration)
 			}
+		} else {
+			// A public mock takes a value its tree receives lazily as the wrapper (`publicMockWrapperParameters(…)`), declared
+			// outside every builder function, so a `@Sendable` builder inside the tree that reads its instance by value captures
+			// the wrapper, as a seam's tree captures a wrapper parameter. Only such a mock's root reads instances it does not
+			// declare (`instancesReadThroughPublicMockWrapperParameters(of:mockDefaults:)`); the wrapper is the one its tree
+			// receives of the instance's label and type, of one wrapper kind (`publicMockWrapperParameters(…)`).
+			for instanceProperty in lazilyInstantiatedInstanceProperties {
+				let wrappers = Set(receivedProperties.lazy.filter { property in
+					property.label == instanceProperty.label
+						&& property.propertyType.isLazilyInstantiated
+						&& property.asValidatedForDependencyCycles.asUnwrappedProperty == instanceProperty.asUnwrappedProperty
+				}.map(\.asUnwrappedProperty))
+				for wrapper in wrappers {
+					declarationsByLabel[instanceProperty.label, default: []].append(VisibleDeclaration(
+						property: wrapper,
+						instanceProperty: instanceProperty,
+						declaringType: nil,
+						declarationLocation: nil,
+						sendableBuilderDepth: 0,
+					))
+				}
+			}
 		}
 		return await nonSendableWrapperCaptures(
 			of: instantiable,
@@ -8511,8 +8533,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///
 	/// A deliberate gap from that rule, documented in `public-mock-builders.md`: the mock still takes the instance, and
 	/// wraps it, where its tree receives the value in both wrapper kinds, which no one parameter holds; where the mock
-	/// names the instance apart beside a forwarded property of its label; and where its tree also receives the value by
-	/// value and the parameter is optional, since an optional wrapper offers no instance.
+	/// names the instance apart beside a forwarded property of its label; and where its tree receives the value only if
+	/// available and also by value, since an optional wrapper offers no instance.
 	static func publicMockWrapperParameters(
 		replacing parameters: [Property],
 		lazilyInstantiatedReceivedProperties: [Property],
@@ -8758,8 +8780,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		let flatReceivedNames = parameterNames.flatReceivedNames
 		var flatParameterDisambiguationMap = [String: [TypeDescription: String]]()
+		// A wrapper a public mock takes in place of the instance (`publicMockWrapperParameters(…)`) is no binding of the
+		// instance: its receivers are passed it by name (`lazilyInstantiatedBindingNameMap`), and so are the types that read
+		// its instance (`dependencyArgument`).
 		for (property, name) in zip(flatReceivedProperties, flatReceivedNames)
-			where name != property.label && lazilyInstantiatedPropertyByInstanceBesideForwardedProperty[property] == nil
+			where name != property.label
+			&& lazilyInstantiatedPropertyByInstanceBesideForwardedProperty[property] == nil
+			&& parameters.publicMockWrapperParameterByInstance[property] == nil
 		{
 			flatParameterDisambiguationMap[property.label, default: [:]][property.typeDescription] = name
 		}
@@ -9262,8 +9289,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let dependenciesByLabel = Dictionary(grouping: instantiable.dependencies, by: \.property.label).compactMapValues(\.first)
 		// A mock root that receives a dependency by value is passed the instance of the
 		// `LazilyInstantiated` property promoted to its children, when the tree also receives that.
-		// So is one that instantiates a dependency the mock builds as the `LazilyInstantiated` its tree receives.
-		let lazilyInstantiatedInstanceProperties = Set(propertiesToGenerate.compactMap(\.declaredLazilyInstantiatedInstanceProperty))
+		// So is one that instantiates a dependency the mock builds as the `LazilyInstantiated` its tree receives, and one
+		// that receives by value a value its public mock takes as the wrapper its tree receives
+		// (`instancesReadThroughPublicMockWrapperParameters(of:mockDefaults:)`), as the rest of its tree reads it.
+		let instancePropertiesReadByValue = Set(propertiesToGenerate.compactMap(\.declaredLazilyInstantiatedInstanceProperty))
+			.union(lazilyInstantiatedInstanceProperties)
 		var parts = [String]()
 		for argument in constructionInitializer.arguments {
 			if let dependency = dependenciesByLabel[argument.innerLabel] {
@@ -9273,7 +9303,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// name. Rewrite the reference so the Root init call finds it.
 				let readsInstanceOfLazilyInstantiatedProperty = switch dependency.source {
 				case .received, .instantiated:
-					lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty)
+					instancePropertiesReadByValue.contains(dependency.property.asUnwrappedProperty)
 				case .aliased, .forwarded:
 					false
 				}
@@ -12375,7 +12405,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		} else if dependency.source.isReceived,
 		          node.lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty)
 		{
-			"\(bindingNamesPassedByName[argument.innerLabel] ?? argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+			// A wrapper a public mock takes in place of the instance may be named apart from its label, which only
+			// `lazilyInstantiatedBindingNames` names: a declaration of the label in the tree drops the rename beneath it
+			// (`removingRenames`), so the receive reads the closer declaration.
+			"\(bindingNamesPassedByName[argument.innerLabel] ?? disambiguatedLazilyInstantiatedBinding(named: argument.innerLabel, withInstanceOfType: dependency.property.typeDescription.unwrapped, disambiguationMap: lazilyInstantiatedBindingNames)?.name ?? argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 		} else if dependency.source.isReceived,
 		          let bindingName = lazilyInstantiatedBindingNames[argument.innerLabel]?[dependency.property.typeDescription]
 		{
