@@ -241,6 +241,14 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		return Property(label: label, typeDescription: instanceType)
 	}
 
+	/// The optional by-value property an optional `LazilyInstantiated` property offers a receive only if available, which
+	/// reads the instance through the optional (`?.instance`): `service: LazilyInstantiated<Service>?` offers
+	/// `service: Service?`. `nil` for a property that is not optional, and where `asLazilyInstantiatedInstanceProperty` is.
+	var asOptionalLazilyInstantiatedInstanceProperty: Property? {
+		guard typeDescription.isOptional else { return nil }
+		return asLazilyInstantiatedInstanceProperty?.asOptionalProperty
+	}
+
 	/// The by-value property a `@Forwarded` or aliased `LazilyInstantiated` property offers. Such a property is
 	/// bound with exactly the type it declares, and the instance of an optional wrapper cannot be read
 	/// unconditionally, so an optional property offers none.
