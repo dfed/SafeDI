@@ -1242,12 +1242,19 @@ private struct ScopeGeneratorUnderConstruction {
 		var fillNearestDeclarations = childNearestDeclarations
 		for field in boundFields {
 			let property = field.property
-			fillNearestDeclarations.replace(property, providing: CycleParameter.forms(providedBy: property))
+			var forms = CycleParameter.forms(providedBy: property)
 			if let instanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding {
 				// A wrapper the fill takes optionally offers its instance only as an optional, which a receive reads through the
 				// optional (`Set<Property>.lazilyInstantiatedInstanceRead(of:)`).
 				fieldInstanceProperties.insert(fill.optionalLazilyInstantiatedLabels.contains(property.label) ? instanceProperty.asOptionalProperty : instanceProperty)
+			} else if !field.bindsMemo, let optionalInstanceProperty = property.asOptionalLazilyInstantiatedInstanceProperty {
+				// An optional wrapper, such as a public mock's copy of the value its caller passed for a receive only if
+				// available, offers its instance to a receive only if available, through the optional: a call inside the fill
+				// that builds the public mock's type again passes it the caller's instance, as inline passes the caller's value.
+				forms.insert(optionalInstanceProperty)
+				fieldInstanceProperties.insert(optionalInstanceProperty)
 			}
+			fillNearestDeclarations.replace(property, providing: forms)
 			// A field bound as its memo is read as the memo's instance wherever the tree reads its label, as the seam's own tree
 			// reads a deferred parameter's memo (`DependencyTreeGenerator.seamRootGenerator`): `tag: Tag` for `tag: Tag?`, and
 			// `x: X!` itself for `x: X!`, which the tree reads as `x.instance`.

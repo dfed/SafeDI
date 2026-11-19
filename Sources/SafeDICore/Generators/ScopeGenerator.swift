@@ -2629,11 +2629,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	let closedOnFillPathDeclarationsBeneath: Int?
 
 	/// Whether this generator's tree reads `field`, a field of a scope struct, as its fill binds it: it receives the
-	/// field, its optional form, or its instance.
+	/// field, its optional form, or its instance, which an optional wrapper offers only as an optional.
 	nonisolated func reads(_ field: Property) -> Bool {
 		receivedProperties.contains(field)
 			|| receivedProperties.contains(field.asOptionalProperty)
 			|| field.asLazilyInstantiatedInstancePropertyOfDeclaredBinding.map { receivedProperties.contains($0) || receivedProperties.contains($0.asOptionalProperty) } == true
+			|| field.asOptionalLazilyInstantiatedInstanceProperty.map(receivedProperties.contains) == true
 	}
 
 	/// The hole this generator is the fill of, or `nil` for every generator that is no fill.
@@ -6306,8 +6307,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					let value = publicMockBuilderStructValuesByLabel[argument.innerLabel] ?? holeArgumentValuesByLabel[argument.innerLabel] ?? instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }).map { dependency in
 						if unavailableProperties.contains(dependency.property) {
 							"nil"
-						} else if dependency.source.isReceived, lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty) {
-							"\(argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+						} else if dependency.source.isReceived, let instanceRead = lazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceRead(of: dependency.property) {
+							// Beneath a fill that binds an optional wrapper, such as the called mock's copy of the value, the instance is
+							// read through the optional.
+							"\(argument.innerLabel)\(instanceRead)"
 						} else {
 							argument.innerLabel
 						}
