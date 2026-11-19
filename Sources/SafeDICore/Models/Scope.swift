@@ -1644,9 +1644,12 @@ private struct ScopeGeneratorUnderConstruction {
 				callersOwnLabels.mockRootBindingByLabel[label] = binding
 			} else if formsRead.allSatisfy({ callerDeclaration.bindings[$0]?.label == label }) {
 				// The forms being built where the call is (`NearestDeclaration.formsBeingBuilt`) need no check: a fill that reads
-				// one, such as an `Instantiator` whose tree makes the call, is rejected for a calling mock as a dependency cycle
-				// (`dependencyReceivedInSameChainItIsInstantiated`). That is a known defect, since production and the inline mock
-				// accept it, and closing it decides how this fill reads an instantiator being built.
+				// one, such as an `Instantiator` whose tree makes the call, reads a label the called type receives, which its
+				// mock builds itself after the place for a caller that passes `nil`, so the fill is rejected for a calling mock:
+				// the place's payload does not carry the label (`requiresOtherCarrier`), and inside a `@Sendable` function the
+				// mock's own declaration outside it is not handed in (`boundOutsideSendableFunction`). That is a known gate,
+				// since production and the inline mock accept it, and lifting it decides how this fill reads an instantiator
+				// being built.
 				callersOwnLabels.labels.insert(label)
 			}
 		}
