@@ -1450,6 +1450,14 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 			        other: Feature.Mode? = nil,
 			        mode: Feature.Mode
 			    ) -> Feature.Child {
+			        Feature.Child.__safeDI_mock(other: other, mode: mode)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        other: Feature.Mode? = nil,
+			        mode: Feature.Mode
+			    ) -> Feature.Child {
 			        let other = other ?? (.fast)
 			        return Feature.Child(mode: mode, other: other)
 			    }

@@ -988,6 +988,14 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        d: SendableInstantiator<D>? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Screen {
+				        Screen.__safeDI_mock(d: d, safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        d: SendableInstantiator<D>? = nil,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Screen {
 				        let __safeDI_d__safeDIBuilder = safeDIOverrides.d
 				        @Sendable func __safeDI_d() -> D {
 				            let d = if let d { d } else { SendableInstantiator<D>(__safeDI_d) }
@@ -4604,6 +4612,14 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        other: Other? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> D {
+				        D.__safeDI_mock(other: other, safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        other: Other? = nil,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> D {
 				        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder(other) } else { Leaf(other: other) }
 				        return D(leaf: leaf)
 				    }
@@ -4653,8 +4669,16 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        other: Other? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Screen {
+				        Screen.__safeDI_mock(other: other, safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        other: Other? = nil,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Screen {
 				        _ = D.__safeDI_D_mock_01E07719440659F9.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				        let screenD = D.mock(other: other, safeDIOverrides: safeDIOverrides.screenD)
+				        let screenD = D.__safeDI_mock(other: other, safeDIOverrides: safeDIOverrides.screenD)
 				        return Screen(screenD: screenD)
 				    }
 				}
