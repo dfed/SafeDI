@@ -27,6 +27,9 @@ indirect enum Expression: Hashable, Sendable {
 	/// `expression` wrapped in the eraser of `erasedType`: the type an `erasedToConcreteExistential` property is
 	/// declared as, or the type an erased wrapper builds.
 	case erasure(Expression, as: TypeDescription)
+	/// `expression`, unless the optional builder `override` holds a function, which is then called with `arguments`: the
+	/// one hook through which a body that can be configured (a `mock()`) replaces a construction.
+	case overridable(Expression, override: String, arguments: String)
 
 	/// How generated code spells the expression.
 	var spelled: String {
@@ -37,11 +40,32 @@ indirect enum Expression: Hashable, Sendable {
 			"\(function)(\(arguments))"
 		case let .erasure(expression, erasedType):
 			"\(erasedType.asSource)(\(expression.spelled))"
+		case let .overridable(expression, override, arguments):
+			"if let \(ReservedName.configurationBuilderPropertyName) = \(override) { \(ReservedName.configurationBuilderPropertyName)(\(arguments)) } else { \(expression.spelled) }"
 		}
+	}
+
+	/// This expression, replaced where `override` holds a builder.
+	func overridden(by override: ConstructionOverride?) -> Expression {
+		guard let override else { return self }
+		return .overridable(self, override: override.expression, arguments: override.arguments)
 	}
 
 	/// This expression wrapped in the eraser of `erasedType` where `isErased`, and otherwise itself.
 	func erased(to erasedType: TypeDescription, where isErased: Bool) -> Expression {
 		isErased ? .erasure(self, as: erasedType) : self
 	}
+}
+
+/// What a configurable body consults before it constructs one place: the optional builder, and the values it is handed.
+struct ConstructionOverride: Hashable, Sendable {
+	/// The expression that reads the optional builder.
+	let expression: String
+	/// The builder's arguments, spelled as the call's argument list.
+	let arguments: String
+}
+
+/// The overrides of one configurable body, keyed by the scope whose construction each replaces.
+struct ConstructionOverrides: Sendable {
+	let byScope: [ObjectIdentifier: ConstructionOverride]
 }
