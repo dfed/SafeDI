@@ -436,6 +436,7 @@ public actor DependencyTreeGenerator {
 							typeDescriptionToScopeMap[typeDescription].map { (typeDescription: typeDescription, scope: $0) }
 						},
 					)
+					var constructionMemo = ConstructionMemo()
 					return try rootScopesToGenerate.map { typeDescription, scope in
 						try RootScopeInfo(
 							typeDescription: typeDescription,
@@ -446,6 +447,7 @@ public actor DependencyTreeGenerator {
 								lazilyInstantiatedInstanceProperties: [],
 								erasedToConcreteExistential: false,
 								declaredTypeNames: declaredTypeNames,
+								constructionMemo: &constructionMemo,
 							),
 						)
 					}

@@ -917,7 +917,9 @@ extension DependencyTreeGenerator {
 			var marked = uncarriedDeclaration
 			marked.isBuildableAboveSeam = true
 			marked.labelsHeldAboveSeam = receivedLabels.union([declaration.property.label])
-			// Each site whose path the tree is beside asks again.
+			// Each site whose path the tree is beside asks again. The places are read at the tree's own path, yet keyed by its
+			// generator, which a construction memo can share between paths: a tree that holds a place holds a hole or passes
+			// one up, which no memo shares, and a tree the memo can share holds no place at any path.
 			let treePlaces = placesByGenerator[ObjectIdentifier(tree.generator)] ?? places(inTreeOf: tree.generator, building: declaration.property, declaredAt: tree.pathToDeclaringScope, seamType: seam.concreteInstantiable)
 			placesByGenerator[ObjectIdentifier(tree.generator)] = treePlaces
 			marked.placesInTree = treePlaces
@@ -1256,6 +1258,8 @@ extension DependencyTreeGenerator {
 		// at each level. Any other value a fill reads is the same at every level.
 		var cycleReentryDeclarations = [SeamSignature.Hole.CycleReentryDeclaration]()
 		for (level, generator, closedOnDeclaration, closedOnDeclaringType) in scopesACycleClosesOn {
+			// Keyed by the generator's identity: a closed-on scope on a site's path holds a hole, so no construction memo
+			// shares it between places.
 			let declarationsBetween = declarationsBetweenByClosedOnScope[ObjectIdentifier(generator)] ?? declarationsBetween(closedOnScope: generator, closedOnDeclaration: closedOnDeclaration)
 			declarationsBetweenByClosedOnScope[ObjectIdentifier(generator)] = declarationsBetween
 			/// Whether the site reads the value of `label` bound inside the function. A place nested by type reads a parameter
@@ -1380,6 +1384,8 @@ extension DependencyTreeGenerator {
 				}
 			} else if generator.closesPropertyCycle, let nestedClosedOnScope = nestedClosedOnScopes.last(where: { $0.declaration == generator.closedOnDeclaration }) {
 				// A nested cycle passes each parameter of the function it closes on its nearest declaration beneath that scope.
+				// Keyed by the nested closed-on scope's generator: a generator a construction memo shares between two places
+				// beneath one closed-on scope has the same subtree at both, so the first place's binding is the binding at each.
 				let declarationsBeneath = pathDeclarations[nestedClosedOnScope.firstDeclarationBeneath...]
 				for label in nestedClosedOnScope.parameterLabels
 					where bindingByNestedCycleParameter[NestedCycleParameter(scope: nestedClosedOnScope.scope, label: label)] == nil

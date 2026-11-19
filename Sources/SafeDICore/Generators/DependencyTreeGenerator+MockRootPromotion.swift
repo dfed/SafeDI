@@ -46,6 +46,7 @@ extension DependencyTreeGenerator {
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
 		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
+		constructionMemo: inout ConstructionMemo,
 	) async throws -> ScopeGenerator {
 		// Recursively collect all transitive received properties from the scope tree
 		// and any promoted scopes' subtrees. Results are cached per Scope identity
@@ -441,7 +442,9 @@ extension DependencyTreeGenerator {
 		// Build the final ScopeGenerator once. The mock root binds every received
 		// property it does not promote — as a `mock()` parameter or a `SafeDIOverrides`
 		// entry — so each is receivable throughout the tree.
-		func mockRootGenerator(builders: ShapedBuilders?) throws -> ScopeGenerator {
+		// A public mock's tree built with builders has holes, whose places no memo holds, so only the tree built without
+		// them shares the mock roots' memo.
+		func mockRootGenerator(builders: ShapedBuilders?, constructionMemo: inout ConstructionMemo) throws -> ScopeGenerator {
 			try mockRootScope.createScopeGenerator(
 				for: nil,
 				// The mock root binds every received property it does not promote, which encloses its whole tree.
@@ -451,9 +454,14 @@ extension DependencyTreeGenerator {
 				erasedToConcreteExistential: false,
 				forMockGeneration: true,
 				declaredTypeNames: declaredTypeNames,
+				constructionMemo: &constructionMemo,
 			)
 		}
-		let generator = try mockRootGenerator(builders: nil)
+		func mockRootGeneratorWithHoles(builders: ShapedBuilders) throws -> ScopeGenerator {
+			var memoOfTreeWithHoles = ConstructionMemo()
+			return try mockRootGenerator(builders: builders, constructionMemo: &memoOfTreeWithHoles)
+		}
+		let generator = try mockRootGenerator(builders: nil, constructionMemo: &constructionMemo)
 		try Self.validateCycleLabelsArePassable(inTreesRootedAt: [generator])
 		// An internal mock takes one builder for the places of one hole type and family its calls of other modules' public
 		// mocks pass up, as its production tree's initializer does (`ScopeGenerator.seamMockBuilders`), so those places must
@@ -517,7 +525,7 @@ extension DependencyTreeGenerator {
 			)
 		}
 		let builders = shapedBuilders(namedApartFrom: [])
-		let builtGenerator = try mockRootGenerator(builders: builders)
+		let builtGenerator = try mockRootGeneratorWithHoles(builders: builders)
 		// The builders follow every other parameter, and each tier's are named apart from the parameters it takes as a seam's
 		// are. A builder's name changes no other parameter's, so the tree is built again only when a builder takes another
 		// name in some tier.
@@ -539,7 +547,7 @@ extension DependencyTreeGenerator {
 			throw error
 		}
 		guard buildersNamedApart.builders.map(SeamSignature.CallShape.Builder.init) != builders.builders.map(SeamSignature.CallShape.Builder.init) else { return builtGenerator }
-		return try mockRootGenerator(builders: buildersNamedApart)
+		return try mockRootGeneratorWithHoles(builders: buildersNamedApart)
 	}
 
 	/// What a public mock's root level holds beside the root's children: the payload of every case of its root enums, and the
