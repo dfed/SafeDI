@@ -153,14 +153,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			var fillNames = Set<String>()
 			// What the root level functions read of the caller's scope, as a seam's root dispatcher reads it: each label in the
 			// form `FillDispatcher.dispatcherParameters(of:fillReads:)` types a dispatcher's parameter by, the form no fill
-			// reads optionally first, then in `Property` order, so neither the order of the fills nor of their cases decides it.
-			var callerReadFormsByLabel = [String: [Property: (field: SeamSignature.Hole.Field, arguments: Set<String>)]]()
+			// reads optionally first, then in `Property` order, so neither the order of the fills nor of their cases decides it,
+			// handed as a fill that takes that form reads it: the caller's declaration in one form is the same for every fill of
+			// the call, which each read of the one scope enclosing the call (`Scope.Fill.callerNearestDeclarations`).
+			var callerReadFormsByLabel = [String: [Property: (field: SeamSignature.Hole.Field, argument: String)]]()
 			for child in propertiesToGenerate {
 				if let key = child.fillKey, child.fillEmitsCode {
 					fillParametersByKey[key] = child.fillParameterFields
 					for (label, argument) in child.fillCallerReads.argumentByLabel {
 						guard let field = child.fillCallerReads.parameterByLabel[label] else { continue }
-						callerReadFormsByLabel[label, default: [:]][field.property, default: (field, [])].arguments.insert(argument)
+						callerReadFormsByLabel[label, default: [:]].merge([field.property: (field, argument)]) { form, _ in form }
 					}
 				}
 				if case let .fill(_, functionName) = child.scopeData {
@@ -173,8 +175,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				guard let property = properties.first(where: { !$0.typeDescription.isOptional }) ?? properties.first,
 				      let form = forms[property]
 				else { continue }
-				// A value one fill finds in the caller's scope is handed as that fill reads it, as a seam's root dispatcher hands it.
-				callerReads[label] = (form.field, form.arguments.filter { $0 != "nil" }.min() ?? "nil")
+				callerReads[label] = form
 			}
 			publicMockLevelFunctions = PublicMockLevelFunctions(
 				dispatchers: fillDispatchers,
@@ -1430,9 +1431,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// What the root dispatcher passes the parameter of each such label, where the caller does not build it later.
 		var argumentByLabel = [String: String]()
 		/// What the root dispatcher hands of each label the fill takes as a `SendableLazilyInstantiated` memo some route hands
-		/// it (`Scope.Fill.labelsHandedAsMemo`): the caller's declaration of that wrapper, or one made of the caller's value, so
-		/// the fill's tree reads the caller's own wrapper where it reads the wrapper, as inline.
-		var memoArgumentByLabel = [String: String]()
+		/// it (`Scope.Fill.labelsHandedAsMemo`), by the memo the fill takes (`SeamSignature.Hole.Field.memoProperty`): the
+		/// caller's declaration of that wrapper, or one made of the caller's value, so the fill's tree reads the caller's own
+		/// wrapper where it reads the wrapper, as inline.
+		var memoArgumentByMemo = [Property: String]()
 		/// The scope value the inner seam handed the fill, which a place inside its tree, or a call there that passes one up,
 		/// carries (`SeamHoles.innerScope(at:innerKey:)`): the fill takes it as a parameter, and each dispatcher that leads to
 		/// it passes it on from the root dispatcher's own parameter.
@@ -1717,13 +1719,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Found as a fixed point: a dispatcher takes each value a case's target reads that the case's payload does not
 		/// carry, and a root dispatcher takes none.
 		///
-		/// A dispatcher's parameter of a label is typed from every form its targets take of it, transitively: a form that is
-		/// no optional wins, since every route that reaches such a target hands it a value that is no optional, and an
-		/// optional form takes the others; forms that still differ are chosen among in `Property` order, which
-		/// per-place validation reports before code is generated. No form depends on the order the enums are met in. A form
-		/// some target takes as a deferred parameter's memo (`Field.bindsMemo`) is taken as the memo
-		/// (`handsForm(_:inPlaceOf:)`), which the dispatcher hands a target that takes another form in that form
-		/// (`structDeclaration`).
+		/// A dispatcher takes a label once per form its targets take of it, transitively, so each target is handed the label in
+		/// its own form, as the root dispatcher hands it (`ScopeGenerator.FillCallerReads`): two places of one hole type, one
+		/// beneath a type that binds the label lazily and one beneath a type that binds it by value, each take their own form
+		/// of a level that binds none above them. An optional form whose unwrapped form a target takes too is taken as that
+		/// form, since every route that reaches such a target hands it a value that is no optional. Nothing is chosen among
+		/// forms, so none depends on the order the enums are met in. A form some target takes as a deferred parameter's memo
+		/// (`Field.bindsMemo`) is taken as the memo (`handsForm(_:inPlaceOf:)`), which the dispatcher hands a target that takes
+		/// the value as its instance (`structDeclaration`). Two forms of one label are named apart (`parameterNames(of:)`).
 		static func dispatcherParameters(of dispatchers: [FillDispatcher], fillReads: [String: [SeamSignature.Hole.Field]]) -> [String: [SeamSignature.Hole.Field]] {
 			var formsByLabelByKey = [String: [String: [Property: SeamSignature.Hole.Field]]]()
 			for (key, fields) in fillReads {
@@ -1751,13 +1754,51 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			var parametersByKey = [String: [SeamSignature.Hole.Field]]()
 			for dispatcher in dispatchers where dispatcher.takesValuesOfOuterTypes {
 				guard let formsByLabel = formsByLabelByKey[dispatcher.key] else { continue }
-				parametersByKey[dispatcher.key] = formsByLabel.keys.sorted().compactMap { label in
-					let properties = formsByLabel[label, default: [:]].keys.sorted()
-					let property = properties.first { !$0.typeDescription.isOptional } ?? properties.first
-					return property.flatMap { formsByLabel[label]?[$0] }
+				parametersByKey[dispatcher.key] = formsByLabel.keys.sorted().flatMap { label in
+					let forms = formsByLabel[label, default: [:]]
+					return forms.keys.sorted().compactMap { property in
+						Self.unwrappedForm(of: property, among: forms) == nil ? forms[property] : nil
+					}
 				}
 			}
 			return parametersByKey
+		}
+
+		/// The form of `property`'s label among `forms` that a dispatcher takes in its place: the unwrapped form of an optional
+		/// `property`, where `forms` holds it, else `nil`.
+		private static func unwrappedForm(of property: Property, among forms: [Property: some Any]) -> Property? {
+			guard property.typeDescription.isOptional else { return nil }
+			let unwrapped = Property(label: property.label, typeDescription: property.typeDescription.unwrapped)
+			return forms[unwrapped] == nil ? nil : unwrapped
+		}
+
+		/// The parameter of `parameters`, a dispatcher's, that hands `parameter`, a target's: the one of its form, or of its
+		/// unwrapped form, which the dispatcher takes in place of an optional one (`dispatcherParameters(of:fillReads:)`).
+		static func parameter(handing parameter: SeamSignature.Hole.Field, among parameters: [SeamSignature.Hole.Field]) -> SeamSignature.Hole.Field? {
+			let formsOfLabel = Dictionary(parameters.filter { $0.property.label == parameter.property.label }.map { ($0.property, $0) }) { first, _ in first }
+			return formsOfLabel[Self.unwrappedForm(of: parameter.property, among: formsOfLabel) ?? parameter.property]
+		}
+
+		/// The name each of `parameters`, a function's, is declared and passed under, by its property: its label, where no
+		/// other parameter has that label, else the label and its type (`token_LazilyInstantiated__Token`), with `_` appended
+		/// while another parameter has that name.
+		static func parameterNames(of parameters: [SeamSignature.Hole.Field]) -> [Property: String] {
+			let labelCounts = Dictionary(parameters.map { ($0.property.label, 1) }, uniquingKeysWith: +)
+			var names = [Property: String]()
+			var usedNames = Set(parameters.map(\.property.label).filter { labelCounts[$0] == 1 })
+			for parameter in parameters {
+				if labelCounts[parameter.property.label] == 1 {
+					names[parameter.property] = parameter.property.label
+				} else {
+					var name = "\(parameter.property.label)_\(parameter.property.typeDescription.asIdentifier)"
+					while usedNames.contains(name) {
+						name += "_"
+					}
+					usedNames.insert(name)
+					names[parameter.property] = name
+				}
+			}
+			return names
 		}
 
 		/// Whether a dispatcher takes `field`, a form a target takes, in place of `existing`, the field of the same property it
@@ -1832,7 +1873,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Where the fill's tree also reads the label as a `SendableLazilyInstantiated` of the memo's form
 		/// (`readingSendableWrapper`, by that wrapper's instance property) and every route that hands a memo hands that one, the
 		/// fill takes it although another route hands the value, which that route makes the memo of: the caller's declaration of
-		/// the wrapper itself at the root dispatcher (`FillCallerReads.memoArgumentByLabel`). So the tree reads the wrapper where
+		/// the wrapper itself at the root dispatcher (`FillCallerReads.memoArgumentByMemo`). So the tree reads the wrapper where
 		/// it reads the wrapper and its instance where it reads the value, as inline reads one declaration both ways; a
 		/// `LazilyInstantiated` it would take instead is no `SendableLazilyInstantiated`. Where a route hands a seam's
 		/// `LazilyInstantiated` instead, which no `@Sendable` function can capture, the fill takes a `LazilyInstantiated`, and those
@@ -2337,21 +2378,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			indent: String,
 			inlinedFills: [String: InlinedFill],
 			parametersByKey: [String: [SeamSignature.Hole.Field]] = [:],
-			callerArgumentByLabel: [String: String] = [:],
-			callerMemoArgumentByLabel: [String: String] = [:],
+			callerArgumentByParameter: [Property: String] = [:],
+			callerMemoArgumentByMemo: [Property: String] = [:],
 			typesDeclaredEscaping: Set<TypeDescription> = [],
 			fillsTakingPayloadFields: Set<String> = [],
 			labelsHiddenByReenteringCalls: Set<String> = [],
 		) -> String {
-			// What this function hands on of a value no case carries: its own parameter, or, for the root dispatcher, which
-			// takes none, the caller's declaration in the form the target takes (`ScopeGenerator.FillCallerReads`).
-			func ownValue(of label: String) -> String {
-				takesValuesOfOuterTypes ? label : callerArgumentByLabel[label] ?? label
-			}
 			let parameters = parametersByKey[key] ?? []
-			// The names this function binds, apart from the labels of what it takes and passes on.
-			let labels = Set(parameters.map(\.property.label) + cases.flatMap { dispatcherCase in
-				dispatcherCase.target.flatMap { parametersByKey[$0.key] }?.map(\.property.label) ?? []
+			let parameterNames = Self.parameterNames(of: parameters)
+			// What this function hands on of a value no case carries to a target that takes it as `parameter`: its own parameter
+			// of that form (`parameter(handing:among:)`), or, for the root dispatcher, which takes none, the caller's declaration
+			// in the form that target takes (`ScopeGenerator.FillCallerReads`), whatever form another target of the call takes it
+			// in.
+			func ownValue(for parameter: SeamSignature.Hole.Field) -> String {
+				takesValuesOfOuterTypes ? parameterNames[parameter.property] ?? parameter.property.label : callerArgumentByParameter[parameter.property] ?? parameter.property.label
+			}
+			// The names this function binds, apart from the names of what it takes and passes on.
+			let labels = Set(parameterNames.values).union(cases.flatMap { dispatcherCase in
+				dispatcherCase.target.map { Self.parameterNames(of: parametersByKey[$0.key] ?? []).values.map(\.self) } ?? []
 			})
 			func name(_ base: String) -> String {
 				var name = base
@@ -2367,8 +2411,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				fillsTakingPayloadFields: fillsTakingPayloadFields,
 				parameters: parameters,
 				parametersByKey: parametersByKey,
-				ownValue: ownValue(of:),
-				callerMemoArgument: { callerMemoArgumentByLabel[$0] },
+				ownValue: ownValue(for:),
+				callerMemoArgument: { callerMemoArgumentByMemo[$0.memoProperty] },
 				valuesName: name("values"),
 				scopeName: name("scope"),
 				typesDeclaredEscaping: typesDeclaredEscaping,
@@ -2389,8 +2433,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			fillsTakingPayloadFields: Set<String>,
 			parameters: [SeamSignature.Hole.Field],
 			parametersByKey: [String: [SeamSignature.Hole.Field]],
-			ownValue: (String) -> String,
-			callerMemoArgument: (String) -> String?,
+			ownValue: (SeamSignature.Hole.Field) -> String,
+			callerMemoArgument: (SeamSignature.Hole.Field) -> String?,
 			valuesName: String,
 			scopeName: String,
 			typesDeclaredEscaping: Set<TypeDescription>,
@@ -2400,7 +2444,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			/// The argument `target`, the target of `dispatcherCase`, takes for `parameter`, reading the case's payload bound as
 			/// `payloadName`, and whether it reads the payload: the struct the caller's member of this level returns for the case,
 			/// for the struct of a level on a carried route; else the case's payload's field, or this function's own value.
-			func argument(_ parameter: SeamSignature.Hole.Field, of target: Case.Target, for dispatcherCase: Case, payloadName: String, readsOwnPayload: Bool) -> (text: String, readsPayload: Bool) {
+			func argument(_ parameter: SeamSignature.Hole.Field, named argumentLabel: String, of target: Case.Target, for dispatcherCase: Case, payloadName: String, readsOwnPayload: Bool) -> (text: String, readsPayload: Bool) {
 				let label = parameter.property.label
 				if let carriedInnerScope = carriedInnerScopes.first(where: { $0.name == label }) {
 					// A level function an enclosing call declares takes the struct under its own name for it.
@@ -2414,19 +2458,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// enclosing value is another declaration's. Elsewhere the caller's declaration is the one inline reads, which the
 					// branches below hand. The payload is read before the member returns, so no memo made of it captures the payload.
 					let source = HandedSource(field, readsMemo: parameter.bindsMemo, expression: "\(payloadName).\(field.memberName(bindingMemo: parameter.bindsMemo))")
-					return ("\(label.spelledAsArgumentLabel): \(source.handed(to: parameter, capturingExpression: true))", true)
-				} else if let ownParameter = parameters.first(where: { $0.property.label == label }) {
-					let source = HandedSource(ownParameter, readsMemo: ownParameter.bindsMemo, expression: ownValue(label))
-					return ("\(label.spelledAsArgumentLabel): \(source.handed(to: parameter, capturingExpression: false))", false)
-				} else if parameter.bindsMemo, parameter.deferral == .deferred(isSendable: true), let memoArgument = callerMemoArgument(label) {
+					return ("\(argumentLabel.spelledAsArgumentLabel): \(source.handed(to: parameter, capturingExpression: true))", true)
+				} else if let ownParameter = Self.parameter(handing: parameter, among: parameters) {
+					// This function's own parameter of the target's form: a target of another form is handed its own.
+					let source = HandedSource(ownParameter, readsMemo: ownParameter.bindsMemo, expression: ownValue(ownParameter))
+					return ("\(argumentLabel.spelledAsArgumentLabel): \(source.handed(to: parameter, capturingExpression: false))", false)
+				} else if parameter.bindsMemo, parameter.deferral == .deferred(isSendable: true), let memoArgument = callerMemoArgument(parameter) {
 					// The root dispatcher hands a target that takes a `SendableLazilyInstantiated` the caller's declaration of it, or
-					// one made of the caller's value (`ScopeGenerator.FillCallerReads.memoArgumentByLabel`).
-					return ("\(label.spelledAsArgumentLabel): \(memoArgument)", false)
+					// one made of the caller's value (`ScopeGenerator.FillCallerReads.memoArgumentByMemo`).
+					return ("\(argumentLabel.spelledAsArgumentLabel): \(memoArgument)", false)
 				} else {
 					// The root dispatcher hands the caller's declaration, in the form a target that takes the value takes it
 					// (`ScopeGenerator.FillCallerReads`).
-					let source = HandedSource(expression: ownValue(label), type: parameter.property.typeDescription, isMemo: false)
-					return ("\(label.spelledAsArgumentLabel): \(source.handed(to: parameter, capturingExpression: false))", false)
+					let source = HandedSource(expression: ownValue(parameter), type: parameter.property.typeDescription, isMemo: false)
+					return ("\(argumentLabel.spelledAsArgumentLabel): \(source.handed(to: parameter, capturingExpression: false))", false)
 				}
 			}
 			/// The parameters of `target`, in the order it declares them: a fill's in their own order; a level function's with
@@ -2441,6 +2486,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			var members = [(name: String, lines: [String])]()
 			for (dispatcherCase, target) in cases.compactMap({ dispatcherCase in dispatcherCase.target.map { (dispatcherCase, $0) } }) {
 				let targetParameters = parametersByKey[target.key] ?? []
+				let targetParameterNames = Self.parameterNames(of: targetParameters)
 				if let inlinedFill = inlinedFills[target.key] {
 					// The fill's body, which declares no function: a fill that does is called by name, so no function is declared
 					// inside the closure the struct stores (`ScopeGenerator.declaresFunction(inFillBody:)`).
@@ -2450,7 +2496,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// A fill that returns a wrapper's builder takes each field of the payload it reads, from the payload, and each
 					// value it reads that the payload does not carry, under its label: the builder it returns captures no payload.
 					// The next level's function likewise takes what it reads from this case's payload where it carries one.
-					let arguments = orderedCarriedFirst(targetParameters, of: target).map { argument($0, of: target, for: dispatcherCase, payloadName: valuesName, readsOwnPayload: true) }
+					let arguments = orderedCarriedFirst(targetParameters, of: target).map { argument($0, named: targetParameterNames[$0.property] ?? $0.property.label, of: target, for: dispatcherCase, payloadName: valuesName, readsOwnPayload: true) }
 					let readsValues = arguments.contains(where: \.readsPayload)
 					var call = "\(target.name)(\(arguments.map(\.text).joined(separator: ", ")))"
 					if dispatcherCase.returnsWrapperBuilder, !Self.isFill(target) {
@@ -2464,7 +2510,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// A fill nested by type takes the case's payload, and each value it reads that the payload does not carry, under
 					// its label: this function's own, or the caller's.
 					let bound = dispatcherCase.carriesPayload ? [scopeName] : []
-					let arguments = orderedCarriedFirst(targetParameters, of: target).map { argument($0, of: target, for: dispatcherCase, payloadName: scopeName, readsOwnPayload: false) }
+					let arguments = orderedCarriedFirst(targetParameters, of: target).map { argument($0, named: targetParameterNames[$0.property] ?? $0.property.label, of: target, for: dispatcherCase, payloadName: scopeName, readsOwnPayload: false) }
 					let readsPayload = !bound.isEmpty || arguments.contains(where: \.readsPayload)
 					members.append((dispatcherCase.name, ["\(dispatcherCase.name.spelledAsArgumentLabel): { \(readsPayload ? scopeName : "_") in \(target.name)(\((bound + arguments.map(\.text)).joined(separator: ", "))) }"]))
 				}
@@ -2478,7 +2524,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				valueParameterList.append("\(carriedInnerScope.upName.spelledAsArgumentLabel): \(TypeDescription.nested(name: ReservedName.builderStructTypeName, parentType: enumType, generics: [Self.carried(carriedInnerScope.type, through: returnType)]).asSource)")
 			}
 			let carriedNames = Set(carriedInnerScopes.map(\.name))
-			valueParameterList += parameters.filter { !carriedNames.contains($0.property.label) }.map { "\($0.property.label.spelledAsArgumentLabel): \($0.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
+			let parameterNames = Self.parameterNames(of: parameters)
+			valueParameterList += parameters.filter { !carriedNames.contains($0.property.label) }.map { "\((parameterNames[$0.property] ?? $0.property.label).spelledAsArgumentLabel): \($0.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
 			let valueParameters = valueParameterList.joined(separator: ", ")
 			let builderType = TypeDescription.nested(name: ReservedName.builderStructTypeName, parentType: enumType, generics: [returnType])
 			var lines = ["\(indent)\(ScopeGenerator.localFunctionPrefix(isSendable: isSendable, isNonisolated: true))func \(functionName)(\(valueParameters)) -> \(builderType.asSource) {"]
@@ -5799,11 +5846,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var inlinedFills = [String: FillDispatcher.InlinedFill]()
 		// What each fill nested by type takes beside its case's payload, then what each dispatcher takes to pass on.
 		var fillParametersByKey = [String: [SeamSignature.Hole.Field]]()
-		// What the root dispatcher passes of each value it reads from this scope: the caller's declaration, or `nil` where a
-		// fill reads it only if available and this scope declares none, or builds it later. A value one fill reads where
-		// another reads it too is passed as the fill that finds it available reads it.
-		var callerArgumentsByLabel = [String: Set<String>]()
-		var callerMemoArgumentsByLabel = [String: Set<String>]()
+		// What the root dispatcher passes of each value it reads from this scope, by the parameter a target takes for it: the
+		// caller's declaration in that parameter's form, or `nil` where a fill reads it only if available and this scope
+		// declares none, or builds it later. Two fills that take one label in different forms are each handed their own form.
+		// The caller's declaration in one form is the same for every fill of the call, which reads the one scope enclosing it
+		// (`Scope.Fill.callerNearestDeclarations`), so nothing is chosen among spellings: a form is passed as the declaration
+		// where any fill that takes it finds it available, and as `nil` where none does.
+		var callerArgumentByParameter = [Property: String]()
+		var callerMemoArgumentByMemo = [Property: String]()
 		// The fills a level function's member hands each field of its payload they read, rather than the payload: those that
 		// return a wrapper's builder, and those an override closure of the call is handed a function over, which the closure
 		// calls with the caller's values.
@@ -5824,12 +5874,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 					let callerReads = child.generator.fillCallerReads
 					for (label, argument) in callerReads.argumentByLabel {
+						guard let parameter = callerReads.parameterByLabel[label]?.property else { continue }
 						let forms = callerReads.dependencies.map(\.property).filter { $0.label == label }
-						callerArgumentsByLabel[label, default: []].insert(forms.allSatisfy(child.unavailableProperties.contains) ? "nil" : argument)
+						if !forms.allSatisfy(child.unavailableProperties.contains) {
+							callerArgumentByParameter[parameter] = argument
+						} else if callerArgumentByParameter[parameter] == nil {
+							callerArgumentByParameter[parameter] = "nil"
+						}
 					}
-					for (label, argument) in callerReads.memoArgumentByLabel {
-						callerMemoArgumentsByLabel[label, default: []].insert(argument)
-					}
+					callerMemoArgumentByMemo.merge(callerReads.memoArgumentByMemo) { argument, _ in argument }
 				}
 			}
 		}
@@ -5845,11 +5898,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			}
 		}
-		let callerArgumentByLabel = callerArgumentsByLabel.compactMapValues { arguments in
-			arguments.filter { $0 != "nil" }.min() ?? arguments.min()
-		}
-		// Every fill of the call reads the one declaration enclosing it, so each spells it alike.
-		let callerMemoArgumentByLabel = callerMemoArgumentsByLabel.compactMapValues { $0.min() }
 		// A public mock's caller declares level functions of its own (`PublicMockLevelFunctions`); a seam's caller its
 		// dispatchers, each value handed on per label (`dispatcherParameters(of:fillReads:)`).
 		let callDispatchers = publicMockLevelFunctions == nil ? fillDispatchers : []
@@ -5905,8 +5953,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				indent: leadingMemberWhitespace,
 				inlinedFills: inlinedFills,
 				parametersByKey: parametersByKey,
-				callerArgumentByLabel: callerArgumentByLabel,
-				callerMemoArgumentByLabel: callerMemoArgumentByLabel,
+				callerArgumentByParameter: callerArgumentByParameter,
+				callerMemoArgumentByMemo: callerMemoArgumentByMemo,
 				typesDeclaredEscaping: typesDeclaredEscaping,
 				fillsTakingPayloadFields: fillsTakingPayloadFields,
 				labelsHiddenByReenteringCalls: Set(fillDeferredLabelsHiddenByReenteringCalls.values.joined()),
@@ -13331,6 +13379,13 @@ extension SeamSignature.Hole.Field {
 			isSeamParameter: isSeamParameter,
 			seamParameterOrigin: isBoundByPublicMockRoot ? nil : seamParameterOrigin,
 		)
+	}
+
+	/// The field's label in the type a function that is handed it takes it as (`boundTypeAsFunctionParameter`), with no type
+	/// declared escaping: what the root dispatcher hands a target that takes the field's memo is found by it
+	/// (`ScopeGenerator.FillCallerReads.memoArgumentByMemo`).
+	var memoProperty: Property {
+		Property(label: property.label, typeDescription: boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: []))
 	}
 
 	/// The type a function that is handed the field takes it as: the memo's where the field `bindsMemo`, else the field's own,

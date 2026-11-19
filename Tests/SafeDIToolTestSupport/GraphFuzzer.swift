@@ -1489,6 +1489,13 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// `HoleRouteImpl` builds `HoleRoutePanel`, a seam whose fill requires `holeRouteToken`, which it reads of
 	/// `HoleRouteImpl`'s fill, so the fill's tree requires the value however `HoleRouteImpl` reads it.
 	case holeLazyRouteNestedSeamFillRequiresValue
+	/// The seam also builds `HoleRouteBench`, a second place of `HoleRouteService`, by itself and beneath `HoleRouteShelf`,
+	/// which binds `holeRouteToken` by value: that place's fill takes the value where `HoleRouteModel`'s takes the wrapper,
+	/// and the root dispatcher hands each fill the root's value in the form it takes.
+	case holeLazyRouteSecondFormPlace
+	/// `HoleRouteWing`, which binds no `holeRouteToken`, builds both places' types in place of the seam, so its level
+	/// function takes `holeRouteToken` in both forms and hands each fill its own.
+	case holeLazyRouteSecondFormBeneathLevel
 	/// `HoleNest`, a seam of the module beneath the seam's that `HoleSeam` calls by value or through an `Instantiator`,
 	/// whose hole `HoleNestImpl` fills in the seam's module with a place of `HoleSeam`'s own hole: a place inside a plain
 	/// fill (the design's section 2.6).
@@ -5597,6 +5604,10 @@ enum GraphFuzzerGenerator {
 			let lazyRouteReadOnlyIfAvailable = holeRolls.lazyRoute.percentChance(45)
 			let lazyRouteRootHoldsToken = holeRolls.lazyRoute.percentChance(60)
 			let lazyRouteNestedSeamFill = holeRolls.lazyRoute.percentChance(50)
+			// A second place of that hole type beneath a type that binds the value by value, on a generator of its own.
+			let drawsLazyRouteSecondForm = holeRolls.lazyRouteSecondForm.percentChance(50)
+			let lazyRouteSecondFormShelfFirst = holeRolls.lazyRouteSecondForm.percentChance(50)
+			let lazyRouteSecondFormBeneathLevel = holeRolls.lazyRouteSecondForm.percentChance(50)
 			// A place inside a plain fill, and a hole under a later member of a loop of received instantiators, each on a
 			// generator of its own, made whatever the base draw.
 			let drawsPlainFillPlace = holeRolls.plainFillPlace.percentChance(25)
@@ -6347,7 +6358,32 @@ enum GraphFuzzerGenerator {
 					PropertyDeclaration(attribute: "@Instantiated", label: "holeRouteDesk", type: desk.name),
 					PropertyDeclaration(attribute: "@Instantiated", label: "holeRouteModel", type: model.name),
 				]
-				seam.properties += lazyRouteDeskFirst ? routeProperties : routeProperties.reversed()
+				var placeProperties = lazyRouteDeskFirst ? routeProperties : routeProperties.reversed()
+				// Half the time a second place of `HoleRouteService`, on `HoleRouteBench`, which the seam builds itself and beneath
+				// `HoleRouteShelf`, which binds `holeRouteToken` by value (`holeLazyRouteSecondFormPlace`): that place's fill takes
+				// the value where `HoleRouteModel`'s takes the wrapper, and the root dispatcher hands each the root's value in the
+				// form that fill takes. Half of those build both places' types beneath `HoleRouteWing`, which binds nothing
+				// (`holeLazyRouteSecondFormBeneathLevel`), whose level function takes `holeRouteToken` once per form and hands each
+				// fill its own.
+				if drawsLazyRouteSecondForm {
+					let bench = instantiable("HoleRouteBench", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeRouteService", type: "any \(routeServiceName)")])
+					let shelf = instantiable("HoleRouteShelf", module: .seamModule, properties: [
+						PropertyDeclaration(attribute: "@Instantiated", label: "holeRouteToken", type: token.name),
+						PropertyDeclaration(attribute: "@Instantiated", label: "holeRouteBench", type: bench.name),
+					])
+					seamModuleDeclarations += [bench, shelf]
+					let secondFormProperties = [
+						PropertyDeclaration(attribute: "@Instantiated", label: "holeRouteShelf", type: shelf.name),
+						PropertyDeclaration(attribute: "@Instantiated", label: "holeRouteBench", type: bench.name),
+					]
+					placeProperties += lazyRouteSecondFormShelfFirst ? secondFormProperties : secondFormProperties.reversed()
+					if lazyRouteSecondFormBeneathLevel {
+						let wing = instantiable("HoleRouteWing", module: .seamModule, properties: placeProperties)
+						seamModuleDeclarations.append(wing)
+						placeProperties = [PropertyDeclaration(attribute: "@Instantiated", label: "holeRouteWing", type: wing.name)]
+					}
+				}
+				seam.properties += placeProperties
 				if !lazyRouteReadOnlyIfAvailable || lazyRouteRootHoldsToken || lazyRouteNestedSeamFill {
 					lazyRouteRootDeclaration = PropertyDeclaration(attribute: "@Instantiated", label: "holeRouteToken", type: token.name)
 				}
@@ -6711,6 +6747,7 @@ enum GraphFuzzerGenerator {
 				spelledPlaces = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6553706C6C)
 				screenPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6553637265)
 				valueOutsideSendableFunction = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6553746174)
+				lazyRouteSecondForm = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654C527366)
 			}
 
 			var crossPackage: GraphFuzzerRandomNumberGenerator
@@ -6765,6 +6802,9 @@ enum GraphFuzzerGenerator {
 			/// A value bound outside a `@Sendable` function that a fill inside it reads
 			/// (`holeFillReadsForwardedValueOutsideSendableFunction`, `holeFillReadsDeclaredValueOutsideSendableFunction`).
 			var valueOutsideSendableFunction: GraphFuzzerRandomNumberGenerator
+			/// A second place of the lazy route's hole type whose fill takes `holeRouteToken` by value where the first's takes
+			/// the wrapper (`holeLazyRouteSecondFormPlace`).
+			var lazyRouteSecondForm: GraphFuzzerRandomNumberGenerator
 		}
 
 		private static let holeRandomSeedMask: UInt64 = 0x686F6C655F726E64
@@ -11122,6 +11162,12 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 			if declares("HoleRoutePanel") {
 				features.insert(.holeLazyRouteNestedSeamFillRequiresValue)
+			}
+			if declares("HoleRouteShelf") {
+				features.insert(.holeLazyRouteSecondFormPlace)
+			}
+			if declares("HoleRouteWing") {
+				features.insert(.holeLazyRouteSecondFormBeneathLevel)
 			}
 		}
 		if declares("HoleTangleT") {
