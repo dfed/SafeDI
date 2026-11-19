@@ -5276,7 +5276,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	/// The tree SafeDI generates for `Root` of `typeBuiltAsParameterLabelFixture` with `wrapper`, whose `A` receives
 	/// `renamed` as `parameterType`: `X` is passed `nil` wherever it is built as `renamed`.
 	private static func expectedTypeBuiltAsParameterLabelTree(wrapper: CycleClosingWrapper, parameterType: String) -> String {
-		let sendable = wrapper.isSendable ? "@Sendable " : ""
+		let sendable = wrapper.isSendable ? "@Sendable nonisolated " : ""
 		let aBuiltWith = { (argument: String) in
 			wrapper.isErased ? "AnyA(__safeDI_aBuilder(renamed: \(argument)))" : "__safeDI_aBuilder(renamed: \(argument))"
 		}
@@ -5307,7 +5307,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	/// The mock SafeDI generates for `Root` of `typeBuiltAsParameterLabelFixture` with `wrapper`, whose `A` receives `renamed`
 	/// as `parameterType`.
 	private static func expectedTypeBuiltAsParameterLabelMock(wrapper: CycleClosingWrapper, parameterType: String) -> String {
-		let sendable = wrapper.isSendable ? "@Sendable " : ""
+		let sendable = wrapper.isSendable ? "@Sendable nonisolated " : ""
 		let overrideLocals = wrapper.isSendable ? ["midBuilder.safeDIBuilder", "midBuilder.renamed", "safeDIBuilder"] : []
 		let aConstruction = { (construction: String) in wrapper.isErased ? "AnyA(\(construction))" : construction }
 		return """
@@ -5511,7 +5511,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 
 	/// The tree SafeDI generates for `Root` of `aliasOfParameterLabelFixture`, with nothing else declared.
 	private static func expectedAliasOfParameterLabelTree(wrapper: CycleClosingWrapper, aliasPosition: AliasPosition, fixtures: FixturePaths) -> String {
-		let sendable = wrapper.isSendable ? "@Sendable " : ""
+		let sendable = wrapper.isSendable ? "@Sendable nonisolated " : ""
 		let aBuiltWith = { (argument: String) in
 			wrapper.isErased ? "AnyA(__safeDI_aBuilder(renamed: \(argument)))" : "__safeDI_aBuilder(renamed: \(argument))"
 		}
@@ -5561,7 +5561,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	/// The mock SafeDI generates for `Root` of `aliasOfParameterLabelFixture`, with nothing else declared. `Root` binds
 	/// `renamed` to an override, which `A`'s builder function is passed where it is declared.
 	private static func expectedAliasOfParameterLabelMock(wrapper: CycleClosingWrapper, aliasPosition: AliasPosition, fixtures: FixturePaths) -> String {
-		let sendable = wrapper.isSendable ? "@Sendable " : ""
+		let sendable = wrapper.isSendable ? "@Sendable nonisolated " : ""
 		let override = { (path: String) in mockOverride(path, wrapper: wrapper) }
 		// Appended rather than joined with `+` around ternaries: Swift 6.2 on Linux can time out type-checking a `+` chain
 		// of arrays with ternaries; later Swift does not.

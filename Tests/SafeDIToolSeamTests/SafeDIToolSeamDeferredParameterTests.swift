@@ -1468,6 +1468,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		// each deferred parameter, under either flow.
 		let sendablePrefix = sendable ? "Sendable" : ""
 		let sendableAttribute = sendable ? "@Sendable " : ""
+		let sendableAttributeFunctionPrefix = sendable ? "@Sendable nonisolated " : ""
 		let output = try await executeSafeDIToolMultiModuleTest(modules: [
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
 				seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Received let user: User", "@Instantiated let cacheBuilder: \(sendablePrefix)Instantiator<Cache>"]),
@@ -1487,7 +1488,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		    public init(__safeDI_user user: User, __safeDI_database: @autoclosure @escaping \(sendableAttribute)() -> Database, __safeDI_logger: @autoclosure @escaping \(sendableAttribute)() -> Logger?) {
 		        let database = \(sendablePrefix)LazilyInstantiated<Database>(__safeDI_database)
 		        let logger = \(sendablePrefix)LazilyInstantiated<Logger?>(__safeDI_logger)
-		        \(sendableAttribute)func __safeDI_cacheBuilder() -> Cache {
+		        \(sendableAttributeFunctionPrefix)func __safeDI_cacheBuilder() -> Cache {
 		            Cache(database: database.instance, logger: logger.instance)
 		        }
 		        let cacheBuilder = \(sendablePrefix)Instantiator<Cache>(__safeDI_cacheBuilder)
@@ -1508,7 +1509,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        let user = User()
-			        \(sendableAttribute)func __safeDI_database() -> Database {
+			        \(sendableAttributeFunctionPrefix)func __safeDI_database() -> Database {
 			            Database()
 			        }
 			        let database = \(sendablePrefix)LazilyInstantiated<Database>(__safeDI_database)
