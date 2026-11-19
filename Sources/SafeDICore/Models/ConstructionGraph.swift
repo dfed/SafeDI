@@ -82,6 +82,30 @@ struct ConstructionGraph: Sendable {
 			))
 		}
 		self.nodes = nodes
+		// A node is at one place of the tree when one reference reaches it, from a node at one place: the root, which the
+		// tree's own place references, or a node whose one child it is. Each node is appended when it is first referenced,
+		// after the node that references it, so the node that references a node referenced once precedes it, and one pass
+		// in node order decides every node. A node on a cycle is referenced by the cycle as well as from outside it, or
+		// descends from such a node, so no node on a cycle is at one place.
+		var referenceCounts = [Int](repeating: 0, count: nodes.count)
+		var lastReferrers = [Int](repeating: 0, count: nodes.count)
+		referenceCounts[0] = 1
+		for (referrer, node) in nodes.enumerated() {
+			for case let .instantiated(_, index, _) in node.propertiesToGenerate {
+				referenceCounts[index] += 1
+				lastReferrers[index] = referrer
+			}
+			for case let .fill(_, index) in node.holeArguments {
+				referenceCounts[index] += 1
+				lastReferrers[index] = referrer
+			}
+		}
+		var isAtOnePlace = [Bool]()
+		isAtOnePlace.reserveCapacity(nodes.count)
+		for index in nodes.indices {
+			isAtOnePlace.append(referenceCounts[index] == 1 && (index == 0 || isAtOnePlace[lastReferrers[index]]))
+		}
+		self.isAtOnePlace = isAtOnePlace
 	}
 
 	/// The scope the graph is rooted at.
@@ -128,6 +152,8 @@ struct ConstructionGraph: Sendable {
 	}
 
 	fileprivate let nodes: [Node]
+	/// Whether the tree reaches each node at one place only (see `ConstructionScope.isAtOnePlaceOfTheTree`).
+	fileprivate let isAtOnePlace: [Bool]
 }
 
 /// A scope of a `ConstructionGraph`, read as construction reads a `Scope`.
@@ -142,6 +168,14 @@ struct ConstructionScope: Sendable {
 	/// What a construction memo keys and keeps alive for this scope.
 	var identity: ConstructionScopeIdentity {
 		node.identity
+	}
+
+	/// Whether the tree the graph is rooted at builds this scope at one place only: one reference reaches it, from a scope
+	/// at one place, or it is the root and nothing references it. Within one pass of the tree, no other place has a
+	/// construction memo key that names this scope, so the place's generator is never reused there (see `ConstructionMemo`).
+	/// A place a pass does not build (inside a cycle it closes, say) only makes this `false` where it could be `true`.
+	var isAtOnePlaceOfTheTree: Bool {
+		graph.isAtOnePlace[index]
 	}
 
 	var instantiable: Instantiable {

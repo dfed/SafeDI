@@ -158,9 +158,65 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysNoPlaceInMemo_whenTreeBuildsEachTypeAtOnePlace() async throws {
+		// `Root` builds `A` and `C`, and `A` builds `B`: no other place of the tree has a place's key, so none is keyed.
+		let keyedTypes = try await typesKeyedInMemo(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let a: A", "@Instantiated let c: C"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let b: B"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "C", isFinalClass: true, declarations: []),
+		])
+		#expect(keyedTypes == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysOnlyPlacesOfTypesBuiltAtSeveralPlaces_whenTwoParentsBuildOneType() async throws {
+		// `P` and `Q` each build `G`, which builds `H`: `G` and `H` are built at two places each, and `P` and `Q` at one.
+		let keyedTypes = try await typesKeyedInMemo(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let p: P", "@Instantiated let q: Q"]),
+			seamFixtureType(named: "P", isFinalClass: true, declarations: ["@Instantiated let g: G"]),
+			seamFixtureType(named: "Q", isFinalClass: true, declarations: ["@Instantiated let g: G"]),
+			seamFixtureType(named: "G", isFinalClass: true, declarations: ["@Instantiated let h: H"]),
+			seamFixtureType(named: "H", isFinalClass: true, declarations: []),
+		])
+		#expect(keyedTypes == ["G", "H"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysPlacesOnCycle_whenTypeBuildsBuilderOfTypeAboveIt() async throws {
+		// `B` builds a builder of `A`, which builds `B`: `A` is built beneath `Root` and again beneath `B`, and `B` beneath
+		// each `A`, while `C` is built at one place.
+		let keyedTypes = try await typesKeyedInMemo(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let a: A", "@Instantiated let c: C"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let b: B"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "C", isFinalClass: true, declarations: []),
+		])
+		#expect(keyedTypes == ["A", "B"])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// Generates `fixture` and returns the concrete type of each place a tree keyed in its construction memo.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func typesKeyedInMemo(of fixture: [String]) async throws -> Set<String> {
+		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
+		_ = try await ConstructionMemoOracle.$keyedPlaceObserver.withValue({ continuation.yield($0) }) { [fixture] in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var keyedTypes = Set<String>()
+		for await keyedType in stream {
+			keyedTypes.insert(keyedType)
+		}
+		return keyedTypes
+	}
 
 	/// Generates `fixture` with the memo and without it, expects the same generated files, and returns them.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)

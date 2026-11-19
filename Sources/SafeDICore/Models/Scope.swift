@@ -444,21 +444,23 @@ final class Scope: Hashable {
 		if let observer = ConstructionMemoOracle.observer {
 			// The oracle's two builds start no code, so nothing changes either while it is read. The build with the memo
 			// shares it across every tree created with this memo, whatever the memo's own sharing, so that the oracle judges
-			// every reuse either sharing makes.
+			// every reuse either sharing makes. The places it keys are the oracle's, not the tree's, so no test sees them.
 			var oracleMemo = constructionMemo.oracleMemo
-			let treeBuiltWithMemo = try createdTree(
-				for: property,
-				nearestDeclarations: nearestDeclarations,
-				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
-				seamRoot: seamRoot,
-				mockBuilders: mockBuilders,
-				erasedToConcreteExistential: erasedToConcreteExistential,
-				forMockGeneration: forMockGeneration,
-				startsCodeGeneration: false,
-				validatesForwardedProperties: validatesForwardedProperties,
-				declaredTypeNames: declaredTypeNames,
-				constructionMemo: &oracleMemo,
-			)
+			let treeBuiltWithMemo = try ConstructionMemoOracle.$keyedPlaceObserver.withValue(nil) {
+				try createdTree(
+					for: property,
+					nearestDeclarations: nearestDeclarations,
+					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+					seamRoot: seamRoot,
+					mockBuilders: mockBuilders,
+					erasedToConcreteExistential: erasedToConcreteExistential,
+					forMockGeneration: forMockGeneration,
+					startsCodeGeneration: false,
+					validatesForwardedProperties: validatesForwardedProperties,
+					declaredTypeNames: declaredTypeNames,
+					constructionMemo: &oracleMemo,
+				)
+			}
 			constructionMemo.oracleMemo = oracleMemo
 			let treeBuiltWithoutMemo = try ConstructionMemo.$isEnabled.withValue(false) {
 				var unusedMemo = ConstructionMemo()
@@ -506,6 +508,10 @@ final class Scope: Hashable {
 		// shared across trees or kept past a pass. Its places with holes store nothing; a seam without holes memoizes the
 		// rest, a pass at a time.
 		let sharesMemo = seamRoot == nil && mockBuilders == nil
+		// Within a pass, a memo that only this tree reads reuses a place's generator only at another place of the same scope,
+		// so no pass keys, looks up or stores a place of a scope the tree builds at one place only. A memo shared across trees
+		// keys every place, since a later tree can reach any of them.
+		let keysPlacesAtOnePlace = sharesMemo && constructionMemo.sharing == .acrossTrees
 		var placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?
 		var scopeGenerator: ScopeGenerator
 		var generatorsToStart: [ScopeGenerator]?
@@ -538,6 +544,7 @@ final class Scope: Hashable {
 				placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 				memo: &passMemo,
 				settledPassMemo: settledPassMemo,
+				keysPlacesAtOnePlace: keysPlacesAtOnePlace,
 				graph: graph,
 			)
 			if previousPassGenerator == nil {
@@ -575,6 +582,11 @@ final class Scope: Hashable {
 	///   generators whose code to start, in the order they are created.
 	/// - Parameter memo: The generators already finished, which a later place of the same key whose context answers their
 	///   reads alike reuses, and where this pass stores the generators it finishes (see `ConstructionMemo`).
+	/// - Parameter keysPlacesAtOnePlace: Whether a place of a scope the tree builds at one place only
+	///   (`ConstructionScope.isAtOnePlaceOfTheTree`) is keyed, looked up and stored as every other place is: only where the
+	///   memo carries generators to other trees. Otherwise no other place of the pass has its key, so a lookup can only miss,
+	///   and its entry could serve only the pass after (`ConstructionMemo.settledReuse`), which builds the place again
+	///   instead, reusing what the pass before stored of the places beneath it.
 	private func createScopeGenerator(
 		for property: Property?,
 		nearestDeclarations: NearestDeclarations,
@@ -591,6 +603,7 @@ final class Scope: Hashable {
 		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?,
 		memo: inout ConstructionMemo,
 		settledPassMemo: ConstructionMemo?,
+		keysPlacesAtOnePlace: Bool,
 		graph: ConstructionGraph,
 	) throws -> ScopeGenerator {
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
@@ -618,6 +631,7 @@ final class Scope: Hashable {
 			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 		)]
 		let reusesGenerators = ConstructionMemo.isEnabled
+		let keyedPlaceObserver = ConstructionMemoOracle.keyedPlaceObserver
 		// The generators whose code this pass started or collected, each of which a place that reuses it does not start again.
 		var startedGenerators = Set<ObjectIdentifier>()
 		// Every generator this pass started or collected, in order: what each place's build started is the part of it from
@@ -629,9 +643,12 @@ final class Scope: Hashable {
 				switch propertyToGenerate {
 				case let .instantiated(property, scope, erasedToConcreteExistential):
 					try scopeGeneratorsUnderConstruction[index].validateForwardedProperties(ofChildBuilding: scope, as: property)
-					let key = reusesGenerators
+					let key = reusesGenerators && (keysPlacesAtOnePlace || !scope.isAtOnePlaceOfTheTree)
 						? scopeGeneratorsUnderConstruction[index].memoKey(ofChildBuilding: scope, as: property, erasedToConcreteExistential: erasedToConcreteExistential)
 						: nil
+					if key != nil, let keyedPlaceObserver {
+						keyedPlaceObserver(scope.instantiable.concreteInstantiable.asSource)
+					}
 					if let key, let reuse = memo.reuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext, besides: scopeGeneratorsUnderConstruction[index].childGeneratorIdentifiers) {
 						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
 					} else if let key, let reuse = settledPassMemo?.settledReuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext, besides: scopeGeneratorsUnderConstruction[index].childGeneratorIdentifiers) {
