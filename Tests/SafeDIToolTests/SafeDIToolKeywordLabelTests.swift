@@ -575,6 +575,14 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 			        default: String? = Service.__safeDI_publicMockDefault_default(),
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Service {
+			        Service.__safeDI_mock(default: `default`, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        default: String? = Service.__safeDI_publicMockDefault_default(),
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Service {
 			        func __safeDI_session() -> Session {
 			            return Session.__safeDI_init(value: safeDIOverrides.session.`inout`, safeDIBuilder: safeDIOverrides.session.safeDIBuilder)
 			        }

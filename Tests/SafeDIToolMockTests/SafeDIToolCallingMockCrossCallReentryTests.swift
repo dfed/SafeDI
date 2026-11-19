@@ -380,6 +380,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    public static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        Screen.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
 		        func __safeDI_page() -> Page {
 		            func __safeDI_serviceBuilder_Page_service() -> any Service {
 		                func __safeDI_service() -> DefaultService {
@@ -1300,7 +1307,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    \(spelling.member)static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+		\(spelling.generatedOnlyMock)        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_page() -> Page {
 		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, token: Token) -> any Service {
 		                func __safeDI_service() -> DefaultService {
@@ -1546,7 +1553,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    \(spelling.member)static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+		\(spelling.generatedOnlyMock)        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_shelf() -> Shelf {
 		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, token: Token) -> any Service {
 		                func __safeDI_service() -> DefaultService {
@@ -1795,7 +1802,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    \(spelling.member)static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+		\(spelling.generatedOnlyMock)        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_shelf() -> Shelf {
 		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, token: Token) -> any Service {
 		                func __safeDI_service() -> DefaultService {
@@ -2062,7 +2069,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    \(spelling.member)static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_page() -> Page {
+		\(spelling.generatedOnlyMock)        func __safeDI_page() -> Page {
 		            func __safeDI_serviceBuilder_Page_service() -> any Service {
 		                func __safeDI_service() -> DefaultService {
 		                    func __safeDI_book() -> Book {
@@ -2622,7 +2629,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    \(spelling.member)static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+		\(spelling.generatedOnlyMock)        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_page() -> Page {
 		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values) -> any Service {
 		                let token = scope.token
@@ -3027,6 +3034,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        Screen.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
@@ -3483,6 +3497,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
 			        let log = if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
 			        func __safeDI_f() -> F {
 			            func __safeDI_apiBuilder_F() -> F.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
@@ -3548,6 +3569,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let log = if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
@@ -3624,14 +3652,19 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
-	/// What a caller’s kind changes in `App`’s file: the access of `SafeDIOverrides`, of its members and of `mock()`, and the
-	/// guard a `.public` mock declares.
-	private static func appSpelling(of caller: GraphFuzzerCallingMockCell.Caller) -> (overrides: String, member: String, guardExtension: String) {
+	/// What a caller’s kind changes in `App`’s file: the access of `SafeDIOverrides`, of its members and of `mock()`, the
+	/// guard a `.public` mock declares, and the `__safeDI_mock` it declares beside `mock()`, which `mock()` calls.
+	private static func appSpelling(of caller: GraphFuzzerCallingMockCell.Caller) -> (overrides: String, member: String, guardExtension: String, generatedOnlyMock: String) {
 		switch caller {
 		case .internal, .listed:
-			("", "", "")
+			("", "", "", "")
 		case .public:
-			("nonisolated public ", "public ", "\nextension Screen {\n    public enum __safeDI_Screen_mock_51799E6AA5E7B634 {}\n}\n")
+			(
+				"nonisolated public ",
+				"public ",
+				"\nextension Screen {\n    public enum __safeDI_Screen_mock_51799E6AA5E7B634 {}\n}\n",
+				"        Screen.__safeDI_mock(safeDIOverrides: safeDIOverrides)\n    }\n\n    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.\n    public static func __safeDI_mock(\n        safeDIOverrides: SafeDIOverrides = .init()\n    ) -> Screen {\n",
+			)
 		}
 	}
 
