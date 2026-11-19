@@ -2096,6 +2096,666 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		])
 	}
 
+	// MARK: Tests – a received value of a passed-up builder’s label and type
+
+	/// A public mock spells its parameters from its plan, so the value `Root` receives keeps the type it declares, though a
+	/// `@Sendable` builder function calls `Panel`’s mock, whose builder has its label and type, and hands it the builder of
+	/// the hole type from the public mock’s own enums.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesTheReceivedValueAsDeclared_whenAPublicCallerReceivesTheLabelAndTypeOfAnInstantiatorBuilderItsSendableFunctionPassesUp() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modules(holeProperty: Self.instantiatorHoleProperty, screenDeclarations: ["@Instantiated let panel: Panel"], rootDeclarations: ["@Received let holeBuilder: Instantiator<Hole>.Builder"], rootMock: .public),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    nonisolated public enum SafeDIMockScope_Hole {
+		        nonisolated public enum Screen_Scope {
+		            nonisolated public struct panel_Values: Sendable {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let panel: (panel_Values) -> Panel.SafeDIMockScope_Hole.__safeDI_Builder<__safeDI_Built>
+
+		                public init(panel: @escaping (panel_Values) -> Panel.SafeDIMockScope_Hole.__safeDI_Builder<__safeDI_Built>) {
+		                    self.panel = panel
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<Hole.ForwardedProperties, __safeDI_Built>.Builder) {
+		                    self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+		    }
+
+		    nonisolated public enum SafeDISendableMockScope_Hole {
+		        nonisolated public struct screenBuilder_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let screenBuilder: @Sendable (screenBuilder_Values) -> SafeDIMockScope_Hole.Screen_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(screenBuilder: @escaping @Sendable (screenBuilder_Values) -> SafeDIMockScope_Hole.Screen_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Hole.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.screenBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            screenBuilder: __safeDI_App_Screen_MockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                screenBuilder: screenBuilder
+		            )
+		        }
+
+		        public var screenBuilder: __safeDI_App_Screen_MockConfiguration { __safeDI_storage.screenBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screenBuilder: __safeDI_App_Screen_MockConfiguration
+		            ) {
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            let screenBuilder: __safeDI_App_Screen_MockConfiguration
+		        }
+		    }
+
+		    public static func mock(
+		        holeBuilder: @escaping Instantiator<Hole>.Builder,
+		        holeSendableBuilder: @escaping SendableInstantiator<Hole>.Builder,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        Root.__safeDI_mock(holeBuilder: holeBuilder, holeSendableBuilder: .init(__safeDI_noScope: holeSendableBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        holeBuilder: @escaping Instantiator<Hole>.Builder,
+		        holeSendableBuilder __safeDI_holeSendableBuilder: Root.SafeDISendableMockScope_Hole.__safeDI_Builder<Hole>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let __safeDI_screenBuilder__safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder
+		        @Sendable func __safeDI_screenBuilder() -> Screen {
+		            let __safeDI_holeSendableBuilder_screenBuilder = __safeDI_holeSendableBuilder.screenBuilder(SafeDISendableMockScope_Hole.screenBuilder_Values())
+		            _ = Panel.__safeDI_Panel_mock_F0F10F2194E82F9F.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            let panel = Panel.__safeDI_mock(holeBuilder: __safeDI_holeSendableBuilder_screenBuilder.panel(SafeDIMockScope_Hole.Screen_Scope.panel_Values()))
+		            return Screen.__safeDI_init(panel: panel, safeDIBuilder: __safeDI_screenBuilder__safeDIBuilder)
+		        }
+		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
+		        return Root(screenBuilder: screenBuilder, holeBuilder: holeBuilder)
+		    }
+		}
+
+		extension Root {
+		    public enum __safeDI_Root_mock_A5AF0459A085386B {}
+		}
+		#endif
+
+		#if DEBUG
+		/// Configuration for how `Screen` is constructed within the public mock trees of module `App`.
+		nonisolated public struct __safeDI_App_Screen_MockConfiguration {
+		    public init(
+		        _ safeDIBuilder: (@Sendable (Panel) -> Screen)? = nil
+		    ) {
+		        __safeDI_storage = __safeDI_Storage(
+		            safeDIBuilder: safeDIBuilder
+		        )
+		    }
+
+		    /// Overrides how `Screen` is constructed. Parameters match the type’s initializer or custom mock method.
+		    public var safeDIBuilder: (@Sendable (Panel) -> Screen)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            safeDIBuilder: (@Sendable (Panel) -> Screen)?
+		        ) {
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let safeDIBuilder: (@Sendable (Panel) -> Screen)?
+		    }
+		}
+
+		extension Screen {
+		    static func __safeDI_init(panel: Panel, safeDIBuilder: (@Sendable (Panel) -> Screen)?) -> Screen {
+		        if let safeDIBuilder { safeDIBuilder(panel) } else { Screen(panel: panel) }
+		    }
+		}
+		#endif
+
+		"""])
+	}
+
+	/// The same, where the place is an erased instantiator that forwards nothing, whose builder is a function type.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesTheReceivedValueAsDeclared_whenAPublicCallerReceivesTheLabelAndTypeOfAnErasedInstantiatorBuilderItsSendableFunctionPassesUp() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modules(holeProperty: Self.erasedHoleProperty, screenDeclarations: ["@Instantiated let panel: Panel"], rootDeclarations: ["@Received let holeFill_AnyHoleBuilder: () -> AnyHole"], rootMock: .public),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    nonisolated public enum SafeDIMockScope_HoleFill_AnyHole {
+		        nonisolated public enum Screen_Scope {
+		            nonisolated public struct panel_Values: Sendable {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let panel: (panel_Values) -> Panel.SafeDIMockScope_HoleFill_AnyHole.__safeDI_Builder<__safeDI_Built>
+
+		                public init(panel: @escaping (panel_Values) -> Panel.SafeDIMockScope_HoleFill_AnyHole.__safeDI_Builder<__safeDI_Built>) {
+		                    self.panel = panel
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+		    }
+
+		    nonisolated public enum SafeDISendableMockScope_HoleFill_AnyHole {
+		        nonisolated public struct screenBuilder_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let screenBuilder: @Sendable (screenBuilder_Values) -> SafeDIMockScope_HoleFill_AnyHole.Screen_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(screenBuilder: @escaping @Sendable (screenBuilder_Values) -> SafeDIMockScope_HoleFill_AnyHole.Screen_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		                self.screenBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            screenBuilder: __safeDI_App_Screen_MockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                screenBuilder: screenBuilder
+		            )
+		        }
+
+		        public var screenBuilder: __safeDI_App_Screen_MockConfiguration { __safeDI_storage.screenBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screenBuilder: __safeDI_App_Screen_MockConfiguration
+		            ) {
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            let screenBuilder: __safeDI_App_Screen_MockConfiguration
+		        }
+		    }
+
+		    public static func mock(
+		        holeFill_AnyHoleBuilder: @escaping () -> AnyHole,
+		        holeFill_AnyHoleSendableBuilder: @escaping @Sendable () -> AnyHole,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        Root.__safeDI_mock(holeFill_AnyHoleBuilder: holeFill_AnyHoleBuilder, holeFill_AnyHoleSendableBuilder: .init(__safeDI_noScope: holeFill_AnyHoleSendableBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        holeFill_AnyHoleBuilder: @escaping () -> AnyHole,
+		        holeFill_AnyHoleSendableBuilder __safeDI_holeFill_AnyHoleSendableBuilder: Root.SafeDISendableMockScope_HoleFill_AnyHole.__safeDI_Builder<AnyHole>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let __safeDI_screenBuilder__safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder
+		        @Sendable func __safeDI_screenBuilder() -> Screen {
+		            let __safeDI_holeFill_AnyHoleSendableBuilder_screenBuilder = __safeDI_holeFill_AnyHoleSendableBuilder.screenBuilder(SafeDISendableMockScope_HoleFill_AnyHole.screenBuilder_Values())
+		            _ = Panel.__safeDI_Panel_mock_E9531DCA567FCD91.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            let panel = Panel.__safeDI_mock(holeFill_AnyHoleBuilder: __safeDI_holeFill_AnyHoleSendableBuilder_screenBuilder.panel(SafeDIMockScope_HoleFill_AnyHole.Screen_Scope.panel_Values()))
+		            return Screen.__safeDI_init(panel: panel, safeDIBuilder: __safeDI_screenBuilder__safeDIBuilder)
+		        }
+		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
+		        return Root(screenBuilder: screenBuilder, holeFill_AnyHoleBuilder: holeFill_AnyHoleBuilder)
+		    }
+		}
+
+		extension Root {
+		    public enum __safeDI_Root_mock_BAE028C053013B23 {}
+		}
+		#endif
+
+		#if DEBUG
+		/// Configuration for how `Screen` is constructed within the public mock trees of module `App`.
+		nonisolated public struct __safeDI_App_Screen_MockConfiguration {
+		    public init(
+		        _ safeDIBuilder: (@Sendable (Panel) -> Screen)? = nil
+		    ) {
+		        __safeDI_storage = __safeDI_Storage(
+		            safeDIBuilder: safeDIBuilder
+		        )
+		    }
+
+		    /// Overrides how `Screen` is constructed. Parameters match the type’s initializer or custom mock method.
+		    public var safeDIBuilder: (@Sendable (Panel) -> Screen)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            safeDIBuilder: (@Sendable (Panel) -> Screen)?
+		        ) {
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let safeDIBuilder: (@Sendable (Panel) -> Screen)?
+		    }
+		}
+
+		extension Screen {
+		    static func __safeDI_init(panel: Panel, safeDIBuilder: (@Sendable (Panel) -> Screen)?) -> Screen {
+		        if let safeDIBuilder { safeDIBuilder(panel) } else { Screen(panel: panel) }
+		    }
+		}
+		#endif
+
+		"""])
+	}
+
+	/// The same, where the place is a `Sendable` wrapper, whose builder is `@Sendable` already.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesTheReceivedValueAsDeclared_whenAPublicCallerReceivesTheLabelAndTypeOfASendableInstantiatorBuilderItsSendableFunctionPassesUp() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modules(holeProperty: Self.sendableInstantiatorHoleProperty, screenDeclarations: ["@Instantiated let panel: Panel"], rootDeclarations: ["@Received let holeBuilder: SendableInstantiator<Hole>.Builder"], rootMock: .public),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    nonisolated public enum SafeDISendableMockScope_Hole {
+		        nonisolated public struct screenBuilder_Sendable_Values: Sendable {}
+
+		        nonisolated public enum Screen_Scope {
+		            nonisolated public struct panel_Sendable_Values: Sendable {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		                public let panel_Sendable: @Sendable (panel_Sendable_Values) -> Panel.SafeDISendableMockScope_Hole.__safeDI_Builder<__safeDI_Built>
+
+		                public init(panel_Sendable: @escaping @Sendable (panel_Sendable_Values) -> Panel.SafeDISendableMockScope_Hole.__safeDI_Builder<__safeDI_Built>) {
+		                    self.panel_Sendable = panel_Sendable
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Hole.ForwardedProperties, __safeDI_Built>.Builder) {
+		                    self.panel_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let screenBuilder_Sendable: @Sendable (screenBuilder_Sendable_Values) -> SafeDISendableMockScope_Hole.Screen_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(screenBuilder_Sendable: @escaping @Sendable (screenBuilder_Sendable_Values) -> SafeDISendableMockScope_Hole.Screen_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.screenBuilder_Sendable = screenBuilder_Sendable
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Hole.ForwardedProperties, __safeDI_Built>.Builder) {
+		                self.screenBuilder_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            screenBuilder: __safeDI_App_Screen_MockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                screenBuilder: screenBuilder
+		            )
+		        }
+
+		        public var screenBuilder: __safeDI_App_Screen_MockConfiguration { __safeDI_storage.screenBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                screenBuilder: __safeDI_App_Screen_MockConfiguration
+		            ) {
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            let screenBuilder: __safeDI_App_Screen_MockConfiguration
+		        }
+		    }
+
+		    public static func mock(
+		        holeBuilder: @escaping SendableInstantiator<Hole>.Builder,
+		        holeSendableBuilder: @escaping SendableInstantiator<Hole>.Builder,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        Root.__safeDI_mock(holeBuilder: holeBuilder, holeSendableBuilder: .init(__safeDI_noScope: holeSendableBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        holeBuilder: @escaping SendableInstantiator<Hole>.Builder,
+		        holeSendableBuilder __safeDI_holeSendableBuilder: Root.SafeDISendableMockScope_Hole.__safeDI_Builder<Hole>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let __safeDI_screenBuilder__safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder
+		        @Sendable func __safeDI_screenBuilder() -> Screen {
+		            let __safeDI_holeSendableBuilder_screenBuilder_Sendable = __safeDI_holeSendableBuilder.screenBuilder_Sendable(SafeDISendableMockScope_Hole.screenBuilder_Sendable_Values())
+		            _ = Panel.__safeDI_Panel_mock_72E86CA99351B8EC.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            let panel = Panel.__safeDI_mock(holeSendableBuilder: __safeDI_holeSendableBuilder_screenBuilder_Sendable.panel_Sendable(SafeDISendableMockScope_Hole.Screen_Scope.panel_Sendable_Values()))
+		            return Screen.__safeDI_init(panel: panel, safeDIBuilder: __safeDI_screenBuilder__safeDIBuilder)
+		        }
+		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
+		        return Root(screenBuilder: screenBuilder, holeBuilder: holeBuilder)
+		    }
+		}
+
+		extension Root {
+		    public enum __safeDI_Root_mock_2F2C4181ECE81CFB {}
+		}
+		#endif
+
+		#if DEBUG
+		/// Configuration for how `Screen` is constructed within the public mock trees of module `App`.
+		nonisolated public struct __safeDI_App_Screen_MockConfiguration {
+		    public init(
+		        _ safeDIBuilder: (@Sendable (Panel) -> Screen)? = nil
+		    ) {
+		        __safeDI_storage = __safeDI_Storage(
+		            safeDIBuilder: safeDIBuilder
+		        )
+		    }
+
+		    /// Overrides how `Screen` is constructed. Parameters match the type’s initializer or custom mock method.
+		    public var safeDIBuilder: (@Sendable (Panel) -> Screen)? { __safeDI_storage.safeDIBuilder }
+
+		    private let __safeDI_storage: __safeDI_Storage
+
+		    private final class __safeDI_Storage {
+		        init(
+		            safeDIBuilder: (@Sendable (Panel) -> Screen)?
+		        ) {
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let safeDIBuilder: (@Sendable (Panel) -> Screen)?
+		    }
+		}
+
+		extension Screen {
+		    static func __safeDI_init(panel: Panel, safeDIBuilder: (@Sendable (Panel) -> Screen)?) -> Screen {
+		        if let safeDIBuilder { safeDIBuilder(panel) } else { Screen(panel: panel) }
+		    }
+		}
+		#endif
+
+		"""])
+	}
+
+	/// An internal mock takes one value per name, so the value `Root` receives is the builder of the hole type that `Panel`’s
+	/// mock is passed, `@Sendable` since a `@Sendable` builder function captures it.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesOneSendableBuilderForTheReceivedValueAndThePlaces_whenAnInternalCallerReceivesTheLabelAndTypeOfAnInstantiatorBuilderItsSendableFunctionPassesUp() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modules(holeProperty: Self.instantiatorHoleProperty, screenDeclarations: ["@Instantiated let panel: Panel"], rootDeclarations: ["@Received let holeBuilder: Instantiator<Hole>.Builder"]),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            screenBuilder: Screen.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                screenBuilder: screenBuilder
+		            )
+		        }
+
+		        var screenBuilder: Screen.SafeDIMockConfiguration { __safeDI_storage.screenBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                screenBuilder: Screen.SafeDIMockConfiguration
+		            ) {
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            let screenBuilder: Screen.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        holeSendableBuilder: @escaping SendableInstantiator<Hole>.Builder,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let holeBuilder: Instantiator<Hole>.Builder = holeSendableBuilder
+		        let __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder = safeDIOverrides.screenBuilder.panel
+		        let __safeDI_screenBuilder__safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder
+		        @Sendable func __safeDI_screenBuilder() -> Screen {
+		            _ = Panel.__safeDI_Panel_mock_F0F10F2194E82F9F.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_panel() -> Panel {
+		                let holeBuilder: Instantiator<Hole>.Builder = holeSendableBuilder
+		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeBuilder) } else { Panel.__safeDI_mock(holeBuilder: .init(__safeDI_noScope: holeBuilder)) }
+		            }
+		            let panel: Panel = __safeDI_panel()
+		            return if let safeDIBuilder = __safeDI_screenBuilder__safeDIBuilder { safeDIBuilder(panel) } else { Screen(panel: panel) }
+		        }
+		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
+		        return Root(screenBuilder: screenBuilder, holeBuilder: holeBuilder)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Configuration for how this type is constructed within a mock tree.
+		    struct SafeDIMockConfiguration {
+		        init(
+		            panel: (@Sendable (@escaping Instantiator<Hole>.Builder) -> Panel)? = nil,
+		            _ safeDIBuilder: (@Sendable (Panel) -> Screen)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                panel: panel,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var panel: (@Sendable (@escaping Instantiator<Hole>.Builder) -> Panel)? { __safeDI_storage.panel }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: (@Sendable (Panel) -> Screen)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                panel: (@Sendable (@escaping Instantiator<Hole>.Builder) -> Panel)?,
+		                safeDIBuilder: (@Sendable (Panel) -> Screen)?
+		            ) {
+		                self.panel = panel
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let panel: (@Sendable (@escaping Instantiator<Hole>.Builder) -> Panel)?
+		            let safeDIBuilder: (@Sendable (Panel) -> Screen)?
+		        }
+		    }
+		}
+		#endif
+
+		"""])
+	}
+
+	/// The same, for a mock of `Root` that another module lists in `additionalMocksToGenerate`.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesOneSendableBuilderForTheReceivedValueAndThePlaces_whenAnotherModulesListedMockReceivesTheLabelAndTypeOfAnInstantiatorBuilderItsSendableFunctionPassesUp() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modules(holeProperty: Self.instantiatorHoleProperty, screenDeclarations: ["@Instantiated let panel: Panel"], rootDeclarations: ["@Received let holeBuilder: Instantiator<Hole>.Builder"], rootMock: .listedInAnotherModule),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["AppMocks"]?.generatedFiles == ["AppMocks.swift": generatedFileHeader + """
+		#if canImport(App)
+		import App
+		#endif
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            screenBuilder: Screen.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                screenBuilder: screenBuilder
+		            )
+		        }
+
+		        var screenBuilder: Screen.SafeDIMockConfiguration { __safeDI_storage.screenBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                screenBuilder: Screen.SafeDIMockConfiguration
+		            ) {
+		                self.screenBuilder = screenBuilder
+		            }
+
+		            let screenBuilder: Screen.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        holeSendableBuilder: @escaping SendableInstantiator<Hole>.Builder,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let holeBuilder: Instantiator<Hole>.Builder = holeSendableBuilder
+		        let __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder = safeDIOverrides.screenBuilder.panel
+		        let __safeDI_screenBuilder__safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder
+		        @Sendable func __safeDI_screenBuilder() -> Screen {
+		            _ = Panel.__safeDI_Panel_mock_F0F10F2194E82F9F.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_panel() -> Panel {
+		                let holeBuilder: Instantiator<Hole>.Builder = holeSendableBuilder
+		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeBuilder) } else { Panel.__safeDI_mock(holeBuilder: .init(__safeDI_noScope: holeBuilder)) }
+		            }
+		            let panel: Panel = __safeDI_panel()
+		            return if let safeDIBuilder = __safeDI_screenBuilder__safeDIBuilder { safeDIBuilder(panel) } else { Screen(panel: panel) }
+		        }
+		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
+		        return Root(screenBuilder: screenBuilder, holeBuilder: holeBuilder)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Configuration for how this type is constructed within a mock tree.
+		    struct SafeDIMockConfiguration {
+		        init(
+		            panel: (@Sendable (@escaping Instantiator<Hole>.Builder) -> Panel)? = nil,
+		            _ safeDIBuilder: (@Sendable (Panel) -> Screen)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                panel: panel,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var panel: (@Sendable (@escaping Instantiator<Hole>.Builder) -> Panel)? { __safeDI_storage.panel }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: (@Sendable (Panel) -> Screen)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                panel: (@Sendable (@escaping Instantiator<Hole>.Builder) -> Panel)?,
+		                safeDIBuilder: (@Sendable (Panel) -> Screen)?
+		            ) {
+		                self.panel = panel
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let panel: (@Sendable (@escaping Instantiator<Hole>.Builder) -> Panel)?
+		            let safeDIBuilder: (@Sendable (Panel) -> Screen)?
+		        }
+		    }
+		}
+		#endif
+
+		"""])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -2119,8 +2779,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 
 	/// `Core`, in package `Shop`, which declares `AnyHole`, `Hole`, `HoleArguments` and the public mocks `Panel` and `PanelTwin`, each holding
 	/// `holeProperty`; and `App`, in package `Other`, whose `Root` mock builds `Screen`, holding `screenDeclarations`, in a
-	/// `SendableInstantiator`.
-	private static func modules(holeProperty: String, screenDeclarations: [String], rootMock: RootMock = .internal, isReleaseConfiguration: Bool = false) -> [ModuleFixture] {
+	/// `SendableInstantiator`, beside `rootDeclarations`, each of a function type, which `Root`’s initializer takes `@escaping`.
+	private static func modules(holeProperty: String, screenDeclarations: [String], rootDeclarations: [String] = [], rootMock: RootMock = .internal, isReleaseConfiguration: Bool = false) -> [ModuleFixture] {
 		var modules = [
 			ModuleFixture(name: "Core", packageName: "Shop", swiftFileContent: [
 				"""
@@ -2154,12 +2814,12 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 
 				\(rootMock.attribute)
 				public final class Root: Instantiable {
-				    public init(screenBuilder: SendableInstantiator<Screen>) {
+				    public init(screenBuilder: SendableInstantiator<Screen>\(rootDeclarations.map { ", \(Self.label(of: $0)): @escaping \(Self.type(of: $0))" }.joined())) {
 				        self.screenBuilder = screenBuilder
-				    }
+				\(rootDeclarations.map { "        self.\(Self.label(of: $0)) = \(Self.label(of: $0))\n" }.joined())    }
 
 				    @Instantiated let screenBuilder: SendableInstantiator<Screen>
-				}
+				\(rootDeclarations.map { "    \($0)\n" }.joined())}
 				""",
 				"""
 				import Core
@@ -2230,6 +2890,11 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 	/// The label `declaration`, a `let` of a property, declares.
 	private static func label(of declaration: String) -> String {
 		String(declaration.components(separatedBy: "let ")[1].prefix { $0 != ":" })
+	}
+
+	/// The type `declaration`, a `let` of a property, declares.
+	private static func type(of declaration: String) -> String {
+		declaration.components(separatedBy: "let ")[1].drop { $0 != ":" }.dropFirst().trimmingCharacters(in: .whitespaces)
 	}
 
 	/// The initializer parameter of `declaration`, a `let` of a property.

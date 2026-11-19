@@ -8763,17 +8763,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		// safedi-source-rule: allow uniqueKeysWithValues — the keys are the elements of a set, `receivedParameterProperties`.
 		let flatReceivedNameByProperty = Dictionary(uniqueKeysWithValues: zip(flatReceivedProperties, flatReceivedNames))
-		// A builder the tree passes up that a `@Sendable` builder function captures is taken `@Sendable`.
-		let sendablePassedUpBuilders = parameters.parameterTree.passedUpBuildersCapturedBySendableFunctions
+		// No flat received property is a builder the tree passes up: an internal mock takes each through the builder of its hole
+		// type and family (`seamMockBuilders`), `@Sendable` where a `@Sendable` builder function captures it, and a public mock,
+		// whose leaves receive none, spells its parameters from its plan (`publicMockPlan`) and reads only these labels.
 		let flatReceivedParameters = zip(flatReceivedProperties, flatReceivedNames).map { property, name in
-			let typeDescription = if sendablePassedUpBuilders.contains(property), !property.typeDescription.isSendableFunction {
-				property.typeDescription.asSendableBuilder
-			} else {
-				property.typeDescription
-			}
-			return (
+			(
 				label: name,
-				typeSource: typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: parameters.typesDeclaredEscaping).asSource,
+				typeSource: property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: parameters.typesDeclaredEscaping).asSource,
 			)
 		}
 		let onlyIfAvailableOverrides = parameterNames.onlyIfAvailableOverrides
