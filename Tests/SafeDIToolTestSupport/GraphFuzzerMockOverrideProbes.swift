@@ -211,14 +211,25 @@ extension GraphFuzzerValueOraclePlan {
 	}
 
 	/// The arguments a builder closure passes an extension's `instantiate(…)`, one per parameter the builder takes, as
-	/// `$0`, `$1`, …: each parameter but an unlabeled default-valued one, which has no configuration field and which a
-	/// generated call leaves to its default.
+	/// `$0`, `$1`, …: each parameter but those a generated call leaves to their default, which have no configuration
+	/// field: an unlabeled default-valued one, and a throwing `@autoclosure` whose default throws
+	/// (`Initializer.Argument.isLeftToItsDefault`), which the extension draw spells `= try <function>()`.
 	static func builderArguments(ofInstantiateParameters parameters: [String]) -> [String] {
 		var arguments = [String]()
-		for parameter in parameters.map({ $0.trimmingCharacters(in: .whitespaces) }) where !(parameter.hasPrefix("_ ") && parameter.contains(" = ")) {
+		for parameter in parameters.map({ $0.trimmingCharacters(in: .whitespaces) }) where !isLeftToItsDefault(parameter) {
 			let argumentLabel = parameter.prefix { $0 != " " && $0 != ":" }
 			arguments.append(argumentLabel == "_" ? "$\(arguments.count)" : "\(argumentLabel): $\(arguments.count)")
 		}
 		return arguments
+	}
+
+	/// Whether a generated call leaves the parameter declared as `parameter` to its default: an unlabeled default-valued
+	/// one, or a throwing `@autoclosure` whose default begins with a plain `try`, neither `try?` nor `try!`.
+	private static func isLeftToItsDefault(_ parameter: String) -> Bool {
+		guard let defaultSeparator = parameter.range(of: " = ") else { return false }
+		let declaration = parameter[..<defaultSeparator.lowerBound]
+		let defaultValue = parameter[defaultSeparator.upperBound...]
+		return parameter.hasPrefix("_ ")
+			|| (declaration.contains("@autoclosure") && declaration.contains(" throws ") && defaultValue.hasPrefix("try "))
 	}
 }
