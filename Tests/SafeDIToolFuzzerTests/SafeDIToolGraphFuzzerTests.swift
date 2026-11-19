@@ -2726,6 +2726,21 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func wrapperParameterFailure_isNil_whenPublicMockTakesWrapperItsTreeReceives() {
+		// A public mock takes a value its tree receives lazily as the wrapper; its file declares the mock's guard enum.
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"@Instantiable(generateMock: .public)\npublic final class S1_Probe: Instantiable {\n\t@Received let value: LazilyInstantiated<S1_Value>\n}\n",
+		])
+		let outcome = GraphFuzzerToolOutcome.accepted(
+			generatedFiles: ["S1_Probe+SafeDIMock.swift": "extension S1_Probe {\n    public static func mock(\n        value: LazilyInstantiated<S1_Value>\n    ) -> S1_Probe {}\n}\n\nextension S1_Probe {\n    public enum __safeDI_S1_Probe_mock_0123456789ABCDEF {}\n}\n"],
+			warnings: [],
+		)
+		let runs = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: outcome, secondOutcome: outcome)
+
+		#expect(runs.wrapperParameterFailure == nil)
+	}
+
+	@Test
 	func wrapperParameterFailure_isNil_whenMockTakesLazilyInstantiatedPropertyTheMockedTypeForwards() {
 		let runs = Self.mockedProbe(declaring: "@Forwarded let value: LazilyInstantiated<S1_Value>", mockParameter: "value: LazilyInstantiated<S1_Value>")
 
@@ -8241,7 +8256,6 @@ struct SafeDIToolGraphFuzzerTests {
 		.consumerFillsHole: 3,
 		.consumerInline: 37,
 		.consumerPassesHoleBuilderUp: 14,
-		.consumerPassesInstance: 46,
 		// pins: derive on CI
 		.consumerPassesLevelFunctionsStruct: 0,
 		.consumerSendableFactory: 17,
@@ -8260,6 +8274,8 @@ struct SafeDIToolGraphFuzzerTests {
 		// pins: derive on CI
 		.isolatedGeneratedOnlyMockFunction: 0,
 		.moduleConfiguration: 84,
+		// pins: derive on CI
+		.publicMockTakesWrapper: 0,
 		.publicTier: 100,
 		.secondTier: 60,
 		.sendableHoleBuilder: 2,
@@ -8299,7 +8315,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	/// The ordinary suite's batch of the public mock corpus: graphs the tool accepts – a consumer in the same package
-	/// calling a public mock with `analytics.instance` of the wrapper it holds, M8.32's stated divergence, of a `@MainActor`
+	/// calling a public mock with the `analytics` wrapper it holds, which the mock takes as that wrapper, of a `@MainActor`
 	/// type whose public tier passes its own provider-defaulted parameter on (seed 0); a consumer in the same package only
 	/// (seed 43); a `Sendable` wrapper above the leaf, a construction function isolated as the initializer
 	/// it calls, and a leaf reached through an `ErasedInstantiator` (seed 46); both consumer modules, a differing mock

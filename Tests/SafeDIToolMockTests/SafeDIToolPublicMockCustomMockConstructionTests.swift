@@ -96,20 +96,20 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 			    }
 
 			    public static func mock(
-			        analytics: Analytics? = nil,
+			        analytics: LazilyInstantiated<Analytics>? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> T0 {
 			        let t3 = if let safeDIBuilder = safeDIOverrides.t3 { safeDIBuilder() } else { T3() }
 			        func __safeDI_analytics() -> Analytics {
-			            if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+			            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 			        }
-			        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+			        let analytics = if let analytics { analytics } else { LazilyInstantiated<Analytics>(__safeDI_analytics) }
 			        return T0.customMock(t3: t3, analytics: analytics)
 			    }
 			}
 
 			extension T0 {
-			    public enum __safeDI_T0_mock_81027395670D1D21 {}
+			    public enum __safeDI_T0_mock_E6F54C5E4AC4B0CA {}
 			}
 			#endif
 			"""])
@@ -155,13 +155,13 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 			    }
 
 			    public static func mock(
-			        analytics: Analytics? = nil,
+			        analytics: LazilyInstantiated<Analytics>? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> T8 {
 			        func __safeDI_analytics() -> Analytics {
-			            if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+			            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 			        }
-			        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+			        let analytics = if let analytics { analytics } else { LazilyInstantiated<Analytics>(__safeDI_analytics) }
 			        func __safeDI_anyT0() -> AnyT0 {
 			            let t3 = if let safeDIBuilder = safeDIOverrides.anyT0.t3 { safeDIBuilder() } else { T3() }
 			            return AnyT0(T0.__safeDI_mock(t3: t3, analytics: analytics, safeDIBuilder: safeDIOverrides.anyT0.safeDIBuilder))
@@ -172,7 +172,7 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 			}
 
 			extension T8 {
-			    public enum __safeDI_T8_mock_81027395670D1D21 {}
+			    public enum __safeDI_T8_mock_E6F54C5E4AC4B0CA {}
 			}
 			#endif
 
@@ -258,20 +258,20 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 				    }
 
 				    public static func mock(
-				        analytics: Analytics? = nil,
+				        analytics: LazilyInstantiated<Analytics>? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> T0 {
 				        let t3 = if let safeDIBuilder = safeDIOverrides.t3 { safeDIBuilder() } else { T3() }
 				        func __safeDI_analytics() -> Analytics {
-				            if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+				            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 				        }
-				        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+				        let analytics = if let analytics { analytics } else { LazilyInstantiated<Analytics>(__safeDI_analytics) }
 				        return T0.customMock(t3: t3, analytics: analytics)
 				    }
 				}
 
 				extension T0 {
-				    public enum __safeDI_T0_mock_81027395670D1D21 {}
+				    public enum __safeDI_T0_mock_E6F54C5E4AC4B0CA {}
 				}
 				#endif
 				""",
@@ -326,13 +326,13 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 				    }
 
 				    public static func mock(
-				        analytics: Analytics? = nil,
+				        analytics: LazilyInstantiated<Analytics>? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> T8 {
 				        func __safeDI_analytics() -> Analytics {
-				            if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+				            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 				        }
-				        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+				        let analytics = if let analytics { analytics } else { LazilyInstantiated<Analytics>(__safeDI_analytics) }
 				        func __safeDI_anyT0() -> AnyT0 {
 				            let t3 = if let safeDIBuilder = safeDIOverrides.anyT0.t3 { safeDIBuilder() } else { T3() }
 				            return AnyT0(T0.__safeDI_mock(t3: t3, analytics: analytics, safeDIBuilder: safeDIOverrides.anyT0.safeDIBuilder))
@@ -343,7 +343,7 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 				}
 
 				extension T8 {
-				    public enum __safeDI_T8_mock_81027395670D1D21 {}
+				    public enum __safeDI_T8_mock_E6F54C5E4AC4B0CA {}
 				}
 				#endif
 				""",
@@ -465,20 +465,20 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 			    }
 
 			    public static func mock(
-			        analytics: Analytics? = nil,
+			        analytics: LazilyInstantiated<Analytics>? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> T0 {
 			        let t3 = if let safeDIBuilder = safeDIOverrides.t3 { safeDIBuilder() } else { T3() }
 			        func __safeDI_analytics() -> Analytics {
-			            if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+			            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 			        }
-			        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+			        let analytics = if let analytics { analytics } else { LazilyInstantiated<Analytics>(__safeDI_analytics) }
 			        return T0.customMock(t3: t3, analytics: analytics)
 			    }
 			}
 
 			extension T0 {
-			    public enum __safeDI_T0_mock_81027395670D1D21 {}
+			    public enum __safeDI_T0_mock_E6F54C5E4AC4B0CA {}
 			}
 			#endif
 			""",
@@ -521,13 +521,13 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 			    }
 
 			    public static func mock(
-			        analytics: Analytics? = nil,
+			        analytics: LazilyInstantiated<Analytics>? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> T8 {
 			        func __safeDI_analytics() -> Analytics {
-			            if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+			            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 			        }
-			        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+			        let analytics = if let analytics { analytics } else { LazilyInstantiated<Analytics>(__safeDI_analytics) }
 			        func __safeDI_anyT0() -> AnyT0 {
 			            let t3 = if let safeDIBuilder = safeDIOverrides.anyT0.t3 { safeDIBuilder() } else { T3() }
 			            return AnyT0(T0.__safeDI_mock(t3: t3, analytics: analytics, safeDIBuilder: safeDIOverrides.anyT0.safeDIBuilder))
@@ -538,7 +538,7 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 			}
 
 			extension T8 {
-			    public enum __safeDI_T8_mock_81027395670D1D21 {}
+			    public enum __safeDI_T8_mock_E6F54C5E4AC4B0CA {}
 			}
 			#endif
 			""",
@@ -655,20 +655,20 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        analytics: Analytics? = nil,
+		        analytics: LazilyInstantiated<Analytics>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T0 {
 		        let t3 = if let safeDIBuilder = safeDIOverrides.t3 { safeDIBuilder() } else { T3() }
 		        func __safeDI_analytics() -> Analytics {
-		            if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        let analytics = if let analytics { analytics } else { LazilyInstantiated<Analytics>(__safeDI_analytics) }
 		        return T0.customMock(t3: t3, analytics: analytics)
 		    }
 		}
 
 		extension T0 {
-		    public enum __safeDI_T0_mock_81027395670D1D21 {}
+		    public enum __safeDI_T0_mock_E6F54C5E4AC4B0CA {}
 		}
 		#endif
 		"""])
@@ -714,13 +714,13 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        analytics: Analytics? = nil,
+		        analytics: LazilyInstantiated<Analytics>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T8 {
 		        func __safeDI_analytics() -> Analytics {
-		            if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        let analytics = if let analytics { analytics } else { LazilyInstantiated<Analytics>(__safeDI_analytics) }
 		        func __safeDI_anyT0Builder() -> AnyT0 {
 		            let t3 = if let safeDIBuilder = safeDIOverrides.anyT0Builder.t3 { safeDIBuilder() } else { T3() }
 		            return AnyT0(T0.__safeDI_mock(t3: t3, analytics: analytics, safeDIBuilder: safeDIOverrides.anyT0Builder.safeDIBuilder))
@@ -731,7 +731,7 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		}
 
 		extension T8 {
-		    public enum __safeDI_T8_mock_81027395670D1D21 {}
+		    public enum __safeDI_T8_mock_E6F54C5E4AC4B0CA {}
 		}
 		#endif
 
@@ -855,20 +855,20 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        analytics: Analytics? = nil,
+		        analytics: LazilyInstantiated<Analytics>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T0 {
 		        let t3 = if let safeDIBuilder = safeDIOverrides.t3 { safeDIBuilder() } else { T3() }
 		        func __safeDI_analytics() -> Analytics {
-		            if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        let analytics = if let analytics { analytics } else { LazilyInstantiated<Analytics>(__safeDI_analytics) }
 		        return T0.customMock(t3: t3, analytics: analytics)
 		    }
 		}
 
 		extension T0 {
-		    public enum __safeDI_T0_mock_81027395670D1D21 {}
+		    public enum __safeDI_T0_mock_E6F54C5E4AC4B0CA {}
 		}
 		#endif
 		"""])
@@ -914,13 +914,13 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        analytics: Analytics? = nil,
+		        analytics: LazilyInstantiated<Analytics>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T8 {
 		        func __safeDI_analytics() -> Analytics {
-		            if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        let analytics = if let analytics { analytics } else { LazilyInstantiated<Analytics>(__safeDI_analytics) }
 		        func __safeDI_t0() -> any T0Protocol {
 		            let t3 = if let safeDIBuilder = safeDIOverrides.t0.t3 { safeDIBuilder() } else { T3() }
 		            return T0.__safeDI_mock(t3: t3, analytics: analytics, safeDIBuilder: safeDIOverrides.t0.safeDIBuilder)
@@ -931,7 +931,7 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		}
 
 		extension T8 {
-		    public enum __safeDI_T8_mock_81027395670D1D21 {}
+		    public enum __safeDI_T8_mock_E6F54C5E4AC4B0CA {}
 		}
 		#endif
 
@@ -969,13 +969,13 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        analytics: Analytics? = nil,
+		        analytics: LazilyInstantiated<Analytics>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T9 {
 		        func __safeDI_analytics() -> Analytics {
-		            if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        let analytics = if let analytics { analytics } else { LazilyInstantiated<Analytics>(__safeDI_analytics) }
 		        func __safeDI_t0() -> T0 {
 		            let t3 = if let safeDIBuilder = safeDIOverrides.t0.t3 { safeDIBuilder() } else { T3() }
 		            return T0.__safeDI_mock(t3: t3, analytics: analytics, safeDIBuilder: safeDIOverrides.t0.safeDIBuilder)
@@ -986,7 +986,7 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		}
 
 		extension T9 {
-		    public enum __safeDI_T9_mock_81027395670D1D21 {}
+		    public enum __safeDI_T9_mock_E6F54C5E4AC4B0CA {}
 		}
 		#endif
 
@@ -1097,20 +1097,20 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        analytics: Analytics? = nil,
+		        analytics: LazilyInstantiated<Analytics>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T0 {
 		        let t3 = if let safeDIBuilder = safeDIOverrides.t3 { safeDIBuilder() } else { T3() }
 		        func __safeDI_analytics() -> Analytics {
-		            if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        let analytics = if let analytics { analytics } else { LazilyInstantiated<Analytics>(__safeDI_analytics) }
 		        return T0.customMock(t3: t3, analytics: analytics)
 		    }
 		}
 
 		extension T0 {
-		    public enum __safeDI_T0_mock_81027395670D1D21 {}
+		    public enum __safeDI_T0_mock_E6F54C5E4AC4B0CA {}
 		}
 		#endif
 		"""])
@@ -1297,20 +1297,20 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        analytics: Analytics? = nil,
+		        analytics: LazilyInstantiated<Analytics>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T0 {
 		        let t3 = if let safeDIBuilder = safeDIOverrides.t3 { safeDIBuilder() } else { T3() }
 		        func __safeDI_analytics() -> Analytics {
-		            if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        let analytics = if let analytics { analytics } else { LazilyInstantiated<Analytics>(__safeDI_analytics) }
 		        return T0(t3: t3, analytics: analytics)
 		    }
 		}
 
 		extension T0 {
-		    public enum __safeDI_T0_mock_81027395670D1D21 {}
+		    public enum __safeDI_T0_mock_E6F54C5E4AC4B0CA {}
 		}
 		#endif
 		"""])
@@ -1356,13 +1356,13 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        analytics: Analytics? = nil,
+		        analytics: LazilyInstantiated<Analytics>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T8 {
 		        func __safeDI_analytics() -> Analytics {
-		            if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        let analytics = if let analytics { analytics } else { LazilyInstantiated<Analytics>(__safeDI_analytics) }
 		        func __safeDI_anyT0() -> AnyT0 {
 		            let t3 = if let safeDIBuilder = safeDIOverrides.anyT0.t3 { safeDIBuilder() } else { T3() }
 		            return AnyT0(T0.__safeDI_init(t3: t3, analytics: analytics, safeDIBuilder: safeDIOverrides.anyT0.safeDIBuilder))
@@ -1373,7 +1373,7 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		}
 
 		extension T8 {
-		    public enum __safeDI_T8_mock_81027395670D1D21 {}
+		    public enum __safeDI_T8_mock_E6F54C5E4AC4B0CA {}
 		}
 		#endif
 
@@ -1691,7 +1691,7 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        analytics: Analytics? = nil,
+		        analytics: LazilyInstantiated<Analytics>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T8 {
 		        func __safeDI_anyT0() -> AnyT0 {
@@ -1699,15 +1699,15 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		        }
 		        let anyT0: AnyT0 = __safeDI_anyT0()
 		        func __safeDI_analytics() -> Analytics {
-		            if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        let analytics = if let analytics { analytics } else { LazilyInstantiated<Analytics>(__safeDI_analytics) }
 		        return T8(anyT0: anyT0, analytics: analytics)
 		    }
 		}
 
 		extension T8 {
-		    public enum __safeDI_T8_mock_81027395670D1D21 {}
+		    public enum __safeDI_T8_mock_E6F54C5E4AC4B0CA {}
 		}
 		#endif
 

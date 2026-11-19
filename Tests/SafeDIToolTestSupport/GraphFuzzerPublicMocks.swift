@@ -408,8 +408,8 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 /// What the generated code of a graph the tool accepts shows, read from it, never from the draw (section 6's output
 /// features). `publicMockCorpusOutputFeatureMinimumShares` pins each one the corpus shows; the consumer's call of a public
 /// mock (`consumerCall`, `consumerPassesInstance`) needs the consumer side.
-/// That no generated mock takes a `LazilyInstantiated` parameter for a receive is `wrapperParameterFailure`, an oracle
-/// every graph of every corpus passes.
+/// That no generated internal mock takes a `LazilyInstantiated` parameter for a receive is `wrapperParameterFailure`, an
+/// oracle every graph of every corpus passes.
 enum GraphFuzzerPublicMockOutputFeature: String, CaseIterable, Comparable {
 	/// A `public static func mock(`, and a second and a third tier of one type's mock.
 	case publicTier
@@ -429,8 +429,12 @@ enum GraphFuzzerPublicMockOutputFeature: String, CaseIterable, Comparable {
 	case forwardedProvider
 	/// A consumer's call of a `.public` type's mock, in a module other than the type's.
 	case consumerCall
-	/// A consumer's leaf call passing `.instance`.
+	/// A consumer's leaf call passing `.instance`, which only the gap "A lazy value a public mock takes" leaves
+	/// (`public-mock-builders.md`) and no smoke graph shows, so it has no minimum share.
 	case consumerPassesInstance
+	/// A parameter of a public mock's `mock()` that takes the `LazilyInstantiated` or `SendableLazilyInstantiated` its tree
+	/// receives, `analytics: LazilyInstantiated<Analytics>`, in the declaring module's file.
+	case publicMockTakesWrapper
 	/// A consumer's `SafeDIOverrides` entry typed `(@Sendable () -> `.
 	case consumerSendableFactory
 	/// A consumer's mock building a `.public` type inline, with its initializer or its `customMockName` method.
@@ -1511,7 +1515,7 @@ struct GraphFuzzerPublicMockDraw {
 			} else {
 				rootLevelRoll < 3 ? .none : .values
 			}
-			// `holeSession` received lazily: `T6`'s mock takes the instance and binds the wrapper apart, which its root level holds.
+			// `holeSession` received lazily: `T6`'s mock takes the wrapper, which its root level holds.
 			rootLevelSessionType = rootLevelShape == .values && rootLevelRandom.percentChance(50) ? "LazilyInstantiated<\(sessionName)>" : sessionName
 			// The types `T6`'s mock cannot build conform to `Instantiable` by hand, proven `public` by `HoleProver`'s initializer.
 			switch rootLevelShape {
@@ -1620,11 +1624,11 @@ struct GraphFuzzerPublicMockDraw {
 			case .existential: Self.builderLabel(ofTypeNamed: protocolName)
 			case .erasedConstant, .erasedInstantiator: "\(Self.builderLabel(ofTypeNamed: fillName).dropLast("Builder".count))_\(erasedName)Builder"
 			}
-			// What the mock takes before its builders that it cannot build: `holeSession`, or both its forms, named apart and
-			// ordered by type.
+			// What the mock takes before its builders that it cannot build: `holeSession`, as the wrapper `T6` receives it lazily,
+			// or both its forms, named apart and ordered by type.
 			let leadingArguments = switch rootLevelShape {
 			case .none: ""
-			case .values: "holeSession: \(sessionName)(), "
+			case .values: rootLevelSessionType == sessionName ? "holeSession: \(sessionName)(), " : "holeSession: LazilyInstantiated { \(sessionName)() }, "
 			case .labelInTwoForms: "holeSession_\(draftName): \(draftName)(), holeSession_\(sessionName): \(sessionName)(), "
 			}
 			let call = if position.isSendable {
@@ -1858,8 +1862,8 @@ struct GraphFuzzerPublicMockDraw {
 					// level holds – `holeSession`, as `T6` receives it, `holeToken` only if available, or both – or, for one label in
 					// two forms, the form `HoleHost`'s level binds again. A place built inside a `@Sendable` function is handed none of
 					// it. A fill declared as an extension's `instantiate(…)` reads `holeSession` alone. No fill reads the instance of a
-					// `holeSession` `T6` receives lazily, which it would read through the wrapper `T6`'s mock makes, a divergence
-					// `SafeDIToolPublicMockRootLevelTests` states that the value oracle does not.
+					// `holeSession` `T6` receives lazily: the draw predates `T6`'s mock taking the wrapper, which a fill now reads as
+					// inline does.
 					let isExtensionFill = holeLeaf.spelling == .plain || holeLeaf.spelling == .instantiator
 					if !holeLeaf.position.isSendable, dependency == .none || dependency == .field && bindsContext {
 						let holeSession = Property(attribute: "@Received", label: "holeSession", type: rootLevelShape == .values ? rootLevelSessionType : name("HoleSession"))
@@ -3982,6 +3986,9 @@ extension GraphFuzzerPublicMockDraw {
 				}
 				if line.contains("?? (") {
 					features.insert(.defaultRewritten)
+				}
+				if !isConsumerFile, line.range(of: #"^\w+: (Sendable)?LazilyInstantiated<.+>(\? = nil)?,?$"#, options: .regularExpression) != nil {
+					features.insert(.publicMockTakesWrapper)
 				}
 				if line.hasPrefix("@usableFromInline nonisolated func __safeDI_"), line.contains("_mockDefault_") {
 					features.insert(.forwardedProvider)

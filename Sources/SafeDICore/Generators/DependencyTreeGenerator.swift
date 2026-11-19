@@ -6772,19 +6772,31 @@ public actor DependencyTreeGenerator {
 		// Build the final ScopeGenerator once. The mock root binds every received
 		// property it does not promote — as a `mock()` parameter or a `SafeDIOverrides`
 		// entry — so each is receivable throughout the tree.
+		// The instances the tree reads by value through a wrapper a public mock takes as a parameter, which it reads as
+		// `<label>.instance` when it builds the type that reads it, as production reads a received wrapper's instance.
+		var instancesReadThroughWrapperParameters = Set<Property>()
 		func mockRootGenerator(builders: ShapedBuilders?) throws -> ScopeGenerator {
 			try mockRootScope.createScopeGenerator(
 				for: nil,
 				// The mock root binds every received property it does not promote, which encloses its whole tree.
 				nearestDeclarations: .binding(allReceived, passingNilTo: receivesPassedNil),
-				lazilyInstantiatedInstanceProperties: [],
+				lazilyInstantiatedInstanceProperties: instancesReadThroughWrapperParameters,
 				mockBuilders: builders,
 				erasedToConcreteExistential: false,
 				forMockGeneration: true,
 				declaredTypeNames: declaredTypeNames,
 			)
 		}
-		let generator = try mockRootGenerator(builders: nil)
+		var generator = try mockRootGenerator(builders: nil)
+		if instantiable.generateMock == .public, allReceived.contains(where: \.propertyType.isLazilyInstantiated) {
+			// A public mock takes a value its tree receives lazily as the wrapper (`ScopeGenerator.publicMockWrapperParameters`),
+			// which a type of the tree that receives the value by value reads the instance of. Which values it takes so is
+			// decided by the tree the generator holds, so a tree that reads one is built again.
+			instancesReadThroughWrapperParameters = await generator.instancesReadThroughPublicMockWrapperParameters(of: instantiable, mockDefaults: flatParameterMockDefaults)
+			if !instancesReadThroughWrapperParameters.isEmpty {
+				generator = try mockRootGenerator(builders: nil)
+			}
+		}
 		try Self.validateCycleLabelsArePassable(inTreesRootedAt: [generator])
 		// An internal mock takes one builder for the places of one hole type and family its calls of other modules' public
 		// mocks pass up, as its production tree's initializer does (`ScopeGenerator.seamMockBuilders`), so those places must

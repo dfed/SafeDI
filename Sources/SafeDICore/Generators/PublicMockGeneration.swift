@@ -542,15 +542,11 @@ extension ScopeGenerator {
 		}
 	}
 
-	/// The parameter a public mock takes for a node it builds for a received dependency: the node's value, optional,
-	/// which is the instance of a lazily instantiated node, since no parameter of a public mock is `LazilyInstantiated`.
+	/// The parameter a public mock takes for a node it builds for a received dependency: the node's value, optional. A
+	/// lazily instantiated node is taken as the wrapper its tree receives, as the type's initializer takes it, so a caller
+	/// hands its own wrapper and nothing is built until the tree reads it.
 	static func publicMockParameterProperty(of node: MockParameterNode) -> Property {
-		let valueType = if node.property.propertyType.isLazilyInstantiated {
-			node.typeDescription.lazilyInstantiatedInstanceType ?? node.typeDescription
-		} else {
-			node.typeDescription
-		}
-		return Property(label: node.propertyLabel, typeDescription: .optional(valueType.implicitlyUnwrappedOptionalSpelledAsOptional.unwrapped))
+		Property(label: node.propertyLabel, typeDescription: .optional(node.typeDescription.implicitlyUnwrappedOptionalSpelledAsOptional.unwrapped))
 	}
 }
 
@@ -813,6 +809,7 @@ extension ScopeGenerator {
 				(node: node, name: disambiguatedLabel(for: node, labelMap: parameters.rootLabelMap))
 			},
 			onlyIfAvailableOverrides: parameterNames.onlyIfAvailableOverrides,
+			wrapperParameterByInstance: parameters.publicMockWrapperParameterByInstance,
 			parameterTree: parameters.parameterTree,
 			builders: parameters.mockBuilders,
 			// A public mock takes each property received only if available as a parameter, so only the tree's nodes make
@@ -907,6 +904,8 @@ extension ScopeGenerator {
 	///   - forwardedDefaults: The default an internal mock gives each forwarded parameter, by label.
 	///   - flatReceivedParameterMockDefaults: The hand-written mock an internal mock defaults each of
 	///     `flatReceivedParameters` to, which a public mock takes as `T? = nil` too.
+	///   - wrapperParameterByInstance: The wrapper the mock takes in place of each of `flatReceivedParameters` or of the
+	///     properties `onlyIfAvailableOverrides` receive (`MockRootParameters.publicMockWrapperParameterByInstance`).
 	///   - hasOverrides: Whether the mock has a `SafeDIOverrides`, which holds the mocked type's own optional-typed
 	///     defaults unless `mock()` is isolated to a global actor; otherwise each is a parameter defaulting to its
 	///     provider.
@@ -920,6 +919,7 @@ extension ScopeGenerator {
 		flatUncoveredParameters: [MockRootParameters.UncoveredParameter],
 		promotedNodes: [(node: MockParameterNode, name: String)],
 		onlyIfAvailableOverrides: [OnlyIfAvailableOverride],
+		wrapperParameterByInstance: [Property: Property],
 		parameterTree: [MockTreeItem],
 		builders shapedBuilders: DependencyTreeGenerator.ShapedBuilders?,
 		hasOverrides: Bool,
@@ -1026,12 +1026,17 @@ extension ScopeGenerator {
 				leadingParameters.append(optionalParameter(named: rootDefault.label, type: type, resolvedTo: rootDefault.defaultExpression, role: .constructionDefault))
 			}
 		}
-		for (property, name) in flatReceivedParameters {
-			if let mockDefault = flatReceivedParameterMockDefaults[property] {
-				// The mock builds the dependency with the hand-written mock when passed `nil`, as an internal mock defaults it.
-				defaultResolutions.append("\(bodyIndent)let \(name) = \(name) ?? (\(mockDefault.expression))")
+		for (instanceProperty, name) in flatReceivedParameters {
+			// A value the tree receives lazily is taken as the wrapper it receives (`ScopeGenerator.publicMockWrapperParameters`).
+			let wrapper = wrapperParameterByInstance[instanceProperty]
+			let property = wrapper ?? instanceProperty
+			if let mockDefault = flatReceivedParameterMockDefaults[instanceProperty] {
+				// The mock builds the dependency with the hand-written mock when passed `nil`, as an internal mock defaults it,
+				// and a wrapper's only when the tree reads it.
+				let defaultExpression = wrapper.map { "\($0.typeDescription.unwrapped.spelledForConstruction) { \(mockDefault.expression) }" } ?? mockDefault.expression
+				defaultResolutions.append("\(bodyIndent)let \(name) = \(name) ?? (\(defaultExpression))")
 				let optionalProperty = Property(label: property.label, typeDescription: .optional(property.typeDescription))
-				leadingParameters.append(PublicMockParameter(name: name, type: optionalProperty.typeDescription, typeSource: optionalProperty.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: optionalProperty.typeDescription, receivedAs: property.label), accessCause: cause(of: optionalProperty.typeDescription, receivedAs: property.label), role: .received(optionalProperty, isRequired: false), isBuiltWhenNil: true))
+				leadingParameters.append(PublicMockParameter(name: name, type: optionalProperty.typeDescription, typeSource: optionalProperty.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: optionalProperty.typeDescription, receivedAs: property.label), accessCause: cause(of: optionalProperty.typeDescription, receivedAs: property.label), role: .received(optionalProperty, isRequired: false), isBuiltWhenNil: true, builtWrapper: wrapper))
 			} else {
 				leadingParameters.append(PublicMockParameter(name: name, type: property.typeDescription, typeSource: property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource, defaultSource: nil, defaultKind: .none, access: access(of: property.typeDescription, receivedAs: property.label), role: .received(property, isRequired: true)))
 			}
@@ -1068,7 +1073,7 @@ extension ScopeGenerator {
 		// The received dependencies the mock builds and those received only if available, each `T? = nil`, by name.
 		var promotedParameterNames = [Property: String]()
 		var optionalReceivedParameters = [PublicMockParameter]()
-		// A promoted `LazilyInstantiated` is taken as its instance under its label, unless another parameter takes that name: a
+		// A promoted `LazilyInstantiated` is taken as the wrapper under its label, unless another parameter takes that name: a
 		// default-valued or forwarded parameter of the mocked type, or another promoted dependency, such as another
 		// `LazilyInstantiated` of the label, which takes its label too. It then takes the name its binding is named apart by.
 		let leadingParameterNames = Set(leadingParameters.map(\.name))
@@ -1087,7 +1092,9 @@ extension ScopeGenerator {
 			optionalReceivedParameters.append(PublicMockParameter(name: parameterName, type: parameterProperty.typeDescription, typeSource: parameterProperty.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: parameterProperty.typeDescription, receivedAs: node.propertyLabel), accessCause: cause(of: parameterProperty.typeDescription, receivedAs: node.propertyLabel), role: .received(parameterProperty, isRequired: false), isBuiltWhenNil: true, builtWrapper: node.property.propertyType.isLazilyInstantiated ? node.property : nil))
 		}
 		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
-			optionalReceivedParameters.append(PublicMockParameter(name: onlyIfAvailableOverride.name, type: onlyIfAvailableOverride.typeDescription, typeSource: onlyIfAvailableOverride.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: onlyIfAvailableOverride.typeDescription, receivedAs: onlyIfAvailableOverride.receivedProperty.label), accessCause: cause(of: onlyIfAvailableOverride.typeDescription, receivedAs: onlyIfAvailableOverride.receivedProperty.label), role: .received(Property(label: onlyIfAvailableOverride.receivedProperty.label, typeDescription: onlyIfAvailableOverride.typeDescription), isRequired: false)))
+			// A value the tree receives lazily is taken as the wrapper it receives (`ScopeGenerator.publicMockWrapperParameters`).
+			let type = wrapperParameterByInstance[onlyIfAvailableOverride.receivedProperty].map { TypeDescription.optional($0.typeDescription.unwrapped) } ?? onlyIfAvailableOverride.typeDescription
+			optionalReceivedParameters.append(PublicMockParameter(name: onlyIfAvailableOverride.name, type: type, typeSource: type.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: type, receivedAs: onlyIfAvailableOverride.receivedProperty.label), accessCause: cause(of: type, receivedAs: onlyIfAvailableOverride.receivedProperty.label), role: .received(Property(label: onlyIfAvailableOverride.receivedProperty.label, typeDescription: type), isRequired: false)))
 		}
 		optionalReceivedParameters.sort { ($0.name, $0.typeSource) < ($1.name, $1.typeSource) }
 

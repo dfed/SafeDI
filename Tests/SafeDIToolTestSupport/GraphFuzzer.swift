@@ -12325,7 +12325,7 @@ struct GraphFuzzerFailure: Equatable {
 		case runsDifferAcrossProcesses = "the tool's output differs between two processes"
 		case compilerCrashedOnGeneratedCode = "the Swift compiler crashed on generated code"
 		case renamedGraphDiffers = "the graph renamed to change an order gives other results"
-		case mockTakesWrapperParameterForReceive = "a generated mock takes a LazilyInstantiated parameter for a receive"
+		case mockTakesWrapperParameterForReceive = "a generated internal mock takes a LazilyInstantiated parameter for a receive"
 		/// A base corpus graph's generated mock builds a type that has a hand-written mock with the type's initializer,
 		/// where it calls the hand-written mock.
 		case generatedMockBypassesHandWrittenMock = "a generated mock builds a type with its initializer rather than its hand-written mock"
@@ -13803,12 +13803,14 @@ struct GraphFuzzerToolRuns {
 		)
 	}
 
-	/// The failure of a graph whose generated `mock()` takes a `LazilyInstantiated` or `SendableLazilyInstantiated`
+	/// The failure of a graph whose generated internal `mock()` takes a `LazilyInstantiated` or `SendableLazilyInstantiated`
 	/// parameter, spelled as itself or, beneath a `Sendable` wrapper, as a `@Sendable` autoclosure of it, that is neither a
 	/// property the mocked type forwards nor one a type the mock builds instantiates and the mock cannot build, or `nil`
-	/// when none does. A mock takes the instance of a dependency its tree receives as a wrapper it cannot build, and wraps
-	/// the instance for the receivers, so a type's mock has the same parameters whether the dependencies it receives are
-	/// lazily instantiated or not. A wrapper that a type the mock builds instantiates and that no declaration the mock's
+	/// when none does. An internal mock takes the instance of a dependency its tree receives as a wrapper it cannot build,
+	/// and wraps the instance for the receivers, so a type's mock has the same parameters whether the dependencies it
+	/// receives are lazily instantiated or not. A public mock takes the wrapper its tree receives ("A lazy value a public
+	/// mock takes" in `public-mock-builders.md`), so its file, which declares the mock's guard enum, is not judged here: the
+	/// value differential's creation stamps fail a public mock that reads the value before the tree does. A wrapper that a type the mock builds instantiates and that no declaration the mock's
 	/// module sees fulfills, the mock takes as that wrapper (`mock-generation.md`). The oracle reads which types the mock
 	/// builds, and which of their instantiated dependencies no scope builds, from the mirror model of the declarations the
 	/// mock's module sees (`GraphFuzzerMockMirrorModel.mockRoot`, `propertiesToGenerate`), and pairs each such parameter
@@ -13827,6 +13829,7 @@ struct GraphFuzzerToolRuns {
 			let lines = contents.split(separator: "\n", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) }
 			guard let signatureStart = lines.firstIndex(where: { $0.hasSuffix("static func mock(") }) else { continue }
 			let modeledTypeName = GraphFuzzerMockMirrorModel.unqualifiedName(of: mockedTypeName)
+			guard !contents.contains("enum __safeDI_\(modeledTypeName)_mock_") else { continue }
 			let mockedTypeDependencies = model.types[modeledTypeName]?.dependencies ?? []
 			let forwardedWrapperTypes = Set(mockedTypeDependencies.filter { $0.source == .forwarded }.map(\.property.type))
 			// One entry per declaration, in the order the mock's tree reaches the declaring types.
