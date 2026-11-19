@@ -8019,7 +8019,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
 		return (rootConstructionInitializer?.arguments ?? []).compactMap { argument in
 			guard !dependencyLabels.contains(argument.innerLabel),
-			      argument.label != "_",
+			      !argument.isLeftToItsDefault,
 			      let defaultExpression = argument.defaultValueExpression
 			else { return nil }
 			return (argument, defaultExpression)
@@ -8246,11 +8246,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// are those of the construction initializer.
 		var parametersKeepingTheirLabels = forwardedDependencies.map(\.property)
 		for (argument, defaultExpression) in Self.defaultValuedMockParameterArguments(of: instantiable) {
+			// A throwing `@autoclosure` is taken as one that does not throw, since the mock calls it where it builds the type,
+			// outside any function that throws; its default throws nothing, or the parameter is left to it.
+			let typeDescription = argument.typeDescription.autoclosureTakenWithoutThrowing
 			rootDefaultParameters.append(MockRootParameters.RootDefaultParameter(
 				label: argument.label,
-				typeSource: argument.typeDescription.asFunctionParameter.asSource,
+				typeSource: typeDescription.asFunctionParameter.asSource,
 				defaultExpression: defaultExpression,
-				typeDescription: argument.typeDescription.strippingEscaping,
+				typeDescription: typeDescription.strippingEscaping,
 			))
 			parametersKeepingTheirLabels.append(Property(label: argument.label, typeDescription: argument.typeDescription))
 		}
@@ -9269,7 +9272,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					let resolved = disambiguationMap[argument.innerLabel]?[dependency.property.typeDescription] ?? argument.innerLabel
 					parts.append("\(argument.label.spelledAsArgumentLabel): \(resolved)")
 				}
-			} else if argument.hasDefaultValue, argument.label != "_" {
+			} else if argument.hasDefaultValue, !argument.isLeftToItsDefault {
 				// `mock()` takes an `@autoclosure` parameter as an autoclosure, or a public mock as a closure, and
 				// passes its call, so the value is evaluated where the type is built.
 				let parameterValue = argument.typeDescription.strippingEscaping.autoclosureValueType == nil ? argument.label : "\(argument.label)()"
@@ -9875,8 +9878,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
-		/// Whether this argument is a non-dependency `_`-labeled defaulted
-		/// parameter that the mock call site elides. Elided parameters are
+		/// Whether this argument is a non-dependency defaulted parameter that the
+		/// mock call site elides: a `_`-labeled one, or a throwing `@autoclosure`
+		/// whose default throws (`Initializer.Argument.isLeftToItsDefault`). Elided parameters are
 		/// filled in by Swift's default-argument thunk in the callee's
 		/// declaration context, which preserves `Self`-binding and unqualified
 		/// name lookup inside the default expression. Dependency parameters
@@ -9886,8 +9890,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// where eliding would produce an uncallable signature (non-trailing
 		/// `_`-labeled default).
 		private static func isElidedInCallSite(_ argument: Initializer.Argument, dependencyInnerLabels: Set<String>) -> Bool {
-			argument.label == "_"
-				&& argument.hasDefaultValue
+			argument.isLeftToItsDefault
 				&& !dependencyInnerLabels.contains(argument.innerLabel)
 		}
 
@@ -9895,7 +9898,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		private let dependencyInnerLabels: Set<String>
 
 		/// Construction arguments surfaced at the mock call site, with elided
-		/// non-dependency unlabeled defaults removed.
+		/// non-dependency defaults removed (`isElidedInCallSite`).
 		let callSiteArguments: [Initializer.Argument]
 
 		/// The builder closure type as a Swift source string (unlabeled parameters).
@@ -10239,7 +10242,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let dependencyLabels = Set(dependencies.map(\.property.label))
 				return initializer.arguments.compactMap { argument in
 					guard !dependencyLabels.contains(argument.innerLabel),
-					      argument.label != "_",
+					      !argument.isLeftToItsDefault,
 					      let defaultExpression = argument.defaultValueExpression
 					else { return nil }
 					let typeDescription = argument.typeDescription.strippingEscaping
@@ -13177,6 +13180,7 @@ extension Instantiable {
 				.createMockInitializerArgumentList(
 					given: dependencies,
 					unavailableProperties: unavailableProperties,
+					isLeftToItsDefault: \.isLeftToItsDefault,
 				)
 		} else {
 			return try initializerToUse?
@@ -13285,5 +13289,55 @@ extension SeamCall {
 	/// comment saying what to do then.
 	func guardLine(for concreteType: TypeDescription) -> String {
 		"_ = \(concreteType.asSource).\(guardTypeName).self\(comment.lineEnd(for: concreteType))"
+	}
+}
+
+extension Initializer.Argument {
+	/// Whether a generated mock leaves this argument to its default rather than take a value for it: an argument without a
+	/// label, which a call does not name, and a throwing `@autoclosure` whose default itself throws (`defaultValueThrows`),
+	/// which a mock could take only as a closure that throws, and so could not call where it builds the type, outside any
+	/// function that throws. The initializer evaluates such a default itself, as in production.
+	var isLeftToItsDefault: Bool {
+		hasDefaultValue && (label == "_" || defaultValueThrows)
+	}
+
+	/// Whether this argument is a throwing `@autoclosure` whose default throws: one that holds a `try` that is neither
+	/// `try?` nor `try!` outside every closure the default declares. Decided from the default's syntax, never its text.
+	private var defaultValueThrows: Bool {
+		guard let defaultValueExpression,
+		      case let .attributed(.closure(_, _, doesThrow, _, _), _, attributes) = typeDescription,
+		      doesThrow,
+		      attributes.contains("autoclosure")
+		else { return false }
+		let visitor = ThrowingTryVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: defaultValueExpression))
+		return visitor.findsThrowingTry
+	}
+}
+
+/// Finds a `try` that throws out of the expression it walks: one that is neither `try?` nor `try!`, outside every closure the
+/// expression declares, whose body throws to the closure's caller.
+private final class ThrowingTryVisitor: SyntaxVisitor {
+	private(set) var findsThrowingTry = false
+
+	override func visit(_ node: TryExprSyntax) -> SyntaxVisitorContinueKind {
+		// A `try?` or `try!` handles what any `try` inside it throws, and one plain `try` settles it.
+		findsThrowingTry = findsThrowingTry || node.questionOrExclamationMark == nil
+		return .skipChildren
+	}
+
+	override func visit(_: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
+		.skipChildren
+	}
+}
+
+extension TypeDescription {
+	/// This type, or, for a throwing `@autoclosure`, the `@autoclosure` that does not throw and returns the same value: how a
+	/// mock takes a default-valued `@autoclosure` it calls where it builds the type (`Initializer.Argument.isLeftToItsDefault`).
+	fileprivate var autoclosureTakenWithoutThrowing: TypeDescription {
+		guard case let .attributed(.closure(arguments, isAsync, true, _, returnType), specifiers, attributes) = self,
+		      attributes.contains("autoclosure")
+		else { return self }
+		return .attributed(.closure(arguments: arguments, isAsync: isAsync, doesThrow: false, thrownType: nil, returnType: returnType), specifiers: specifiers, attributes: attributes)
 	}
 }
