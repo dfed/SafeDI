@@ -66,6 +66,8 @@ public struct Generate: AsyncParsableCommand {
 
 	@Option(help: "The package of the module this run generates code for, as the compiler’s '-package-name' names it, recorded as '--module-name' is. Omit it when the compiler receives no '-package-name'.") var packageName: String?
 
+	@Flag(help: "Writes the view of '--module-info-output' as references to the modules it carries, each found in that module’s own module info file among those '--transitive-module-info-file-path' lists, instead of copies of their declarations.") var moduleInfoViewsReferToModules = false
+
 	@Flag(help: "States that the compiler is handed every input Swift file, including the files behind dependent module info, at exactly the path this tool is handed. Generated code then wraps each `@Received(fulfilledByDependencyNamed:ofType:)` assignment in a `#sourceLocation` directive naming that path, so the compiler reports a type mismatch at the declaration. Without a build tool plugin’s manifest, this tool also prints each error and warning at the path it was handed, as the compiler prints its own. Without this flag, and without a build tool plugin’s manifest, the assignment names the declaration in a comment instead, because the compiler warns at a directive whose path differs from the one it was handed, and errors and warnings name each file by its absolute path.") var compilerReceivesInputPathsUnchanged = false
 
 	// MARK: Internal
@@ -256,7 +258,8 @@ public struct Generate: AsyncParsableCommand {
 		let ownProjectFilePaths = Self.ownProjectFilePaths(manifest: manifest, inputProjectFilePaths: inputProjectFilePaths, comparisonFilePaths: comparisonFilePaths)
 
 		let listedModuleInfoPaths = try moduleInfoPaths(listedIn: dependentModuleInfoFilePath)
-		let (listedModuleInfoFiles, parsed) = try await (
+		let referenceResolver = ModuleReferenceResolver(transitiveModuleInfoListPath: transitiveModuleInfoFilePath)
+		let (unresolvedListedModuleInfoFiles, parsed) = try await (
 			loadSafeDIModuleInfo(at: listedModuleInfoPaths),
 			parsedModule(
 				inputFilePaths: inputFilePaths,
@@ -268,6 +271,7 @@ public struct Generate: AsyncParsableCommand {
 				activeCompilationConditions: suppliedCompilationConditions,
 			),
 		)
+		let listedModuleInfoFiles = try await referenceResolver.resolvingReferences(in: unresolvedListedModuleInfoFiles)
 		// A reserved name is a mistake in the module's own files whatever its trees hold, so it is reported before any is
 		// built. A module that depends on this one never reads these declarations, so only this run reports them.
 		let reservedTypeNameDeclarations = parsed.module.reservedTypeNameDeclarations
@@ -326,6 +330,7 @@ public struct Generate: AsyncParsableCommand {
 			listedFiles: listedModuleInfoFiles,
 			listedPaths: listedModuleInfoPaths,
 			ownModule: parsedModuleInfo,
+			referenceResolver: referenceResolver,
 		)
 		// Each declaration with the module that declares its file, as the build system tells this run, if it does. The
 		// modules whose module info this run reads are ones this module depends on, directly as the build system lists
@@ -351,6 +356,7 @@ public struct Generate: AsyncParsableCommand {
 		let moduleInfoView = try MergedModuleInfoView(
 			directModules: dependentModuleInfoFiles,
 			ownModuleDeclaresSeamOrPublicMock: module.instantiables.contains { $0.generatesDependencyTree || $0.generateMock == .public },
+			viewsReferToModules: moduleInfoViewsReferToModules,
 		)
 
 		// The modules each module of the module infos this run reads depends on directly, which that module's run read:
@@ -1823,6 +1829,10 @@ public struct Generate: AsyncParsableCommand {
 	///   `false` leaves every view empty.
 	/// - Throws: When a file cannot be read.
 	private func loadSafeDIModuleInfo(at paths: [String], readingViews: Bool = true) async throws -> [(file: ModuleInfoFile, path: String)] {
+		try await Self.loadSafeDIModuleInfo(at: paths, readingViews: readingViews)
+	}
+
+	static func loadSafeDIModuleInfo(at paths: [String], readingViews: Bool = true) async throws -> [(file: ModuleInfoFile, path: String)] {
 		let moduleInfoURLs = paths.map(\.asFileURL)
 		return try await withThrowingTaskGroup(
 			of: (index: Int, file: ModuleInfoFile).self,
@@ -1856,6 +1866,7 @@ public struct Generate: AsyncParsableCommand {
 		listedFiles: [(file: ModuleInfoFile, path: String)],
 		listedPaths: [String],
 		ownModule: ModuleInfo,
+		referenceResolver: ModuleReferenceResolver,
 	) async throws -> [(file: ModuleInfoFile, path: String)] {
 		var selection = ModulesBeneathSelection(ownModule: ownModule, listedFiles: listedFiles.map(\.file))
 		guard transitiveModuleInfoFilePath != nil, selection.reachesTypeNothingReadDeclares() else {
@@ -1864,7 +1875,7 @@ public struct Generate: AsyncParsableCommand {
 		let otherPaths = try Set(moduleInfoPaths(listedIn: transitiveModuleInfoFilePath)).subtracting(listedPaths).sorted()
 		let otherFiles = try await loadSafeDIModuleInfo(at: otherPaths, readingViews: false)
 		let pathsToRead = selection.indicesOfFilesToRead(among: otherFiles.map(\.file)).sorted().map { otherPaths[$0] }
-		let filesToRead = try await loadSafeDIModuleInfo(at: pathsToRead)
+		let filesToRead = try await referenceResolver.resolvingReferences(in: loadSafeDIModuleInfo(at: pathsToRead))
 		return zip(listedPaths + pathsToRead, listedFiles + filesToRead)
 			.sorted { $0.0 < $1.0 }
 			.map(\.1)

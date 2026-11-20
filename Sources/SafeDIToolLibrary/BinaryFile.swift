@@ -99,6 +99,7 @@ enum BinaryFile {
 			ModuleInfoView.self,
 			ViewedModuleIdentity.self,
 			ViewedModule.self,
+			ViewedModuleReference.self,
 			ImportStatement.self,
 			FileVisitor.ImportSegment.self,
 			ConditionalCompilationDecision.self,

@@ -1375,18 +1375,41 @@ extension ModuleInfoView: BinarySchemaMember {
 			fields: [
 				BinaryLayoutField("moduleGraph", \.moduleGraph),
 				BinaryLayoutField("declarations", \.declarations),
+				BinaryLayoutField("references", \.references),
 			],
 			unwrittenProperties: [],
 		)
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
-		try self.init(moduleGraph: reader.read(), declarations: reader.read())
+		try self.init(moduleGraph: reader.read(), declarations: reader.read(), references: reader.read())
 	}
 
 	func write(to writer: inout BinaryWriter) {
 		writer.write(moduleGraph)
 		writer.write(declarations)
+		writer.write(references)
+	}
+}
+
+extension ViewedModuleReference: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("moduleName", \.moduleName),
+				BinaryLayoutField("checksum", \.checksum),
+			],
+			unwrittenProperties: [],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(moduleName: reader.read(), checksum: reader.read())
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.write(moduleName)
+		writer.write(checksum)
 	}
 }
 

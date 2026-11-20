@@ -139,6 +139,25 @@ public struct ModuleInfoFile: Codable, Sendable {
 		)
 	}
 
+	/// This file with `view` in place of its own.
+	func replacingView(with view: ModuleInfoView) -> ModuleInfoFile {
+		ModuleInfoFile(
+			moduleName: moduleName,
+			packageName: packageName,
+			dependencyModuleNames: dependencyModuleNames,
+			imports: imports,
+			mockImports: mockImports,
+			instantiables: instantiables,
+			configurations: configurations,
+			filesWithUnexpectedNodes: filesWithUnexpectedNodes,
+			conditionalCompilationDecisions: conditionalCompilationDecisions,
+			instantiableTypeNamesInAnyClause: instantiableTypeNamesInAnyClause,
+			plainTypeDeclarations: plainTypeDeclarations,
+			seamSignatures: seamSignatures,
+			view: view,
+		)
+	}
+
 	/// The module's declarations as its dependents' views hold them.
 	var ownEntry: ViewedModule {
 		ViewedModule(
@@ -190,9 +209,25 @@ public struct ModuleInfoView: Codable, Sendable {
 	/// The declarations of each module in the closure that declares a seam or a public mock, and of each module such a
 	/// module depends on directly, each once.
 	let declarations: [ViewedModule]
+	/// The modules whose declarations the view carries by reference instead: each module's name and the checksum of its
+	/// own entry, which a reader finds in that module's own file.
+	let references: [ViewedModuleReference]
+
+	init(moduleGraph: [ViewedModuleIdentity], declarations: [ViewedModule], references: [ViewedModuleReference] = []) {
+		self.moduleGraph = moduleGraph
+		self.declarations = declarations
+		self.references = references
+	}
 
 	/// The view of a module that depends on nothing.
 	public static let empty = ModuleInfoView(moduleGraph: [], declarations: [])
+}
+
+/// A module whose declarations a view carries by reference: its name, and the checksum of the bytes of its own entry
+/// (`ModuleInfoFile.ownEntry`), which has no positions, so a position-only edit leaves it unchanged.
+struct ViewedModuleReference: Codable {
+	let moduleName: String
+	let checksum: UInt64
 }
 
 /// A module in a view's module graph.
@@ -263,7 +298,7 @@ struct MergedModuleInfoView {
 	///   - ownModuleDeclaresSeamOrPublicMock: Whether the module the run generates code for declares a seam or a public
 	///     mock, whose signature its dependents compute from the modules it depends on directly.
 	/// - Throws: `ModuleInfoDisagreementError` when two files describe one module differently.
-	init(directModules: [(file: ModuleInfoFile, path: String)], ownModuleDeclaresSeamOrPublicMock: Bool) throws(ModuleInfoDisagreementError) {
+	init(directModules: [(file: ModuleInfoFile, path: String)], ownModuleDeclaresSeamOrPublicMock: Bool, viewsReferToModules: Bool = false) throws(ModuleInfoDisagreementError) {
 		var identities = [String: (identity: ViewedModuleIdentity, bytes: [UInt8], path: String)]()
 		var declarations = [String: (entry: ViewedModule, bytes: [UInt8], path: String)]()
 		var writtenDeclarationNames = Set<String>()
@@ -316,12 +351,22 @@ struct MergedModuleInfoView {
 		identitiesByModuleName = identities.mapValues(\.identity)
 		declarationsByModuleName = declarations.mapValues(\.entry)
 		self.directModuleNames = directModuleNames
-		view = ModuleInfoView(
-			moduleGraph: identities.values.map(\.identity).sorted { Array($0.moduleName.utf8).lexicographicallyPrecedes(Array($1.moduleName.utf8)) },
-			declarations: writtenDeclarationNames
-				.compactMap { declarations[$0]?.entry }
-				.sorted { Array($0.moduleName.utf8).lexicographicallyPrecedes(Array($1.moduleName.utf8)) },
-		)
+		let moduleGraph = identities.values.map(\.identity).sorted { Array($0.moduleName.utf8).lexicographicallyPrecedes(Array($1.moduleName.utf8)) }
+		let writtenNames = writtenDeclarationNames.sorted { Array($0.utf8).lexicographicallyPrecedes(Array($1.utf8)) }
+		view = if viewsReferToModules {
+			ModuleInfoView(
+				moduleGraph: moduleGraph,
+				declarations: [],
+				references: writtenNames.compactMap { name in
+					declarations[name].map { ViewedModuleReference(moduleName: name, checksum: $0.bytes.withUnsafeBytes(BinaryFile.checksum(of:))) }
+				},
+			)
+		} else {
+			ModuleInfoView(
+				moduleGraph: moduleGraph,
+				declarations: writtenNames.compactMap { declarations[$0]?.entry },
+			)
+		}
 	}
 
 	/// Every module the files name or carry, by name.
@@ -346,7 +391,7 @@ struct MergedModuleInfoView {
 
 	/// The bytes `value` is written as, which two entries for one module must share: `==` ignores `any` at every depth
 	/// and the order inside an `UnorderedEquatingCollection`, which the bytes do not.
-	private static func encoded(_ value: some BinaryCodable) -> [UInt8] {
+	static func encoded(_ value: some BinaryCodable) -> [UInt8] {
 		var writer = BinaryWriter()
 		writer.write(value)
 		return writer.encoded
@@ -367,5 +412,16 @@ struct ModuleInfoDisagreementError: Error, CustomStringConvertible {
 
 	var description: String {
 		"SafeDI was given two module infos that describe module `\(moduleName)` differently: \(filePaths.map { "`\($0)`" }.joined(separator: " and ")) were written against two different builds of `\(moduleName)`. Build `\(moduleName)` and the modules that depend on it again, so that every module info is written against the current one."
+	}
+}
+
+/// A view refers to a module whose own file the run was not given.
+struct UnresolvableModuleReferenceError: Error, CustomStringConvertible {
+	let moduleName: String
+	/// The files whose views refer to the module, sorted.
+	let referringFilePaths: [String]
+
+	var description: String {
+		"SafeDI could not find the module info of module `\(moduleName)`, which \(referringFilePaths.map { "`\($0)`" }.joined(separator: " and ")) \(referringFilePaths.count == 1 ? "refers" : "refer") to: a view that refers to modules is read with the module info of every module beneath, which SafeDI’s Bazel rule passes with `--transitive-module-info-file-path`. Pass the module info of `\(moduleName)` that way, or build the modules without `--module-info-views-refer-to-modules`."
 	}
 }

@@ -405,6 +405,16 @@ extension Int: BinaryCodable {
 	}
 }
 
+extension UInt64: BinaryCodable {
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		self = try reader.readUnsigned()
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.writeUnsigned(self)
+	}
+}
+
 extension Int64: BinaryCodable {
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		let zigzag = try reader.readUnsigned()

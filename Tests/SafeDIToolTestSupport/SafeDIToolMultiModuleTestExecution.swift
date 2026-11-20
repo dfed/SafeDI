@@ -349,6 +349,8 @@ struct MultiModuleFixtureError: Error, CustomStringConvertible {
 ///     `--transitive-module-info-file-path`, of the `.safedi` of every module the module depends on, directly or not, as
 ///     the Bazel rule tells it of the set it collects. `nil` passes no such option, as the Tuist plugin does and a
 ///     custom script may.
+///   - viewsReferToModules: Under `.moduleInfo`, whether every module that writes a `.safedi` passes
+///     `--module-info-views-refer-to-modules`, as the Bazel rule does.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func executeSafeDIToolMultiModuleTest(
 	modules: [ModuleFixture],
@@ -360,6 +362,7 @@ func executeSafeDIToolMultiModuleTest(
 	discardsStoredSeamSignatures: Bool = false,
 	writesDOTTrees: Bool = false,
 	modulesBeneath: ((_ moduleNames: [String]) -> [String])? = nil,
+	viewsReferToModules: Bool = false,
 	filesToDelete: inout [URL],
 	recordDirectory: URL? = ExpectationRecording.directoryFromEnvironment,
 	sourceLocation: SourceLocation = #_sourceLocation,
@@ -472,6 +475,9 @@ func executeSafeDIToolMultiModuleTest(
 			arguments.append("--compiler-receives-input-paths-unchanged")
 			if !module.fixture.omitsModuleName {
 				arguments += ["--module-info-output", output.path, "--module-name", moduleName]
+				if viewsReferToModules {
+					arguments.append("--module-info-views-refer-to-modules")
+				}
 			}
 			if !module.fixture.omitsPackageName {
 				arguments += ["--package-name", module.fixture.packageName]
@@ -643,6 +649,10 @@ func executeSafeDIToolMultiModuleTest(
 		inputs.append(("moduleOrder", modules.map(\.name).joinedForRecording))
 		inputs.append(("writesTargetGraph", "\(writesTargetGraph)"))
 		inputs.append(("scansDuringGenerate", "\(scansDuringGenerate)"))
+		// Recorded only when set, so every record made without it keeps its digest.
+		if viewsReferToModules {
+			inputs.append(("viewsReferToModules", "true"))
+		}
 		inputs.append(("moduleInfoOverrides", moduleInfoOverrides.sorted { $0.key < $1.key }.flatMap { [$0.key, $0.value] }.joinedForRecording))
 		inputs.append(("writesDOTTrees", "\(writesDOTTrees)"))
 		ExpectationRecording.recordGeneration(
