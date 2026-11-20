@@ -63,13 +63,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Page {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct service_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let service: (service_Values) -> __safeDI_Built
+		            public let service: (__safeDI_Values) -> __safeDI_Built
 
-		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		            public init(service: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                self.service = service
 		            }
 
@@ -89,13 +89,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    public static func __safeDI_mock(
 		        serviceBuilder __safeDI_serviceBuilder: Page.SafeDIMockScope_Service.__safeDI_Builder<any Service>
 		    ) -> Page {
-		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.service_Values())
+		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.__safeDI_Values())
 		        return Page(service: service)
 		    }
 		}
 
 		extension Page {
-		    public enum __safeDI_Page_mock_4A57B09DFB8A9D2C {}
+		    public enum __safeDI_Page_mock_8616590B7F80513D {}
 		}
 		#endif
 		"""])
@@ -110,13 +110,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Book {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct pageBuilder_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let pageBuilder: (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
+		            public let pageBuilder: (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
 
-		            public init(pageBuilder: @escaping (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+		            public init(pageBuilder: @escaping (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
 		                self.pageBuilder = pageBuilder
 		            }
 
@@ -143,9 +143,9 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		        serviceBuilder __safeDI_serviceBuilder: Book.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Book {
-		        _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		        _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		        func __safeDI_pageBuilder() -> Page {
-		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.pageBuilder_Values()))
+		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.__safeDI_Values()))
 		        }
 		        let pageBuilder = Instantiator<Page>(__safeDI_pageBuilder)
 		        return Book(pageBuilder: pageBuilder)
@@ -153,7 +153,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		}
 
 		extension Book {
-		    public enum __safeDI_Book_mock_00BE9B499BC3E7F2 {}
+		    public enum __safeDI_Book_mock_0011B1D815B1ECB7 {}
 		}
 		#endif
 		"""])
@@ -216,7 +216,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 		            }
-		            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		            _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
 		        }
 		        let page: Page = __safeDI_page()
@@ -245,13 +245,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Page {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct service_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let service: (service_Values) -> __safeDI_Built
+		            public let service: (__safeDI_Values) -> __safeDI_Built
 
-		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		            public init(service: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                self.service = service
 		            }
 
@@ -271,13 +271,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    public static func __safeDI_mock(
 		        serviceBuilder __safeDI_serviceBuilder: Page.SafeDIMockScope_Service.__safeDI_Builder<any Service>
 		    ) -> Page {
-		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.service_Values())
+		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.__safeDI_Values())
 		        return Page(service: service)
 		    }
 		}
 
 		extension Page {
-		    public enum __safeDI_Page_mock_4A57B09DFB8A9D2C {}
+		    public enum __safeDI_Page_mock_8616590B7F80513D {}
 		}
 		#endif
 		"""])
@@ -292,13 +292,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Book {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct pageBuilder_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let pageBuilder: (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
+		            public let pageBuilder: (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
 
-		            public init(pageBuilder: @escaping (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+		            public init(pageBuilder: @escaping (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
 		                self.pageBuilder = pageBuilder
 		            }
 
@@ -325,9 +325,9 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		        serviceBuilder __safeDI_serviceBuilder: Book.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Book {
-		        _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		        _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		        func __safeDI_pageBuilder() -> Page {
-		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.pageBuilder_Values()))
+		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.__safeDI_Values()))
 		        }
 		        let pageBuilder = Instantiator<Page>(__safeDI_pageBuilder)
 		        return Book(pageBuilder: pageBuilder)
@@ -335,7 +335,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		}
 
 		extension Book {
-		    public enum __safeDI_Book_mock_00BE9B499BC3E7F2 {}
+		    public enum __safeDI_Book_mock_0011B1D815B1ECB7 {}
 		}
 		#endif
 		"""])
@@ -398,7 +398,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 		            }
-		            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		            _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
 		        }
 		        let page: Page = __safeDI_page()
@@ -431,13 +431,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Page {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct service_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let service: (service_Values) -> __safeDI_Built
+		            public let service: (__safeDI_Values) -> __safeDI_Built
 
-		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		            public init(service: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                self.service = service
 		            }
 
@@ -457,13 +457,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    public static func __safeDI_mock(
 		        serviceBuilder __safeDI_serviceBuilder: Page.SafeDIMockScope_Service.__safeDI_Builder<any Service>
 		    ) -> Page {
-		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.service_Values())
+		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.__safeDI_Values())
 		        return Page(service: service)
 		    }
 		}
 
 		extension Page {
-		    public enum __safeDI_Page_mock_4A57B09DFB8A9D2C {}
+		    public enum __safeDI_Page_mock_8616590B7F80513D {}
 		}
 		#endif
 		"""])
@@ -478,13 +478,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Book {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct pageBuilder_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let pageBuilder: (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
+		            public let pageBuilder: (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
 
-		            public init(pageBuilder: @escaping (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+		            public init(pageBuilder: @escaping (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
 		                self.pageBuilder = pageBuilder
 		            }
 
@@ -511,9 +511,9 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		        serviceBuilder __safeDI_serviceBuilder: Book.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Book {
-		        _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		        _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		        func __safeDI_pageBuilder() -> Page {
-		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.pageBuilder_Values()))
+		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.__safeDI_Values()))
 		        }
 		        let pageBuilder = Instantiator<Page>(__safeDI_pageBuilder)
 		        return Book(pageBuilder: pageBuilder)
@@ -521,7 +521,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		}
 
 		extension Book {
-		    public enum __safeDI_Book_mock_00BE9B499BC3E7F2 {}
+		    public enum __safeDI_Book_mock_0011B1D815B1ECB7 {}
 		}
 		#endif
 		"""])
@@ -584,7 +584,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 		            }
-		            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		            _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
 		        }
 		        let page: Page = __safeDI_page()
@@ -613,13 +613,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Page {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct service_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let service: (service_Values) -> __safeDI_Built
+		            public let service: (__safeDI_Values) -> __safeDI_Built
 
-		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		            public init(service: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                self.service = service
 		            }
 
@@ -639,13 +639,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    public static func __safeDI_mock(
 		        serviceBuilder __safeDI_serviceBuilder: Page.SafeDIMockScope_Service.__safeDI_Builder<any Service>
 		    ) -> Page {
-		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.service_Values())
+		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.__safeDI_Values())
 		        return Page(service: service)
 		    }
 		}
 
 		extension Page {
-		    public enum __safeDI_Page_mock_4A57B09DFB8A9D2C {}
+		    public enum __safeDI_Page_mock_8616590B7F80513D {}
 		}
 		#endif
 		"""])
@@ -660,13 +660,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Book {
 		    nonisolated public enum SafeDISendableMockScope_Service {
-		        nonisolated public struct pageBuilder_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-		            public let pageBuilder: @Sendable (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
+		            public let pageBuilder: @Sendable (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
 
-		            public init(pageBuilder: @escaping @Sendable (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+		            public init(pageBuilder: @escaping @Sendable (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
 		                self.pageBuilder = pageBuilder
 		            }
 
@@ -693,9 +693,9 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		        serviceSendableBuilder __safeDI_serviceSendableBuilder: Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Book {
-		        _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		        _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		        @Sendable func __safeDI_pageBuilder() -> Page {
-		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceSendableBuilder.pageBuilder(SafeDISendableMockScope_Service.pageBuilder_Values()))
+		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceSendableBuilder.pageBuilder(SafeDISendableMockScope_Service.__safeDI_Values()))
 		        }
 		        let pageBuilder = SendableInstantiator<Page>(__safeDI_pageBuilder)
 		        return Book(pageBuilder: pageBuilder)
@@ -703,7 +703,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		}
 
 		extension Book {
-		    public enum __safeDI_Book_mock_B9084D3C3DCDE1EE {}
+		    public enum __safeDI_Book_mock_C54DD09BF85A385B {}
 		}
 		#endif
 		"""])
@@ -766,7 +766,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            @Sendable nonisolated func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 		            }
-		            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		            _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
 		        }
 		        let page: Page = __safeDI_page()
@@ -796,13 +796,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Page {
 		    nonisolated public enum SafeDIMockScope_DefaultService_Service {
-		        nonisolated public struct serviceBuilder_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let serviceBuilder: (serviceBuilder_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder
+		            public let serviceBuilder: (__safeDI_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder
 
-		            public init(serviceBuilder: @escaping (serviceBuilder_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		            public init(serviceBuilder: @escaping (__safeDI_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder) {
 		                self.serviceBuilder = serviceBuilder
 		            }
 
@@ -822,13 +822,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    public static func __safeDI_mock(
 		        defaultService_ServiceBuilder __safeDI_defaultService_ServiceBuilder: Page.SafeDIMockScope_DefaultService_Service.__safeDI_Builder<any Service>
 		    ) -> Page {
-		        let serviceBuilder = ErasedInstantiator<Int, any Service>(__safeDI_defaultService_ServiceBuilder.serviceBuilder(SafeDIMockScope_DefaultService_Service.serviceBuilder_Values()))
+		        let serviceBuilder = ErasedInstantiator<Int, any Service>(__safeDI_defaultService_ServiceBuilder.serviceBuilder(SafeDIMockScope_DefaultService_Service.__safeDI_Values()))
 		        return Page(serviceBuilder: serviceBuilder)
 		    }
 		}
 
 		extension Page {
-		    public enum __safeDI_Page_mock_D15A253F853DBCB8 {}
+		    public enum __safeDI_Page_mock_5F8A188A8883BADE {}
 		}
 		#endif
 		"""])
@@ -843,13 +843,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Book {
 		    nonisolated public enum SafeDIMockScope_DefaultService_Service {
-		        nonisolated public struct pageBuilder_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let pageBuilder: (pageBuilder_Values) -> Page.SafeDIMockScope_DefaultService_Service.__safeDI_Builder<__safeDI_Built>
+		            public let pageBuilder: (__safeDI_Values) -> Page.SafeDIMockScope_DefaultService_Service.__safeDI_Builder<__safeDI_Built>
 
-		            public init(pageBuilder: @escaping (pageBuilder_Values) -> Page.SafeDIMockScope_DefaultService_Service.__safeDI_Builder<__safeDI_Built>) {
+		            public init(pageBuilder: @escaping (__safeDI_Values) -> Page.SafeDIMockScope_DefaultService_Service.__safeDI_Builder<__safeDI_Built>) {
 		                self.pageBuilder = pageBuilder
 		            }
 
@@ -876,9 +876,9 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		        defaultService_ServiceBuilder __safeDI_defaultService_ServiceBuilder: Book.SafeDIMockScope_DefaultService_Service.__safeDI_Builder<any Service>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Book {
-		        _ = Page.__safeDI_Page_mock_D15A253F853DBCB8.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		        _ = Page.__safeDI_Page_mock_5F8A188A8883BADE.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		        func __safeDI_pageBuilder() -> Page {
-		            Page.__safeDI_mock(defaultService_ServiceBuilder: __safeDI_defaultService_ServiceBuilder.pageBuilder(SafeDIMockScope_DefaultService_Service.pageBuilder_Values()))
+		            Page.__safeDI_mock(defaultService_ServiceBuilder: __safeDI_defaultService_ServiceBuilder.pageBuilder(SafeDIMockScope_DefaultService_Service.__safeDI_Values()))
 		        }
 		        let pageBuilder = Instantiator<Page>(__safeDI_pageBuilder)
 		        return Book(pageBuilder: pageBuilder)
@@ -886,7 +886,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		}
 
 		extension Book {
-		    public enum __safeDI_Book_mock_12A9084ABFC242B9 {}
+		    public enum __safeDI_Book_mock_8407221CFC49F8FF {}
 		}
 		#endif
 		"""])
@@ -948,7 +948,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            func __safeDI_defaultService_ServiceBuilder_Page() -> Page.SafeDIMockScope_DefaultService_Service.__safeDI_Builder<any Service> {
 		                .init(serviceBuilder: { _ in __safeDI_defaultService_ServiceBuilder_Page_serviceBuilder() })
 		            }
-		            _ = Page.__safeDI_Page_mock_D15A253F853DBCB8.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		            _ = Page.__safeDI_Page_mock_5F8A188A8883BADE.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder(__safeDI_defaultService_ServiceBuilder_Page_serviceBuilder()) } else { Page.__safeDI_mock(defaultService_ServiceBuilder: __safeDI_defaultService_ServiceBuilder_Page()) }
 		        }
 		        let page: Page = __safeDI_page()
@@ -979,13 +979,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Page {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct service_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let service: (service_Values) -> __safeDI_Built
+		            public let service: (__safeDI_Values) -> __safeDI_Built
 
-		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		            public init(service: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                self.service = service
 		            }
 
@@ -1005,13 +1005,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    public static func __safeDI_mock(
 		        serviceBuilder __safeDI_serviceBuilder: Page.SafeDIMockScope_Service.__safeDI_Builder<any Service>
 		    ) -> Page {
-		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.service_Values())
+		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.__safeDI_Values())
 		        return Page(service: service)
 		    }
 		}
 
 		extension Page {
-		    public enum __safeDI_Page_mock_4A57B09DFB8A9D2C {}
+		    public enum __safeDI_Page_mock_8616590B7F80513D {}
 		}
 		#endif
 		"""])
@@ -1026,13 +1026,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Book {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct pageBuilder_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let pageBuilder: (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
+		            public let pageBuilder: (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
 
-		            public init(pageBuilder: @escaping (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+		            public init(pageBuilder: @escaping (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
 		                self.pageBuilder = pageBuilder
 		            }
 
@@ -1059,9 +1059,9 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		        serviceBuilder __safeDI_serviceBuilder: Book.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Book {
-		        _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		        _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		        func __safeDI_pageBuilder() -> Page {
-		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.pageBuilder_Values()))
+		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.__safeDI_Values()))
 		        }
 		        let pageBuilder = Instantiator<Page>(__safeDI_pageBuilder)
 		        return Book(pageBuilder: pageBuilder)
@@ -1069,7 +1069,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		}
 
 		extension Book {
-		    public enum __safeDI_Book_mock_00BE9B499BC3E7F2 {}
+		    public enum __safeDI_Book_mock_0011B1D815B1ECB7 {}
 		}
 		#endif
 		"""])
@@ -1116,7 +1116,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    ) -> Screen {
 		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_page() -> Page {
-		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, token: Token) -> any Service {
+		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.__safeDI_Values, token: Token) -> any Service {
 		                func __safeDI_service() -> DefaultService {
 		                    func __safeDI_book() -> Book {
 		                        func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
@@ -1133,7 +1133,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            func __safeDI_serviceBuilder_Page(token: Token) -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, token: token) })
 		            }
-		            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		            _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(token: token))
 		        }
 		        let page: Page = __safeDI_page()
@@ -1165,13 +1165,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Page {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct service_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let service: (service_Values) -> __safeDI_Built
+		            public let service: (__safeDI_Values) -> __safeDI_Built
 
-		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		            public init(service: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                self.service = service
 		            }
 
@@ -1191,13 +1191,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    public static func __safeDI_mock(
 		        serviceBuilder __safeDI_serviceBuilder: Page.SafeDIMockScope_Service.__safeDI_Builder<any Service>
 		    ) -> Page {
-		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.service_Values())
+		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.__safeDI_Values())
 		        return Page(service: service)
 		    }
 		}
 
 		extension Page {
-		    public enum __safeDI_Page_mock_4A57B09DFB8A9D2C {}
+		    public enum __safeDI_Page_mock_8616590B7F80513D {}
 		}
 		#endif
 		"""])
@@ -1212,13 +1212,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Book {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct pageBuilder_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let pageBuilder: (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
+		            public let pageBuilder: (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
 
-		            public init(pageBuilder: @escaping (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+		            public init(pageBuilder: @escaping (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
 		                self.pageBuilder = pageBuilder
 		            }
 
@@ -1245,9 +1245,9 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		        serviceBuilder __safeDI_serviceBuilder: Book.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Book {
-		        _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		        _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		        func __safeDI_pageBuilder() -> Page {
-		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.pageBuilder_Values()))
+		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.__safeDI_Values()))
 		        }
 		        let pageBuilder = Instantiator<Page>(__safeDI_pageBuilder)
 		        return Book(pageBuilder: pageBuilder)
@@ -1255,7 +1255,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		}
 
 		extension Book {
-		    public enum __safeDI_Book_mock_00BE9B499BC3E7F2 {}
+		    public enum __safeDI_Book_mock_0011B1D815B1ECB7 {}
 		}
 		#endif
 		"""])
@@ -1302,7 +1302,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    ) -> Screen {
 		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_page() -> Page {
-		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, token: Token) -> any Service {
+		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.__safeDI_Values, token: Token) -> any Service {
 		                func __safeDI_service() -> DefaultService {
 		                    func __safeDI_middle() -> Middle {
 		                        let token = Token()
@@ -1324,7 +1324,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            func __safeDI_serviceBuilder_Page(token: Token) -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, token: token) })
 		            }
-		            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		            _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(token: token))
 		        }
 		        let page: Page = __safeDI_page()
@@ -1355,13 +1355,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Page {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct service_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let service: (service_Values) -> __safeDI_Built
+		            public let service: (__safeDI_Values) -> __safeDI_Built
 
-		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		            public init(service: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                self.service = service
 		            }
 
@@ -1381,13 +1381,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    public static func __safeDI_mock(
 		        serviceBuilder __safeDI_serviceBuilder: Page.SafeDIMockScope_Service.__safeDI_Builder<any Service>
 		    ) -> Page {
-		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.service_Values())
+		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.__safeDI_Values())
 		        return Page(service: service)
 		    }
 		}
 
 		extension Page {
-		    public enum __safeDI_Page_mock_4A57B09DFB8A9D2C {}
+		    public enum __safeDI_Page_mock_8616590B7F80513D {}
 		}
 		#endif
 		"""])
@@ -1402,13 +1402,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Book {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct pageBuilder_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let pageBuilder: (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
+		            public let pageBuilder: (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
 
-		            public init(pageBuilder: @escaping (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+		            public init(pageBuilder: @escaping (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
 		                self.pageBuilder = pageBuilder
 		            }
 
@@ -1435,9 +1435,9 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		        serviceBuilder __safeDI_serviceBuilder: Book.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Book {
-		        _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		        _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		        func __safeDI_pageBuilder() -> Page {
-		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.pageBuilder_Values()))
+		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.__safeDI_Values()))
 		        }
 		        let pageBuilder = Instantiator<Page>(__safeDI_pageBuilder)
 		        return Book(pageBuilder: pageBuilder)
@@ -1445,20 +1445,20 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		}
 
 		extension Book {
-		    public enum __safeDI_Book_mock_00BE9B499BC3E7F2 {}
+		    public enum __safeDI_Book_mock_0011B1D815B1ECB7 {}
 		}
 		#endif
 
 		#if DEBUG
 		extension Shelf {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct pageBuilder_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let pageBuilder: (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
+		            public let pageBuilder: (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
 
-		            public init(pageBuilder: @escaping (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+		            public init(pageBuilder: @escaping (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
 		                self.pageBuilder = pageBuilder
 		            }
 
@@ -1485,9 +1485,9 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		        serviceBuilder __safeDI_serviceBuilder: Shelf.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Shelf {
-		        _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		        _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		        func __safeDI_pageBuilder() -> Page {
-		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.pageBuilder_Values()))
+		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.__safeDI_Values()))
 		        }
 		        let pageBuilder = Instantiator<Page>(__safeDI_pageBuilder)
 		        return Shelf(pageBuilder: pageBuilder)
@@ -1495,7 +1495,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		}
 
 		extension Shelf {
-		    public enum __safeDI_Shelf_mock_0AA2046DBF99EF48 {}
+		    public enum __safeDI_Shelf_mock_F175C8C93C69D9E3 {}
 		}
 		#endif
 		"""])
@@ -1548,7 +1548,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    ) -> Screen {
 		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_shelf() -> Shelf {
-		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, token: Token) -> any Service {
+		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.__safeDI_Values, token: Token) -> any Service {
 		                func __safeDI_service() -> DefaultService {
 		                    func __safeDI_middle() -> Middle {
 		                        let token = Token()
@@ -1573,7 +1573,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            func __safeDI_serviceBuilder_Page(token: Token) -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, token: token) })
 		            }
-		            _ = Shelf.__safeDI_Shelf_mock_0AA2046DBF99EF48.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Shelf", declaringModule: "Mid"))
+		            _ = Shelf.__safeDI_Shelf_mock_F175C8C93C69D9E3.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Shelf", declaringModule: "Mid"))
 		            return Shelf.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Shelf(token: token), safeDIOverrides: safeDIOverrides.shelf)
 		        }
 		        let shelf: Shelf = __safeDI_shelf()
@@ -1604,13 +1604,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Page {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct service_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let service: (service_Values) -> __safeDI_Built
+		            public let service: (__safeDI_Values) -> __safeDI_Built
 
-		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		            public init(service: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                self.service = service
 		            }
 
@@ -1630,13 +1630,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    public static func __safeDI_mock(
 		        serviceBuilder __safeDI_serviceBuilder: Page.SafeDIMockScope_Service.__safeDI_Builder<any Service>
 		    ) -> Page {
-		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.service_Values())
+		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.__safeDI_Values())
 		        return Page(service: service)
 		    }
 		}
 
 		extension Page {
-		    public enum __safeDI_Page_mock_4A57B09DFB8A9D2C {}
+		    public enum __safeDI_Page_mock_8616590B7F80513D {}
 		}
 		#endif
 		"""])
@@ -1651,13 +1651,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Book {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct pageBuilder_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let pageBuilder: (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
+		            public let pageBuilder: (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
 
-		            public init(pageBuilder: @escaping (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+		            public init(pageBuilder: @escaping (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
 		                self.pageBuilder = pageBuilder
 		            }
 
@@ -1684,9 +1684,9 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		        serviceBuilder __safeDI_serviceBuilder: Book.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Book {
-		        _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		        _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		        func __safeDI_pageBuilder() -> Page {
-		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.pageBuilder_Values()))
+		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.__safeDI_Values()))
 		        }
 		        let pageBuilder = Instantiator<Page>(__safeDI_pageBuilder)
 		        return Book(pageBuilder: pageBuilder)
@@ -1694,20 +1694,20 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		}
 
 		extension Book {
-		    public enum __safeDI_Book_mock_00BE9B499BC3E7F2 {}
+		    public enum __safeDI_Book_mock_0011B1D815B1ECB7 {}
 		}
 		#endif
 
 		#if DEBUG
 		extension Shelf {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct pageBuilder_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let pageBuilder: (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
+		            public let pageBuilder: (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
 
-		            public init(pageBuilder: @escaping (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+		            public init(pageBuilder: @escaping (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
 		                self.pageBuilder = pageBuilder
 		            }
 
@@ -1734,9 +1734,9 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		        serviceBuilder __safeDI_serviceBuilder: Shelf.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Shelf {
-		        _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		        _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		        func __safeDI_pageBuilder() -> Page {
-		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.pageBuilder_Values()))
+		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.__safeDI_Values()))
 		        }
 		        let pageBuilder = Instantiator<Page>(__safeDI_pageBuilder)
 		        return Shelf(pageBuilder: pageBuilder)
@@ -1744,7 +1744,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		}
 
 		extension Shelf {
-		    public enum __safeDI_Shelf_mock_0AA2046DBF99EF48 {}
+		    public enum __safeDI_Shelf_mock_F175C8C93C69D9E3 {}
 		}
 		#endif
 		"""])
@@ -1797,7 +1797,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    ) -> Screen {
 		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_shelf() -> Shelf {
-		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, token: Token) -> any Service {
+		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.__safeDI_Values, token: Token) -> any Service {
 		                func __safeDI_service() -> DefaultService {
 		                    func __safeDI_middle() -> Middle {
 		                        let token = Token()
@@ -1819,7 +1819,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            func __safeDI_serviceBuilder_Page(token: Token) -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, token: token) })
 		            }
-		            _ = Shelf.__safeDI_Shelf_mock_0AA2046DBF99EF48.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Shelf", declaringModule: "Mid"))
+		            _ = Shelf.__safeDI_Shelf_mock_F175C8C93C69D9E3.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Shelf", declaringModule: "Mid"))
 		            return Shelf.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Shelf(token: token), safeDIOverrides: safeDIOverrides.shelf)
 		        }
 		        let shelf: Shelf = __safeDI_shelf()
@@ -1850,13 +1850,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Page {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct service_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let service: (service_Values) -> __safeDI_Built
+		            public let service: (__safeDI_Values) -> __safeDI_Built
 
-		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		            public init(service: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                self.service = service
 		            }
 
@@ -1876,13 +1876,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    public static func __safeDI_mock(
 		        serviceBuilder __safeDI_serviceBuilder: Page.SafeDIMockScope_Service.__safeDI_Builder<any Service>
 		    ) -> Page {
-		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.service_Values())
+		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.__safeDI_Values())
 		        return Page(service: service)
 		    }
 		}
 
 		extension Page {
-		    public enum __safeDI_Page_mock_4A57B09DFB8A9D2C {}
+		    public enum __safeDI_Page_mock_8616590B7F80513D {}
 		}
 		#endif
 		"""])
@@ -1897,16 +1897,16 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Book {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct binderBuilder_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        nonisolated public enum Binder_Scope {
-		            nonisolated public struct pageBuilder_Values: Sendable {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let pageBuilder: (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
+		                public let pageBuilder: (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
 
-		                public init(pageBuilder: @escaping (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+		                public init(pageBuilder: @escaping (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
 		                    self.pageBuilder = pageBuilder
 		                }
 
@@ -1918,9 +1918,9 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let binderBuilder: (binderBuilder_Values) -> SafeDIMockScope_Service.Binder_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let binderBuilder: (__safeDI_Values) -> SafeDIMockScope_Service.Binder_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(binderBuilder: @escaping (binderBuilder_Values) -> SafeDIMockScope_Service.Binder_Scope.__safeDI_Builder<__safeDI_Built>) {
+		            public init(binderBuilder: @escaping (__safeDI_Values) -> SafeDIMockScope_Service.Binder_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.binderBuilder = binderBuilder
 		            }
 
@@ -1967,11 +1967,11 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		        serviceBuilder __safeDI_serviceBuilder: Book.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Book {
-		        let __safeDI_serviceBuilder_binderBuilder = __safeDI_serviceBuilder.binderBuilder(SafeDIMockScope_Service.binderBuilder_Values())
+		        let __safeDI_serviceBuilder_binderBuilder = __safeDI_serviceBuilder.binderBuilder(SafeDIMockScope_Service.__safeDI_Values())
 		        func __safeDI_binderBuilder() -> Binder {
-		            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		            _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		            func __safeDI_pageBuilder() -> Page {
-		                Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_binderBuilder.pageBuilder(SafeDIMockScope_Service.Binder_Scope.pageBuilder_Values()))
+		                Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_binderBuilder.pageBuilder(SafeDIMockScope_Service.Binder_Scope.__safeDI_Values()))
 		            }
 		            let pageBuilder = Instantiator<Page>(__safeDI_pageBuilder)
 		            return Binder.__safeDI_init(pageBuilder: pageBuilder, safeDIBuilder: safeDIOverrides.binderBuilder.safeDIBuilder)
@@ -1982,7 +1982,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		}
 
 		extension Book {
-		    public enum __safeDI_Book_mock_5584FA8657679280 {}
+		    public enum __safeDI_Book_mock_446B5EA517A27896 {}
 		}
 		#endif
 
@@ -2083,7 +2083,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            func __safeDI_serviceBuilder_Page() -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 		            }
-		            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		            _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
 		        }
 		        let page: Page = __safeDI_page()
@@ -2114,13 +2114,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Page {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct service_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let service: (service_Values) -> __safeDI_Built
+		            public let service: (__safeDI_Values) -> __safeDI_Built
 
-		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		            public init(service: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                self.service = service
 		            }
 
@@ -2140,13 +2140,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    public static func __safeDI_mock(
 		        serviceBuilder __safeDI_serviceBuilder: Page.SafeDIMockScope_Service.__safeDI_Builder<any Service>
 		    ) -> Page {
-		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.service_Values())
+		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.__safeDI_Values())
 		        return Page(service: service)
 		    }
 		}
 
 		extension Page {
-		    public enum __safeDI_Page_mock_4A57B09DFB8A9D2C {}
+		    public enum __safeDI_Page_mock_8616590B7F80513D {}
 		}
 		#endif
 		"""])
@@ -2161,13 +2161,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Book {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct pageBuilder_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let pageBuilder: (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
+		            public let pageBuilder: (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
 
-		            public init(pageBuilder: @escaping (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+		            public init(pageBuilder: @escaping (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
 		                self.pageBuilder = pageBuilder
 		            }
 
@@ -2194,9 +2194,9 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		        serviceBuilder __safeDI_serviceBuilder: Book.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Book {
-		        _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		        _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		        func __safeDI_pageBuilder() -> Page {
-		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.pageBuilder_Values()))
+		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.__safeDI_Values()))
 		        }
 		        let pageBuilder = Instantiator<Page>(__safeDI_pageBuilder)
 		        return Book(pageBuilder: pageBuilder)
@@ -2204,7 +2204,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		}
 
 		extension Book {
-		    public enum __safeDI_Book_mock_00BE9B499BC3E7F2 {}
+		    public enum __safeDI_Book_mock_0011B1D815B1ECB7 {}
 		}
 		#endif
 		"""])
@@ -2254,7 +2254,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		        }
 		        let token = LazilyInstantiated<Token>(__safeDI_token)
 		        func __safeDI_page() -> Page {
-		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.service_Values, token: LazilyInstantiated<Token>) -> any Service {
+		            func __safeDI_serviceBuilder_Page_service(_ scope: Page.SafeDIMockScope_Service.__safeDI_Values, token: LazilyInstantiated<Token>) -> any Service {
 		                func __safeDI_service() -> DefaultService {
 		                    func __safeDI_middle() -> Middle {
 		                        func __safeDI_token() -> Token {
@@ -2279,7 +2279,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		            func __safeDI_serviceBuilder_Page(token: LazilyInstantiated<Token>) -> Page.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, token: token) })
 		            }
-		            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
+		            _ = Page.__safeDI_Page_mock_8616590B7F80513D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(token: token))
 		        }
 		        let page: Page = __safeDI_page()
@@ -2426,13 +2426,13 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		#if DEBUG
 		extension Book {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct pageBuilder_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let pageBuilder: (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
+		            public let pageBuilder: (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>
 
-		            public init(pageBuilder: @escaping (pageBuilder_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
+		            public init(pageBuilder: @escaping (__safeDI_Values) -> Page.SafeDIMockScope_Service.__safeDI_Builder<__safeDI_Built>) {
 		                self.pageBuilder = pageBuilder
 		            }
 
@@ -2488,7 +2488,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        _ = Page.__safeDI_Page_mock_C5813F6661CC087D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
 		        func __safeDI_pageBuilder() -> Page {
-		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.pageBuilder_Values()), token: token, safeDIOverrides: safeDIOverrides.pageBuilder)
+		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.pageBuilder(SafeDIMockScope_Service.__safeDI_Values()), token: token, safeDIOverrides: safeDIOverrides.pageBuilder)
 		        }
 		        let pageBuilder = Instantiator<Page>(__safeDI_pageBuilder)
 		        return Book(token: token, pageBuilder: pageBuilder)

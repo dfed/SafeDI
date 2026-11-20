@@ -826,7 +826,7 @@ extension GraphFuzzerBuilderSurface {
 					if !openEnums.isEmpty || name.range(of: #"^SafeDI(Sendable)?Scope_"#, options: .regularExpression) != nil {
 						openEnums.append((indentation, name))
 					}
-				} else if !openEnums.isEmpty, trimmed.range(of: #"struct __safeDI_Builder<"#, options: .regularExpression) != nil {
+				} else if !openEnums.isEmpty, trimmed.range(of: #"(struct|final class) __safeDI_Builder<"#, options: .regularExpression) != nil {
 					openStructIndentation = indentation
 				} else if openStructIndentation != nil,
 				          let extendedType,

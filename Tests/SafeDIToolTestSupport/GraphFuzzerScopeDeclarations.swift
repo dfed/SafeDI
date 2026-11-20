@@ -458,8 +458,11 @@ private final class ScopeEnumCollector: SyntaxVisitor {
 		}
 		guard cases.isEmpty else { return cases }
 		for member in enumDeclaration.memberBlock.members {
+			// A builder struct of more than one member is declared a `final class`, one of a single member a `struct`.
 			if let structDeclaration = member.decl.as(StructDeclSyntax.self), structDeclaration.name.text == builderStructName {
-				return builderStructCases(of: structDeclaration)
+				return builderStructCases(members: structDeclaration.memberBlock, inheritanceClause: structDeclaration.inheritanceClause)
+			} else if let classDeclaration = member.decl.as(ClassDeclSyntax.self), classDeclaration.name.text == builderStructName {
+				return builderStructCases(members: classDeclaration.memberBlock, inheritanceClause: classDeclaration.inheritanceClause)
 			}
 		}
 		return []
@@ -468,17 +471,17 @@ private final class ScopeEnumCollector: SyntaxVisitor {
 	/// The name of the builder struct a seam's scope enum declares in place of its cases.
 	private static let builderStructName = "__safeDI_Builder"
 
-	/// A case for each stored member of `builderStruct`, a seam's level's `__safeDI_Builder<__safeDI_Built>`, labeled as the
+	/// A case for each stored member of a seam's level's builder struct (`members`), `__safeDI_Builder<__safeDI_Built>`, labeled as the
 	/// member, whose payload is what the case it replaces carried: the struct the member takes, unless the struct is
 	/// `Sendable` (a `@Sendable` enum's, whose cases carry no values, the member taking an empty struct no case carried),
 	/// then each scope enum whose builder struct the member returns, outermost first – a nested enum of the seam's own, an
 	/// inner seam's root enum, or, for a place inside a fill, the filled seam's root enum and then the enum of the type the
 	/// fill builds. A member returning `__safeDI_Built` or a wrapper's `Builder` is a place, which carries nothing more the
 	/// readers read.
-	private static func builderStructCases(of builderStruct: StructDeclSyntax) -> [GraphFuzzerScopeDeclarations.ScopeCase] {
-		let isSendable = builderStruct.inheritanceClause?.inheritedTypes.contains { $0.type.trimmedDescription == "Sendable" } ?? false
+	private static func builderStructCases(members: MemberBlockSyntax, inheritanceClause: InheritanceClauseSyntax?) -> [GraphFuzzerScopeDeclarations.ScopeCase] {
+		let isSendable = inheritanceClause?.inheritedTypes.contains { $0.type.trimmedDescription == "Sendable" } ?? false
 		var cases = [GraphFuzzerScopeDeclarations.ScopeCase]()
-		for member in builderStruct.memberBlock.members {
+		for member in members.members {
 			guard let variable = member.decl.as(VariableDeclSyntax.self), variable.bindingSpecifier.tokenKind == .keyword(.let) else { continue }
 			for binding in variable.bindings {
 				guard let type = binding.typeAnnotation?.type else { continue }
