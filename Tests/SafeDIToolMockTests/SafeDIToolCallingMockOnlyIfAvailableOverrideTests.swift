@@ -995,6 +995,134 @@ struct SafeDIToolCallingMockOnlyIfAvailableOverrideTests: ~Copyable {
 		""" + "\n"])
 	}
 
+	/// Before, the calling mock took its own `filter: (() -> Filter)?` override for the instance its tree requires and
+	/// passed the call `nil`; now it promotes the wrapper, as the inline mock does, so the override is
+	/// `(@Sendable () -> Filter)?` and the call is handed the wrapper whose instance the tree reads.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_promotesWrapperAndPassesItToCall_whenCalledMockReceivesSendableWrapperOnlyIfAvailableAndTreeRequiresItsInstance() async throws {
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Cache.swift": """
+			import SafeDI
+
+			@Instantiable
+			public final class Filter: Instantiable, Sendable {
+			    public init() {}
+			}
+
+			@Instantiable
+			package struct TokenCache: Instantiable {
+			    package init(filter: SendableLazilyInstantiated<Filter>?) {
+			        self.filter = filter
+			    }
+
+			    @Received(onlyIfAvailable: true) let filter: SendableLazilyInstantiated<Filter>?
+			}
+
+			@Instantiable(generateMock: .public)
+			public struct Cache: Instantiable {
+			    package init(tokenCache: TokenCache) {
+			        self.tokenCache = tokenCache
+			    }
+
+			    @Instantiated let tokenCache: TokenCache
+			}
+			"""]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Screen.swift": """
+			import Core
+			import SafeDI
+
+			@Instantiable(generateMock: true)
+			public struct Screen: Instantiable {
+			    public init(cache: Cache, reader: Reader) {
+			        self.cache = cache
+			        self.reader = reader
+			    }
+
+			    @Instantiated let cache: Cache
+			    @Instantiated let reader: Reader
+			}
+
+			@Instantiable
+			public struct Reader: Instantiable {
+			    public init(filter: Filter) {
+			        self.filter = filter
+			    }
+
+			    @Received let filter: Filter
+			}
+			"""], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            filter: (@Sendable () -> Filter)? = nil,
+		            cache: Cache.SafeDIOverrides = .init(),
+		            reader: ((Filter) -> Reader)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                filter: filter,
+		                cache: cache,
+		                reader: reader
+		            )
+		        }
+
+		        var filter: (@Sendable () -> Filter)? { __safeDI_storage.filter }
+		        var cache: Cache.SafeDIOverrides { __safeDI_storage.cache }
+		        var reader: ((Filter) -> Reader)? { __safeDI_storage.reader }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                filter: (@Sendable () -> Filter)?,
+		                cache: Cache.SafeDIOverrides,
+		                reader: ((Filter) -> Reader)?
+		            ) {
+		                self.filter = filter
+		                self.cache = cache
+		                self.reader = reader
+		            }
+
+		            let filter: (@Sendable () -> Filter)?
+		            let cache: Cache.SafeDIOverrides
+		            let reader: ((Filter) -> Reader)?
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let __safeDI_filter__safeDIBuilder = safeDIOverrides.filter
+		        @Sendable func __safeDI_filter() -> Filter {
+		            if let safeDIBuilder = __safeDI_filter__safeDIBuilder { safeDIBuilder() } else { Filter() }
+		        }
+		        let filter = SendableLazilyInstantiated<Filter>(__safeDI_filter)
+		        _ = Cache.__safeDI_Cache_mock_5E1700DCC2ECDE3C.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let cache = Cache.__safeDI_mock(filter: filter, safeDIOverrides: safeDIOverrides.cache)
+		        let reader = if let safeDIBuilder = safeDIOverrides.reader { safeDIBuilder(filter.instance) } else { Reader(filter: filter.instance) }
+		        return Screen(cache: cache, reader: reader)
+		    }
+		}
+		#endif
+		"""])
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [
+			DifferentialValueProbe("Screen.mock()"),
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

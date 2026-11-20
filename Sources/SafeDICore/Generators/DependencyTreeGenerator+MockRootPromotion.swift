@@ -157,8 +157,10 @@ extension DependencyTreeGenerator {
 			}
 			// A dependency the public mock another module generated builds when its call passes `nil` is built once here
 			// and passed to every call – each call an `Instantiator` makes included – and every receiver that receives it
-			// only if available, as the inline mock promotes it, where this module can build it (M8.8b). One this module
-			// cannot build is each called mock's to build.
+			// only if available, as the inline mock promotes it, where this module can build it (M8.8b): its whole tree,
+			// with the fills of the public mock calls in it where the build compiles the generated mocks, as the mock root's
+			// own access check walks them, so a promotion never brings in an error the called mock's module would not have.
+			// One this module cannot build is each called mock's to build.
 			for property in builtWhenNilByPublicMockCalls.sorted() where !allRequired.contains(property) {
 				guard !isForwarded(property), let promotedScope = scopeToPromote(for: property)?.scope else { continue }
 				if let emittingModule {
@@ -169,6 +171,7 @@ extension DependencyTreeGenerator {
 						isMock: true,
 						emittingModule: emittingModule,
 						extendedTypes: extendedTypeDeclarations,
+						walksFillsOfPublicMockCalls: compilesGeneratedMocks,
 					)
 					guard Self.inaccessibleConstructions(constructions, from: emittingModule, extendedTypes: extendedTypeDeclarations).isEmpty else { continue }
 				}
