@@ -1361,6 +1361,91 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		"""])
 	}
 
+	// MARK: Tests – Unused inputs
+
+	@Test(arguments: [
+		[0, 1, 2, 3, 4, 5],
+		[5, 4, 3, 2, 1, 0],
+		[2, 5, 0, 3, 1, 4],
+		[3, 0, 4, 1, 5, 2],
+		[1, 3, 5, 0, 2, 4],
+		[4, 2, 0, 5, 3, 1],
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_listsEveryModuleBeneathItDoesNotList_whenModuleDeclaresNoTree(permutation: [Int]) async throws {
+		// `Middle`, the module listed, sorts between the modules only the set names, so that a list in the set's order, or
+		// with the listed module among them, differs from the one expected.
+		let leafNames = ["Alpha", "Bravo", "Charlie", "Xray", "Yankee", "Zulu"]
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: leafNames.map { ModuleFixture(name: $0, packageName: "Base", swiftFileContent: [seamFixtureType(named: "\($0)Type", declarations: [])]) } + [
+				ModuleFixture(name: "Middle", packageName: "Base", swiftFileContent: [
+					leafNames.map { "import \($0)" }.joined(separator: "\n") + "\n\n" + seamFixtureType(named: "Hub", declarations: leafNames.map { "@Instantiated let \($0.lowercased()): \($0)Type" }),
+				], dependencies: leafNames),
+				ModuleFixture(name: "App", packageName: "App", swiftFileContent: ["import Middle\n\n" + seamFixtureType(named: "Screen", declarations: ["@Instantiated let hub: Hub"])], dependencies: ["Middle"]),
+			],
+			integration: .moduleInfo,
+			modulesBeneath: { moduleNames in
+				let leaves = permutation.map { leafNames[$0] }
+				return leaves + moduleNames.filter { !leaves.contains($0) }
+			},
+			filesToDelete: &filesToDelete,
+		)
+		let moduleInfoDirectory = output.fixtureRoot.appendingPathComponent("ModuleInfo")
+		#expect(output.modules["App"]?.unusedInputs == [
+			moduleInfoDirectory.appendingPathComponent("Alpha.safedi").path,
+			moduleInfoDirectory.appendingPathComponent("Bravo.safedi").path,
+			moduleInfoDirectory.appendingPathComponent("Charlie.safedi").path,
+			moduleInfoDirectory.appendingPathComponent("Xray.safedi").path,
+			moduleInfoDirectory.appendingPathComponent("Yankee.safedi").path,
+			moduleInfoDirectory.appendingPathComponent("Zulu.safedi").path,
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_listsNoModule_whenTheModuleListsEveryModuleBeneathIt() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.deepAndMiddle + [
+				ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+					"import Deep\nimport Middle\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let feedScreen: FeedScreen", "@Instantiated let clock: Clock"]),
+				], dependencies: ["Middle", "Deep"]),
+			],
+			integration: .moduleInfo,
+			modulesBeneath: { $0 },
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.unusedInputs == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_listsTheModuleBeneathItNeverOpens_whenRootsTreeNeedsNothingOfIt() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.deepAndMiddle + [
+				ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+					seamFixtureType(named: "Screen", declarations: []),
+					"import Middle\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screen: Screen"]),
+				], dependencies: ["Middle"]),
+			],
+			integration: .moduleInfo,
+			modulesBeneath: { $0 },
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.unusedInputs == [output.fixtureRoot.appendingPathComponent("ModuleInfo").appendingPathComponent("Deep.safedi").path])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_listsNoModuleBeneath_whenRootsTreeOpensTheModulesBeneath() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.rootOverMiddleOverDeep(appDependencies: ["Middle"]),
+			integration: .moduleInfo,
+			modulesBeneath: { $0 },
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.unusedInputs == [])
+	}
+
 	// MARK: Tests – What the modules beneath cost
 
 	@Test
