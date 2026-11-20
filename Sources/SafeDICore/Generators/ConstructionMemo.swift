@@ -148,14 +148,15 @@ struct ConstructionMemo {
 		let cycleClosingRedeclaredLabels: ScopeGenerator.CycleClosingRedeclaredLabels
 	}
 
-	/// Every generator one pass started or collected to start, in order (`ScopeRecord.createScopeGenerator`), which the
-	/// pass's entries share: each names its own part, so no entry copies the generators beneath its place, which made a
-	/// deep chain's entries hold a number of generators that grows with the square of its depth.
+	/// Every group of generators one pass started or collected to start, each group on one task, in order
+	/// (`ScopeRecord.createScopeGenerator`), which the pass's entries share: each names its own part, so no entry copies
+	/// the generators beneath its place, which made a deep chain's entries hold a number of generators that grows with the
+	/// square of its depth.
 	final class StartLog {
-		private(set) var generators = [ScopeGenerator]()
+		private(set) var groups = [[ScopeGenerator]]()
 
-		func append(_ generator: ScopeGenerator) {
-			generators.append(generator)
+		func append(_ group: [ScopeGenerator]) {
+			groups.append(group)
 		}
 	}
 
@@ -164,8 +165,8 @@ struct ConstructionMemo {
 		let log: StartLog
 		let positions: Range<Int>
 
-		var generators: ArraySlice<ScopeGenerator> {
-			log.generators[positions]
+		var groups: ArraySlice<[ScopeGenerator]> {
+			log.groups[positions]
 		}
 	}
 
