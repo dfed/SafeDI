@@ -793,6 +793,84 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		""")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsSeamsTreeInlineWithComment_whenModulesOwnSeamReachesSeamDeclaredInAdditionalDirectory() async throws {
+		// As above, but the tree that reaches `Screen` is the module's own seam's, `Host`'s, whose code the run generates
+		// from the tree its signature computation built.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				#SafeDIConfiguration(
+				    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"]
+				)
+				""",
+				"""
+				@Instantiable(generateDependencyTree: true)
+				public struct Host: Instantiable {
+				    public init(session: Session, screen: Screen) {
+				        self.session = session
+				        self.screen = screen
+				    }
+
+				    @Instantiated let session: Session
+				    @Instantiated let screen: Screen
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Session: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			additionalDirectorySwiftFileContent: [
+				"""
+				@Instantiable(generateDependencyTree: true)
+				public struct Screen: Instantiable {
+				    public init(detail: Detail) {
+				        self.detail = detail
+				    }
+
+				    @Instantiated let detail: Detail
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Detail: Instantiable {
+				    public init(session: Session) {
+				        self.session = session
+				    }
+
+				    @Received let session: Session
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "App"],
+		)
+
+		#expect(output.dependencyTreeFiles["Host+SafeDI.swift"] == generatedFileHeader + """
+		extension Host {
+		    /// Code you write and code SafeDI generates can both call this initializer.
+		    public init() {
+		        let session = Session()
+		        func __safeDI_screen() -> Screen {
+		            let detail = Detail(session: session)
+		            return Screen(detail: detail) // Built inline: SafeDI does not know which module declares `Screen`, so this tree cannot call the initializer SafeDI generates for it.
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        self.init(session: session, screen: screen)
+		    }
+		}
+
+		extension Host {
+		    public enum __safeDI_Host_CBF29CE484222325 {}
+		}
+		""")
+	}
+
 	@Test(arguments: [["--module-name", "App"], []])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsSeamsTreeInlineWithComment_whenSeamIsDeclaredInAdditionalDirectory(moduleMembershipArguments: [String]) async throws {

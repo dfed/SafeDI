@@ -354,6 +354,11 @@ public actor DependencyTreeGenerator {
 	/// declares, once every whole-module check of the trees passes.
 	private func generatedCode(of trees: DependencyTrees) async throws -> [GeneratedRoot] {
 		let rootScopeGenerators = trees.roots
+		for rootInfo in rootScopeGenerators {
+			if let emittedSeamRoot = rootInfo.emittedSeamRoot {
+				await rootInfo.scopeGenerator.emitting(emittedSeamRoot)
+			}
+		}
 		try Self.validateFills(
 			inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator),
 			callerModule: seams.currentModule,
@@ -487,6 +492,9 @@ public actor DependencyTreeGenerator {
 		let instantiable: Instantiable
 		let sourceFilePath: String?
 		let scopeGenerator: ScopeGenerator
+		/// The root a seam's tree emits, when its generator is the one the seam's settling signature pass built
+		/// (`SettledSeamTree`), which was built with the root the pass had.
+		var emittedSeamRoot: ScopeGenerator.SeamRoot?
 	}
 
 	/// The validated scopes, frozen. Made only in this file, once `dependencyTrees(unreadTypeComment:)` has validated them,

@@ -2862,6 +2862,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return declaredProperties
 	}
 
+	/// Hands the root of a seam's tree that a signature pass built the root its code emits: the seam's final root, which
+	/// adds to the pass's what only emission reads (`DependencyTreeGenerator.SettledSeamTree`).
+	func emitting(_ seamRoot: SeamRoot) {
+		emittedSeamRoot = seamRoot
+	}
+
 	/// Generates the code of this scope as the root of what is generated, with nothing
 	/// generated before it.
 	func generateCode(
@@ -4136,6 +4142,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	private let scopeData: ScopeData
+	/// The root a seam's tree emits in place of the one in `scopeData`, when a signature pass built the tree (`emitting(_:)`).
+	private var emittedSeamRoot: SeamRoot?
 	/// The received properties that some receiver in this subtree requires — a `@Received`
 	/// dependency, or the fulfilling property of an aliased one, that is not `onlyIfAvailable`.
 	let requiredReceivedProperties: Set<Property>
@@ -6604,7 +6612,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		case let .root(instantiable, seamRoot):
 			switch codeGeneration {
 			case .dependencyTree:
-				if let seamRoot {
+				if let seamRoot = emittedSeamRoot ?? seamRoot {
 					return try await generateSeamRootCode(
 						instantiable: instantiable,
 						seamRoot: seamRoot,
