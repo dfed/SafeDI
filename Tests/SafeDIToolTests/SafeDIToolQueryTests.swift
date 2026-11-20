@@ -2957,6 +2957,28 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_throwsErrorOfFirstModuleInfoArgument_whenTwentyFourModuleInfoFilesCannotBeRead() async throws {
+		// Read in parallel, so the reads finish in any order; named against their sort order, so neither order picks
+		// the first argument by chance.
+		let directory = try temporaryModuleDirectory()
+		let unreadableFiles = (0..<24).reversed().map { directory.appendingPathComponent("Missing\($0).safedi").path }
+
+		await assertThrowsQueryError(
+			diagnostics: { _ in
+				"Could not read the SafeDI module info file at '\(directory.path)/Missing23.safedi': No file exists at that path."
+			},
+		) {
+			try await executeSafeDIToolQuery(
+				typeName: "Feature",
+				modules: [],
+				additionalArguments: unreadableFiles.flatMap { ["--module-info", $0] },
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func query_readsModuleInfoFile_whenItsViewIsCorrupt() async throws {
 		let output = try await executeSafeDIToolQuery(
 			typeName: "Feature",
