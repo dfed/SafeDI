@@ -124,6 +124,25 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func binaryReader_readsRepeatedPlaces_whenPlacesHoldTypeDescriptionNotSeenBefore() throws {
+		// The first list of places is the first to name `Service`, so its type is read, and takes its index, before the
+		// list does. The second list refers to the first.
+		let site = SeamSignature.Hole.Site(seamType: .simple(name: "Service"), path: [])
+		let places = [BinaryShared([site]), BinaryShared([site])]
+		var writer = BinaryWriter()
+		writer.write(BinarySharingTypeDescriptions(places))
+
+		let readPlaces = try writer.encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let readPlaces: BinarySharingTypeDescriptions<[BinaryShared<[SeamSignature.Hole.Site]>]> = try reader.read()
+			try reader.finish()
+			return readPlaces.value
+		}
+
+		#expect(readPlaces.map(\.value) == [[site], [site]])
+	}
+
+	@Test
 	func binaryReader_throws_whenSharedTypeDescriptionReferenceComesBeforeTheType() {
 		// An empty string table, then one element whose type refers to the first shared value, which no value before it
 		// holds.
