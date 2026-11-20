@@ -203,14 +203,192 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		passesUpBuilder = !passedUpHoles.isEmpty || propertiesToGenerate.contains(where: \.passesUpBuilder)
 		holdsCallReenteringEnclosingFill = holeCallArguments.contains { $0.enclosingFillKey != nil } || propertiesToGenerate.contains(where: \.holdsCallReenteringEnclosingFill)
-		// This runs at every scope of every tree, and nearly every child is outside every cycle.
-		var childCycleClosedOnDeclarations = Set<BuiltDeclaration>()
-		var childrenTakePartInCycle = false
-		for child in propertiesToGenerate where child.isReferencedByCycleClosingScope || !child.cycleClosedOnDeclarations.isEmpty {
-			childCycleClosedOnDeclarations.formUnion(child.cycleClosedOnDeclarations)
-			childrenTakePartInCycle = true
+		typesDeclaredEscaping = Self.typesDeclaredEscaping(
+			instantiable: instantiable,
+			publicMockCall: publicMockCall,
+			seamCall: seamCall,
+			children: propertiesToGenerate,
+		)
+		declaresBuilderFunction = property != nil && !isPropertyCycle
+		let cycleClosings = Self.cycleClosings(
+			children: propertiesToGenerate,
+			property: property,
+			declaration: declaration,
+			closedOnDeclaration: closedOnDeclaration,
+			isPropertyCycle: isPropertyCycle,
+		)
+		childrenTakePartInCycle = cycleClosings.childrenTakePartInCycle
+		cycleClosedOnDeclarations = cycleClosings.cycleClosedOnDeclarations
+		isReferencedByCycleClosingScope = cycleClosings.isReferencedByCycleClosingScope
+		buildsInSendableFunction = cycleClosings.buildsInSendableFunction
+		cycleClosedOnDeclarationsReferencedFromSendableFunction = cycleClosings.cycleClosedOnDeclarationsReferencedFromSendableFunction
+		let fillReferences = Self.fillReferences(
+			holeCallArguments: holeCallArguments,
+			builderCallArguments: builderCallArguments,
+			fillDispatchers: fillDispatchers,
+			publicMockLevelFunctions: publicMockLevelFunctions,
+			children: propertiesToGenerate,
+			buildsInSendableFunction: cycleClosings.buildsInSendableFunction,
+		)
+		sendableFillKeys = fillReferences.sendableFillKeys
+		namedFillKeys = fillReferences.namedFillKeys
+		inlinableFillKeys = fillReferences.inlinableFillKeys
+		referencedFillNamesByKey = fillReferences.referencedFillNamesByKey
+		fillKeysReferencedFromSendableFunction = fillReferences.fillKeysReferencedFromSendableFunction
+		publicMockLevelReentries = fillReferences.publicMockLevelReentries
+		publicMockLevelReentriesChangedInTree = fillReferences.publicMockLevelReentries != previousPassPublicMockLevelReentries
+			|| propertiesToGenerate.contains(where: \.publicMockLevelReentriesChangedInTree)
+		let deferredFillLabels = Self.deferredFillLabels(children: propertiesToGenerate, previousPassFillSendableWrapperReads: previousPassFillSendableWrapperReads)
+		fillDeferredLabelsHiddenByReenteringCalls = deferredFillLabels.hiddenByReenteringCalls
+		fillDeferredLabelsReadInsideSendableFunction = deferredFillLabels.readInsideSendableFunction
+		fillSendableWrapperReads = deferredFillLabels.sendableWrapperReads
+		fillStructBoundLabelsChangedInTree = deferredFillLabels.fillStructBoundLabelsChangedInTree
+		self.propertiesToDeclare = propertiesToDeclare
+		self.instantiatedDependenciesNotGenerated = instantiatedDependenciesNotGenerated
+		self.unavailableOptionalProperties = unavailableOptionalProperties
+		self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
+		fulfillingPropertyIsLazilyInstantiatedInstance = false
+		fulfillingBindingIsOptional = false
+		fulfillingExpression = nil
+		declaredLazilyInstantiatedInstanceProperty = property?.asLazilyInstantiatedInstanceProperty
+		onlyIfAvailableDependencies = Self.onlyIfAvailableDependencies(of: instantiable.dependencies, cycleParameters: cycleParameters)
+		// A forwarded lazily instantiated property is also received by value, as the instance it creates.
+		let forwardedProperties = if forwardedLazilyInstantiatedInstanceProperties.isEmpty {
+			scopeData.forwardedProperties
+		} else {
+			scopeData.forwardedProperties.union(forwardedLazilyInstantiatedInstanceProperties)
 		}
-		self.childrenTakePartInCycle = childrenTakePartInCycle
+		// A scope that closes a cycle builds nothing, but the builder function it calls declares what its type instantiates
+		// and forwards, so an alias of one of those is bound inside that function, which binds its own: the scope receives
+		// nothing for it.
+		let aliasBindingDeclaredProperties = isPropertyCycle ? Self.propertiesDeclared(byOwnDependencies: instantiable.dependencies) : propertiesToDeclare
+		let receives = Self.receives(
+			children: propertiesToGenerate,
+			ownDependencies: instantiable.dependencies,
+			receivesPassedNil: receivesPassedNil,
+			propertiesToDeclare: propertiesToDeclare,
+			forwardedProperties: forwardedProperties,
+			aliasBindingDeclaredProperties: aliasBindingDeclaredProperties,
+			cycleParameters: isPropertyCycle ? cycleParameters : [],
+		)
+		receivedProperties = receives.receivedProperties
+		requiredReceivedProperties = receives.requiredReceivedProperties
+		let publicMockCallReceives = Self.publicMockCallReceives(
+			children: propertiesToGenerate,
+			ownDependencies: instantiable.dependencies,
+			publicMockCall: publicMockCall,
+			ownReceivedProperties: receives.ownReceivedProperties,
+			propertiesToDeclare: propertiesToDeclare,
+			forwardedProperties: forwardedProperties,
+		)
+		receivedOnlyByPublicMockCalls = publicMockCallReceives.receivedOnlyByPublicMockCalls
+		passedByPublicMockCalls = publicMockCallReceives.passedByPublicMockCalls
+		var unwrappedOptionalRequiredReceivedProperties = Set<Property>()
+		for property in receives.requiredReceivedProperties where property.typeDescription.isOptional {
+			unwrappedOptionalRequiredReceivedProperties.insert(property.asUnwrappedProperty)
+		}
+		self.unwrappedOptionalRequiredReceivedProperties = unwrappedOptionalRequiredReceivedProperties
+		let aliasRequirements = Self.aliasRequirements(
+			children: propertiesToGenerate,
+			propertiesToDeclare: propertiesToDeclare,
+			forwardedProperties: forwardedProperties,
+			cycleParameters: isPropertyCycle ? cycleParameters : [],
+			seamCall: seamCall,
+		)
+		requiredOnlyIfAvailableAliasProperties = aliasRequirements.requiredOnlyIfAvailableAliasProperties
+		requiredAliasFulfillingProperties = aliasRequirements.requiredAliasFulfillingProperties
+		onlyIfAvailableAliasFulfillingProperty = nil
+		onlyIfAvailableUnwrappedReceivedProperties = Self.onlyIfAvailableUnwrappedReceivedProperties(
+			children: propertiesToGenerate,
+			ownDependencies: instantiable.dependencies,
+			receivesPassedNil: receivesPassedNil,
+			propertiesToDeclare: propertiesToDeclare,
+			forwardedProperties: forwardedProperties,
+			aliasBindingDeclaredProperties: aliasBindingDeclaredProperties,
+			cycleParameters: isPropertyCycle ? cycleParameters : [],
+			requiredReceivedProperties: receives.requiredReceivedProperties,
+		)
+		let cycleParameterSearch = Self.cycleParameterSearch(
+			instantiable: instantiable,
+			property: property,
+			declaration: declaration,
+			closedOnDeclaration: closedOnDeclaration,
+			isPropertyCycle: isPropertyCycle,
+			childrenTakePartInCycle: cycleClosings.childrenTakePartInCycle,
+			children: propertiesToGenerate,
+			propertiesToDeclare: propertiesToDeclare,
+			forwardedProperties: forwardedProperties,
+			cycleParameters: cycleParameters,
+			receivedProperties: receives.receivedProperties,
+			requiredReceivedProperties: receives.requiredReceivedProperties,
+			requiredAliasFulfillingProperties: aliasRequirements.requiredAliasFulfillingProperties,
+			onlyIfAvailableUnwrappedReceivedProperties: onlyIfAvailableUnwrappedReceivedProperties,
+		)
+		cycleClosingRedeclaredLabels = cycleParameterSearch.cycleClosingRedeclaredLabels
+		foundCycleParameters = cycleParameterSearch.foundCycleParameters
+		unpassableCycleLabelsInTree = cycleParameterSearch.unpassableCycleLabelsInTree
+		cycleParametersChangedInTree = cycleParameterSearch.foundCycleParameters != builtCycleParameters
+			|| propertiesToGenerate.contains(where: \.cycleParametersChangedInTree)
+		// A scope that closes a cycle builds nothing, so its children are on no loop. A fill's one child is the property it
+		// fills, whose builder function the seam's initializer declares: a receive of that property in the fill's tree is a
+		// fill finding (`receivesInstantiatorBuildingSite`), never a loop the fill rebinds.
+		let receivedBuilderLoops = isPropertyCycle || fill != nil
+			? ReceivedBuilderLoops()
+			: Self.receivedBuilderLoops(of: propertiesToGenerate, requiredOnlyIfAvailableAliasProperties: aliasRequirements.requiredOnlyIfAvailableAliasProperties)
+		self.receivedBuilderLoops = receivedBuilderLoops
+		receivedBuilderLoopsChangedInTree = receivedBuilderLoops != (previousPassReceivedBuilderLoops ?? ReceivedBuilderLoops())
+			|| propertiesToGenerate.contains(where: \.receivedBuilderLoopsChangedInTree)
+		// In a seam's own tree, a loop whose members bind two or more payloads or levels holds them in one box, unless a
+		// member's function is `@Sendable`, which could not capture the box (see `boxedLoops`).
+		var boxedLoops = [Int: String]()
+		var loopLevelsTypesInTree = [String: String]()
+		if holdsLoopPayloadsInBoxes, !receivedBuilderLoops.loopByChildIndex.isEmpty {
+			// Each loop's bindings in index order, the order the body generates its members in (`orderedPropertiesToGenerate`).
+			var bindingsByLoop = [Int: [SeamHoles.ValuesBinding]]()
+			for (index, loop) in receivedBuilderLoops.loopByChildIndex.sorted(by: { $0.key < $1.key }) where !propertiesToGenerate[index].isAlias {
+				bindingsByLoop[loop, default: []] += propertiesToGenerate[index].valuesBindings
+			}
+			let loopsWithSendableFunction = Set(receivedBuilderLoops.loopByChildIndex.filter { propertiesToGenerate[$0.key].buildsInSendableFunction }.values)
+			for (loop, bindings) in bindingsByLoop where bindings.count > 1 && !loopsWithSendableFunction.contains(loop) {
+				let loopLevelsType = LoopLevelsType(holding: bindings)
+				boxedLoops[loop] = loopLevelsType.name
+				loopLevelsTypesInTree[loopLevelsType.name] = loopLevelsType.declaration
+			}
+		}
+		for child in propertiesToGenerate where !child.loopLevelsTypesInTree.isEmpty {
+			loopLevelsTypesInTree.merge(child.loopLevelsTypesInTree) { declaration, _ in declaration }
+		}
+		self.boxedLoops = boxedLoops
+		self.loopLevelsTypesInTree = loopLevelsTypesInTree
+		self.reboundProperties = if let property, let declaration, !isPropertyCycle, !reboundProperties.isEmpty {
+			Self.reboundProperties(
+				reboundProperties,
+				builtProperty: property,
+				builtDeclaration: declaration,
+				instantiable: instantiable,
+				children: propertiesToGenerate,
+				forwardedProperties: forwardedProperties,
+				cycleParameters: cycleParameters,
+				receivedProperties: receives.receivedProperties,
+			)
+		} else {
+			[]
+		}
+	}
+
+	// MARK: Initialization helpers
+
+	// Each part of what the initializer works out from a scope's children is a function of its own, kept out of the
+	// initializer: as one function, the initializer took most of the time an optimized build of this module takes.
+
+	/// The names this scope's subtree declares `@escaping` (see `typesDeclaredEscaping`).
+	@inline(never)
+	nonisolated private static func typesDeclaredEscaping(
+		instantiable: Instantiable,
+		publicMockCall: PublicMockCall?,
+		seamCall: SeamCall?,
+		children: [ScopeGenerator],
+	) -> Set<TypeDescription> {
 		var typesDeclaredEscaping = Set(instantiable.initializer?.typesDeclaredEscaping ?? [])
 		typesDeclaredEscaping.formUnion(instantiable.mockInitializer?.typesDeclaredEscaping ?? [])
 		// An alias hands its receiver the value of the property it names, so a name that fulfills a property of a name
@@ -227,11 +405,38 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		typesDeclaredEscaping.formUnion(publicMockCall?.typesDeclaredEscaping ?? [])
 		typesDeclaredEscaping.formUnion(seamCall?.typesDeclaredEscaping ?? [])
-		for child in propertiesToGenerate where !child.typesDeclaredEscaping.isEmpty {
+		for child in children where !child.typesDeclaredEscaping.isEmpty {
 			typesDeclaredEscaping.formUnion(child.typesDeclaredEscaping)
 		}
-		self.typesDeclaredEscaping = typesDeclaredEscaping
-		declaresBuilderFunction = property != nil && !isPropertyCycle
+		return typesDeclaredEscaping
+	}
+
+	/// What a scope's place in the cycles closed beneath it makes of it.
+	private struct CycleClosings {
+		let childrenTakePartInCycle: Bool
+		let cycleClosedOnDeclarations: Set<BuiltDeclaration>
+		let isReferencedByCycleClosingScope: Bool
+		let buildsInSendableFunction: Bool
+		let cycleClosedOnDeclarationsReferencedFromSendableFunction: Set<BuiltDeclaration>
+	}
+
+	@inline(never)
+	nonisolated private static func cycleClosings(
+		children: [ScopeGenerator],
+		property: Property?,
+		declaration: BuiltDeclaration?,
+		closedOnDeclaration: BuiltDeclaration?,
+		isPropertyCycle: Bool,
+	) -> CycleClosings {
+		// This runs at every scope of every tree, and nearly every child is outside every cycle.
+		var childCycleClosedOnDeclarations = Set<BuiltDeclaration>()
+		var childrenTakePartInCycle = false
+		for child in children where child.isReferencedByCycleClosingScope || !child.cycleClosedOnDeclarations.isEmpty {
+			childCycleClosedOnDeclarations.formUnion(child.cycleClosedOnDeclarations)
+			childrenTakePartInCycle = true
+		}
+		let cycleClosedOnDeclarations: Set<BuiltDeclaration>
+		let isReferencedByCycleClosingScope: Bool
 		if let closedOnDeclaration {
 			cycleClosedOnDeclarations = [closedOnDeclaration]
 			isReferencedByCycleClosingScope = false
@@ -247,7 +452,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// `@Sendable` too. So must it when the cycle-closing scope hands it to a `Sendable` wrapper of its own, which
 		// takes a `@Sendable` function, whatever kind of declaration it repeats.
 		var cycleClosedOnDeclarationsReferencedFromSendableFunction = Set<BuiltDeclaration>()
-		for child in propertiesToGenerate {
+		for child in children {
 			cycleClosedOnDeclarationsReferencedFromSendableFunction.formUnion(child.cycleClosedOnDeclarationsReferencedFromSendableFunction)
 		}
 		if let closedOnDeclaration, let property, property.propertyType.isSendable {
@@ -266,8 +471,34 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		if let declaration, !isPropertyCycle {
 			cycleClosedOnDeclarationsReferencedFromSendableFunction.remove(declaration)
 		}
-		self.buildsInSendableFunction = buildsInSendableFunction
-		self.cycleClosedOnDeclarationsReferencedFromSendableFunction = cycleClosedOnDeclarationsReferencedFromSendableFunction
+		return CycleClosings(
+			childrenTakePartInCycle: childrenTakePartInCycle,
+			cycleClosedOnDeclarations: cycleClosedOnDeclarations,
+			isReferencedByCycleClosingScope: isReferencedByCycleClosingScope,
+			buildsInSendableFunction: buildsInSendableFunction,
+			cycleClosedOnDeclarationsReferencedFromSendableFunction: cycleClosedOnDeclarationsReferencedFromSendableFunction,
+		)
+	}
+
+	/// How the fills and dispatchers of a scope's calls are referred to, and which are `@Sendable` or inlined.
+	private struct FillReferences {
+		let sendableFillKeys: Set<String>
+		let namedFillKeys: Set<String>
+		let inlinableFillKeys: Set<String>
+		let referencedFillNamesByKey: [String: String]
+		let fillKeysReferencedFromSendableFunction: Set<String>
+		let publicMockLevelReentries: [String: PublicMockLevelFunctions.Reentry]
+	}
+
+	@inline(never)
+	nonisolated private static func fillReferences(
+		holeCallArguments: [HoleCallArgument],
+		builderCallArguments: [BuilderCallArgument],
+		fillDispatchers: [FillDispatcher],
+		publicMockLevelFunctions: PublicMockLevelFunctions?,
+		children: [ScopeGenerator],
+		buildsInSendableFunction: Bool,
+	) -> FillReferences {
 		// A call inside a fill of its seam's call refers to every fill of the enclosing call by name. Nearly no scope holds
 		// such a call. Which of a call's own fills that makes `@Sendable` is decided here, where every function that can
 		// refer to them has been built (see `sendableFills(of:referencedFromSendableFunctions:)`).
@@ -290,17 +521,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			}
 		}
-		for child in propertiesToGenerate where !child.referencedFillNamesByKey.isEmpty {
+		for child in children where !child.referencedFillNamesByKey.isEmpty {
 			referencedFillNamesByKey.merge(child.referencedFillNamesByKey) { name, _ in name }
 			fillKeysReferencedFromSendableFunction.formUnion(child.fillKeysReferencedFromSendableFunction)
 		}
 		// A call inside a fill of this call that re-enters a level function hands it what it takes of the caller's scope, which
 		// the pass before found (`Scope.enclosingLevelReentriesOfThisCall`). Nearly no call holds such a call.
 		let publicMockLevelReentries = publicMockLevelFunctions?.levelReentries(amongKeys: Set(referencedFillNamesByKey.keys)) ?? [:]
-		self.publicMockLevelReentries = publicMockLevelReentries
-		publicMockLevelReentriesChangedInTree = publicMockLevelReentries != previousPassPublicMockLevelReentries
-			|| propertiesToGenerate.contains(where: \.publicMockLevelReentriesChangedInTree)
-		let ownFills = propertiesToGenerate.compactMap { child -> SendableFillNode? in
+		let ownFills = children.compactMap { child -> SendableFillNode? in
 			child.fillKey.map { SendableFillNode(key: $0, references: Set(child.referencedFillNamesByKey.keys), startsSendable: child.fillHole?.isSendable == true) }
 		} + fillDispatchers.map { dispatcher in
 			SendableFillNode(key: dispatcher.key, references: Set(dispatcher.cases.compactMap(\.target?.key)), startsSendable: dispatcher.isSendableFamily)
@@ -317,14 +545,36 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			fillKeysReferencedFromSendableFunction.formUnion(referencedFillNamesByKey.keys.filter { !ownFillKeys.contains($0) })
 		}
 		let sendableFills = Self.sendableFills(of: ownFills, referencedFromSendableFunctions: fillKeysReferencedFromSendableFunction)
-		sendableFillKeys = sendableFills.keys
 		fillKeysReferencedFromSendableFunction.formUnion(sendableFills.referencedFillKeys)
+		let namedFills = Self.namedFills(
+			builderCallArguments: builderCallArguments,
+			fillDispatchers: fillDispatchers,
+			children: children,
+			sendableFillKeys: sendableFills.keys,
+		)
+		return FillReferences(
+			sendableFillKeys: sendableFills.keys,
+			namedFillKeys: namedFills.namedFillKeys.subtracting(ownFillKeys),
+			inlinableFillKeys: namedFills.inlinableFillKeys,
+			referencedFillNamesByKey: referencedFillNamesByKey.filter { !ownFillKeys.contains($0.key) },
+			fillKeysReferencedFromSendableFunction: fillKeysReferencedFromSendableFunction.subtracting(ownFillKeys),
+			publicMockLevelReentries: publicMockLevelReentries,
+		)
+	}
+
+	@inline(never)
+	nonisolated private static func namedFills(
+		builderCallArguments: [BuilderCallArgument],
+		fillDispatchers: [FillDispatcher],
+		children: [ScopeGenerator],
+		sendableFillKeys: Set<String>,
+	) -> (namedFillKeys: Set<String>, inlinableFillKeys: Set<String>) {
 		// A fill that one case of one of the call's dispatchers calls, and nothing else refers to by name, is generated in
 		// that case: one function fewer for each place, which is most of what a caller compiles. What refers to a fill by
 		// name is a call's argument (an enclosing fill or dispatcher a call inside it passes) and a
 		// dispatcher's case, the call's own or a call's inside one of its fills.
 		var childNamedFillKeys = Set<String>()
-		for child in propertiesToGenerate where !child.namedFillKeys.isEmpty {
+		for child in children where !child.namedFillKeys.isEmpty {
 			childNamedFillKeys.formUnion(child.namedFillKeys)
 		}
 		var namedFillKeys = childNamedFillKeys
@@ -340,9 +590,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				dispatcherByTargetKey[target.key] = dispatcher
 			}
 		}
-		self.namedFillKeys = namedFillKeys.subtracting(ownFillKeys)
-		let sendableFillKeys = sendableFillKeys
-		inlinableFillKeys = Set(propertiesToGenerate.compactMap { child -> String? in
+		let inlinableFillKeys = Set(children.compactMap { child -> String? in
 			guard let key = child.fillKey,
 			      dispatcherCaseCountByTargetKey[key] == 1,
 			      !childNamedFillKeys.contains(key),
@@ -358,18 +606,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			else { return nil }
 			return key
 		})
+		return (namedFillKeys, inlinableFillKeys)
+	}
+
+	@inline(never)
+	nonisolated private static func deferredFillLabels(
+		children: [ScopeGenerator],
+		previousPassFillSendableWrapperReads: [String: [String: Property]],
+	) -> (hiddenByReenteringCalls: [String: Set<String>], readInsideSendableFunction: [String: Set<String>], sendableWrapperReads: [String: [String: Property]], fillStructBoundLabelsChangedInTree: Bool) {
 		// A call's fills whose hole has a field bound from a deferred parameter read it from the caller's scope, unless a
 		// call inside one of them passes it on beneath another declaration of the label. Nearly no scope calls such a seam.
 		// A field every route hands as a carried level's memo is bound from what the fill is handed, never read from the caller.
-		let fillsWithDeferredFields = propertiesToGenerate.compactMap { fill -> (fill: ScopeGenerator, key: String)? in
+		let fillsWithDeferredFields = children.compactMap { fill -> (fill: ScopeGenerator, key: String)? in
 			// A fill of a case nested by type binds a level's field where a route holds one, whatever another route's deferred one.
 			guard let key = fill.fillKey, !fill.fillBindsDeferredFieldsFromStruct, fill.fillFields.contains(where: { $0.isDeferredParameter && !fill.fillLabelsHandedAsMemo.contains($0.property.label) }) else { return nil }
 			return (fill, key)
 		}
 		var fillDeferredLabelsHiddenByReenteringCalls = [String: Set<String>]()
-		var fillStructBoundLabelsChangedInTree = propertiesToGenerate.contains(where: \.fillStructBoundLabelsChangedInTree)
+		var fillStructBoundLabelsChangedInTree = children.contains(where: \.fillStructBoundLabelsChangedInTree)
 		if !fillsWithDeferredFields.isEmpty {
-			let hiddenByFillKey = DependencyTreeGenerator.hiddenByReenteringCalls(ofFills: propertiesToGenerate)
+			let hiddenByFillKey = DependencyTreeGenerator.hiddenByReenteringCalls(ofFills: children)
 			for (fill, key) in fillsWithDeferredFields {
 				let deferredLabels = Set(fill.fillFields.filter(\.isDeferredParameter).map(\.property.label)).subtracting(fill.fillLabelsHandedAsMemo)
 				let hiddenLabels = deferredLabels.intersection(hiddenByFillKey[key].map { Set($0.pathDeclarations.keys) } ?? [])
@@ -386,7 +642,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// `LazilyInstantiated`, which no `@Sendable` function can capture: a deliberate gap, the fill binds the struct's by-value
 		// member, which creates the value where the fill, or a level function on its route, is handed the struct (see
 		// `Scope.fillUnderConstruction`). Nearly no scope calls such a seam.
-		let fillsBindingNonSendableMemos = propertiesToGenerate.compactMap { fill -> (fill: ScopeGenerator, key: String, labels: Set<String>)? in
+		let fillsBindingNonSendableMemos = children.compactMap { fill -> (fill: ScopeGenerator, key: String, labels: Set<String>)? in
 			guard let key = fill.fillKey else { return nil }
 			let labels = Set(fill.fillFields.filter { $0.deferral == .deferred(isSendable: false) && fill.fillStructBoundLabels.contains($0.property.label) }.map(\.property.label))
 			return labels.isEmpty ? nil : (fill, key, labels)
@@ -407,7 +663,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// is left out, a deliberate leniency that `DependencyTreeGenerator.validateFills` keeps too: the fill builds it where
 		// one module rejects the graph for reading the label in two forms.
 		var fillSendableWrapperReads = [String: [String: Property]]()
-		for fill in propertiesToGenerate where !fill.fillLabelsHandedAsMemo.isEmpty {
+		for fill in children where !fill.fillLabelsHandedAsMemo.isEmpty {
 			guard let key = fill.fillKey, let built = fill.children.first else { continue }
 			var instancePropertyByLabel = [String: Property]()
 			for property in built.receivedProperties.sorted() where fill.fillLabelsHandedAsMemo.contains(property.label) && property.propertyType == .sendableLazilyInstantiated && !property.typeDescription.isOptional && instancePropertyByLabel[property.label] == nil {
@@ -421,21 +677,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		if fillSendableWrapperReads != previousPassFillSendableWrapperReads {
 			fillStructBoundLabelsChangedInTree = true
 		}
-		self.fillDeferredLabelsHiddenByReenteringCalls = fillDeferredLabelsHiddenByReenteringCalls
-		self.fillDeferredLabelsReadInsideSendableFunction = fillDeferredLabelsReadInsideSendableFunction
-		self.fillSendableWrapperReads = fillSendableWrapperReads
-		self.fillStructBoundLabelsChangedInTree = fillStructBoundLabelsChangedInTree
-		self.referencedFillNamesByKey = referencedFillNamesByKey.filter { !ownFillKeys.contains($0.key) }
-		self.fillKeysReferencedFromSendableFunction = fillKeysReferencedFromSendableFunction.subtracting(ownFillKeys)
-		self.propertiesToDeclare = propertiesToDeclare
-		self.instantiatedDependenciesNotGenerated = instantiatedDependenciesNotGenerated
-		self.unavailableOptionalProperties = unavailableOptionalProperties
-		self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
-		fulfillingPropertyIsLazilyInstantiatedInstance = false
-		fulfillingBindingIsOptional = false
-		fulfillingExpression = nil
-		declaredLazilyInstantiatedInstanceProperty = property?.asLazilyInstantiatedInstanceProperty
-		onlyIfAvailableDependencies = instantiable.dependencies.compactMap { dependency in
+		return (fillDeferredLabelsHiddenByReenteringCalls, fillDeferredLabelsReadInsideSendableFunction, fillSendableWrapperReads, fillStructBoundLabelsChangedInTree)
+	}
+
+	@inline(never)
+	nonisolated private static func onlyIfAvailableDependencies(
+		of dependencies: [Dependency],
+		cycleParameters: [CycleParameter],
+	) -> [OnlyIfAvailableDependency] {
+		dependencies.compactMap { dependency in
 			switch dependency.source {
 			case let .received(onlyIfAvailable):
 				onlyIfAvailable
@@ -460,46 +710,67 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				? nil
 				: OnlyIfAvailableDependency(unwrappedFulfillingProperty: parameter.property.asUnwrappedProperty, unavailableProperties: [parameter.property])
 		}
-		// A forwarded lazily instantiated property is also received by value, as the instance it creates.
-		let forwardedProperties = if forwardedLazilyInstantiatedInstanceProperties.isEmpty {
-			scopeData.forwardedProperties
-		} else {
-			scopeData.forwardedProperties.union(forwardedLazilyInstantiatedInstanceProperties)
-		}
-		/// Whether a property a child requires be passed in must be received by this scope too: this
-		/// scope does not provide it.
-		func isReceivedFromAncestors(_ property: Property) -> Bool {
-			!Self.provides(property, declaredProperties: propertiesToDeclare, forwardedProperties: forwardedProperties)
-		}
-		/// Whether this scope declares or forwards a form of `property` that a receive of it only if available reads (see
-		/// `Property.formsReadByOnlyIfAvailableReceive`): the receive reads that nearest declaration, and receives nothing
-		/// from this scope's ancestors.
-		func providesAFormReadByOnlyIfAvailableReceive(of property: Property) -> Bool {
-			property.formsReadByOnlyIfAvailableReceive.contains { propertiesToDeclare.contains($0) || forwardedProperties.contains($0) }
-		}
+	}
+
+	/// Whether a property a child requires be passed in must be received by a scope too: the scope does not provide it.
+	nonisolated private static func isReceivedFromAncestors(
+		_ property: Property,
+		propertiesToDeclare: Set<Property>,
+		forwardedProperties: Set<Property>,
+	) -> Bool {
+		!provides(property, declaredProperties: propertiesToDeclare, forwardedProperties: forwardedProperties)
+	}
+
+	/// Whether a scope declares or forwards a form of `property` that a receive of it only if available reads (see
+	/// `Property.formsReadByOnlyIfAvailableReceive`): the receive reads that nearest declaration, and receives nothing
+	/// from the scope's ancestors.
+	nonisolated private static func providesAFormReadByOnlyIfAvailableReceive(
+		of property: Property,
+		propertiesToDeclare: Set<Property>,
+		forwardedProperties: Set<Property>,
+	) -> Bool {
+		property.formsReadByOnlyIfAvailableReceive.contains { propertiesToDeclare.contains($0) || forwardedProperties.contains($0) }
+	}
+
+	/// What a scope receives from its ancestors.
+	private struct Receives {
+		let receivedProperties: Set<Property>
+		let requiredReceivedProperties: Set<Property>
+		/// The properties the scope's own dependencies receive.
+		let ownReceivedProperties: Set<Property>
+	}
+
+	/// - Parameter cycleParameters: For a scope that closes a lazy cycle, the parameters of the function it refers to;
+	///   empty otherwise.
+	@inline(never)
+	nonisolated private static func receives(
+		children: [ScopeGenerator],
+		ownDependencies: [Dependency],
+		receivesPassedNil: Set<Property>,
+		propertiesToDeclare: Set<Property>,
+		forwardedProperties: Set<Property>,
+		aliasBindingDeclaredProperties: Set<Property>,
+		cycleParameters: [CycleParameter],
+	) -> Receives {
 		// All the properties our children require be passed in, unioned with the properties we
 		// require to fulfill our own dependencies, and those of them some receiver requires. A
 		// child's required properties are among its received ones, so each child's received
 		// properties are read once, with no intermediate sets: this runs at every scope of every tree.
 		var receivedProperties = Set<Property>()
 		var requiredReceivedProperties = Set<Property>()
-		for child in propertiesToGenerate {
-			for property in child.receivedProperties where isReceivedFromAncestors(property) {
+		for child in children {
+			for property in child.receivedProperties where isReceivedFromAncestors(property, propertiesToDeclare: propertiesToDeclare, forwardedProperties: forwardedProperties) {
 				let isRequired = child.requiredReceivedProperties.contains(property)
-				guard isRequired || !providesAFormReadByOnlyIfAvailableReceive(of: property) else { continue }
+				guard isRequired || !providesAFormReadByOnlyIfAvailableReceive(of: property, propertiesToDeclare: propertiesToDeclare, forwardedProperties: forwardedProperties) else { continue }
 				receivedProperties.insert(property)
 				if isRequired {
 					requiredReceivedProperties.insert(property)
 				}
 			}
 		}
-		// A scope that closes a cycle builds nothing, but the builder function it calls declares what its type instantiates
-		// and forwards, so an alias of one of those is bound inside that function, which binds its own: the scope receives
-		// nothing for it.
-		let aliasBindingDeclaredProperties = isPropertyCycle ? Self.propertiesDeclared(byOwnDependencies: instantiable.dependencies) : propertiesToDeclare
 		// The properties this scope's own dependencies receive.
 		var ownReceivedProperties = Set<Property>()
-		for dependency in instantiable.dependencies {
+		for dependency in ownDependencies {
 			let receivedProperty: Property
 			let onlyIfAvailable: Bool
 			switch dependency.source {
@@ -533,37 +804,48 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		// A scope that closes a lazy cycle passes the function it refers to what that function's body receives under each
 		// parameter's label, so it receives those forms as the body does.
-		if isPropertyCycle {
-			for parameter in cycleParameters {
-				receivedProperties.formUnion(parameter.receivedForms)
-				requiredReceivedProperties.formUnion(parameter.requiredForms)
-			}
+		for parameter in cycleParameters {
+			receivedProperties.formUnion(parameter.receivedForms)
+			requiredReceivedProperties.formUnion(parameter.requiredForms)
 		}
-		self.receivedProperties = receivedProperties
-		self.requiredReceivedProperties = requiredReceivedProperties
+		return Receives(
+			receivedProperties: receivedProperties,
+			requiredReceivedProperties: requiredReceivedProperties,
+			ownReceivedProperties: ownReceivedProperties,
+		)
+	}
+
+	@inline(never)
+	nonisolated private static func publicMockCallReceives(
+		children: [ScopeGenerator],
+		ownDependencies: [Dependency],
+		publicMockCall: PublicMockCall?,
+		ownReceivedProperties: Set<Property>,
+		propertiesToDeclare: Set<Property>,
+		forwardedProperties: Set<Property>,
+	) -> (receivedOnlyByPublicMockCalls: Set<Property>, passedByPublicMockCalls: Set<Property>) {
 		// The properties only the leaves that call another module's public mock receive: each receives them only if
 		// available, and passes them where the tree provides them. Nearly every subtree calls no public mock.
 		var receivedOnlyByPublicMockCalls = Set<Property>()
 		if publicMockCall != nil {
-			for dependency in instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) {
+			for dependency in ownDependencies where dependency.source == .received(onlyIfAvailable: true) {
 				receivedOnlyByPublicMockCalls.insert(dependency.property)
 			}
 		}
-		for child in propertiesToGenerate {
-			for property in child.receivedOnlyByPublicMockCalls where isReceivedFromAncestors(property) {
+		for child in children {
+			for property in child.receivedOnlyByPublicMockCalls where isReceivedFromAncestors(property, propertiesToDeclare: propertiesToDeclare, forwardedProperties: forwardedProperties) {
 				receivedOnlyByPublicMockCalls.insert(property)
 			}
 		}
 		if !receivedOnlyByPublicMockCalls.isEmpty {
 			// A property another receiver receives is not only the leaves'.
-			for child in propertiesToGenerate {
+			for child in children {
 				receivedOnlyByPublicMockCalls.subtract(child.receivedProperties.subtracting(child.receivedOnlyByPublicMockCalls))
 			}
 			if publicMockCall == nil {
 				receivedOnlyByPublicMockCalls.subtract(ownReceivedProperties)
 			}
 		}
-		self.receivedOnlyByPublicMockCalls = receivedOnlyByPublicMockCalls
 		// Of those, the ones some call passes: the tier it reaches takes them. Others are omitted by every call.
 		var passedByPublicMockCalls = Set<Property>()
 		if !receivedOnlyByPublicMockCalls.isEmpty {
@@ -572,17 +854,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					passedByPublicMockCalls.insert(parameter.dependency.property)
 				}
 			}
-			for child in propertiesToGenerate {
+			for child in children {
 				passedByPublicMockCalls.formUnion(child.passedByPublicMockCalls)
 			}
 			passedByPublicMockCalls.formIntersection(receivedOnlyByPublicMockCalls)
 		}
-		self.passedByPublicMockCalls = passedByPublicMockCalls
-		var unwrappedOptionalRequiredReceivedProperties = Set<Property>()
-		for property in requiredReceivedProperties where property.typeDescription.isOptional {
-			unwrappedOptionalRequiredReceivedProperties.insert(property.asUnwrappedProperty)
-		}
-		self.unwrappedOptionalRequiredReceivedProperties = unwrappedOptionalRequiredReceivedProperties
+		return (receivedOnlyByPublicMockCalls, passedByPublicMockCalls)
+	}
+
+	/// - Parameter cycleParameters: For a scope that closes a lazy cycle, the parameters of the function it refers to;
+	///   empty otherwise.
+	@inline(never)
+	nonisolated private static func aliasRequirements(
+		children: [ScopeGenerator],
+		propertiesToDeclare: Set<Property>,
+		forwardedProperties: Set<Property>,
+		cycleParameters: [CycleParameter],
+		seamCall: SeamCall?,
+	) -> (requiredOnlyIfAvailableAliasProperties: Set<Property>, requiredAliasFulfillingProperties: Set<Property>) {
 		// A child's tree requires an `onlyIfAvailable` alias this scope declares when a receiver in it requires the alias's
 		// property, or an alias in it that is required is fulfilled by that property. The alias is bound from the nearest
 		// declaration of its fulfilling property's label, so that declaration is built first: a sibling here (see
@@ -591,20 +880,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// renames another (SafeDITool rejects that before it validates a tree that builds the scope), so a child's
 		// requirement is the only way.
 		func isRequiredByChild(_ property: Property) -> Bool {
-			propertiesToGenerate.contains { child in
+			children.contains { child in
 				child.requiredReceivedProperties.contains(property)
-					|| child.requiredAliasFulfillingProperties.contains { $0.label == property.label && Self.provides(property, aFormReadBy: $0) }
+					|| child.requiredAliasFulfillingProperties.contains { $0.label == property.label && provides(property, aFormReadBy: $0) }
 			}
 		}
 		var requiredOnlyIfAvailableAliasProperties = Set<Property>()
 		var requiredOnlyIfAvailableAliasFulfillingProperties = Set<Property>()
-		for case let (aliasProperty?, fulfillingProperty?) in propertiesToGenerate.lazy.map({ ($0.property, $0.onlyIfAvailableAliasFulfillingProperty) })
+		for case let (aliasProperty?, fulfillingProperty?) in children.lazy.map({ ($0.property, $0.onlyIfAvailableAliasFulfillingProperty) })
 			where isRequiredByChild(aliasProperty)
 		{
 			requiredOnlyIfAvailableAliasProperties.insert(aliasProperty)
 			requiredOnlyIfAvailableAliasFulfillingProperties.insert(fulfillingProperty)
 		}
-		self.requiredOnlyIfAvailableAliasProperties = requiredOnlyIfAvailableAliasProperties
 		// A requirement stops at the nearest declaration of its label, whatever form that declaration has: the alias reads
 		// it, or is `nil` where it provides no form the alias reads.
 		var declaredLabels = Set(forwardedProperties.map(\.label))
@@ -614,21 +902,36 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A call of a seam whose tree requires one of its pass-throughs through an `onlyIfAvailable` alias requires it too
 		// (`SeamSignature.Parameter.requiredThroughAlias`): the seam's alias is bound from that parameter. Validation reads
 		// the same requirement from the seam's tree, which it walks inline, so `collectReceivedProperties` meets no seam call.
-		requiredAliasFulfillingProperties = Set(propertiesToGenerate.flatMap(\.requiredAliasFulfillingProperties))
+		let requiredAliasFulfillingProperties = Set(children.flatMap(\.requiredAliasFulfillingProperties))
 			.union(requiredOnlyIfAvailableAliasFulfillingProperties)
-			.union(isPropertyCycle ? cycleParameters.flatMap(\.requiredAliasFulfillingForms) : [])
+			.union(cycleParameters.flatMap(\.requiredAliasFulfillingForms))
 			.union(seamCall?.requiredThroughAliasProperties ?? [])
 			.filter { !declaredLabels.contains($0.label) }
-		onlyIfAvailableAliasFulfillingProperty = nil
+		return (requiredOnlyIfAvailableAliasProperties, requiredAliasFulfillingProperties)
+	}
+
+	/// - Parameter cycleParameters: For a scope that closes a lazy cycle, the parameters of the function it refers to;
+	///   empty otherwise.
+	@inline(never)
+	nonisolated private static func onlyIfAvailableUnwrappedReceivedProperties(
+		children: [ScopeGenerator],
+		ownDependencies: [Dependency],
+		receivesPassedNil: Set<Property>,
+		propertiesToDeclare: Set<Property>,
+		forwardedProperties: Set<Property>,
+		aliasBindingDeclaredProperties: Set<Property>,
+		cycleParameters: [CycleParameter],
+		requiredReceivedProperties: Set<Property>,
+	) -> Set<Property> {
 		var onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired = Set<Property>()
-		for propertyToGenerate in propertiesToGenerate {
+		for propertyToGenerate in children {
 			for property in propertyToGenerate.onlyIfAvailableUnwrappedReceivedProperties
-				where !providesAFormReadByOnlyIfAvailableReceive(of: property)
+				where !providesAFormReadByOnlyIfAvailableReceive(of: property, propertiesToDeclare: propertiesToDeclare, forwardedProperties: forwardedProperties)
 			{
 				onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.insert(property)
 			}
 		}
-		for dependency in instantiable.dependencies {
+		for dependency in ownDependencies {
 			switch dependency.source {
 			case .instantiated, .forwarded:
 				continue
@@ -647,17 +950,41 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.insert(fulfillingProperty.asUnwrappedProperty)
 			}
 		}
-		if isPropertyCycle {
-			for parameter in cycleParameters {
-				onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.formUnion(parameter.onlyIfAvailableUnwrappedForms)
-			}
+		for parameter in cycleParameters {
+			onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.formUnion(parameter.onlyIfAvailableUnwrappedForms)
 		}
 		// A property some receiver requires is required, even where others receive
 		// it only if available. Few subtrees receive anything only if available, so the
 		// required properties are unwrapped only for those that do.
-		onlyIfAvailableUnwrappedReceivedProperties = onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.isEmpty
+		return onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.isEmpty
 			? onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired
 			: onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.subtracting(requiredReceivedProperties.map(\.asUnwrappedProperty))
+	}
+
+	/// The parameters of the builder function a lazy cycle closes on that a scope finds, and what it carries up for them.
+	private struct CycleParameterSearch {
+		let cycleClosingRedeclaredLabels: [BuiltDeclaration: [String: CycleParameter.Redeclaration]]
+		let foundCycleParameters: [CycleParameter]
+		let unpassableCycleLabelsInTree: [UnpassableCycleLabel]
+	}
+
+	@inline(never)
+	nonisolated private static func cycleParameterSearch(
+		instantiable: Instantiable,
+		property: Property?,
+		declaration: BuiltDeclaration?,
+		closedOnDeclaration: BuiltDeclaration?,
+		isPropertyCycle: Bool,
+		childrenTakePartInCycle: Bool,
+		children: [ScopeGenerator],
+		propertiesToDeclare: Set<Property>,
+		forwardedProperties: Set<Property>,
+		cycleParameters: [CycleParameter],
+		receivedProperties: Set<Property>,
+		requiredReceivedProperties: Set<Property>,
+		requiredAliasFulfillingProperties: Set<Property>,
+		onlyIfAvailableUnwrappedReceivedProperties: Set<Property>,
+	) -> CycleParameterSearch {
 		// The labels the scopes between each cycle-closing scope in this subtree and the scope it closes on declare, by the
 		// declaration the cycle closes on. A scope a cycle closes on takes those of them its tree receives from the scopes
 		// enclosing it as parameters of its builder function. Nearly every scope takes part in no cycle.
@@ -665,7 +992,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		if let closedOnDeclaration {
 			cycleClosingRedeclaredLabels[closedOnDeclaration] = [:]
 		} else if childrenTakePartInCycle {
-			for child in propertiesToGenerate {
+			for child in children {
 				for (closedOnDeclaration, redeclarations) in child.cycleClosingRedeclaredLabels {
 					cycleClosingRedeclaredLabels[closedOnDeclaration, default: [:]].merge(redeclarations) { $0.preceding($1) }
 				}
@@ -694,13 +1021,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			if !receivedRedeclarations.isEmpty {
 				(foundCycleParameters, unpassableCycleLabelsInTree) = CycleParameter.parameters(
-					firstReceives: Self.inOrderTheBodyFirstReceives(
+					firstReceives: inOrderTheBodyFirstReceives(
 						ofLabels: receivedRedeclarations,
 						builtProperty: property,
 						builtDeclaration: declaration,
 						builtType: instantiable.concreteInstantiable,
 						ownDependencies: instantiable.dependencies,
-						children: propertiesToGenerate,
+						children: children,
 					).map { (label: $0.label, receiver: $0.receiver, redeclaration: $0.value) },
 					receivedProperties: receivedProperties,
 					requiredReceivedProperties: requiredReceivedProperties,
@@ -710,7 +1037,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				)
 			}
 		}
-		for child in propertiesToGenerate where !child.unpassableCycleLabelsInTree.isEmpty {
+		for child in children where !child.unpassableCycleLabelsInTree.isEmpty {
 			unpassableCycleLabelsInTree.append(contentsOf: child.unpassableCycleLabelsInTree)
 		}
 		if !isPropertyCycle, !cycleClosingRedeclaredLabels.isEmpty {
@@ -732,77 +1059,56 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			cycleClosingRedeclaredLabels = cycleClosingRedeclaredLabels.mapValues { $0.merging(redeclarations) { $0.preceding($1) } }
 		}
-		self.cycleClosingRedeclaredLabels = cycleClosingRedeclaredLabels
-		self.foundCycleParameters = foundCycleParameters
-		self.unpassableCycleLabelsInTree = unpassableCycleLabelsInTree
-		cycleParametersChangedInTree = foundCycleParameters != builtCycleParameters
-			|| propertiesToGenerate.contains(where: \.cycleParametersChangedInTree)
-		// A scope that closes a cycle builds nothing, so its children are on no loop. A fill's one child is the property it
-		// fills, whose builder function the seam's initializer declares: a receive of that property in the fill's tree is a
-		// fill finding (`receivesInstantiatorBuildingSite`), never a loop the fill rebinds.
-		let receivedBuilderLoops = isPropertyCycle || fill != nil
-			? ReceivedBuilderLoops()
-			: Self.receivedBuilderLoops(of: propertiesToGenerate, requiredOnlyIfAvailableAliasProperties: requiredOnlyIfAvailableAliasProperties)
-		self.receivedBuilderLoops = receivedBuilderLoops
-		receivedBuilderLoopsChangedInTree = receivedBuilderLoops != (previousPassReceivedBuilderLoops ?? ReceivedBuilderLoops())
-			|| propertiesToGenerate.contains(where: \.receivedBuilderLoopsChangedInTree)
-		// In a seam's own tree, a loop whose members bind two or more payloads or levels holds them in one box, unless a
-		// member's function is `@Sendable`, which could not capture the box (see `boxedLoops`).
-		var boxedLoops = [Int: String]()
-		var loopLevelsTypesInTree = [String: String]()
-		if holdsLoopPayloadsInBoxes, !receivedBuilderLoops.loopByChildIndex.isEmpty {
-			// Each loop's bindings in index order, the order the body generates its members in (`orderedPropertiesToGenerate`).
-			var bindingsByLoop = [Int: [SeamHoles.ValuesBinding]]()
-			for (index, loop) in receivedBuilderLoops.loopByChildIndex.sorted(by: { $0.key < $1.key }) where !propertiesToGenerate[index].isAlias {
-				bindingsByLoop[loop, default: []] += propertiesToGenerate[index].valuesBindings
-			}
-			let loopsWithSendableFunction = Set(receivedBuilderLoops.loopByChildIndex.filter { propertiesToGenerate[$0.key].buildsInSendableFunction }.values)
-			for (loop, bindings) in bindingsByLoop where bindings.count > 1 && !loopsWithSendableFunction.contains(loop) {
-				let loopLevelsType = LoopLevelsType(holding: bindings)
-				boxedLoops[loop] = loopLevelsType.name
-				loopLevelsTypesInTree[loopLevelsType.name] = loopLevelsType.declaration
-			}
-		}
-		for child in propertiesToGenerate where !child.loopLevelsTypesInTree.isEmpty {
-			loopLevelsTypesInTree.merge(child.loopLevelsTypesInTree) { declaration, _ in declaration }
-		}
-		self.boxedLoops = boxedLoops
-		self.loopLevelsTypesInTree = loopLevelsTypesInTree
+		return CycleParameterSearch(
+			cycleClosingRedeclaredLabels: cycleClosingRedeclaredLabels,
+			foundCycleParameters: foundCycleParameters,
+			unpassableCycleLabelsInTree: unpassableCycleLabelsInTree,
+		)
+	}
+
+	/// The properties the builder function of a member of a loop of builders rebinds (see `reboundProperties`).
+	@inline(never)
+	nonisolated private static func reboundProperties(
+		_ reboundProperties: Set<Property>,
+		builtProperty property: Property,
+		builtDeclaration declaration: BuiltDeclaration,
+		instantiable: Instantiable,
+		children: [ScopeGenerator],
+		forwardedProperties: Set<Property>,
+		cycleParameters: [CycleParameter],
+		receivedProperties: Set<Property>,
+	) -> [Property] {
 		// The function rebinds what its tree receives inside its loop, in the order its body first receives each, except a
 		// label its own parameters name: the body reads the parameter.
-		if let property, let declaration, !isPropertyCycle, !reboundProperties.isEmpty {
-			var parameterLabels = Set(forwardedProperties.map(\.label))
-			for parameter in cycleParameters {
-				parameterLabels.insert(parameter.property.label)
-			}
-			// The forms of each label, in property order: a mock root can promote a label in two forms, both on one loop.
-			var reboundFormsByLabel = [String: [Property]]()
-			for reboundProperty in reboundProperties.sorted() where !parameterLabels.contains(reboundProperty.label) {
-				reboundFormsByLabel[reboundProperty.label, default: []].append(reboundProperty)
-			}
-			// Of a label promoted in two forms, the function rebinds each form its body reads – the form a receive names, or
-			// the non-optional one where a required optional receive has no form of its own – and none it does not read, which
-			// would be an unused binding. Each label is decided on its own, so the order of the dictionary reaches nothing.
-			for (label, forms) in reboundFormsByLabel where forms.count > 1 {
-				let readForms = forms.filter { form in
-					receivedProperties.contains(form)
-						|| (!form.typeDescription.isOptional && receivedProperties.contains(form.asOptionalProperty) && !forms.contains(form.asOptionalProperty))
-				}
-				reboundFormsByLabel[label] = readForms.isEmpty ? nil : readForms
-			}
-			let firstReceives = Self.inOrderTheBodyFirstReceives(
-				ofLabels: reboundFormsByLabel,
-				builtProperty: property,
-				builtDeclaration: declaration,
-				builtType: instantiable.concreteInstantiable,
-				ownDependencies: instantiable.dependencies,
-				children: propertiesToGenerate,
-			)
-			// Every label rebound is received in the body, so the walk meets each.
-			self.reboundProperties = firstReceives.flatMap(\.value)
-		} else {
-			self.reboundProperties = []
+		var parameterLabels = Set(forwardedProperties.map(\.label))
+		for parameter in cycleParameters {
+			parameterLabels.insert(parameter.property.label)
 		}
+		// The forms of each label, in property order: a mock root can promote a label in two forms, both on one loop.
+		var reboundFormsByLabel = [String: [Property]]()
+		for reboundProperty in reboundProperties.sorted() where !parameterLabels.contains(reboundProperty.label) {
+			reboundFormsByLabel[reboundProperty.label, default: []].append(reboundProperty)
+		}
+		// Of a label promoted in two forms, the function rebinds each form its body reads – the form a receive names, or
+		// the non-optional one where a required optional receive has no form of its own – and none it does not read, which
+		// would be an unused binding. Each label is decided on its own, so the order of the dictionary reaches nothing.
+		for (label, forms) in reboundFormsByLabel where forms.count > 1 {
+			let readForms = forms.filter { form in
+				receivedProperties.contains(form)
+					|| (!form.typeDescription.isOptional && receivedProperties.contains(form.asOptionalProperty) && !forms.contains(form.asOptionalProperty))
+			}
+			reboundFormsByLabel[label] = readForms.isEmpty ? nil : readForms
+		}
+		let firstReceives = inOrderTheBodyFirstReceives(
+			ofLabels: reboundFormsByLabel,
+			builtProperty: property,
+			builtDeclaration: declaration,
+			builtType: instantiable.concreteInstantiable,
+			ownDependencies: instantiable.dependencies,
+			children: children,
+		)
+		// Every label rebound is received in the body, so the walk meets each.
+		return firstReceives.flatMap(\.value)
 	}
 
 	init(
