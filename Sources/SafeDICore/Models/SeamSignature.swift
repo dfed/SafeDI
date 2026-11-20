@@ -230,7 +230,7 @@ public struct SeamSignature: Sendable {
 	public struct Hole: Sendable {
 		/// A value in scope at the site, which the scope struct the builder is handed carries.
 		public struct Field: Sendable {
-			public init(property: Property, access: AccessLevel, accessCause: TypeAccessProof.Cause? = nil, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool = false, parameterTakingType: TypeDescription? = nil, deferral: Parameter.Deferral = .none, bindsMemo: Bool = false, isSeamParameter: Bool = false) {
+			public init(property: Property, access: AccessLevel, accessCause: TypeAccessProof.Cause? = nil, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool = false, parameterTakingType: TypeDescription? = nil, deferral: Parameter.Deferral = .none, bindsMemo: Bool = false, isSeamParameter: Bool = false, seamParameterOrigin: SeamParameterOrigin? = nil) {
 				self.property = property
 				self.bindsMemo = bindsMemo
 				self.deferral = deferral
@@ -241,6 +241,24 @@ public struct SeamSignature: Sendable {
 				self.declarationLocation = declarationLocation
 				self.isReceivedOnlyIfAvailable = isReceivedOnlyIfAvailable
 				self.parameterTakingType = parameterTakingType
+				self.seamParameterOrigin = seamParameterOrigin
+			}
+
+			/// What a field bound from a parameter of the seam whose tree holds the site says about that parameter: where
+			/// the seam is declared, whether the parameter passes a receive through or is the seam's own property, and the
+			/// receives in its tree the parameter passes its value to (the seam's own receive, for its own property). A fill
+			/// whose tree receives the label in a form no one parameter takes together with the parameter's gives the seam's
+			/// tree the label in two forms, which the seam reports where it sees both.
+			public struct SeamParameterOrigin: Sendable {
+				public init(seamDeclarationLocation: Dependency.DeclarationLocation?, isPassThrough: Bool, receivers: [Receiver]) {
+					self.seamDeclarationLocation = seamDeclarationLocation
+					self.isPassThrough = isPassThrough
+					self.receivers = receivers
+				}
+
+				public let seamDeclarationLocation: Dependency.DeclarationLocation?
+				public let isPassThrough: Bool
+				public let receivers: [Receiver]
 			}
 
 			/// The value's label and the type of its declaration.
@@ -275,6 +293,9 @@ public struct SeamSignature: Sendable {
 			/// seam again inside a fill passes it the nearest declaration of its label there, which a place of the seam opened
 			/// again carries too.
 			public let isSeamParameter: Bool
+			/// For a field bound from a parameter of a seam, which a public mock's root level never is, that parameter's
+			/// receives and the seam's declaration; `nil` for a field bound from a declaration inside the tree.
+			public let seamParameterOrigin: SeamParameterOrigin?
 
 			/// Whether the field is bound from a deferred parameter (`SeamSignature.Parameter.isDeferred`).
 			public var isDeferredParameter: Bool {
@@ -360,7 +381,7 @@ public struct SeamSignature: Sendable {
 					property = hole.property
 					instantiatedType = hole.instantiatedType
 					builderLabel = hole.builderLabel
-					caseName = hole.enumPlace?.describedCase
+					caseName = hole.enumPlace?.caseName
 					isBuiltBySendableBuilder = hole.enumPlace?.isBuiltBySendableBuilder ?? false
 				}
 
@@ -369,7 +390,8 @@ public struct SeamSignature: Sendable {
 				public let ownerType: TypeDescription
 				public let property: Property
 				public let instantiatedType: TypeDescription
-				/// The label of the builder the place's seam takes, and the place's case in that builder's enum, if it has one.
+				/// The label of the builder the place's seam takes, and the name of the place's case in that builder's enum, if it has
+				/// one, unqualified: a diagnostic names no generated type.
 				public let builderLabel: String
 				public let caseName: String?
 				/// Whether a `@Sendable` function builds the place, which is then handed only what that function binds.
