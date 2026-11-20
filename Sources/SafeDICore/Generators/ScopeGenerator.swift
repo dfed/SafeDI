@@ -6192,8 +6192,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The declaration of this scope's instantiator, which hands its wrapper the function named `functionName`, called
 	/// with `forwardedArguments`: the function itself when it takes no arguments and erases nothing, and otherwise a
 	/// closure that calls it. Empty for a scope that builds no instantiator, which no caller asks.
-	nonisolated private func instantiatorDeclaration(handing functionName: String, forwardedArguments: String) -> String {
-		guard case let .property(instantiable, property, _, _, _, _) = scopeData else { return "" }
+	nonisolated private func instantiatorDeclaration(handing functionName: String, forwardedArguments: String, bindingName: String? = nil) -> String {
+		guard case let .property(instantiable, declaredProperty, _, _, _, _) = scopeData else { return "" }
+		let property = bindingName.map { Property(label: $0, typeDescription: declaredProperty.typeDescription) } ?? declaredProperty
 		// A type constructed by annotation spells its generic arguments only in the declaration.
 		let unwrappedTypeDescription = property
 			.typeDescription
@@ -6560,9 +6561,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				nil
 			}
+			let scopeNames: ScopeNames? = if case let .overriding(overrides) = codeGeneration {
+				overrides.namesByScope[ObjectIdentifier(self)]
+			} else {
+				nil
+			}
 			return .place(propertyCode(
 				around: childCode,
 				constructionOverride: constructionOverride,
+				scopeNames: scopeNames,
 				instantiable: instantiable,
 				property: property,
 				forwardedProperties: forwardedProperties,
@@ -6601,9 +6608,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			)
 			return .place(PlacePlan(kind: .hostedSeamCode, functionNames: [], closedOnFunctionName: nil, code: .text(fillCode)))
 		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
+			let scopeNames: ScopeNames? = if case let .overriding(overrides) = codeGeneration {
+				overrides.namesByScope[ObjectIdentifier(self)]
+			} else {
+				nil
+			}
 			let aliasCode = aliasCode(
-				of: property,
+				of: scopeNames?.bindingName.map { Property(label: $0, typeDescription: property.typeDescription) } ?? property,
 				fulfilledBy: fulfillingProperty,
+				fulfillingName: scopeNames?.argumentNameByLabel[fulfillingProperty.label],
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				onlyIfAvailable: onlyIfAvailable,
 				declarationReference: declarationReference,
@@ -6631,6 +6644,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private func aliasCode(
 		of property: Property,
 		fulfilledBy fulfillingProperty: Property,
+		fulfillingName: String? = nil,
 		erasedToConcreteExistential: Bool,
 		onlyIfAvailable: Bool,
 		declarationReference: AliasDeclarationReferences.Reference?,
@@ -6648,8 +6662,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				of: Self.aliasDeclaration(
 					of: property,
 					fulfilledBy: fulfillingExpression ?? (fulfillingPropertyIsLazilyInstantiatedInstance
-						? "\(fulfillingProperty.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
-						: fulfillingProperty.label),
+						? "\(fulfillingName ?? fulfillingProperty.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+						: fulfillingName ?? fulfillingProperty.label),
 					ofType: fulfillingProperty.typeDescription,
 					erasedToConcreteExistential: erasedToConcreteExistential,
 					fulfillingValueMayBeOptional: fulfillingBindingIsOptional,
@@ -6794,17 +6808,29 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private func propertyCode(
 		around childCode: [GeneratedCode],
 		constructionOverride: ConstructionOverride?,
+		scopeNames: ScopeNames?,
 		instantiable: Instantiable,
-		property: Property,
+		property declaredProperty: Property,
 		forwardedProperties: Set<Property>,
 		erasedToConcreteExistential: Bool,
 		isPropertyCycle: Bool,
 		seamCall: SeamCall?,
-		argumentList: String,
+		argumentList passedArgumentList: String,
 		unavailableProperties: Set<Property>,
 		builderFunctionNames: BuilderFunctionNames,
 		fillPlaceBindings: FillPlaceBindings,
 	) -> PlacePlan {
+		// The body's naming policy: the name the scope binds, what its builder function binds again, and the names its
+		// construction reads by name.
+		let property = scopeNames?.bindingName.map { Property(label: $0, typeDescription: declaredProperty.typeDescription) } ?? declaredProperty
+		let nameRebindingLines = scopeNames?.rebindingLines.map { GeneratedCode.text("\(Self.standardIndent)\($0)") } ?? []
+		let argumentList = scopeNames.map { names in
+			passedArgumentList.components(separatedBy: ", ").map { argument in
+				let parts = argument.components(separatedBy: ": ")
+				guard parts.count == 2, parts[0] == parts[1], let name = names.argumentNameByLabel[parts[0]] else { return argument }
+				return "\(parts[0]): \(name)"
+			}.joined(separator: ", ")
+		} ?? passedArgumentList
 		let concreteTypeName = instantiable.concreteInstantiable.asSource
 		let constructionTarget: ConstructionTarget = if let publicMockCall {
 			.mock(instantiable.concreteInstantiable, name: publicMockCall.functionName)
@@ -6824,7 +6850,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let construction = Expression.construction(constructionTarget, arguments: constructionArguments).overridden(by: constructionOverride)
 		// The payloads of the cases on the routes to the places beneath this scope, bound before its builder function, where
 		// the scope's parent binds its labels: each field read as the parent's receivers read it.
-		let valuesBindingLines = builderFunctionNames.loopValuesBindingLines ?? valuesBindingLines
+		let valuesBindingLines = (scopeNames?.preludeLines.map { "\($0)\n" }.joined() ?? "") + (builderFunctionNames.loopValuesBindingLines ?? valuesBindingLines)
 		// What ends the line that constructs the type, after the construction. A seam built inline here is built with the
 		// caller's isolation; across modules, its generated initializer builds its tree with the type's isolation, or the
 		// one `generatedInitializerAttributes` spells. A deliberate gap, which
@@ -6921,6 +6947,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			generatedProperties += rebindingLines.map(GeneratedCode.text)
 			generatedProperties += seamGuardLines
 			generatedProperties += fillPlaceBindingLines
+			generatedProperties += nameRebindingLines
 			generatedProperties += childCode
 			// The function a lazy cycle closes on also takes the parameters its cycle-closing scopes pass.
 			let functionParameters = forwardedProperties + (isPropertyCycle ? [] : cycleParameters.map(\.property))
@@ -6990,10 +7017,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					.text(receivedFunctionDeclaration + instantiatorDeclaration(
 						handing: receivedFunctionName,
 						forwardedArguments: Self.forwardedArguments(of: forwardedProperties, spreading: forwardedValue).joined(separator: ", "),
+						bindingName: scopeNames?.bindingName,
 					)),
 				]))
 			}
-			return place(code: .sequence([.text(valuesBindingLines), functionDeclaration, .text(instantiatorDeclaration(handing: functionName, forwardedArguments: forwardedArguments))]))
+			return place(code: .sequence([.text(valuesBindingLines), functionDeclaration, .text(instantiatorDeclaration(handing: functionName, forwardedArguments: forwardedArguments, bindingName: scopeNames?.bindingName))]))
 		case .lazilyInstantiated,
 		     .sendableLazilyInstantiated:
 			// The builder function is the one a constant with children declares. A constant calls it
@@ -7002,7 +7030,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// as a constant, so it is never the deferred hop of a cycle.
 			let cycleArguments = cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", ")
 			let functionName = builderFunctionNames.functionName ?? Self.functionName(toBuild: property)
-			let generatedProperties = memberCallCode + seamGuardLines + fillPlaceBindingLines + childCode
+			let generatedProperties = memberCallCode + seamGuardLines + fillPlaceBindingLines + nameRebindingLines + childCode
 			// The function a cycle closes on also takes the parameters its cycle-closing scopes pass.
 			let function = BuilderNode(
 				name: functionName,
@@ -7024,7 +7052,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return PlacePlan(kind: .builtByFunction, functionNames: [functionName], closedOnFunctionName: nil, code: function.spelled(after: valuesBindingLines, followedBy: lastLine))
 		case .constant:
 			let callArguments = cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", ")
-			let generatedProperties = memberCallCode + seamGuardLines + fillPlaceBindingLines + childCode
+			let generatedProperties = memberCallCode + seamGuardLines + fillPlaceBindingLines + nameRebindingLines + childCode
 			let body = BuilderBody(statements: generatedProperties)
 			let hasGeneratedContent = body.hasStatements
 			let propertyDeclaration = BindingDeclaration(
@@ -9522,11 +9550,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// SPIKE (SP1): the mock body of a mock in the slice, generated by the production emitter with an override hook.
 			if let spikeMode = ProcessInfo.processInfo.environment["SAFEDI_SP1"],
 			   publicMock == nil,
-			   treeDisambiguationMap.isEmpty,
+			   treeDisambiguationMap.isEmpty || (ProcessInfo.processInfo.environment["SAFEDI_SP1_ALLOW"] ?? "").contains("rename"),
 			   lazilyInstantiatedBindingNameMap.isEmpty,
 			   uncoveredDependencyNameMap.isEmpty,
 			   sendableAutoclosureParameters.isEmpty,
 			   rootItems.fillingGenerators.isEmpty,
+			   case var spikeNames = [ObjectIdentifier: ScopeNames](),
 			   let overrides = Self.spikeConstructionOverrides(
 			   	of: rootItems,
 			   	labelMap: rootLabelMap,
@@ -9534,17 +9563,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			   	ancestorTypes: [],
 			   	parentConcreteType: nil,
 			   	overridePathReachable: true,
+			   	flatParameterDisambiguationMap: treeDisambiguationMap,
+			   	names: &spikeNames,
 			   	context: context,
 			   )
 			{
 				let productionStatements = try await generateProperties(
-					codeGeneration: .overriding(ConstructionOverrides(byScope: overrides)),
+					codeGeneration: .overriding(ConstructionOverrides(byScope: overrides, namesByScope: spikeNames)),
 					propertiesGeneratedLater: [],
 					enclosingFunctionNames: [:],
 					leadingMemberWhitespace: bodyIndent,
 					fillPlaceBindings: .none,
 				)
-				let productionLines = productionStatements.joined(separator: "\n").components(separatedBy: "\n").filter { !$0.allSatisfy(\.isWhitespace) }
+				let productionLines = GeneratedCode.lines(productionStatements).spelled().components(separatedBy: "\n").filter { !$0.allSatisfy(\.isWhitespace) }
 				let isIdentical = productionLines == bodyBindings
 				if let logPath = ProcessInfo.processInfo.environment["SAFEDI_SP1_LOG"] {
 					let record = "\(isIdentical ? "IDENTICAL" : "DIFFERENT") \(typeName)\n" + (isIdentical ? "" : "--- per-path mock body\n\(bodyBindings.joined(separator: "\n"))\n+++ production emitter\n\(productionLines.joined(separator: "\n"))\n")
@@ -10703,6 +10734,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// For a site of a hole, the properties its owner holds only as a `LazilyInstantiated` property's instance, which
 		/// the site's payload reads as the owner's receivers do.
 		var holeSiteLazilyInstantiatedInstanceProperties = Set<Property>()
+		/// The scope this alias was built from, whose declaration the production emitter names where it builds the body.
+		var generatorIdentifier: ObjectIdentifier?
 	}
 
 	// MARK: OnlyIfAvailableOverride
@@ -11008,6 +11041,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// An alias whose fulfilling property is unavailable is declared `nil`, as production declares it.
 					isBoundToNil: Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: childUnavailableProperties),
 					loop: loopByGenerator[ObjectIdentifier(childGenerator)],
+					generatorIdentifier: ObjectIdentifier(childGenerator),
 				)))
 			} else if case let .property(childInstantiable, childProperty, _, erasedToConcreteExistential, isPropertyCycle, _) = childGenerator.scopeData {
 				let isInstantiator = !childProperty.propertyType.isConstant
@@ -12069,14 +12103,40 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		ancestorTypes: Set<String>,
 		parentConcreteType: String?,
 		overridePathReachable: Bool,
+		flatParameterDisambiguationMap: [String: [TypeDescription: String]] = [:],
+		sendableOverrideExtractor: SendableOverrideExtractor? = nil,
+		names: inout [ObjectIdentifier: ScopeNames],
 		context: MockContext,
 	) -> [ObjectIdentifier: ConstructionOverride]? {
 		let propertyNodes = items.propertyNodes
 		let labelMap = labelMap ?? disambiguatePropertyLabels(for: propertyNodes)
 		var overrides = [ObjectIdentifier: ConstructionOverride]()
+		// The names of this level, from which an outermost `@Sendable` function started here claims its locals, as the
+		// per-path body claims them.
+		let builderFunctionNamesDeclaredHere = Set(propertyNodes.filter { !$0.isPropertyCycle }.map { Self.functionName(toBuildPropertyNamed: disambiguatedLabel(for: $0, labelMap: labelMap)) })
+		if let sendableOverrideExtractor {
+			sendableOverrideExtractor.reserve(builderFunctionNamesDeclaredHere)
+			for node in propertyNodes {
+				let childNodes = node.children.propertyNodes
+				let childLabelMap = disambiguatePropertyLabels(for: childNodes)
+				sendableOverrideExtractor.reserve(childNodes.map { Self.functionName(toBuildPropertyNamed: disambiguatedLabel(for: $0, labelMap: childLabelMap)) })
+			}
+		}
+		var overrideLocalNames = GeneratedNameAllocator(reserving: builderFunctionNamesDeclaredHere)
 		let allowed = Set((ProcessInfo.processInfo.environment["SAFEDI_SP1_ALLOW"] ?? "").split(separator: ",").map(String.init))
+		var combinedDisambiguationMap = flatParameterDisambiguationMap
+		mergeSiblingDisambiguations(into: &combinedDisambiguationMap, for: propertyNodes, labelMap: labelMap)
 		for item in items {
-			if case .alias = item, allowed.contains("alias") {
+			if case let .alias(alias) = item, allowed.contains("alias") {
+				// The naming policy of a rename: the name apart a mock root binds it under, and the name its fulfilling
+				// property resolves to, as `emitAliasBinding` resolves it.
+				let bindingName = alias.declaredProperty.flatMap { $0.label == alias.property.label ? nil : alias.property.label }
+				let fulfillingName = alias.fulfillingPropertyIsLazilyInstantiatedInstance
+					? disambiguatedLazilyInstantiatedBinding(named: alias.fulfillingLabel, withInstanceOfType: alias.fulfillingTypeDescription.unwrapped, disambiguationMap: combinedDisambiguationMap)?.name
+					: combinedDisambiguationMap[alias.fulfillingLabel]?[alias.fulfillingTypeDescription]
+				if let generatorIdentifier = alias.generatorIdentifier, bindingName != nil || fulfillingName != nil {
+					names[generatorIdentifier] = ScopeNames(bindingName: bindingName, argumentNameByLabel: fulfillingName.map { [alias.fulfillingLabel: $0] } ?? [:])
+				}
 				continue
 			}
 			guard case let .property(node) = item,
@@ -12088,25 +12148,69 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			      node.valuesBindings.isEmpty, node.memberCallsInsideBuilderFunction.isEmpty,
 			      !node.buildsInSendableFunction || allowed.contains("sendable"), !node.requiresSendable || allowed.contains("sendable"),
 			      uncoveredInstantiatedDependencies(of: node).isEmpty,
-			      disambiguatedLabel(for: node, labelMap: labelMap) == node.propertyLabel
+			      disambiguatedLabel(for: node, labelMap: labelMap) == node.propertyLabel || allowed.contains("rename"),
+			      combinedDisambiguationMap.isEmpty || allowed.contains("rename")
 			else { return nil }
+			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
 			let nodeTypeKey = node.cycleNodeKey
 			let isBackEdge = parentConcreteType.map { context.cycleEdges.contains(CycleEdge(parent: $0, child: node.concreteType.asSource)) } ?? false
 			let reachable = overridePathReachable && !isBackEdge
-			let nodePath = "\(parentPath).\(node.propertyLabel)"
-			if reachable, !ancestorTypes.contains(nodeTypeKey) {
-				let arguments = resolveBuilderArguments(
+			let nodePath = "\(parentPath).\(disambiguated)"
+			// The naming policy, as the per-path body decides it: the name apart, the names passed by name, and the labels
+			// bound again inside the builder function from the names they resolve to.
+			let bindingNamesPassedByName = receivedBindingNamesPassedByName(
+				to: node,
+				flatParameterDisambiguationMap: combinedDisambiguationMap,
+				lazilyInstantiatedBindingNames: [:],
+			)
+			let ownCycleParameterForms = (node.isPropertyCycle ? [] : node.cycleParameters).flatMap(\.providedForms).sorted()
+			let functionParameters = (node.isInstantiator ? node.forwardedProperties.sorted() : []) + ownCycleParameterForms
+			let functionDisambiguationMap = removingRenames(
+				hiddenByDeclarationsOf: node.children,
+				parameters: functionParameters,
+				from: combinedDisambiguationMap,
+			)
+			let rebindingLines = emitReceiverBindings(
+				for: node.dependencies,
+				unavailableProperties: node.unavailableProperties,
+				lazilyInstantiatedInstanceProperties: node.lazilyInstantiatedInstanceProperties,
+				flatParameterDisambiguationMap: functionDisambiguationMap,
+				bindingNamesPassedByName: bindingNamesPassedByName,
+				indent: "",
+			)
+			var scopeNames = ScopeNames(
+				bindingName: disambiguated == node.propertyLabel ? nil : disambiguated,
+				rebindingLines: rebindingLines,
+				argumentNameByLabel: bindingNamesPassedByName,
+			)
+			let isOverridden = reachable && !ancestorTypes.contains(nodeTypeKey)
+			let handWrittenMockDefaultParameters = context.handWrittenMockDefaultParameters[node.concreteType, default: []]
+			func arguments(readThrough extractor: SendableOverrideExtractor?) -> String {
+				resolveBuilderArguments(
 					for: node,
 					nodePath: nodePath,
 					lazilyInstantiatedBindingNames: [:],
 					uncoveredDependencyNames: [:],
-					sendableOverrideExtractor: nil,
+					sendableOverrideExtractor: extractor,
 					overrideReachable: reachable,
-					handWrittenMockDefaultParameters: context.handWrittenMockDefaultParameters[node.concreteType, default: []],
+					handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 					sendableConfigurationTypeNames: context.sendableConfigurationTypeNames,
-					bindingNamesPassedByName: [:],
-				)
-				overrides[generatorIdentifier] = ConstructionOverride(expression: node.overridePath(nodePath: nodePath), arguments: arguments.joined(separator: ", "))
+					bindingNamesPassedByName: bindingNamesPassedByName,
+				).joined(separator: ", ")
+			}
+			// Inside an outermost `@Sendable` function, the override is read through a local declared before it.
+			var overrideExpression: String? = nil
+			var overrideArguments = ""
+			if isOverridden {
+				overrideArguments = arguments(readThrough: sendableOverrideExtractor)
+				overrideExpression = sendableOverrideExtractor.map {
+					$0.extract(node.overridePath(nodePath: nodePath), localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(ReservedName.configurationBuilderPropertyName)")
+				} ?? node.overridePath(nodePath: nodePath)
+			}
+			let startedSendableOverrideExtractor: SendableOverrideExtractor? = if sendableOverrideExtractor == nil, node.buildsInSendableFunction, !node.isPropertyCycle {
+				SendableOverrideExtractor(functionName: Self.functionName(toBuildPropertyNamed: disambiguated), names: overrideLocalNames)
+			} else {
+				nil
 			}
 			var childAncestors = ancestorTypes
 			childAncestors.insert(nodeTypeKey)
@@ -12117,9 +12221,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				ancestorTypes: childAncestors,
 				parentConcreteType: node.concreteType.asSource,
 				overridePathReachable: reachable,
+				flatParameterDisambiguationMap: functionDisambiguationMap,
+				sendableOverrideExtractor: sendableOverrideExtractor ?? startedSendableOverrideExtractor,
+				names: &names,
 				context: context,
 			) else { return nil }
 			overrides.merge(childOverrides) { first, _ in first }
+			if let startedSendableOverrideExtractor {
+				if isOverridden {
+					overrideArguments = arguments(readThrough: startedSendableOverrideExtractor)
+					overrideExpression = overrideExpression.map { startedSendableOverrideExtractor.extract($0, localNameSuffix: ReservedName.configurationBuilderPropertyName) }
+				}
+				overrideLocalNames = startedSendableOverrideExtractor.names
+				scopeNames.preludeLines = startedSendableOverrideExtractor.extractions.map { "let \($0.localName) = \($0.expression)" }
+			}
+			if let overrideExpression {
+				overrides[generatorIdentifier] = ConstructionOverride(expression: overrideExpression, arguments: overrideArguments)
+			}
+			if scopeNames != ScopeNames() {
+				names[generatorIdentifier] = scopeNames
+			}
 		}
 		return overrides
 	}
@@ -12699,6 +12820,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// it accepts the shape: a deliberate gap.
 				loop: alias.loop,
 				declaredProperty: alias.declaredProperty ?? alias.property,
+				generatorIdentifier: alias.generatorIdentifier,
 			))
 		}
 		return (renamedItems, bindingNames)
