@@ -484,6 +484,152 @@ struct SafeDIToolSeamTypeKeyTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_declaresSendableContext_whenSendableSeamBuilderReadsValuesFromAboveSeam() async throws {
+		// RT1-NAMES condition 1: `Host`'s `@Sendable` builder reads `service` and `extra`, which `Host` receives, so its context is declared `Sendable`, which the compiler proves because both are `Sendable`. Callers are unchanged.
+		try await expectSeamTypeKeyFiles(
+			ofFeature: [
+				Self.type("Host", isSeam: true, "@Received public let service: Service", "@Received public let extra: Extra", "@Instantiated public let screenBuilder: SendableInstantiator<Screen>"),
+				Self.sendableType("Screen", "@Forwarded public let id: Int", "@Received public let service: Service", "@Received public let extra: Extra"),
+				Self.sendableType("Service"),
+				Self.sendableType("Extra"),
+			],
+			ofApp: [seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let service: Service", "@Instantiated public let extra: Extra", "@Instantiated public let host: Host"])],
+			feature: """
+			extension Host {
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    fileprivate nonisolated final class __safeDI_screenBuilder_Context: Sendable {
+			        let service: Service
+			        let extra: Extra
+
+			        init(service: Service, extra: Extra) {
+			            self.service = service
+			            self.extra = extra
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public convenience init(__safeDI_service service: Service, __safeDI_extra extra: Extra) {
+			        let __safeDI_screenBuilder_context = __safeDI_screenBuilder_Context(service: service, extra: extra)
+			        @Sendable func __safeDI_screenBuilder(id: Int) -> Screen {
+			            Screen(id: id, service: __safeDI_screenBuilder_context.service, extra: __safeDI_screenBuilder_context.extra)
+			        }
+			        let screenBuilder = SendableInstantiator<Screen> {
+			            __safeDI_screenBuilder(id: $0)
+			        }
+			        self.init(service: service, extra: extra, screenBuilder: screenBuilder)
+			    }
+			}
+
+			extension Host {
+			    public enum __safeDI_Host_104FA7B7C210CBCD {}
+			}
+			""",
+			app: """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        let service = Service()
+			        let extra = Extra()
+			        func __safeDI_host() -> Host {
+			            _ = Host.__safeDI_Host_104FA7B7C210CBCD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Host(__safeDI_service: service, __safeDI_extra: extra)
+			        }
+			        let host: Host = __safeDI_host()
+			        self.init(service: service, extra: extra, host: host)
+			    }
+			}
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsLazyReceivedValueThroughSlot_whenCallerHoldsValueLazily() async throws {
+		// RT1-NAMES condition 2: `Root` holds `service` as `LazilyInstantiated<Service>` and `Screen`, inside `Host`'s builder, reads it by value. `Root` passes it unbuilt, and `Host`'s context builds it on its first read and then releases the closure that builds it.
+		try await expectSeamTypeKeyFiles(
+			ofFeature: [
+				Self.type("Host", isSeam: true, "@Instantiated public let screenBuilder: Instantiator<Screen>"),
+				Self.type("Screen", "@Forwarded public let id: Int", "@Received public let service: Service"),
+				Self.type("Service"),
+			],
+			ofApp: [seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let service: LazilyInstantiated<Service>", "@Instantiated public let host: Host"])],
+			feature: """
+			extension Host {
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    fileprivate nonisolated final class __safeDI_screenBuilder_Context {
+			        private enum __safeDI_service_Slot {
+			            case unbuilt(() -> Service)
+			            case built(Service)
+			        }
+
+			        private var __safeDI_service_slot: __safeDI_service_Slot
+
+			        init(service: @escaping () -> Service) {
+			            __safeDI_service_slot = .unbuilt(service)
+			        }
+
+			        func __safeDI_service() -> Service {
+			            switch __safeDI_service_slot {
+			            case let .built(service):
+			                return service
+			            case let .unbuilt(build):
+			                let service = build()
+			                if case let .built(firstService) = __safeDI_service_slot {
+			                    return firstService
+			                }
+			                __safeDI_service_slot = .built(service)
+			                return service
+			            }
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public convenience init(__safeDI_service: @autoclosure @escaping () -> Service) {
+			        let __safeDI_screenBuilder_context = __safeDI_screenBuilder_Context(service: __safeDI_service)
+			        func __safeDI_screenBuilder(id: Int) -> Screen {
+			            Screen(id: id, service: __safeDI_screenBuilder_context.__safeDI_service())
+			        }
+			        let screenBuilder = Instantiator<Screen> {
+			            __safeDI_screenBuilder(id: $0)
+			        }
+			        self.init(screenBuilder: screenBuilder)
+			    }
+			}
+
+			extension Host {
+			    public enum __safeDI_Host_6C3D8B09996784A6 {}
+			}
+			""",
+			app: """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_service() -> Service {
+			            Service()
+			        }
+			        let service = LazilyInstantiated<Service>(__safeDI_service)
+			        func __safeDI_host() -> Host {
+			            _ = Host.__safeDI_Host_6C3D8B09996784A6.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Host(__safeDI_service: service.instance)
+			        }
+			        let host: Host = __safeDI_host()
+			        self.init(service: service, host: host)
+			    }
+			}
+			""",
+		)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
