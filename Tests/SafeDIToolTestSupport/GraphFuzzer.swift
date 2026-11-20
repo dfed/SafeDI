@@ -9342,7 +9342,10 @@ enum GraphFuzzerGenerator {
 			// this draw does not repeat. A root's plain wrapper is also rejected where `MixMid`'s tree reads the value in a
 			// `@Sendable` function, so a graph that draws only accepted variants declares the `Sendable` one (seeds 146,
 			// 670, 990, 1156 and 1849 lost their hole graphs to it).
-			let tokenWrapper = rootDeclaresSendableWrapper || drawsOnlyAcceptedVariants || (readsWrapper && readerInSendableFunction) ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			// Where `MixOuter` declares the wrapper above its calls, the root declares the same `Sendable` one, so that
+			// `MixMid`'s own route to `MixWorker` reads it and the reader's one error is the field `MixOuter`'s hides: without
+			// it, the advice to declare it on the root left that error at the reader (seeds 1044 and 1856).
+			let tokenWrapper = rootDeclaresSendableWrapper || drawsOnlyAcceptedVariants || declaresWrapperOnOuter || (readsWrapper && readerInSendableFunction) ? "SendableLazilyInstantiated" : "LazilyInstantiated"
 			var outerProperties = [PropertyDeclaration]()
 			if declaresWrapperOnOuter {
 				outerProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "mixToken", type: "SendableLazilyInstantiated<\(token.name)>"))
@@ -9375,7 +9378,7 @@ enum GraphFuzzerGenerator {
 			thingImplementation.fillsHole = true
 			// `MixToken` is a type of the module beneath the seam's module, which the roots' module does not import.
 			thingImplementation.imports.append(GraphFuzzerModule.seamDependency.name)
-			var root = instantiable("MixRoot", module: .samePackageCaller, properties: (declaresWrapperOnOuter ? [] : [PropertyDeclaration(attribute: "@Instantiated", label: "mixToken", type: "\(tokenWrapper)<\(token.name)>")]) + [PropertyDeclaration(attribute: "@Instantiated", label: "mixMid", type: mid.name)])
+			var root = instantiable("MixRoot", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "mixToken", type: "\(tokenWrapper)<\(token.name)>"), PropertyDeclaration(attribute: "@Instantiated", label: "mixMid", type: mid.name)])
 			root.instantiableArguments = ["isRoot: true"]
 			root.imports.append(GraphFuzzerModule.seamDependency.name)
 			var added = [token, leaf, mixSeam]
