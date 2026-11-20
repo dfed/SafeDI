@@ -2741,7 +2741,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let helper = if let safeDIBuilder = safeDIOverrides.helper { safeDIBuilder() } else { Helper() }
-		        let thirdParty = if let safeDIBuilder = safeDIOverrides.thirdParty { safeDIBuilder(helper) } else { ThirdParty.instantiate(helper: helper) }
+		        let thirdParty: ThirdParty = if let safeDIBuilder = safeDIOverrides.thirdParty { safeDIBuilder(helper) } else { ThirdParty.instantiate(helper: helper) }
 		        return Root(thirdParty: thirdParty, helper: helper)
 		    }
 		}
@@ -2867,7 +2867,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Child {
-		        let dep = if let safeDIBuilder = safeDIOverrides.dep { safeDIBuilder() } else { ThirdPartyDep.instantiate() }
+		        let dep: ThirdPartyDep = if let safeDIBuilder = safeDIOverrides.dep { safeDIBuilder() } else { ThirdPartyDep.instantiate() }
 		        return Child(dep: dep)
 		    }
 		}
@@ -2915,7 +2915,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let dep = if let safeDIBuilder = safeDIOverrides.dep { safeDIBuilder() } else { ThirdPartyDep.instantiate() }
+		        let dep: ThirdPartyDep = if let safeDIBuilder = safeDIOverrides.dep { safeDIBuilder() } else { ThirdPartyDep.instantiate() }
 		        let child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(dep) } else { Child(dep: dep) }
 		        return Root(child: child, dep: dep)
 		    }
@@ -3209,7 +3209,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        func __safeDI_thirdPartyBuilder() -> ThirdParty {
 		            if let safeDIBuilder = safeDIOverrides.thirdPartyBuilder { safeDIBuilder(shared) } else { ThirdParty.instantiate(shared: shared) }
 		        }
-		        let thirdPartyBuilder = Instantiator<ThirdParty>(__safeDI_thirdPartyBuilder)
+		        let thirdPartyBuilder: Instantiator<ThirdParty> = Instantiator<ThirdParty>(__safeDI_thirdPartyBuilder)
 		        return Root(shared: shared, thirdPartyBuilder: thirdPartyBuilder)
 		    }
 		}
@@ -5941,7 +5941,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let externalType = if let safeDIBuilder = safeDIOverrides.externalType { safeDIBuilder() } else { ExternalType.instantiate() }
+		        let externalType: ExternalType = if let safeDIBuilder = safeDIOverrides.externalType { safeDIBuilder() } else { ExternalType.instantiate() }
 		        return Root(externalType: externalType)
 		    }
 		}
@@ -6716,7 +6716,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				        name: String,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Service {
-				        let externalEngine = if let safeDIBuilder = safeDIOverrides.externalEngine { safeDIBuilder() } else { ExternalEngine.instantiate() }
+				        let externalEngine: ExternalEngine = if let safeDIBuilder = safeDIOverrides.externalEngine { safeDIBuilder() } else { ExternalEngine.instantiate() }
 				        return Service(externalEngine: externalEngine, name: name)
 				    }
 				}
@@ -6764,7 +6764,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 					        name: String,
 					        safeDIOverrides: SafeDIOverrides = .init()
 					    ) -> Service {
-					        let externalEngine = if let safeDIBuilder = safeDIOverrides.externalEngine { safeDIBuilder() } else { ExternalEngine.instantiate() }
+					        let externalEngine: ExternalEngine = if let safeDIBuilder = safeDIOverrides.externalEngine { safeDIBuilder() } else { ExternalEngine.instantiate() }
 					        return Service(externalEngine: externalEngine, name: name)
 					    }
 					}
@@ -6871,7 +6871,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
-		        let externalEngine = if let safeDIBuilder = safeDIOverrides.externalEngine { safeDIBuilder() } else { ExternalEngine.instantiate() }
+		        let externalEngine: ExternalEngine = if let safeDIBuilder = safeDIOverrides.externalEngine { safeDIBuilder() } else { ExternalEngine.instantiate() }
 		        return Service(externalEngine: externalEngine)
 		    }
 		}
@@ -13494,7 +13494,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        let childBuilder = Instantiator<Item> {
 		            __safeDI_childBuilder(name: $0)
 		        }
-		        let wrapper = if let safeDIBuilder = safeDIOverrides.wrapper { safeDIBuilder(childBuilder) } else { ThirdPartyWrapper.instantiate(childBuilder: childBuilder) }
+		        let wrapper: ThirdPartyWrapper = if let safeDIBuilder = safeDIOverrides.wrapper { safeDIBuilder(childBuilder) } else { ThirdPartyWrapper.instantiate(childBuilder: childBuilder) }
 		        return Root(childBuilder: childBuilder, wrapper: wrapper)
 		    }
 		}

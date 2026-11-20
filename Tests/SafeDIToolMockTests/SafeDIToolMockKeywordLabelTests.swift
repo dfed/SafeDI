@@ -308,7 +308,7 @@ struct SafeDIToolMockKeywordLabelTests: ~Copyable {
 		    ) -> Root {
 		        let Protocol: Kind? = safeDIOverrides.Protocol
 		        let `self` = if let safeDIBuilder = safeDIOverrides.`self` { safeDIBuilder() } else { Kind() }
-		        let gadget = if let safeDIBuilder = safeDIOverrides.gadget { safeDIBuilder(`self`) } else { Gadget.instantiate(self: `self`) }
+		        let gadget: Gadget = if let safeDIBuilder = safeDIOverrides.gadget { safeDIBuilder(`self`) } else { Gadget.instantiate(self: `self`) }
 		        return Root(gadget: gadget, Protocol: Protocol)
 		    }
 		}

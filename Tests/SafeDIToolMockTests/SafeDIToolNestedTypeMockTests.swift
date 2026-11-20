@@ -720,7 +720,7 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Feature.Service() }
-		        let consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(service) } else { Feature.Consumer.mock(service: service) }
+		        let consumer: Feature.Consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(service) } else { Feature.Consumer.mock(service: service) }
 		        return Root(consumer: consumer)
 		    }
 		}
@@ -817,7 +817,7 @@ struct SafeDIToolNestedTypeMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Feature.Service() }
-		        let consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(service) } else { Feature.Consumer.mock(service: service) }
+		        let consumer: Feature.Consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(service) } else { Feature.Consumer.mock(service: service) }
 		        return Root(consumer: consumer)
 		    }
 		}
