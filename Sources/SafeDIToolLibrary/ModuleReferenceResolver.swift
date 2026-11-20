@@ -29,7 +29,8 @@ actor ModuleReferenceResolver {
 		self.transitiveModuleInfoListPath = transitiveModuleInfoListPath
 	}
 
-	/// Every file the resolver read whole to resolve a reference, as the transitive list spells it.
+	/// Every file the resolver read whole to resolve a reference, as the transitive list spells it: the run reads its
+	/// declarations and seam signatures, so a change to it can change the run's output.
 	private(set) var openedPaths = Set<String>()
 	/// Every file of the transitive list whose first fields the resolver read to learn which module it describes, as the
 	/// list spells it. Its module name is all the run took from such a file.

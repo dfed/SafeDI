@@ -219,6 +219,8 @@ public struct ModuleInfoFile: Codable, Sendable {
 public struct ModuleInfoView: Codable, Sendable {
 	/// The modules of the closure, without their declarations: names only, so this changes when a module is added,
 	/// renamed or depends on others, never on an edit.
+	/// Always a copy, even where `references` stand for the declarations: a reference's checksum leaves out the seam
+	/// signatures, which read the graph (`ViewedModule.checksum`).
 	let moduleGraph: [ViewedModuleIdentity]
 	/// The declarations of each module in the closure that declares a seam or a public mock, and of each module such a
 	/// module depends on directly, each once.
@@ -239,9 +241,12 @@ public struct ModuleInfoView: Codable, Sendable {
 
 extension ViewedModule {
 	/// The checksum a reference to this entry's module holds: of the bytes the entry is written as without its seam
-	/// signatures. Each signature follows from the declarations of the module and of the modules its run read, which a view
-	/// that refers to this module refers to as well, so a change that changes a signature changes some reference's
-	/// checksum; and a file whose signatures are taken out (`ModuleInfoFile.withoutSeamSignatures`) keeps its references.
+	/// signatures. Each signature follows from the declarations of the module and of the modules its run read, the
+	/// signatures of the seams it reaches, and the module graph (each module's dependencies, package and mock condition,
+	/// which the access proofs read). A view that refers to this module refers to those modules as well, and carries the
+	/// module graph as a copy, so a change that changes a signature changes some reference's checksum or the graph; and a
+	/// file whose signatures are taken out (`ModuleInfoFile.withoutSeamSignatures`) keeps its references. A view that
+	/// referred to the module graph instead would need this checksum to cover it.
 	var checksum: UInt64 {
 		MergedModuleInfoView.encoded(
 			ViewedModule(moduleName: moduleName, imports: imports, mockImports: mockImports, instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, seamSignatures: []),
