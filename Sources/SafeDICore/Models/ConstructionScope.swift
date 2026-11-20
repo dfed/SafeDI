@@ -139,8 +139,8 @@ struct ConstructionScope: Sendable {
 /// The scopes one tree builds at one place only: one reference reaches each, from a scope at one place, or it is the root
 /// and nothing references it. Within one pass of the tree, no other place has a construction memo key that names such a
 /// scope, so its place's generator is never reused there (see `ConstructionMemo`). A place a pass does not build (inside a
-/// cycle it closes, say) only leaves a scope out where it could be in. A `ScopeTable` is shared by every tree built from
-/// its map, so this is decided once per tree, from the tree's root.
+/// cycle it closes, say) only leaves a scope out where it could be in. Records are shared by every table of one frozen
+/// map, and so by every tree built from it, so this is decided once per tree, from the tree's root.
 struct ScopesBuiltAtOnePlace: Sendable {
 	init(treeRootedAt root: ConstructionScope) {
 		// The records the root reaches through the scopes it builds and the fills of its calls, each appended when it is
@@ -186,6 +186,7 @@ struct ScopesBuiltAtOnePlace: Sendable {
 			}
 		}
 		self.recordsAtOnePlace = recordsAtOnePlace
+		self.records = records
 	}
 
 	/// Whether the tree builds `scope` at one place only.
@@ -194,4 +195,6 @@ struct ScopesBuiltAtOnePlace: Sendable {
 	}
 
 	private let recordsAtOnePlace: Set<ObjectIdentifier>
+	/// Every record the tree reaches, held so that no other record takes the address of one `recordsAtOnePlace` names.
+	private let records: [ScopeRecord]
 }
