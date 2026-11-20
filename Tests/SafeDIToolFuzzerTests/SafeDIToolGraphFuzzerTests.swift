@@ -8128,6 +8128,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.selfBuildingPublicMockFillReadsToken: 74,
 		.selfBuildingPublicMockPassedUp: 76,
 		.selfBuildingPublicMockPlaceBeneath: 116,
+		.selfBuildingPublicMockReceivesBuilder: 180,
 		.selfBuildingPublicMockThroughSendableInstantiator: 33,
 		.selfBuildingPublicMockThroughStep: 91,
 		.sharedConstructionPublicMock: 247,
@@ -8183,7 +8184,7 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0xA76D5B5D65E6E197
+	static let publicMockCorpusFixtureHash: UInt64 = 0x75E5FAEF8D8D9A2A
 	static let publicMockCorpusAcceptedSeedCount = 856
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0x00FC421C8B43BC22
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -8223,7 +8224,10 @@ struct SafeDIToolGraphFuzzerTests {
 	/// beneath the declaring module (seed 98) and a chain of public mocks through the three modules beneath it (seed 208),
 	/// which a consumer computes from the declaring module's view (`GraphFuzzerSeamDependencyDraw`); and a type built with
 	/// its hand-written mock inside another public mock of its module, whose extensions declare the function only generated
-	/// code calls beside the construction function of that name (seed 37). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
+	/// code calls beside the construction function of that name (seed 37); and a graph that puts a place beneath a
+	/// dependency the public mock promotes, which did not compile before a public mock kept such a place: `SelfPart`
+	/// receiving `SelfNode`'s `SendableInstantiator` beside the place, whose construction function forwarded a flat
+	/// `@autoclosure` parameter (seed 189, the adopter's own shape). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
 	/// which `publicMockSmokeSeeds_exercisePublicMockFeature_inGraphsTheToolAccepts` checks. Beyond the corpus, seeds
 	/// 1339, 1649, 2687 and 2840 build a type whose public mock names `customMockName` erased to a concrete existential in
 	/// another module's public mock, whose shared construction function returned the eraser and did not compile
@@ -8233,9 +8237,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// code did not compile before each construction had a function of its own
 	/// (`SafeDIToolPublicMockSharedConstructionTests`); seed 555 draws it in the graph the tool rejects.
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
-	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
+	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 189, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x6811652CBED7F527
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x59C881F608EC7DD1
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -8243,7 +8247,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockParametersSortedByLabelReason,
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
-			seeds: [103, 106, 167, 251, 351, 562, 771, 836],
+			seeds: [103, 106, 167, 251, 351, 562, 771, 836, 947],
 		),
 		// The base corpus's shape, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy
 		// cycle through it, in the gating draw of the shape #702 fixed, a `.public` type that builds itself again through
@@ -8253,8 +8257,8 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: lazyCycleConfigurationFieldReason,
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [3, 33, 99, 186, 213, 289, 301, 302, 387, 468, 542, 549, 561, 566, 583, 598, 616, 618, 649, 653, 677,
-			        697, 701, 703, 717, 832, 833, 840, 884, 907, 946],
+			seeds: [3, 33, 99, 186, 213, 289, 301, 302, 542, 549, 561, 566, 583, 598, 616, 618, 649, 653, 677,
+			        697, 832, 833, 884, 907, 946],
 		),
 		// A shape the corpus first compiled once SafeDI proved a type's access from its plain declaration (2026-11-03):
 		// before, a consumer held a holder the public tier omitted, which the tool rejected; now `Dock`'s own declaration
@@ -8289,7 +8293,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockFormsNamedApartOrderReason,
 			signatures: [.renamedGraphDiffers(.mockCode)],
-			seeds: [22, 101, 156, 161, 326, 629, 881, 970, 977],
+			seeds: [22, 156, 161, 326, 629, 881, 970, 977],
 		),
 		// The retention oracle's written exception until the leak fix gives a public mock builders that keep only what their
 		// fill reads: a public mock hands each place's case the values of every level on the way to it, and the builder
@@ -8306,8 +8310,8 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockLeakReason,
 			signatures: publicMockLeakSignatures,
-			seeds: [8, 10, 15, 28, 44, 57, 73, 77, 111, 136, 165, 177, 185, 196, 199, 205, 207, 212, 238, 243, 244, 273,
-			        278, 293, 297, 300, 304, 312, 313, 314, 319, 335, 339, 340, 342, 353, 356, 369, 379, 401, 409, 412,
+			seeds: [8, 10, 15, 28, 44, 57, 73, 77, 111, 136, 165, 177, 185, 196, 199, 205, 212, 238, 243, 244, 273,
+			        278, 293, 297, 300, 304, 312, 313, 319, 335, 339, 340, 342, 353, 356, 369, 379, 401, 409, 412,
 			        421, 423, 429, 431, 434, 438, 442, 443, 445, 467, 477, 482, 511, 519, 522, 525, 532, 540, 541, 543,
 			        550, 558, 563, 571, 575, 592, 601, 608, 619, 624, 651, 664, 678, 679, 682, 693, 699, 713, 716, 739,
 			        747, 753, 758, 766, 770, 775, 787, 792, 827, 834, 838, 843, 844, 846, 847, 849, 851, 853, 859, 872,
@@ -8336,7 +8340,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "\(publicMockParametersSortedByLabelReason); and \(publicMockLeakReason)",
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)] + publicMockLeakSignatures,
-			seeds: [433, 528, 947],
+			seeds: [433, 528],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(publicMockParametersSortedByLabelReason); and \(lazyCycleConfigurationFieldReason)",
@@ -8402,37 +8406,37 @@ struct SafeDIToolGraphFuzzerTests {
 	static let publicMockBuilderSurfaceSeeds = BuilderSurfaceSeeds(
 		base: [
 			2, 3, 4, 8, 9, 12, 15, 17, 18, 19, 20, 21, 22, 24, 28, 33, 34, 42, 44, 47,
-			48, 49, 54, 55, 56, 57, 58, 60, 62, 63, 64, 65, 66, 67, 69, 77, 79, 82, 84, 87,
+			48, 49, 54, 55, 56, 57, 58, 60, 62, 63, 65, 66, 67, 69, 77, 79, 82, 84, 87,
 			88, 89, 90, 92, 95, 96, 99, 103, 106, 108, 109, 111, 115, 119, 122, 123, 124, 129, 130, 131,
 			136, 137, 138, 143, 146, 147, 148, 149, 150, 155, 156, 157, 158, 160, 161, 162, 165, 166, 167, 168,
-			171, 172, 176, 177, 178, 180, 181, 182, 183, 185, 186, 189, 190, 192, 195, 196, 197, 198, 199, 200,
-			201, 202, 204, 205, 207, 210, 211, 212, 213, 216, 218, 222, 223, 225, 226, 227, 228, 229, 230, 231,
+			171, 172, 176, 177, 178, 180, 181, 182, 183, 185, 186, 190, 192, 195, 196, 197, 198, 199, 200,
+			201, 202, 204, 205, 210, 211, 212, 213, 216, 218, 222, 223, 225, 226, 227, 228, 229, 230, 231,
 			233, 238, 239, 242, 243, 244, 245, 246, 247, 248, 250, 252, 256, 257, 261, 263, 264, 265, 266, 267,
 			268, 269, 270, 271, 272, 273, 274, 278, 280, 281, 282, 283, 284, 285, 287, 289, 290, 293, 295, 296,
-			297, 299, 300, 301, 302, 304, 306, 307, 308, 309, 310, 311, 312, 313, 314, 317, 319, 321, 322, 324,
-			326, 327, 328, 329, 331, 333, 335, 336, 337, 339, 340, 342, 344, 346, 347, 348, 349, 350, 351, 352,
-			353, 356, 360, 361, 366, 368, 369, 370, 371, 372, 374, 379, 380, 381, 383, 386, 387, 388, 389, 392,
+			297, 299, 300, 301, 302, 304, 306, 307, 308, 309, 310, 311, 312, 313, 317, 319, 321, 322, 324,
+			326, 327, 328, 329, 331, 333, 335, 336, 337, 339, 340, 342, 344, 346, 347, 348, 349, 350, 352,
+			353, 356, 360, 361, 366, 368, 369, 371, 372, 374, 379, 380, 381, 383, 386, 388, 389, 392,
 			394, 395, 397, 398, 401, 402, 404, 406, 409, 411, 412, 413, 415, 416, 417, 421, 423, 424, 425, 428,
 			429, 431, 432, 433, 434, 436, 438, 440, 441, 442, 443, 445, 448, 453, 455, 456, 459, 463, 465, 467,
-			468, 469, 472, 474, 477, 478, 479, 481, 482, 484, 486, 488, 490, 492, 494, 497, 498, 499, 503, 507,
+			469, 472, 474, 477, 478, 479, 481, 482, 484, 486, 488, 490, 492, 494, 497, 498, 499, 503, 507,
 			508, 510, 511, 515, 516, 519, 521, 522, 525, 526, 527, 528, 532, 537, 539, 540, 541, 542, 543, 545,
 			549, 550, 556, 558, 559, 561, 563, 564, 565, 567, 568, 571, 572, 575, 576, 577, 580, 581, 584, 587,
 			589, 592, 594, 595, 597, 598, 601, 602, 605, 606, 607, 608, 610, 611, 612, 614, 616, 618, 619, 621,
 			622, 623, 624, 627, 631, 632, 635, 636, 638, 639, 642, 643, 644, 645, 646, 647, 648, 649, 651, 652,
 			653, 654, 655, 658, 659, 660, 663, 664, 669, 670, 671, 673, 675, 677, 678, 679, 681, 682, 685, 691,
-			692, 693, 695, 697, 699, 700, 701, 703, 706, 707, 708, 711, 713, 714, 715, 716, 717, 718, 720, 721,
+			692, 693, 695, 697, 699, 700, 706, 707, 708, 711, 713, 714, 715, 716, 718, 720, 721,
 			722, 723, 724, 725, 727, 728, 730, 732, 733, 734, 735, 737, 739, 740, 741, 743, 746, 747, 748, 751,
 			753, 757, 758, 765, 766, 768, 770, 772, 773, 774, 775, 776, 777, 778, 779, 781, 782, 783, 784, 786,
 			787, 789, 792, 793, 795, 797, 798, 799, 801, 802, 803, 804, 805, 807, 808, 814, 817, 818, 819, 820,
-			821, 823, 824, 825, 827, 828, 832, 833, 834, 838, 839, 840, 843, 844, 845, 846, 847, 848, 849, 850,
+			821, 823, 824, 825, 827, 828, 832, 833, 834, 838, 839, 843, 844, 845, 846, 847, 848, 849, 850,
 			851, 852, 853, 854, 858, 860, 861, 862, 863, 864, 865, 866, 870, 872, 873, 875, 877, 879, 880, 881,
 			883, 884, 885, 886, 887, 888, 889, 890, 891, 892, 896, 897, 898, 899, 901, 902, 903, 904, 906, 907,
 			909, 910, 911, 912, 913, 915, 917, 918, 919, 923, 926, 927, 930, 931, 933, 934, 935, 936, 937, 940,
-			941, 943, 944, 946, 947, 950, 951, 953, 956, 958, 959, 960, 961, 962, 963, 965, 966, 970, 971, 973,
+			941, 943, 944, 946, 950, 951, 953, 956, 958, 959, 960, 961, 962, 963, 965, 966, 970, 971, 973,
 			974, 975, 977, 978, 979, 981, 983, 985, 987, 988, 989, 990, 991, 992, 993, 995, 996, 998,
 		],
 		labels: [
-			19, 64, 119, 166, 211, 230, 299, 307, 333, 406, 415, 456, 486, 510, 597, 658, 692, 743, 748,
+			19, 119, 166, 211, 230, 299, 307, 333, 406, 415, 456, 486, 510, 597, 658, 692, 743, 748,
 			845, 960,
 		],
 		sameSupply: [
@@ -8449,11 +8453,11 @@ struct SafeDIToolGraphFuzzerTests {
 		remedyBuilderKindFlips: [],
 		addedSupply: [],
 		forwardingOtherValues: [
-			3, 12, 22, 28, 59, 60, 64, 65, 79, 87, 88, 97, 106, 107, 117, 119, 128, 130, 136, 156,
-			166, 199, 221, 230, 238, 242, 251, 259, 262, 264, 269, 273, 284, 296, 314, 327, 328, 332, 344, 351,
-			370, 386, 397, 402, 406, 423, 425, 435, 449, 455, 456, 459, 463, 474, 477, 489, 497, 510, 537, 539,
+			3, 12, 22, 28, 59, 60, 65, 79, 87, 88, 97, 106, 107, 117, 119, 128, 130, 136, 156,
+			166, 199, 221, 230, 238, 242, 251, 259, 262, 264, 269, 273, 284, 296, 327, 328, 332, 344,
+			386, 397, 402, 406, 423, 425, 435, 449, 455, 456, 459, 463, 474, 477, 489, 497, 510, 537, 539,
 			543, 549, 551, 559, 562, 587, 606, 629, 635, 647, 648, 658, 668, 679, 692, 699, 716, 723, 724, 725,
-			743, 779, 786, 790, 797, 821, 833, 834, 836, 876, 892, 904, 906, 909, 911, 912, 919, 936, 947, 958,
+			743, 779, 786, 790, 797, 821, 833, 834, 836, 876, 892, 904, 906, 909, 911, 912, 919, 936, 958,
 			959, 977, 983, 995,
 		],
 		callingMocks: [
@@ -8531,15 +8535,15 @@ struct SafeDIToolGraphFuzzerTests {
 		.bothConsumerModules: 393,
 		.childDefaultNamingOwnStaticMember: 452,
 		.closureDefault: 225,
-		.consumerHoldsLazilyInstantiatedWrapper: 262,
+		.consumerHoldsLazilyInstantiatedWrapper: 257,
 		.consumerHoldsOmittedValue: 188,
-		.consumerInstantiatesLeaf: 655,
+		.consumerInstantiatesLeaf: 653,
 		.consumerReachesHoleTypeThroughTwoPublicMocks: 57,
 		.consumerReachesHoleTypeUnderTwoLabels: 87,
 		.consumerReachesHoleTypeWithFill: 155,
 		.consumerReachesHoleTypeWithoutFill: 166,
 		.consumerReceivesLazilyInstantiatedWrapper: 136,
-		.consumerReceivesLeaf: 550,
+		.consumerReceivesLeaf: 553,
 		.customMockName: 369,
 		.declaringModuleConfigurationFile: 30,
 		.erasedConstantLeaf: 119,
@@ -8550,9 +8554,9 @@ struct SafeDIToolGraphFuzzerTests {
 		.fakeMockDependencyBoundParameter: 221,
 		.fakeTypeInternal: 344,
 		.holderlessOmittedValue: 57,
-		.holeBeneathInstantiator: 67,
-		.holeBeneathLazilyInstantiated: 82,
-		.holeBeneathSendableWrapper: 21,
+		.holeBeneathInstantiator: 35,
+		.holeBeneathLazilyInstantiated: 47,
+		.holeBeneathSendableWrapper: 12,
 		.holeCallerInOtherPackage: 278,
 		.holeCallerInSamePackage: 120,
 		.holeDeclaredAsErasedConstant: 77,
@@ -8561,19 +8565,25 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeDeclaredAsInstantiator: 34,
 		.holeFakeAlone: 7,
 		.holeFakeBesideFill: 12,
+		.holeHandWrittenMockBuiltInPublicMock: 113,
+		.holeHandWrittenMockTakesNoOverrides: 29,
+		.holeHostReceivedByValue: 17,
+		.holeHostReceivedThroughInstantiator: 38,
+		.holeHostReceivedThroughSendableInstantiator: 21,
 		.holeFillClosesLazyCycle: 15,
 		.holeFillReceivesField: 56,
 		.holeFillReceivesNonField: 40,
-		.holeFillReceivesFormBoundAgain: 28,
+		.holeFillReceivesFormBoundAgain: 25,
 		.holeFillReceivesRootLevelValue: 38,
 		.holeFillReceivesRootLevelWrapper: 15,
 		.holeForwardsValue: 43,
 		.holeInsideLoop: 131,
 		.holeLoopDeclaresContextAgain: 74,
+		.holeMockIsolatedToMainActor: 93,
 		.holeOnPublicMockType: 228,
-		.holeRootLevelHoldsValues: 108,
-		.holeRootLevelHoldsWrapper: 90,
-		.holeRootReceivesLabelInTwoForms: 97,
+		.holeRootLevelHoldsValues: 111,
+		.holeRootLevelHoldsWrapper: 91,
+		.holeRootReceivesLabelInTwoForms: 92,
 		.holeScopeHoldsPackageValue: 103,
 		.holeScopeHoldsPublicValue: 225,
 		.placeInsidePublicMockFill: 355,
@@ -8587,6 +8597,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.selfBuildingPublicMockFillReadsToken: 84,
 		.selfBuildingPublicMockPassedUp: 82,
 		.selfBuildingPublicMockPlaceBeneath: 127,
+		.selfBuildingPublicMockReceivesBuilder: 200,
 		.selfBuildingPublicMockThroughSendableInstantiator: 35,
 		.selfBuildingPublicMockThroughStep: 103,
 		.retentionPublicMockValueBeforeBuilder: 144,
@@ -8630,7 +8641,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.omittedValueProviderAfterLeaf: 101,
 		.omittedValueProviderAndLeafReceiveEachOther: 51,
 		.omittedValueProviderBeforeLeaf: 100,
-		.omittedValueProviderUnderSendableBuilder: 32,
+		.omittedValueProviderUnderSendableBuilder: 30,
 		.onePublicMockType: 369,
 		.optionalDefaultOfPackageType: 282,
 		.optionalDefaultOfPublicType: 267,
@@ -8644,12 +8655,12 @@ struct SafeDIToolGraphFuzzerTests {
 		.plainTypePublicInitializerTakes: 200,
 		.protocolSlotFilledByFake: 686,
 		.publicConsumer: 331,
-		.publicConsumerLeavesLeafLabelUnprovided: 103,
+		.publicConsumerLeavesLeafLabelUnprovided: 106,
 		.qualifiedAllowlistedParameterType: 93,
 		.requiredParameterNarrowerThanPublic: 96,
 		.samePackageConsumerModuleOnly: 306,
 		.sendableErasedInstantiatorLeaf: 15,
-		.sendableWrapperAboveLeaf: 189,
+		.sendableWrapperAboveLeaf: 180,
 		.spelledChildDefault: 147,
 		.spelledClosure: 84,
 		.spelledConsumerPasses: 109,
