@@ -237,7 +237,8 @@ struct BinaryWriter {
 		sharesTypeDescriptions = false
 		write(&self)
 		sharesTypeDescriptions = wasSharing
-		let key = bytes[valueStart...]
+		// Copied: a slice would keep the writer's buffer shared, so that every later append copied the whole buffer.
+		let key = Array(bytes[valueStart...])
 		if let index = sharedValueIndicesByBytes[key] {
 			bytes.removeSubrange(referenceStart...)
 			writeUnsigned(index + 1)
@@ -321,7 +322,7 @@ struct BinaryWriter {
 	private var strings = [String]()
 	private var stringIndices = [StringTableKey: UInt64]()
 	private var sharedValueIndices = [AnyHashable: UInt64]()
-	private var sharedValueIndicesByBytes = [ArraySlice<UInt8>: UInt64]()
+	private var sharedValueIndicesByBytes = [[UInt8]: UInt64]()
 	private var sharedValueCount: UInt64 = 0
 	private var nestingDepth = 0
 	private var isNestedTooDeeply = false
