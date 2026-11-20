@@ -74,9 +74,11 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_startsTasksForFewScopes_whenTreeHasManySmallSubtrees() async throws {
 		let starts = try await countCodeTaskStarts(of: Self.ternaryTree(depth: Self.depth, beneath: ["Root"], rootDeclarations: []))
-		// The root and the 12 scopes of the next two levels, whose subtrees have 364 and 121 scopes, and the 27 subtrees of
-		// 40 scopes beneath them. Every scope of the tree, one per path, started early: 1,093.
-		#expect(starts == 40)
+		// The root, the scopes of the next two levels, whose subtrees have 364 and 121 scopes, and the subtrees of 40 scopes
+		// beneath them, each counted once per generator: the construction memo shares one generator between every place of
+		// a level that builds the same type in the same context, so each level holds three, 10 in all. Without the memo,
+		// one per place: 40. Every scope of the tree, one per path, started early: 1,093.
+		#expect(starts == 10)
 	}
 
 	@Test
@@ -84,8 +86,8 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 	mutating func generate_startsTasksForFewScopes_whenTreeIsCreatedAgainForItsLazyCycle() async throws {
 		// The step builds a session of its own, which the screen it builds again receives: the tree is created a second time
 		// with the parameter the screen's builder function takes. The first pass starts its scopes' code as it creates them,
-		// and the second once its tree exists: 42 each, the ternary tree's 40 and the root's two other small subtrees.
-		// Every scope of both passes started early: 2,196.
+		// and the second once its tree exists: 12 each, the ternary tree's 10 shared generators and the root's two other
+		// small subtrees (42 each without the construction memo). Every scope of both passes started early: 2,196.
 		let cycle = [
 			seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Received let session: Session", "@Instantiated let stepBuilder: Instantiator<Step>"]),
 			seamFixtureType(named: "Step", isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
@@ -96,7 +98,7 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 			beneath: ["Root"],
 			rootDeclarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"],
 		) + cycle)
-		#expect(starts == 84)
+		#expect(starts == 24)
 	}
 
 	// MARK: Private
