@@ -720,9 +720,10 @@ extension ScopeRecord {
 							subtreeScopeCount: createdScope.subtreeScopeCount,
 							startedBeneath: Array(startLog[createdScope.startLogIndex...]),
 							isSettled: isSettled,
+							cycleClosingRedeclaredLabels: createdScope.cycleClosingRedeclaredLabels,
 						), for: key, keepingAlive: createdScope.builtScope.identity)
 					}
-					scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].add(childGenerator: scopeGenerator, createdBy: createdScope, readsAnsweredAbove: readsAnsweredAbove, isSettled: isSettled)
+					scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].add(childGenerator: scopeGenerator, createdBy: &createdScope, readsAnsweredAbove: readsAnsweredAbove, isSettled: isSettled)
 				}
 			}
 		}
@@ -1383,6 +1384,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 
 	/// The generators created so far for `propertiesToGenerate`, in order, followed by those of `fillsOfThisCall`.
 	private(set) var childGenerators = [ScopeGenerator]()
+	/// The `ScopeGenerator.CycleClosingRedeclaredLabels` of `childGenerators`, merged in their order, which this scope's
+	/// generator is created from; then, once `scopeGenerator(collectingGeneratorsToStartInto:)` has created it, its own,
+	/// which `add(childGenerator:createdBy:readsAnsweredAbove:isSettled:)` merges into its parent's, and a memo entry of
+	/// the generator keeps for a place that reuses it (`ConstructionMemo.Entry`). No generator keeps one. An alias or a hole
+	/// has none.
+	private(set) var cycleClosingRedeclaredLabels = ScopeGenerator.CycleClosingRedeclaredLabels()
 	/// How many scopes this scope's subtree has so far: itself, and every scope created beneath it. An alias or a hole,
 	/// which generates a line or two, is not counted.
 	private(set) var subtreeScopeCount = 1
@@ -1407,8 +1414,14 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// - Parameters:
 	///   - readsAnsweredAbove: `child.readsAnsweredAbove`.
 	///   - isSettled: `child.isSettled(building: childGenerator)`.
-	mutating func add(childGenerator: ScopeGenerator, createdBy child: ScopeGeneratorUnderConstruction, readsAnsweredAbove: ConstructionLog, isSettled: Bool) {
+	mutating func add(childGenerator: ScopeGenerator, createdBy child: inout ScopeGeneratorUnderConstruction, readsAnsweredAbove: ConstructionLog, isSettled: Bool) {
 		childGenerators.append(childGenerator)
+		if cycleClosingRedeclaredLabels.isEmpty {
+			// Nearly every scope has at most one child that takes part in a cycle, whose map it takes whole.
+			swap(&cycleClosingRedeclaredLabels, &child.cycleClosingRedeclaredLabels)
+		} else {
+			merge(childCycleClosingRedeclaredLabels: child.cycleClosingRedeclaredLabels)
+		}
 		subtreeScopeCount += child.subtreeScopeCount
 		if child.startsCodeBeneathALargeSubtree {
 			childGeneratorsStartingBeneathALargeSubtree.append(childGenerator)
@@ -1427,6 +1440,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// child of this scope may.
 	mutating func add(reusing reuse: ConstructionMemo.Reuse) {
 		childGenerators.append(reuse.entry.generator)
+		merge(childCycleClosingRedeclaredLabels: reuse.entry.cycleClosingRedeclaredLabels)
 		subtreeScopeCount += reuse.entry.subtreeScopeCount
 		if mayStartCodeEarly, reuse.entry.subtreeScopeCount < Self.scopeCountOfLargeSubtree {
 			childGeneratorsStartingBeneathALargeSubtree.append(reuse.entry.generator)
@@ -1434,6 +1448,13 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		log.formUnion(reuse.reads)
 		if !reuse.entry.isSettled {
 			childrenAreSettled = false
+		}
+	}
+
+	/// Merges a child's `ScopeGenerator.CycleClosingRedeclaredLabels` into `cycleClosingRedeclaredLabels`.
+	private mutating func merge(childCycleClosingRedeclaredLabels: ScopeGenerator.CycleClosingRedeclaredLabels) {
+		for (closedOnDeclaration, redeclarations) in childCycleClosingRedeclaredLabels {
+			cycleClosingRedeclaredLabels[closedOnDeclaration, default: [:]].merge(redeclarations) { $0.preceding($1) }
 		}
 	}
 
@@ -2239,6 +2260,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			enclosingLevelCalls: scope.publicMockCall == nil ? [:] : enclosingLevelCalls,
 			namesBoundBySeam: GenerationWork.taking(seamHoles.namesBoundBySeam, by: .joiningNamesBoundBySeam),
 			placeHoldingProperties: placeHoldingPropertiesByType.map { $0[scope.instantiable.concreteInstantiable] ?? [] },
+			cycleClosingRedeclaredLabels: &cycleClosingRedeclaredLabels,
 		)
 		let scopeGenerator = if let fill {
 			ScopeGenerator(
@@ -2255,6 +2277,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 				plainMemoRoutesOfSendableWrapperReads: fill.plainMemoRoutesOfSendableWrapperReads,
 				memoOriginsByLabel: fill.memoOriginsByLabel,
 				child: builtGenerator,
+				cycleClosingRedeclaredLabels: &cycleClosingRedeclaredLabels,
 			)
 		} else {
 			builtGenerator

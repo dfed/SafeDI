@@ -148,6 +148,9 @@ struct ConstructionMemo {
 		/// loops of builders and fill struct labels. Building the place again from this generator then reads what the build
 		/// read from the pass before, so it builds this generator again (see `settledReuse`).
 		let isSettled: Bool
+		/// The generator's `ScopeGenerator.CycleClosingRedeclaredLabels`, which no generator keeps, for the parent of a place
+		/// that reuses it to merge.
+		let cycleClosingRedeclaredLabels: ScopeGenerator.CycleClosingRedeclaredLabels
 	}
 
 	/// A reuse of an entry by another place: the entry, with the depths its reads are answered at in the place's context.
