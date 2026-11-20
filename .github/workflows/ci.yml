@@ -1369,9 +1369,6 @@ jobs:
           path: graph-fuzzer-test-bundle.tar.gz
           retention-days: 3
 
-  # Runs the suite once, with compile checks and coverage, from the bundle
-  # "Build Tests on Linux" built. It keeps the name it had when it also
-  # built, which is the name of a required check.
   # Leaves main the builds of its newest commits only: each push to main
   # saves a build under a key that ends in its commit, about 580 MB on macOS
   # and 546 MB on Linux, and the repository's caches are evicted above
@@ -1379,15 +1376,16 @@ jobs:
   # the same prefix and the other build's commit is an ancestor of this
   # run's. Two pushes to main do not cancel each other, so the older one's
   # run can finish last: it finds the newer build's commit ahead of its
-  # own and leaves it. The macOS prefix names no runner image, so a build
-  # an older image made goes when a newer commit's build exists. Deleting a
+  # own and leaves it. The macOS prefix names no runner image and the
+  # debug prefix no Swift version, so a build an older image or release
+  # made goes when a newer commit's build exists. Deleting a
   # cache takes `actions: write` and comparing two commits `contents: read`;
   # only this job has the first. It checks nothing out and calls only
   # GitHub's API, so it runs on Linux with no container. A failure warns and
   # leaves the builds for the next run or for eviction.
   prune-build-caches:
     name: Delete Older Build Directories
-    needs: [spm, linux-build, generate-time, example-integrations]
+    needs: [spm, linux-build, linux-latest-swift-group, generate-time, example-integrations]
     if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     permissions:
@@ -1568,6 +1566,9 @@ jobs:
             done
           done
 
+  # Runs the suite once, with compile checks and coverage, from the bundle
+  # "Build Tests on Linux" built. It keeps the name it had when it also
+  # built, which is the name of a required check.
   linux:
     name: Build and Test on Linux
     needs: [changes, linux-build]
@@ -2430,22 +2431,34 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
+      # For the reason "Build Tests on Linux" gives: without it, a restored
+      # build directory rebuilds every target of this package, in each of
+      # the seven groups.
+      - name: Stamp Source Times
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          .github/scripts/stamp-source-times.sh
       - name: Print Swift Version
         id: swift
         run: |
           swift --version
           echo "version=$(swift --version 2>&1 | grep -m1 -oE 'Swift version [0-9.]+' | awk '{print $3}')" >> "$GITHUB_OUTPUT"
       # The toolchain floats, so the key carries the version printed
-      # above: a new release starts from an empty cache. The groups restore
-      # one cache and, where no cache has the key yet, each tries to save
-      # it; the first to finish does.
-      - name: Cache Build Directory
-        uses: actions/cache@v6
+      # above: a new release starts from an empty cache. It ends in the
+      # commit, so that each push to main saves the build a later run
+      # starts from ("Save Build Directory" below), and only a run on main
+      # saves, both for the reasons "Build Tests on Linux" gives; "Delete
+      # Older Build Directories" removes main's older ones. `v2` keeps a
+      # build made before the sources were stamped from being restored.
+      - name: Restore Build Directory
+        id: build-cache
+        uses: actions/cache/restore@v6
         with:
           path: .build
-          key: spm-debug-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}
+          key: spm-debug-v2-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
           restore-keys: |
-            spm-debug-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-
+            spm-debug-v2-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}-
+            spm-debug-v2-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -2467,12 +2480,30 @@ jobs:
         # times that, rounded up for the runner's variance.
         timeout-minutes: 5
         run: swift build --build-system swiftbuild --traits sourceBuild --target SafeDIToolTestSupport --scratch-path "$RUNNER_TEMP/swiftbuild-test-support"
+      # Built in a step of its own so that one group saves the build
+      # directory after a build that succeeded and before the tests, which
+      # a failure of theirs then cannot lose. Before the groups, the build
+      # from nothing took 4.2 minutes on the 4-core Linux runner, 2.5
+      # minutes on a restored build whose sources were not stamped, and 7
+      # seconds on one whose sources were (run 44189733147, 2026-11-17); the
+      # limit is about twice the first.
+      - name: Build Tests
+        timeout-minutes: 10
+        run: swift build --build-tests --traits sourceBuild
+      # One group saves, since all seven build the same thing.
+      - name: Save Build Directory
+        if: ${{ matrix.group == 'others' && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .build
+          key: ${{ steps.build-cache.outputs.cache-primary-key }}
       # A time limit for the macOS job's reason: about twice the longest
       # duration measured. On their first run (44625637732, 2026-11-19, the
       # 2.3.0 stack's tests, the build restored from the cache) the groups'
       # step took 17.6 minutes for mocks, 16.0 for fuzzer-seam-smoke, 14.0
       # for seams, 11.2 for fuzzer-smoke, 9.4 for others, 5.3 for tool and
-      # 5.2 for dependency-trees, of which the build is 3 to 5. Twice 17.6
+      # 5.2 for dependency-trees, of which the build was 3 to 5 before it
+      # moved to "Build Tests" above. Twice 17.6
       # is 35. A build job that hands the groups its build directory was
       # measured beside it (run 44625836276): the build job took 9.6
       # minutes and each group another minute to fetch its work, so the
