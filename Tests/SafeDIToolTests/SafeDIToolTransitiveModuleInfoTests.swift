@@ -455,7 +455,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsUnresolvableModuleReference_whenModuleBeneathIsNotPassed() async throws {
+	mutating func generate_throwsUnresolvableModuleReference_whenModuleBeneathIsNotPassed() async {
 		await assertThrowsError(containing: "SafeDI could not find the module info of module `Inner`, which `") {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: Self.seamOverInnerOverDeep(middleDependencies: ["Inner"], appDependencies: ["Middle"]),
@@ -561,7 +561,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsUnresolvableModuleReference_whenNoModuleBeneathIsListed() async throws {
+	mutating func generate_throwsUnresolvableModuleReference_whenNoModuleBeneathIsListed() async {
 		await assertThrowsError(containing: "SafeDI could not find the module info of module `Deep`, which `") {
 			try await ModuleReferenceResolver(transitiveModuleInfoListPath: nil).resolvingReferences(in: [(Self.fileReferringToDeep, "/App.safedi")])
 		}
@@ -2363,21 +2363,21 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 	/// The module info file of a module named `moduleName` that declares nothing.
 	private static func moduleInfoFile(named moduleName: String, ownEntryChecksum: UInt64? = nil, view: ModuleInfoView = .empty) -> ModuleInfoFile {
 		ModuleInfoFile(
-		moduleName: moduleName,
-		ownEntryChecksum: ownEntryChecksum,
-		packageName: nil,
-		dependencyModuleNames: [],
-		imports: [],
-		mockImports: [],
-		instantiables: [],
-		configurations: [],
-		filesWithUnexpectedNodes: nil,
-		conditionalCompilationDecisions: [],
-		instantiableTypeNamesInAnyClause: [],
-		plainTypeDeclarations: [],
-		seamSignatures: [],
-		view: view,
-	)
+			moduleName: moduleName,
+			ownEntryChecksum: ownEntryChecksum,
+			packageName: nil,
+			dependencyModuleNames: [],
+			imports: [],
+			mockImports: [],
+			instantiables: [],
+			configurations: [],
+			filesWithUnexpectedNodes: nil,
+			conditionalCompilationDecisions: [],
+			instantiableTypeNamesInAnyClause: [],
+			plainTypeDeclarations: [],
+			seamSignatures: [],
+			view: view,
+		)
 	}
 
 	/// `DefaultThing`, which fulfills `Thing` and builds nothing.
