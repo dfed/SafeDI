@@ -27,7 +27,7 @@
 /// claims its builders' internal names, then the functions that build its wrapper places, then the payloads it binds; a
 /// filler's body claims its fills, then its dispatchers; a mock's scope claims each function's locals in the order the
 /// mock's body walk reads the overrides (`ScopeGenerator.SendableOverrideExtractor`).
-struct GeneratedNameAllocator {
+struct GeneratedNameAllocator: Sendable {
 	init(reserving names: Set<String>) {
 		taken = names
 		consulted = NamesConsultedInTurn([])
@@ -246,6 +246,13 @@ extension DependencyTreeGenerator {
 		var memberBindingKeysByLabel = [String: Set<ValuesBindingKey>]()
 		var builders = [SeamSignature.Builder]()
 		var internalNameByFamily = [SeamSignature.ScopeEnum.Key: String]()
+		var levels = LevelsOfEveryHoleType(
+			generator: generator,
+			holes: flatHoles,
+			parameters: parameters,
+			bindsReceivesAgain: bindsReceivesAgain,
+			namesApartAtRoot: namesApartAtRoot,
+		)
 		for holeType in orderedHoleTypes {
 			let stem = stemByHoleType[holeType, default: ""]
 			let rootTypeNames = (plain: "\(scopeTypeNames.plain)\(stem)".spelledAsIdentifier, sendable: "\(scopeTypeNames.sendable)\(stem)".spelledAsIdentifier)
@@ -264,11 +271,11 @@ extension DependencyTreeGenerator {
 					holesBySite: holesBySite,
 					parameters: parameters,
 					bindsReceivesAgain: bindsReceivesAgain,
-					namesApartAtRoot: namesApartAtRoot,
 					reenteredFillsByKey: reenteredFillsByKey,
 					proof: proof,
 					instantiables: instantiables,
 					reachedEnum: reachedEnum,
+					levels: &levels,
 				)
 				// Every hole type of a seam and of a public mock takes a builder struct, whatever places it reaches: the seam's tree
 				// calls a member per level, bound under names of their own, and binds no payload. A seam's own internal mock takes
@@ -344,7 +351,6 @@ extension DependencyTreeGenerator {
 					label: builderLabel,
 					internalName: internalName,
 					parameterType: parameterType,
-					parameterTypeWithoutAny: parameterType.withoutAny,
 					readableParameterType: Self.readableBuilderType(of: Self.builderForm(ofPlaces: placesOfReadableType), returning: builtType, isSendable: isSendable),
 					takesBuilderStruct: true,
 					tierAccess: narrowest.level,
@@ -743,38 +749,70 @@ extension DependencyTreeGenerator {
 		func stem(of type: TypeDescription) -> String {
 			type.simplified.asIdentifier.spelledWithoutBackticks
 		}
-		// A stem's plain label equal to another's `@Sendable` label names apart only the stem whose plain label it is
-		// (`ServiceSendable` beside `Service`), so a hole type's own labels never follow another type's name. Equal stems and
-		// equal plain labels name both apart.
-		func collides(_ index: Int, among stems: [String]) -> Bool {
-			let plainLabel = plainBuilderLabel(ofStem: stems[index])
-			return stems.indices.contains { other in
-				other != index && (stems[other] == stems[index] || plainBuilderLabel(ofStem: stems[other]) == plainLabel || sendableBuilderLabel(ofStem: stems[other]) == plainLabel)
-			}
-		}
 		var stems = holeTypes.map { holeType in
 			holeType.instantiatedType == holeType.builtType
 				? stem(of: holeType.instantiatedType)
 				: "\(stem(of: holeType.instantiatedType))_\(stem(of: holeType.builtType))"
 		}
-		let colliding = holeTypes.indices.filter { collides($0, among: stems) }
+		// A stem collides where another stem equals it, or gives its plain label as its own plain or `@Sendable` label: a
+		// stem's plain label equal to another's `@Sendable` label names apart only the stem whose plain label it is
+		// (`ServiceSendable` beside `Service`), so a hole type's own labels never follow another type's name. Equal stems give
+		// equal plain labels, so counting the stems that give each label in each family finds every collision with one pass
+		// over the stems: comparing every pair of stems, and lowering both stems' capitals for each pair, grew with the
+		// square of the hole types.
+		var labelCounts = BuilderLabelCounts(stems: stems)
+		let colliding = holeTypes.indices.filter { labelCounts.collides(stems[$0]) }
 		if !colliding.isEmpty {
+			let collidingIndices = Set(colliding)
 			let renamed = ScopeGenerator.identifierSafeNames(
 				for: colliding.map { (label: stems[$0], suffixTypes: [holeTypes[$0].instantiatedType, holeTypes[$0].builtType]) },
-				reservedNames: Set(holeTypes.indices.filter { !colliding.contains($0) }.map { stems[$0] }),
+				reservedNames: Set(holeTypes.indices.filter { !collidingIndices.contains($0) }.map { stems[$0] }),
 				countingWorkAs: .namingEntriesApart,
 			)
 			for (index, name) in zip(colliding, renamed) {
+				labelCounts.replace(stems[index], with: name.spelledWithoutBackticks)
 				stems[index] = name.spelledWithoutBackticks
 			}
 			// Two stems may still give one label: each that does takes a trailing underscore until none does.
 			for index in stems.indices {
-				while collides(index, among: stems) {
+				while labelCounts.collides(stems[index]) {
+					labelCounts.replace(stems[index], with: stems[index] + "_")
 					stems[index] += "_"
 				}
 			}
 		}
 		return Dictionary(zip(holeTypes, stems), uniquingKeysWith: { first, _ in first })
+	}
+
+	/// How many of a set of stems give each builder label, in each family (`stems(of:)`).
+	private struct BuilderLabelCounts {
+		init(stems: [String]) {
+			for stem in stems {
+				add(stem)
+			}
+		}
+
+		/// Whether another stem than one `stem` stands for gives `stem`'s plain label, as its plain or its `@Sendable` label. A
+		/// stem's own two labels differ, so its own `@Sendable` label is never counted against it.
+		func collides(_ stem: String) -> Bool {
+			let plainLabel = plainBuilderLabel(ofStem: stem)
+			return plainCountByLabel[plainLabel, default: 0] > 1 || sendableCountByLabel[plainLabel, default: 0] > 0
+		}
+
+		/// Counts `newStem` in the place of one `oldStem`.
+		mutating func replace(_ oldStem: String, with newStem: String) {
+			plainCountByLabel[plainBuilderLabel(ofStem: oldStem), default: 0] -= 1
+			sendableCountByLabel[sendableBuilderLabel(ofStem: oldStem), default: 0] -= 1
+			add(newStem)
+		}
+
+		private var plainCountByLabel = [String: Int]()
+		private var sendableCountByLabel = [String: Int]()
+
+		private mutating func add(_ stem: String) {
+			plainCountByLabel[plainBuilderLabel(ofStem: stem), default: 0] += 1
+			sendableCountByLabel[sendableBuilderLabel(ofStem: stem), default: 0] += 1
+		}
 	}
 
 	/// The stem with its leading capitals lowered, keeping the last when a lowercase letter follows it, then `Builder`.

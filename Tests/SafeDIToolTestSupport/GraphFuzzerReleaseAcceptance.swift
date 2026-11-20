@@ -39,7 +39,7 @@ struct GraphFuzzerRelease: Hashable, Sendable {
 	}
 
 	/// - Parameters:
-	///   - name: The release's name in reports, such as `2.2.0`.
+	///   - name: The release's name in reports, such as `2.3.0`.
 	///   - tool: How its tool runs.
 	///   - runtimeSource: Its runtime and macros, or `nil` for this tree's.
 	init(name: String, tool: Tool, runtimeSource: DifferentialValueRuntimeSource?) {

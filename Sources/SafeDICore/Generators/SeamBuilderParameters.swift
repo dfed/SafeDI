@@ -73,7 +73,7 @@ extension DependencyTreeGenerator {
 			let declarationsHiddenByFields: [SeamSignature.Hole.DeclarationHiddenByField]
 		}
 		var declarationsBetweenByClosedOnScope = [ObjectIdentifier: [DeclarationBetween]]()
-		var placesByGenerator = [ObjectIdentifier: [SeamSignature.Hole.Site]]()
+		var placesByTreePath = [[Property]: [SeamSignature.Hole.Site]]()
 		let siteContents = sites.compactMap { site -> SiteContent? in
 			guard let owner = site.frames.last?.generator.builtInstantiable else { return nil }
 			let content = fields(
@@ -87,7 +87,7 @@ extension DependencyTreeGenerator {
 				proof: proof,
 				instantiables: instantiables,
 				declarationsBetweenByClosedOnScope: &declarationsBetweenByClosedOnScope,
-				placesByGenerator: &placesByGenerator,
+				placesByTreePath: &placesByTreePath,
 			)
 			return SiteContent(
 				site: site,
@@ -861,7 +861,8 @@ extension DependencyTreeGenerator {
 	///     `receivesBoundAgainOfAnyBuild(inTreeRootedAt:rootFields:namesApartAtRoot:)` says too.
 	///   - declarationsBetweenByClosedOnScope: The `declarationsBetween(closedOnScope:)` of each scope already asked, by the
 	///     scope's identity.
-	///   - placesByGenerator: The `places(inTreeOf:…)` of each tree already asked, by its generator's identity.
+	///   - placesByTreePath: The `places(inTreeOf:…)` of each tree already asked, by the path to its place: the declaring
+	///     scope's path and the property. A generator can be shared between places, and a tree's places are read at its own path.
 	private static func fields(
 		of site: BuildSite,
 		seam: Instantiable,
@@ -873,7 +874,7 @@ extension DependencyTreeGenerator {
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
 		declarationsBetweenByClosedOnScope: inout [ObjectIdentifier: [DeclarationBetween]],
-		placesByGenerator: inout [ObjectIdentifier: [SeamSignature.Hole.Site]],
+		placesByTreePath: inout [[Property]: [SeamSignature.Hole.Site]],
 	) -> (fields: [SeamSignature.Hole.Field], uncarriedDeclarations: [SeamSignature.Hole.UncarriedDeclaration], cycleReentryDeclarations: [SeamSignature.Hole.CycleReentryDeclaration], levels: [SeamPlaceLevels.Level], pathFields: [Property], pathUncarriedProperties: [Property], declarationsHiddenByFields: [SeamSignature.Hole.DeclarationHiddenByField]) {
 		// A field is as visible as the narrowest type it names, which the declarations of the seam's module and of the
 		// module of the type that declares the value prove, capped at the seam's type.
@@ -921,9 +922,11 @@ extension DependencyTreeGenerator {
 			var marked = uncarriedDeclaration
 			marked.isBuildableAboveSeam = true
 			marked.labelsHeldAboveSeam = receivedLabels.union([declaration.property.label])
-			// Each site whose path the tree is beside asks again.
-			let treePlaces = placesByGenerator[ObjectIdentifier(tree.generator)] ?? places(inTreeOf: tree.generator, building: declaration.property, declaredAt: tree.pathToDeclaringScope, seamType: seam.concreteInstantiable)
-			placesByGenerator[ObjectIdentifier(tree.generator)] = treePlaces
+			// Each site whose path the tree is beside asks again. The places are read at the tree's own path, so they are keyed
+			// by that path, never by the generator, which a construction memo can share between paths.
+			let treePath = tree.pathToDeclaringScope + [declaration.property]
+			let treePlaces = placesByTreePath[treePath] ?? places(inTreeOf: tree.generator, building: declaration.property, declaredAt: tree.pathToDeclaringScope, seamType: seam.concreteInstantiable)
+			placesByTreePath[treePath] = treePlaces
 			marked.placesInTree = treePlaces
 			return marked
 		}
@@ -1177,7 +1180,7 @@ extension DependencyTreeGenerator {
 				// A member of the loop of builders the scope on the path is on (`ScopeGenerator.ReceivedBuilderLoops`) is still
 				// being built where the loop's payloads are bound, before the loop's first function.
 				let isLoopMemberBuildingSite = position < pathPosition
-					&& frame.generator.areMembersOfOneLoop(child.generator, frame.orderedChildren[pathPosition].generator)
+					&& frame.generator.areMembersOfOneLoop(childAt: child.index, frame.orderedChildren[pathPosition].index)
 				var pathDeclaration = declaration(of: property, isBoundBeforeSite: position < pathPosition && !isLoopMemberBuildingSite)
 				// A public mock's root binds each received dependency it promotes, which it builds where its caller passes `nil`, among
 				// the mocked type's own children.
@@ -1279,6 +1282,8 @@ extension DependencyTreeGenerator {
 		// at each level. Any other value a fill reads is the same at every level.
 		var cycleReentryDeclarations = [SeamSignature.Hole.CycleReentryDeclaration]()
 		for (level, generator, closedOnDeclaration, closedOnDeclaringType) in scopesACycleClosesOn {
+			// Keyed by the generator's identity: a closed-on scope on a site's path holds a hole, so no construction memo
+			// shares it between places.
 			let declarationsBetween = declarationsBetweenByClosedOnScope[ObjectIdentifier(generator)] ?? declarationsBetween(closedOnScope: generator, closedOnDeclaration: closedOnDeclaration)
 			declarationsBetweenByClosedOnScope[ObjectIdentifier(generator)] = declarationsBetween
 			/// Whether the site reads the value of `label` bound inside the function. A place nested by type reads a parameter
@@ -1403,6 +1408,8 @@ extension DependencyTreeGenerator {
 				}
 			} else if generator.closesPropertyCycle, let nestedClosedOnScope = nestedClosedOnScopes.last(where: { $0.declaration == generator.closedOnDeclaration }) {
 				// A nested cycle passes each parameter of the function it closes on its nearest declaration beneath that scope.
+				// Keyed by the nested closed-on scope's generator: a generator a construction memo shares between two places
+				// beneath one closed-on scope has the same subtree at both, so the first place's binding is the binding at each.
 				let declarationsBeneath = pathDeclarations[nestedClosedOnScope.firstDeclarationBeneath...]
 				for label in nestedClosedOnScope.parameterLabels
 					where bindingByNestedCycleParameter[NestedCycleParameter(scope: nestedClosedOnScope.scope, label: label)] == nil

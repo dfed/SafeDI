@@ -233,13 +233,16 @@ extension DependencyTreeGenerator {
 	}
 
 	/// The constructions the code generated for the tree rooted at `rootScope` emits: the root's own, and each scope
-	/// the tree instantiates, transitively – the trees of the fills of each seam call it makes included – once each, in
-	/// no particular order.
+	/// the tree instantiates, transitively – the trees of the fills of each seam call it makes included, and of each call of
+	/// another module's public mock a mock root's tree makes – once each, in no particular order.
 	/// - Parameters:
 	///   - rootIsConstructedWithMockMethod: Whether the root is constructed with its hand-written mock method.
 	///   - rootReferenceLocation: Where this module refers to the root.
 	///   - isMock: Whether the tree is a mock's, which constructs each type it builds with its hand-written mock method
 	///     where that method returns a type the property accepts, as `ScopeGenerator` builds it.
+	///   - walksFillsOfPublicMockCalls: Whether a mock's tree is walked into the fills of the public mock calls it makes:
+	///     a mock root's tree in a build that compiles the generated mocks, whose fills `holesFilled(byCallsOf:in:)` made
+	///     without checking their constructions.
 	///   - emittingModule: The module the generated code compiles in, whose own files hold the dependencies that refer
 	///     to a construction.
 	///   - extendedTypes: The declarations the module reads, among which the declaration of a type an extension
@@ -252,6 +255,7 @@ extension DependencyTreeGenerator {
 		emittingModule: EmittingModule,
 		extendedTypes: ExtendedTypeDeclarations,
 		leavingOut typesLeftOut: Set<TypeDescription> = [],
+		walksFillsOfPublicMockCalls: Bool = false,
 	) -> [Construction] {
 		var constructionsByKey = [ConstructionKey: Construction]()
 		// A scope can be reached along several paths, and the first reference location in source order is kept,
@@ -313,8 +317,8 @@ extension DependencyTreeGenerator {
 			}
 		}
 		// The root is the module's own, or a mock's, so it is neither a seam candidate nor a seam built inline.
-		var scopesToWalk = [(scope: rootScope, usesMockMethod: rootIsConstructedWithMockMethod, referenceLocation: rootReferenceLocation, seamCandidateOnPaths: SeamCandidateOnPaths.agreed(nil), inlineSeamOnPath: DependencyTreeGeneratorError.InaccessibleConstruction.InlineSeam?.none, publicMockCandidate: candidate(of: rootScope.instantiable))]
-		while let (scope, usesMockMethod, referenceLocation, seamCandidateOnPaths, inlineSeamOnPath, publicMockCandidate) = scopesToWalk.popLast() {
+		var scopesToWalk = [(scope: rootScope, usesMockMethod: rootIsConstructedWithMockMethod, referenceLocation: rootReferenceLocation, seamCandidateOnPaths: SeamCandidateOnPaths.agreed(nil), inlineSeamOnPath: DependencyTreeGeneratorError.InaccessibleConstruction.InlineSeam?.none, publicMockCandidate: candidate(of: rootScope.instantiable), isInMockFill: false)]
+		while let (scope, usesMockMethod, referenceLocation, seamCandidateOnPaths, inlineSeamOnPath, publicMockCandidate, isInMockFill) = scopesToWalk.popLast() {
 			let key = ConstructionKey(scope: ObjectIdentifier(scope), usesMockMethod: usesMockMethod)
 			let walkedConstruction = constructionsByKey[key]
 			let isEarliestPath = walkedConstruction.map { Dependency.DeclarationLocation.precedesInSourceOrder(referenceLocation, $0.referenceLocation) } ?? true
@@ -347,27 +351,34 @@ extension DependencyTreeGenerator {
 					// Every path to the child through this scope extends a path to this scope.
 					seamCandidateOnPaths: mergedSeamCandidateOnPaths.extended(to: childScope.instantiable, childIsCandidate: isSeamCandidate(childScope.instantiable), candidatesModuleReads: candidatesModuleReads),
 					inlineSeamOnPath: inlineSeamOnPath ?? inlineSeam(builtBy: childScope, referencedAt: childReferenceLocation),
-					publicMockCandidate: publicMockCandidate ?? candidate(of: childScope.instantiable),
+					// A mock's fill offers only the remedy its production twin's error offers: widening the declaration.
+					publicMockCandidate: isInMockFill ? nil : publicMockCandidate ?? candidate(of: childScope.instantiable),
+					isInMockFill: isInMockFill,
 				))
 			}
-			// A seam call's fills are constructions of this module's code: the fulfilling type and its tree, built with
-			// their initializers as the type's own module builds them, reached where the call is. A mock's tree calls no
-			// seam's generated initializer, and fills another module's public mock's builder only where every construction
-			// of the fill is one this module can reach (`holesFilled(byCallsOf:in:)`), so only a production tree's fills
-			// are walked. A fill starts a path of its own, whose candidate is the fill's type when another module SafeDI
-			// knows declares it: declared a seam, that module builds the type's tree and the fill calls the initializer
-			// generated for it. No candidate above the seam reaches the fill: a type above the seam declared a seam would
-			// pass the builder up to this module whenever its own module cannot see the fulfilling type, so it would keep
-			// the fill out of this module for no path.
-			if !isMock {
-				for case let .fill(_, fillScope) in scope.holeArguments {
+			// A seam call's fills are constructions of this module's code: the fulfilling type and its tree, built with their
+			// initializers as the type's own module builds them, reached where the call is. A fill starts a path of its own,
+			// whose candidate is the fill's type when another module SafeDI knows declares it: declared a seam, that module
+			// builds the type's tree and the fill calls the initializer generated for it. No candidate above the seam reaches
+			// the fill: a type above the seam declared a seam would pass the builder up to this module whenever its own module
+			// cannot see the fulfilling type, so it would keep the fill out of this module for no path. A mock's tree calls no
+			// seam's generated initializer, but a mock root's tree fills the places of the public mocks of other modules it
+			// calls as its production twin fills them, so its fills are walked too, built as the inline mock builds them
+			// (`holesFilled(byCallsOf:in:)`). A mock builds every seam's tree inline and the twin calls no public mock, so
+			// neither remedy reaches a mock's fill: its error offers only widening the declaration. Built as the inline mock
+			// builds it, a fill calls a type's hand-written mock method where it has one, as a mock root's own tree does, where
+			// the twin calls the initializer: a deliberate difference (`seam-and-mock-contract.md`, rule 7). The mock reports
+			// that method's access where the twin reports nothing, and nothing of an initializer only the twin calls.
+			if !isMock || walksFillsOfPublicMockCalls {
+				for case let .fill(hole, fillScope) in scope.holeArguments {
 					scopesToWalk.append((
 						scope: fillScope,
-						usesMockMethod: false,
+						usesMockMethod: isMock && fillScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: hole.property.typeDescription.asInstantiatedType),
 						referenceLocation: referenceLocation,
 						seamCandidateOnPaths: SeamCandidateOnPaths.agreed(nil).extended(to: fillScope.instantiable, childIsCandidate: isSeamCandidate(fillScope.instantiable), candidatesModuleReads: candidatesModuleReads),
 						inlineSeamOnPath: inlineSeamOnPath ?? inlineSeam(builtBy: fillScope, referencedAt: referenceLocation),
 						publicMockCandidate: nil,
+						isInMockFill: isMock,
 					))
 				}
 			}
