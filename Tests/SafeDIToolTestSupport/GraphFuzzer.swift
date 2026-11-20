@@ -1457,6 +1457,21 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// no cycle parameter, so `HoleTangleT`'s level binds `holeTangleMark` as that build's tree reads it there: the seam's
 	/// deferred parameter, which it holds lazily.
 	case holeTangleTBuiltByValue
+	/// Two routes to one case: the seam builds `HoleRouteDesk`, which binds `holeRouteToken` lazily before it builds
+	/// `HoleRouteModel`, which holds a place of `HoleRouteService`, and builds `HoleRouteModel` beside it. `HoleRouteImpl`
+	/// fills the place reading `holeRouteToken` by value, which the root holds by value: the fill takes the wrapper, which
+	/// the root dispatcher makes of the root's value.
+	case holeLazyRoute
+	/// `HoleRouteDesk` binds `holeRouteToken` in a `SendableLazilyInstantiated`.
+	case holeLazyRouteSendableWrapper
+	/// `HoleRouteImpl` reads `holeRouteToken` only if available, so the fill takes the wrapper optionally.
+	case holeLazyRouteReadOnlyIfAvailable
+	/// `HoleRouteDesk` builds `HoleRouteModel` through an `Instantiator`, so inline creates `holeRouteToken`'s value only
+	/// when it builds a `HoleRouteModel`.
+	case holeLazyRouteBeneathInstantiator
+	/// `HoleRouteImpl` builds `HoleRoutePanel`, a seam whose fill requires `holeRouteToken`, which it reads of
+	/// `HoleRouteImpl`'s fill, so the fill's tree requires the value however `HoleRouteImpl` reads it.
+	case holeLazyRouteNestedSeamFillRequiresValue
 	/// `HoleNest`, a seam of the module beneath the seam's that `HoleSeam` calls by value or through an `Instantiator`,
 	/// whose hole `HoleNestImpl` fills in the seam's module with a place of `HoleSeam`'s own hole: a place inside a plain
 	/// fill (the design's section 2.6).
@@ -1902,6 +1917,13 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// graphs the seam corpus counts: the neighbours and the remedy the tool must accept.
 	var isScreenPlaceShape: Bool {
 		rawValue.hasPrefix("holeScreen")
+	}
+
+	/// Whether `addingHoleShapes` draws this case of two routes whose fill reads a value one route binds lazily and the
+	/// caller holds by value, whose count in accepted graphs the seam corpus pins (`acceptedDrawFeatureCounts`), at least
+	/// ten each.
+	var isLazyRouteShape: Bool {
+		rawValue.hasPrefix("holeLazyRoute")
 	}
 
 	static func < (lhs: GraphFuzzerSeamDrawFeature, rhs: GraphFuzzerSeamDrawFeature) -> Bool {
@@ -5407,6 +5429,15 @@ enum GraphFuzzerGenerator {
 			let tangleReadsInstantiator = holeRolls.tangle.percentChance(50)
 			let tangleTReadsMark = holeRolls.tangle.percentChance(90)
 			let tangleTBuiltByValue = holeRolls.tangle.percentChance(50)
+			// Two routes to one case whose fill reads a value one route binds lazily and the caller holds by value, on a generator
+			// of its own, made whatever the base draw.
+			let drawsLazyRoute = holeRolls.lazyRoute.percentChance(60)
+			let lazyRouteWrapper = holeRolls.lazyRoute.element(of: lazyWrappers)
+			let lazyRouteDeskFirst = holeRolls.lazyRoute.percentChance(50)
+			let lazyRouteBeneathInstantiator = holeRolls.lazyRoute.percentChance(50)
+			let lazyRouteReadOnlyIfAvailable = holeRolls.lazyRoute.percentChance(45)
+			let lazyRouteRootHoldsToken = holeRolls.lazyRoute.percentChance(60)
+			let lazyRouteNestedSeamFill = holeRolls.lazyRoute.percentChance(50)
 			// A place inside a plain fill, and a hole under a later member of a loop of received instantiators, each on a
 			// generator of its own, made whatever the base draw.
 			let drawsPlainFillPlace = holeRolls.plainFillPlace.percentChance(25)
@@ -6063,6 +6094,66 @@ enum GraphFuzzerGenerator {
 			// seam holds: past a batch's traversals, and an isolated seed's, with the draws below at their widest (seed 945
 			// with a place inside a plain fill on two calls and two routes; seeds 600, 945 and 1393 with a loop's places).
 			let fillCallsSeamAgain = ownerIsBuiltByInstantiator && (drawsReentry || drawsNestedFill && !drawsSecondHole)
+			// Two routes to one case whose fill reads a value one route binds lazily and the caller holds by value
+			// (`holeLazyRoute`): the seam builds `HoleRouteDesk`, which binds `holeRouteToken` in a `LazilyInstantiated` or a
+			// `SendableLazilyInstantiated` and then builds `HoleRouteModel`, by value or, half the time where the graph
+			// holds `Instantiator`, through one, and builds `HoleRouteModel` beside it, in either order. `HoleRouteModel` holds
+			// a place of `HoleRouteService`, which `HoleRouteImpl` fills reading `holeRouteToken` by value, required or only if
+			// available. The root holds `holeRouteToken` by value where the read is required and, where it is only if available,
+			// six times in ten. The fill then takes the wrapper: `HoleRouteDesk`'s route hands it its own, the root dispatcher
+			// one it makes of the root's value or `nil`, and the fill reads the instance where it builds the place, so the value
+			// oracle compares when `HoleRouteDesk`'s value is created with inline's. Half the time `HoleRouteImpl` also builds
+			// `HoleRoutePanel`, a seam whose place of `HoleRouteGadget` `HoleRouteGadgetImpl` fills requiring `holeRouteToken`,
+			// which it reads of `HoleRouteImpl`'s fill: the fill's tree then requires the value, however `HoleRouteImpl` reads it,
+			// and the root holds it. Not where a fill calls the seam again, inside which the root's value is not the nearest
+			// declaration.
+			var lazyRouteRootDeclaration: PropertyDeclaration?
+			if drawsLazyRoute, !fillCallsSeamAgain {
+				let routeServiceName = name("HoleRouteService")
+				let token = instantiable("HoleRouteToken", module: .seamModule)
+				var model = instantiable("HoleRouteModel", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeRouteService", type: "any \(routeServiceName)")])
+				model.additionalDeclarations.append("public protocol \(routeServiceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+				let deskModel = if lazyRouteBeneathInstantiator, sendability != .sendable {
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeRouteModelBuilder", type: "Instantiator<\(model.name)>")
+				} else {
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeRouteModel", type: model.name)
+				}
+				let desk = instantiable("HoleRouteDesk", module: .seamModule, properties: [
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeRouteToken", type: "\(lazyRouteWrapper)<\(token.name)>"),
+					deskModel,
+				])
+				var routeImpl = instantiable("HoleRouteImpl", module: fillerModule, properties: [
+					lazyRouteReadOnlyIfAvailable
+						? PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "holeRouteToken", type: token.name + "?")
+						: PropertyDeclaration(attribute: "@Received", label: "holeRouteToken", type: token.name),
+				])
+				routeImpl.instantiableArguments = ["fulfillingAdditionalTypes: [\(routeServiceName).self]"]
+				routeImpl.additionalConformances.append(routeServiceName)
+				routeImpl.fillsHole = true
+				seamModuleDeclarations += [token, model, desk]
+				if lazyRouteNestedSeamFill {
+					let gadgetName = name("HoleRouteGadget")
+					var panel = instantiable("HoleRoutePanel", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeRouteGadget", type: "any \(gadgetName)")])
+					panel.instantiableArguments = ["generateDependencyTree: true"]
+					panel.additionalDeclarations.append("public protocol \(gadgetName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+					var gadgetImpl = instantiable("HoleRouteGadgetImpl", module: fillerModule, properties: [PropertyDeclaration(attribute: "@Received", label: "holeRouteToken", type: token.name)])
+					gadgetImpl.instantiableArguments = ["fulfillingAdditionalTypes: [\(gadgetName).self]"]
+					gadgetImpl.additionalConformances.append(gadgetName)
+					gadgetImpl.fillsHole = true
+					seamModuleDeclarations.append(panel)
+					callerDeclarations.append(gadgetImpl)
+					routeImpl.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeRoutePanel", type: panel.name))
+				}
+				callerDeclarations.append(routeImpl)
+				let routeProperties = [
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeRouteDesk", type: desk.name),
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeRouteModel", type: model.name),
+				]
+				seam.properties += lazyRouteDeskFirst ? routeProperties : routeProperties.reversed()
+				if !lazyRouteReadOnlyIfAvailable || lazyRouteRootHoldsToken || lazyRouteNestedSeamFill {
+					lazyRouteRootDeclaration = PropertyDeclaration(attribute: "@Instantiated", label: "holeRouteToken", type: token.name)
+				}
+			}
 			// A place inside a plain fill the seam generates (the design's section 2.6): `HoleNest`, a seam in the module beneath
 			// the seam's, takes a builder for `HoleNestService`, which `HoleNestImpl`, in the seam's module, fills, so the seam
 			// generates the fill, and `HoleNestImpl`'s own place of `HoleService`, on it or, now and then, on `HoleNestWidget`
@@ -6374,6 +6465,9 @@ enum GraphFuzzerGenerator {
 			if rootHoldsScreenTag {
 				rootProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeScreenTag", type: name("HoleScreenTag")))
 			}
+			if let lazyRouteRootDeclaration {
+				rootProperties.append(lazyRouteRootDeclaration)
+			}
 			rootProperties.append(rootCall)
 			rootProperties += nestedRootProperties
 			if fillsFromOtherPackage {
@@ -6407,6 +6501,7 @@ enum GraphFuzzerGenerator {
 				placeInsideSendableFill = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6544656570)
 				sharedTypes = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6553686172)
 				tangle = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6554616E67)
+				lazyRoute = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654C52746B)
 				plainFillPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6546696C6C)
 				loopPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6552696E67)
 				forwardingPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C65466F7277)
@@ -6441,6 +6536,9 @@ enum GraphFuzzerGenerator {
 			/// The draws of scopes nested by type: types shared under a hole, and a tangle of cycles with a place.
 			var sharedTypes: GraphFuzzerRandomNumberGenerator
 			var tangle: GraphFuzzerRandomNumberGenerator
+			/// Two routes to one case whose fill reads a value one route binds lazily and the caller holds by value
+			/// (`holeLazyRoute`).
+			var lazyRoute: GraphFuzzerRandomNumberGenerator
 			/// A place inside a plain fill the seam generates, and a hole under a later member of a loop of received
 			/// instantiators.
 			var plainFillPlace: GraphFuzzerRandomNumberGenerator
@@ -10503,6 +10601,21 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			features.insert(.holeSharedTypes)
 			if declares("HoleModel") {
 				features.insert(.holeSharedTypesThroughModel)
+			}
+		}
+		if declares("HoleRouteDesk") {
+			features.insert(.holeLazyRoute)
+			if properties(of: "HoleRouteDesk").contains(where: { $0.type.hasPrefix("Sendable") }) {
+				features.insert(.holeLazyRouteSendableWrapper)
+			}
+			if properties(of: "HoleRouteImpl").contains(where: { $0.type.hasSuffix("?") }) {
+				features.insert(.holeLazyRouteReadOnlyIfAvailable)
+			}
+			if properties(of: "HoleRouteDesk").contains(where: { $0.label == "holeRouteModelBuilder" }) {
+				features.insert(.holeLazyRouteBeneathInstantiator)
+			}
+			if declares("HoleRoutePanel") {
+				features.insert(.holeLazyRouteNestedSeamFillRequiresValue)
 			}
 		}
 		if declares("HoleTangleT") {
