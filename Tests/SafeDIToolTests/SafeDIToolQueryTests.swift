@@ -2957,6 +2957,33 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_readsModuleInfoFile_whenItsViewIsCorrupt() async throws {
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Feature",
+			modules: [QueryTestModule("FeatureModule", [Self.standaloneFeature], input: .moduleInfo())],
+			moduleArguments: { _, _, moduleInfoFiles in
+				let moduleInfoFile = moduleInfoFiles["FeatureModule"]!
+				do {
+					try Self.corruptView(ofModuleInfoFileAt: moduleInfoFile)
+				} catch {
+					Issue.record(error)
+				}
+				return ["--module-info", moduleInfoFile.path]
+			},
+			filesToDelete: &filesToDelete,
+		)
+
+		// The file a reader of its view rejects…
+		let moduleInfoData = try Data(contentsOf: URL(fileURLWithPath: output.paths(of: "FeatureModule")[0]))
+		#expect(throws: BinaryFileReadError.self) {
+			try ModuleInfoFile(moduleInfoData: moduleInfoData)
+		}
+		// …still describes its module to the query, which reads no view.
+		#expect(output.result.modules == [output.module("FeatureModule", [output.instantiable("Feature", in: "FeatureModule")])])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func query_throwsError_whenAFileIsInTwoModuleInfoFiles() async {
 		await assertThrowsQueryError(
 			diagnostics: { moduleFiles in
@@ -3060,6 +3087,19 @@ struct SafeDIToolQueryTests: ~Copyable {
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 		filesToDelete.append(directory)
 		return directory
+	}
+
+	/// Makes the view of the module info file at `url`, which the file holds last, claim more modules than the file
+	/// holds, and records the body's checksum again, so that only a reader of the view finds the file malformed.
+	private static func corruptView(ofModuleInfoFileAt url: URL) throws {
+		var data = try Data(contentsOf: url)
+		// The header's 30 bytes end with the body's checksum; the body ends with the count of the view's declarations,
+		// zero in a file whose view is empty.
+		let headerLength = 30
+		data[data.count - 1] = 0x7F
+		let checksum = data[headerLength...].withUnsafeBytes { BinaryFile.checksum(of: $0) }
+		withUnsafeBytes(of: checksum.littleEndian) { data.replaceSubrange(22..<headerLength, with: $0) }
+		try data.write(to: url)
 	}
 
 	/// A feature that instantiates a service and receives a logger, across three modules.

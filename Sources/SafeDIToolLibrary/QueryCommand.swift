@@ -204,10 +204,7 @@ public struct QueryNeeds: AsyncParsableCommand {
 	/// configuration, and a module info file as a dependent module's. Ordered by name, whatever order their reads
 	/// finished in, which is the order their declarations are combined in.
 	func readIncludedModules() async throws -> [ParsedQueryModule] {
-		// A module info file names the module it describes.
-		let moduleInfoFiles = try moduleInfo.map { path in
-			(path: path, recordedModuleName: try ParsedQueryModule.readModuleInfoFile(at: path).moduleName)
-		}
+		let moduleInfoFiles = try await Self.readModuleInfoFiles(at: moduleInfo)
 		let includedModules = try IncludedModule.modules(including: include, moduleInfo: moduleInfoFiles)
 		guard !includedModules.isEmpty else {
 			throw QueryError.noModuleIncluded
@@ -230,6 +227,46 @@ public struct QueryNeeds: AsyncParsableCommand {
 		}
 	}
 
+	/// The module info file each of `paths` names, in the order of `paths`. Each file is read once, however many
+	/// arguments name it, and the files are read in parallel.
+	/// - Throws: The error of the first path, in the order of `paths`, whose file cannot be read, whatever order the
+	///   reads finish in.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	static func readModuleInfoFiles(at paths: [String]) async throws -> [(path: String, file: ModuleInfoFile)] {
+		// Each file is read under the first argument that names it, so an error names the file as that argument spells it.
+		var pathsToRead = [String]()
+		var readIndexesByFile = [NormalizedFilePath: Int]()
+		let readIndexes = paths.map { path in
+			let file = NormalizedFilePath(path)
+			if let readIndex = readIndexesByFile[file] {
+				return readIndex
+			} else {
+				readIndexesByFile[file] = pathsToRead.count
+				pathsToRead.append(path)
+				return pathsToRead.count - 1
+			}
+		}
+		let reads = await withTaskGroup(
+			of: (index: Int, read: Result<ModuleInfoFile, any Error>).self,
+			returning: [Result<ModuleInfoFile, any Error>].self,
+		) { taskGroup in
+			for (index, path) in pathsToRead.enumerated() {
+				taskGroup.addTask {
+					(index: index, read: Result { try ParsedQueryModule.readModuleInfoFile(at: path) })
+				}
+			}
+			var indexedReads = [(index: Int, read: Result<ModuleInfoFile, any Error>)]()
+			for await indexedRead in taskGroup {
+				indexedReads.append(indexedRead)
+			}
+			return indexedReads.sorted { $0.index < $1.index }.map(\.read)
+		}
+		let files = try reads.map { try $0.get() }
+		return zip(paths, readIndexes).map { path, readIndex in
+			(path: path, file: files[readIndex])
+		}
+	}
+
 	/// The names of the concrete types that contain `typeName` or that it contains, ignoring case – the likeliest
 	/// misspellings – closest in length first, at most five, leaving out the `excluded` names.
 	private static func similarlyNamedTypes(to typeName: String, among typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable], excluding excluded: [String]) -> [String] {
@@ -248,7 +285,7 @@ public struct QueryNeeds: AsyncParsableCommand {
 }
 
 /// A module named with `--include` or `--module-info`: what it is read from, and the arguments that name it.
-struct IncludedModule: Equatable {
+struct IncludedModule {
 	/// A directory's module is named by the last component of its path, or as many of its trailing components as tell it
 	/// apart from the other directories, joined by `/`. A module info file's module is the module the file records.
 	let name: String
@@ -257,19 +294,24 @@ struct IncludedModule: Equatable {
 	let paths: [String]
 
 	/// What a module is read from.
-	enum Source: Hashable {
+	enum Source {
 		/// The Swift files under a directory named with `--include`, or named directly: the directory, and the
 		/// directory as the first of `paths` spelled it, under which the module's files are reported.
 		case directory(NormalizedFilePath, spelling: String)
-		/// A `.safedi` module info file named with `--module-info`.
-		case moduleInfo(NormalizedFilePath)
+		/// A `.safedi` module info file named with `--module-info`, and the file as read without its view.
+		case moduleInfo(NormalizedFilePath, file: ModuleInfoFile)
 	}
 
 	/// The modules the arguments name, ordered by name. Arguments naming one directory, or one file, are one module.
-	/// - Parameter moduleInfoFiles: Each `--module-info` argument, with the module its file records.
+	/// - Parameter moduleInfoFiles: Each `--module-info` argument, with its file, which names the module it records.
 	/// - Throws: When two module info files record one module, or a directory's module is named like a module a module
 	///   info file records: one module included twice.
-	static func modules(including directoryPaths: [String], moduleInfo moduleInfoFiles: [(path: String, recordedModuleName: String)]) throws(QueryError) -> [IncludedModule] {
+	static func modules(including directoryPaths: [String], moduleInfo moduleInfoFiles: [(path: String, file: ModuleInfoFile)]) throws(QueryError) -> [IncludedModule] {
+		/// What tells two included modules apart: the file a module is read from, and not what was read from it.
+		enum SourceKey: Hashable {
+			case directory(NormalizedFilePath, spelling: String)
+			case moduleInfo(NormalizedFilePath)
+		}
 		struct Entry {
 			let source: Source
 			var paths: [String]
@@ -278,27 +320,30 @@ struct IncludedModule: Equatable {
 		}
 		var directoryEntries = [Entry]()
 		var moduleInfoEntries = [Entry]()
-		var entryIndexesBySource = [Source: Int]()
+		var entryIndexesBySource = [SourceKey: Int]()
 		for path in directoryPaths {
 			// `generate --include` reads a Swift file named directly, as it reads the files of a directory.
 			let directorySpelling = path.hasSuffix(".swift") ? (path as NSString).deletingLastPathComponent : path
 			let spelling = directorySpelling.isEmpty ? "." : directorySpelling
 			let directory = NormalizedFilePath(spelling)
 			let source = Source.directory(directory, spelling: spelling)
-			if let index = entryIndexesBySource[source] {
+			let sourceKey = SourceKey.directory(directory, spelling: spelling)
+			if let index = entryIndexesBySource[sourceKey] {
 				directoryEntries[index].paths.append(path)
 			} else {
-				entryIndexesBySource[source] = directoryEntries.count
+				entryIndexesBySource[sourceKey] = directoryEntries.count
 				directoryEntries.append(Entry(source: source, paths: [path], nameComponents: directory.path.split(separator: "/").map(String.init)))
 			}
 		}
-		for (path, recordedModuleName) in moduleInfoFiles {
-			let source = Source.moduleInfo(NormalizedFilePath(path))
-			if let index = entryIndexesBySource[source] {
+		for (path, file) in moduleInfoFiles {
+			let moduleInfoPath = NormalizedFilePath(path)
+			let sourceKey = SourceKey.moduleInfo(moduleInfoPath)
+			if let index = entryIndexesBySource[sourceKey] {
 				moduleInfoEntries[index].paths.append(path)
 			} else {
-				entryIndexesBySource[source] = moduleInfoEntries.count
-				moduleInfoEntries.append(Entry(source: source, paths: [path], nameComponents: [recordedModuleName]))
+				entryIndexesBySource[sourceKey] = moduleInfoEntries.count
+				// A module info file names the module it describes.
+				moduleInfoEntries.append(Entry(source: .moduleInfo(moduleInfoPath, file: file), paths: [path], nameComponents: [file.moduleName]))
 			}
 		}
 		// Two layouts need more than the last component: `Modules/Home/Sources` and `Modules/Settings/Sources`
@@ -361,10 +406,9 @@ struct ParsedQueryModule {
 					),
 				)
 			}
-		case .moduleInfo:
-			let path = includedModule.paths[0]
-			// The file's view of the modules it depends on is not read: the query includes every module it reads.
-			let readModuleInfo = try Self.readModuleInfoFile(at: path).module
+		case let .moduleInfo(_, file):
+			// The file's view of the modules it depends on was not read: the query includes every module it reads.
+			let readModuleInfo = file.module
 			// Every declaration the file holds belongs to the module, named, with its package, as the build that wrote the
 			// file named them. They decide only which hand-written mocks a module that generates a mock can call.
 			identity = ModuleIdentity(moduleName: includedModule.name, packageName: readModuleInfo.packageName)
@@ -386,7 +430,8 @@ struct ParsedQueryModule {
 		}
 	}
 
-	/// The module info file at `path`, as given.
+	/// The module info file at `path`, as given, without its view of the modules it depends on: the query includes every
+	/// module it reads, and a view grows with the modules beneath the file's module.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	static func readModuleInfoFile(at path: String) throws -> ModuleInfoFile {
 		guard FileManager.default.fileExists(atPath: path) else {
@@ -395,7 +440,7 @@ struct ParsedQueryModule {
 		// A file that cannot be opened reports the file system's error as `generate` does.
 		let data = try Data(contentsOf: path.asFileURL)
 		do {
-			return try ModuleInfoFile(moduleInfoData: data)
+			return try ModuleInfoFile(moduleInfoDataWithoutView: data)
 		} catch {
 			throw QueryError.moduleInfoNotReadable(path: path, reason: "\(error) \(BinaryFile.unreadableFileExplanation)")
 		}
