@@ -2841,7 +2841,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	func generateCode(
 		codeGeneration: CodeGeneration = .dependencyTree,
 	) async throws -> String {
-		try await GeneratedCode(scopeCodeAsRoot(codeGeneration: codeGeneration), indentedBy: "").written
+		try await GeneratedCode.writtenAsRoot(scopeCodeAsRoot(codeGeneration: codeGeneration))
 	}
 
 	/// Generates this scope's code as the root of what is generated, into its cache, without writing it out: a later

@@ -18,6 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import Foundation
+
 /// The code a scope generated, held as the pieces it is written from until it is written out once.
 ///
 /// A scope's code holds its children's code, and each scope used to indent its whole subtree's text again, so a line was
@@ -81,12 +83,87 @@ struct GeneratedCode: Sendable {
 
 	/// The code as it is written.
 	var written: String {
-		if pieces.count == 1 {
-			pieces[0].written
+		Self.joined(pieces.map(\.written))
+	}
+
+	/// The pieces' text as written, joined as `written` joins it.
+	private static func joined(_ writtenPieces: [String]) -> String {
+		if writtenPieces.count == 1 {
+			writtenPieces[0]
 		} else {
-			pieces.map(\.written).filter { !$0.isEmpty }.joined(separator: "\n")
+			writtenPieces.filter { !$0.isEmpty }.joined(separator: "\n")
 		}
 	}
+
+	/// The code `scopeCode` stands for as the root of what is generated, written as `init(_:indentedBy:)` writes it with no
+	/// whitespace, with its pieces indented by concurrent tasks. Every piece is indented on its own, so the root's code is
+	/// written on as many cores as the scopes' code was generated on, where one task indenting every line of a large tree
+	/// took longer than generating it.
+	static func writtenAsRoot(_ scopeCode: ScopeCode) async -> String {
+		let parts = parts(of: scopeCode)
+		var children = [GeneratedCode]()
+		for part in parts {
+			if case let .child(index, extraIndentation) = part {
+				children.append(scopeCode.children[index].indented(by: extraIndentation))
+			}
+		}
+		var writtenChildren = await writtenConcurrently(children).makeIterator()
+		var text = ""
+		for part in parts {
+			switch part {
+			case let .text(partText):
+				text += partText
+			case .child:
+				text += writtenChildren.next() ?? ""
+			}
+		}
+		return text
+	}
+
+	/// What each of `codes` writes, as `written` writes it, from its pieces indented in chunks of about the same size by
+	/// concurrent tasks.
+	private static func writtenConcurrently(_ codes: [GeneratedCode]) async -> [String] {
+		let pieces = codes.flatMap(\.pieces)
+		let totalSize = pieces.reduce(0) { $0 + $1.text.utf8.count }
+		let chunkSize = max(minimumChunkSize, totalSize / (ProcessInfo.processInfo.activeProcessorCount * chunksPerProcessor))
+		var chunks = [Range<Int>]()
+		var chunkStart = 0
+		var size = 0
+		for (index, piece) in pieces.enumerated() {
+			size += piece.text.utf8.count
+			if size >= chunkSize {
+				chunks.append(chunkStart..<(index + 1))
+				chunkStart = index + 1
+				size = 0
+			}
+		}
+		if chunkStart < pieces.count {
+			chunks.append(chunkStart..<pieces.count)
+		}
+		var writtenPieces = [String](repeating: "", count: pieces.count)
+		if chunks.count == 1 {
+			writtenPieces = pieces.map(\.written)
+		} else {
+			await withTaskGroup(of: (Range<Int>, [String]).self) { group in
+				for chunk in chunks {
+					group.addTask { (chunk, pieces[chunk].map(\.written)) }
+				}
+				for await (chunk, written) in group {
+					writtenPieces.replaceSubrange(chunk, with: written)
+				}
+			}
+		}
+		var codeStart = 0
+		return codes.map { code in
+			defer { codeStart += code.pieces.count }
+			return joined(Array(writtenPieces[codeStart..<(codeStart + code.pieces.count)]))
+		}
+	}
+
+	/// The fewest bytes of text a task indents, below which a task costs more than it saves.
+	private static let minimumChunkSize = 1 << 16
+	/// How many chunks each processor is offered, so that a processor that finishes early takes another.
+	private static let chunksPerProcessor = 4
 
 	/// Whether the code, indented by a scope above it, writes a line: every line of a piece owed indentation is written
 	/// unless it is empty, and a piece written as it is is never indented again.
