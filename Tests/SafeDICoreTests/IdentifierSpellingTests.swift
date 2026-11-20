@@ -18,10 +18,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-@testable import SafeDICore
 import SwiftParser
 import SwiftSyntax
 import Testing
+@testable import SafeDICore
 
 struct IdentifierSpellingTests {
 	@Test
