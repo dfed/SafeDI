@@ -580,8 +580,11 @@ func executeSafeDIToolMultiModuleTest(
 			// rethrows them as an `ExitCode`, which would hide the error from the assertion helpers.
 			do {
 				// Every place's levels must hold its scope struct's fields (`SeamPlaceLevels.pathStructMismatches`).
+				// Every tree must hold the same data on every path with the construction memo and without it (`ConstructionMemoChecks`).
 				generateOutput = try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
-					try await tool.generate()
+					try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
+						try await tool.generate()
+					}
 				}
 			} catch {
 				var fixturesByModuleName = outputs.mapValues(\.fixtures)

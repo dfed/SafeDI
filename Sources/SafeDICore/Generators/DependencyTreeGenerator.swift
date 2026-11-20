@@ -324,7 +324,7 @@ public actor DependencyTreeGenerator {
 			let trees = try dependencyTrees(unreadTypeComment: publicMockContext?.unreadTypeComment)
 			if request.generatesDependencyTrees {
 				generatedRoots = try await generatedCode(of: trees)
-				warnings = generateWarnings(validatedScopes: trees.validatedScopes)
+				warnings = trees.warnings
 			}
 			if request.generatesDOTTree {
 				// Drawn from the trees the code was generated from, before any mock is built, so that no tree outlives its
@@ -483,14 +483,31 @@ public actor DependencyTreeGenerator {
 		let scopeGenerator: ScopeGenerator
 	}
 
+	/// The validated scopes, frozen. Made only in this file, once `dependencyTrees(unreadTypeComment:)` has validated them,
+	/// and handed to each construction that validation must come first for: the trees of the roots of a module without
+	/// seams, the inline trees of foreign seams with holes (`inlineTreesOfForeignSeamsWithHoles(in:validatedWorld:foreignSeamRoots:)`),
+	/// this module's own seams' signature trees (`SignatureConstruction.ownSeams`), and, through a `SeamWorld`, the trees of
+	/// the roots and seams a module with seams generates. It is a convention the compiler enforces by access, not a proof
+	/// that the walks ran correctly. Another module's seams' signature trees and its public mocks' plans take none: they
+	/// read the declarations alone.
+	struct ValidatedWorld {
+		fileprivate init(frozenScopeMap: FrozenScopeMap) {
+			self.frozenScopeMap = frozenScopeMap
+		}
+
+		/// The validated scopes' table.
+		let frozenScopeMap: FrozenScopeMap
+	}
+
 	/// The trees of the roots and seams a run of `generate` builds once, validated, which their code, their warnings and
 	/// the DOT graph read.
 	struct DependencyTrees {
 		/// The generators of the trees this module generates: the roots of the dependency tree, then the seams this module
 		/// generates.
 		let roots: [RootScopeInfo]
-		/// The scopes of the validated dependency tree, which `generateWarnings(validatedScopes:)` analyzes.
-		let validatedScopes: Set<Scope>
+		/// The warnings about the validated dependency tree (`generateWarnings(validatedScopes:)`), found while its scopes
+		/// are built so that no scope outlives the trees into code generation, whose peak memory it would raise.
+		let warnings: [SourceDiagnostic]
 		/// The roots another module declares, in type order, whose `init()` that module generates rather than this one.
 		let rootsOfOtherModules: [Instantiable]
 	}
@@ -543,7 +560,9 @@ public actor DependencyTreeGenerator {
 				let foreignSeamHoles = foreignSeamRoots.compactMapValues { $0?.signature.holes }
 				throw error.markingCyclesClosedInSeamFills(DependencyTreeGeneratorError.SeamFillDeclarations.ofFills(ofHolesOf: foreignSeamHoles, in: typeDescriptionToScopeMap))
 			}
-			inlineForeignSeamTrees = try inlineTreesOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap, foreignSeamRoots: foreignSeamRoots)
+			// Every tree built from the validated scopes reads them frozen, once.
+			let validatedWorld = ValidatedWorld(frozenScopeMap: FrozenScopeMap(freezing: typeDescriptionToScopeMap.lazy.map { (key: $0.key, scope: $0.value) }))
+			inlineForeignSeamTrees = try inlineTreesOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap, validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots)
 			validatedScopes = Set(typeDescriptionToScopeMap.values)
 			// A module whose declarations hold no seam generates from the validated scopes.
 			// One that holds a seam generates from a second map, in which every reach of a seam is a call to
@@ -559,21 +578,27 @@ public actor DependencyTreeGenerator {
 					},
 				)
 				rootsOfOtherModules = rootScopesToGenerate.rootsOfOtherModules
-				return try rootScopesToGenerate.rootScopes.map { typeDescription, scope in
-					try RootScopeInfo(
+				var constructionMemo = ConstructionMemo()
+				var roots = [RootScopeInfo]()
+				for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
+					let (table, record) = validatedWorld.frozenScopeMap.freezing(rootScope: scope)
+					try roots.append(RootScopeInfo(
 						typeDescription: typeDescription,
 						instantiable: scope.instantiable,
 						sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
-						scopeGenerator: scope.createScopeGenerator(
+						scopeGenerator: record.createScopeGenerator(
+							in: table,
 							for: nil,
 							lazilyInstantiatedInstanceProperties: [],
 							erasedToConcreteExistential: false,
 							declaredTypeNames: declaredTypeNames,
+							constructionMemo: &constructionMemo,
 						),
-					)
+					))
 				}
+				return roots
 			}
-			let seamWorldRoots = try seamWorldRootScopeGenerators(foreignSeamRoots: foreignSeamRoots, unreadTypeComment: unreadTypeComment)
+			let seamWorldRoots = try seamWorldRootScopeGenerators(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, unreadTypeComment: unreadTypeComment)
 			rootsOfOtherModules = seamWorldRoots.rootsOfOtherModules
 			return seamWorldRoots.roots
 		}()
@@ -581,7 +606,7 @@ public actor DependencyTreeGenerator {
 		for root in rootScopeGenerators {
 			GenerationLayerObservation.record(.dependencyTree(of: root.typeDescription), inRunOf: seams.currentModule.moduleName)
 		}
-		return DependencyTrees(roots: rootScopeGenerators, validatedScopes: validatedScopes, rootsOfOtherModules: rootsOfOtherModules)
+		return DependencyTrees(roots: rootScopeGenerators, warnings: generateWarnings(validatedScopes: validatedScopes), rootsOfOtherModules: rootsOfOtherModules)
 	}
 
 	/// Rejects each label that a type a dependency cycle builds again, in the trees `generators` root, receives in forms
@@ -665,9 +690,8 @@ public actor DependencyTreeGenerator {
 			}
 			rootScopesToGenerate.append(rootScope)
 		}
-		// A calling mock whose fill of a called public mock's place makes such a construction passes the place up and is
-		// accepted instead, a deliberate gap accepted for now that the calling-mock mirror work in 2.3.1 closes
-		// (`holesFilled(byCallsOf:in:)`, `seam-and-mock-contract.md`, rule 7).
+		// A calling mock whose fill of a called public mock's place makes such a construction reports it too, where the mock
+		// makes it as the twin does (`holesFilled(byCallsOf:in:)`).
 		guard inaccessibleConstructions.isEmpty else {
 			throw DependencyTreeGeneratorError.inaccessibleConstructions(inaccessibleConstructions)
 		}

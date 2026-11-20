@@ -979,6 +979,10 @@ enum GraphFuzzerBuilderSurfaceEdit: String, CaseIterable {
 	/// Added supply: a place of a new builder of the existing filling type in the inner seam of another module that
 	/// `secondPlaceInInnerSeamOfAnotherModule` adds, against whose graph it is judged.
 	case placeOfNewBuilderInInnerSeamOfAnotherModule
+	/// Added supply: a place of `HoleServiceSendable`, a hole type of its own whose builder's plain label is `HoleService`'s
+	/// `@Sendable` builder label, beside `HoleService`'s place, filled by `HoleServiceSendableImpl` beside `HoleImpl`. Only the
+	/// new type's builder may be named apart: `HoleService`'s keeps its label whatever another type is named.
+	case placeOfHoleTypeNamedAfterSendableLabel
 	/// Rejection: a place of an existing builder that forwards other values (`ErasedInstantiator<Int, …>`).
 	case placeForwardingOtherValues
 	/// The rejection's remedy: the same place forwarding what the existing places forward (`ErasedInstantiator<(), …>`).
@@ -1007,6 +1011,7 @@ enum GraphFuzzerBuilderSurfaceEdit: String, CaseIterable {
 		     .sendableInstantiatorChangedToSendableErasedInstantiator,
 		     .placeOfNewBuilderOfExistingFillingType,
 		     .placeOfNewBuilderInInnerSeamOfAnotherModule,
+		     .placeOfHoleTypeNamedAfterSendableLabel,
 		     .placeForwardingOtherValues,
 		     .placeForwardingOtherValuesRemedied,
 		     .placeForwardingOtherValuesInInnerSeamOfAnotherModule,
@@ -1048,6 +1053,7 @@ extension GraphFuzzerGenerator {
 		     .placeBehindLazilyInstantiated,
 		     .placeOfNewBuilderOfExistingFillingType,
 		     .placeOfNewBuilderInInnerSeamOfAnotherModule,
+		     .placeOfHoleTypeNamedAfterSendableLabel,
 		     .placeForwardingOtherValues,
 		     .placeForwardingOtherValuesRemedied,
 		     .placeForwardingOtherValuesInInnerSeamOfAnotherModule,
@@ -1159,6 +1165,21 @@ extension GraphFuzzerGenerator {
 			], builtBy: insertingOnSeam) else { return nil }
 			edited[edited.count - 1].additionalDeclarations.append("public struct \(erasedName)\(context.helperTypesAreSendable ? ": Sendable" : "") {\n\tpublic init(_ value: \(serviceType)) {\n\t\tself.value = value\n\t}\n\n\tpublic let value: \(serviceType)\n}")
 			return edited
+		case .placeOfHoleTypeNamedAfterSendableLabel:
+			// `HoleServiceSendable`'s plain builder label is `HoleService`'s `@Sendable` one, whether or not `HoleService` has a
+			// place in the `@Sendable` family. The new protocol is declared beside the holder and filled from `HoleImpl`'s module.
+			guard let impl = declarations.first(where: { $0.name == "\(prefix)HoleImpl" }),
+			      let holeIndex = holder.properties.firstIndex(where: { $0.label == "holeService" && $0.type == serviceType })
+			else { return nil }
+			let sendableNamedServiceName = "\(prefix)HoleServiceSendable"
+			declarations[holderIndex].additionalDeclarations.append("public protocol \(sendableNamedServiceName)\(context.helperTypesAreSendable ? ": Sendable" : "") {}")
+			declarations[holderIndex].properties.insert(PropertyDeclaration(attribute: "@Instantiated", label: "holeServiceSendable", type: "any \(sendableNamedServiceName)"), at: holeIndex + 1)
+			var filler = TypeDeclaration(name: "\(sendableNamedServiceName)Impl", instantiableArguments: ["fulfillingAdditionalTypes: [\(sendableNamedServiceName).self]"], properties: [], declaresHelperTypes: false)
+			filler.additionalConformances = [sendableNamedServiceName]
+			filler.module = impl.module
+			filler.imports = impl.imports
+			filler.fillsHole = true
+			declarations.append(filler)
 		case .placeForwardingOtherValuesInInnerSeamOfAnotherModule, .placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied:
 			let forwarded = edit == .placeForwardingOtherValuesInInnerSeamOfAnotherModule ? "Int" : "()"
 			return addingInnerSeam(holding: [PropertyDeclaration(
@@ -1240,6 +1261,7 @@ extension GraphFuzzerGenerator {
 		     .placeBehindLazilyInstantiated,
 		     .placeOfNewBuilderOfExistingFillingType,
 		     .placeOfNewBuilderInInnerSeamOfAnotherModule,
+		     .placeOfHoleTypeNamedAfterSendableLabel,
 		     .placeForwardingOtherValues,
 		     .placeForwardingOtherValuesRemedied,
 		     .placeForwardingOtherValuesInInnerSeamOfAnotherModule,
@@ -1459,7 +1481,8 @@ extension GraphFuzzerToolRuns {
 					}
 					judgments.append((run.edit.rawValue, judgment))
 				}
-			case .placeOfNewBuilderOfExistingFillingType:
+			case .placeOfNewBuilderOfExistingFillingType,
+			     .placeOfHoleTypeNamedAfterSendableLabel:
 				judgments.append((run.edit.rawValue, GraphFuzzerBuilderSurface.addedSupplyJudgment(without: firstOutcome, with: run.outcome)))
 			case .placeOfNewBuilderInInnerSeamOfAnotherModule:
 				// Judged against the graph with the second place in the inner seam, whose rejection is part (i)'s alone.
@@ -1567,6 +1590,7 @@ extension GraphFuzzerToolRuns {
 		failure(of: .addedBuilderChangesExistingBuilder, kinds: [
 			GraphFuzzerBuilderSurfaceEdit.placeOfNewBuilderOfExistingFillingType.rawValue,
 			GraphFuzzerBuilderSurfaceEdit.placeOfNewBuilderInInnerSeamOfAnotherModule.rawValue,
+			GraphFuzzerBuilderSurfaceEdit.placeOfHoleTypeNamedAfterSendableLabel.rawValue,
 			Self.secondErasurePairKind,
 		])
 	}

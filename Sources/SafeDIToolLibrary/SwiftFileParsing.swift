@@ -685,7 +685,9 @@ public struct FileScan: Codable, Sendable {
 			path: path,
 			imports: imports.map { $0.spelled(in: path) },
 			mockImports: mockImports.map { $0.spelled(in: path) },
-			instantiables: instantiables.map {
+			// Kept when each already names the file, as a walk given the file's path records it: copying a module's
+			// instantiables doubles the memory its scan holds.
+			instantiables: instantiables.allSatisfy { $0.sourceFilePath == path } ? instantiables : instantiables.map {
 				var instantiable = $0
 				instantiable.sourceFilePath = path
 				return instantiable
@@ -825,7 +827,9 @@ func keptPlainTypeNames(of fileScans: [FileScan]) -> KeptPlainTypeNames {
 	return KeptPlainTypeNames(
 		extendedTypeNames: Set(outputFileDeclarations.flatMap(\.extendedTypeNames).map(\.spelledWithoutBackticks)),
 		instantiableChainTypeNames: Set(outputFileDeclarations.flatMap(\.instantiableTypeNames).flatMap(namesBoundingType(named:))),
-		mentionedTypeNames: mentionedTypeNames(of: fileScans.flatMap(\.instantiables)),
+		mentionedTypeNames: fileScans.reduce(into: Set<String>()) { mentionedTypeNames, fileScan in
+			insertMentionedTypeNames(of: fileScan.instantiables, into: &mentionedTypeNames)
+		},
 	)
 }
 
@@ -910,6 +914,11 @@ struct KeptPlainTypeNames: Codable, Equatable, Sendable {
 /// (`DependencyTreeGenerator.extendedTypeAccessNeeds(of:in:)`), and a top-level type's name keeps the declarations of
 /// the types nested in it.
 private func namesBoundingType(named typeName: String) -> [String] {
+	// Most types are top-level and named by an ASCII word, which is the only name a parse finds, while a parse costs a
+	// scan more than the rest of its reading of the module's names does. `Void` parses as no name.
+	guard !typeName.utf8.allSatisfy(isASCIIWordByte) || typeName == "Void" else {
+		return [typeName]
+	}
 	var parser = Parser(typeName)
 	var names = [String]()
 	var remainingType: TypeDescription? = TypeSyntax.parse(from: &parser).typeDescription
@@ -918,6 +927,16 @@ private func namesBoundingType(named typeName: String) -> [String] {
 		remainingType = type.droppingOutermostType
 	}
 	return names.count > 1 ? Array(names.dropLast()) : names
+}
+
+/// Whether `byte` is an ASCII letter, digit, or underscore.
+private func isASCIIWordByte(_ byte: UInt8) -> Bool {
+	switch byte {
+	case UInt8(ascii: "a")...UInt8(ascii: "z"), UInt8(ascii: "A")...UInt8(ascii: "Z"), UInt8(ascii: "0")...UInt8(ascii: "9"), UInt8(ascii: "_"):
+		true
+	default:
+		false
+	}
 }
 
 /// Every name of each type the dependencies – an alias's fulfilling property among them –, initializer or
@@ -929,28 +948,39 @@ private func namesBoundingType(named typeName: String) -> [String] {
 /// receives it takes it. Each name is spelled without the backticks it was written with (`KeptPlainTypeNames`).
 func mentionedTypeNames(of instantiables: [Instantiable]) -> Set<String> {
 	var mentionedTypeNames = Set<String>()
-	for instantiable in instantiables {
-		let mentioningTypes = instantiable.dependencies.flatMap { dependency in
-			switch dependency.source {
-			case let .aliased(fulfillingProperty, _, _):
-				[dependency.property.typeDescription, fulfillingProperty.typeDescription]
-			case .instantiated, .received, .forwarded:
-				[dependency.property.typeDescription]
-			}
-		}
-			+ (instantiable.initializer?.arguments ?? []).map(\.typeDescription)
-			+ (instantiable.mockInitializer?.arguments ?? []).map(\.typeDescription)
-		for mentioningType in mentioningTypes {
-			for mentionedType in TypeAccessProof.mentionedTypes(in: mentioningType) {
-				var remainingType: TypeDescription? = mentionedType.withoutGenericArguments
-				while let type = remainingType, let name = type.outermostTypeName {
-					mentionedTypeNames.insert(name.spelledWithoutBackticks)
-					remainingType = type.droppingOutermostType
-				}
+	insertMentionedTypeNames(of: instantiables, into: &mentionedTypeNames)
+	return mentionedTypeNames
+}
+
+/// Inserts `mentionedTypeNames(of: instantiables)` into `mentionedTypeNames`, so that a module's files are read where they
+/// are, rather than copied into one array: an `Instantiable` is large.
+func insertMentionedTypeNames(of instantiables: [Instantiable], into mentionedTypeNames: inout Set<String>) {
+	func insertNames(mentionedIn mentioningType: TypeDescription) {
+		for mentionedType in TypeAccessProof.mentionedTypes(in: mentioningType) {
+			var remainingType: TypeDescription? = mentionedType.withoutGenericArguments
+			while let type = remainingType, let name = type.outermostTypeName {
+				mentionedTypeNames.insert(name.spelledWithoutBackticks)
+				remainingType = type.droppingOutermostType
 			}
 		}
 	}
-	return mentionedTypeNames
+	for instantiable in instantiables {
+		for dependency in instantiable.dependencies {
+			insertNames(mentionedIn: dependency.property.typeDescription)
+			switch dependency.source {
+			case let .aliased(fulfillingProperty, _, _):
+				insertNames(mentionedIn: fulfillingProperty.typeDescription)
+			case .instantiated, .received, .forwarded:
+				break
+			}
+		}
+		for argument in instantiable.initializer?.arguments ?? [] {
+			insertNames(mentionedIn: argument.typeDescription)
+		}
+		for argument in instantiable.mockInitializer?.arguments ?? [] {
+			insertNames(mentionedIn: argument.typeDescription)
+		}
+	}
 }
 
 /// What `walkFiles(named:conditionalCompilation:findingPackageAccessModifier:)` found.
@@ -1266,6 +1296,7 @@ private func walk(
 	let fileVisitor = FileVisitor(
 		conditionalCompilationEvaluator: evaluator,
 		sourceLocationConverter: SourceLocationConverter(fileName: filePath, tree: syntaxTree),
+		sourceFilePath: filePath,
 	)
 	fileVisitor.walk(syntaxTree)
 	let fileScan = FileScan(
