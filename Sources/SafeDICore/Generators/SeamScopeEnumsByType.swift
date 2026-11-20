@@ -119,7 +119,7 @@ extension DependencyTreeGenerator {
 		holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole],
 		parameters: [SeamSignature.Parameter],
 		bindsReceivesAgain: Bool,
-		namesApartAtRoot: PublicMockRootLevel.NamesApart,
+		namesApartAtRoot _: PublicMockRootLevel.NamesApart,
 		reenteredFillsByKey: [String: ScopeGenerator],
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
