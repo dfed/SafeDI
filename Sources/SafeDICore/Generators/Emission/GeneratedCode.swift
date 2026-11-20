@@ -40,6 +40,9 @@ indirect enum GeneratedCode: Sendable {
 	case indented(GeneratedCode, by: String)
 	/// A place of the body's walk (`PlacePlan`), whose code is written as it is.
 	case place(PlacePlan)
+	/// A body the type key laid out (`TypeKeyBody`), written as `spelled`, whose places are those of `places`, the path
+	/// key's plan the layout was read from: the place oracle checks what each place of the walk holds.
+	case laidOut(spelled: GeneratedCode, places: GeneratedCode)
 
 	/// The empty code.
 	static let empty = GeneratedCode.sequence([])
@@ -67,6 +70,22 @@ struct PlacePlan: Sendable {
 	let closedOnFunctionName: String?
 	/// The place's code, which holds the plans of the places beneath it.
 	let code: GeneratedCode
+	/// What the type key reads of the place (`TypeKeyBody`), or `nil` for a place it does not plan yet, whose root keeps
+	/// the path key's body.
+	let record: PlaceRecord?
+
+	init(kind: PlaceKind, functionNames: [String], closedOnFunctionName: String?, code: GeneratedCode, record: PlaceRecord? = nil) {
+		self.kind = kind
+		self.functionNames = functionNames
+		self.closedOnFunctionName = closedOnFunctionName
+		self.code = code
+		self.record = record
+	}
+
+	/// This plan, with `record`.
+	func with(record: PlaceRecord?) -> PlacePlan {
+		PlacePlan(kind: kind, functionNames: functionNames, closedOnFunctionName: closedOnFunctionName, code: code, record: record)
+	}
 }
 
 /// The kinds of place a production body's walk reaches, each holding a fixed number of builder functions and closing
@@ -153,6 +172,8 @@ private struct GeneratedCodeWriter {
 					}
 				case let .place(plan):
 					work.append(.code(plan.code))
+				case let .laidOut(spelled, _):
+					work.append(.code(spelled))
 				}
 			case .lineFeed:
 				write(.lineFeed(level: levels.count - 1))
