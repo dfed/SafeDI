@@ -1033,11 +1033,13 @@ LoggedInView.mock(
 
 `SafeDIMockConfiguration` has an optional field for each of the child’s own `@Instantiated` dependencies and each labeled default-valued parameter of its `init` (or `instantiate(…)`), plus a final, unlabeled builder closure. A default-valued parameter’s field defaults to the default the type’s hand-written `mock` method declares for it, if any, and otherwise to its `init`’s (or `instantiate(…)`’s). The builder’s parameters match the hand-written `mock` method’s signature if one is defined, or the `init`’s otherwise; without a builder, the generated mock calls the hand-written `mock` method or `init` directly.
 
-The fields of `SafeDIOverrides` and `SafeDIMockConfiguration` are read-only computed properties, so create these values only through their generated initializers: an initializer you write in an extension of one calls `self.init(…)`.
+The fields of `SafeDIOverrides` and `SafeDIMockConfiguration` are read-only computed properties, so create these values only through their generated initializers: an initializer you write in an extension of one calls `self.init(…)`. Each initializer takes its entries in declaration order, except that an entry comes after every entry its type receives, as the tree builds them.
 
 > **Note:** Pass the builder in parentheses, as in `.init(StubNoteStorage.init)` above. Swift gives a trailing closure to the first closure field, which may not be the builder.
 
 A labeled default-valued `@autoclosure` parameter, such as `retries: @autoclosure () -> Int = 3`, is evaluated each time the mock builds the type, as in production. You pass a value, as in `Service.mock(retries: 5)`, and a builder closure is handed an `Int`. The mock takes a throwing `@autoclosure` as one that does not throw, so the value you pass cannot throw; when the default itself throws, as `= try loadRetries()` does, the mock takes no parameter for it and the initializer evaluates the default.
+
+Declare a default-valued parameter whose type is a typealias of a function type `@escaping`, as in `onFinish: @escaping Handler = {}`. Where a type beneath the mocked type declares one, its `SafeDIMockConfiguration` stores the value, and SafeDI cannot see that the typealias names a function type, so without `@escaping` the mock does not compile.
 
 Closure fields on `SafeDIMockConfiguration` are not `@Sendable`, so an override can capture mutable test state that is not `Sendable`. Beneath a [`Sendable` wrapper](#sendable-wrappers), what you hand the mock for a type there must be `Sendable`: its override closures are `@Sendable`, and so are its default-valued initializer parameters and the dependencies it instantiates that the mock cannot build. The mock takes each of these values as a `@Sendable` autoclosure, and evaluates it each time it builds the type, as production does. You still write a value, as in `Root.mock(service: MockService())`, but it cannot capture non-`Sendable` test state, such as a `MockService` held in a `let` outside the call.
 
@@ -1096,7 +1098,7 @@ To give every type its own instance, as the app does, declare a [`mockOnly`](#th
 
 The mocked type’s own renames are the exception. When the mocked type declares a rename, a dependency the mock builds beside it that receives the rename’s label, as the rename’s type or its optional form, has no entry for that label: it gets the rename, as types beneath the mocked type do.
 
-**Names.** When two flat `mock()` parameters, or two entries of one `SafeDIOverrides` or `SafeDIMockConfiguration`, share a label, each is named by its label followed by its type, spelled as an identifier: received dependencies named `items` of types `[String]` and `Set<String>` become `items_Array_String` and `items_Set__String`. A mock builds every form in which its tree receives one label: when one type requires `x: X` and another beside it requires `x: Instantiator<X>`, the mock builds both, as `x_X` and `x_Instantiator__X`. An optional form beside its non-optional form, and the instance of a `LazilyInstantiated`, are not forms of their own. Two forms received by one type, or one beneath the other, read the one declaration nearest above them, as [`@Received`](#received) describes, so they are an error unless both are received [only if available](#conditionally-receiving-dependencies).
+**Names.** When two flat `mock()` parameters, or two entries of one `SafeDIOverrides` or `SafeDIMockConfiguration`, share a label, each is named by its label followed by its type, spelled as an identifier: received dependencies named `items` of types `[String]` and `Set<String>` become `items_Array_String` and `items_Set__String`. A mock builds every form in which its tree receives one label: when one type requires `x: X` and another beside it requires `x: Instantiator<X>`, the mock builds both, as `x_X` and `x_Instantiator__X`. An optional form beside its non-optional form, and the instance of a `LazilyInstantiated`, are not forms of their own. Two forms received by one type, or one beneath the other, read the one declaration nearest above them, as [`@Received`](#received) describes, so they are an error unless both are received [only if available](#conditionally-receiving-dependencies). A flat parameter gives its label to an entry of `SafeDIOverrides`: where `ProfileView` receives `user: Draft`, which nothing fulfills, beside an `Editor` that receives the `user: User` the mock builds, the entry keeps `user` and the parameter is `user_Draft`.
 
 #### Receiving a type-erased dependency
 
@@ -1380,7 +1382,7 @@ To add the SafeDI framework as a dependency to a package utilizing [Swift Packag
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.2.0"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.0"),
 ]
 ```
 
@@ -1487,7 +1489,7 @@ Unlike the Xcode project plugin, the Swift package plugin finds the source files
 
 #### Bazel
 
-Add `bazel_dep(name = "safedi", version = "2.2.0")` to your `MODULE.bazel`, then declare each first-party Swift module ([Generating your dependency tree](#generating-your-dependency-tree)) with `safedi_swift_library` in place of `swift_library`:
+Add `bazel_dep(name = "safedi", version = "2.3.0")` to your `MODULE.bazel`, then declare each first-party Swift module ([Generating your dependency tree](#generating-your-dependency-tree)) with `safedi_swift_library` in place of `swift_library`:
 
 ```python
 load("@safedi//bazel:safedi.bzl", "safedi_swift_library")
@@ -1545,7 +1547,7 @@ Depend on SafeDI in `Tuist/Package.swift`, so that `tuist install` fetches the S
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.2.0"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.0"),
 ]
 ```
 
@@ -2068,7 +2070,7 @@ This plugin will:
 ### Manual migration
 
 1. Update your `swift-tools-version` to 6.2 or later
-2. Update your SafeDI dependency to `from: "2.2.0"`
+2. Update your SafeDI dependency to `from: "2.3.0"`
 3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, add a `#SafeDIConfiguration` in your root module with the equivalent values and delete the CSV files
 4. If you don’t have CSV configuration files and do not need other SafeDI configuration options, no `#SafeDIConfiguration()` declaration is required
 
