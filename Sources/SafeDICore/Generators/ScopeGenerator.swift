@@ -4249,7 +4249,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// Properties that will be generated as `let` constants.
-	private nonisolated var propertiesToGenerate: [ScopeGenerator] {
+	nonisolated private var propertiesToGenerate: [ScopeGenerator] {
 		propertiesToGenerateSlot.value
 	}
 
