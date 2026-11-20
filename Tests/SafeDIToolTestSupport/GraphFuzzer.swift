@@ -2774,6 +2774,7 @@ enum GraphFuzzerGenerator {
 			reenteredPlaceFieldRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredPlaceFieldRandomSeedMask)
 			repeatedAncestorRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.repeatedAncestorRandomSeedMask)
 			guardedMockParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.guardedMockParameterRandomSeedMask)
+			differingPinsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.differingPinsRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -2850,6 +2851,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingRepeatedAncestorShapes(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingGuardedMockParameterShapes(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingTypeBuiltTwiceWithDifferingPins(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3271,6 +3274,9 @@ enum GraphFuzzerGenerator {
 		/// built only beneath a cycle edge that repeats an ancestor, and every shape of that tree.
 		private var repeatedAncestorRandom: GraphFuzzerRandomNumberGenerator
 		private var guardedMockParameterRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingTypeBuiltTwiceWithDifferingPins`' choices: whether a graph gains `PinHost`'s tree, and every
+		/// shape of that tree.
+		private var differingPinsRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -7690,6 +7696,92 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let guardedMockParameterRandomSeedMask: UInt64 = 0x67756172644D636B
+
+		// MARK: A type built twice with differing pins
+
+		/// The base corpus's draw, in one graph of twenty-five, of a type a mock builds in two places where a required
+		/// receive pins the declaration one place reads only if available and nothing pins the other's. `PinLeaf` receives
+		/// `pinToken: PinToken?` only if available, or, one graph in three, an `onlyIfAvailable` alias of it. `PinScreen`,
+		/// whose mock is generated, receives `PinSource`, which its mock promotes and builds above it, as production does.
+		/// In `PinSource`'s tree, `PinSource` itself, or `PinHolder` beneath it one graph in three, requires `pinToken:
+		/// Instantiator<PinToken>` above a `PinLeaf`, which one graph in three `PinMaker`'s instantiator builds, so
+		/// production passes that `PinLeaf` `nil`. In `PinScreen`'s own tree, or, two graphs in five, in the tree of
+		/// `PinOther`, a second dependency `PinScreen` receives, `PinReader` requires `pinToken: PinToken` beside a
+		/// `PinLeaf`, which production passes that `PinToken`. `PinHost` declares `pinToken: Instantiator<PinToken>` and
+		/// `PinSource`, and `PinMiddle` beneath it declares `pinToken: PinToken`, `PinOther` and `PinScreen`, so production
+		/// builds each tree beneath the form it reads. No root of the graph reaches the tree: a root's mock rejects a tree
+		/// that holds a receive only if available of a label a closer declaration holds in another form, by design, and the
+		/// value oracle makes a mock of every root. The mock of `PinScreen` binds both forms of `pinToken`, so no mirror
+		/// judges it, and the value oracle compares it with the `PinScreen` a root of its own builds through `PinHost`
+		/// instead (`GraphFuzzerValueOraclePlan.pinnedPlacePair`).
+		/// `differingPinsRandom` draws only for this pass, after every other, and only in the base corpus.
+		private mutating func addingTypeBuiltTwiceWithDifferingPins(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, differingPinsRandom.percentChance(4) else { return declarations }
+			var declarations = declarations
+			let isPinnedByHolder = differingPinsRandom.percentChance(33)
+			let leafReceivesAlias = differingPinsRandom.percentChance(33)
+			let pinnedPlaceIsThroughInstantiator = differingPinsRandom.percentChance(33)
+			let isUnpinnedInAnotherPromotedTree = differingPinsRandom.percentChance(40)
+			let readerComesFirst = differingPinsRandom.percentChance(50)
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func append(_ name: String, generatesMock: Bool = false, _ properties: [PropertyDeclaration]) {
+				declarations.append(TypeDeclaration(
+					name: name,
+					instantiableArguments: generatesMock ? ["generateMock: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: conformances,
+				))
+			}
+			let tokenName = "\(prefix)PinToken"
+			let leafName = "\(prefix)PinLeaf"
+			let pinningForm = "\(instantiator)<\(tokenName)>"
+			let pinningReceive = PropertyDeclaration(attribute: "@Received", label: "pinToken", type: pinningForm)
+			let leafPlace = PropertyDeclaration(attribute: "@Instantiated", label: "pinLeaf", type: leafName)
+			let readerPlace = PropertyDeclaration(attribute: "@Instantiated", label: "pinReader", type: "\(prefix)PinReader")
+			let unpinnedPlaces = readerComesFirst ? [readerPlace, leafPlace] : [leafPlace, readerPlace]
+			append(tokenName, [])
+			if leafReceivesAlias {
+				append(leafName, [PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"pinToken\", ofType: \(tokenName).self, onlyIfAvailable: true)", label: "pinTokenAlias", type: tokenName + "?")])
+			} else {
+				append(leafName, [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "pinToken", type: tokenName + "?")])
+			}
+			append("\(prefix)PinReader", [PropertyDeclaration(attribute: "@Received", label: "pinToken", type: tokenName)])
+			var pinnedPlace = leafPlace
+			if pinnedPlaceIsThroughInstantiator {
+				pinnedPlace = PropertyDeclaration(attribute: "@Instantiated", label: "pinMaker", type: "\(prefix)PinMaker")
+				append("\(prefix)PinMaker", [PropertyDeclaration(attribute: "@Instantiated", label: "pinLeafBuilder", type: "\(instantiator)<\(leafName)>")])
+			}
+			let sourceName = "\(prefix)PinSource"
+			if isPinnedByHolder {
+				append(sourceName, [PropertyDeclaration(attribute: "@Instantiated", label: "pinHolder", type: "\(prefix)PinHolder")])
+				append("\(prefix)PinHolder", [pinningReceive, pinnedPlace])
+			} else {
+				append(sourceName, [pinningReceive, pinnedPlace])
+			}
+			let screenName = "\(prefix)PinScreen"
+			let sourceReceive = PropertyDeclaration(attribute: "@Received", label: "pinSource", type: sourceName)
+			var middleProperties = [PropertyDeclaration(attribute: "@Instantiated", label: "pinToken", type: tokenName)]
+			if isUnpinnedInAnotherPromotedTree {
+				let otherName = "\(prefix)PinOther"
+				append(otherName, unpinnedPlaces)
+				append(screenName, generatesMock: true, [sourceReceive, PropertyDeclaration(attribute: "@Received", label: "pinOther", type: otherName)])
+				middleProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "pinOther", type: otherName))
+			} else {
+				append(screenName, generatesMock: true, unpinnedPlaces + [sourceReceive])
+			}
+			middleProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "pinScreen", type: screenName))
+			append("\(prefix)PinMiddle", middleProperties)
+			append("\(prefix)PinHost", [
+				PropertyDeclaration(attribute: "@Instantiated", label: "pinToken", type: pinningForm),
+				PropertyDeclaration(attribute: "@Instantiated", label: "pinSource", type: sourceName),
+				PropertyDeclaration(attribute: "@Instantiated", label: "pinMiddle", type: "\(prefix)PinMiddle"),
+			])
+			return declarations
+		}
+
+		private static let differingPinsRandomSeedMask: UInt64 = 0x64696666506E6E73
 
 		// MARK: Cycle parameters
 
