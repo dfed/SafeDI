@@ -67,6 +67,42 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func writingStringsInline_writesSameBytesForTwoValues_exactlyWhenWriterWithTableDoes() {
+		// Merging module infos compares two entries for one module by the bytes a writer that writes each string in
+		// place writes, which must tell the entries apart exactly when the bytes of the file do: the order in which
+		// strings first appear, a string's own bytes, and every value besides strings.
+		let values: [[String]] = [
+			["Clock", "Calendar", "Clock"],
+			["Calendar", "Clock", "Calendar"],
+			["Clock", "Calendar", "Calendar"],
+			["Clock", "Calendar"],
+			[Self.precomposedCafe, Self.decomposedCafe],
+			[Self.decomposedCafe, Self.precomposedCafe],
+			[Self.precomposedCafe, Self.precomposedCafe],
+			["ab", "c"],
+			["a", "bc"],
+			[],
+		]
+		func tableBytes(of value: [String]) -> [UInt8] {
+			var writer = BinaryWriter()
+			writer.write(value)
+			return writer.encoded
+		}
+		func inlineBytes(of value: [String]) -> [UInt8] {
+			var writer = BinaryWriter.writingStringsInline()
+			writer.write(value)
+			return writer.bytes
+		}
+
+		for first in values {
+			for second in values {
+				#expect((inlineBytes(of: first) == inlineBytes(of: second)) == (tableBytes(of: first) == tableBytes(of: second)))
+				#expect((inlineBytes(of: first) == inlineBytes(of: second)) == (first.map { Array($0.utf8) } == second.map { Array($0.utf8) }))
+			}
+		}
+	}
+
+	@Test
 	func binaryWriter_writesSharedValueOnce_whenValueRepeats() throws {
 		var writer = BinaryWriter()
 		writer.write([BinaryShared(["a", "b"]), BinaryShared(["c"]), BinaryShared(["a", "b"])])
@@ -233,7 +269,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			view: ModuleInfoView(moduleGraph: [moduleInfoFile.ownIdentity], declarations: [moduleInfoFile.ownEntry]),
 		)
 		var foundTypeNames = Set<String>()
-		for value in reflectedStructuresAndEnumerations(in: project.scannedModuleInfo) + reflectedStructuresAndEnumerations(in: moduleInfoFileWithView) {
+		for value in Self.cachedStructuresAndEnumerations(in: project.scannedModuleInfo) + Self.cachedStructuresAndEnumerations(in: moduleInfoFileWithView) {
 			let typeName = String(reflecting: type(of: value))
 			foundTypeNames.insert(typeName)
 			guard let schemaMember = value as? any BinarySchemaMember else {
@@ -1009,6 +1045,41 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	/// The number of cases an enum's layout lists.
+	/// The structs and enums `value` holds, as `reflectedStructuresAndEnumerations(in:)` finds them, except the storage
+	/// of a property its layout lists as unwritten: a type held there that is no schema member, such as the box
+	/// `Instantiable` keeps its rarely set fields in, holds fields written under their own names, so only the schema
+	/// members it holds are cached values.
+	private static func cachedStructuresAndEnumerations(in value: Any, isInsideUnwrittenProperty: Bool = false) -> [Any] {
+		let mirror = Mirror(reflecting: value)
+		let unwrittenProperties = unwrittenProperties(of: value)
+		let nested = mirror.children.flatMap { child in
+			cachedStructuresAndEnumerations(
+				in: child.value,
+				isInsideUnwrittenProperty: isInsideUnwrittenProperty || unwrittenProperties.contains(child.label ?? ""),
+			)
+		}
+		guard mirror.displayStyle == .struct || mirror.displayStyle == .enum,
+		      !isInsideUnwrittenProperty || value is any BinarySchemaMember
+		else {
+			return nested
+		}
+		return [value] + nested
+	}
+
+	/// The properties the layout of `value`'s type lists as unwritten, when it is a schema member's struct.
+	private static func unwrittenProperties(of value: Any) -> [String] {
+		func unwrittenProperties<Member: BinarySchemaMember>(ofMember _: Member) -> [String] {
+			guard case let .structure(_, unwrittenProperties) = Member.binaryLayout else {
+				return []
+			}
+			return unwrittenProperties
+		}
+		guard let member = value as? any BinarySchemaMember else {
+			return []
+		}
+		return unwrittenProperties(ofMember: member)
+	}
+
 	private static func caseCount<Member: BinarySchemaMember>(of _: Member.Type) -> Int {
 		switch Member.binaryLayout {
 		case .structure:

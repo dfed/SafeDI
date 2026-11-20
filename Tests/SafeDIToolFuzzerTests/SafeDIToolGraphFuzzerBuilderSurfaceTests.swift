@@ -851,6 +851,7 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 		(.secondPlaceInInnerSeamOfAnotherModule, .generateDependencyTree, 135),
 		(.holderMovedToInnerSeamOfAnotherModule, .generateDependencyTree, 135),
 		(.placeOfNewBuilderInInnerSeamOfAnotherModule, .generateDependencyTree, 135),
+		(.placeOfHoleTypeNamedAfterSendableLabel, .generateDependencyTree, 59),
 		(.placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied, .generateDependencyTree, 135),
 		// Seed 59 holds `HoleHanded`, which forwards nothing, in an `Instantiator` on `HoleHandedHolder`.
 		(.instantiatorPlaceMovedToPlainPlace, .generateDependencyTree, 59),
@@ -897,6 +898,18 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 		// The tool rejects the public mock corpus's places of one builder that forward other values, as it rejects the seam
 		// corpus's: the judgment runs and finds nothing to report.
 		#expect(try await Self.forwardingOtherValuesJudgment(feature: .generateMockPublic, seed: 3) == .init(isJudged: true, problems: []))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addedSupplyJudgment_reportsNoProblem_whenHoleTypeNamedAfterExistingSendableLabelIsAdded() async throws {
+		// `HoleServiceSendable`'s plain builder label is `HoleService`'s `@Sendable` one: only the new type's builder is named
+		// apart, so `HoleService`'s builders keep their labels, types and order.
+		let seed: UInt64 = 59
+		let without = try await GraphFuzzerOracle.toolOutcome(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree]))
+		let fixture = try #require(GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree], builderSurfaceEdit: .placeOfHoleTypeNamedAfterSendableLabel))
+		let with = try await GraphFuzzerOracle.toolOutcome(of: fixture)
+		#expect(GraphFuzzerBuilderSurface.addedSupplyJudgment(without: without, with: with) == .init(isJudged: true, problems: []))
 	}
 
 	// MARK: Known issues
