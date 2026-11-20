@@ -9203,6 +9203,33 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lines.append("")
 		}
 
+		// SPIKE (3.0 migrate prototype, never to land): a machine-readable record of each 2.x `mock()` parameter's role.
+		do {
+			func escaped(_ string: String) -> String {
+				string.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+			}
+			var records = [String]()
+			for dependency in forwardedDependencies {
+				records.append("{\"label\":\"\(escaped(dependency.property.label))\",\"kind\":\"forwarded\",\"hasDefault\":\(parameters.forwardedParameterDefaults[dependency.property.label] != nil)}")
+			}
+			for rootDefault in rootDefaultParameters {
+				records.append("{\"label\":\"\(escaped(rootDefault.label))\",\"kind\":\"rootDefault\",\"type\":\"\(escaped(rootDefault.typeSource))\",\"isOptional\":\(rootDefault.typeDescription.isOptional)}")
+			}
+			for (property, flatReceived) in zip(flatReceivedProperties, flatReceivedParameters) {
+				records.append("{\"label\":\"\(escaped(flatReceived.label))\",\"kind\":\"flatReceived\",\"hasDefault\":\(parameters.flatReceivedParameterMockDefaults[property] != nil)}")
+			}
+			for builder in parameters.seamMockBuilders {
+				records.append("{\"label\":\"\(escaped(builder.label))\",\"kind\":\"seamBuilder\"}")
+			}
+			for uncovered in flatUncoveredParameters {
+				records.append("{\"label\":\"\(escaped(uncovered.label))\",\"kind\":\"uncovered\",\"isSendableAutoclosure\":\(uncovered.isSendableAutoclosure),\"creatingTypeCount\":\(uncovered.creatingTypes.count),\"type\":\"\(escaped(uncovered.typeSource))\"}")
+			}
+			for builder in parameters.mockBuilders?.builders ?? [] {
+				records.append("{\"label\":\"\(escaped(builder.label))\",\"kind\":\"publicMockBuilder\"}")
+			}
+			lines.append("\(indent)// safedi-migrate-signature: {\"type\":\"\(escaped(instantiable.concreteInstantiable.asSource))\",\"isPublic\":\(publicMock != nil),\"hasOverrides\":\(hasOverridableTree),\"parameters\":[\(records.joined(separator: ","))]}")
+		}
+
 		// Build mock() signature.
 		var mockParameters = [String]()
 		for dependency in forwardedDependencies {

@@ -188,6 +188,19 @@ let package = Package(
 				.swiftLanguageMode(.v6),
 			],
 		),
+		// SPIKE: the 3.0 migrate prototype and its corpus dump. Never to land.
+		.executableTarget(
+			name: "SafeDIMigrateSpike",
+			dependencies: [
+				.product(name: "SwiftParser", package: "swift-syntax"),
+				.product(name: "SwiftSyntax", package: "swift-syntax"),
+			],
+		),
+		.executableTarget(
+			name: "SafeDIMigrateCorpusDump",
+			dependencies: ["SafeDIToolTestSupport"],
+			swiftSettings: [.swiftLanguageMode(.v6)],
+		),
 		.target(
 			name: "SafeDIToolLibrary",
 			dependencies: [
