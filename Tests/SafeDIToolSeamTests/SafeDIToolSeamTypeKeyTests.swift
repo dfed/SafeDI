@@ -630,6 +630,74 @@ struct SafeDIToolSeamTypeKeyTests: ~Copyable {
 		)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_capturesNonSendableValuesDirectly_whenSendableSeamBuilderReadsThemFromAboveSeam() async throws {
+		// RT1-NAMES condition 1, its other branch: `Host`'s `@Sendable` builder reads `service` and `extra`, which are not `Sendable`, so no context can be declared `Sendable`, and the builder keeps today's direct captures, byte for byte, which Swift 6 rejects as it rejects the same graph built inline. SafeDI reports nothing of its own here, today or after R2a. Callers are unchanged.
+		let featureFiles = [
+			Self.type("Host", isSeam: true, "@Received public let service: Service", "@Received public let extra: Extra", "@Instantiated public let screenBuilder: SendableInstantiator<Screen>"),
+			Self.type("Screen", "@Forwarded public let id: Int", "@Received public let service: Service", "@Received public let extra: Extra"),
+			Self.type("Service"),
+			Self.type("Extra"),
+		]
+		let rootFile = seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let service: Service", "@Instantiated public let extra: Extra", "@Instantiated public let host: Host"])
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: featureFiles),
+			ModuleFixture(name: "App", packageName: "Shop", swiftFileContent: ["import Feature\n\n" + rootFile], dependencies: ["Feature"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
+		extension Host {
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public convenience init(__safeDI_service service: Service, __safeDI_extra extra: Extra) {
+		        @Sendable func __safeDI_screenBuilder(id: Int) -> Screen {
+		            Screen(id: id, service: service, extra: extra)
+		        }
+		        let screenBuilder = SendableInstantiator<Screen> {
+		            __safeDI_screenBuilder(id: $0)
+		        }
+		        self.init(service: service, extra: extra, screenBuilder: screenBuilder)
+		    }
+		}
+
+		extension Host {
+		    public enum __safeDI_Host_104FA7B7C210CBCD {}
+		}
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        let service = Service()
+		        let extra = Extra()
+		        func __safeDI_host() -> Host {
+		            _ = Host.__safeDI_Host_104FA7B7C210CBCD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Host(__safeDI_service: service, __safeDI_extra: extra)
+		        }
+		        let host: Host = __safeDI_host()
+		        self.init(service: service, extra: extra, host: host)
+		    }
+		}
+		"""])
+		guard compileVerificationIsEnabled else { return }
+		let rejection = "capture of 'service' with non-Sendable type 'Service' in a '@Sendable' local function"
+		let failure = try #require(output.compilation?.failure)
+		#expect(failure.moduleName == "Feature")
+		#expect(failure.result.stderr.contains(rejection))
+		let inlineOutput = try await executeSafeDIToolMultiModuleTest(
+			modules: [ModuleFixture(name: "App", packageName: "Shop", swiftFileContent: inlineFixture(featureFiles + [rootFile]))],
+			integration: .moduleInfo,
+			compileVerification: .returningOutcomeOnly,
+			filesToDelete: &filesToDelete,
+		)
+		let inlineFailure = try #require(inlineOutput.compilation?.failure)
+		#expect(inlineFailure.result.stderr.contains(rejection))
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
