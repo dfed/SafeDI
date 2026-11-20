@@ -104,8 +104,9 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 	@Test
 	@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
 	mutating func generate_writesSameCode_whenEarlyStartsFinishInAnyOrder() async throws {
-		// The tree created twice for its lazy cycle starts 84 scopes early, across both passes. Each run forces the order in
-		// which they finish, and the code must be what a run whose starts race writes.
+		// The tree created twice for its lazy cycle starts 24 scopes early: the second pass reuses the generators the first
+		// built, whose code it does not start again. Each run forces the order in which they finish, and the code must be what
+		// a run whose starts race writes.
 		let fixture = Self.ternaryTree(
 			depth: Self.depth,
 			beneath: ["Root"],
@@ -149,7 +150,7 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 				)
 			}
 			// Every start took its turn in the order forced.
-			#expect(await ordering.turnsTaken() == order(84))
+			#expect(await ordering.turnsTaken() == order(24))
 			#expect(ordered.dependencyTreeFiles == racing.dependencyTreeFiles)
 		}
 	}
