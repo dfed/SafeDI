@@ -690,9 +690,8 @@ public actor DependencyTreeGenerator {
 			}
 			rootScopesToGenerate.append(rootScope)
 		}
-		// A calling mock whose fill of a called public mock's place makes such a construction passes the place up and is
-		// accepted instead, a deliberate gap accepted for now that the calling-mock mirror work in 2.3.1 closes
-		// (`holesFilled(byCallsOf:in:)`, `seam-and-mock-contract.md`, rule 7).
+		// A calling mock whose fill of a called public mock's place makes such a construction reports it too, where the mock
+		// makes it as the twin does (`holesFilled(byCallsOf:in:)`).
 		guard inaccessibleConstructions.isEmpty else {
 			throw DependencyTreeGeneratorError.inaccessibleConstructions(inaccessibleConstructions)
 		}
