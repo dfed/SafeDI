@@ -5722,18 +5722,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	nonisolated private func cycleParameterArguments(unavailableProperties: Set<Property>) -> [String] {
 		cycleParameters.map { parameter in
 			let label = parameter.property.label
-			let value = if unavailableProperties.contains(parameter.property) {
-				"nil"
-			} else if let instanceRead = callSiteLazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceRead(of: parameter.property) {
+			let source: ArgumentSource = if unavailableProperties.contains(parameter.property) {
+				.nil
+			} else if let instanceSource = callSiteLazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceSource(of: parameter.property, boundAs: label) {
 				// A deliberate gap: reading the instance here creates it when the function is called, not when a receiver in
 				// the function's body first reads it. Mock generation does the same (`mockCycleParameterArguments`). See
 				// "Eager instances at a lazy cycle's calls" in `.claude/rules/cycle-generation.md`. Beneath a fill that takes the
 				// wrapper optionally, the instance is read through the optional.
-				"\(label)\(instanceRead)"
+				instanceSource
 			} else {
-				label
+				.binding(label: label)
 			}
-			return "\(label.spelledAsArgumentLabel): \(value)"
+			return CallArgument(label: label, source: source).spelled
 		}
 	}
 
@@ -5762,6 +5762,68 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		leadingMemberWhitespace: String,
 		fillPlaceBindings: FillPlaceBindings,
 	) async throws -> [String] {
+		// Only each child's code is awaited here: what the body decides around it is decided by the synchronous functions
+		// below, as a property's scope is (`generatePropertyCode`).
+		var body = bodyChildren(propertiesGeneratedLater: propertiesGeneratedLater, enclosingFunctionNames: enclosingFunctionNames)
+		for index in body.orderedChildren.indices where body.orderedChildren[index].generator.fillEmitsCode {
+			let code = try await body.orderedChildren[index].generator.generateCode(
+				codeGeneration: codeGeneration,
+				unavailableProperties: body.orderedChildren[index].unavailableProperties,
+				propertiesGeneratedLater: body.orderedChildren[index].propertiesGeneratedLater,
+				builderFunctionNames: builderFunctionNamesOfChild(at: index, in: body),
+				leadingWhitespace: leadingMemberWhitespace,
+				fillPlaceBindings: fillPlaceBindings,
+			)
+			append(code, ofChildAt: index, to: &body, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
+		}
+		return statements(of: consume body, leadingMemberWhitespace: leadingMemberWhitespace)
+	}
+
+	/// What a body decides of its children before it awaits their code, and what it has written of them since: the
+	/// statements of the children it does not inline, and the bodies of the fills it does.
+	private struct BodyChildren {
+		/// The children in the order the body generates them.
+		let orderedChildren: [OrderedChild]
+		/// The builder function names of each child, in that order, where they are not the children's own; `nil` where
+		/// every child keeps its own.
+		let childBuilderFunctionNames: [BuilderFunctionNames?]?
+		/// Per loop of builders: the rebinding of each member the body declares, wrapping the function this body names.
+		let loopMemberDeclarationsByLoop: [Int: [Property: String]]
+		/// The `_received` function of each member, by its index among `orderedChildren`, that takes cycle parameters.
+		let receivedFunctionNameByIndex: [Int: String]
+		/// Per loop: the lines binding its members' payloads, the index of the member that binds them, and the name of a
+		/// boxed loop's box.
+		let valuesBindingLinesByLoop: [Int: String]
+		let valuesBindingMemberIndexByLoop: [Int: Int]
+		let loopLevelsNameByLoop: [Int: String]
+		/// The fills an override closure of the call is handed a function over.
+		let overrideFillKeys: Set<String>
+		/// The fills a level function's member hands each field of its payload they read, rather than the payload.
+		let fillsTakingPayloadFields: Set<String>
+		/// What each fill nested by type takes beside its case's payload.
+		let fillParametersByKey: [String: [SeamSignature.Hole.Field]]
+		/// What each fill and each dispatcher takes.
+		let parametersByKey: [String: [SeamSignature.Hole.Field]]
+		/// What the root dispatcher passes of each value it reads from this scope, by the parameter a target takes for it,
+		/// and of each memo.
+		let callerArgumentByParameter: [Property: String]
+		let callerMemoArgumentByMemo: [Property: String]
+		/// The dispatchers of a seam's caller; empty for a public mock's caller, which declares level functions instead.
+		let callDispatchers: [FillDispatcher]
+		/// Which fills a dispatcher may hold in its case.
+		let fillInlining: FillInlining
+		/// The children's statements so far, in order, but for the fills a dispatcher holds.
+		var generatedProperties = [String]()
+		/// The bodies of the fills a dispatcher holds, by fill.
+		var inlinedFills = [String: FillDispatcher.InlinedFill]()
+	}
+
+	// `generateProperties` awaits each child's code between the synchronous functions below, for the reason
+	// `generatePropertyCode` gives: each is kept out of the async function (`@inline(never)`).
+
+	/// What the body decides of its children before it awaits their code.
+	@inline(never)
+	private func bodyChildren(propertiesGeneratedLater: Set<Property>, enclosingFunctionNames: [BuiltDeclaration: String]) -> BodyChildren {
 		let orderedChildren = orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater)
 		// Nearly every body holds no scope of a cycle, and its children keep their names. Every child but a seam
 		// call's fill is a property's scope, so each has a candidate; a fill keeps the name it was constructed with.
@@ -5809,7 +5871,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			// A `__safeDI_<label>_received` function is named apart, with underscores appended, from every name in scope
 			// where it is declared or read (see `namesReceivedFunctionsAvoid`).
-			var names = GeneratedNameAllocator(reserving: namesReceivedFunctionsAvoid(
+			var names = LoopMemberNames(reserving: namesReceivedFunctionsAvoid(
 				orderedChildren: orderedChildren,
 				childBuilderFunctionNames: childBuilderFunctionNames,
 				loopMembers: orderedChildren.compactMap { loopByGenerator[ObjectIdentifier($0.generator)] == nil ? nil : $0.generator },
@@ -5828,13 +5890,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// `let` of its own – in its body (`InstantiatorBindingLines.prelude`) and in its fills, which this function
 				// generates (`SeamHoles.holdsLoopPayloadsInBoxes`) – a deliberate gap: a public mock's payloads were never builder
 				// structs, so its loops capture what they captured before.
-				if let typeName = boxedLoops[loop], let arguments = boxedArgumentsByLoop[loop], valuesBindingMemberIndexByLoop[loop] == index {
-					let loopLevelsName = names.claim(ReservedName.loopLevelsName(of: functionName))
+				let box = boxedLoops[loop].flatMap { typeName in boxedArgumentsByLoop[loop].map { (typeName: typeName, arguments: $0) } }
+				let claimedNames = names.claim(
+					forMemberBuiltBy: functionName,
+					bindsLoopsBox: box != nil && valuesBindingMemberIndexByLoop[loop] == index,
+					takesCycleParameters: !child.generator.cycleParameters.isEmpty,
+				)
+				if let loopLevelsName = claimedNames.loopLevelsName, let box {
 					loopLevelsNameByLoop[loop] = loopLevelsName
-					valuesBindingLinesByLoop[loop] = Self.loopLevelsBinding(named: loopLevelsName, ofType: typeName, arguments: arguments)
+					valuesBindingLinesByLoop[loop] = Self.loopLevelsBinding(named: loopLevelsName, ofType: box.typeName, arguments: box.arguments)
 				}
-				if !child.generator.cycleParameters.isEmpty {
-					functionName = names.claim(ReservedName.receivedBuilderFunctionName(of: functionName))
+				if let receivedFunctionName = claimedNames.receivedFunctionName {
+					functionName = receivedFunctionName
 					receivedFunctionNameByIndex[index] = functionName
 				}
 				loopMemberDeclarationsByLoop[loop, default: [:]][property] = child.generator.loopRebindingDeclaration(functionName: functionName)
@@ -5850,8 +5917,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				loopMemberDeclarationsByLoop[loop, default: [:]][property] = declaration
 			}
 		}
-		var generatedProperties = [String]()
-		var inlinedFills = [String: FillDispatcher.InlinedFill]()
 		// What each fill nested by type takes beside its case's payload, then what each dispatcher takes to pass on.
 		var fillParametersByKey = [String: [SeamSignature.Hole.Field]]()
 		// What the root dispatcher passes of each value it reads from this scope, by the parameter a target takes for it: the
@@ -5910,61 +5975,87 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// dispatchers, each value handed on per label (`dispatcherParameters(of:fillReads:)`).
 		let callDispatchers = publicMockLevelFunctions == nil ? fillDispatchers : []
 		let dispatcherParametersByKey = FillDispatcher.dispatcherParameters(of: callDispatchers, fillReads: fillParametersByKey)
-		let parametersByKey = fillParametersByKey.merging(dispatcherParametersByKey) { fillParameters, _ in fillParameters }
-		// A public mock's level function holds the body of a fill it hands each value in the form the fill takes it, under
-		// its own label, and declares no function inside the closure its struct stores.
-		let publicMockInlinableFillKeys = publicMockLevelFunctions?.keysOfFillsCalledWithOwnValues
-		for (index, child) in orderedChildren.enumerated() where child.generator.fillEmitsCode {
-			var builderFunctionNames = childBuilderFunctionNames?[index].flatMap(\.self)
-				?? BuilderFunctionNames(fillIsSendable: buildsInSendableFunction(ofFill: child.generator))
-			builderFunctionNames.fillTakesPayloadFields = child.generator.fillKey.map(overrideFillKeys.contains) ?? false
-			if !loopMemberDeclarationsByLoop.isEmpty,
-			   let childIndex = propertiesToGenerate.firstIndex(where: { $0 === child.generator }),
-			   let loop = receivedBuilderLoops.loopByChildIndex[childIndex]
-			{
-				builderFunctionNames.loopMemberDeclarations = loopMemberDeclarationsByLoop[loop, default: [:]]
-				builderFunctionNames.receivedFunctionName = receivedFunctionNameByIndex[index]
-				if !child.generator.isAlias {
-					builderFunctionNames.loopValuesBindingLines = valuesBindingMemberIndexByLoop[loop] == index ? valuesBindingLinesByLoop[loop, default: ""] : ""
-					builderFunctionNames.loopLevelsName = loopLevelsNameByLoop[loop]
-				}
-			}
-			let code = try await child.generator.generateCode(
-				codeGeneration: codeGeneration,
-				unavailableProperties: child.unavailableProperties,
-				propertiesGeneratedLater: child.propertiesGeneratedLater,
-				builderFunctionNames: builderFunctionNames,
-				leadingWhitespace: leadingMemberWhitespace,
-				fillPlaceBindings: fillPlaceBindings,
-			)
-			if let key = child.generator.fillKey,
-			   inlinableFillKeys.contains(key),
-			   publicMockInlinableFillKeys?.contains(key) ?? true,
-			   // An override closure calls the fill's function.
-			   !overrideFillKeys.contains(key),
-			   let inlinedFill = Self.inlinedFill(of: child.generator, code: code, leadingMemberWhitespace: leadingMemberWhitespace),
-			   // A builder struct's member holds the fill's body in a closure, inside which no function is declared: a body that
-			   // declares one, which can be isolated as the code around the closure is, is called by name instead.
-			   !(child.generator.fillDeclaresFunction(fillPlaceBindings: fillPlaceBindings) && (publicMockInlinableFillKeys != nil || callDispatchers.contains { dispatcher in
-			   	dispatcher.returnsBuilderStruct && dispatcher.cases.contains { $0.target?.key == key }
-			   }))
-			{
-				inlinedFills[key] = inlinedFill
-			} else {
-				generatedProperties.append(code)
+		return BodyChildren(
+			orderedChildren: orderedChildren,
+			childBuilderFunctionNames: childBuilderFunctionNames,
+			loopMemberDeclarationsByLoop: loopMemberDeclarationsByLoop,
+			receivedFunctionNameByIndex: receivedFunctionNameByIndex,
+			valuesBindingLinesByLoop: valuesBindingLinesByLoop,
+			valuesBindingMemberIndexByLoop: valuesBindingMemberIndexByLoop,
+			loopLevelsNameByLoop: loopLevelsNameByLoop,
+			overrideFillKeys: overrideFillKeys,
+			fillsTakingPayloadFields: fillsTakingPayloadFields,
+			fillParametersByKey: fillParametersByKey,
+			parametersByKey: fillParametersByKey.merging(dispatcherParametersByKey) { fillParameters, _ in fillParameters },
+			callerArgumentByParameter: callerArgumentByParameter,
+			callerMemoArgumentByMemo: callerMemoArgumentByMemo,
+			callDispatchers: callDispatchers,
+			// A public mock's level function holds the body of a fill it hands each value in the form the fill takes it, under
+			// its own label, and declares no function inside the closure its struct stores.
+			fillInlining: FillInlining(
+				inlinableFillKeys: inlinableFillKeys,
+				publicMockInlinableFillKeys: publicMockLevelFunctions?.keysOfFillsCalledWithOwnValues,
+				overrideFillKeys: overrideFillKeys,
+				keysTargetedByBuilderStructDispatchers: Set(callDispatchers.filter(\.returnsBuilderStruct).flatMap { $0.cases.compactMap(\.target?.key) }),
+			),
+		)
+	}
+
+	/// The names the code of the child at `index` among `body`'s ordered children refers to builder functions by.
+	@inline(never)
+	private func builderFunctionNamesOfChild(at index: Int, in body: BodyChildren) -> BuilderFunctionNames {
+		let child = body.orderedChildren[index]
+		var builderFunctionNames = body.childBuilderFunctionNames?[index].flatMap(\.self)
+			?? BuilderFunctionNames(fillIsSendable: buildsInSendableFunction(ofFill: child.generator))
+		builderFunctionNames.fillTakesPayloadFields = child.generator.fillKey.map(body.overrideFillKeys.contains) ?? false
+		if !body.loopMemberDeclarationsByLoop.isEmpty,
+		   let childIndex = propertiesToGenerate.firstIndex(where: { $0 === child.generator }),
+		   let loop = receivedBuilderLoops.loopByChildIndex[childIndex]
+		{
+			builderFunctionNames.loopMemberDeclarations = body.loopMemberDeclarationsByLoop[loop, default: [:]]
+			builderFunctionNames.receivedFunctionName = body.receivedFunctionNameByIndex[index]
+			if !child.generator.isAlias {
+				builderFunctionNames.loopValuesBindingLines = body.valuesBindingMemberIndexByLoop[loop] == index ? body.valuesBindingLinesByLoop[loop, default: ""] : ""
+				builderFunctionNames.loopLevelsName = body.loopLevelsNameByLoop[loop]
 			}
 		}
+		return builderFunctionNames
+	}
+
+	/// Adds `code`, the code of the child at `index` among `body`'s ordered children, to what `body` has written: as the
+	/// body of a fill a dispatcher holds, or as a statement of its own.
+	@inline(never)
+	private func append(_ code: String, ofChildAt index: Int, to body: inout BodyChildren, leadingMemberWhitespace: String, fillPlaceBindings: FillPlaceBindings) {
+		let child = body.orderedChildren[index]
+		if let key = child.generator.fillKey,
+		   body.fillInlining.mayHold(key),
+		   let inlinedFill = Self.inlinedFill(of: child.generator, code: code, leadingMemberWhitespace: leadingMemberWhitespace),
+		   !body.fillInlining.keepsFunction(key, declaresFunction: child.generator.fillDeclaresFunction(fillPlaceBindings: fillPlaceBindings))
+		{
+			body.inlinedFills[key] = inlinedFill
+		} else {
+			body.generatedProperties.append(code)
+		}
+	}
+
+	/// The statements of `body`, its children's code followed by the declarations of its call's dispatchers or a public
+	/// mock's level functions.
+	@inline(never)
+	private func statements(of body: consuming BodyChildren, leadingMemberWhitespace: String) -> [String] {
+		// Moved out of `body`, so that appending to it does not copy it.
+		var generatedProperties = [String]()
+		swap(&generatedProperties, &body.generatedProperties)
 		// A call's dispatchers follow its fills, each a function that returns its level's struct.
-		for dispatcher in callDispatchers {
+		for dispatcher in body.callDispatchers {
 			generatedProperties.append(dispatcher.declaration(
 				isSendable: sendableFillKeys.contains(dispatcher.key),
 				indent: leadingMemberWhitespace,
-				inlinedFills: inlinedFills,
-				parametersByKey: parametersByKey,
-				callerArgumentByParameter: callerArgumentByParameter,
-				callerMemoArgumentByMemo: callerMemoArgumentByMemo,
+				inlinedFills: body.inlinedFills,
+				parametersByKey: body.parametersByKey,
+				callerArgumentByParameter: body.callerArgumentByParameter,
+				callerMemoArgumentByMemo: body.callerMemoArgumentByMemo,
 				typesDeclaredEscaping: typesDeclaredEscaping,
-				fillsTakingPayloadFields: fillsTakingPayloadFields,
+				fillsTakingPayloadFields: body.fillsTakingPayloadFields,
 				labelsHiddenByReenteringCalls: Set(fillDeferredLabelsHiddenByReenteringCalls.values.joined()),
 			))
 		}
@@ -5972,9 +6063,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			generatedProperties += publicMockLevelFunctions.declarations(
 				indent: leadingMemberWhitespace,
 				sendableKeys: sendableFillKeys,
-				inlinedFills: inlinedFills,
-				fillsTakingPayloadFields: fillsTakingPayloadFields,
-				fillMemberParameterFieldsByKey: fillParametersByKey,
+				inlinedFills: body.inlinedFills,
+				fillsTakingPayloadFields: body.fillsTakingPayloadFields,
+				fillMemberParameterFieldsByKey: body.fillParametersByKey,
 				typesDeclaredEscaping: typesDeclaredEscaping,
 			)
 		}
@@ -6093,13 +6184,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The arguments a builder function of a type whose `@Forwarded` properties are `forwardedProperties`, in their order,
 	/// is passed from `forwardedValue`: the value itself for one property, and its elements by label for several.
 	private static func forwardedArguments(of forwardedProperties: [Property], spreading forwardedValue: String) -> [String] {
-		let forwardedPropertiesHaveLabels = forwardedProperties.count > 1
+		let isOnly = forwardedProperties.count == 1
 		return forwardedProperties.map {
-			if forwardedPropertiesHaveLabels {
-				"\($0.label.spelledAsArgumentLabel): \(forwardedValue).\($0.label)"
-			} else {
-				"\($0.label.spelledAsArgumentLabel): \(forwardedValue)"
-			}
+			CallArgument(label: $0.label, source: .forwardedSpread(label: $0.label, isOnly: isOnly, spreadName: forwardedValue)).spelled
 		}
 	}
 
@@ -6108,18 +6195,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// closure that calls it. Empty for a scope that builds no instantiator, which no caller asks.
 	nonisolated private func instantiatorDeclaration(handing functionName: String, forwardedArguments: String) -> String {
 		guard case let .property(instantiable, property, _, _, _, _) = scopeData else { return "" }
-		let typeDescription = property.typeDescription.asSource
-		// A type constructed by annotation spells its generic arguments only in `propertyDeclaration`.
+		// A type constructed by annotation spells its generic arguments only in the declaration.
 		let unwrappedTypeDescription = property
 			.typeDescription
 			.unwrapped
 			.spelledForConstruction
-		let propertyDeclaration = if !instantiable.declarationType.isExtension, typeDescription == unwrappedTypeDescription {
-			"let \(property.label)"
-		} else {
-			"let \(property.asSource)"
-		}
-		return "\(propertyDeclaration) = \(instantiatorExpression(handing: functionName, forwardedArguments: forwardedArguments))"
+		let propertyDeclaration = BindingDeclaration(
+			property: property,
+			rule: .instantiator(isExtension: instantiable.declarationType.isExtension, constructionSpellsPropertyType: property.typeDescription.asSource == unwrappedTypeDescription),
+		)
+		return "\(propertyDeclaration.spelled) = \(instantiatorExpression(handing: functionName, forwardedArguments: forwardedArguments))"
 	}
 
 	/// The wrapper `instantiatorDeclaration(handing:forwardedArguments:)` declares.
@@ -6129,17 +6214,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.typeDescription
 			.unwrapped
 			.spelledForConstruction
-		let instantiatedTypeDescription = property
-			.typeDescription
-			.unwrapped
-			.asInstantiatedType
-			.asSource
 		return if forwardedArguments.isEmpty, !erasedToConcreteExistential {
 			"\(unwrappedTypeDescription)(\(functionName))"
 		} else if erasedToConcreteExistential {
 			"""
 			\(unwrappedTypeDescription) {
-			\(Self.standardIndent)\(instantiatedTypeDescription)(\(functionName)(\(forwardedArguments)))
+			\(Self.standardIndent)\(Expression.erasure(.call(function: functionName, arguments: forwardedArguments), as: property.typeDescription.unwrapped.asInstantiatedType).spelled)
 			}
 			"""
 		} else {
@@ -6406,6 +6486,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// recursively. Mock mode only reaches this function for `.root` scopes, which
 	/// delegate to `generateMockRootCode`; non-root mock code is produced via
 	/// `collectMockParameterTree` + `generateMockBodyBindings` instead.
+	///
+	/// Never inlined: its frame holds a slot for each of its branches, and inlined into `generateCode`, which every scope
+	/// awaits each child's code in, it made every such frame as large as its own.
+	@inline(never)
 	private func generatePropertyCode(
 		codeGeneration: CodeGeneration,
 		unavailableProperties: Set<Property>,
@@ -6427,21 +6511,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						fillPlaceBindings: fillPlaceBindings,
 					)
 				}
-				let argumentList = try instantiable.generateArgumentList()
-				if instantiable.dependencies.isEmpty {
-					return ""
-				} else {
-					// Attributes precede the initializer's modifiers on its line, as `mockAttributes` precede a mock's.
-					let attributesPrefix = instantiable.generatedInitializerAttributes.isEmpty ? "" : "\(instantiable.generatedInitializerAttributes) "
-					return try await """
-					extension \(instantiable.concreteInstantiable.asSource) {
-					    \(attributesPrefix)public \(instantiable.declarationType == .classType ? "convenience " : "")init() {
-					\(generateProperties(propertiesGeneratedLater: propertiesGeneratedLater, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames, leadingMemberWhitespace: "        ", fillPlaceBindings: fillPlaceBindings).joined(separator: "\n"))
-					        self.init(\(argumentList))
-					    }
-					}
-					"""
-				}
+				guard let rootInitializer = try Self.rootInitializer(of: instantiable) else { return "" }
+				let childCode = try await generateProperties(
+					propertiesGeneratedLater: propertiesGeneratedLater,
+					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
+					leadingMemberWhitespace: "        ",
+					fillPlaceBindings: fillPlaceBindings,
+				)
+				return Self.rootCode(of: rootInitializer, writing: consume childCode)
 			case let .mock(context):
 				return try await generateMockRootCode(
 					instantiable: instantiable,
@@ -6456,364 +6533,37 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			isPropertyCycle,
 			seamCall,
 		):
-			// A type built with its hand-written mock, as one built with its initializer, is constructed inside its builder
-			// function, whose own parameters hide the declarations of their labels where it is called.
-			let argumentList = if publicMockCall != nil, let mockInitializer = instantiable.mockInitializer {
-				// A call of another module's public mock in a fill a mock declares, which passes each parameter of the tier
-				// in signature order, a builder it fills among them, and no `safeDIOverrides`: no override reaches a fill. A
-				// by-value parameter whose label the tree holds as a lazily instantiated property is passed its instance, as
-				// a call outside a fill is (`dependencyArgument`).
-				mockInitializer.arguments.map { argument in
-					let value = publicMockBuilderStructValuesByLabel[argument.innerLabel] ?? holeArgumentValuesByLabel[argument.innerLabel] ?? instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }).map { dependency in
-						if unavailableProperties.contains(dependency.property) {
-							"nil"
-						} else if dependency.source.isReceived, lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty) {
-							"\(argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
-						} else {
-							argument.innerLabel
-						}
-					} ?? argument.innerLabel
-					return "\(argument.label.spelledAsArgumentLabel): \(value)"
-				}.joined(separator: ", ")
-			} else if constructsWithHandWrittenMock, let mockInitializer = instantiable.mockInitializer {
-				// A type a fill builds with its hand-written mock is passed what the mock takes of its dependencies, as an
-				// initializer is; each other parameter of the mock keeps its default. One without a default, whose dependency
-				// only an inactive clause declares, reaches here only in a build that compiles no generated mock, which never
-				// compiles the call, as it never compiles the same call outside a fill.
-				mockInitializer.createHandWrittenMockArgumentList(
-					given: instantiable.dependencies,
-					unavailableProperties: bodyUnavailableProperties(unavailableProperties),
-					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
-				)
-			} else {
-				// A public mock takes a value its tree receives lazily as the wrapper, so a call of one passes the caller's own
-				// (`ScopeGenerator.publicMockWrapperParameters`). A deliberate gap, the other site of which is that function: where
-				// the called mock still takes the value by value, a call passes a `LazilyInstantiated` property's instance
-				// (`<label>.instance`), which is created at the call, even when nothing in the called mock's tree reads it.
-				try instantiable.generateArgumentList(
-					unavailableProperties: bodyUnavailableProperties(unavailableProperties),
-					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
-				)
+			// Only the children's code is awaited here: what the scope writes around it is decided and spelled by the
+			// synchronous functions below (`.claude/rules/emission-decisions.md`, "A spelling holds no subtree text longer").
+			let argumentList = try constructionArgumentList(of: instantiable, unavailableProperties: unavailableProperties)
+			if isPropertyCycle, let closingCode = cycleClosingCode(
+				of: property,
+				erasedToConcreteExistential: erasedToConcreteExistential,
+				unavailableProperties: unavailableProperties,
+				builderFunctionNames: builderFunctionNames,
+			) {
+				return closingCode
 			}
-			let concreteTypeName = instantiable.concreteInstantiable.asSource
-			let instantiationDeclaration = if publicMockCall != nil {
-				"\(concreteTypeName).\(publicMockCall?.functionName ?? InstantiableVisitor.mockMethodName)"
-			} else if constructsWithHandWrittenMock {
-				"\(concreteTypeName).\(instantiable.customMockName ?? InstantiableVisitor.mockMethodName)"
-			} else if instantiable.declarationType.isExtension {
-				"\(concreteTypeName).\(InstantiableVisitor.instantiateMethodName)"
-			} else {
-				concreteTypeName
-			}
-			// A seam call passes a builder for each of the seam's holes after the tier's parameters; a call of a public
-			// mock passes them among its arguments.
-			let holeArgumentList = publicMockCall == nil
-				? builderCallArguments.map { "\($0.label): \($0.value)" }
-				: []
-			let returnLineSansReturn = holeArgumentList.isEmpty
-				? "\(instantiationDeclaration)(\(argumentList))"
-				: "\(instantiationDeclaration)(\(([argumentList].filter { !$0.isEmpty } + holeArgumentList).joined(separator: ", ")))"
-			// The payloads of the cases on the routes to the places beneath this scope, bound before its builder function, where
-			// the scope's parent binds its labels: each field read as the parent's receivers read it.
-			let valuesBindingLines = builderFunctionNames.loopValuesBindingLines ?? valuesBindingLines
-			// What ends the line that constructs the type, after the construction. A seam built inline here is built with the
-			// caller's isolation; across modules, its generated initializer builds its tree with the type's isolation, or the
-			// one `generatedInitializerAttributes` spells. A deliberate gap, which
-			// `generateSeamRootCode`'s comment on the generated initializers' isolation states too.
-			let constructionLineEnd = builtInlineSeamComment.map { " \($0)" } ?? ""
-			// A call to a seam's generated initializer refers to the enum the seam's module generated for the
-			// signature the call was generated from, on the line before the call, so a call generated from another
-			// signature fails to compile here rather than pass `nil` where the initializer expects a value. The
-			// statement is emitted as the body's only generated property, so the call is made in a builder function.
-			let seamGuardLines: [String] = if let seamCall {
-				["\(Self.standardIndent)\(seamCall.guardLine(for: instantiable.concreteInstantiable))"]
-			} else {
-				[]
-			}
-			// A type inside a fill an internal mock declares binds each place of it nothing builds from the builder `mock()`
-			// takes for the place (`FillPlace`), once per build, before its children, which receive the place's value.
-			let fillPlaceBindingLines = fillPlaceBindings.bindingsByGenerator[ObjectIdentifier(self), default: []].map { "\(Self.standardIndent)\($0.binding)" }
-
-			let propertyType = property.propertyType
-			switch propertyType {
-			case .instantiator,
-			     .erasedInstantiator,
-			     .sendableInstantiator,
-			     .sendableErasedInstantiator:
-				let forwardedProperties = forwardedProperties.sorted()
-				// The wrapper's closure spreads its argument.
-				let forwardedValue = "$0"
-				let forwardedArguments = (
-					Self.forwardedArguments(of: forwardedProperties, spreading: forwardedValue)
-						+ cycleParameterArguments(unavailableProperties: unavailableProperties),
-				).joined(separator: ", ")
-				// A member of a loop of builders first wraps again the functions of the members its tree receives inside the
-				// loop, each as the member's own declaration wraps it, so each receiver beneath reads a wrapper this call made.
-				// A cycle-closing scope declares no function: it refers to the enclosing one it closes on.
-				let functionName = if isPropertyCycle {
-					closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames)
-				} else {
-					builderFunctionNames.functionName ?? Self.functionName(toBuild: property)
-				}
-				let rebindingLines = reboundProperties.compactMap { reboundProperty in
-					if reboundProperty == property, declaresCycleParameters {
-						// The function's own property is wrapped again with the function's own parameters: where a cycle-closing
-						// scope builds the tree again, they are that scope's, which is then the nearest declaration of each.
-						Self.indented(instantiatorDeclaration(
-							handing: functionName,
-							forwardedArguments: (
-								Self.forwardedArguments(of: forwardedProperties, spreading: "$0")
-									+ cycleParameters.map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.label)" },
-							).joined(separator: ", "),
-						))
-					} else {
-						builderFunctionNames.loopMemberDeclarations[reboundProperty].map(Self.indented)
-					}
-				}
-				// A member of a boxed loop first unboxes its own payloads, which the scope bound in the loop's box.
-				let unboxingLines = builderFunctionNames.loopLevelsName.map(loopLevelsUnboxingLines(from:)) ?? []
-				// A fill that returns the builder the wrapper keeps is handed, for each struct of its own level, the function the inner
-				// seam's member returns, which takes the forwarded value: the builder function calls it with what it was forwarded,
-				// `()` where it forwards nothing, one value as itself, several as the labeled tuple the wrapper forwards.
-				var forwardedInnerScopeLines = [String]()
-				if isBuiltByFill, fillReturnsWrapperBuilder, readsFillInnerScopes {
-					let forwardedValue = switch forwardedProperties.count {
-					case 0: "()"
-					case 1: forwardedProperties[0].label
-					default: "(\(forwardedProperties.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" }.joined(separator: ", ")))"
-					}
-					forwardedInnerScopeLines = innerScopesCalledWithForwardedValue.map { "\(Self.standardIndent)let \($0) = \($0)(\(forwardedValue))" }
-				}
-				// Appended part by part: Linux's Swift 6.2 cannot type-check these parts joined with `+` in one expression ("the
-				// compiler is unable to type-check this expression in reasonable time").
-				var generatedProperties = unboxingLines
-				generatedProperties += forwardedInnerScopeLines
-				generatedProperties += memberCallLines
-				generatedProperties += rebindingLines
-				generatedProperties += seamGuardLines
-				generatedProperties += fillPlaceBindingLines
-				generatedProperties += try await generateProperties(
-					codeGeneration: codeGeneration,
-					propertiesGeneratedLater: bodyPropertiesGeneratedLater(propertiesGeneratedLater),
-					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
-					leadingMemberWhitespace: Self.standardIndent,
-					fillPlaceBindings: fillPlaceBindings,
-				)
-				// The function a lazy cycle closes on also takes the parameters its cycle-closing scopes pass.
-				let functionParameters = forwardedProperties + (isPropertyCycle ? [] : cycleParameters.map(\.property))
-				let functionArguments = if functionParameters.isEmpty {
-					""
-				} else {
-					functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
-				}
-				// A fill that returns a wrapper's builder spells its builder function `nonisolated` where it is `@Sendable`, as the
-				// code that calls the fill is.
-				let functionDecorator = if buildsInSendableFunction {
-					fillReturnsWrapperBuilder ? Self.localFunctionPrefix(isSendable: true, isNonisolated: true) : sendableFunctionDecorator
-				} else {
-					""
-				}
-				let functionDeclaration = if isPropertyCycle {
-					""
-				} else {
-					"""
-					\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
-					\(generatedProperties.joined(separator: "\n"))
-					\(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)\(constructionLineEnd)
-					}
-
-					"""
-				}
-
-				guard !isBuiltByFill else {
-					// A fill returns the builder the wrapper keeps (`fillReturnsWrapperBuilder`): a closure that hands the builder function what the wrapper forwards, named, and
-					// spread by label where it is several values, never destructured.
-					// Named apart from the parameters a lazy cycle passes, which the call reads by their labels.
-					var forwardedName = "forwarded"
-					while cycleParameters.contains(where: { $0.property.label == forwardedName }) {
-						forwardedName += "_"
-					}
-					var builderArguments = Self.forwardedArguments(of: forwardedProperties, spreading: forwardedName)
-					builderArguments += cycleParameterArguments(unavailableProperties: unavailableProperties)
-					let builderCall = "\(functionName)(\(builderArguments.joined(separator: ", ")))"
-					let builtValue = erasedToConcreteExistential ? "\(property.typeDescription.unwrapped.asInstantiatedType.asSource)(\(builderCall))" : builderCall
-					return "\(valuesBindingLines)\(functionDeclaration)return { \(forwardedProperties.isEmpty ? "_" : forwardedName) in \(builtValue) }"
-				}
-				if let receivedFunctionName = builderFunctionNames.receivedFunctionName {
-					// The function every wrapper of this member hands: it passes the parameters a lazy cycle needs what this
-					// scope's body binds, and a member of the same loop as a wrapper it makes, which no wrapper the body
-					// declares later can be.
-					var memberLines = [String]()
-					let cycleArguments = zip(cycleParameters, cycleParameterArguments(unavailableProperties: unavailableProperties)).map { parameter, argument in
-						// A scope declares each label once, so at most one of the two forms is a member.
-						let unwrappedProperty = parameter.property.asUnwrappedProperty
-						let memberDeclaration = builderFunctionNames.loopMemberDeclarations[unwrappedProperty] ?? builderFunctionNames.loopMemberDeclarations[unwrappedProperty.asOptionalProperty]
-						if let memberDeclaration {
-							memberLines.append(Self.indented(memberDeclaration))
-							return "\(parameter.property.label.spelledAsArgumentLabel): \(parameter.property.label)"
-						} else {
-							return argument
-						}
-					}
-					let receivedFunctionParameters = forwardedProperties.isEmpty
-						? ""
-						: forwardedProperties.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
-					let callArguments = (forwardedProperties.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" } + cycleArguments).joined(separator: ", ")
-					let receivedFunctionDecorator = buildsInSendableFunction || property.propertyType.isSendable ? sendableFunctionDecorator : ""
-					let receivedFunctionDeclaration = """
-					\(receivedFunctionDecorator)func \(receivedFunctionName)(\(receivedFunctionParameters)) -> \(concreteTypeName) {
-					\((memberLines + ["\(Self.standardIndent)\(memberLines.isEmpty ? "" : "return ")\(functionName)(\(callArguments))"]).joined(separator: "\n"))
-					}
-
-					"""
-					return """
-					\(valuesBindingLines)\(functionDeclaration)\(receivedFunctionDeclaration)\(instantiatorDeclaration(
-						handing: receivedFunctionName,
-						forwardedArguments: Self.forwardedArguments(of: forwardedProperties, spreading: forwardedValue).joined(separator: ", "),
-					))
-					"""
-				}
-				return """
-				\(valuesBindingLines)\(functionDeclaration)\(instantiatorDeclaration(handing: functionName, forwardedArguments: forwardedArguments))
-				"""
-			case .lazilyInstantiated,
-			     .sendableLazilyInstantiated:
-				// The builder function is the one a constant with children declares. A constant calls it
-				// immediately; a lazily instantiated property hands it to its wrapper, which calls it the
-				// first time the instance is requested. Dependency cycle validation treats the property
-				// as a constant, so it is never the deferred hop of a cycle. A scope that closes a cycle
-				// declares no function: it hands its wrapper the function of the declaration it repeats,
-				// with that function's cycle parameters, as an instantiator that closes a cycle does. The
-				// wrapper is always spelled with its generic argument, so the declaration needs no type
-				// annotation: an optional property receives the wrapper through optional promotion.
-				let unwrappedTypeDescription = property
-					.typeDescription
-					.unwrapped
-					.asSource
-				let cycleArguments = cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", ")
-				let functionName = if isPropertyCycle {
-					closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames)
-				} else {
-					builderFunctionNames.functionName ?? Self.functionName(toBuild: property)
-				}
-				let lazilyInstantiatedInstantiation = if erasedToConcreteExistential {
-					"""
-					\(unwrappedTypeDescription) {
-					\(Self.standardIndent)\(property.typeDescription.asInstantiatedType.asSource)(\(functionName)(\(cycleArguments)))
-					}
-					"""
-				} else if cycleArguments.isEmpty {
-					"\(unwrappedTypeDescription)(\(functionName))"
-				} else {
-					"""
-					\(unwrappedTypeDescription) {
-					\(Self.standardIndent)\(functionName)(\(cycleArguments))
-					}
-					"""
-				}
-				guard !isPropertyCycle else {
-					return "\(valuesBindingLines)let \(property.label) = \(lazilyInstantiatedInstantiation)"
-				}
-				let generatedProperties = try await memberCallLines + seamGuardLines + fillPlaceBindingLines + generateProperties(
-					codeGeneration: codeGeneration,
-					propertiesGeneratedLater: bodyPropertiesGeneratedLater(propertiesGeneratedLater),
-					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
-					leadingMemberWhitespace: Self.standardIndent,
-					fillPlaceBindings: fillPlaceBindings,
-				)
-				let functionDecorator = if buildsInSendableFunction {
-					sendableFunctionDecorator
-				} else {
-					""
-				}
-				// The function a cycle closes on also takes the parameters its cycle-closing scopes pass.
-				let functionParameters = cycleParameters.map(\.property)
-				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
-				let builderCall = "\(functionName)(\(cycleArguments))"
-				let lastLine = if isBuiltByFill {
-					"return \(erasedToConcreteExistential ? "\(property.typeDescription.asInstantiatedType.asSource)(\(builderCall))" : builderCall)"
-				} else {
-					"let \(property.label) = \(lazilyInstantiatedInstantiation)"
-				}
-
-				return """
-				\(valuesBindingLines)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
-				\(generatedProperties.joined(separator: "\n"))
-				\(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)\(constructionLineEnd)
-				}
-				\(lastLine)
-				"""
-			case .constant:
-				let callArguments = cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", ")
-				guard !isPropertyCycle else {
-					// A scope that closes a cycle declares no function: it calls the function of the declaration it repeats
-					// with that function's cycle parameters, typed as a constant with content is. A closer builds nothing, so
-					// it holds no seam's site and `valuesBindingLines` is empty, as it is for every closer.
-					let call = "\(closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames))(\(callArguments))"
-					return if erasedToConcreteExistential {
-						"\(valuesBindingLines)let \(property.label) = \(property.typeDescription.asSource)(\(call))\n"
-					} else {
-						"\(valuesBindingLines)let \(property.asSource) = \(call)\n"
-					}
-				}
-				let generatedProperties = try await memberCallLines + seamGuardLines + fillPlaceBindingLines + generateProperties(
-					codeGeneration: codeGeneration,
-					propertiesGeneratedLater: bodyPropertiesGeneratedLater(propertiesGeneratedLater),
-					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
-					leadingMemberWhitespace: Self.standardIndent,
-					fillPlaceBindings: fillPlaceBindings,
-				)
-				let functionDecorator = if buildsInSendableFunction {
-					sendableFunctionDecorator
-				} else {
-					""
-				}
-				// The function a cycle closes on also takes the parameters its cycle-closing scopes pass.
-				let functionParameters = cycleParameters.map(\.property)
-				let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
-
-				let nonEmptyGeneratedProperties = generatedProperties.filter { !$0.isEmpty }
-				let hasGeneratedContent = !nonEmptyGeneratedProperties.isEmpty
-				let propertyDeclaration = if erasedToConcreteExistential || (
-					concreteTypeName == property.typeDescription.asSource
-						&& !hasGeneratedContent
-						&& !instantiable.declarationType.isExtension
-				) {
-					"let \(property.label)"
-				} else {
-					"let \(property.asSource)"
-				}
-
-				// Ideally we would be able to use an anonymous closure rather than a named function here.
-				// Unfortunately, there's a bug in Swift Concurrency that prevents us from doing this: https://github.com/swiftlang/swift/issues/75003
-				let functionName = builderFunctionNames.functionName ?? Self.functionName(toBuild: property)
-				let functionDeclaration = if !hasGeneratedContent {
-					""
-				} else {
-					"""
-					\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
-					\(nonEmptyGeneratedProperties.joined(separator: "\n"))
-					\(Self.standardIndent)return \(returnLineSansReturn)\(constructionLineEnd)
-					}
-
-					"""
-				}
-				let existentialWrappedReturn = if erasedToConcreteExistential {
-					"\(property.typeDescription.asSource)(\(returnLineSansReturn))"
-				} else {
-					returnLineSansReturn
-				}
-				let initializer = if !hasGeneratedContent {
-					existentialWrappedReturn + constructionLineEnd
-				} else if erasedToConcreteExistential {
-					"\(property.typeDescription.asSource)(\(functionName)(\(callArguments)))"
-				} else {
-					"\(functionName)(\(callArguments))"
-				}
-
-				// The payloads a seam's tree binds before building a scope that leads to a place.
-				return "\(valuesBindingLines)\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
-			}
+			let childCode = try await generateProperties(
+				codeGeneration: codeGeneration,
+				propertiesGeneratedLater: bodyPropertiesGeneratedLater(propertiesGeneratedLater),
+				enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
+				leadingMemberWhitespace: Self.standardIndent,
+				fillPlaceBindings: fillPlaceBindings,
+			)
+			return propertyCode(
+				around: childCode,
+				instantiable: instantiable,
+				property: property,
+				forwardedProperties: forwardedProperties,
+				erasedToConcreteExistential: erasedToConcreteExistential,
+				isPropertyCycle: isPropertyCycle,
+				seamCall: seamCall,
+				argumentList: argumentList,
+				unavailableProperties: unavailableProperties,
+				builderFunctionNames: builderFunctionNames,
+				fillPlaceBindings: fillPlaceBindings,
+			)
 		case let .hole(property, _, site):
 			// A tree built only to compute the seam's signature has no site, and generates nothing.
 			guard let site else { return "" }
@@ -6830,27 +6580,448 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				fillPlaceBindings: fillPlaceBindings,
 			)
 		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
-			if Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: unavailableProperties) {
-				// An `onlyIfAvailable` alias whose fulfilling property is unavailable is still declared, so that its declaring
-				// type and everything beneath it read it, `nil` included, rather than a declaration of its label further up.
-				return Self.referencingDeclaration(of: "let \(property.asSource) = nil", by: declarationReference)
+			return aliasCode(
+				of: property,
+				fulfilledBy: fulfillingProperty,
+				erasedToConcreteExistential: erasedToConcreteExistential,
+				onlyIfAvailable: onlyIfAvailable,
+				declarationReference: declarationReference,
+				unavailableProperties: unavailableProperties,
+			)
+		}
+	}
+
+	/// The initializer generated for `instantiable`, a root of the dependency tree, or `nil` for a root without
+	/// dependencies, for which nothing is generated (`RootInitializer.init(of:argumentList:)`).
+	@inline(never)
+	private static func rootInitializer(of instantiable: Instantiable) throws -> RootInitializer? {
+		try RootInitializer(of: instantiable, argumentList: instantiable.generateArgumentList())
+	}
+
+	/// The extension `rootInitializer` declares, writing `childCode`, the code of the root's children. The children's
+	/// text is a temporary of the plan, which the spelling consumes (`RootInitializer.spelled(writing:)`).
+	@inline(never)
+	private static func rootCode(of rootInitializer: RootInitializer, writing childCode: consuming [String]) -> String {
+		rootInitializer.spelled(writing: BuilderFunctionGraph(body: childCode.map(Statement.verbatim)))
+	}
+
+	/// The declaration of the alias `property`, which `fulfillingProperty` fulfills.
+	@inline(never)
+	private func aliasCode(
+		of property: Property,
+		fulfilledBy fulfillingProperty: Property,
+		erasedToConcreteExistential: Bool,
+		onlyIfAvailable: Bool,
+		declarationReference: AliasDeclarationReferences.Reference?,
+		unavailableProperties: Set<Property>,
+	) -> String {
+		if Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: unavailableProperties) {
+			// An `onlyIfAvailable` alias whose fulfilling property is unavailable is still declared, so that its declaring
+			// type and everything beneath it read it, `nil` included, rather than a declaration of its label further up.
+			Self.referencingDeclaration(of: "let \(property.asSource) = nil", by: declarationReference)
+		} else {
+			// The alias is bound from the declared property it reads, which may be `nil` where it is an optional
+			// property – a seam's optional parameter, a parameter made optional, or the optional form of the fulfilling
+			// property – and is otherwise a non-optional value. A wrapper's instance is read from a non-optional wrapper.
+			Self.referencingDeclaration(
+				of: Self.aliasDeclaration(
+					of: property,
+					fulfilledBy: fulfillingExpression ?? (fulfillingPropertyIsLazilyInstantiatedInstance
+						? "\(fulfillingProperty.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+						: fulfillingProperty.label),
+					ofType: fulfillingProperty.typeDescription,
+					erasedToConcreteExistential: erasedToConcreteExistential,
+					fulfillingValueMayBeOptional: fulfillingBindingIsOptional,
+				),
+				by: declarationReference,
+			)
+		}
+	}
+
+	// A property's scope is written by the synchronous functions below, as a root's and an alias's are by those above,
+	// and `generatePropertyCode` only awaits its children's code between them. A task holds the async frame of every call
+	// it is suspended in, and a large subtree starts each small subtree beneath it on a task of its own, so a wide tree
+	// holds one such frame for each of its scopes at once: every value decided or spelled inside the async function made
+	// each of them larger. Each function is kept out of the async function (`@inline(never)`), so that what it decides
+	// lives on a thread's stack while it runs.
+
+	/// What the construction of `instantiable` in this scope's builder function passes the function it calls.
+	@inline(never)
+	private func constructionArgumentList(of instantiable: Instantiable, unavailableProperties: Set<Property>) throws -> String {
+		// A type built with its hand-written mock, as one built with its initializer, is constructed inside its builder
+		// function, whose own parameters hide the declarations of their labels where it is called.
+		if publicMockCall != nil, let mockInitializer = instantiable.mockInitializer {
+			// A call of another module's public mock in a fill a mock declares, which passes each parameter of the tier
+			// in signature order, a builder it fills among them, and no `safeDIOverrides`: no override reaches a fill. A
+			// by-value parameter whose label the tree holds as a lazily instantiated property is passed its instance, as
+			// a call outside a fill is (`dependencyArgument`).
+			mockInitializer.arguments.map { argument in
+				let dependency = instantiable.dependencies.first { $0.property.label == argument.innerLabel }
+				let source: ArgumentSource = if let builderValue = publicMockBuilderStructValuesByLabel[argument.innerLabel] {
+					.builderArgument(builderValue)
+				} else if let holeValue = holeArgumentValuesByLabel[argument.innerLabel] {
+					.holeArgument(holeValue)
+				} else if let dependency, unavailableProperties.contains(dependency.property) {
+					.nil
+				} else if let dependency, dependency.source.isReceived, lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty) {
+					.lazyInstance(label: argument.innerLabel, throughOptional: false)
+				} else {
+					// A parameter no dependency takes reads the nearest declaration of its label, as a dependency does.
+					.binding(label: argument.innerLabel)
+				}
+				return CallArgument(label: argument.label, source: source).spelled
+			}.joined(separator: ", ")
+		} else if constructsWithHandWrittenMock, let mockInitializer = instantiable.mockInitializer {
+			// A type a fill builds with its hand-written mock is passed what the mock takes of its dependencies, as an
+			// initializer is; each other parameter of the mock keeps its default. One without a default, whose dependency
+			// only an inactive clause declares, reaches here only in a build that compiles no generated mock, which never
+			// compiles the call, as it never compiles the same call outside a fill.
+			mockInitializer.createHandWrittenMockArgumentList(
+				given: instantiable.dependencies,
+				unavailableProperties: bodyUnavailableProperties(unavailableProperties),
+				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+			)
+		} else {
+			// A public mock takes a value its tree receives lazily as the wrapper, so a call of one passes the caller's own
+			// (`ScopeGenerator.publicMockWrapperParameters`). A deliberate gap, the other site of which is that function: where
+			// the called mock still takes the value by value, a call passes a `LazilyInstantiated` property's instance
+			// (`<label>.instance`), which is created at the call, even when nothing in the called mock's tree reads it.
+			try instantiable.generateArgumentList(
+				unavailableProperties: bodyUnavailableProperties(unavailableProperties),
+				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+			)
+		}
+	}
+
+	/// The code of this scope where it closes a cycle on `property`, lazily instantiated or constant: it declares no
+	/// function, and refers to the function of the declaration it repeats with that function's cycle parameters. `nil`
+	/// for an instantiator, which generates its children as every other scope does.
+	@inline(never)
+	private func cycleClosingCode(
+		of property: Property,
+		erasedToConcreteExistential: Bool,
+		unavailableProperties: Set<Property>,
+		builderFunctionNames: BuilderFunctionNames,
+	) -> String? {
+		switch property.propertyType {
+		case .instantiator,
+		     .erasedInstantiator,
+		     .sendableInstantiator,
+		     .sendableErasedInstantiator:
+			return nil
+		case .lazilyInstantiated,
+		     .sendableLazilyInstantiated:
+			// It hands its wrapper the function of the declaration it repeats, as an instantiator that closes a cycle does.
+			let lazilyInstantiatedInstantiation = Self.lazilyInstantiatedInstantiation(
+				of: property,
+				callingFunctionNamed: closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames),
+				cycleArguments: cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", "),
+				erasedToConcreteExistential: erasedToConcreteExistential,
+			)
+			return "\(builderFunctionNames.loopValuesBindingLines ?? valuesBindingLines)\(BindingDeclaration(property: property, rule: .lazilyInstantiated).spelled) = \(lazilyInstantiatedInstantiation)"
+		case .constant:
+			// It is typed as a constant with content is. A closer builds nothing, so it holds no seam's site and
+			// `valuesBindingLines` is empty, as it is for every closer.
+			let valuesBindingLines = builderFunctionNames.loopValuesBindingLines ?? valuesBindingLines
+			let callArguments = cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", ")
+			let call = Expression.call(function: closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames), arguments: callArguments)
+			return if erasedToConcreteExistential {
+				"\(valuesBindingLines)let \(property.label) = \(Expression.erasure(call, as: property.typeDescription).spelled)\n"
 			} else {
-				// The alias is bound from the declared property it reads, which may be `nil` where it is an optional
-				// property – a seam's optional parameter, a parameter made optional, or the optional form of the fulfilling
-				// property – and is otherwise a non-optional value. A wrapper's instance is read from a non-optional wrapper.
-				return Self.referencingDeclaration(
-					of: Self.aliasDeclaration(
-						of: property,
-						fulfilledBy: fulfillingExpression ?? (fulfillingPropertyIsLazilyInstantiatedInstance
-							? "\(fulfillingProperty.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
-							: fulfillingProperty.label),
-						ofType: fulfillingProperty.typeDescription,
-						erasedToConcreteExistential: erasedToConcreteExistential,
-						fulfillingValueMayBeOptional: fulfillingBindingIsOptional,
-					),
-					by: declarationReference,
-				)
+				"\(valuesBindingLines)let \(property.asSource) = \(call.spelled)\n"
 			}
+		}
+	}
+
+	/// The wrapper a lazily instantiated `property` is declared as, which calls the builder function named `functionName`
+	/// with `cycleArguments` the first time its instance is requested. The wrapper is always spelled with its generic
+	/// argument, so the declaration needs no type annotation: an optional property receives the wrapper through optional
+	/// promotion.
+	private static func lazilyInstantiatedInstantiation(
+		of property: Property,
+		callingFunctionNamed functionName: String,
+		cycleArguments: String,
+		erasedToConcreteExistential: Bool,
+	) -> String {
+		let unwrappedTypeDescription = property
+			.typeDescription
+			.unwrapped
+			.asSource
+		return if erasedToConcreteExistential {
+			"""
+			\(unwrappedTypeDescription) {
+			\(Self.standardIndent)\(Expression.erasure(.call(function: functionName, arguments: cycleArguments), as: property.typeDescription.asInstantiatedType).spelled)
+			}
+			"""
+		} else if cycleArguments.isEmpty {
+			"\(unwrappedTypeDescription)(\(functionName))"
+		} else {
+			"""
+			\(unwrappedTypeDescription) {
+			\(Self.standardIndent)\(functionName)(\(cycleArguments))
+			}
+			"""
+		}
+	}
+
+	/// The code of this scope, which builds `property` from `instantiable`, written around `childCode`, its children's
+	/// code: the builder function, where the scope declares one, and the declaration of the property. A scope that closes
+	/// a lazily instantiated or constant cycle is written by `cycleClosingCode(of:erasedToConcreteExistential:unavailableProperties:builderFunctionNames:)`.
+	/// - Parameter argumentList: What the construction passes the function it calls
+	///   (`constructionArgumentList(of:unavailableProperties:)`).
+	@inline(never)
+	private func propertyCode(
+		around childCode: [String],
+		instantiable: Instantiable,
+		property: Property,
+		forwardedProperties: Set<Property>,
+		erasedToConcreteExistential: Bool,
+		isPropertyCycle: Bool,
+		seamCall: SeamCall?,
+		argumentList: String,
+		unavailableProperties: Set<Property>,
+		builderFunctionNames: BuilderFunctionNames,
+		fillPlaceBindings: FillPlaceBindings,
+	) -> String {
+		let concreteTypeName = instantiable.concreteInstantiable.asSource
+		let constructionTarget: ConstructionTarget = if let publicMockCall {
+			.mock(instantiable.concreteInstantiable, name: publicMockCall.functionName)
+		} else if constructsWithHandWrittenMock {
+			.mock(instantiable.concreteInstantiable, name: instantiable.customMockName ?? InstantiableVisitor.mockMethodName)
+		} else if instantiable.declarationType.isExtension {
+			.instantiate(instantiable.concreteInstantiable)
+		} else {
+			.initializer(instantiable.concreteInstantiable)
+		}
+		// A seam call passes a builder for each of the seam's holes after the tier's parameters; a call of a public
+		// mock passes them among its arguments.
+		let holeArgumentList = publicMockCall == nil
+			? builderCallArguments.map { "\($0.label): \($0.value)" }
+			: []
+		let constructionArguments = holeArgumentList.isEmpty ? argumentList : ([argumentList].filter { !$0.isEmpty } + holeArgumentList).joined(separator: ", ")
+		let construction = Expression.construction(constructionTarget, arguments: constructionArguments)
+		// The payloads of the cases on the routes to the places beneath this scope, bound before its builder function, where
+		// the scope's parent binds its labels: each field read as the parent's receivers read it.
+		let valuesBindingLines = builderFunctionNames.loopValuesBindingLines ?? valuesBindingLines
+		// What ends the line that constructs the type, after the construction. A seam built inline here is built with the
+		// caller's isolation; across modules, its generated initializer builds its tree with the type's isolation, or the
+		// one `generatedInitializerAttributes` spells. A deliberate gap, which
+		// `generateSeamRootCode`'s comment on the generated initializers' isolation states too.
+		let constructionLineEnd = builtInlineSeamComment.map { " \($0)" } ?? ""
+		// A call to a seam's generated initializer refers to the enum the seam's module generated for the
+		// signature the call was generated from, on the line before the call, so a call generated from another
+		// signature fails to compile here rather than pass `nil` where the initializer expects a value. The
+		// statement is emitted as the body's only generated property, so the call is made in a builder function.
+		let seamGuardLines: [String] = if let seamCall {
+			["\(Self.standardIndent)\(seamCall.guardLine(for: instantiable.concreteInstantiable))"]
+		} else {
+			[]
+		}
+		// A type inside a fill an internal mock declares binds each place of it nothing builds from the builder `mock()`
+		// takes for the place (`FillPlace`), once per build, before its children, which receive the place's value.
+		let fillPlaceBindingLines = fillPlaceBindings.bindingsByGenerator[ObjectIdentifier(self), default: []].map { "\(Self.standardIndent)\($0.binding)" }
+
+		let propertyType = property.propertyType
+		switch propertyType {
+		case .instantiator,
+		     .erasedInstantiator,
+		     .sendableInstantiator,
+		     .sendableErasedInstantiator:
+			let forwardedProperties = forwardedProperties.sorted()
+			// The wrapper's closure spreads its argument.
+			let forwardedValue = "$0"
+			let forwardedArguments = (
+				Self.forwardedArguments(of: forwardedProperties, spreading: forwardedValue)
+					+ cycleParameterArguments(unavailableProperties: unavailableProperties),
+			).joined(separator: ", ")
+			// A member of a loop of builders first wraps again the functions of the members its tree receives inside the
+			// loop, each as the member's own declaration wraps it, so each receiver beneath reads a wrapper this call made.
+			// A cycle-closing scope declares no function: it refers to the enclosing one it closes on.
+			let functionName = if isPropertyCycle {
+				closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames)
+			} else {
+				builderFunctionNames.functionName ?? Self.functionName(toBuild: property)
+			}
+			let rebindingLines = reboundProperties.compactMap { reboundProperty in
+				if reboundProperty == property, declaresCycleParameters {
+					// The function's own property is wrapped again with the function's own parameters: where a cycle-closing
+					// scope builds the tree again, they are that scope's, which is then the nearest declaration of each.
+					Self.indented(instantiatorDeclaration(
+						handing: functionName,
+						forwardedArguments: (
+							Self.forwardedArguments(of: forwardedProperties, spreading: "$0")
+								+ cycleParameters.map { CallArgument(label: $0.property.label, source: .binding(label: $0.property.label)).spelled },
+						).joined(separator: ", "),
+					))
+				} else {
+					builderFunctionNames.loopMemberDeclarations[reboundProperty].map(Self.indented)
+				}
+			}
+			// A member of a boxed loop first unboxes its own payloads, which the scope bound in the loop's box.
+			let unboxingLines = builderFunctionNames.loopLevelsName.map(loopLevelsUnboxingLines(from:)) ?? []
+			// A fill that returns the builder the wrapper keeps is handed, for each struct of its own level, the function the inner
+			// seam's member returns, which takes the forwarded value: the builder function calls it with what it was forwarded,
+			// `()` where it forwards nothing, one value as itself, several as the labeled tuple the wrapper forwards.
+			var forwardedInnerScopeLines = [String]()
+			if isBuiltByFill, fillReturnsWrapperBuilder, readsFillInnerScopes {
+				let forwardedValue = switch forwardedProperties.count {
+				case 0: "()"
+				case 1: forwardedProperties[0].label
+				default: "(\(forwardedProperties.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" }.joined(separator: ", ")))"
+				}
+				forwardedInnerScopeLines = innerScopesCalledWithForwardedValue.map { "\(Self.standardIndent)let \($0) = \($0)(\(forwardedValue))" }
+			}
+			// Appended part by part: Linux's Swift 6.2 cannot type-check these parts joined with `+` in one expression ("the
+			// compiler is unable to type-check this expression in reasonable time").
+			var generatedProperties = unboxingLines
+			generatedProperties += forwardedInnerScopeLines
+			generatedProperties += memberCallLines
+			generatedProperties += rebindingLines
+			generatedProperties += seamGuardLines
+			generatedProperties += fillPlaceBindingLines
+			generatedProperties += childCode
+			// The function a lazy cycle closes on also takes the parameters its cycle-closing scopes pass.
+			let functionParameters = forwardedProperties + (isPropertyCycle ? [] : cycleParameters.map(\.property))
+			let functionDeclaration = if isPropertyCycle {
+				""
+			} else {
+				Statement.function(BuilderNode(
+					name: functionName,
+					isSendable: buildsInSendableFunction,
+					// A fill that returns a wrapper's builder spells its builder function `nonisolated` where it is `@Sendable`, as
+					// the code that calls the fill is.
+					isNonisolated: fillReturnsWrapperBuilder || sendableFunctionsAreNonisolated,
+					parameters: functionParameters,
+					typesDeclaredEscaping: typesDeclaredEscaping,
+					returnType: instantiable.concreteInstantiable,
+					body: BuilderBody(statements: generatedProperties),
+					value: construction,
+					lineEnd: constructionLineEnd,
+				)).spelled
+			}
+
+			guard !isBuiltByFill else {
+				// A fill returns the builder the wrapper keeps (`fillReturnsWrapperBuilder`): a closure that hands the builder function what the wrapper forwards, named, and
+				// spread by label where it is several values, never destructured.
+				// Named apart from the parameters a lazy cycle passes, which the call reads by their labels.
+				var forwardedName = "forwarded"
+				while cycleParameters.contains(where: { $0.property.label == forwardedName }) {
+					forwardedName += "_"
+				}
+				var builderArguments = Self.forwardedArguments(of: forwardedProperties, spreading: forwardedName)
+				builderArguments += cycleParameterArguments(unavailableProperties: unavailableProperties)
+				let builtValue = Expression.call(function: functionName, arguments: builderArguments.joined(separator: ", "))
+					.erased(to: property.typeDescription.unwrapped.asInstantiatedType, where: erasedToConcreteExistential)
+					.spelled
+				return "\(valuesBindingLines)\(functionDeclaration)return { \(forwardedProperties.isEmpty ? "_" : forwardedName) in \(builtValue) }"
+			}
+			if let receivedFunctionName = builderFunctionNames.receivedFunctionName {
+				// The function every wrapper of this member hands: it passes the parameters a lazy cycle needs what this
+				// scope's body binds, and a member of the same loop as a wrapper it makes, which no wrapper the body
+				// declares later can be.
+				var memberLines = [String]()
+				let cycleArguments = zip(cycleParameters, cycleParameterArguments(unavailableProperties: unavailableProperties)).map { parameter, argument in
+					// A scope declares each label once, so at most one of the two forms is a member.
+					let unwrappedProperty = parameter.property.asUnwrappedProperty
+					let memberDeclaration = builderFunctionNames.loopMemberDeclarations[unwrappedProperty] ?? builderFunctionNames.loopMemberDeclarations[unwrappedProperty.asOptionalProperty]
+					if let memberDeclaration {
+						memberLines.append(Self.indented(memberDeclaration))
+						return CallArgument(label: parameter.property.label, source: .binding(label: parameter.property.label)).spelled
+					} else {
+						return argument
+					}
+				}
+				let receivedFunctionParameters = forwardedProperties.isEmpty
+					? ""
+					: forwardedProperties.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
+				let callArguments = (forwardedProperties.map { CallArgument(label: $0.label, source: .binding(label: $0.label)).spelled } + cycleArguments).joined(separator: ", ")
+				let receivedFunctionDecorator = buildsInSendableFunction || property.propertyType.isSendable ? sendableFunctionDecorator : ""
+				let receivedFunctionDeclaration = """
+				\(receivedFunctionDecorator)func \(receivedFunctionName)(\(receivedFunctionParameters)) -> \(concreteTypeName) {
+				\((memberLines + ["\(Self.standardIndent)\(BuilderBody(statements: memberLines).returnKeyword)\(functionName)(\(callArguments))"]).joined(separator: "\n"))
+				}
+
+				"""
+				return """
+				\(valuesBindingLines)\(functionDeclaration)\(receivedFunctionDeclaration)\(instantiatorDeclaration(
+					handing: receivedFunctionName,
+					forwardedArguments: Self.forwardedArguments(of: forwardedProperties, spreading: forwardedValue).joined(separator: ", "),
+				))
+				"""
+			}
+			return """
+			\(valuesBindingLines)\(functionDeclaration)\(instantiatorDeclaration(handing: functionName, forwardedArguments: forwardedArguments))
+			"""
+		case .lazilyInstantiated,
+		     .sendableLazilyInstantiated:
+			// The builder function is the one a constant with children declares. A constant calls it
+			// immediately; a lazily instantiated property hands it to its wrapper, which calls it the
+			// first time the instance is requested. Dependency cycle validation treats the property
+			// as a constant, so it is never the deferred hop of a cycle.
+			let cycleArguments = cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", ")
+			let functionName = builderFunctionNames.functionName ?? Self.functionName(toBuild: property)
+			let generatedProperties = memberCallLines + seamGuardLines + fillPlaceBindingLines + childCode
+			// The function a cycle closes on also takes the parameters its cycle-closing scopes pass.
+			let function = BuilderNode(
+				name: functionName,
+				isSendable: buildsInSendableFunction,
+				isNonisolated: sendableFunctionsAreNonisolated,
+				parameters: cycleParameters.map(\.property),
+				typesDeclaredEscaping: typesDeclaredEscaping,
+				returnType: instantiable.concreteInstantiable,
+				body: BuilderBody(statements: generatedProperties),
+				value: construction,
+				lineEnd: constructionLineEnd,
+			)
+			let lastLine = if isBuiltByFill {
+				"return \(Expression.call(function: functionName, arguments: cycleArguments).erased(to: property.typeDescription.asInstantiatedType, where: erasedToConcreteExistential).spelled)"
+			} else {
+				"\(BindingDeclaration(property: property, rule: .lazilyInstantiated).spelled) = \(Self.lazilyInstantiatedInstantiation(of: property, callingFunctionNamed: functionName, cycleArguments: cycleArguments, erasedToConcreteExistential: erasedToConcreteExistential))"
+			}
+
+			return function.spelled(after: valuesBindingLines, followedBy: lastLine)
+		case .constant:
+			let callArguments = cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", ")
+			let generatedProperties = memberCallLines + seamGuardLines + fillPlaceBindingLines + childCode
+			let body = BuilderBody(statements: generatedProperties)
+			let hasGeneratedContent = body.hasStatements
+			let propertyDeclaration = BindingDeclaration(
+				property: property,
+				rule: .constant(
+					isErased: erasedToConcreteExistential,
+					constructedTypeIsPropertyType: concreteTypeName == property.typeDescription.asSource,
+					hasBuilderFunction: hasGeneratedContent,
+					isExtension: instantiable.declarationType.isExtension,
+				),
+			)
+
+			// Ideally we would be able to use an anonymous closure rather than a named function here.
+			// Unfortunately, there's a bug in Swift Concurrency that prevents us from doing this: https://github.com/swiftlang/swift/issues/75003
+			let functionName = builderFunctionNames.functionName ?? Self.functionName(toBuild: property)
+			let functionDeclaration = if !hasGeneratedContent {
+				""
+			} else {
+				// The function a cycle closes on also takes the parameters its cycle-closing scopes pass.
+				Statement.function(BuilderNode(
+					name: functionName,
+					isSendable: buildsInSendableFunction,
+					isNonisolated: sendableFunctionsAreNonisolated,
+					parameters: cycleParameters.map(\.property),
+					typesDeclaredEscaping: typesDeclaredEscaping,
+					returnType: instantiable.concreteInstantiable,
+					body: body,
+					value: construction,
+					lineEnd: constructionLineEnd,
+				)).spelled
+			}
+			let binding = if !hasGeneratedContent {
+				Statement.binding(propertyDeclaration, construction.erased(to: property.typeDescription, where: erasedToConcreteExistential), lineEnd: constructionLineEnd)
+			} else {
+				Statement.binding(propertyDeclaration, Expression.call(function: functionName, arguments: callArguments).erased(to: property.typeDescription, where: erasedToConcreteExistential), lineEnd: "")
+			}
+
+			// The payloads a seam's tree binds before building a scope that leads to a place.
+			return "\(valuesBindingLines)\(functionDeclaration)\(binding.spelled)\n"
 		}
 	}
 
@@ -7252,6 +7423,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///     have where the site is built, which the payload reads a field of such a wrapper by
 	///     (`SeamHoles.valuesArguments(of:readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)`).
 	///   - isNonisolated: Whether the tree spells a `@Sendable` local function it declares `nonisolated` too.
+	// Kept out of `generatePropertyCode`'s async frame, as the functions that write a property's scope are.
+	@inline(never)
 	static func buildSiteCode(of property: Property, at site: SeamSignature.Hole, functionName: String?, readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property> = [], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:], isNonisolated: Bool = false) -> String {
 		// A place nested by type is handed what its owner binds before it; the cases that lead to it carry what each type on
 		// the way binds, which the tree bound before building the next. A place in a `@Sendable` enum held in a `Sendable`
@@ -7337,9 +7510,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 		// A caller's own value the fill reads from its mock root's binding is bound under its label from the name the root binds
 		// it under, where that is not the label.
-		var body = fillCallerReads.mockRootBindingByLabel.keys.sorted().compactMap { label in
-			fillCallerReads.mockRootBindingByLabel[label].flatMap { fillPlaceBindings.rootBindingNames[label]?[$0.typeDescription] }.map { "\(indent)let \(label) = \($0)" }
-		}
+		var body = fillCallerReads.mockRootRebindings(rootBindingNames: fillPlaceBindings.rootBindingNames).map { "\(indent)let \($0.label) = \($0.rootBindingName)" }
 		body += childCode.joined(separator: "\n").split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 		guard !fillReturnsWrapperBuilder else {
 			// A level function's member hands the fill of an instantiator's place each field it reads, and the fill returns the
