@@ -2974,6 +2974,44 @@ struct SafeDIToolQueryTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_reportsBuilderOfHoleTypeAsRequired_whenTypeThatGeneratesItsDependencyTreeHasPlaceItsMockBuilds() async throws {
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Feature",
+			modules: [
+				QueryTestModule("FeatureModule", [
+					"""
+					public protocol UserService {}
+
+					@Instantiable(generateDependencyTree: true, generateMock: true)
+					public final class Feature: Instantiable {
+					    public init(profile: Profile) {
+					        self.profile = profile
+					    }
+					    @Instantiated private let profile: Profile
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Profile: Instantiable {
+					    public init(userService: any UserService) {
+					        self.userService = userService
+					    }
+					    @Instantiated private let userService: any UserService
+					}
+					""",
+				]),
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		// `Feature`'s mock takes a builder for the place, which a caller writes as a closure.
+		#expect(output.result.unfulfilledDependencies == [
+			TypeReport.UnfulfilledDependency(label: "userServiceBuilder", type: "() -> any UserService", defaultExpression: nil, reasonKind: .noInstantiableFulfillsType, reason: "No @Instantiable declaration fulfills `UserService`."),
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

@@ -6046,9 +6046,9 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_takesBuilderAndKeepsMocksFlatParameter_whenSeamThatGeneratesMockHasHole() async throws {
+	mutating func generate_takesBuilderOfHoleTypeInItsOwnMock_whenSeamThatGeneratesMockHasHole() async throws {
 		// C3.12, H11: a mock builds every seam inline, so `Service`'s mock, which cannot see a fulfilling declaration, takes
-		// the hole as today's parameter, beside the generated initializer that takes the builder.
+		// a builder of the hole type, as the generated initializer does, which `Profile`'s builder function calls.
 		let feature = [
 			Self.userServiceProtocol,
 			seamFixtureType(named: "Analytics", declarations: []),
@@ -6093,11 +6093,15 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        userService: UserService,
+		        userServiceBuilder: @escaping () -> any UserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        let profile = if let safeDIBuilder = safeDIOverrides.profile { safeDIBuilder(userService, analytics) } else { Profile(userService: userService, analytics: analytics) }
+		        func __safeDI_profile() -> Profile {
+		            let userService: any UserService = userServiceBuilder()
+		            return if let safeDIBuilder = safeDIOverrides.profile { safeDIBuilder(userService, analytics) } else { Profile(userService: userService, analytics: analytics) }
+		        }
+		        let profile: Profile = __safeDI_profile()
 		        return Service(analytics: analytics, profile: profile)
 		    }
 		}

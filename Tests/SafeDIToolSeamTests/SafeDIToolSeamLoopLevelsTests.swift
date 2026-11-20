@@ -1149,23 +1149,42 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			"Inner+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Inner {
-			    @frozen public enum SafeDIMockScope_Service {
+			    @frozen nonisolated public enum SafeDIMockScope_Service {
 			        case service(service_Values)
 
-			        public struct service_Values {}
+			        nonisolated public struct service_Values {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let service: (service_Values) -> __safeDI_Built
+
+			            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+			                self.service = service
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.service = { _ in __safeDI_builder() }
+			            }
+			        }
 			    }
 
 			    public static func mock(
-			        serviceBuilder: @escaping (Inner.SafeDIMockScope_Service) -> any Service
+			        serviceBuilder: @escaping () -> any Service
 			    ) -> Inner {
-			        let __safeDI_serviceBuilder = serviceBuilder
-			        let service: any Service = __safeDI_serviceBuilder(.service(SafeDIMockScope_Service.service_Values()))
+			        Inner.__safeDI_mock(serviceBuilder: .init(__safeDI_noScope: serviceBuilder))
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        serviceBuilder __safeDI_serviceBuilder: Inner.SafeDIMockScope_Service.__safeDI_Builder<any Service>
+			    ) -> Inner {
+			        let service: any Service = __safeDI_serviceBuilder.service(SafeDIMockScope_Service.service_Values())
 			        return Inner(service: service)
 			    }
 			}
 
 			extension Inner {
-			    public enum __safeDI_Inner_mock_EE753AF97E802078 {}
+			    public enum __safeDI_Inner_mock_E789692848368FB8 {}
 			}
 			#endif
 			""",
@@ -1410,8 +1429,8 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			                    return service
 			                }
 			            }
-			            _ = Inner.__safeDI_Inner_mock_EE753AF97E802078.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
-			            return if let safeDIBuilder = safeDIOverrides.inner { safeDIBuilder(__safeDI_serviceBuilder_Inner) } else { Inner.mock(serviceBuilder: __safeDI_serviceBuilder_Inner) }
+			            _ = Inner.__safeDI_Inner_mock_E789692848368FB8.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
+			            return if let safeDIBuilder = safeDIOverrides.inner { safeDIBuilder(__safeDI_serviceBuilder_Inner) } else { Inner.__safeDI_mock(serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.service(__safeDI_serviceValues)) })) }
 			        }
 			        let inner: Inner = __safeDI_inner()
 			        return Outer(inner: inner)
@@ -1534,8 +1553,8 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			                        return service
 			                    }
 			                }
-			                _ = Inner.__safeDI_Inner_mock_EE753AF97E802078.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
-			                return if let safeDIBuilder = safeDIOverrides.outer.inner { safeDIBuilder(__safeDI_serviceBuilder_Inner) } else { Inner.mock(serviceBuilder: __safeDI_serviceBuilder_Inner) }
+			                _ = Inner.__safeDI_Inner_mock_E789692848368FB8.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
+			                return if let safeDIBuilder = safeDIOverrides.outer.inner { safeDIBuilder(__safeDI_serviceBuilder_Inner) } else { Inner.__safeDI_mock(serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.service(__safeDI_serviceValues)) })) }
 			            }
 			            let inner: Inner = __safeDI_inner()
 			            return if let safeDIBuilder = safeDIOverrides.outer.safeDIBuilder { safeDIBuilder(inner) } else { Outer(inner: inner) }
