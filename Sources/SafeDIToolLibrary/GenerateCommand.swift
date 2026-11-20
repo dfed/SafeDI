@@ -71,6 +71,21 @@ public struct Generate: AsyncParsableCommand {
 	// MARK: Internal
 
 	public func run() async throws {
+		// SPIKE ONLY (PR 10 contention lead, 2026-11-20): SAFEDI_SPIKE_ISOLATED=K runs K whole generates at once in this
+		// process, each parsing its own copy of the inputs, so no object is shared between their constructions.
+		if let copies = ProcessInfo.processInfo.environment["SAFEDI_SPIKE_ISOLATED"].flatMap(Int.init), copies > 1 {
+			try await withThrowingTaskGroup(of: Void.self) { taskGroup in
+				for copy in 0..<copies {
+					var command = self
+					command.combinedOutput = combinedOutput.map { "\($0).\(copy)" }
+					command.moduleInfoOutput = moduleInfoOutput.map { "\($0).\(copy)" }
+					let box = SpikeCommandBox(command: command)
+					taskGroup.addTask { _ = try await box.command.generate() }
+				}
+				try await taskGroup.waitForAll()
+			}
+			return
+		}
 		let buildLog = BuildLog()
 		do {
 			let warnings = try await generate(buildLog: buildLog).warnings
@@ -1987,4 +2002,13 @@ struct UnreadableModuleInfoError: Error, CustomStringConvertible {
 	var description: String {
 		"Could not read the SafeDI module info file at \(path): \(reason) \(BinaryFile.unreadableFileExplanation)"
 	}
+}
+
+/// SPIKE ONLY: hands one copy of the command to one task.
+private final class SpikeCommandBox: @unchecked Sendable {
+	init(command: Generate) {
+		self.command = command
+	}
+
+	let command: Generate
 }

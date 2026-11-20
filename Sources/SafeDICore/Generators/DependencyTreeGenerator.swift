@@ -582,7 +582,14 @@ public actor DependencyTreeGenerator {
 				for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
 					let (table, record) = validatedWorld.frozenScopeMap.freezing(rootScope: scope)
 					let spikeDeclaredTypeNames = declaredTypeNames
-					try SpikeContention.measure(label: typeDescription.asSource) {
+					var spikeTables = [(table: ScopeTable, record: ScopeRecord)]()
+					for _ in 0..<4 {
+						spikeTables.append(SpikeContention.ownTable && SpikeContention.rounds != nil
+							? FrozenScopeMap(freezing: typeDescriptionToScopeMap.lazy.map { (key: $0.key, scope: $0.value) }).freezing(rootScope: scope)
+							: (table, record))
+					}
+					try SpikeContention.measure(label: typeDescription.asSource, constructions: spikeTables.map { spikeTable in { @Sendable in
+						let (table, record) = spikeTable
 						var spikeMemo = ConstructionMemo()
 						_ = try record.createScopeGenerator(
 							in: table,
@@ -593,7 +600,7 @@ public actor DependencyTreeGenerator {
 							declaredTypeNames: spikeDeclaredTypeNames,
 							constructionMemo: &spikeMemo,
 						)
-					}
+					} })
 					try roots.append(RootScopeInfo(
 						typeDescription: typeDescription,
 						instantiable: scope.instantiable,
