@@ -1643,6 +1643,556 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 		"""], dependencies: ["Core"]),
 	]
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_takesThrowingAutoclosureParameterAsAutoclosureThatDoesNotThrow_whenMockedTypesDefaultDoesNotThrow() async throws {
+		// `mock()` calls the autoclosure where it builds the type, outside any function that throws, so it takes one that does not throw, which the default, or a `try?` in it, satisfies. 2.2.0 passed the autoclosure itself, which did not compile.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public func compute() throws -> Int { 3 }
+				@Instantiable(generateMock: true)
+				public final class Service: Instantiable {
+				    public init(retries: @autoclosure () throws -> Int = 3, limit: @escaping @autoclosure () throws -> Int = (try? compute()) ?? 1) {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+			"Service+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Service {
+			    static func mock(
+			        retries: @escaping @autoclosure () -> Int = 3,
+			        limit: @escaping @autoclosure () -> Int = (try? compute()) ?? 1
+			    ) -> Service {
+			        return Service(retries: retries(), limit: limit())
+			    }
+			}
+			#endif
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_leavesThrowingAutoclosureParameterToItsDefault_whenMockedTypesDefaultThrows() async throws {
+		// An autoclosure that does not throw cannot hold a default that throws, so `mock()` takes no parameter for it and the initializer evaluates its default, as in production.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public func compute() throws -> Int { 3 }
+				@Instantiable(generateMock: true)
+				public final class Service: Instantiable {
+				    public init(retries: @autoclosure () throws -> Int = try compute()) {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+			"Service+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Service {
+			    static func mock() -> Service {
+			        Service()
+			    }
+			}
+			#endif
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_storesClosureThatDoesNotThrowInConfiguration_whenTypeInMockedTreeHasThrowingAutoclosureParameter() async throws {
+		// The configuration stores a closure that does not throw, which the construction calls outside any function that throws.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public final class Root: Instantiable {
+				    public init(service: Service) {
+				        self.service = service
+				    }
+
+				    @Instantiated let service: Service
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Service: Instantiable {
+				    public init(retries: @autoclosure () throws -> Int = 3) {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        let service = Service()
+			        self.init(service: service)
+			    }
+			}
+			""",
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            service: Service.SafeDIMockConfiguration = .init()
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                service: service
+			            )
+			        }
+
+			        var service: Service.SafeDIMockConfiguration { __safeDI_storage.service }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                service: Service.SafeDIMockConfiguration
+			            ) {
+			                self.service = service
+			            }
+
+			            let service: Service.SafeDIMockConfiguration
+			        }
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_service() -> Service {
+			            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(safeDIOverrides.service.retries()) } else { Service(retries: safeDIOverrides.service.retries()) }
+			        }
+			        let service: Service = __safeDI_service()
+			        return Root(service: service)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Service {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            retries: @autoclosure @escaping () -> Int = 3,
+			            _ safeDIBuilder: ((Int) -> Service)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                retries: retries,
+			                safeDIBuilder: safeDIBuilder
+			            )
+			        }
+
+			        var retries: () -> Int { __safeDI_storage.retries }
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        var safeDIBuilder: ((Int) -> Service)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                retries: @escaping () -> Int,
+			                safeDIBuilder: ((Int) -> Service)?
+			            ) {
+			                self.retries = retries
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let retries: () -> Int
+			            let safeDIBuilder: ((Int) -> Service)?
+			        }
+			    }
+			}
+			#endif
+
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_leavesThrowingAutoclosureParameterToItsDefault_whenTypeInMockedTreeHasThrowingDefault() async throws {
+		// The configuration takes no value for a parameter whose default throws, and neither the construction nor its override closure is handed one: the initializer evaluates the default, as in production.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public final class Root: Instantiable {
+				    public init(service: Service) {
+				        self.service = service
+				    }
+
+				    @Instantiated let service: Service
+				}
+				""",
+				"""
+				public func compute() throws -> Int { 3 }
+				@Instantiable
+				public final class Service: Instantiable {
+				    public init(retries: @autoclosure () throws -> Int = try compute(), limit: Int = 1) {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        let service = Service()
+			        self.init(service: service)
+			    }
+			}
+			""",
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            service: Service.SafeDIMockConfiguration = .init()
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                service: service
+			            )
+			        }
+
+			        var service: Service.SafeDIMockConfiguration { __safeDI_storage.service }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                service: Service.SafeDIMockConfiguration
+			            ) {
+			                self.service = service
+			            }
+
+			            let service: Service.SafeDIMockConfiguration
+			        }
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_service() -> Service {
+			            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(safeDIOverrides.service.limit) } else { Service(limit: safeDIOverrides.service.limit) }
+			        }
+			        let service: Service = __safeDI_service()
+			        return Root(service: service)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Service {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            limit: Int = 1,
+			            _ safeDIBuilder: ((Int) -> Service)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                limit: limit,
+			                safeDIBuilder: safeDIBuilder
+			            )
+			        }
+
+			        var limit: Int { __safeDI_storage.limit }
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        var safeDIBuilder: ((Int) -> Service)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                limit: Int,
+			                safeDIBuilder: ((Int) -> Service)?
+			            ) {
+			                self.limit = limit
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let limit: Int
+			            let safeDIBuilder: ((Int) -> Service)?
+			        }
+			    }
+			}
+			#endif
+
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_storesSendableClosureThatDoesNotThrow_whenTypeBuiltInSendableBuilderHasThrowingAutoclosureParameters() async throws {
+		// Beneath a `Sendable` wrapper the configuration stores a `@Sendable` closure that does not throw, and leaves a parameter whose default throws to the initializer.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public final class Root: Instantiable {
+				    public init(serviceBuilder: SendableInstantiator<Service>) {
+				        self.serviceBuilder = serviceBuilder
+				    }
+
+				    @Instantiated let serviceBuilder: SendableInstantiator<Service>
+				}
+				""",
+				"""
+				public func compute() throws -> Int { 3 }
+				@Instantiable
+				public final class Service: Instantiable, Sendable {
+				    public init(retries: @autoclosure () throws -> Int = 3, seed: @autoclosure () throws -> Int = try compute()) {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        @Sendable func __safeDI_serviceBuilder() -> Service {
+			            Service()
+			        }
+			        let serviceBuilder = SendableInstantiator<Service>(__safeDI_serviceBuilder)
+			        self.init(serviceBuilder: serviceBuilder)
+			    }
+			}
+			""",
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            serviceBuilder: Service.SafeDIMockConfiguration = .init()
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                serviceBuilder: serviceBuilder
+			            )
+			        }
+
+			        var serviceBuilder: Service.SafeDIMockConfiguration { __safeDI_storage.serviceBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage: Sendable {
+			            init(
+			                serviceBuilder: Service.SafeDIMockConfiguration
+			            ) {
+			                self.serviceBuilder = serviceBuilder
+			            }
+
+			            let serviceBuilder: Service.SafeDIMockConfiguration
+			        }
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        let __safeDI_serviceBuilder__serviceBuilder_retries = safeDIOverrides.serviceBuilder.retries
+			        let __safeDI_serviceBuilder__safeDIBuilder = safeDIOverrides.serviceBuilder.safeDIBuilder
+			        @Sendable func __safeDI_serviceBuilder() -> Service {
+			            if let safeDIBuilder = __safeDI_serviceBuilder__safeDIBuilder { safeDIBuilder(__safeDI_serviceBuilder__serviceBuilder_retries()) } else { Service(retries: __safeDI_serviceBuilder__serviceBuilder_retries()) }
+			        }
+			        let serviceBuilder = SendableInstantiator<Service>(__safeDI_serviceBuilder)
+			        return Root(serviceBuilder: serviceBuilder)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Service {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            retries: @autoclosure @escaping @Sendable () -> Int = 3,
+			            _ safeDIBuilder: (@Sendable (Int) -> Service)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                retries: retries,
+			                safeDIBuilder: safeDIBuilder
+			            )
+			        }
+
+			        var retries: @Sendable () -> Int { __safeDI_storage.retries }
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        var safeDIBuilder: (@Sendable (Int) -> Service)? { __safeDI_storage.safeDIBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage: Sendable {
+			            init(
+			                retries: @escaping @Sendable () -> Int,
+			                safeDIBuilder: (@Sendable (Int) -> Service)?
+			            ) {
+			                self.retries = retries
+			                self.safeDIBuilder = safeDIBuilder
+			            }
+
+			            let retries: @Sendable () -> Int
+			            let safeDIBuilder: (@Sendable (Int) -> Service)?
+			        }
+			    }
+			}
+			#endif
+
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func publicMock_takesClosureThatDoesNotThrow_whenMockedTypeAndTypeInItsTreeHaveThrowingAutoclosureParameters() async throws {
+		// A public mock takes a closure that does not throw, and leaves a parameter whose default throws to the initializer.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				struct Child: Instantiable {
+				    init(capacity: @autoclosure () throws -> Int = 10, seed: @autoclosure () throws -> Int = try compute()) {}
+				}
+				""",
+				"""
+				public func compute() throws -> Int { 3 }
+				@Instantiable(generateMock: .public)
+				public struct Service: Instantiable {
+				    init(child: Child, retries: @autoclosure () throws -> Int = 3, seed: @autoclosure () throws -> Int = try compute()) {
+				        self.child = child
+				    }
+
+				    @Instantiated let child: Child
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			/// Configuration for how `Child` is constructed within the public mock trees of this module.
+			nonisolated public struct __safeDI_Child_MockConfiguration {
+			    public init(
+			        capacity: (() -> Int)? = nil
+			    ) {
+			        __safeDI_storage = __safeDI_Storage(
+			            capacity: capacity,
+			            safeDIBuilder: nil
+			        )
+			    }
+
+			    init(
+			        capacity: (() -> Int)? = nil,
+			        _ safeDIBuilder: ((Int) -> Child)? = nil
+			    ) {
+			        __safeDI_storage = __safeDI_Storage(
+			            capacity: capacity,
+			            safeDIBuilder: safeDIBuilder
+			        )
+			    }
+
+			    /// `nil` keeps the default of `Child`’s `capacity`.
+			    public var capacity: (() -> Int)? { __safeDI_storage.capacity }
+			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
+			    var safeDIBuilder: ((Int) -> Child)? { __safeDI_storage.safeDIBuilder }
+
+			    private let __safeDI_storage: __safeDI_Storage
+
+			    private final class __safeDI_Storage {
+			        init(
+			            capacity: (() -> Int)?,
+			            safeDIBuilder: ((Int) -> Child)?
+			        ) {
+			            self.capacity = capacity
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let capacity: (() -> Int)?
+			        let safeDIBuilder: ((Int) -> Child)?
+			    }
+			}
+
+			extension Child {
+			    static func __safeDI_init(capacity: (() -> Int)?, safeDIBuilder: ((Int) -> Child)?) -> Child {
+			        let capacity = capacity ?? ({ 10 })
+			        return if let safeDIBuilder { safeDIBuilder(capacity()) } else { Child(capacity: capacity()) }
+			    }
+			}
+			#endif
+
+			""",
+			"Service+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Service {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            child: __safeDI_Child_MockConfiguration = .init()
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                child: child
+			            )
+			        }
+
+			        public var child: __safeDI_Child_MockConfiguration { __safeDI_storage.child }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                child: __safeDI_Child_MockConfiguration
+			            ) {
+			                self.child = child
+			            }
+
+			            let child: __safeDI_Child_MockConfiguration
+			        }
+			    }
+
+			    public static func mock(
+			        retries: (() -> Int)? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Service {
+			        let retries = retries ?? ({ 3 })
+			        func __safeDI_child() -> Child {
+			            return Child.__safeDI_init(capacity: safeDIOverrides.child.capacity, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
+			        }
+			        let child: Child = __safeDI_child()
+			        return Service(child: child, retries: retries())
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_mock_88F7917B74D30085 {}
+			}
+			#endif
+			""",
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
