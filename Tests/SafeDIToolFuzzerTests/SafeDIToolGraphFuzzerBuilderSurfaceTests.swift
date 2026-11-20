@@ -539,6 +539,83 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 		#expect(failure.details.hasPrefix("sendableInstantiatorPlaceMovedToPlainPlace: The tool rejects the edited graph:\n<fixture-directory>/FuzzApp/S333_HoleFill.swift:7:33: error: Cycle\n"))
 	}
 
+	/// Seam corpus seed 1524's rejection of a place moved into the inner seam of another module: the fill reads `holeLogger`,
+	/// which `S1524_HoleLoggerTop` binds where it calls the inner seam, and that call passes the place's builder up.
+	private static let passUpRejection = "<fixture-directory>/other/Sources/FuzzOther/S1524_HoleLoggerReader.swift:10:2: error: `S1524_HoleLoggerReader` receives `holeLogger: S1524_HoleLogger`, which `S1524_HoleLoggerTop` builds where it calls `S1524_HoleSurfaceInner`, but `S1524_HoleLoggerTop` passes the builder for `S1524_HoleSurfaceInner`’s `holeService: any S1524_HoleService` (case `holeService` of `s1524_HoleServiceBuilder_S1524_HoleSurfaceInner`) on from its own caller, which cannot hand it `S1524_HoleLoggerTop`’s values. Declare `@Received let holeLogger: S1524_HoleLogger` on `S1524_HoleSurfaceInner`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `S1524_HoleService` in module `FuzzFeature` or a module it lists among its SafeDI dependencies, so `S1524_HoleLoggerTop` fills the builder itself.\n<fixture-directory>/shop/Sources/FuzzFeature/S1524_HoleLoggerTop.swift:11:2: note: `S1524_HoleLoggerTop` declares `holeLogger: S1524_HoleLogger` here."
+
+	/// Tool runs of a drawn graph the tool accepts and one same-supply `edit`, whose outcome is `outcome`.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func sameSupplyEditRuns(edit: GraphFuzzerBuilderSurfaceEdit, outcome: GraphFuzzerToolOutcome) -> GraphFuzzerToolRuns {
+		let drawn = Self.acceptedMock(["holeServiceBuilder: @escaping () -> any HoleService"])
+		let fixture = GraphFuzzerFixture(seed: 7, swiftFileContent: [])
+		return GraphFuzzerToolRuns(fixture: fixture, firstOutcome: drawn, secondOutcome: drawn, builderSurfaceRuns: [
+			GraphFuzzerBuilderSurfaceRun(edit: edit, fixture: fixture, outcome: outcome),
+		])
+	}
+
+	@Test(arguments: [GraphFuzzerBuilderSurfaceEdit.secondPlaceInInnerSeamOfAnotherModule, .holderMovedToInnerSeamOfAnotherModule])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func sameSupplyEditRejectedFailure_reportsNothing_whenToolRejectsPlaceMovedIntoInnerSeamPastValueItsFillReads(edit: GraphFuzzerBuilderSurfaceEdit) {
+		// Seam corpus seeds 1331, 1524 and 1972: moving a place into the inner seam of another module moves it past where its
+		// fill's value is bound, so the place's builder is passed up to a caller that cannot hand it that value. The tool
+		// rightly rejects the edited graph with its remedy, which leaves the pair unjudged and passing.
+		let runs = Self.sameSupplyEditRuns(edit: edit, outcome: .rejected(diagnostics: Self.passUpRejection))
+		#expect(runs.sameSupplyEditRejectedFailure == nil)
+		#expect(runs.builderSurfaceJudgments.map(\.kind) == [edit.rawValue])
+		#expect(runs.builderSurfaceJudgments.map(\.judgment) == [.init(isJudged: false, problems: [])])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func sameSupplyEditRejectedFailure_reportsRejection_whenPassUpRejectionJoinsAnotherError() throws {
+		let diagnostics = "\(Self.passUpRejection)\n<fixture-directory>/shop/Sources/FuzzFeature/S1524_HoleSeam.swift:4:1: error: Cycle"
+		let runs = Self.sameSupplyEditRuns(edit: .holderMovedToInnerSeamOfAnotherModule, outcome: .rejected(diagnostics: diagnostics))
+		let failure = try #require(runs.sameSupplyEditRejectedFailure)
+		#expect(failure.details.hasPrefix("holderMovedToInnerSeamOfAnotherModule: The tool rejects the edited graph:\n\(diagnostics)\n"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func sameSupplyEditRejectedFailure_reportsRejection_whenToolRejectsSecondPlaceInAnotherTypeByPassingItUp() throws {
+		// A second place in another type of the seam's own module moves no place past a seam call, so no pass-up rejection
+		// of it is legitimate.
+		let runs = Self.sameSupplyEditRuns(edit: .secondPlaceInAnotherType, outcome: .rejected(diagnostics: Self.passUpRejection))
+		let failure = try #require(runs.sameSupplyEditRejectedFailure)
+		#expect(failure.details.hasPrefix("secondPlaceInAnotherType: The tool rejects the edited graph:\n\(Self.passUpRejection)\n"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func sameSupplyEditRejectedFailure_reportsRejection_whenToolRejectsPlaceMovedIntoInnerSeamForValueNotSendable() throws {
+		// Moving a place into the inner seam keeps its family, so the `@Sendable` twins' legitimate rejection is not one here.
+		let diagnostics = "<fixture-directory>/FuzzApp/S333_HoleFill.swift:7:33: error: @Received property `holeSession: LazilyInstantiated<S333_HoleSession>` cannot be received inside a `@Sendable` function in chain: S333_T7 -> S333_T6 -> S333_Hole."
+		let runs = Self.sameSupplyEditRuns(edit: .secondPlaceInInnerSeamOfAnotherModule, outcome: .rejected(diagnostics: diagnostics))
+		let failure = try #require(runs.sameSupplyEditRejectedFailure)
+		#expect(failure.details.hasPrefix("secondPlaceInInnerSeamOfAnotherModule: The tool rejects the edited graph:\n\(diagnostics)\n"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func forwardingRemedyFailure_reportsNothing_whenToolRejectsRemedyInInnerSeamPastValueItsFillReads() {
+		// Seam corpus seeds 1331, 1524 and 1972: the remedy's added place in the inner seam of another module is moved past
+		// where its fill's value is bound, as the same-supply edits' places are, so the tool rightly rejects it with the
+		// pass-up error, which leaves the remedy and its builders unjudged and passing.
+		let runs = Self.sameSupplyEditRuns(edit: .placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied, outcome: .rejected(diagnostics: Self.passUpRejection))
+		#expect(runs.forwardingRemedyFailure == nil)
+		#expect(runs.builderSurfaceJudgments.map(\.kind) == ["placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied", "remedyKeepsDrawnBuilders"])
+		#expect(runs.builderSurfaceJudgments.map(\.judgment) == [.init(isJudged: false, problems: []), .init(isJudged: false, problems: [])])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func forwardingRemedyFailure_reportsRejection_whenToolRejectsRemedyInSeamModuleByPassingItUp() throws {
+		// The remedy's added place in the seam's own module is moved past no seam call, so no pass-up rejection of it is
+		// legitimate.
+		let runs = Self.sameSupplyEditRuns(edit: .placeForwardingOtherValuesRemedied, outcome: .rejected(diagnostics: Self.passUpRejection))
+		let failure = try #require(runs.forwardingRemedyFailure)
+		#expect(failure.details.hasPrefix("placeForwardingOtherValuesRemedied: The tool rejects the remedied graph, whose places forward the same values:\n\(Self.passUpRejection)\n"))
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func builderSurfaceJudgments_judgeLazilyInstantiatedPlaceMovedBack_whenEditMovesPlaceBehindLazilyInstantiated() {

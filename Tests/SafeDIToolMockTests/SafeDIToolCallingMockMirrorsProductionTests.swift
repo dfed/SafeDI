@@ -3225,7 +3225,6 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	}
 }
 
-/// The kind of a calling mock: `generateMock: true` or `generateMock: .public`.
 /// The kinds of caller whose generated mock the mock condition compiles out: an internal mock, a public mock, and a type
 /// the module lists in `additionalMocksToGenerate`.
 enum MockConditionCaller: CustomTestStringConvertible {
@@ -3392,6 +3391,7 @@ enum MockConditionCaller: CustomTestStringConvertible {
 	}
 }
 
+/// The kind of a calling mock: `generateMock: true` or `generateMock: .public`.
 enum CallingMockCaller: CaseIterable, CustomTestStringConvertible {
 	case `internal`
 	case `public`
