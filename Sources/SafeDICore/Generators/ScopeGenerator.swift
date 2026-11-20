@@ -7689,6 +7689,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				lineEnd: constructionLineEnd,
 				hasFunction: hasFunction,
 				children: childCode,
+				generator: ObjectIdentifier(self),
 			))
 		}
 
