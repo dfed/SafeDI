@@ -63,6 +63,43 @@ struct SafeDIToolValidatedAdviceTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_advisesRelabelingEachHidingDeclaration_whenTwoMockedTypesDeclareReceivedLabelWithOtherTypes() async {
+		// `T3`’s mock and `T6`’s mock each build `T5` beneath their own `t4`, of another type than the receive’s, so the advice
+		// names both relabels.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["T5.swift"]):7:5: error: @Received property `t4: T0` is not @Instantiated or @Forwarded in chain: Root -> T5. Declare `@Instantiated let t4: T0` on `Root` or on another type in the chain, and give `t4: T1` on `T3` and `t4: T2` on `T6` different labels, to fix.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.mockedHiderFiles() + [
+					"""
+					@Instantiable(generateMock: true)
+					public final class T6: Instantiable {
+					    public init(t4: T2, t5: T5) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let t4: T2
+					    @Instantiated let t5: T5
+					}
+
+					@Instantiable
+					public final class T2: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_generatesTreeAndMock_whenRootDeclaresAdvisedPropertyAndMockedTypeRelabelsHidingDeclaration() async throws {
 		// The advice above, applied as written.
 		let output = try await executeSafeDIToolTest(
@@ -396,6 +433,33 @@ struct SafeDIToolValidatedAdviceTests: ~Copyable {
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: Self.sendableBoundaryFiles(boundary: "t1: SendableLazilyInstantiated<T1>", receiver: "T1"),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_advisesSendableForm_whenAdvisedTypesTreeDeclaresEveryWrapperItReceives() async {
+		// `T2`’s tree instantiates `T6`, which aliases `T2`’s `t9`, and an `Instantiator<T7>` of a type that forwards a value:
+		// every wrapper it receives is declared inside it, so its `Sendable` twin is advised beside the declaration on `T1`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["T1.swift"]):7:5: error: @Received property `t2Builder: Instantiator<T2>` is not @Instantiated or @Forwarded in chain: Root -> T1. `t1Builder: SendableInstantiator<T1>` on `Root` builds `T1` in a `@Sendable` function, which cannot capture an `Instantiator<T2>` declared outside it. Declare `@Instantiated let t2Builder: SendableInstantiator<T2>` on `Root` and receive this property as `SendableInstantiator<T2>`, or declare `@Instantiated let t2Builder: Instantiator<T2>` on `T1`, to fix.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let t1Builder: SendableInstantiator<T1>"]),
+					seamFixtureType(named: "T1", declarations: ["@Received let t2Builder: Instantiator<T2>"]),
+					seamFixtureType(named: "T2", declarations: ["@Instantiated let t9: T9", "@Instantiated let t6: T6", "@Instantiated let t7Builder: Instantiator<T7>"]),
+					seamFixtureType(named: "T6", declarations: ["@Received(fulfilledByDependencyNamed: \"t9\", ofType: T9.self) let t9Alias: T9"]),
+					seamFixtureType(named: "T7", declarations: ["@Forwarded let id: Int"]),
+					seamFixtureType(named: "T9", declarations: []),
+				],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)

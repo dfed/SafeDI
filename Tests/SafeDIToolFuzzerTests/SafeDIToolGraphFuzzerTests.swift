@@ -6957,13 +6957,13 @@ struct SafeDIToolGraphFuzzerTests {
 	static let corpusValueOracleCounts = GraphFuzzerValueOracleCounts(
 		rootPairCount: 5_248,
 		rootPairsSum: GraphFuzzerSeedSetSum(value: 0x5892AF524297D9FB),
-		mirroredPairCount: 4_538,
-		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0xBCE18832640ED0C4),
+		mirroredPairCount: 4_540,
+		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0x2BE62B319F3DBB2F),
 		skipCounts: [
 			.requiredParameter: 1_666,
 			.twoFormsOfOneLabel: 132,
 			.requiredOptionalReceiveOfNonOptionalDeclaration: 5,
-			.requiredReceiveOfUncreatedAlias: 21,
+			.requiredReceiveOfUncreatedAlias: 19,
 		],
 		shapeCounts: [
 			.rootTreePropertyReceivedByTwoOrMoreTypes: 1_784,
@@ -6976,10 +6976,10 @@ struct SafeDIToolGraphFuzzerTests {
 			.onlyIfAvailableReceiveInMockedTypesTreeLeftUnbuilt: 597,
 		],
 		drawnMocksMatchingOnlyAfterNormalizationCount: 786,
-		mirroredPairsTakingSamplesCount: 970,
+		mirroredPairsTakingSamplesCount: 972,
 		forwardedPropertiesSampleCount: 2_727,
 		overridePairCount: 5_628,
-		overridePairsSum: GraphFuzzerSeedSetSum(value: 0x148E4A6744CA60FD),
+		overridePairsSum: GraphFuzzerSeedSetSum(value: 0x14844A6744C20C78),
 		overrideFieldKindCounts: [
 			.builder: 4_051,
 			.configuration: 1_577,
