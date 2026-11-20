@@ -4719,21 +4719,37 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private var unavailablePropertiesToGenerateCodeTask = [UnavailablePropertiesCacheKey: Task<GeneratedCode, Error>]()
 	/// This scope's finished dependency tree code for each context.
 	private var unavailablePropertiesToGeneratedCode = [UnavailablePropertiesCacheKey: GeneratedCode]()
-	/// The task that builds a mock root's parameter tree. Collecting configuration types, collecting
+	/// The task that builds a mock root's parameter tree, until it finishes. Collecting configuration types, collecting
 	/// sendable configuration type names, and generating the mock each read the same tree.
 	private var rootMockParameterTreeTask: Task<[MockTreeItem], Never>?
+	/// The mock root's finished parameter tree, until `releaseRootMockParameterTree()` drops it.
+	private var finishedRootMockParameterTree: [MockTreeItem]?
 
-	/// The mock parameter tree of this scope as a mock root, built once.
+	/// The mock parameter tree of this scope as a mock root, built once until `releaseRootMockParameterTree()` drops it.
+	/// The finished tree is kept rather than the task, which would keep the memory its async frames took.
 	private var rootMockParameterTree: [MockTreeItem] {
 		get async {
-			if let rootMockParameterTreeTask {
-				return await rootMockParameterTreeTask.value
-			} else {
-				let rootMockParameterTreeTask = Task { await collectMockParameterTree() }
-				self.rootMockParameterTreeTask = rootMockParameterTreeTask
-				return await rootMockParameterTreeTask.value
+			if let finishedRootMockParameterTree {
+				return finishedRootMockParameterTree
 			}
+			let rootMockParameterTreeTask = rootMockParameterTreeTask ?? Task { await collectMockParameterTree() }
+			self.rootMockParameterTreeTask = rootMockParameterTreeTask
+			let tree = await rootMockParameterTreeTask.value
+			// A reader that awaited the same task, or the release, may have run in the meantime.
+			if self.rootMockParameterTreeTask != nil {
+				finishedRootMockParameterTree = tree
+				self.rootMockParameterTreeTask = nil
+			}
+			return tree
 		}
+	}
+
+	/// Drops this mock root's parameter tree, which `generateMockCode` does once a phase has read it: a tree holds a node
+	/// per path, and every mock root's tree held until the module's mocks are generated was most of the generator's peak
+	/// memory. A later reader builds the tree again.
+	func releaseRootMockParameterTree() {
+		rootMockParameterTreeTask = nil
+		finishedRootMockParameterTree = nil
 	}
 
 	/// The children of this scope in the order their code is emitted: every child
@@ -10203,6 +10219,78 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			subtreeCallsPublicMock = publicMockCall != nil || childItems?.propertyNodes.contains(where: \.subtreeCallsPublicMock) == true
 		}
 
+		/// `node` with `childItems` in place of its own children, every other field as `node` holds it, those worked out
+		/// from its children included, so the copy describes the node's construction and configuration as `node` does.
+		private init(copying node: MockParameterNode, childItems: MockTreeItems?) {
+			self.childItems = childItems
+			propertyLabel = node.propertyLabel
+			inlineOrderPosition = node.inlineOrderPosition
+			typeDescription = node.typeDescription
+			instantiatedTypeDescription = node.instantiatedTypeDescription
+			isInstantiator = node.isInstantiator
+			isExtensionBased = node.isExtensionBased
+			erasedToConcreteExistential = node.erasedToConcreteExistential
+			defaultParameters = node.defaultParameters
+			constructionArguments = node.constructionArguments
+			constructionIsolation = node.constructionIsolation
+			dependencies = node.dependencies
+			lazilyInstantiatedInstanceProperties = node.lazilyInstantiatedInstanceProperties
+			unavailableProperties = node.unavailableProperties
+			useMockInitializer = node.useMockInitializer
+			constructionReturnType = node.constructionReturnType
+			customMockName = node.customMockName
+			concreteType = node.concreteType
+			sourceFilePath = node.sourceFilePath
+			mockDeclarationLocation = node.mockDeclarationLocation
+			publicMockCall = node.publicMockCall
+			valuesBindings = node.valuesBindings
+			memberCallsInsideBuilderFunction = node.memberCallsInsideBuilderFunction
+			fillingGenerator = node.fillingGenerator
+			holeArgumentValuesByLabel = node.holeArgumentValuesByLabel
+			publicMockBuilderStructValuesByLabel = node.publicMockBuilderStructValuesByLabel
+			publicMockOverrideBuilders = node.publicMockOverrideBuilders
+			fillPropertiesGeneratedLater = node.fillPropertiesGeneratedLater
+			referencedFillNames = node.referencedFillNames
+			forwardedProperties = node.forwardedProperties
+			typesDeclaredEscaping = node.typesDeclaredEscaping
+			isPropertyCycle = node.isPropertyCycle
+			closedOnDeclaration = node.closedOnDeclaration
+			cycleClosedOnDeclarations = node.cycleClosedOnDeclarations
+			isReferencedByCycleClosingScope = node.isReferencedByCycleClosingScope
+			cycleParameters = node.cycleParameters
+			cycleParameterArgumentUnavailableProperties = node.cycleParameterArgumentUnavailableProperties
+			callSiteLazilyInstantiatedInstanceProperties = node.callSiteLazilyInstantiatedInstanceProperties
+			buildsInSendableFunction = node.buildsInSendableFunction
+			requiresSendable = node.requiresSendable
+			loop = node.loop
+			reboundProperties = node.reboundProperties
+			isReadOutsideItsLoop = node.isReadOutsideItsLoop
+			generatorIdentifier = node.generatorIdentifier
+			dependencyInnerLabels = node.dependencyInnerLabels
+			callSiteArguments = node.callSiteArguments
+			builderParameterTypes = node.builderParameterTypes
+			needsConfigurationStruct = node.needsConfigurationStruct
+			subtreeCallsPublicMock = node.subtreeCallsPublicMock
+		}
+
+		/// This node as the configurations `generateMockCode` generates after every root's code read it: its own fields and
+		/// its children's (`generateConfigurationStruct`, `publicConfigurationDeclarations`, `configurationRequirements`
+		/// and the fulfillers each struct records read nothing deeper), without the nodes beneath its children. A node of a
+		/// mock root's tree holds the whole subtree beneath it, so keeping the node itself until the module's mocks are
+		/// generated kept every root's tree alive together.
+		var withChildrenOnly: MockParameterNode {
+			MockParameterNode(copying: self, childItems: childItems.map { childItems in
+				MockTreeItems(childItems.items.map { item in
+					switch item {
+					case let .property(child):
+						.property(MockParameterNode(copying: child, childItems: nil))
+					case .alias:
+						item
+					}
+				})
+			})
+		}
+
 		/// Whether this node or a node beneath it calls another module's public mock (`publicMockCall`). The walks that
 		/// look for such calls, which nearly every tree has none of, skip a subtree without one.
 		let subtreeCallsPublicMock: Bool
@@ -10942,6 +11030,53 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				handWrittenMockDefaultParameters.first(where: {
 					$0.isDefault(forParameterLabeled: defaultParameter.label, ofType: defaultParameter.typeDescription)
 				})?.defaultExpression ?? defaultParameter.defaultExpression
+			},
+		)
+	}
+
+	/// What `generateMockCode` reads of a mock root's parameter tree before any root's code is generated, and keeps until
+	/// the module's mocks are generated, with every node it keeps holding its children but nothing beneath them
+	/// (`MockParameterNode.withChildrenOnly`), so that the tree can be released.
+	struct MockTreeSummary: Sendable {
+		/// See `collectSendableConfigurationTypeNames()`.
+		let sendableConfigurationTypeNames: Set<String>
+		/// See `collectConfigurationTypes(isPublicMock:handWrittenMockDefaultParameters:)`. The nodes beneath repeated
+		/// ancestors keep their subtrees: the configurations their structs nest are found beneath them, transitively
+		/// (`DependencyTreeGenerator.configurationsBeneathRepeatedAncestors`), and only a tree with a cycle has any.
+		let configurationTypes: ConfigurationTypes
+		/// See `collectPublicConstructionNodes()`; empty for an internal mock.
+		let publicConstructionNodes: [MockParameterNode]
+		/// See `collectConfigurationNodesByConstruction(of:mockRoot:cycleEdges:)`.
+		let configurationNodesByConstruction: [BuiltMockParameterNode]
+	}
+
+	/// What `generateMockCode` reads of this mock root's parameter tree before any root's code is generated, after which
+	/// the tree is released.
+	/// - Parameters:
+	///   - concreteTypesWithHandWrittenMocks: The types whose nodes `collectConfigurationNodesByConstruction` collects.
+	func mockTreeSummary(
+		isPublicMock: Bool,
+		handWrittenMockDefaultParameters: [TypeDescription: [MockParameterNode.DefaultParameter]],
+		concreteTypesWithHandWrittenMocks: Set<TypeDescription>,
+		mockRoot: TypeDescription,
+		cycleEdges: Set<CycleEdge>,
+	) async -> MockTreeSummary {
+		let sendableConfigurationTypeNames = await collectSendableConfigurationTypeNames()
+		let configurationTypes = await collectConfigurationTypes(isPublicMock: isPublicMock, handWrittenMockDefaultParameters: handWrittenMockDefaultParameters)
+		let publicConstructionNodes = isPublicMock ? await collectPublicConstructionNodes() : []
+		let configurationNodesByConstruction = concreteTypesWithHandWrittenMocks.isEmpty
+			? []
+			: await collectConfigurationNodesByConstruction(of: concreteTypesWithHandWrittenMocks, mockRoot: mockRoot, cycleEdges: cycleEdges)
+		releaseRootMockParameterTree()
+		return MockTreeSummary(
+			sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+			configurationTypes: ConfigurationTypes(
+				nodes: configurationTypes.nodes.map(\.withChildrenOnly),
+				nodesBeneathRepeatedAncestors: configurationTypes.nodesBeneathRepeatedAncestors,
+			),
+			publicConstructionNodes: publicConstructionNodes.map(\.withChildrenOnly),
+			configurationNodesByConstruction: configurationNodesByConstruction.map { builtNode in
+				BuiltMockParameterNode(node: builtNode.node.withChildrenOnly, parent: builtNode.parent, mockRoot: builtNode.mockRoot)
 			},
 		)
 	}
