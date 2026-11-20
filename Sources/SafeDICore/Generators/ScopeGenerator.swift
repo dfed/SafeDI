@@ -6918,7 +6918,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A type inside a fill an internal mock declares binds each place of it nothing builds from the builder `mock()`
 		// takes for the place (`FillPlace`), once per build, before its children, which receive the place's value.
 		let fillPlaceBindingLines = fillPlaceBindings.bindingsByGenerator[ObjectIdentifier(self), default: []].map { GeneratedCode.text("\(Self.standardIndent)\($0.binding)") }
-		let memberCallLines = self.memberCallLines.map(GeneratedCode.text)
+		let memberCallLines = memberCallLines.map(GeneratedCode.text)
 
 		let propertyType = property.propertyType
 		switch propertyType {
