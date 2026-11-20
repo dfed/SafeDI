@@ -581,6 +581,19 @@ public actor DependencyTreeGenerator {
 				var roots = [RootScopeInfo]()
 				for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
 					let (table, record) = validatedWorld.frozenScopeMap.freezing(rootScope: scope)
+					let spikeDeclaredTypeNames = declaredTypeNames
+					try SpikeContention.measure(label: typeDescription.asSource) {
+						var spikeMemo = ConstructionMemo()
+						_ = try record.createScopeGenerator(
+							in: table,
+							for: nil,
+							lazilyInstantiatedInstanceProperties: [],
+							erasedToConcreteExistential: false,
+							startsCodeGeneration: false,
+							declaredTypeNames: spikeDeclaredTypeNames,
+							constructionMemo: &spikeMemo,
+						)
+					}
 					try roots.append(RootScopeInfo(
 						typeDescription: typeDescription,
 						instantiable: scope.instantiable,
