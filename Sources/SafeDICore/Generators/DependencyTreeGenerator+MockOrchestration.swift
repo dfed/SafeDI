@@ -180,41 +180,31 @@ extension DependencyTreeGenerator {
 				)
 			}
 
-		// Each root's tree is read in two phases, and released after each, so that the trees are not all alive together: a
-		// tree holds a node per path, and every root's tree held until the module's mocks were generated was most of the
-		// generator's peak memory. The first phase reads what every root's emission needs or the module generates after it,
-		// keeping only nodes that hold their children and nothing beneath them (`ScopeGenerator.MockTreeSummary`); the
-		// second builds the tree again to generate the root's code.
+		// Each root's tree is built, read and released in one task, at most one root per processor at once, so that the
+		// trees are not all alive together: a tree holds a node per path, and every root's tree held until the module's
+		// mocks were generated was most of the generator's peak memory. What the module generates after the roots is kept
+		// in nodes that hold their children and nothing beneath them (`ScopeGenerator.MockTreeSummary`).
 		//
-		// The sendable configuration types are unioned across every root: a struct is shared across every root that
-		// references the type, so the annotation has to agree, and each root's emission reads the union.
+		// The sendable configuration types are unioned across every root before any root's code is generated: a struct is
+		// shared across every root that references the type, so the annotation has to agree, and each root's emission
+		// reads the union. They are read from the generator trees, which need no parameter tree.
+		let sendableConfigurationTypeNames = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { _, mockRoot in
+			mockRoot.sendableConfigurationTypeNames()
+		}.reduce(into: Set<String>()) { union, names in
+			union.formUnion(names)
+		}
 		let mockDeclarationLocations = mockDeclarationLocationsOfTypesWithHandWrittenMocks()
 		let concreteTypesWithHandWrittenMocks = Set(mockDeclarationLocations.keys)
-		let summaries = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiable, mockRoot in
-			await mockRoot.mockTreeSummary(
+
+		// Generate each root's mock code.
+		let generatedRootsAndSummaries = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiable, mockRoot in
+			let summary = await mockRoot.mockTreeSummary(
 				isPublicMock: instantiable.generateMock == .public,
 				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 				concreteTypesWithHandWrittenMocks: concreteTypesWithHandWrittenMocks,
 				mockRoot: instantiable.concreteInstantiable,
 				cycleEdges: cycleEdges,
 			)
-		}
-		let sendableConfigurationTypeNames = summaries.reduce(into: Set<String>()) { union, summary in
-			union.formUnion(summary.sendableConfigurationTypeNames)
-		}
-		// The second whole-module gate, not run by `requirements(forTypeNamed:generatesMock:mockEmittingModule:)`; see
-		// the note above `validateSendableBuildersCaptureNoNonSendableWrapper`. Its error is thrown after the roots' code is
-		// generated, so that an error generating a root's code is reported first, as when the gate read each tree after it.
-		let configurationValidation = Result {
-			try Self.validateConfigurationsAreBuiltOneWay(
-				configurationNodesByConstruction: summaries.map(\.configurationNodesByConstruction),
-				mockDeclarationLocations: mockDeclarationLocations,
-			)
-		}
-
-		// Generate each root's mock code.
-		let generatedRoots = try await BoundedConcurrency.map(Array(zip(mockRoots, summaries)), width: BoundedConcurrency.mockRootWidth) { mockRootAndSummary in
-			let ((instantiable, mockRoot), summary) = mockRootAndSummary
 			async let code = mockRoot.generateCode(
 				codeGeneration: .mock(ScopeGenerator.MockContext(
 					mockConditionalCompilation: mockConditionalCompilation,
@@ -238,10 +228,17 @@ extension DependencyTreeGenerator {
 				publicConstructionNodes: summary.publicConstructionNodes,
 			)
 			await mockRoot.releaseRootMockParameterTree()
-			return generatedRoot
+			return (generatedRoot: generatedRoot, configurationNodesByConstruction: summary.configurationNodesByConstruction)
 		}
+		let generatedRoots = generatedRootsAndSummaries.map(\.generatedRoot)
 
-		let nodesReadingConfiguration = try configurationValidation.get()
+		// The second whole-module gate, not run by `requirements(forTypeNamed:generatesMock:mockEmittingModule:)`; see
+		// the note above `validateSendableBuildersCaptureNoNonSendableWrapper`. It runs after the roots' code is generated,
+		// so that an error generating a root's code is reported first, as when the gate read each tree after it.
+		let nodesReadingConfiguration = try Self.validateConfigurationsAreBuiltOneWay(
+			configurationNodesByConstruction: generatedRootsAndSummaries.map(\.configurationNodesByConstruction),
+			mockDeclarationLocations: mockDeclarationLocations,
+		)
 
 		let rootedTypeNames = Set(generatedRoots.map(\.root.typeDescription.asSource))
 		// Deduplicate configuration types by type name across all roots.
