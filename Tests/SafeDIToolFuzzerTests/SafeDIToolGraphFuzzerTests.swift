@@ -2925,7 +2925,7 @@ struct SafeDIToolGraphFuzzerTests {
 		}
 	}
 
-	@Test(arguments: [UInt64(654), 1_107])
+	@Test(arguments: [UInt64(654), 10_921])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_rejectBothBuildsWithEachDeferringSeamsTwoForms_whenCarriedLevelsFillReadsOptionalSendableWrapper(seed: UInt64) async throws {
 		// `CarriedInner` defers `carriedToken` in a `LazilyInstantiated`, `CarriedInnerB` `@Sendable`, and
@@ -2960,7 +2960,7 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(errorsByBuild["hole"] == errorsByBuild["visible"])
 	}
 
-	@Test(arguments: [UInt64(609), 1_107])
+	@Test(arguments: [UInt64(609), 10_921])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_rejectBothBuildsWithDeferringSeamsTwoForms_whenCarriedOuterReceivesWrapperItsLevelsFillReadsOptionally(seed: UInt64) async throws {
 		// The graph of the test above where `CarriedOuter`, which passes up the place whose fill builds `CarriedWorker`,
@@ -7509,7 +7509,6 @@ struct SafeDIToolGraphFuzzerTests {
 		.formsSeam: 986,
 		.formsByValueReceive: 548,
 		.formsWrapperReceive: 685,
-		.formsRequiredOptionalReceive: 165,
 		.formsOptionalWrapperReceive: 210,
 		.formsSeamOwnReceive: 105,
 		.formsDetailInSendableBuilder: 66,
@@ -9024,7 +9023,7 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: mockParameterAndFieldOrderReason,
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
 			seeds: [
-				6, 36, 45, 55, 154, 157, 209, 281, 300, 371, 380, 381, 434, 476, 541, 548,
+				6, 7, 14, 36, 45, 55, 154, 157, 209, 281, 300, 371, 380, 381, 434, 476, 541, 548,
 				593, 657, 774, 808, 840, 903, 1_042, 1_073, 1_140, 1_185, 1_217, 1_300, 1_335, 1_369, 1_432,
 				1_563, 1_646, 1_664, 1_675, 1_742, 1_795, 1_817, 1_853, 1_867, 2_051, 2_057, 2_083, 2_149, 2_296, 2_337, 2_484,
 				2_626, 2_791, 2_841, 2_916, 2_935, 3_160, 3_352, 3_470, 3_491, 3_513, 3_534, 3_537, 3_589, 3_600, 3_623,

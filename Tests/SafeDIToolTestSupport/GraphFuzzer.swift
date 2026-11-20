@@ -1196,8 +1196,8 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// The alias declared where its fulfilling property is generated later: `aliasToken` receives `AliasA` only if
 	/// available, and `AliasA` builds `AliasDetail`.
 	case uncreatedAliasFulfillingPropertyGeneratedLater
-	/// The alias's fulfilling property is a required optional parameter of the seam – its own `@Received` or
-	/// `@Forwarded` property, or a property `AliasLeft` requires – which every caller holds a value for.
+	/// The alias's fulfilling property is a required optional parameter of the seam – its own `@Forwarded`
+	/// property – which every caller holds a value for.
 	case uncreatedAliasRequiredOptionalParameter
 	/// The alias spelled with the exact optional form of its fulfilling property, `ofType: AliasValue?.self`.
 	case uncreatedAliasExactFormAlias
@@ -1636,8 +1636,6 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case formsByValueReceive
 	/// `FormsSummary` receiving a wrapper of `formsUser`.
 	case formsWrapperReceive
-	/// A required receive of the optional form of `formsUser`.
-	case formsRequiredOptionalReceive
 	/// `FormsPreview` receiving an optional wrapper only if available.
 	case formsOptionalWrapperReceive
 	/// The seam's own receive of `formsUser`.
@@ -3674,11 +3672,10 @@ enum GraphFuzzerGenerator {
 				}
 			} else if roll < 60 {
 				PropertyDeclaration(attribute: required, label: source.label, type: source.type)
-			} else if roll < 90 {
-				PropertyDeclaration(attribute: onlyIfAvailable, label: source.label, type: source.type + "?")
 			} else {
-				// A required receive of the optional form, which only an optional property fulfills.
-				PropertyDeclaration(attribute: required, label: source.label, type: source.type + "?")
+				// No required receive of the optional form, which a non-optional property fulfills only as an unsupported
+				// accident (`.claude/rules/test-design.md`, "Unsupported shapes").
+				PropertyDeclaration(attribute: onlyIfAvailable, label: source.label, type: source.type + "?")
 			}
 			if property.attribute == required {
 				recordRequirement(of: source, receiverIndex: receiverIndex)
@@ -4944,11 +4941,10 @@ enum GraphFuzzerGenerator {
 		/// `onlyIfAvailable` alias may be `nil`, in shapes whose seam binds the alias from a parameter: `AliasSeam`, which
 		/// the first root instantiates, instantiates `AliasLeft`, which instantiates `AliasDetail`, which declares
 		/// `aliasAuth`, an `onlyIfAvailable` alias of `aliasToken` – usually a pass-through received only if available,
-		/// and now and then a required optional parameter (the seam's own `@Received` or `@Forwarded` property, or a
-		/// property `AliasLeft` requires), whose exact-form alias (`ofType: AliasValue?.self`) and
-		/// unwrapped-form alias are both bound from it; one graph in ten declares the alias on the seam itself. Now and then a
-		/// reader beneath the alias reads its property: `AliasReader` receives it, only if available or required,
-		/// declares a label-keeping alias of it retyped to an existential, is built through a wrapper, is reached
+		/// and now and then a required optional parameter (the seam's own `@Forwarded` property), whose exact-form alias
+		/// (`ofType: AliasValue?.self`) and unwrapped-form alias are both bound from it; one graph in ten declares the
+		/// alias on the seam itself. Now and then a reader beneath the alias reads its property: `AliasReader` receives it
+		/// only if available, declares a label-keeping alias of it retyped to an existential, is built through a wrapper, is reached
 		/// through a nested seam `AliasPanel`, or sits beneath `AliasMid`; `AliasDetail` aliases the alias's fulfilling
 		/// property as `aliasBearer` (an alias of the alias there would rename another rename of one declaration, which
 		/// the macro rejects); a declaration of the alias's label is placed beside
@@ -4982,24 +4978,14 @@ enum GraphFuzzerGenerator {
 			var newDeclarations = [type("AliasLabel")]
 
 			// How `aliasToken` reaches the seam: a pass-through received only if available, which the seam takes as
-			// `AliasValue?` that callers may pass `nil` for, or a required optional parameter – the seam's own receive,
-			// its own forwarded property, or a property `AliasLeft` requires – which every caller holds a value for.
+			// `AliasValue?` that callers may pass `nil` for, or a required optional parameter – the seam's own forwarded
+			// property – which every caller holds a value for. No type receives `aliasToken: AliasValue?` required: a
+			// required optional receive is an unsupported shape (`.claude/rules/test-design.md`, "Unsupported shapes").
 			enum ParameterKind {
 				case onlyIfAvailablePassThrough
-				case ownRequiredOptionalReceive
 				case ownRequiredOptionalForwarded
-				case requiredOptionalPassThrough
 			}
-			let parameterKind: ParameterKind = switch uncreatedAliasRandom.integer(in: 0...9) {
-			case 0...6:
-				.onlyIfAvailablePassThrough
-			case 7:
-				.ownRequiredOptionalReceive
-			case 8:
-				.ownRequiredOptionalForwarded
-			default:
-				.requiredOptionalPassThrough
-			}
+			let parameterKind: ParameterKind = uncreatedAliasRandom.integer(in: 0...9) == 8 ? .ownRequiredOptionalForwarded : .onlyIfAvailablePassThrough
 			let isRequiredOptionalParameter = parameterKind != .onlyIfAvailablePassThrough
 			// The alias's `ofType:` spelling: the exact optional form of the parameter, which a required optional
 			// parameter always creates, or the unwrapped form.
@@ -5019,16 +5005,6 @@ enum GraphFuzzerGenerator {
 			case .onlyIfAvailablePassThrough:
 				if uncreatedAliasRandom.percentChance(40) {
 					declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasToken", type: valueType))
-				}
-			case .ownRequiredOptionalReceive, .requiredOptionalPassThrough:
-				// A required `aliasToken: AliasValue?` is fulfilled by its exact form alone, which the root declares as
-				// an alias of the value it instantiates.
-				declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasSource", type: valueType))
-				declarations[0].properties.append(PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"aliasSource\", ofType: \(valueType).self, onlyIfAvailable: true)", label: "aliasToken", type: valueType + "?"))
-				if parameterKind == .ownRequiredOptionalReceive {
-					seam.properties.append(PropertyDeclaration(attribute: "@Received", label: "aliasToken", type: valueType + "?"))
-				} else {
-					left.properties.append(PropertyDeclaration(attribute: "@Received", label: "aliasToken", type: valueType + "?"))
 				}
 			case .ownRequiredOptionalForwarded:
 				seam.properties.append(PropertyDeclaration(attribute: "@Forwarded", label: "aliasToken", type: valueType + "?"))
@@ -5121,10 +5097,9 @@ enum GraphFuzzerGenerator {
 				let readLabel = readsAlias ? "aliasAuth" : "aliasToken"
 				var reader = type("AliasReader")
 				switch uncreatedAliasRandom.integer(in: 0...9) {
-				case 0...4:
+				case 0...5:
+					// Never a required receive of `AliasValue?`, an unsupported shape (`.claude/rules/test-design.md`).
 					reader.properties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: readLabel, type: valueType + "?"))
-				case 5:
-					reader.properties.append(PropertyDeclaration(attribute: "@Received", label: readLabel, type: valueType + "?"))
 				default:
 					// A label-keeping alias retyped to an existential, or, as the twin, an alias of the fulfilling property.
 					reader.properties.append(readsAlias
@@ -6960,7 +6935,7 @@ enum GraphFuzzerGenerator {
 			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
 			let aliasIsOnSeam = declarations[seamIndex].properties.contains { $0.attribute.contains("fulfilledByDependencyNamed: \"aliasToken\"") }
 			let parameterIsRequiredOptional = (declarations[seamIndex].properties + declarations[leftIndex].properties).contains {
-				$0.label == "aliasToken" && ($0.attribute == "@Received" || $0.attribute == "@Forwarded")
+				$0.label == "aliasToken" && $0.attribute == "@Forwarded"
 			}
 			/// Whether a receive of `aliasAuth` that leaves the seam, which a second one could collide with, is declared.
 			func receivesLabelFromOutside() -> Bool {
@@ -7078,9 +7053,9 @@ enum GraphFuzzerGenerator {
 
 		/// With the `generateDependencyTree` feature on, half of the graphs gain a seam, `FormsScreen`, whose tree receives
 		/// one label, `formsUser`, in the forms a lazily instantiated property can be received in, and a caller that holds
-		/// the label in one of the forms a tree can hold it in: `FormsDetail` receives the instance (required, required
-		/// optional, or only if available), now and then built inside a `SendableInstantiator`; `FormsSummary` receives the
-		/// wrapper the graph's kind allows (the same three ways); `FormsPreview` receives a wrapper of either kind only if
+		/// the label in one of the forms a tree can hold it in: `FormsDetail` receives the instance (required or only if
+		/// available), now and then built inside a `SendableInstantiator`; `FormsSummary` receives the wrapper the graph's
+		/// kind allows (the same two ways); `FormsPreview` receives a wrapper of either kind only if
 		/// available; and the seam receives the label itself, as the instance or the wrapper, required or only if available.
 		/// The first root holds `formsUser` as the instance, the wrapper, the other wrapper kind, or nothing; through
 		/// `FormsHost`, which it builds through an instantiator and which forwards the optional instance or the optional
@@ -7110,17 +7085,15 @@ enum GraphFuzzerGenerator {
 			}
 			let wrapper = formsRandom.element(of: wrapperKinds)
 			let otherWrapper = wrapperKinds.first { $0 != wrapper }
+			// No receive is required and optional, an unsupported shape (`.claude/rules/test-design.md`, "Unsupported shapes").
 			enum Receive: CaseIterable {
 				case required
-				case requiredOptional
 				case onlyIfAvailable
 			}
 			func receive(_ receive: Receive, ofType receivedType: String) -> PropertyDeclaration {
 				switch receive {
 				case .required:
 					PropertyDeclaration(attribute: "@Received", label: "formsUser", type: receivedType)
-				case .requiredOptional:
-					PropertyDeclaration(attribute: "@Received", label: "formsUser", type: receivedType + "?")
 				case .onlyIfAvailable:
 					PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "formsUser", type: receivedType + "?")
 				}
@@ -7205,12 +7178,8 @@ enum GraphFuzzerGenerator {
 				switch (receive, isWrapper) {
 				case (.required?, true):
 					holdings.formIntersection([.wrapper])
-				case (.requiredOptional?, true):
-					holdings.formIntersection([.wrapper, .forwardedOptionalWrapper])
 				case (.required?, false):
 					holdings.formIntersection([.instance, .wrapper, .otherWrapper, .instanceWhoseTreeReceivesSeamOnlyIfAvailable])
-				case (.requiredOptional?, false):
-					holdings.formIntersection([.instance, .forwardedOptionalInstance, .instanceAndNearerForwardedOptionalInstance, .instanceWhoseTreeReceivesSeamOnlyIfAvailable])
 				case (.onlyIfAvailable?, _), (nil, _):
 					break
 				}
@@ -10511,8 +10480,6 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				} else {
 					features.insert(.uncreatedAliasFulfillingPropertyPruned)
 				}
-			} else if property.label == "aliasToken", aliasedLabel(of: property.attribute) == nil {
-				features.insert(.uncreatedAliasRequiredOptionalParameter)
 			} else if property.label == "aliasAuth", property.type.hasSuffix("AliasValue") {
 				features.insert(.uncreatedAliasSamePropertyBeside)
 			} else if property.label == "aliasAuth", property.type.hasSuffix("AliasLabel") {
@@ -10524,8 +10491,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		for property in properties(ofTypeNamed: "AliasSeam") {
 			if property.label == "aliasAuth", aliasedLabel(of: property.attribute) == nil {
 				features.insert(property.attribute.hasPrefix("@Instantiated") ? .uncreatedAliasDeclarationAbove : .uncreatedAliasLabelParameter)
-			} else if property.label == "aliasToken", aliasedLabel(of: property.attribute) == nil, property.attribute != "@Received(onlyIfAvailable: true)" {
-				// The seam's own only-if-available receive is no required parameter.
+			} else if property.label == "aliasToken", property.attribute == "@Forwarded" {
 				features.insert(.uncreatedAliasRequiredOptionalParameter)
 			}
 		}
@@ -10649,7 +10615,6 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		// `addingLabelFormsSeam`'s shapes.
 		if declaresType(named: "FormsScreen") {
 			features.insert(.formsSeam)
-			let formsProperties = ["FormsScreen", "FormsDetail", "FormsSummary", "FormsPreview"].flatMap { properties(ofTypeNamed: $0) }
 			if declaresType(named: "FormsDetail") {
 				features.insert(.formsByValueReceive)
 			}
@@ -10658,9 +10623,6 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 			if declaresType(named: "FormsPreview") {
 				features.insert(.formsOptionalWrapperReceive)
-			}
-			if formsProperties.contains(where: { $0.label == "formsUser" && $0.attribute == "@Received" && $0.type.hasSuffix("?") }) {
-				features.insert(.formsRequiredOptionalReceive)
 			}
 			let screenProperties = properties(ofTypeNamed: "FormsScreen")
 			if screenProperties.contains(where: { $0.label == "formsUser" }) {
