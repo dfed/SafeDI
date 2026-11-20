@@ -23,7 +23,7 @@
 /// form). The name is `nil` when SafeDITool does not know it. The package is `nil` when SafeDITool is not told one: a
 /// named module is then in no package, as a module the compiler receives no `-package-name` for is, and a module whose
 /// name SafeDITool does not know may be in any package.
-public struct ModuleIdentity: Hashable, Sendable {
+public struct ModuleIdentity: Codable, Hashable, Sendable {
 	public init(moduleName: String?, packageName: String?) {
 		self.moduleName = moduleName
 		self.packageName = packageName
@@ -95,7 +95,7 @@ public struct ModuleIdentity: Hashable, Sendable {
 }
 
 /// The access a declaration needs for the code SafeDI generates in one module to use it.
-public enum AccessRequirement: Hashable, Sendable {
+public enum AccessRequirement: Codable, Hashable, Sendable {
 	/// The code is in the declaration's own module: `internal` access suffices.
 	case `internal`
 	/// The code is in another module of the declaration's package: `package` access suffices.

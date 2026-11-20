@@ -213,14 +213,24 @@ func distinguishingTypesUnnameable(
 	modulesRead: (String) -> TypeAccessProof.ModuleReach.ModulesRead,
 ) -> [Instantiable] {
 	guard viewer.moduleName != nil else { return normalizedInstantiables }
+	// Nearly every run declares each type once, so a first pass only asks whether any type is fulfilled twice, holding no
+	// list of declarations per type.
+	var firstDeclarationIndexByType = [TypeDescription: Int]()
+	var typesFulfilledTwice = Set<TypeDescription>()
+	for (index, instantiable) in normalizedInstantiables.enumerated() where !instantiable.mockOnly {
+		for instantiableType in instantiable.instantiableTypes {
+			if let firstIndex = firstDeclarationIndexByType.updateValue(index, forKey: instantiableType), firstIndex != index {
+				typesFulfilledTwice.insert(instantiableType)
+			}
+		}
+	}
+	guard !typesFulfilledTwice.isEmpty else { return normalizedInstantiables }
 	var declarationIndicesByType = [TypeDescription: [Int]]()
 	for (index, instantiable) in normalizedInstantiables.enumerated() where !instantiable.mockOnly {
-		for instantiableType in Set(instantiable.instantiableTypes) {
+		for instantiableType in Set(instantiable.instantiableTypes) where typesFulfilledTwice.contains(instantiableType) {
 			declarationIndicesByType[instantiableType, default: []].append(index)
 		}
 	}
-	declarationIndicesByType = declarationIndicesByType.filter { $0.value.count > 1 }
-	guard !declarationIndicesByType.isEmpty else { return normalizedInstantiables }
 
 	let moduleReach = TypeAccessProof.ModuleReach(viewer: viewer, instantiables: normalizedInstantiables, plainTypeDeclarations: plainTypeDeclarations, modulesReadByRunOfModule: modulesRead)
 	let mentionedDeclarations = TypeAccessProof.MentionedDeclarations(instantiables: normalizedInstantiables, plainTypeDeclarations: plainTypeDeclarations, reach: moduleReach)
