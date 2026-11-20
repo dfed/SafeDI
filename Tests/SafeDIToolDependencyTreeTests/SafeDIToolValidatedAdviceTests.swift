@@ -297,26 +297,26 @@ struct SafeDIToolValidatedAdviceTests: ~Copyable {
 		return [
 			rootDeclaresT4
 				? """
-			@Instantiable(isRoot: true)
-			public final class Root: Instantiable {
-			    public init(t4: T0, t5: T5) {
-			        fatalError("SafeDI doesn't inspect the initializer body")
-			    }
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(t4: T0, t5: T5) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-			    @Instantiated let t4: T0
-			    @Instantiated let t5: T5
-			}
-			"""
+				    @Instantiated let t4: T0
+				    @Instantiated let t5: T5
+				}
+				"""
 				: """
-			@Instantiable(isRoot: true)
-			public final class Root: Instantiable {
-			    public init(t5: T5) {
-			        fatalError("SafeDI doesn't inspect the initializer body")
-			    }
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(t5: T5) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-			    @Instantiated let t5: T5
-			}
-			""",
+				    @Instantiated let t5: T5
+				}
+				""",
 			"""
 			@Instantiable(generateMock: true)
 			public final class T3: Instantiable {
