@@ -1120,12 +1120,26 @@ jobs:
           path: .build
           key: ${{ steps.build-cache.outputs.cache-primary-key }}
       - name: Test Framework
+        id: tests
         timeout-minutes: 85
         env:
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
         run: |
           # shellcheck disable=SC2086 # The arguments are words to split.
           xcrun swift test --skip-build $SWIFT_TEST_ARGUMENTS
+      # A run keeps in its branch's cache only the value comparison outputs it
+      # read or printed and those the newest artifacts of its identity hold,
+      # since the restore adds other runs' outputs to the directory, and keeps
+      # them all when its tests did not run to their end
+      # (.github/scripts/keep-value-outputs-used-in-run.sh says why). The
+      # cache only saves time, so this cannot fail the job.
+      - name: Keep the Value Comparison Outputs This Run Used
+        if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+        run: .github/scripts/keep-value-outputs-used-in-run.sh .compile-check-cache "$GITHUB_RUN_ID" "$TEST_OUTCOME"
       - name: Save Passed Compile Checks
         if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
         uses: actions/cache/save@v6
@@ -1343,11 +1357,25 @@ jobs:
       # skipped (run 43765011597); the 2.3.0 stack's suite took 34.9 (run
       # 44545790927), and run 44573505588 passed 40 still running.
       - name: Test
+        id: tests
         timeout-minutes: 70
         env:
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
           LLVM_PROFILE_FILE: ${{ runner.temp }}/unit-suite-profiles/unit-suite-%p.profraw
         run: .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing
+      # A run keeps in its branch's cache only the value comparison outputs it
+      # read or printed and those the newest artifacts of its identity hold,
+      # since the restore adds other runs' outputs to the directory, and keeps
+      # them all when its tests did not run to their end
+      # (.github/scripts/keep-value-outputs-used-in-run.sh says why). The
+      # cache only saves time, so this cannot fail the job.
+      - name: Keep the Value Comparison Outputs This Run Used
+        if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+        run: .github/scripts/keep-value-outputs-used-in-run.sh .compile-check-cache "$GITHUB_RUN_ID" "$TEST_OUTCOME"
       - name: Save Passed Compile Checks
         if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
         uses: actions/cache/save@v6
@@ -1648,12 +1676,15 @@ jobs:
           mv .generate-time/cached/SafeDITool .generate-time/base/SafeDITool
           swift build -c release --product SafeDITool
           cp .build/release/SafeDITool .generate-time/head/SafeDITool
-      # The comparison took 2.0 and 2.3 minutes (the same runs). The limit is
-      # more than twice that because a slower generator is what this step
-      # exists to report: the largest seam graph took 12 to 19 seconds a run
-      # in those runs, and at five times that the step takes 9 minutes.
+      # The comparison of all eight shapes took 3.9 minutes in a probe run in
+      # this container (44630955284), whose medians summed to 19.4 seconds a
+      # tool: 4.7 and 5.2 for the public mock and fill shapes, 2.4 to 2.5 for
+      # the other E24 shapes, 1.3 for E32-inline, under 1 for the rest. The
+      # limit is more than twice that because a slower generator is what this
+      # step exists to report: with the head five times as slow on every
+      # shape, its six runs of each and the base's take 11.7 minutes.
       - name: Compare Generate Time
-        timeout-minutes: 10
+        timeout-minutes: 15
         run: |
           python3 -I Scripts/generate-time-check.py --summary "$GITHUB_STEP_SUMMARY" \
             .generate-time/base/SafeDITool .generate-time/head/SafeDITool "$RUNNER_TEMP/generate-time"
@@ -1945,6 +1976,12 @@ jobs:
       # workflow, another identity or an archive it cannot read.
       - name: Check the Passed Compile Checks Script Against Its Fixtures
         run: node .github/actions/restore-shared-compile-checks/restore-from-artifacts.js --self-test "$RUNNER_TEMP/restore-from-artifacts-self-test"
+      # .github/scripts/keep-value-outputs-used-in-run.sh decides which value
+      # comparison outputs a branch's cache keeps, so it proves on fixtures
+      # that it keeps what the newest artifacts hold and everything when the
+      # tests did not run to their end.
+      - name: Check the Value Comparison Outputs Script Against Its Fixtures
+        run: .github/scripts/keep-value-outputs-used-in-run.sh --self-test "$RUNNER_TEMP/keep-value-outputs-self-test"
       # A test job that failed, was cancelled or could not export uploads no
       # report, and the next step names the report that is missing, so a
       # download that finds nothing is not this step's failure.
