@@ -6,9 +6,10 @@
 # READS none | some (fills read id1 from L1) | win (fill of Lk reads m of L(k-1), one reference) | two (m and id of L(k-1)).
 import sys, os
 shape, form, reads, D, out = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]), sys.argv[5]
+rebuild = len(sys.argv) > 6 and sys.argv[6] == "rebuild"
 os.makedirs(out, exist_ok=True)
 F = ["""public final class Instantiator<T> { let b: (Int) -> T; public init(_ b: @escaping (Int) -> T) { self.b = b }; public func instantiate(_ id: Int) -> T { b(id) } }
-public final class M { public let x = 1; public init() {} }
+public final class M: Sendable { public let x = 1; public init() {} }
 public protocol H { var v: Int { get } }
 """]
 A = ["import Feature\nfinal class HImpl: H, Sendable { let v: Int; init(v: Int) { self.v = v } }\n"]
@@ -278,10 +279,230 @@ elif form in ("ccl", "ccldual", "ccl2"):
                 A.append(f"func form{k}({sig}) -> Fills {{ W{k}(h{k}: {{ id, m in StaticFills.hOfL{k}(id: id, m: m, {fa}) }}{ent}) }}\n")
             nx = "pm: m" if reads == "win" else "Carried(pm: m, pid: id)"
             A.append(f"func makeHost() -> Instantiator<L1> {{ makeSeamHost(Root(h1: {{ id, m in StaticFills.hOfL1(id: id, m: m) }}, e2: {{ id, m in form2({nx}) }})) }}\n")
+elif form in ("C", "Ce"):
+    # The trajectory candidate C: per level type a seam-declared final class carrier of required closures the caller
+    # forms. hOfLk takes the level's own values; enterL(k+1) takes the values of level k that the subtree beneath reads
+    # and forms the child carrier. Each closure captures at most one reference, the caller's context for its carried set.
+    # C: the entry runs inside the builder; the builder captures one word: the carrier where the entry takes nothing,
+    #    else the seam's per-level context holding the carrier as a let and the entry's arguments.
+    # Ce: the entry runs when the parent forms the builder; the builder captures the child carrier.
+    cv = {"none": [], "some": [("id1", "Int")], "win": [("pm", "M")], "two": [("pm", "M"), ("pid", "Int")]}[reads]
+    def eargs(k):  # values of level k passed to enterL(k+1)
+        if reads == "none": return []
+        if reads == "some": return [("id", "Int")] if k == 1 else []
+        if reads == "win": return [("m", "M")]
+        return [("m", "M"), ("id", "Int")]
+    Cn = lambda k: f"__safeDI_Host_L{k}Carrier"
+    for k in range(1, D + 1):
+        mem = [(f"hOfL{k}", "(_ id: Int, _ m: M) -> any H")]
+        if k < D: mem.append((f"enterL{k+1}", "(" + ", ".join(f"_ {a}: {t}" for a, t in eargs(k)) + f") -> {Cn(k+1)}"))
+        F.append(f"public final class {Cn(k)} {{ " + " ".join(f"public let {a}: {t};" for a, t in mem) + f" public init({', '.join(f'{a}: @escaping {t}' for a, t in mem)}) {{ " + " ".join(f"self.{a} = {a};" for a, _ in mem) + " } }\n")
+    for k in range(1, D + 1):
+        body = f"func buildL{k}(_ id: Int, _ c: {Cn(k)}) -> L{k} {{ let m = M(); let h = c.hOfL{k}(id, m)"
+        if k == D:
+            body += f"; return L{k}(id: id, m: m, h: h) }}\n"
+        else:
+            ea = eargs(k); call = ", ".join(a for a, _ in ea)
+            if form == "Ce":
+                body += f"; let n = c.enterL{k+1}({call}); return L{k}(id: id, m: m, h: h, next: Instantiator<L{k+1}> {{ buildL{k+1}($0, n) }}) }}\n"
+            elif not ea:
+                body += f"; return L{k}(id: id, m: m, h: h, next: Instantiator<L{k+1}> {{ buildL{k+1}($0, c.enterL{k+1}()) }}) }}\n"
+            else:
+                F.append(f"final class __safeDI_L{k}Level {{ let carrier: {Cn(k)}; " + " ".join(f"let {a}: {t};" for a, t in ea) + f" init(carrier: {Cn(k)}, {', '.join(f'{a}: {t}' for a, t in ea)}) {{ self.carrier = carrier; " + " ".join(f"self.{a} = {a};" for a, _ in ea) + " } }\n")
+                body += f"; let level = __safeDI_L{k}Level(carrier: c, {', '.join(f'{a}: {a}' for a, _ in ea)}); return L{k}(id: id, m: m, h: h, next: Instantiator<L{k+1}> {{ buildL{k+1}($0, level.carrier.enterL{k+1}({', '.join(f'level.{a}' for a, _ in ea)})) }}) }}\n"
+        F.append(body)
+    F.append(f"public func makeSeamHost(_ c: {Cn(1)}) -> Instantiator<L1> {{ Instantiator<L1> {{ buildL1($0, c) }} }}\n")
+    A.append("enum StaticFills {\n")
+    for k in range(1, D + 1):
+        ps = "".join(f", {a}: {t}" for a, t in cv) if k > 1 else ""
+        A.append(f"    static func hOfL{k}(id: Int, m: M{ps}) -> any H {{ {fexpr(k)} }}\n")
+    A.append("}\n")
+    if cv:
+        A.append("final class Ctx { " + " ".join(f"let {a}: {t};" for a, t in cv) + f" init({', '.join(f'{a}: {t}' for a, t in cv)}) {{ " + " ".join(f"self.{a} = {a};" for a, _ in cv) + " } }\n")
+    # form functions: level 1 has no context; level k >= 2 takes the context of its carried set
+    newctx = {"some": "Ctx(id1: id)", "win": "Ctx(pm: m)", "two": "Ctx(pm: m, pid: id)"}
+    for k in range(1, D + 1):
+        has = bool(cv) and k > 1
+        fill = f"hOfL{k}: {{ id, m in StaticFills.hOfL{k}(id: id, m: m" + ("".join(f", {a}: ctx.{a}" for a, _ in cv) if has else "") + ") }"
+        mem = [fill]
+        if k < D:
+            ea = eargs(k); ps = ", ".join(a for a, _ in ea)
+            if not cv:
+                mem.append(f"enterL{k+1}: {{ formL{k+1}() }}")
+            elif reads == "some" and k > 1:
+                mem.append(f"enterL{k+1}: {{ formL{k+1}(ctx) }}")
+            else:
+                mem.append(f"enterL{k+1}: {{ {ps} in formL{k+1}({newctx[reads]}) }}")
+        A.append(f"func formL{k}({'_ ctx: Ctx' if has else ''}) -> {Cn(k)} {{ {Cn(k)}({', '.join(mem)}) }}\n")
+    A.append("func makeHost() -> Instantiator<L1> { makeSeamHost(formL1()) }\n")
+elif form == "Cf":
+    # C formed once per carried set (the lead's 6.4.2 variant): a level whose child carries nothing new holds the child's
+    # carrier as a `let`, formed once by the caller when the carried set's zone is formed (child first); only where a
+    # level carries a new value is there an entry, which forms the new zone (its context and its carriers). The seam's
+    # builder captures one word: the child carrier, or the seam's per-level context (carrier + the entry's arguments).
+    cv = {"none": [], "some": [("id1", "Int")], "win": [("pm", "M")], "two": [("pm", "M"), ("pid", "Int")]}[reads]
+    def eargs(k):
+        if reads == "none": return None
+        if reads == "some": return [("id", "Int")] if k == 1 else None
+        if reads == "win": return [("m", "M")]
+        return [("m", "M"), ("id", "Int")]
+    Cn = lambda k: f"__safeDI_Host_L{k}Carrier"
+    for k in range(1, D + 1):
+        mem = [(f"hOfL{k}", "(_ id: Int, _ m: M) -> any H", True)]
+        if k < D:
+            ea = eargs(k)
+            mem.append((f"l{k+1}", Cn(k + 1), False) if ea is None else (f"enterL{k+1}", "(" + ", ".join(f"_ {a}: {t}" for a, t in ea) + f") -> {Cn(k+1)}", True))
+        F.append(f"public final class {Cn(k)} {{ " + " ".join(f"public let {a}: {t};" for a, t, _ in mem) + f" public init({', '.join(f'{a}: ' + ('@escaping ' if c else '') + t for a, t, c in mem)}) {{ " + " ".join(f"self.{a} = {a};" for a, _, _ in mem) + " } }\n")
+    for k in range(1, D + 1):
+        body = f"func buildL{k}(_ id: Int, _ c: {Cn(k)}) -> L{k} {{ let m = M(); let h = c.hOfL{k}(id, m)"
+        if k == D:
+            body += f"; return L{k}(id: id, m: m, h: h) }}\n"
+        else:
+            ea = eargs(k)
+            if ea is None:
+                body += f"; let n = c.l{k+1}; return L{k}(id: id, m: m, h: h, next: Instantiator<L{k+1}> {{ buildL{k+1}($0, n) }}) }}\n"
+            else:
+                F.append(f"final class __safeDI_L{k}Level {{ let carrier: {Cn(k)}; " + " ".join(f"let {a}: {t};" for a, t in ea) + f" init(carrier: {Cn(k)}, {', '.join(f'{a}: {t}' for a, t in ea)}) {{ self.carrier = carrier; " + " ".join(f"self.{a} = {a};" for a, _ in ea) + " } }\n")
+                body += f"; let level = __safeDI_L{k}Level(carrier: c, {', '.join(f'{a}: {a}' for a, _ in ea)}); return L{k}(id: id, m: m, h: h, next: Instantiator<L{k+1}> {{ buildL{k+1}($0, level.carrier.enterL{k+1}({', '.join(f'level.{a}' for a, _ in ea)})) }}) }}\n"
+        F.append(body)
+    F.append(f"public func makeSeamHost(_ c: {Cn(1)}) -> Instantiator<L1> {{ Instantiator<L1> {{ buildL1($0, c) }} }}\n")
+    A.append("enum StaticFills {\n")
+    for k in range(1, D + 1):
+        ps = "".join(f", {a}: {t}" for a, t in cv) if k > 1 else ""
+        A.append(f"    static func hOfL{k}(id: Int, m: M{ps}) -> any H {{ {fexpr(k)} }}\n")
+    A.append("}\n")
+    if cv:
+        A.append("final class Ctx { " + " ".join(f"let {a}: {t};" for a, t in cv) + f" init({', '.join(f'{a}: {t}' for a, t in cv)}) {{ " + " ".join(f"self.{a} = {a};" for a, _ in cv) + " } }\n")
+    newctx = {"some": "Ctx(id1: id)", "win": "Ctx(pm: m)", "two": "Ctx(pm: m, pid: id)"}
+    # zones: maximal runs of levels joined by lets; zone j forms its carriers child first and returns level j's
+    starts = [1] + [k + 1 for k in range(1, D) if eargs(k) is not None]
+    for j in starts:
+        end = j
+        while end < D and eargs(end) is None: end += 1
+        has = bool(cv) and j > 1
+        lines = []
+        for k in range(end, j - 1, -1):
+            mem = [f"hOfL{k}: {{ id, m in StaticFills.hOfL{k}(id: id, m: m" + ("".join(f", {a}: ctx.{a}" for a, _ in cv) if has else "") + ") }"]
+            if k < D:
+                ea = eargs(k)
+                if ea is None: mem.append(f"l{k+1}: c{k+1}")
+                else: mem.append(f"enterL{k+1}: {{ {', '.join(a for a, _ in ea)} in zoneL{k+1}({newctx[reads]}) }}")
+            lines.append(f"let c{k} = {Cn(k)}({', '.join(mem)})")
+        A.append(f"func zoneL{j}({'_ ctx: Ctx' if has else ''}) -> {Cn(j)} {{ " + "; ".join(lines) + f"; return c{j} }}\n")
+    A.append("func makeHost() -> Instantiator<L1> { makeSeamHost(zoneL1()) }\n")
+elif form == "Cx":
+    # The spec v4 form for chains: every level binds id and m, visible beneath, so every level has an entry taking them,
+    # called when the parent forms the builder; the builder captures the child carrier it returned (one word). The caller
+    # forms a zone (context and carriers, child first) where its fills read a new value, and otherwise returns the child's
+    # pre-formed carrier, captured.
+    cv = {"none": [], "some": [("id1", "Int")], "win": [("pm", "M")], "two": [("pm", "M"), ("pid", "Int")]}[reads]
+    newzone = lambda k: {"none": False, "some": k == 1, "win": True, "two": True}[reads]   # does enterL(k+1) form a new zone
+    Cn = lambda k: f"__safeDI_Host_L{k}Carrier"
+    for k in range(1, D + 1):
+        mem = [(f"hOfL{k}", "(_ id: Int, _ m: M) -> any H")]
+        if k < D: mem.append((f"enterL{k+1}", f"(_ id: Int, _ m: M) -> {Cn(k+1)}"))
+        F.append(f"public final class {Cn(k)} {{ " + " ".join(f"public let {a}: {t};" for a, t in mem) + f" public init({', '.join(f'{a}: @escaping {t}' for a, t in mem)}) {{ " + " ".join(f"self.{a} = {a};" for a, _ in mem) + " } }\n")
+    for k in range(1, D + 1):
+        body = f"func buildL{k}(_ id: Int, _ c: {Cn(k)}) -> L{k} {{ let m = M(); let h = c.hOfL{k}(id, m)"
+        body += (f"; let n = c.enterL{k+1}(id, m); return L{k}(id: id, m: m, h: h, next: Instantiator<L{k+1}> {{ buildL{k+1}($0, n) }}) }}\n" if k < D else f"; return L{k}(id: id, m: m, h: h) }}\n")
+        F.append(body)
+    F.append(f"public func makeSeamHost(_ c: {Cn(1)}) -> Instantiator<L1> {{ Instantiator<L1> {{ buildL1($0, c) }} }}\n")
+    A.append("enum StaticFills {\n")
+    for k in range(1, D + 1):
+        ps = "".join(f", {a}: {t}" for a, t in cv) if k > 1 else ""
+        A.append(f"    static func hOfL{k}(id: Int, m: M{ps}) -> any H {{ {fexpr(k)} }}\n")
+    A.append("}\n")
+    if cv:
+        A.append("final class Ctx { " + " ".join(f"let {a}: {t};" for a, t in cv) + f" init({', '.join(f'{a}: {t}' for a, t in cv)}) {{ " + " ".join(f"self.{a} = {a};" for a, _ in cv) + " } }\n")
+    newctx = {"some": "Ctx(id1: id)", "win": "Ctx(pm: m)", "two": "Ctx(pm: m, pid: id)"}
+    starts = [1] + [k + 1 for k in range(1, D) if newzone(k)]
+    for j in starts:
+        end = j
+        while end < D and not newzone(end): end += 1
+        has = bool(cv) and j > 1
+        lines = []
+        for k in range(end, j - 1, -1):
+            mem = [f"hOfL{k}: {{ id, m in StaticFills.hOfL{k}(id: id, m: m" + ("".join(f", {a}: ctx.{a}" for a, _ in cv) if has else "") + ") }"]
+            if k < D:
+                mem.append(f"enterL{k+1}: {{ id, m in zoneL{k+1}({newctx[reads]}) }}" if newzone(k) else f"enterL{k+1}: {{ _, _ in c{k+1} }}")
+            lines.append(f"let c{k} = {Cn(k)}({', '.join(mem)})")
+        A.append(f"func zoneL{j}({'_ ctx: Ctx' if has else ''}) -> {Cn(j)} {{ " + "; ".join(lines) + f"; return c{j} }}\n")
+    A.append("func makeHost() -> Instantiator<L1> { makeSeamHost(zoneL1()) }\n")
+elif form == "ccl3":
+    # Shared closure table: the root's generated code forms one table of non-capturing closures (every fill and every
+    # forming entry); each zone stores the table and its carried values, so forming a zone allocates only the zone.
+    F.append("nonisolated open class Fills {\n    public init() {}\n")
+    for k in range(1, D + 1):
+        F.append(f"    open func hOfL{k}(id: Int, m: M) -> any H {{ fatalError(\"SafeDI: unfilled hOfL{k}\") }}\n")
+        if k < D: F.append(f"    open func enterL{k+1}(id: Int, m: M) -> Fills {{ fatalError(\"SafeDI: unentered enterL{k+1}\") }}\n")
+    F.append("}\n")
+    for k in range(1, D + 1):
+        F.append(f"func buildL{k}(_ id: Int, _ f: Fills) -> L{k} {{ let m = M(); let h = f.hOfL{k}(id: id, m: m)" + (f"; let g = f.enterL{k+1}(id: id, m: m); return L{k}(id: id, m: m, h: h, next: Instantiator<L{k+1}> {{ buildL{k+1}($0, g) }}) }}\n" if k < D else f"; return L{k}(id: id, m: m, h: h) }}\n"))
+    F.append("public func makeSeamHost(_ f: Fills) -> Instantiator<L1> { Instantiator<L1> { buildL1($0, f) } }\n")
+    cv = {"none": [], "some": [("id1", "Int")], "win": [("pm", "M")], "two": [("pm", "M"), ("pid", "Int")]}[reads]
+    A.append("enum StaticFills {\n")
+    for k in range(1, D + 1):
+        ps = "".join(f", {a}: {t}" for a, t in cv) if k > 1 else ""
+        A.append(f"    static func hOfL{k}(id: Int, m: M{ps}) -> any H {{ {fexpr(k)} }}\n")
+    A.append("}\n")
+    CT = "(Int, M" + "".join(f", {t}" for _, t in cv) + ") -> any H"
+    tf = [("h1", "(Int, M) -> any H")] + [(f"h{k}", CT) for k in range(2, D + 1)]
+    A.append("nonisolated final class Table { " + " ".join(f"let {a}: {t};" for a, t in tf) + f" init({', '.join(f'{a}: @escaping {t}' for a, t in tf)}) {{ " + " ".join(f"self.{a} = {a};" for a, _ in tf) + " } }\n")
+    args = "".join(f", {a}" for a, _ in cv)
+    if reads == "none":
+        A.append("nonisolated final class Root: Fills { let t: Table; init(t: Table) { self.t = t }\n" + "".join(f"    override func hOfL{k}(id: Int, m: M) -> any H {{ t.h{k}(id, m) }}\n" + (f"    override func enterL{k+1}(id: Int, m: M) -> Fills {{ self }}\n" if k < D else "") for k in range(1, D + 1)) + "}\n")
+    else:
+        nx = {"some": "id1: id", "win": "pm: m", "two": "pm: m, pid: id"}[reads]
+        A.append(f"nonisolated final class Root: Fills {{ let t: Table; init(t: Table) {{ self.t = t }}\n    override func hOfL1(id: Int, m: M) -> any H {{ t.h1(id, m) }}\n    override func enterL2(id: Int, m: M) -> Fills {{ Z2(t: t, {nx}) }} }}\n")
+        fl = "".join(f"let {a}: {t}; " for a, t in cv); il = ", ".join(f"{a}: {t}" for a, t in cv); asg = " ".join(f"self.{a} = {a};" for a, _ in cv)
+        if reads == "some":
+            A.append(f"nonisolated final class Z2: Fills {{ let t: Table; {fl}init(t: Table, {il}) {{ self.t = t; {asg} }}\n" + "".join(f"    override func hOfL{k}(id: Int, m: M) -> any H {{ t.h{k}(id, m{args}) }}\n" + (f"    override func enterL{k+1}(id: Int, m: M) -> Fills {{ self }}\n" if k < D else "") for k in range(2, D + 1)) + "}\n")
+        else:
+            for k in range(2, D + 1):
+                ent = f"    override func enterL{k+1}(id: Int, m: M) -> Fills {{ Z{k+1}(t: t, {nx}) }}\n" if k < D else ""
+                A.append(f"nonisolated final class Z{k}: Fills {{ let t: Table; {fl}init(t: Table, {il}) {{ self.t = t; {asg} }}\n    override func hOfL{k}(id: Int, m: M) -> any H {{ t.h{k}(id, m{args}) }}\n{ent}}}\n")
+    targs = ["h1: { id, m in StaticFills.hOfL1(id: id, m: m) }"] + [f"h{k}: {{ id, m" + "".join(f", {a}" for a, _ in cv) + f" in StaticFills.hOfL{k}(id: id, m: m" + "".join(f", {a}: {a}" for a, _ in cv) + ") }" for k in range(2, D + 1)]
+    A.append("func makeHost() -> Instantiator<L1> { makeSeamHost(Root(t: Table(" + ", ".join(targs) + "))) }\n")
+elif form == "tw":
+    # The Sendable twin alone (every place under a @Sendable builder): one final Sendable class per seam, optional fill
+    # closures (a guard-let trap where unreachable), non-optional entries with an explicit keep, init with no defaults.
+    C = "__safeDI_Host_SendableFills"
+    F.append("public enum __safeDI_Entry<T: Sendable>: Sendable { case keep; case enter(@Sendable (_ id: Int, _ m: M) -> T) }\n")
+    fl = [(f"hOfL{k}", "(@Sendable (_ id: Int, _ m: M) -> any H)?") for k in range(1, D + 1)] + [(f"enterL{k}", f"__safeDI_Entry<{C}>") for k in range(2, D + 1)]
+    F.append(f"public final class {C}: Sendable {{\n" + "".join(f"    let {a}: {t}\n" for a, t in fl) + f"    public init({', '.join(f'{a}: {t}' for a, t in fl)}) {{ " + "; ".join(f"self.{a} = {a}" for a, _ in fl) + " }\n}\n")
+    for k in range(1, D + 1):
+        body = f"func buildL{k}(_ id: Int, _ c: {C}) -> L{k} {{ let m = M(); guard let fill = c.hOfL{k} else {{ fatalError(\"SafeDI: unfilled hOfL{k}\") }}; let h = fill(id, m)"
+        if k < D:
+            body += f"; let n: {C}; switch c.enterL{k+1} {{ case .keep: n = c; case let .enter(e): n = e(id, m) }}; return L{k}(id: id, m: m, h: h, next: Instantiator<L{k+1}> {{ buildL{k+1}($0, n) }}) }}\n"
+        else:
+            body += f"; return L{k}(id: id, m: m, h: h) }}\n"
+        F.append(body)
+    F.append(f"public func makeSeamHost(_ c: {C}) -> Instantiator<L1> {{ Instantiator<L1> {{ buildL1($0, c) }} }}\n")
+    cv = {"none": [], "some": [("id1", "Int")], "win": [("pm", "M")], "two": [("pm", "M"), ("pid", "Int")]}[reads]
+    A.append("enum StaticFills {\n")
+    for k in range(1, D + 1):
+        ps = "".join(f", {a}: {t}" for a, t in cv) if k > 1 else ""
+        A.append(f"    nonisolated static func hOfL{k}(id: Int, m: M{ps}) -> any H {{ {fexpr(k)} }}\n")
+    A.append("}\n")
+    def form_call(fills, enters):  # fills: {k: closure}, enters: {k: closure}; everything else nil / .keep
+        parts = [f"hOfL{k}: {fills.get(k, 'nil')}" for k in range(1, D + 1)] + [f"enterL{k}: {('.enter(' + enters[k] + ')') if k in enters else '.keep'}" for k in range(2, D + 1)]
+        return f"{C}(" + ", ".join(parts) + ")"
+    if reads == "none":
+        A.append("func makeHost() -> Instantiator<L1> { makeSeamHost(" + form_call({k: f"{{ id, m in StaticFills.hOfL{k}(id: id, m: m) }}" for k in range(1, D + 1)}, {}) + ") }\n")
+    elif reads == "some":
+        A.append("func formL2(id1: Int) -> " + C + " { " + form_call({k: f"{{ id, m in StaticFills.hOfL{k}(id: id, m: m, id1: id1) }}" for k in range(2, D + 1)}, {}) + " }\n")
+        A.append("func makeHost() -> Instantiator<L1> { makeSeamHost(" + form_call({1: "{ id, m in StaticFills.hOfL1(id: id, m: m) }"}, {2: "{ id, _ in formL2(id1: id) }"}) + ") }\n")
+    else:
+        sig = ", ".join(f"{a}: {t}" for a, t in cv); pa = ", ".join(f"{a}: {a}" for a, _ in cv)
+        nx = "pm: m" if reads == "win" else "pm: m, pid: id"
+        for k in range(2, D + 1):
+            ent = {k + 1: f"{{ id, m in formL{k+1}({nx}) }}"} if k < D else {}
+            A.append(f"func formL{k}({sig}) -> {C} {{ " + form_call({k: f"{{ id, m in StaticFills.hOfL{k}(id: id, m: m, {pa}) }}"}, ent) + " }\n")
+        A.append("func makeHost() -> Instantiator<L1> { makeSeamHost(" + form_call({1: "{ id, m in StaticFills.hOfL1(id: id, m: m) }"}, {2: f"{{ id, m in formL2({nx}) }}"}) + ") }\n")
 A.append("import Foundation\n@inline(never) func walk(_ host: Instantiator<L1>) -> Int {\n    " + walk + "    return s\n}\n")
 A.append("""let host = makeHost()
 var best = Double.infinity; var sink = 0
-for _ in 0..<41 { let t = DispatchTime.now().uptimeNanoseconds; for _ in 0..<20000 { sink &+= walk(host) }; best = min(best, Double(DispatchTime.now().uptimeNanoseconds - t) / 20000) }
+for _ in 0..<41 { let t = DispatchTime.now().uptimeNanoseconds; for _ in 0..<20000 { sink &+= walk(""" + ("makeHost()" if rebuild else "host") + """) }; best = min(best, Double(DispatchTime.now().uptimeNanoseconds - t) / 20000) }
 print(String(format: "%.0f ns per walk (sink %d)", best, sink))
 """)
 open(os.path.join(out, "Feature.swift"), "w").write("".join(F))
