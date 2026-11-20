@@ -32,7 +32,7 @@ struct SafeDIToolBaseComparisonTests {
 		var results = [GraphFuzzerBaseComparison.Result]()
 		for (features, seeds) in Self.graphsOfEveryFlow {
 			for seed in seeds {
-				results.append(try await GraphFuzzerBaseComparison.compare(GraphFuzzerGenerator.fixture(forSeed: seed, features: features), base: tool, head: tool))
+				await results.append(try GraphFuzzerBaseComparison.compare(GraphFuzzerGenerator.fixture(forSeed: seed, features: features), base: tool, head: tool))
 			}
 		}
 		#expect(results.flatMap(\.differences) == [])
