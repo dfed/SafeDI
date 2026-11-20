@@ -68,22 +68,25 @@ enum GeneratedCodeText {
 					.filter { !$0.allSatisfy(\.isWhitespace) }
 					.joined(separator: "\n")
 			}
-			var result = [UInt8]()
-			result.reserveCapacity(bytes.count)
-			var lineStart = bytes.startIndex
-			for index in bytes.indices where bytes[index] == lineFeed {
-				appendIfNotBlank(UnsafeBufferPointer(rebasing: bytes[lineStart..<index]), to: &result)
-				lineStart = index + 1
+			// Written straight into the string's storage, reserved at the code's size, which no line it drops makes too small:
+			// a buffer of bytes decoded into a string afterwards would hold the text twice.
+			return String(unsafeUninitializedCapacity: bytes.count) { result in
+				var count = 0
+				var lineStart = bytes.startIndex
+				for index in bytes.indices where bytes[index] == lineFeed {
+					appendIfNotBlank(UnsafeBufferPointer(rebasing: bytes[lineStart..<index]), to: result, count: &count)
+					lineStart = index + 1
+				}
+				appendIfNotBlank(UnsafeBufferPointer(rebasing: bytes[lineStart...]), to: result, count: &count)
+				return count
 			}
-			appendIfNotBlank(UnsafeBufferPointer(rebasing: bytes[lineStart...]), to: &result)
-			return String(decoding: result, as: UTF8.self)
 		}
 	}
 
-	/// Appends `line` to `result`, after a line feed where `result` holds a line already, unless every `Character` of it is
-	/// whitespace. A line of ASCII bytes is judged by its bytes, the ASCII whitespace `Character.isWhitespace` accepts
-	/// being the space and U+0009 to U+000D.
-	private static func appendIfNotBlank(_ line: UnsafeBufferPointer<UInt8>, to result: inout [UInt8]) {
+	/// Writes `line` into `result` after its first `count` bytes, after a line feed where `result` holds a line already,
+	/// unless every `Character` of it is whitespace. A line of ASCII bytes is judged by its bytes, the ASCII whitespace
+	/// `Character.isWhitespace` accepts being the space and U+0009 to U+000D.
+	private static func appendIfNotBlank(_ line: UnsafeBufferPointer<UInt8>, to result: UnsafeMutableBufferPointer<UInt8>, count: inout Int) {
 		let isASCII = line.allSatisfy { $0 < 0x80 }
 		let isBlank = if isASCII {
 			line.allSatisfy { $0 == UInt8(ascii: " ") || (0x09...0x0D).contains($0) }
@@ -91,10 +94,12 @@ enum GeneratedCodeText {
 			String(decoding: line, as: UTF8.self).allSatisfy(\.isWhitespace)
 		}
 		if !isBlank {
-			if !result.isEmpty {
-				result.append(UInt8(ascii: "\n"))
+			if count > 0 {
+				result[count] = UInt8(ascii: "\n")
+				count += 1
 			}
-			result.append(contentsOf: line)
+			_ = UnsafeMutableBufferPointer(rebasing: result[count..<(count + line.count)]).initialize(from: line)
+			count += line.count
 		}
 	}
 
