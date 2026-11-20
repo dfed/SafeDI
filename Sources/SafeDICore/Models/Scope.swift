@@ -532,7 +532,6 @@ extension ScopeRecord {
 				// discarded build of the same pass stored, which the schedule asks newest first.
 				var discardedGeneratorsToStart = generatorsToStart
 				_ = try createScopeGenerator(
-					in: table,
 					for: property,
 					nearestDeclarations: nearestDeclarations,
 					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -552,7 +551,6 @@ extension ScopeRecord {
 				)
 			}
 			scopeGenerator = try createScopeGenerator(
-				in: table,
 				for: property,
 				nearestDeclarations: nearestDeclarations,
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -606,7 +604,6 @@ extension ScopeRecord {
 	/// - Parameter memo: The generators already finished, which a later place of the same key whose context answers their
 	///   reads alike reuses, and where this pass stores the generators it finishes (see `ConstructionMemo`).
 	private func createScopeGenerator(
-		in table: ScopeTable,
 		for property: Property?,
 		nearestDeclarations: NearestDeclarations,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
