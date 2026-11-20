@@ -4908,11 +4908,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			siblingIndexByProperty[sibling.property] = sibling.index
 		}
 		// A lazily instantiated sibling is also received by value, as the instance it creates, unless
-		// another sibling declares that property itself.
+		// another sibling declares that property itself. Where siblings of both wrapper kinds create one instance,
+		// a by-value receive waits on each, since which one its binding reads is decided where the code is generated.
+		var lazilyInstantiatedSiblingIndicesByInstanceProperty = [Property: [Int]]()
 		for case let (instanceProperty?, index) in siblings.lazy.map({ ($0.instanceProperty, $0.index) })
 			where siblingIndexByProperty[instanceProperty] == nil
 		{
-			siblingIndexByProperty[instanceProperty] = index
+			lazilyInstantiatedSiblingIndicesByInstanceProperty[instanceProperty, default: []].append(index)
 		}
 		var siblingsByLabel = [String: [(property: Property, index: Int)]]()
 		for sibling in siblings {
@@ -4929,6 +4931,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				for property in scope.receivedProperties where isRequiredReceive(property) {
 					if let siblingIndex = siblingIndexByProperty[property] {
 						dependencies.insert(siblingIndex)
+					} else if let siblingIndices = lazilyInstantiatedSiblingIndicesByInstanceProperty[property] {
+						dependencies.formUnion(siblingIndices)
 					}
 				}
 			} else {
@@ -4937,7 +4941,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				for sibling in siblings
 					where isReceivedAndRequired(sibling.property)
-					|| sibling.instanceProperty.map({ siblingIndexByProperty[$0] == sibling.index && isReceivedAndRequired($0) }) == true
+					|| sibling.instanceProperty.map({ siblingIndexByProperty[$0] == nil && isReceivedAndRequired($0) }) == true
 				{
 					dependencies.insert(sibling.index)
 				}
@@ -4947,6 +4951,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for property in scope.unwrappedOptionalRequiredReceivedProperties {
 				if let siblingIndex = siblingIndexByProperty[property] {
 					dependencies.insert(siblingIndex)
+				} else if let siblingIndices = lazilyInstantiatedSiblingIndicesByInstanceProperty[property] {
+					dependencies.formUnion(siblingIndices)
 				}
 			}
 			// A property the child's tree requires through an `onlyIfAvailable` alias is read from the nearest declaration
