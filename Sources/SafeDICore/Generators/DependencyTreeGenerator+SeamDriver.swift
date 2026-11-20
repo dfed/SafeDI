@@ -725,14 +725,20 @@ extension DependencyTreeGenerator {
 					checkingModule: checkingModule,
 				)
 				let scopeInstantiables = scopeMap.mapValues(\.instantiable)
-				let frozenScopeMap = baseFrozenScopeMap.overlaying(passScopeMap: scopeMap) { hole in
+				let rootScopes = componentSeams.map { seam in
+					Self.seamRootScope(of: seam, in: scopeMap, instantiables: scopeInstantiables, aliasDeclarationReferences: aliasDeclarationReferences)
+				}
+				let fulfillingKey = { (hole: SeamSignature.Hole) in
 					Self.fulfillingInstantiable(of: hole, in: instantiables)?.concreteInstantiable
 				}
+				let frozenScopeMap = baseFrozenScopeMap.overlaying(passScopeMap: scopeMap, rootScopes: rootScopes, fulfillingKey: fulfillingKey)
 				if let overlayOracle = ScopeTableObservation.overlayOracle {
-					// The table every pass's map would freeze to, compared by key: what the pass's map holds, the same
-					// record; what it does not, no record.
+					// The table every pass's map would freeze to, compared by key: what the pass's map holds and its seams
+					// reach, the same record; what it does not hold, no record. A key whose scope the seams do not reach
+					// keeps the base's record, which construction never reads.
 					let passTable = FrozenScopeMap(freezing: scopeMap.lazy.map { (key: $0.key, scope: $0.value) }).table
-					let passKeys = Array(scopeMap.keys)
+					let reachedScopes = Set(FrozenScopeMap.scopesReached(from: rootScopes, passScopeMap: scopeMap, fulfillingKey: fulfillingKey).map(ObjectIdentifier.init))
+					let passKeys = scopeMap.compactMap { reachedScopes.contains(ObjectIdentifier($0.value)) ? $0.key : nil }
 					let expected = passTable.projectionByKey(passKeys)
 					let assembled = frozenScopeMap.table.projectionByKey(passKeys)
 					var mismatches = [String]()
@@ -747,8 +753,7 @@ extension DependencyTreeGenerator {
 				var changed = false
 				var passErrors = [DependencyTreeGeneratorError]()
 				var passFailedSeams = Set<TypeDescription>()
-				for seam in componentSeams {
-					let rootScope = Self.seamRootScope(of: seam, in: scopeMap, instantiables: scopeInstantiables, aliasDeclarationReferences: aliasDeclarationReferences)
+				for (seam, rootScope) in zip(componentSeams, rootScopes) {
 					// A seam found to equal its own initializer is computed again from that initializer's parameters:
 					// a change to the trees of the module's other seams can make it a seam after all.
 					let previousSeamRoot = seamRoots[seam.concreteInstantiable] ?? nil

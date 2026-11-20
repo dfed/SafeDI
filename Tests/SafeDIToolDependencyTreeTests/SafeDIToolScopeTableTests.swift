@@ -90,6 +90,34 @@ struct SafeDIToolScopeTableTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_overlaysOnlyTheCallsEachPassesSeamsReach_whenSeamsCallEachOtherInAChain() async throws {
+		// Each seam calls the next through a type of its own tree. The pass map of the first seam's component holds the call
+		// scopes of every seam after it, which the first seam's tree does not reach: only its own call of the second seam is
+		// recorded again from the pass.
+		let (stream, continuation) = AsyncStream.makeStream(of: [String].self)
+		try await ScopeTableObservation.$overlaidCallRecords.withValue({ calledTypes in
+			continuation.yield(calledTypes)
+		}) {
+			_ = try await executeSafeDIToolTest(
+				swiftFileContent: [Self.chain],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		var overlaidCallRecords = [[String]]()
+		for await calledTypes in stream {
+			overlaidCallRecords.append(calledTypes)
+		}
+		#expect(overlaidCallRecords.sorted { $0.joined(separator: ",") < $1.joined(separator: ",") } == [
+			[],
+			["SecondSeam"],
+			["ThirdSeam"],
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -103,6 +131,67 @@ struct SafeDIToolScopeTableTests: ~Copyable {
 		}
 		return positions
 	}
+
+	private static let chain = """
+	@Instantiable
+	public final class Root: Instantiable {
+		public init(firstSeam: FirstSeam) {
+			self.firstSeam = firstSeam
+		}
+
+		@Instantiated let firstSeam: FirstSeam
+	}
+
+	@Instantiable(generateDependencyTree: true)
+	public final class FirstSeam: Instantiable {
+		public init(firstStep: FirstStep) {
+			self.firstStep = firstStep
+		}
+
+		@Instantiated let firstStep: FirstStep
+	}
+
+	@Instantiable
+	public final class FirstStep: Instantiable {
+		public init(secondSeam: SecondSeam) {
+			self.secondSeam = secondSeam
+		}
+
+		@Instantiated let secondSeam: SecondSeam
+	}
+
+	@Instantiable(generateDependencyTree: true)
+	public final class SecondSeam: Instantiable {
+		public init(secondStep: SecondStep) {
+			self.secondStep = secondStep
+		}
+
+		@Instantiated let secondStep: SecondStep
+	}
+
+	@Instantiable
+	public final class SecondStep: Instantiable {
+		public init(thirdSeam: ThirdSeam) {
+			self.thirdSeam = thirdSeam
+		}
+
+		@Instantiated let thirdSeam: ThirdSeam
+	}
+
+	@Instantiable(generateDependencyTree: true)
+	public final class ThirdSeam: Instantiable {
+		public init(leaf: Leaf) {
+			self.leaf = leaf
+		}
+
+		@Instantiated let leaf: Leaf
+	}
+
+	@Instantiable
+	public final class Leaf: Instantiable {
+		public init() {}
+	}
+	"""
 
 	private static let clocks = """
 	public protocol Clock {}
