@@ -7793,21 +7793,29 @@ enum GraphFuzzerGenerator {
 		// MARK: One label received as both wrapper kinds
 
 		/// The base corpus's draw, in mixed graphs, of a mock whose tree receives one label as a `LazilyInstantiated` and
-		/// as a `SendableLazilyInstantiated`, so that its mock root promotes a wrapper of each kind, both of which create the
-		/// instance a by-value receive reads. `WrapKindsHost`, whose mock is generated, instantiates `WrapKindsSource` and
+		/// as a `SendableLazilyInstantiated`. `WrapKindsHost`, whose mock is generated, instantiates `WrapKindsSource` and
 		/// `WrapKindsPinner`, in either order. `WrapKindsSource` receives `wrapKindsToken: WrapKindsToken` by value and
-		/// instantiates `WrapKindsLeaf`, which receives the label only if available as one wrapper kind; `WrapKindsPinner`
-		/// requires the other kind and, half the time, instantiates `WrapKindsSource` again. The by-value receiver must be
-		/// built after every wrapper sibling whose instance it can read: with the source declared first, a mock that
-		/// waited on one of them read the other before declaring it, which Swift 6.2.4 crashed compiling (seeds 0 and 78). No
-		/// root reaches the tree, and its mirror holds two forms of one label, so the compile is the oracle.
+		/// instantiates `WrapKindsLeaf`, which receives the label as one wrapper kind, required or only if available;
+		/// `WrapKindsPinner` requires the other kind and, half the time where the leaf's receive is only if available,
+		/// instantiates `WrapKindsSource` again. Where the leaf requires its wrapper, the mock root promotes a wrapper of each
+		/// kind, both of which create the instance the source reads, so the source must be built after both: with the source
+		/// declared first, a mock that waited on one of them read the other before declaring it, which Swift 6.2.4 crashed
+		/// compiling (seeds 78 and 317); no root reaches the tree, and its mirror holds two forms of one label, so the compile
+		/// is the oracle. Where the leaf's receive is only if available, the pinner's wrapper provides the source's instance,
+		/// so the mock promotes no wrapper of the leaf's kind and passes the leaf `nil` where the pinner pins it, as
+		/// production does: a mock that promoted it fails the mirror model's count (seeds 9, 175 and 195).
 		/// `wrapperKindsRandom` draws only for this pass, after every other, and only in the base corpus.
 		private mutating func addingLabelReceivedAsBothWrapperKinds(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard features.isEmpty, wrapperKindsRandom.percentChance(16), sendability == .mixed else { return declarations }
 			var declarations = declarations
 			let pinnerRequiresSendable = wrapperKindsRandom.percentChance(50)
 			let sourceComesFirst = wrapperKindsRandom.percentChance(50)
-			let pinnerBuildsSource = wrapperKindsRandom.percentChance(50)
+			let pinnerMayBuildSource = wrapperKindsRandom.percentChance(50)
+			// A leaf that requires its wrapper makes the mock promote both kinds; one that receives it only if available
+			// beside the pinner's required wrapper promotes one, and is passed `nil` where the pinner pins it. A required leaf
+			// beneath a pinner that requires the other kind is rejected as hidden, so the pinner then builds no source.
+			let leafRequiresWrapper = wrapperKindsRandom.percentChance(50)
+			let pinnerBuildsSource = pinnerMayBuildSource && !leafRequiresWrapper
 			func append(_ name: String, generatesMock: Bool = false, _ properties: [PropertyDeclaration]) {
 				declarations.append(TypeDeclaration(
 					name: name,
@@ -7826,7 +7834,9 @@ enum GraphFuzzerGenerator {
 			let source = PropertyDeclaration(attribute: "@Instantiated", label: "wrapKindsSource", type: sourceName)
 			let pinner = PropertyDeclaration(attribute: "@Instantiated", label: "wrapKindsPinner", type: pinnerName)
 			append(tokenName, [])
-			append(leafName, [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "wrapKindsToken", type: "\(leafWrapper)<\(tokenName)>?")])
+			append(leafName, [leafRequiresWrapper
+					? PropertyDeclaration(attribute: "@Received", label: "wrapKindsToken", type: "\(leafWrapper)<\(tokenName)>")
+					: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "wrapKindsToken", type: "\(leafWrapper)<\(tokenName)>?")])
 			append(sourceName, [
 				PropertyDeclaration(attribute: "@Received", label: "wrapKindsToken", type: tokenName),
 				PropertyDeclaration(attribute: "@Instantiated", label: "wrapKindsLeaf", type: leafName),

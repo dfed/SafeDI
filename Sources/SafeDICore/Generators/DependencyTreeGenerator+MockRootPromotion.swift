@@ -216,15 +216,24 @@ extension DependencyTreeGenerator {
 		// A receive of the instance, or of the optional instance, that a forwarded property fulfills does not count:
 		// the forwarded value comes from outside the tree. A required `x: LazilyInstantiated<X>?` beside no required
 		// instance is promoted below as it is, as any optional form is when nothing requires its non-optional form.
+		// A required wrapper provides its instance, so where the tree requires one wrapper kind, a requirement of the
+		// instance promotes no wrapper of the other kind: a receive of that kind only if available is then not promoted,
+		// as production passes it no value of that wrapper's own (`MockReceivesPassedNil`, where the required wrapper pins it).
+		var requiredWrappersByInstanceProperty = [Property: Set<Property>]()
+		for requiredProperty in allRequired where !requiredProperty.typeDescription.isOptional {
+			guard let instanceProperty = requiredProperty.asLazilyInstantiatedInstanceProperty else { continue }
+			requiredWrappersByInstanceProperty[instanceProperty, default: []].insert(requiredProperty)
+		}
 		var lazilyInstantiatedPropertiesToPromote = Set<Property>()
 		var instancePropertiesOfLazilyInstantiatedProperties = Set(mockRootScope.propertiesToGenerate.compactMap(\.lazilyInstantiatedInstanceProperty))
 		for receivedProperty in allReceived {
 			guard let instanceProperty = receivedProperty.asLazilyInstantiatedInstanceProperty else { continue }
 			let lazilyInstantiatedProperty = receivedProperty.asUnwrappedProperty
 			let optionalInstanceProperty = Property(label: instanceProperty.label, typeDescription: .optional(instanceProperty.typeDescription))
+			let otherKindIsRequired = requiredWrappersByInstanceProperty[instanceProperty]?.contains { $0 != lazilyInstantiatedProperty } == true
 			guard allRequired.contains(lazilyInstantiatedProperty)
-				|| (allRequired.contains(instanceProperty) && !isForwarded(instanceProperty))
-				|| (allRequired.contains(optionalInstanceProperty) && !isForwarded(optionalInstanceProperty)),
+				|| (!otherKindIsRequired && allRequired.contains(instanceProperty) && !isForwarded(instanceProperty))
+				|| (!otherKindIsRequired && allRequired.contains(optionalInstanceProperty) && !isForwarded(optionalInstanceProperty)),
 				scopeToPromote(for: lazilyInstantiatedProperty) != nil
 			else { continue }
 			lazilyInstantiatedPropertiesToPromote.insert(lazilyInstantiatedProperty)
