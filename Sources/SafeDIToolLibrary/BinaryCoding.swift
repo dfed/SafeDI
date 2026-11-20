@@ -205,9 +205,45 @@ struct BinaryWriter {
 		if let index = sharedValueIndices[key] {
 			writeUnsigned(index + 1)
 		} else {
-			sharedValueIndices[key] = UInt64(sharedValueIndices.count)
+			sharedValueIndices[key] = sharedValueCount
+			sharedValueCount += 1
 			writeUnsigned(0)
 			write(value)
+		}
+	}
+
+	/// Whether a type description is written through ``writeSharedByBytes(_:)``, as it is inside
+	/// ``writeSharingTypeDescriptions(_:)``.
+	private(set) var sharesTypeDescriptions = false
+
+	/// Runs `write` with every type description it writes, at the outermost level of each, written once
+	/// (``writeSharedByBytes(_:)``). A seam signature names the same few types at many places.
+	mutating func writeSharingTypeDescriptions(_ write: (inout BinaryWriter) -> Void) {
+		let wasSharing = sharesTypeDescriptions
+		sharesTypeDescriptions = true
+		write(&self)
+		sharesTypeDescriptions = wasSharing
+	}
+
+	/// Writes the value `write` writes as ``writeShared(_:)`` does, but keyed by the bytes it writes, which are equal
+	/// exactly when two values read back equal in every respect, even where their type's `==` ignores a difference, as
+	/// a type description's does for `any`. A value written again wrote no string the table lacked, since every string it
+	/// names was written with the value it repeats, so removing its bytes leaves the table as it was.
+	mutating func writeSharedByBytes(_ write: (inout BinaryWriter) -> Void) {
+		let referenceStart = bytes.count
+		writeUnsigned(0)
+		let valueStart = bytes.count
+		let wasSharing = sharesTypeDescriptions
+		sharesTypeDescriptions = false
+		write(&self)
+		sharesTypeDescriptions = wasSharing
+		let key = bytes[valueStart...]
+		if let index = sharedValueIndicesByBytes[key] {
+			bytes.removeSubrange(referenceStart...)
+			writeUnsigned(index + 1)
+		} else {
+			sharedValueIndicesByBytes[key] = sharedValueCount
+			sharedValueCount += 1
 		}
 	}
 
@@ -285,6 +321,8 @@ struct BinaryWriter {
 	private var strings = [String]()
 	private var stringIndices = [StringTableKey: UInt64]()
 	private var sharedValueIndices = [AnyHashable: UInt64]()
+	private var sharedValueIndicesByBytes = [ArraySlice<UInt8>: UInt64]()
+	private var sharedValueCount: UInt64 = 0
 	private var nestingDepth = 0
 	private var isNestedTooDeeply = false
 }
@@ -394,6 +432,37 @@ struct BinaryReader {
 		let reference = try readUnsigned()
 		if reference == 0 {
 			let value: Value = try read()
+			sharedValues.append(value)
+			return value
+		} else {
+			guard reference <= UInt64(sharedValues.count), let value = sharedValues[Int(reference - 1)] as? Value else {
+				throw .sharedValueReferenceOutOfRange(reference: reference, offset: referenceOffset)
+			}
+			return value
+		}
+	}
+
+	/// Whether a type description is read through ``readSharedByBytes(_:)``, as it is inside
+	/// ``readSharingTypeDescriptions(_:)``.
+	private(set) var sharesTypeDescriptions = false
+
+	/// Reads what ``BinaryWriter/writeSharingTypeDescriptions(_:)`` wrote.
+	mutating func readSharingTypeDescriptions<Value>(_ read: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryDecodingError) -> Value {
+		let wasSharing = sharesTypeDescriptions
+		sharesTypeDescriptions = true
+		defer { sharesTypeDescriptions = wasSharing }
+		return try read(&self)
+	}
+
+	/// Reads a value that ``BinaryWriter/writeSharedByBytes(_:)`` wrote.
+	mutating func readSharedByBytes<Value>(_ read: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryDecodingError) -> Value {
+		let referenceOffset = offset
+		let reference = try readUnsigned()
+		if reference == 0 {
+			let wasSharing = sharesTypeDescriptions
+			sharesTypeDescriptions = false
+			defer { sharesTypeDescriptions = wasSharing }
+			let value = try read(&self)
 			sharedValues.append(value)
 			return value
 		} else {
@@ -536,6 +605,23 @@ extension Array: BinaryCodable where Element: BinaryCodable {
 		for element in self {
 			writer.write(element)
 		}
+	}
+}
+
+/// A value whose type descriptions are each written once (``BinaryWriter/writeSharingTypeDescriptions(_:)``).
+struct BinarySharingTypeDescriptions<Value: BinaryCodable>: BinaryCodable {
+	init(_ value: Value) {
+		self.value = value
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		value = try reader.readSharingTypeDescriptions { reader throws(BinaryDecodingError) in try reader.read() }
+	}
+
+	let value: Value
+
+	func write(to writer: inout BinaryWriter) {
+		writer.writeSharingTypeDescriptions { $0.write(value) }
 	}
 }
 
