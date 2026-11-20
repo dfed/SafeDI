@@ -768,15 +768,6 @@ struct PublicMockPlan: Sendable {
 	var builders = [SeamSignature.Builder]()
 	/// Every enum the builders reach: the mock's own, then those their cases hold.
 	var scopeEnums = [SeamSignature.ScopeEnum]()
-	/// The places of the enums the builders reach that the mock fills itself, so never hands a builder: a case of an enum
-	/// holds a called mock's whole enum, whose places the mock fills some of. A caller switches over every case of an enum
-	/// it fills a place of, so it fills each of these it can too, and passes the others up with the places `holes` lists.
-	var unpresentedHoles = [SeamSignature.Hole]()
-
-	/// The builders `mock()` takes.
-	var calledBuilders: CalledBuilders {
-		CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums)
-	}
 
 	/// The parameters the tier at `tier` takes, under that tier's names.
 	func parameters(ofTier tier: AccessLevel) -> [PublicMockParameter] {
@@ -815,32 +806,7 @@ extension ScopeGenerator {
 			context: context,
 		)
 		plan.noTierParameters = noTierParameters(in: parameters.parameterTree, leftOut: parameters.receivedOnlyByPublicMockCallsLeftOut)
-		plan.unpresentedHoles = unpresentedHoles(of: plan, in: parameters.parameterTree)
 		return plan
-	}
-
-	/// The places the enums of `plan`'s builders reach that the mock never hands them (see
-	/// `PublicMockPlan.unpresentedHoles`), each as the call in the tree `items` that reaches it first presents it, in tree
-	/// order.
-	private static func unpresentedHoles(of plan: PublicMockPlan, in items: [MockTreeItem]) -> [SeamSignature.Hole] {
-		let calledBuilders = plan.calledBuilders
-		let enumsByKey = calledBuilders.enumsByKey
-		var unpresentedSites = Set<SeamSignature.Hole.Site>()
-		for builder in plan.builders {
-			unpresentedSites.formUnion(calledBuilders.sitesReached(by: builder, in: enumsByKey))
-		}
-		unpresentedSites.subtract(plan.holes.map(\.site))
-		guard !unpresentedSites.isEmpty else { return [] }
-		var unpresentedHoles = [SeamSignature.Hole]()
-		// Depth first, in tree order, on a stack of its own, since a mock tree can be as deep as the module has types.
-		var nodesToVisit = Array(items.propertyNodes.reversed())
-		while let node = nodesToVisit.popLast() {
-			for hole in node.publicMockCall?.holes ?? [] where unpresentedSites.remove(hole.site) != nil {
-				unpresentedHoles.append(hole)
-			}
-			nodesToVisit.append(contentsOf: node.propertyChildren.reversed())
-		}
-		return unpresentedHoles
 	}
 
 	/// The parameters on no tier of a public mock whose tree is `items` (see `PublicMockPlan.noTierParameters`): each
@@ -1708,9 +1674,9 @@ struct PublicMockCall: Sendable {
 	/// The calling tree's scope for the type is a leaf, with no scopes for that tree, so a function the calling tree
 	/// declares with such a parameter learns the name here.
 	let typesDeclaredEscaping: Set<TypeDescription>
-	/// The builders the call passes, built once with the call: its `holes` are every place the mock's builders reach, those it
-	/// hands them, in the order they reach them (`PublicMockPlan.holes`), then those it fills itself
-	/// (`PublicMockPlan.unpresentedHoles`), which the calling module fills or passes up alike; its `builders` the builders the
+	/// The builders the call passes, built once with the call: its `holes` are every place the mock's builders reach, in the
+	/// order they reach them (`PublicMockPlan.holes`), since the mock fills every place of a hole type of each call it makes
+	/// or none, and its builders reach a called mock's places only where it passes them up; its `builders` the builders the
 	/// mock takes (`PublicMockPlan.builders`); and its `scopeEnums` every enum they reach (`PublicMockPlan.scopeEnums`).
 	let calledBuilders: CalledBuilders
 

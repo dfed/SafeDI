@@ -296,13 +296,10 @@ public struct Initializer: Codable, Hashable, Sendable {
 	/// and default-valued non-dependency arguments. Used in mock generation where
 	/// default-valued parameters are bubbled up to the root mock method and
 	/// dependency arguments are fulfilled from the tree.
-	/// - Parameter isLeftToItsDefault: Whether the mock leaves a default-valued non-dependency argument to its default,
-	///   which the list then leaves out: one without a label, and whatever else the generator decides
-	///   (`Initializer.Argument.isLeftToItsDefault`).
+	/// A default-valued argument the mock leaves to its default (`Argument.isLeftToItsDefault`) is left out.
 	func createMockInitializerArgumentList(
 		given dependencies: [Dependency],
 		unavailableProperties: Set<Property>? = nil,
-		isLeftToItsDefault: (Argument) -> Bool = { $0.label == "_" },
 	) -> String {
 		var parts = [String]()
 		for argument in arguments {
@@ -312,7 +309,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 				} else {
 					parts.append("\(argument.label.spelledAsArgumentLabel): \(argument.innerLabel)")
 				}
-			} else if argument.hasDefaultValue, !isLeftToItsDefault(argument) {
+			} else if argument.hasDefaultValue, !argument.isLeftToItsDefault {
 				parts.append("\(argument.label.spelledAsArgumentLabel): \(argument.label)")
 			}
 			// Arguments that don't match a dependency and have no default are
@@ -365,9 +362,22 @@ public struct Initializer: Codable, Hashable, Sendable {
 		public let typeDescription: TypeDescription
 		/// The source text of the default value expression, if one exists (e.g., `"nil"`, `".init()"`).
 		public let defaultValueExpression: String?
+		/// Whether the default value throws: holds a `try` that is neither `try?` nor `try!` outside every closure it
+		/// declares, whose body throws to the closure's caller. Only a throwing `@autoclosure`'s default can throw, so no
+		/// other argument's default is read for one. Decided from the default's syntax where the argument is parsed.
+		public let defaultValueThrows: Bool
 		/// Whether the argument has a default value.
 		public var hasDefaultValue: Bool {
 			defaultValueExpression != nil
+		}
+
+		/// Whether a generated mock leaves this argument to its default rather than take a value for it: an argument
+		/// without a label, which a call does not name, and a throwing `@autoclosure` whose default itself throws
+		/// (`defaultValueThrows`), which a mock could take only as a closure that throws, and so could not call where it
+		/// builds the type, outside any function that throws. The initializer evaluates such a default itself, as in
+		/// production.
+		public var isLeftToItsDefault: Bool {
+			hasDefaultValue && (label == "_" || defaultValueThrows)
 		}
 
 		/// The label by which this argument is referenced at the call site.
@@ -401,13 +411,25 @@ public struct Initializer: Codable, Hashable, Sendable {
 			}
 			typeDescription = node.type.typeDescription
 			defaultValueExpression = node.defaultValue?.value.trimmedDescription
+			defaultValueThrows = if let defaultValue = node.defaultValue, typeDescription.isThrowingAutoclosure {
+				ThrowingTryVisitor.findsThrowingTry(in: defaultValue.value)
+			} else {
+				false
+			}
 		}
 
-		public init(outerLabel: String? = nil, innerLabel: String, typeDescription: TypeDescription, defaultValueExpression: String? = nil) {
+		public init(
+			outerLabel: String? = nil,
+			innerLabel: String,
+			typeDescription: TypeDescription,
+			defaultValueExpression: String? = nil,
+			defaultValueThrows: Bool = false,
+		) {
 			self.outerLabel = outerLabel
 			self.innerLabel = innerLabel
 			self.typeDescription = typeDescription
 			self.defaultValueExpression = defaultValueExpression
+			self.defaultValueThrows = defaultValueThrows
 		}
 
 		public func withUpdatedTypeDescription(_ typeDescription: TypeDescription) -> Self {
@@ -416,6 +438,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 				innerLabel: innerLabel,
 				typeDescription: typeDescription,
 				defaultValueExpression: defaultValueExpression,
+				defaultValueThrows: defaultValueThrows,
 			)
 		}
 
@@ -429,9 +452,40 @@ public struct Initializer: Codable, Hashable, Sendable {
 	}
 }
 
+// MARK: - ThrowingTryVisitor
+
+/// Finds a `try` that throws out of the expression it walks: one that is neither `try?` nor `try!`, outside every closure the
+/// expression declares, whose body throws to the closure's caller.
+private final class ThrowingTryVisitor: SyntaxVisitor {
+	/// Whether `expression` holds a `try` that throws out of it.
+	static func findsThrowingTry(in expression: ExprSyntax) -> Bool {
+		let visitor = ThrowingTryVisitor(viewMode: .sourceAccurate)
+		visitor.walk(expression)
+		return visitor.findsThrowingTry
+	}
+
+	private var findsThrowingTry = false
+
+	override func visit(_ node: TryExprSyntax) -> SyntaxVisitorContinueKind {
+		// A `try?` or `try!` handles what any `try` inside it throws, and one plain `try` settles it.
+		findsThrowingTry = findsThrowingTry || node.questionOrExclamationMark == nil
+		return .skipChildren
+	}
+
+	override func visit(_: ClosureExprSyntax) -> SyntaxVisitorContinueKind {
+		.skipChildren
+	}
+}
+
 // MARK: - TypeDescription
 
 extension TypeDescription {
+	/// Whether this is a throwing `@autoclosure`, the only parameter type whose default can throw.
+	fileprivate var isThrowingAutoclosure: Bool {
+		guard case let .attributed(.closure(_, _, doesThrow, _, _), _, attributes) = self else { return false }
+		return doesThrow && attributes.contains("autoclosure")
+	}
+
 	/// Whether a parameter of type `argument` takes a property of this type: the parameter's type is this type as a
 	/// function parameter (`asFunctionParameter`, which spells a closure type `@escaping`), with its attributes in any
 	/// order, since Swift reads `@Sendable @escaping` and `@escaping @Sendable` as one type. Or the parameter's type is

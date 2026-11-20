@@ -4208,7 +4208,7 @@ public actor DependencyTreeGenerator {
 				// A builder's `Builder` type, which a calling internal mock that passes its places up takes, is a function too.
 				typesDeclaredEscaping: ownPlan.typesDeclaredEscaping.intersection(tierParameters.map(\.type)).union(tierParameters.compactMap { $0.builder?.readableParameterType.nameDeclaredEscaping }),
 				calledBuilders: CalledBuilders(
-					holes: (ownPlan.plan.holes + ownPlan.plan.unpresentedHoles).map { $0.atTier(tier) },
+					holes: ownPlan.plan.holes.map { $0.atTier(tier) },
 					builders: ownPlan.plan.builders.map { $0.atTier(tier) },
 					scopeEnums: ownPlan.plan.scopeEnums,
 				),
