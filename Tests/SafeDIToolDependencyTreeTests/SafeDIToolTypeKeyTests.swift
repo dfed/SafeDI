@@ -870,6 +870,50 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 		)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesRequiredParameterByValue_whenCallSiteReadsParameterOfFunctionTypedLater() async throws {
+		// `A`'s function is called from `Mid`'s, which declares `service`, and from `B`'s, which passes its own parameter
+		// `service`, typed only after `A`'s is first computed. An unknown type is no `nil`, so `A` takes `service: Service`,
+		// which `A` requires.
+		try await expectTypeKeyTree(
+			of: [
+				Self.type("Root", isRoot: true, "@Instantiated let midBuilder: Instantiator<Mid>"),
+				Self.type("Mid", "@Instantiated let service: Service", "@Instantiated let aBuilder: Instantiator<A>"),
+				Self.type("A", "@Received let service: Service", "@Instantiated let bBuilder: Instantiator<B>"),
+				Self.type("B", "@Received let service: Service", "@Instantiated let aBuilder: Instantiator<A>"),
+				Self.type("Service"),
+			],
+			equals: """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_aBuilder(service: Service) -> A {
+			            let bBuilder = Instantiator<B> {
+			                __safeDI_bBuilder(service: service)
+			            }
+			            return A(service: service, bBuilder: bBuilder)
+			        }
+			        func __safeDI_bBuilder(service: Service) -> B {
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(service: service)
+			            }
+			            return B(service: service, aBuilder: aBuilder)
+			        }
+			        func __safeDI_midBuilder() -> Mid {
+			            let service = Service()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(service: service)
+			            }
+			            return Mid(service: service, aBuilder: aBuilder)
+			        }
+			        let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+			        self.init(midBuilder: midBuilder)
+			    }
+			}
+			""",
+		)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
