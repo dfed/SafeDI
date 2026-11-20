@@ -2403,7 +2403,7 @@ extension GraphFuzzerFixture {
 				}
 			}
 		}
-		if let probe = handWrittenRetentionProbe(generatedFiles: generatedFiles) {
+		if let probe = handWrittenRetentionProbe(generatedFiles: generatedFiles) ?? publicMockHandWrittenRetentionProbe(generatedFiles: generatedFiles) {
 			probes.append(probe)
 		}
 		let mockFileSuffix = "+SafeDIMock.swift"
@@ -2475,6 +2475,40 @@ extension GraphFuzzerFixture {
 			name: homeName + Self.handWrittenBuilderProbeNameSuffix,
 			expression: "\(homeName)(\(label): \(builder))",
 			knownRightExpression: "\(typeNamePrefix)RetainRoot().retainHome",
+		)
+	}
+
+	/// A probe building `RetainHome`, the public mock of `GraphFuzzerPublicMockDraw`'s retention draw, through its `mock()`
+	/// with a builder written by hand that reads nothing, `{ RetainLive() }`, beside the known-right path's
+	/// `RetainApp.mock().retainHome`, which fills the place inline; `nil` when the graph has no such mock, when its fill reads a value,
+	/// or when `mock()` keeps the builder over its enum, which a person's builder would have to take. The probe takes the
+	/// seam's probe name (`handWrittenBuilderProbeNameSuffix`), so the long run counts it with the seam's.
+	private func publicMockHandWrittenRetentionProbe(generatedFiles: [String: String]) -> DifferentialValueProbe? {
+		let homeName = typeNamePrefix + "RetainHome"
+		let liveName = typeNamePrefix + "RetainLive"
+		var liveReadsValue = false
+		var declaresHome = false
+		for content in swiftFileContent {
+			var typeName: String?
+			for line in GraphFuzzerSourceLine.lines(of: content) {
+				switch line {
+				case let .typeDeclaration(name):
+					typeName = name
+					declaresHome = declaresHome || name == homeName
+				case .property where typeName == liveName:
+					liveReadsValue = true
+				case .instantiableAttribute, .instantiateMethod, .property, .other:
+					break
+				}
+			}
+		}
+		guard declaresHome, !liveReadsValue,
+		      let label = GraphFuzzerPublicMockBuilders.labelsTakingNothing(of: homeName, in: generatedFiles).first
+		else { return nil }
+		return DifferentialValueProbe(
+			name: homeName + Self.handWrittenBuilderProbeNameSuffix,
+			expression: "\(homeName).mock(\(label): { \(liveName)() })",
+			knownRightExpression: "\(typeNamePrefix)RetainApp.mock().retainHome",
 		)
 	}
 

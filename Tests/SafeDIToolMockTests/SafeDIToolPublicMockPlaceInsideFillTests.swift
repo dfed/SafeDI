@@ -152,8 +152,13 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                    return service
 			                }
 			            }
-			            _ = Inner.__safeDI_Inner_mock_9FEF36196FBAB924.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return Inner.mock(serviceBuilder: __safeDI_serviceBuilder_Inner, safeDIOverrides: safeDIOverrides.inner)
+			            _ = Inner.__safeDI_Inner_mock_3EBB13A82C3BF964.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Inner.__safeDI_mock(serviceBuilder: .init(
+			                screenBuilder: { __safeDI_screenBuilderValues in
+			                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.screenBuilder(__safeDI_screenBuilderValues, .service(__safeDI_serviceValues))) })
+			                },
+			                service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.service(__safeDI_serviceValues)) }
+			            ), safeDIOverrides: safeDIOverrides.inner)
 			        }
 			        let inner: Inner = __safeDI_inner()
 			        return Outer(tag: tag, inner: inner)
@@ -343,8 +348,13 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                    return service
 			                }
 			            }
-			            _ = Inner.__safeDI_Inner_mock_A0ED213C6A416A0A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return Inner.mock(serviceBuilder: __safeDI_serviceBuilder_Inner, safeDIOverrides: safeDIOverrides.inner)
+			            _ = Inner.__safeDI_Inner_mock_5720E82B2981644A.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Inner.__safeDI_mock(serviceBuilder: .init(
+			                screenBuilder: { __safeDI_screenBuilderValues in
+			                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.screenBuilder(__safeDI_screenBuilderValues, .service(__safeDI_serviceValues))) })
+			                },
+			                service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.service(__safeDI_serviceValues)) }
+			            ), safeDIOverrides: safeDIOverrides.inner)
 			        }
 			        let inner: Inner = __safeDI_inner()
 			        return Outer(session: session, inner: inner)
@@ -523,8 +533,13 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                    return service
 			                }
 			            }
-			            _ = Inner.__safeDI_Inner_mock_9FEF36196FBAB924.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return Inner.mock(serviceBuilder: __safeDI_serviceBuilder_Inner, safeDIOverrides: safeDIOverrides.inner)
+			            _ = Inner.__safeDI_Inner_mock_3EBB13A82C3BF964.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Inner.__safeDI_mock(serviceBuilder: .init(
+			                screenBuilder: { __safeDI_screenBuilderValues in
+			                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.screenBuilder(__safeDI_screenBuilderValues, .service(__safeDI_serviceValues))) })
+			                },
+			                service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.service(__safeDI_serviceValues)) }
+			            ), safeDIOverrides: safeDIOverrides.inner)
 			        }
 			        let inner: Inner = __safeDI_inner()
 			        return Outer(inner: inner)
@@ -716,8 +731,13 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                    return service
 			                }
 			            }
-			            _ = Inner.__safeDI_Inner_mock_2EFBE0AFAF545FB2.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return Inner.mock(serviceBuilder: __safeDI_serviceBuilder_Inner, safeDIOverrides: safeDIOverrides.inner)
+			            _ = Inner.__safeDI_Inner_mock_718C21DDAD65EAF2.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Inner.__safeDI_mock(serviceBuilder: .init(
+			                screenBuilder: { __safeDI_screenBuilderValues in
+			                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.screenBuilder(__safeDI_screenBuilderValues, .service(__safeDI_serviceValues))) })
+			                },
+			                service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.service(__safeDI_serviceValues)) }
+			            ), safeDIOverrides: safeDIOverrides.inner)
 			        }
 			        let inner: Inner = __safeDI_inner()
 			        return Outer(id: id, inner: inner)
@@ -905,8 +925,19 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                    return service
 			                }
 			            }
-			            _ = Inner.__safeDI_Inner_mock_9A3489C424741DFE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return Inner.mock(serviceBuilder: __safeDI_serviceBuilder_Inner, safeDIOverrides: safeDIOverrides.inner)
+			            _ = Inner.__safeDI_Inner_mock_C638028EA3E6E9BE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Inner.__safeDI_mock(serviceBuilder: .init(
+			                page: { __safeDI_pageValues in
+			                    .init(
+			                        model: { __safeDI_modelValues in
+			                            .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.page(__safeDI_pageValues, .model(__safeDI_modelValues, .service(__safeDI_serviceValues)))) })
+			                        }
+			                    )
+			                },
+			                model: { __safeDI_modelValues in
+			                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.model(__safeDI_modelValues, .service(__safeDI_serviceValues))) })
+			                }
+			            ), safeDIOverrides: safeDIOverrides.inner)
 			        }
 			        let inner: Inner = __safeDI_inner()
 			        return Outer(inner: inner)
@@ -1550,8 +1581,13 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                    return service
 			                }
 			            }
-			            _ = Inner.__safeDI_Inner_mock_9FEF36196FBAB924.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return Inner.mock(serviceBuilder: __safeDI_serviceBuilder_Inner, safeDIOverrides: safeDIOverrides.inner)
+			            _ = Inner.__safeDI_Inner_mock_3EBB13A82C3BF964.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Inner.__safeDI_mock(serviceBuilder: .init(
+			                screenBuilder: { __safeDI_screenBuilderValues in
+			                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.screenBuilder(__safeDI_screenBuilderValues, .service(__safeDI_serviceValues))) })
+			                },
+			                service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.service(__safeDI_serviceValues)) }
+			            ), safeDIOverrides: safeDIOverrides.inner)
 			        }
 			        let inner: Inner = __safeDI_inner()
 			        return Outer(tag: tag, inner: inner)
@@ -1746,7 +1782,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                                    return part
 			                                }
 			                            }
-			                            return Holder.mock(partBuilder: __safeDI_partBuilder_Holder)
+			                            return Holder.__safeDI_mock(partBuilder: .init(part: { __safeDI_partValues in __safeDI_partBuilder_Holder(.part(__safeDI_partValues)) }))
 			                        }
 			                        let holder: Holder = __safeDI_holder()
 			                        return DefaultService(holder: holder)
@@ -1772,7 +1808,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                                    return part
 			                                }
 			                            }
-			                            return Holder.mock(partBuilder: __safeDI_partBuilder_Holder)
+			                            return Holder.__safeDI_mock(partBuilder: .init(part: { __safeDI_partValues in __safeDI_partBuilder_Holder(.part(__safeDI_partValues)) }))
 			                        }
 			                        let holder: Holder = __safeDI_holder()
 			                        return DefaultService(holder: holder)
@@ -1781,8 +1817,13 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                    return service
 			                }
 			            }
-			            _ = Inner.__safeDI_Inner_mock_9FEF36196FBAB924.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return Inner.mock(serviceBuilder: __safeDI_serviceBuilder_Inner, safeDIOverrides: safeDIOverrides.inner)
+			            _ = Inner.__safeDI_Inner_mock_3EBB13A82C3BF964.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Inner.__safeDI_mock(serviceBuilder: .init(
+			                screenBuilder: { __safeDI_screenBuilderValues in
+			                    .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.screenBuilder(__safeDI_screenBuilderValues, .service(__safeDI_serviceValues))) })
+			                },
+			                service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.service(__safeDI_serviceValues)) }
+			            ), safeDIOverrides: safeDIOverrides.inner)
 			        }
 			        let inner: Inner = __safeDI_inner()
 			        return Outer(inner: inner)
@@ -2231,8 +2272,8 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                    return service
 			                }
 			            }
-			            _ = Inner.__safeDI_Inner_mock_B10E7305A67539A6.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return Inner.mock(serviceBuilder: __safeDI_serviceBuilder_Inner, safeDIOverrides: safeDIOverrides.inner)
+			            _ = Inner.__safeDI_Inner_mock_42B604434A0DC066.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Inner.__safeDI_mock(serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.service(__safeDI_serviceValues)) }), safeDIOverrides: safeDIOverrides.inner)
 			        }
 			        let inner: Inner = __safeDI_inner()
 			        return Outer(inner: inner)
@@ -2445,8 +2486,13 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                        return service
 			                    }
 			                }
-			                _ = Inner.__safeDI_Inner_mock_9FEF36196FBAB924.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			                return Inner.mock(serviceBuilder: __safeDI_serviceBuilder_Inner, safeDIOverrides: safeDIOverrides.b.inner)
+			                _ = Inner.__safeDI_Inner_mock_3EBB13A82C3BF964.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                return Inner.__safeDI_mock(serviceBuilder: .init(
+			                    screenBuilder: { __safeDI_screenBuilderValues in
+			                        .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.screenBuilder(__safeDI_screenBuilderValues, .service(__safeDI_serviceValues))) })
+			                    },
+			                    service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.service(__safeDI_serviceValues)) }
+			                ), safeDIOverrides: safeDIOverrides.b.inner)
 			            }
 			            let inner: Inner = __safeDI_inner()
 			            return B.__safeDI_init(user: user, inner: inner, safeDIBuilder: safeDIOverrides.b.safeDIBuilder)
@@ -2714,8 +2760,13 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                        return service
 			                    }
 			                }
-			                _ = Inner.__safeDI_Inner_mock_9FEF36196FBAB924.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			                return Inner.mock(serviceBuilder: __safeDI_serviceBuilder_Inner, safeDIOverrides: safeDIOverrides.b.inner)
+			                _ = Inner.__safeDI_Inner_mock_3EBB13A82C3BF964.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                return Inner.__safeDI_mock(serviceBuilder: .init(
+			                    screenBuilder: { __safeDI_screenBuilderValues in
+			                        .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.screenBuilder(__safeDI_screenBuilderValues, .service(__safeDI_serviceValues))) })
+			                    },
+			                    service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.service(__safeDI_serviceValues)) }
+			                ), safeDIOverrides: safeDIOverrides.b.inner)
 			            }
 			            let inner: Inner = __safeDI_inner()
 			            return B.__safeDI_init(user: user, inner: inner, safeDIBuilder: safeDIOverrides.b.safeDIBuilder)
@@ -2923,7 +2974,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                    func __safeDI_service() -> Outer {
 			                        let gadget: any Gadget = __safeDI_gadgetBuilder(.innerBuilder_serviceBuilder(__safeDI_gadgetValues_innerBuilder_serviceBuilder, __safeDI_innerBuilder_serviceBuilder, .gadget(SafeDIMockScope_Gadget.gadget_Values())))
 			                        func __safeDI_innerBuilder() -> Inner {
-			                            Inner.mock(serviceBuilder: __safeDI_serviceBuilder_Inner)
+			                            Inner.__safeDI_mock(serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.service(__safeDI_serviceValues)) }))
 			                        }
 			                        let innerBuilder = Instantiator<Inner>(__safeDI_innerBuilder)
 			                        return Outer(gadget: gadget, innerBuilder: innerBuilder)
@@ -2932,8 +2983,8 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                    return service
 			                }
 			            }
-			            _ = Inner.__safeDI_Inner_mock_EE753AF97E802078.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return if let safeDIBuilder = safeDIOverrides.innerBuilder { safeDIBuilder(__safeDI_serviceBuilder_Inner) } else { Inner.mock(serviceBuilder: __safeDI_serviceBuilder_Inner) }
+			            _ = Inner.__safeDI_Inner_mock_E789692848368FB8.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return if let safeDIBuilder = safeDIOverrides.innerBuilder { safeDIBuilder(__safeDI_serviceBuilder_Inner) } else { Inner.__safeDI_mock(serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.service(__safeDI_serviceValues)) })) }
 			        }
 			        let innerBuilder = Instantiator<Inner>(__safeDI_innerBuilder)
 			        return Outer(gadget: gadget, innerBuilder: innerBuilder)
@@ -3132,8 +3183,8 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                    return service
 			                }
 			            }
-			            _ = Inner.__safeDI_Inner_mock_EE753AF97E802078.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return if let safeDIBuilder = safeDIOverrides.inner { safeDIBuilder(__safeDI_serviceBuilder_Inner) } else { Inner.mock(serviceBuilder: __safeDI_serviceBuilder_Inner) }
+			            _ = Inner.__safeDI_Inner_mock_E789692848368FB8.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return if let safeDIBuilder = safeDIOverrides.inner { safeDIBuilder(__safeDI_serviceBuilder_Inner) } else { Inner.__safeDI_mock(serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.service(__safeDI_serviceValues)) })) }
 			        }
 			        let inner: Inner = __safeDI_inner()
 			        return Outer(tag: tag, inner: inner)
