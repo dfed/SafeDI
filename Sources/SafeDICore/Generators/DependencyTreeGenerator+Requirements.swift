@@ -41,10 +41,14 @@ extension DependencyTreeGenerator {
 	///     hand-written mock is then taken to be callable. No other access is checked.
 	public func requirements(forTypeNamed typeName: String, generatesMock: Bool, mockEmittingModule: EmittingModule?) async throws -> TypeRequirements? {
 		var receivedPropertiesCache = ReceivedPropertiesCache()
+		// Every value the query computes is a local of this call: the generator keeps nothing between the types it is asked
+		// about.
+		var foreignPublicMockPlans = PublicMockPlans()
 		let mockScopes = try await mockScopes(
 			additionalMocksToGenerate: [typeName],
 			mockEmittingModule: constructsOnlyPublicDeclarations ? nil : mockEmittingModule,
 			receivedPropertiesCache: &receivedPropertiesCache,
+			foreignPublicMockPlans: &foreignPublicMockPlans,
 		)
 		// The type's own entry in the scope map, which `generateMockCode` builds each mock root from. The name is
 		// matched as `additionalMocksToGenerate` matches it, and the entry is chosen by type, never by map order.
@@ -53,6 +57,8 @@ extension DependencyTreeGenerator {
 			.min(by: { $0.key < $1.key })
 		else { return nil }
 		let instantiable = mockRootInstantiable(for: scope.instantiable, scope: scope)
+		// The context a public mock's root reads, made only for one.
+		let publicMockContext = instantiable.generateMock == .public ? makePublicMockContext() : nil
 		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
@@ -63,6 +69,7 @@ extension DependencyTreeGenerator {
 			// exists only because the type is listed, so removing it from the list is also a fix.
 			generatedMockReason: generatesMock ? (instantiable.generatesMock ? .generateMock : .additionalMocksToGenerate) : nil,
 			mockScopes: mockScopes,
+			publicMockContext: publicMockContext,
 			// The query reports what a type needs, not what keeps a module from compiling its mock, so it checks no
 			// module's access here; `mockEmittingModule` decides only which flat parameters default.
 			emittingModule: nil,
@@ -73,7 +80,7 @@ extension DependencyTreeGenerator {
 		)
 		// Whether a public mock can be generated is decided for one root and needs no emitting module, as
 		// `generateMockCode` decides it, so the query reports it too.
-		if generatesMock, instantiable.generateMock == .public {
+		if generatesMock, let publicMockContext {
 			let findings = await mockRoot.publicMockFindings(of: instantiable, context: publicMockContext, mockDefaults: mockScopes.flatParameterMockDefaults)
 			guard findings.isEmpty else {
 				throw DependencyTreeGeneratorError.publicMockCannotBeGenerated(findings)
