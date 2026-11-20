@@ -185,7 +185,7 @@ public struct SeamSignature: Sendable {
 		func plainSpelling(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> String {
 			// The closure of the initializer only generated code calls captures a deferred parameter, so a function type is
 			// `@escaping` here even though that initializer takes it behind an `@autoclosure`.
-			property.asFunctionParameterSyntax(amongTypesDeclaredEscaping: typesDeclaredEscaping).description
+			property.functionParameterSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 		}
 
 		/// The parameter as the initializer only generated code calls declares it: under `generatedOnlyArgumentLabel`, a
@@ -194,7 +194,7 @@ public struct SeamSignature: Sendable {
 		func generatedOnlySpelling(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> String {
 			switch deferral {
 			case .none:
-				"\(generatedOnlyArgumentLabel) \(property.asFunctionParameterSyntax(amongTypesDeclaredEscaping: typesDeclaredEscaping).description)"
+				"\(generatedOnlyArgumentLabel) \(property.functionParameterSource(amongTypesDeclaredEscaping: typesDeclaredEscaping))"
 			case let .deferred(isSendable):
 				"\(internalName == generatedOnlyArgumentLabel ? internalName : "\(generatedOnlyArgumentLabel) \(internalName)"): @autoclosure @escaping\(isSendable ? " @Sendable" : "") () -> \(property.typeDescription.asSource)"
 			}

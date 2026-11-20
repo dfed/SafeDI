@@ -3886,6 +3886,20 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(Self.renamedGraphDifferences(betweenCode: "\(PublicConfiguration.firstStruct)\n\n\(PublicConfiguration.secondStruct)\n", and: "\(PublicConfiguration.secondStruct)\n\n\(PublicConfiguration.firstStruct)\n") == [])
 	}
 
+	@Test
+	func renamedGraphFailures_isEmpty_whenStructsOfPublicConfigurationsWithoutTheirExtensionsDifferOnlyInTheirOrderAndOneHasForwarders() {
+		// Decomposing a module's combined output files the forwarders of a configuration's defaults after its struct,
+		// each a block of its own, so they move with the struct (public mock corpus seeds 2291 and 2877).
+		let forwarder = "@usableFromInline nonisolated func __safeDI_FuzzFeature_S12_T1_mockDefault_name() -> String? { S12_T1.__safeDI_mockDefault_name() }"
+		#expect(Self.renamedGraphDifferences(betweenCode: "\(PublicConfiguration.firstStruct)\n\n\(PublicConfiguration.secondStruct)\n\n\(forwarder)\n", and: "\(PublicConfiguration.secondStruct)\n\n\(forwarder)\n\n\(PublicConfiguration.firstStruct)\n") == [])
+	}
+
+	@Test
+	func renamedGraphFailures_reportFile_whenForwarderMovesToAnotherStructOfPublicConfigurationWithoutItsExtension() {
+		let forwarder = "@usableFromInline nonisolated func __safeDI_FuzzFeature_S12_T1_mockDefault_name() -> String? { S12_T1.__safeDI_mockDefault_name() }"
+		#expect(Self.renamedGraphDifferences(betweenCode: "\(PublicConfiguration.firstStruct)\n\n\(PublicConfiguration.secondStruct)\n\n\(forwarder)\n", and: "\(PublicConfiguration.firstStruct)\n\n\(forwarder)\n\n\(PublicConfiguration.secondStruct)\n") == [.mockConfigurationCode])
+	}
+
 	@Test(arguments: [
 		// A configuration's struct that takes the place of an extension.
 		("\(PublicConfiguration.firstStruct)\n\n\(GeneratedExtension.first)", "\(GeneratedExtension.first)\n\(PublicConfiguration.firstStruct)\n"),
@@ -6703,7 +6717,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x8ED1E510982417DE
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xBE92D2B5BCD764DC
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -6713,15 +6727,15 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xFEF5FF2EC2FEC857
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x4CD98AEE7FC379F6
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0xEE74156114727283
+	static let corpusFixtureHash: UInt64 = 0x00D6FB77C725297D
 
-	static let corpusPartitionHash: UInt64 = 0x4E46F02E966CCD26
+	static let corpusPartitionHash: UInt64 = 0x5B0833371CCED0EA
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
@@ -6733,7 +6747,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// corpus, so a generator change that stops drawing a feature, or a tool change that stops accepting the graphs that
 	/// draw it, changes these and must update them deliberately, with the hashes and the accepted-seed pins.
 	static let corpusAcceptedFeatureCounts: [GraphFuzzerFeature: Int] = [
-		.constantProperty: 2_582,
+		.constantProperty: 2_586,
 		.erasedConstantProperty: 450,
 		.instantiatorProperty: 2_165,
 		.sendableInstantiatorProperty: 916,
@@ -6746,9 +6760,9 @@ struct SafeDIToolGraphFuzzerTests {
 		.receivedLazilyInstantiatedInstance: 277,
 		.forwardedProperty: 1_686,
 		.optionalForwardedProperty: 889,
-		.requiredReceive: 2_476,
+		.requiredReceive: 2_481,
 		.requiredOptionalReceive: 215,
-		.onlyIfAvailableReceive: 2_209,
+		.onlyIfAvailableReceive: 2_220,
 		.requiredAlias: 1_097,
 		.onlyIfAvailableAlias: 1_033,
 		.aliasOfOnlyIfAvailableAlias: 78,
@@ -6778,7 +6792,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.forwardedPropertiesTypealiasArgument: 156,
 		.forwardedTupleBuilderReceivedByMockedType: 137,
 		.multipleRoots: 1_765,
-		.generateMock: 2_426,
+		.generateMock: 2_441,
 		.lazyCycle: 1_294,
 		.constantCycleCloser: 39,
 		.builderReceivedInsideItsTree: 179,
@@ -6794,7 +6808,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.dependencyMockCannotBuildReceivedBeneathItsOwner: 267,
 		.dependencyMockCannotBuildReceivedLazilyBesideItsMockedOwner: 68,
 		.dependencyMockCannotBuildLazilyInstantiatedReceivedAsOtherKindBesideItsMockedOwner: 9,
-		.sendableAndNonSendableWrappers: 555,
+		.sendableAndNonSendableWrappers: 567,
 		.mockedTypeOnLazyCycle: 589,
 		.typesReceivingEachOtherOnlyIfAvailable: 298,
 		.labelReceivedAsInstanceAndAsInstantiator: 244,
@@ -6955,32 +6969,32 @@ struct SafeDIToolGraphFuzzerTests {
 	static let corpusValueOracleCounts = GraphFuzzerValueOracleCounts(
 		rootPairCount: 5_248,
 		rootPairsSum: GraphFuzzerSeedSetSum(value: 0x5892AF524297D9FB),
-		mirroredPairCount: 4_538,
-		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0xBCE18832640ED0C4),
+		mirroredPairCount: 4_593,
+		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0x06E682D7EAFBF1AE),
 		skipCounts: [
 			.requiredParameter: 1_666,
-			.twoFormsOfOneLabel: 132,
+			.twoFormsOfOneLabel: 182,
 			.requiredOptionalReceiveOfNonOptionalDeclaration: 5,
-			.requiredReceiveOfUncreatedAlias: 21,
+			.requiredReceiveOfUncreatedAlias: 19,
 		],
 		shapeCounts: [
 			.rootTreePropertyReceivedByTwoOrMoreTypes: 1_784,
 			.rootTreeLabelDeclaredAtTwoDepthsAboveReceiver: 181,
-			.promotedDependencyReceivedByTwoOrMoreTypes: 512,
+			.promotedDependencyReceivedByTwoOrMoreTypes: 565,
 			.onlyIfAvailableAliasOfPromotedDependency: 122,
 			.requiredAliasOfPromotedDependency: 402,
-			.promotedWrapperReceivedInAnotherForm: 13,
+			.promotedWrapperReceivedInAnotherForm: 66,
 			.instanceOfPromotedWrapperPassedToMockedType: 4,
-			.onlyIfAvailableReceiveInMockedTypesTreeLeftUnbuilt: 597,
+			.onlyIfAvailableReceiveInMockedTypesTreeLeftUnbuilt: 650,
 		],
 		drawnMocksMatchingOnlyAfterNormalizationCount: 786,
-		mirroredPairsTakingSamplesCount: 970,
+		mirroredPairsTakingSamplesCount: 972,
 		forwardedPropertiesSampleCount: 2_727,
-		overridePairCount: 5_628,
-		overridePairsSum: GraphFuzzerSeedSetSum(value: 0x148E4A6744CA60FD),
+		overridePairCount: 5_681,
+		overridePairsSum: GraphFuzzerSeedSetSum(value: 0x681F58375464D737),
 		overrideFieldKindCounts: [
-			.builder: 4_051,
-			.configuration: 1_577,
+			.builder: 4_061,
+			.configuration: 1_620,
 		],
 		pinnedPlacePairCount: 105,
 	)
@@ -7043,6 +7057,7 @@ struct SafeDIToolGraphFuzzerTests {
 			"holderMovedToInnerSeamOfAnotherModule",
 			"placeBehindLazilyInstantiated",
 			"placeOfNewBuilderInInnerSeamOfAnotherModule",
+			"placeOfHoleTypeNamedAfterSendableLabel",
 			"placeForwardingOtherValues",
 			"placeForwardingOtherValuesRemedied",
 			"placeForwardingOtherValuesInInnerSeamOfAnotherModule",
@@ -7253,9 +7268,13 @@ struct SafeDIToolGraphFuzzerTests {
 	/// seed 945, whose `S945_HoleOtherRoot()` spends a batch's traversals through `HoleOuter`, `HoleRelay` and `HoleImpl`
 	/// re-entering `HoleSeam`, whose place inside a plain fill `HoleNestScreen` holds, on both of its builds alike; and seed
 	/// 1311, whose `S1311_Root0()` spends even a graph's own traversals through `HoleRelay`, `HoleLoop`, `HolePing` and
-	/// `HoleDeep` re-entering `HoleSeam`, on both of its builds alike, as `seamKnownIssues` lists; and the smoke batch's
-	/// seeds 277 and 1890, below the corpus's size (`seamSmokeSeedsTraversingPastTheBatchBudget`).
-	static let seamCorpusSeedsTraversingPastTheBatchBudget: Set<UInt64> = [277, 391, 883, 945, 1_311, 1_890]
+	/// `HoleDeep` re-entering `HoleSeam`, on both of its builds alike, as `seamKnownIssues` lists; the smoke batch's
+	/// seeds 277 and 1890, below the corpus's size (`seamSmokeSeedsTraversingPastTheBatchBudget`); and seeds 4429 and
+	/// 5059, past the corpus's size, which a run of the seam draw beyond the corpus spent a batch's traversals on through
+	/// holes that re-enter `HoleSeam`, as seed 391 does, and which a graph's own traversals describe; and seeds 5043 and
+	/// 5609, past the corpus's size too, which spend even a graph's own traversals through holes that re-enter `HoleSeam`,
+	/// as seed 1311 does, in the comparator's probe alone: `generate` takes no longer on them than on another graph.
+	static let seamCorpusSeedsTraversingPastTheBatchBudget: Set<UInt64> = [277, 391, 883, 945, 1_311, 1_890, 4_429, 5_043, 5_059, 5_609]
 
 	/// The seam smoke batch's seeds whose probes traverse more wrappers than a batch allows, compared on their own as
 	/// `seamCorpusSeedsTraversingPastTheBatchBudget`'s are: seed 1890, whose `S1890_HoleOtherRoot()` spends a batch's
@@ -7315,7 +7334,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// rejects as it rejects the seam whose own tree receives both forms. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 705, 743, 850, 881, 892, 934, 969, 1_010, 1_020, 1_450, 1_815, 1_837, 1_890, 1_986, 2_006, 3_575, 4_668]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xE61A0C5D8F52B70B
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xFBD8DB850D7E8FE6
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -9168,7 +9187,7 @@ struct SafeDIToolGraphFuzzerTests {
 				.remedyLeavesErrorAtSite(.relabelHidingDeclaration, containing: "cannot be received inside a `@Sendable` function"),
 			],
 			seeds: [
-				167, 456, 1_724, 1_935, 2_310, 2_627, 2_715, 2_751, 3_145, 3_240, 3_619, 4_345,
+				167, 456, 1_724, 1_935, 2_715, 3_145, 3_240, 4_345,
 			],
 		),
 		GraphFuzzerKnownIssue(
@@ -9180,7 +9199,7 @@ struct SafeDIToolGraphFuzzerTests {
 				.remedyLeavesErrorAtSite(.receiveSuggestedProperty, containing: "is hidden in chain"),
 			],
 			seeds: [
-				492, 1_832, 2_322, 2_500, 2_605, 2_663, 2_982, 3_529, 3_778, 3_799, 4_142, 4_441, 4_940,
+				492, 1_832, 2_322, 2_500, 2_663, 2_982, 3_529, 3_778, 3_799, 4_142, 4_441, 4_940,
 			],
 		),
 		GraphFuzzerKnownIssue(
@@ -9191,7 +9210,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: remedySuggestionClosesCycleReason,
 			signatures: [.remedyLeavesErrorAtSite(.receiveSuggestedProperty, containing: "Dependency cycle: ")],
-			seeds: [1_132, 2_059, 2_560, 3_982, 3_995, 4_333],
+			seeds: [1_132, 2_059, 2_560, 3_995, 4_333],
 		),
 		GraphFuzzerKnownIssue(
 			reason: remedySuggestionsAlternateReason,
@@ -9201,7 +9220,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: remedyDeclarationClosesCycleThroughRootReason,
 			signatures: [.remedyLeavesErrorAtSite(.instantiateOnRoot, containing: "Dependency cycle: ")],
-			seeds: [984, 3_493, 4_375, 4_864],
+			seeds: [4_864],
 		),
 		GraphFuzzerKnownIssue(
 			reason: remedySendableWrapperNamesOneDeclarationReason,
@@ -9219,7 +9238,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: compileTimeAssertionsDifferBetweenIntegrationsReason,
 			signatures: [.integrationsDiffer(containing: "<compile-time assertions>")],
-			seeds: [340, 2_279, 2_787, 4_622],
+			seeds: [2_279, 2_787, 4_622],
 		),
 	]
 

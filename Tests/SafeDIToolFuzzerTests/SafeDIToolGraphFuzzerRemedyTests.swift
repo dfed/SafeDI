@@ -2123,9 +2123,7 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 		let runs = try await Self.remedyRuns(of: fixture)
 
 		#expect(runs.map(\.remedy.kind) == [.instantiateOnRootAndReceiveOnlyIfAvailable])
-		withKnownIssue("\(SafeDIToolGraphFuzzerTests.remedyHiddenByCloserDeclarationReason)") {
-			#expect(runs.map(\.errorsAtSite) == [[]])
-		}
+		#expect(runs.map(\.errorsAtSite) == [[]])
 	}
 
 	@Test
@@ -2169,9 +2167,7 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 		let runs = try await Self.remedyRuns(of: fixture)
 
 		#expect(runs.map(\.remedy.kind) == [.receiveSuggestedProperty])
-		withKnownIssue("\(SafeDIToolGraphFuzzerTests.remedySuggestionClosesCycleReason)") {
-			#expect(runs.map(\.errorsAtSite) == [[]])
-		}
+		#expect(runs.map(\.errorsAtSite) == [[]])
 	}
 
 	@Test
@@ -2273,10 +2269,8 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 		let runs = try await Self.remedyRuns(of: fixture)
 
-		#expect(runs.map(\.remedy.kind) == [.instantiateOnRoot])
-		withKnownIssue("\(SafeDIToolGraphFuzzerTests.remedyDeclarationClosesCycleThroughRootReason)") {
-			#expect(runs.map(\.errorsAtSite) == [[]])
-		}
+		#expect(runs.map(\.remedy.kind) == [.removeReceive, .receiveOptionallyIfAvailable])
+		#expect(runs.map(\.errorsAtSite) == [[], []])
 	}
 
 	@Test
@@ -2287,9 +2281,7 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 		let runs = try await Self.remedyRuns(of: fixture)
 
 		#expect(runs.map(\.remedy.kind) == [.declareProvidingFormOnSeam])
-		withKnownIssue("\(SafeDIToolGraphFuzzerTests.remedySeamProvidingWrapperUndeclaredReason)") {
-			#expect(runs.map(\.errorsAtSite) == [[]])
-		}
+		#expect(runs.map(\.errorsAtSite) == [[]])
 	}
 
 	// MARK: Seam fills
