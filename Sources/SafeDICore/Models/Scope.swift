@@ -615,7 +615,8 @@ extension ScopeRecord {
 	/// - Parameter memo: The generators already finished, which a later place of the same key whose context answers their
 	///   reads alike reuses, and where this pass stores the generators it finishes (see `ConstructionMemo`).
 	/// - Parameter scopesBuiltAtOnePlace: The scopes the tree builds at one place only, whose places are not keyed, looked up
-	///   or stored, or `nil` where every place is: where the memo carries generators to other trees. Otherwise no other place of the pass has its key, so a lookup can only miss,
+	///   or stored, or `nil` where every place is keyed: where the memo carries generators to other trees, where the sharing
+	///   oracle's build offers each place what a later place built, and where the memo is off, which keys nothing. Otherwise no other place of the pass has its key, so a lookup can only miss,
 	///   and its entry could serve only the pass after (`ConstructionMemo.settledReuse`), which builds the place again
 	///   instead, reusing what the pass before stored of the places beneath it.
 	private func createScopeGenerator(

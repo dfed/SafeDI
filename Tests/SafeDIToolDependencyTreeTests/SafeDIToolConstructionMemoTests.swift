@@ -206,6 +206,23 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysEveryPlaceInMemo_whenSharingScheduleOffersLaterPlacesCandidates() async throws {
+		// The tree of `generate_keysNoPlaceInMemo_whenTreeBuildsEachTypeAtOnePlace`, whose places a discarded build of the
+		// same pass stores first, so a place at one place can reuse what that build stored: every place is keyed.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let a: A", "@Instantiated let c: C"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let b: B"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "C", isFinalClass: true, declarations: []),
+		]
+		let keyedTypes = try await ConstructionSharingSchedule.$current.withValue(ConstructionSharingSchedule(seed: nil, offersLaterPlacesCandidates: true)) {
+			try await typesKeyedInMemo(of: fixture)
+		}
+		#expect(keyedTypes == ["A", "B", "C"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_keysOnlyPlacesOfTypesBuiltAtSeveralPlaces_whenTwoParentsBuildOneType() async throws {
 		// `P` and `Q` each build `G`, which builds `H`: `G` and `H` are built at two places each, and `P` and `Q` at one.
 		let keyedTypes = try await typesKeyedInMemo(of: [
