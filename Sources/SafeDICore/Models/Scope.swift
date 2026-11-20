@@ -1273,7 +1273,7 @@ private struct ScopeGeneratorUnderConstruction {
 			fillNearestDeclarations.replace(property, providing: CycleParameter.forms(providedBy: property))
 			if let instanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding {
 				// A wrapper the fill takes optionally offers its instance only as an optional, which a receive reads through the
-				// optional (`Set<Property>.lazilyInstantiatedInstanceRead(of:)`).
+				// optional (`Set<Property>.lazilyInstantiatedInstanceSource(of:boundAs:)`).
 				fieldInstanceProperties.insert(fill.optionalLazilyInstantiatedLabels.contains(property.label) ? instanceProperty.asOptionalProperty : instanceProperty)
 			}
 			// A field bound as its memo is read as the memo's instance wherever the tree reads its label, as the seam's own tree
@@ -1506,12 +1506,12 @@ private struct ScopeGeneratorUnderConstruction {
 					reads.unavailableProperties.insert(form)
 				}
 			}
-			reads.argumentByLabel[label] = callerArgument(reading: parameter.property, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties)
+			reads.argumentByLabel[label] = callerArgument(reading: parameter.property, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties).spelled
 		}
 		reads.mockRootBindingByLabel = fill.mockRootBindingByLabel
 		for field in fill.fields where fill.labelsHandedAsMemo.contains(field.property.label) && field.bindsMemo && field.deferral == .deferred(isSendable: true) {
 			let memo = field.memoProperty
-			reads.memoArgumentByMemo[memo] = callerArgument(reading: memo, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties)
+			reads.memoArgumentByMemo[memo] = callerArgument(reading: memo, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties).spelled
 		}
 		return reads
 	}
@@ -1535,21 +1535,21 @@ private struct ScopeGeneratorUnderConstruction {
 	/// scope does not declare, where it declares the instance – a route of a seam's tree binds the wrapper and the caller
 	/// the value – is a wrapper the call makes of the caller's value, so the fill reads the instance where its tree reads
 	/// it on every route, as inline does; an optional one maps an optional value the scope declares.
-	private static func callerArgument(reading property: Property, of nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>) -> String {
+	private static func callerArgument(reading property: Property, of nearestDeclarations: NearestDeclarations, lazilyInstantiatedInstanceProperties: Set<Property>) -> ArgumentSource {
 		guard let binding = nearestDeclarations.binding(of: property) else {
 			guard let instanceProperty = property.asLazilyInstantiatedInstanceProperty,
 			      let instanceBinding = nearestDeclarations.binding(of: instanceProperty)
-			else { return "nil" }
-			let wrapperType = property.typeDescription.unwrapped.asSource
+			else { return .nil }
+			let wrapperType = property.typeDescription.unwrapped
 			let instance = callerArgument(reading: instanceProperty, of: nearestDeclarations, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties)
 			return instanceBinding.typeDescription.isOptional
-				? "\(instance).map { value in \(wrapperType)({ value }) }"
-				: "\(wrapperType)({ \(instance) })"
+				? .optionalWrapper(of: instance, wrapperType: wrapperType)
+				: .wrapper(of: instance, wrapperType: wrapperType)
 		}
 		return !property.propertyType.isLazilyInstantiated
 			&& (binding.propertyType.isLazilyInstantiated || lazilyInstantiatedInstanceProperties.contains(property.asUnwrappedProperty))
-			? "\(property.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
-			: property.label
+			? .lazyInstance(label: property.label, throughOptional: false)
+			: .binding(label: property.label)
 	}
 
 	/// The field a public mock caller's fill of a case nested by type takes for one label, given `fields`, the case's places'
@@ -1592,11 +1592,12 @@ private struct ScopeGeneratorUnderConstruction {
 	/// (`CallersOwnLabels.mockRootBindingByLabel`).
 	///
 	/// Any other label keeps its field, which the levels on each route hand the fill. A level of the called mock that
-	/// declares the label again hands its own value, which inline reads there. Where no level on a route binds a form that
-	/// provides the one the fill reads, the route passes the place up, and the calling mock names a builder it does not
-	/// declare: a level that holds only the called mock's by-value copy cannot hand a fill that reads the caller's
-	/// `LazilyInstantiated`. That is a known defect (`public-mock-builders.md`, "The caller's own value") on a route to one
-	/// place of a case whose other place a level that declares the label again hides the copy from.
+	/// declares the label again hands its own value, which inline reads there. A level that holds only the called mock's
+	/// by-value copy cannot hand a fill that reads the caller's `LazilyInstantiated`, so where a level that declares the
+	/// label again hides the copy from one place of a case and the copy reaches another, the fills of that hole type read
+	/// different wrappers, and `DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)` passes it up
+	/// whole before any fill is generated (`SafeDIToolCallingMockMirrorsProductionTests`'
+	/// `whenPlacesOfOneHoleTypeReadDifferentLazyValuesBesideTheirFields`).
 	private static func callersOwnLabels(
 		amongLabelsOf fields: [SeamSignature.Hole.Field],
 		carrying carriedLabels: Set<String>,
@@ -1655,9 +1656,12 @@ private struct ScopeGeneratorUnderConstruction {
 				callersOwnLabels.mockRootBindingByLabel[label] = binding
 			} else if formsRead.allSatisfy({ callerDeclaration.bindings[$0]?.label == label }) {
 				// The forms being built where the call is (`NearestDeclaration.formsBeingBuilt`) need no check: a fill that reads
-				// one, such as an `Instantiator` whose tree makes the call, is rejected for a calling mock as a dependency cycle
-				// (`dependencyReceivedInSameChainItIsInstantiated`). That is a known defect, since production and the inline mock
-				// accept it, and closing it decides how this fill reads an instantiator being built.
+				// one, such as an `Instantiator` whose tree makes the call, reads a label the called type receives, which its
+				// mock builds itself after the place for a caller that passes `nil`, so the fill is rejected for a calling mock:
+				// the place's payload does not carry the label (`requiresOtherCarrier`), and inside a `@Sendable` function the
+				// mock's own declaration outside it is not handed in (`boundOutsideSendableFunction`). That is a known gate,
+				// since production and the inline mock accept it, and lifting it decides how this fill reads an instantiator
+				// being built.
 				callersOwnLabels.labels.insert(label)
 			}
 		}
@@ -1791,7 +1795,7 @@ private struct ScopeGeneratorUnderConstruction {
 	/// the levels between the two calls bind is the one inline reads there, which the enclosing call's caller does not see.
 	private func enclosingLevelReentryArguments(ofDispatcherKeyed key: String) -> [String] {
 		(enclosingLevelReentries[key]?.parameters ?? []).map { property in
-			"\(property.label.spelledAsArgumentLabel): \(Self.callerArgument(reading: property, of: childNearestDeclarations, lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties))"
+			CallArgument(label: property.label, source: Self.callerArgument(reading: property, of: childNearestDeclarations, lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties)).spelled
 		}
 	}
 
