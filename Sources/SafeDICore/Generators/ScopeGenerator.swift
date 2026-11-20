@@ -2853,8 +2853,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// The root of what is generated is inside no fill an internal mock declares.
 			fillPlaceBindings: .none,
 		)
-		// The tree's code is spelled once, here: each level holds its children's code rather than a copy of its text.
-		return code.spelled()
+		// The tree's code is spelled once, here: each level holds its children's code rather than a copy of its text, and
+		// the root's larger levels are spelled at their final indentation in parallel.
+		return await code.spelledAsRoot()
 	}
 
 	/// - Parameters:
