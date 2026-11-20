@@ -1636,7 +1636,8 @@ extension DependencyTreeGenerator {
 		// A seam's two forms of a label are one finding however many of its fills read the label (`SeamTreeReceives`): each fill
 		// records it with no receivers, which `record` merges into one, completed once every fill is walked.
 		var seamTreeReceives = SeamTreeReceives()
-		for root in generators {
+		// A tree that holds no call of another module's seam or public mock, and no fill, has nothing to judge.
+		for root in generators where root.treeHoldsCallOrFill {
 			// Each generator with what the calls inside every fill of its seam call hide from it, when it is such a fill, the
 			// children of its parent, which are the fills of that call, and what the calls inside the fills of public mock calls
 			// enclosing it hide from the fills of public mock calls nested in those fills (`inheritedCalledCopyDeclarations`).
@@ -1681,7 +1682,7 @@ extension DependencyTreeGenerator {
 				for label in declaredLabels {
 					childInheritedCalledCopyDeclarations[label] = nil
 				}
-				generatorsToVisit.append(contentsOf: generator.children.reversed().map { child in
+				generatorsToVisit.append(contentsOf: generator.children.reversed().filter(\.treeHoldsCallOrFill).map { child in
 					var childHidden = child.fillKey.flatMap { hiddenByFillKey[$0] }
 					if generator.publicMockCall != nil, child.fillHole != nil, !childInheritedCalledCopyDeclarations.isEmpty {
 						var merged = childHidden ?? FillReentryHidings()

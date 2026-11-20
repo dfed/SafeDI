@@ -106,3 +106,18 @@ extension Collection<String> {
 		filter { !$0.isEmpty }
 	}
 }
+
+extension Array {
+	/// Reverses, in place, the elements from `index` to the end. A walk with an explicit stack pushes a scope's children and
+	/// reverses them so that the first is walked next; reversing the slice instead (`self[index...].reverse()`) copies the
+	/// whole array through the slice's setter whenever it runs.
+	mutating func reverseElements(from index: Int) {
+		var low = index
+		var high = endIndex - 1
+		while low < high {
+			swapAt(low, high)
+			low += 1
+			high -= 1
+		}
+	}
+}

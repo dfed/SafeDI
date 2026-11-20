@@ -209,6 +209,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		passesUpBuilder = !passedUpHoles.isEmpty || propertiesToGenerate.contains(where: \.passesUpBuilder)
 		holdsCallReenteringEnclosingFill = holeCallArguments.contains { $0.enclosingFillKey != nil } || propertiesToGenerate.contains(where: \.holdsCallReenteringEnclosingFill)
+		treeHoldsCallOrFill = seamCall != nil || publicMockCall != nil || fill != nil || propertiesToGenerate.contains(where: \.treeHoldsCallOrFill)
 		typesDeclaredEscaping = Self.typesDeclaredEscaping(
 			instantiable: instantiable,
 			publicMockCall: publicMockCall,
@@ -1230,6 +1231,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fieldsCarriedBySites = []
 		passesUpBuilder = false
 		holdsCallReenteringEnclosingFill = false
+		treeHoldsCallOrFill = false
 		fillKey = nil
 		closedOnFillPathDeclarationsBeneath = nil
 		fillStructBoundLabels = []
@@ -1338,6 +1340,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fieldsCarriedBySites = Set((site.map(Self.fieldsCarried(by:)) ?? []).map(\.property))
 		passesUpBuilder = false
 		holdsCallReenteringEnclosingFill = false
+		treeHoldsCallOrFill = false
 		fillKey = nil
 		fillStructBoundLabels = []
 		fillBindsDeferredFieldsFromStruct = false
@@ -4505,6 +4508,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	nonisolated var memberCallsInsideBuilderFunction: [MockParameterNode.ValuesBinding] {
 		memberCallsInsideFunction.map { MockParameterNode.ValuesBinding(binding: $0, lazilyInstantiatedInstanceProperties: callSiteLazilyInstantiatedInstanceProperties) }
 	}
+
+	/// Whether this scope, or a scope of its generated subtree, calls another module's seam or public mock or is a fill: only
+	/// such a tree has anything `DependencyTreeGenerator.validateFills(inTreesRootedAt:callerModule:compilesGeneratedMocks:)`
+	/// judges, so its walk skips every other subtree. Set once, bottom-up, by the initializer that builds a scope's generator
+	/// (from `seamCall`, `publicMockCall`, `fill` and the children's flags), and `false` for an alias's or a hole's generator,
+	/// which holds neither; `validateFills` is its only reader.
+	let treeHoldsCallOrFill: Bool
 
 	/// Whether this scope's generated subtree holds a site of a hole of the seam whose tree is generated, on this scope's
 	/// path. A child starts after its siblings that hold no place by `startsAsCarrier(_:)`, which reads this only where

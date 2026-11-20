@@ -3271,11 +3271,58 @@ public actor DependencyTreeGenerator {
 			let declaringType: TypeDescription
 			/// Whether `declaringType` is forwarded `property`, which the tree is then handed rather than builds.
 			let isForwarded: Bool
+			/// The declaration of the label this one replaced as the closest on its path, from which `enclosingDeclarations` is
+			/// found. A walk enters a declaration at every scope of every path, and only an error reads what it hides, so the
+			/// declarations are kept as a chain of links rather than copied into an array each time.
+			private let replacedDeclaration: ReplacedDeclaration?
+
+			init(
+				property: Property,
+				lazilyInstantiatedInstanceProperty: Property?,
+				declarationLocation: Dependency.DeclarationLocation?,
+				declaringType: TypeDescription,
+				isForwarded: Bool,
+				replacing replacedDeclaration: LabelDeclaration?,
+			) {
+				self.property = property
+				self.lazilyInstantiatedInstanceProperty = lazilyInstantiatedInstanceProperty
+				self.declarationLocation = declarationLocation
+				self.declaringType = declaringType
+				self.isForwarded = isForwarded
+				self.replacedDeclaration = replacedDeclaration.map(ReplacedDeclaration.init)
+			}
+
 			/// The declarations of the label that the scopes `declaringType` is built inside make on this path, which this one
-			/// hides, closest first. What a hidden receive's error names beside this declaration; no part of which declaration
-			/// this is, so `==` and `hash(into:)` leave it out, and the walk's memo of trees built again and the matching of a
-			/// seam's chain with a root's compare the closest declaration alone.
-			var enclosingDeclarations: [LabelDeclaration]
+			/// hides, closest first: the declaration it replaced, then those that one hides, without any equal to this one, since
+			/// a type a cycle builds again beneath itself declares the label again, one declaration named once. What a hidden
+			/// receive's error names beside this declaration; no part of which declaration this is, so `==` and `hash(into:)`
+			/// leave it out, and the walk's memo of trees built again and the matching of a seam's chain with a root's compare
+			/// the closest declaration alone.
+			var enclosingDeclarations: [LabelDeclaration] {
+				// The chain of replaced declarations, nearest first. Each declaration's own list is its replaced declaration
+				// followed by that one's list, without those equal to it, found from the far end of the chain inward.
+				var chain = [LabelDeclaration]()
+				var next = replacedDeclaration?.declaration
+				while let declaration = next {
+					chain.append(declaration)
+					next = declaration.replacedDeclaration?.declaration
+				}
+				var enclosingDeclarations = [LabelDeclaration]()
+				for index in chain.indices.reversed() {
+					let owner = index == 0 ? self : chain[index - 1]
+					enclosingDeclarations = ([chain[index]] + enclosingDeclarations).filter { $0 != owner }
+				}
+				return enclosingDeclarations
+			}
+
+			/// A link to the declaration a `LabelDeclaration` replaced.
+			private final class ReplacedDeclaration: Sendable {
+				init(_ declaration: LabelDeclaration) {
+					self.declaration = declaration
+				}
+
+				let declaration: LabelDeclaration
+			}
 
 			/// Whether a receive that resolves to any of `acceptedProperties` resolves to this declaration: the declaration is
 			/// one of them, or a lazily instantiated declaration whose instance is.
@@ -5826,7 +5873,7 @@ public actor DependencyTreeGenerator {
 					fillsBindingLabels: childFillsBindingLabels,
 				))
 			}
-			generatorsToVisit[firstChildIndex...].reverse()
+			generatorsToVisit.reverseElements(from: firstChildIndex)
 		}
 		return (receivers, parameterReads)
 	}
@@ -7245,7 +7292,7 @@ public actor DependencyTreeGenerator {
 						))
 					}
 					// The scope walked next is the last one on the stack, so the first child goes last.
-					scopesToWalk[firstChildIndex...].reverse()
+					scopesToWalk.reverseElements(from: firstChildIndex)
 				}
 			}
 		}
@@ -7501,7 +7548,7 @@ public actor DependencyTreeGenerator {
 				))
 			}
 			// The scope walked next is the last one on the stack, so the first child goes last.
-			scopesToWalk[firstChildIndex...].reverse()
+			scopesToWalk.reverseElements(from: firstChildIndex)
 		}
 		if !receivesPassedNil.labelsPinnedFromAbove.isEmpty {
 			// The mocked type's own receives are above its own children, not above the children it promotes, whose trees
@@ -7659,7 +7706,7 @@ public actor DependencyTreeGenerator {
 					scopesToWalk.append(childScope)
 				}
 				// The scope walked next is the last one on the stack, so the first child goes last.
-				scopesToWalk[firstChildIndex...].reverse()
+				scopesToWalk.reverseElements(from: firstChildIndex)
 				if scope.publicMockCall != nil {
 					for case let .fill(_, fillScope) in scope.holeArguments {
 						fillScopes.append(fillScope)
@@ -7702,7 +7749,15 @@ public actor DependencyTreeGenerator {
 				let propertyForDependency = declaredPropertyForDependency.asValidatedForDependencyCycles
 				// An `onlyIfAvailable` dependency is passed `nil` instead (`Dependency.canCloseDependencyCycle`), and an
 				// `onlyIfAvailable` alias is bound to `nil`, which a receive of it reads.
-				guard dependency.canCloseDependencyCycle else { continue }
+				guard dependency.canCloseDependencyCycle,
+				      // Every form a stack entry can match has the property's label, and nearly every dependency's label is on no
+				      // entry, so the forms are made only for one whose label is.
+				      propertyStack.contains(where: { $0.label == propertyForDependency.label })
+				else { continue }
+				let closingReceive = Self.closingReceive(of: dependency, in: scope)
+				// `throwIfInvalidCycle` throws for an instantiation only when every property on the cycle, its own included, is
+				// constant, so an instantiation of an instantiator closes no cycle it could report.
+				guard closingReceive != nil || propertyForDependency.propertyType.isConstant else { continue }
 				// A mock promotes a received optional property as the non-optional value it builds, so a receive of the
 				// non-optional form inside the tree it builds reaches it too.
 				let receivedForms: [Property] = if dependency.isInstantiated {
@@ -7710,7 +7765,6 @@ public actor DependencyTreeGenerator {
 				} else {
 					[propertyForDependency, Property(label: propertyForDependency.label, typeDescription: .optional(propertyForDependency.typeDescription))]
 				}
-				let closingReceive = Self.closingReceive(of: dependency, in: scope)
 				guard let cycleIndex = Self.indexOfEntryClosedOn(
 					by: declaredPropertyForDependency,
 					of: scope,
@@ -7738,8 +7792,24 @@ public actor DependencyTreeGenerator {
 				)
 			}
 
-			// Walk the children next. They see what this scope declares as the nearest declaration of its labels: what it
-			// creates, and at the mock root the dependencies it promotes.
+			// Walk the children next.
+			var childrenToWalk = [(declaredProperty: Property, property: Property, scope: Scope)]()
+			for childPropertyToGenerate in scope.propertiesToGenerate {
+				switch childPropertyToGenerate {
+				case let .instantiated(declaredChildProperty, childScope, _):
+					let childProperty = declaredChildProperty.asValidatedForDependencyCycles
+					let childConcreteType = childScope.instantiable.concreteInstantiable
+					guard !propertyStack.indices.contains(where: { propertyStack[$0] == childProperty && scopeToWalk.concreteTypeStack[$0] == childConcreteType }) else { continue }
+					childrenToWalk.append((declaredChildProperty, childProperty, childScope))
+				case .aliased, .hole:
+					// A hole's tree is a fill's, which a mock never builds: a mock's scopes hold no hole.
+					break
+				}
+			}
+			// Most scopes build no child, so what they declare is gathered only for one that does.
+			guard !childrenToWalk.isEmpty else { continue }
+			// The children see what this scope declares as the nearest declaration of its labels: what it creates, and at the
+			// mock root the dependencies it promotes.
 			var childNearestDeclarationByLabel = scopeToWalk.nearestDeclarationByLabel
 			var labelsDeclaredHere = Set<String>()
 			func declare(_ property: Property) {
@@ -7756,26 +7826,17 @@ public actor DependencyTreeGenerator {
 				declare(propertyToGenerate.property)
 			}
 			let firstChildIndex = scopesToWalk.endIndex
-			for childPropertyToGenerate in scope.propertiesToGenerate {
-				switch childPropertyToGenerate {
-				case let .instantiated(declaredChildProperty, childScope, _):
-					let childProperty = declaredChildProperty.asValidatedForDependencyCycles
-					let childConcreteType = childScope.instantiable.concreteInstantiable
-					guard !propertyStack.indices.contains(where: { propertyStack[$0] == childProperty && scopeToWalk.concreteTypeStack[$0] == childConcreteType }) else { continue }
-					scopesToWalk.append(ScopeToWalkForCycles(
-						scope: childScope,
-						propertyStack: [childProperty] + propertyStack,
-						concreteTypeStack: [childConcreteType] + scopeToWalk.concreteTypeStack,
-						lazilyInstantiatedDeclarations: scopeToWalk.lazilyInstantiatedDeclarations.recordingLazilyInstantiated(declaredChildProperty),
-						nearestDeclarationByLabel: childNearestDeclarationByLabel,
-					))
-				case .aliased, .hole:
-					// A hole's tree is a fill's, which a mock never builds: a mock's scopes hold no hole.
-					break
-				}
+			for child in childrenToWalk {
+				scopesToWalk.append(ScopeToWalkForCycles(
+					scope: child.scope,
+					propertyStack: [child.property] + propertyStack,
+					concreteTypeStack: [child.scope.instantiable.concreteInstantiable] + scopeToWalk.concreteTypeStack,
+					lazilyInstantiatedDeclarations: scopeToWalk.lazilyInstantiatedDeclarations.recordingLazilyInstantiated(child.declaredProperty),
+					nearestDeclarationByLabel: childNearestDeclarationByLabel,
+				))
 			}
 			// The scope walked next is the last one on the stack, so the first child goes last.
-			scopesToWalk[firstChildIndex...].reverse()
+			scopesToWalk.reverseElements(from: firstChildIndex)
 		}
 	}
 
@@ -8105,7 +8166,7 @@ public actor DependencyTreeGenerator {
 							scopesToValidate.append((scope: childScope, parentIndex: walkedScopeIndex))
 						}
 						// The scope validated next is the last one on the stack, so the first child goes last.
-						scopesToValidate[firstChildIndex...].reverse()
+						scopesToValidate.reverseElements(from: firstChildIndex)
 					}
 				}
 			} catch let error as DependencyTreeGeneratorError {
@@ -8136,6 +8197,8 @@ public actor DependencyTreeGenerator {
 	private static func renamesContradictingOwnProperties(
 		in scope: Scope,
 	) -> [DependencyTreeGeneratorError.RenameContradictingOwnProperty] {
+		// Most types rename nothing, and every walk of every tree asks of each of its scopes.
+		guard scope.instantiable.dependencies.contains(where: { $0.source.fulfillingProperty != nil }) else { return [] }
 		var ownDependencyByLabel = [String: Dependency]()
 		for dependency in scope.instantiable.dependencies {
 			switch dependency.source {
@@ -8259,7 +8322,7 @@ public actor DependencyTreeGenerator {
 				for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
 					scopesToSearch.append((childScope, searchedProperty, requiredOnlyIfAvailableAliases))
 				}
-				scopesToSearch[firstChildIndex...].reverse()
+				scopesToSearch.reverseElements(from: firstChildIndex)
 			}
 		}
 		return receiver
@@ -8389,7 +8452,7 @@ public actor DependencyTreeGenerator {
 		declarationLocation: Dependency.DeclarationLocation?,
 		directParent: TypeDescription,
 		closingReceive: CycleClosingReceive?,
-		lazilyInstantiatedProperties: [Property],
+		lazilyInstantiatedProperties: @autoclosure () -> [Property],
 	) throws {
 		// A receive of an instantiator that is still being built reads a wrapper the instantiator's builder function makes
 		// again of that function (see `ScopeGenerator.ReceivedBuilderLoops`): a loop through that instantiator alone, which
@@ -8405,7 +8468,7 @@ public actor DependencyTreeGenerator {
 				declarationLocation: declarationLocation,
 				directParent: directParent,
 				closingReceive: closingReceive,
-				lazilyInstantiatedProperties: lazilyInstantiatedProperties,
+				lazilyInstantiatedProperties: lazilyInstantiatedProperties(),
 			)
 		}
 	}
@@ -10276,8 +10339,15 @@ public actor DependencyTreeGenerator {
 		let closestDeclarationByLabel: [String: DependencyTreeGeneratorError.LabelDeclaration]
 		/// See `ScopeToValidate.closestDeclarationDepthByLabel`.
 		let closestDeclarationDepthByLabel: [String: Int]
-		/// The properties the scopes the cycle-closing scope is built inside make available to it.
-		let receivableProperties: Set<Property>
+		/// The properties the scopes the cycle-closing scope is built inside make available to the scopes they build.
+		let enclosingReceivableProperties: Set<Property>
+		/// The properties the cycle-closing scope's own property makes receivable, which its tree is not given.
+		let receivablePropertiesOfClosingProperty: [Property]
+		/// The properties the scopes the cycle-closing scope is built inside make available to it, as the tree of any child
+		/// is given them, without the property it builds. Computed only where the tree built again is walked, which is rare.
+		var receivableProperties: Set<Property> {
+			enclosingReceivableProperties.subtracting(receivablePropertiesOfClosingProperty)
+		}
 		/// See `ScopeToValidate.receivableDepthByProperty`.
 		let receivableDepthByProperty: [Property: Int]
 	}
@@ -10669,11 +10739,22 @@ public actor DependencyTreeGenerator {
 		/// `labelsNoJudgementFiresFor()`.
 		func treeReadsAnything(ofTreeRootedAt scope: Scope, newLabels: some Collection<String>, newReceivableProperties: Set<Property>) -> Bool {
 			guard !newLabels.isEmpty || !newReceivableProperties.isEmpty else { return false }
-			let readLabels = labelsRead(inTreeOf: scope)
-			func canBeJudged(_ label: String) -> Bool {
-				readLabels.contains(label) && !labelsNoJudgementFiresFor().contains(label)
+			let judgedLabels = labelsJudged(inTreeOf: scope)
+			return newLabels.contains(where: judgedLabels.contains) || newReceivableProperties.contains { judgedLabels.contains($0.label) }
+		}
+		/// See `labelsJudged(inTreeOf:)`.
+		var labelsJudgedByTreeRoot = [Scope: Set<String>]()
+		/// The labels the tree `scope` builds reads (`labelsRead(inTreeOf:)`) that a judgement of `validateTreeBuiltAgainByCycle`
+		/// can fire for (not among `labelsNoJudgementFiresFor()`): a tree built again is walked only where one of them is new.
+		func labelsJudged(inTreeOf scope: Scope) -> Set<String> {
+			if let labels = labelsJudgedByTreeRoot[scope] {
+				return labels
+			} else {
+				let readLabels = labelsRead(inTreeOf: scope)
+				let labels = readLabels.isEmpty ? readLabels : readLabels.subtracting(labelsNoJudgementFiresFor())
+				labelsJudgedByTreeRoot[scope] = labels
+				return labels
 			}
-			return newLabels.contains(where: canBeJudged) || newReceivableProperties.contains { canBeJudged($0.label) }
 		}
 		/// See `labelsNoJudgementFiresFor()`.
 		var memoizedLabelsNoJudgementFiresFor: Set<String>?
@@ -10828,24 +10909,26 @@ public actor DependencyTreeGenerator {
 			// `ScopeGenerator.mockRootParameterNames(of:)`).
 			for dependency in scope.instantiable.dependencies where !(scope.publicMockCall?.passesUpBuilder(receivedAs: dependency.property) ?? false) {
 				let receivedProperty: Property
-				let acceptedProperties: Set<Property>
+				let isOnlyIfAvailableAlias: Bool
 				switch dependency.source {
 				case .received:
 					receivedProperty = dependency.property
-					// A receive of an optional property, required or `onlyIfAvailable`, resolves to its non-optional
-					// form too.
-					acceptedProperties = [receivedProperty, receivedProperty.asUnwrappedProperty]
+					isOnlyIfAvailableAlias = false
 				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
 					receivedProperty = fulfillingProperty
-					// An `onlyIfAvailable` alias reads the optional form of its fulfilling property too, as `nil` where it is.
-					acceptedProperties = onlyIfAvailable
-						? Set(fulfillingProperty.formsReadByOnlyIfAvailableReceive)
-						: [fulfillingProperty, fulfillingProperty.asUnwrappedProperty]
+					isOnlyIfAvailableAlias = onlyIfAvailable
 				case .instantiated, .forwarded:
 					continue
 				}
-				guard let closestDeclaration = closestDeclarationByLabel[receivedProperty.label],
-				      !closestDeclaration.fulfills(anyOf: acceptedProperties),
+				// Most receives have no declaration of their label in the tree, so the forms they accept are listed only for one
+				// that has.
+				guard let closestDeclaration = closestDeclarationByLabel[receivedProperty.label] else { continue }
+				// A receive of an optional property, required or `onlyIfAvailable`, resolves to its non-optional form too, and an
+				// `onlyIfAvailable` alias reads the optional form of its fulfilling property too, as `nil` where it is.
+				let acceptedProperties: Set<Property> = isOnlyIfAvailableAlias
+					? Set(receivedProperty.formsReadByOnlyIfAvailableReceive)
+					: [receivedProperty, receivedProperty.asUnwrappedProperty]
+				guard !closestDeclaration.fulfills(anyOf: acceptedProperties),
 				      // An alias of a property this scope declares refers to that declaration.
 				      acceptedProperties.isDisjoint(with: scope.createdProperties),
 				      // Production passes `nil` for an `onlyIfAvailable` dependency no ancestor provides. A mock
@@ -10887,19 +10970,14 @@ public actor DependencyTreeGenerator {
 			entering: (String) -> Void,
 		) {
 			for dependency in scope.instantiable.dependencies where scope.createdProperties.contains(dependency.property) {
-				var declaration = DependencyTreeGeneratorError.LabelDeclaration(
+				closestDeclarationByLabel[dependency.property.label] = DependencyTreeGeneratorError.LabelDeclaration(
 					property: dependency.property,
 					lazilyInstantiatedInstanceProperty: dependency.lazilyInstantiatedInstanceProperty,
 					declarationLocation: dependency.declarationLocation,
 					declaringType: scope.instantiable.concreteInstantiable,
 					isForwarded: dependency.isForwarded,
-					enclosingDeclarations: [],
+					replacing: closestDeclarationByLabel[dependency.property.label],
 				)
-				if let replacedDeclaration = closestDeclarationByLabel[dependency.property.label] {
-					// A type a cycle builds again beneath itself declares the label again, one declaration named once.
-					declaration.enclosingDeclarations = ([replacedDeclaration] + replacedDeclaration.enclosingDeclarations).filter { $0 != declaration }
-				}
-				closestDeclarationByLabel[dependency.property.label] = declaration
 				entering(dependency.property.label)
 			}
 		}
@@ -10999,7 +11077,7 @@ public actor DependencyTreeGenerator {
 			parentTypeStack: [TypeDescription],
 			closestDeclarationByLabel: [String: DependencyTreeGeneratorError.LabelDeclaration],
 			closestDeclarationDepthByLabel: [String: Int],
-			receivableProperties: Set<Property>,
+			receivableProperties: @autoclosure () -> Set<Property>,
 			receivableDepthByProperty: [Property: Int],
 			validatesCycles: Bool,
 			validatesHiddenProperties: Bool,
@@ -11007,6 +11085,15 @@ public actor DependencyTreeGenerator {
 		) throws {
 			// The scope the cycle closes on is built inside the scopes after it on the stack.
 			let closedOnDepth = propertyStack.count - closedOnIndex
+			// Nearly every tree built again reads no label a judgement can fire for that is new to it: a label a scope between
+			// declares, or the label of a property a scope between made receivable. The two guards below find that too, but
+			// only once they have gathered every declaration between.
+			let judgedLabels = labelsJudged(inTreeOf: scope)
+			guard judgedLabels.contains(where: { label in
+				closestDeclarationDepthByLabel[label].map { $0 > closedOnDepth } == true && label != property.label
+			}) || receivableDepthByProperty.contains(where: { $0.value > closedOnDepth && judgedLabels.contains($0.key.label) })
+			else { return }
+			let receivableProperties = receivableProperties()
 			// The declarations between that bind the function's parameters. The property the cycle closes on is no
 			// parameter: the cycle-closing scope's own declaration of its label is that property, which the tree built again
 			// is passed `nil` for, as its first build is.
@@ -11186,7 +11273,7 @@ public actor DependencyTreeGenerator {
 					}
 				}
 				// The scope walked next is the last one on the stack, so the first child goes last.
-				scopesToWalk[firstChildIndex...].reverse()
+				scopesToWalk.reverseElements(from: firstChildIndex)
 			}
 		}
 		/// Validates one scope of a tree, and adds the children to validate after it to `scopesToValidate`, the first
@@ -11485,7 +11572,12 @@ public actor DependencyTreeGenerator {
 			for dependency in scope.instantiable.dependencies where validatesCycles && dependency.canCloseDependencyCycle {
 				let declaredPropertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
 				let propertyForDependency = declaredPropertyForDependency.asValidatedForDependencyCycles
+				// A stack entry matches only a property of its label, and nearly every dependency's label is on no entry.
+				guard childPropertyStack.contains(where: { $0.label == propertyForDependency.label }) else { continue }
 				let closingReceive = Self.closingReceive(of: dependency, in: scope)
+				// `throwIfInvalidCycle` throws for an instantiation only when every property on the cycle, its own included, is
+				// constant, so an instantiation of an instantiator closes no cycle it could report.
+				guard closingReceive != nil || propertyForDependency.propertyType.isConstant else { continue }
 				guard let cycleIndex = Self.indexOfEntryClosedOn(
 					by: declaredPropertyForDependency,
 					of: scope,
@@ -11512,6 +11604,8 @@ public actor DependencyTreeGenerator {
 					),
 				)
 			}
+			// Most scopes build no child, so what the children would see is gathered only for one that builds one.
+			guard scope.propertiesToGenerate.contains(where: { $0.builtScope != nil }) else { return }
 			var childClosestDeclarationByLabel = closestDeclarationByLabel
 			var childClosestDeclarationDepthByLabel = scopeToValidate.closestDeclarationDepthByLabel
 			enterDeclarations(of: scope, into: &childClosestDeclarationByLabel) {
@@ -11524,17 +11618,13 @@ public actor DependencyTreeGenerator {
 			for (aliasProperty, alias) in declaredAliases {
 				childReceivableAliases[aliasProperty] = alias
 			}
-			// What the scopes this scope builds receive, found only for a scope that builds one, with the depth since which each
-			// has been receivable, which the validation of mocks never reads.
-			var childReceivableProperties = Set<Property>()
-			var childReceivableDepthByProperty = [Property: Int]()
-			if scope.propertiesToGenerate.contains(where: { $0.builtScope != nil }) {
-				childReceivableProperties = receivableProperties
-				childReceivableDepthByProperty = scopeToValidate.receivableDepthByProperty
-				insertProperties(madeAvailableBy: scope, given: receivableProperties, instantiationStack: instantiationStack, nearestDeclaration: nearestDeclaration, into: &childReceivableProperties) {
-					if !cyclesOnly {
-						childReceivableDepthByProperty[$0] = instantiationStack.count
-					}
+			// What the scopes this scope builds receive, with the depth since which each has been receivable, which the validation
+			// of mocks never reads.
+			var childReceivableProperties = receivableProperties
+			var childReceivableDepthByProperty = scopeToValidate.receivableDepthByProperty
+			insertProperties(madeAvailableBy: scope, given: receivableProperties, instantiationStack: instantiationStack, nearestDeclaration: nearestDeclaration, into: &childReceivableProperties) {
+				if !cyclesOnly {
+					childReceivableDepthByProperty[$0] = instantiationStack.count
 				}
 			}
 			let firstChildIndex = scopesToValidate.endIndex
@@ -11557,8 +11647,8 @@ public actor DependencyTreeGenerator {
 							parentTypeStack: childParentTypeStack,
 							closestDeclarationByLabel: childClosestDeclarationByLabel,
 							closestDeclarationDepthByLabel: childClosestDeclarationDepthByLabel,
-							// As the tree of any child is given them, without the property it builds.
-							receivableProperties: childReceivableProperties.subtracting(childPropertyToGenerate.receivableProperties),
+							enclosingReceivableProperties: childReceivableProperties,
+							receivablePropertiesOfClosingProperty: childPropertyToGenerate.receivableProperties,
 							receivableDepthByProperty: childReceivableDepthByProperty,
 						)))
 						continue
@@ -11591,7 +11681,7 @@ public actor DependencyTreeGenerator {
 				}
 			}
 			// The scope validated next is the last one on the stack, so the first child goes last.
-			scopesToValidate[firstChildIndex...].reverse()
+			scopesToValidate.reverseElements(from: firstChildIndex)
 		}
 
 		// Each tree reports the first error it throws, and the errors of every tree are reported, rather than the

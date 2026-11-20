@@ -2135,11 +2135,12 @@ extension Property {
 	/// - Parameter declaringModuleNames: The modules, beside `Swift` and the built type's, whose name it sees through as a
 	///   qualifier of either spelling, of a type no other module declares a type of the name of.
 	func firstGenericMatchesForwardedProperties(of builtInstantiable: Instantiable, declaringModuleNames: [String], declaredTypeNames: DeclaredTypeNames) -> Bool {
-		let forwardedProperties = builtInstantiable.forwardedProperties
+		// Most properties are no erased instantiator, so the built type's forwarded properties are listed only for one.
 		guard propertyType.isErasedInstantiator,
-		      !forwardedProperties.isEmpty,
 		      let forwardedArgument = generics?.first
 		else { return true }
+		let forwardedProperties = builtInstantiable.forwardedProperties
+		guard !forwardedProperties.isEmpty else { return true }
 		let modulesNames = ["Swift"] + (builtInstantiable.moduleName.map { [$0] } ?? [])
 		// The forwarded argument is the same as `InstantiableName.ForwardedProperties`, or names the `ForwardedProperties` of a
 		// type the fulfiller also fulfills: that type's conformance is trusted, as at an `Instantiator` of it. A mock does not
@@ -2162,11 +2163,12 @@ extension Property {
 	/// received property of either as a `mock()` parameter, as it did when SafeDI rejected a declaration of it. Building it would remove the parameter that callers of the mock pass,
 	/// and bring the built type's tree into the mock, whose cycles, hidden labels, and access no tree had to pass.
 	func mockBuildsFirstGeneric(of builtInstantiable: Instantiable) -> Bool {
-		let forwardedProperties = builtInstantiable.forwardedProperties
+		// Most properties are no erased instantiator, so the built type's forwarded properties are listed only for one.
 		guard propertyType.isErasedInstantiator,
-		      !forwardedProperties.isEmpty,
 		      let forwardedArgument = generics?.first
 		else { return true }
+		let forwardedProperties = builtInstantiable.forwardedProperties
+		guard !forwardedProperties.isEmpty else { return true }
 		return forwardedArgument == .nested(name: "ForwardedProperties", parentType: builtInstantiable.concreteInstantiable)
 			|| (forwardedProperties.count == 1 && forwardedArgument == forwardedProperties[0].typeDescription)
 			|| forwardedArgument == forwardedProperties.asTupleTypeDescriptionOfBareElements
