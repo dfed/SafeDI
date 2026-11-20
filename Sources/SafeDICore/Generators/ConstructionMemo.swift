@@ -425,11 +425,7 @@ struct ConstructionLog {
 	/// Adds `log`'s reads to this log's.
 	mutating func formUnion(_ log: Self) {
 		guard isRecording else { return }
-		if answersByRead.isEmpty {
-			answersByRead = log.answersByRead
-		} else {
-			answersByRead.merge(log.answersByRead) { existing, _ in existing }
-		}
+		answersByRead.merge(log.answersByRead) { existing, _ in existing }
 	}
 
 	/// These reads as `context` answers them, or `nil` when `context` answers one otherwise.
