@@ -1114,10 +1114,11 @@ extension ScopeGenerator {
 		return modulesByLabel
 	}
 
-	/// The tiers of a public mock: the `mock()` of each tier of `plan`, widest first, all carrying `attributesPrefix`.
-	/// The narrowest tier's body is `narrowestBody`; each wider tier calls the next narrower one, passing every
-	/// parameter it takes and `nil` for each it omits, so the call names a label only the narrower tier has. The `public`
-	/// tier is marked for `unreadTypeComment`, when there is one.
+	/// The tiers of a public mock: the `mock()` of each tier of `plan`, widest first, all carrying `attributesPrefix`, each
+	/// followed by the tier's `__safeDI_mock`, which `mock()` calls and which only generated code calls otherwise. The
+	/// narrowest tier's `__safeDI_mock` body is `narrowestBody`; each wider tier's calls the next narrower one's, passing
+	/// every parameter it takes and `nil` for each it omits, so the call names a label only the narrower tier has. The
+	/// `public` tier is marked for `unreadTypeComment`, when there is one.
 	static func publicMockTiers(
 		of plan: PublicMockPlan,
 		typeName: String,
@@ -1149,9 +1150,10 @@ extension ScopeGenerator {
 			}
 			lines.append(contentsOf: parameters.flatMap(\.sharedValueDocumentation).map { "\(indent)\($0)" })
 			let accessPrefix = "\(indent)\(attributesPrefix)\(tier == .internal ? "" : "\(tier.spelledOnGeneratedDeclaration) ")"
-			// A tier that takes a builder struct is a pair: `mock()` takes each such builder as a closure that takes nothing and
-			// calls the tier's function only generated code calls, which takes the struct and holds what `mock()` holds
-			// elsewhere.
+			// Every tier is a pair: `mock()`, which code people write calls, calls the tier's function only generated code calls,
+			// which builds the tree, or forwards to the next narrower tier's. Generated code calls only the latter, so no call
+			// SafeDI generates reaches a function meant for people. Where the tier takes a builder struct, `mock()` takes each
+			// such builder as a closure that takes nothing and wraps it in the struct.
 			let takesBuilderStruct = parameters.contains { $0.builder?.takesBuilderStruct == true }
 			/// The lines that declare the tier's function named `functionName`, each parameter spelled by `spelling`.
 			func appendSignature(functionName: String, spelling: (PublicMockParameter) -> String) {
@@ -1175,25 +1177,23 @@ extension ScopeGenerator {
 					"\(parameter.name.spelledAsArgumentLabel): \(parameter.typeSource)"
 				}
 			}
-			if takesBuilderStruct {
-				let arguments = parameters.map { parameter in
-					let value = if parameter.builder?.takesBuilderStruct == true {
-						".init(\(ReservedName.noScopeArgumentLabel): \(parameter.name))"
-					} else {
-						parameter.name
-					}
-					return "\(parameter.name.spelledAsArgumentLabel): \(value)"
+			let arguments = parameters.map { parameter in
+				let value = if parameter.builder?.takesBuilderStruct == true {
+					".init(\(ReservedName.noScopeArgumentLabel): \(parameter.name))"
+				} else {
+					parameter.name
 				}
-				lines.append("\(bodyIndent)\(typeName).\(ReservedName.publicMockFunctionName)(\(arguments.joined(separator: ", ")))")
-				lines.append("\(indent)}")
-				lines.append("")
-				lines.append("\(indent)/// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.")
-				appendSignature(functionName: ReservedName.publicMockFunctionName) { parameter in
-					if let builder = parameter.builder, builder.takesBuilderStruct {
-						"\(parameter.name.spelledAsArgumentLabel) \(builder.internalName): \(parameter.typeSource)"
-					} else {
-						"\(parameter.name.spelledAsArgumentLabel): \(parameter.typeSource)"
-					}
+				return "\(parameter.name.spelledAsArgumentLabel): \(value)"
+			}
+			lines.append("\(bodyIndent)\(typeName).\(ReservedName.publicMockFunctionName)(\(arguments.joined(separator: ", ")))")
+			lines.append("\(indent)}")
+			lines.append("")
+			lines.append("\(indent)/// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.")
+			appendSignature(functionName: ReservedName.publicMockFunctionName) { parameter in
+				if let builder = parameter.builder, builder.takesBuilderStruct {
+					"\(parameter.name.spelledAsArgumentLabel) \(builder.internalName): \(parameter.typeSource)"
+				} else {
+					"\(parameter.name.spelledAsArgumentLabel): \(parameter.typeSource)"
 				}
 			}
 			if index == plan.tiers.count - 1 {
@@ -1215,8 +1215,7 @@ extension ScopeGenerator {
 					}
 					return "\(parameter.name(inTier: narrowerTier).spelledAsArgumentLabel): \(value)"
 				}
-				let functionName = takesBuilderStruct ? ReservedName.publicMockFunctionName : InstantiableVisitor.mockMethodName
-				lines.append("\(bodyIndent)\(typeName).\(functionName)(\(arguments.joined(separator: ", ")))")
+				lines.append("\(bodyIndent)\(typeName).\(ReservedName.publicMockFunctionName)(\(arguments.joined(separator: ", ")))")
 			}
 			lines.append("\(indent)}")
 			if index < plan.tiers.count - 1 {
@@ -1690,10 +1689,10 @@ struct PublicMockCall: Sendable {
 		calledBuilders.builders
 	}
 
-	/// The function the call calls: the one only generated code calls where the mock takes a builder struct, which the call
-	/// passes, and `mock()` otherwise.
+	/// The function the call calls: the one only generated code calls, `__safeDI_mock`, which every tier of every public mock
+	/// declares beside its `mock()`. Generated code never calls a function meant for code people write in another module.
 	var functionName: String {
-		builders.contains(where: \.takesBuilderStruct) ? ReservedName.publicMockFunctionName : InstantiableVisitor.mockMethodName
+		ReservedName.publicMockFunctionName
 	}
 
 	/// The builders a caller that fills `filledHoles` passes up, as the leaf receives them: each whose routes reach a place

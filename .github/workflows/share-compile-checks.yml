@@ -29,6 +29,12 @@ name: Share Passed Compile Checks
 # artifact is data, of which it keeps only lines that are a SHA-256 in
 # hexadecimal. It can read artifacts and nothing else.
 #
+# The run's artifact also holds the value comparison outputs its tests printed,
+# which this workflow leaves out of the list: they would make it grow, and be
+# saved again by megabytes, on nearly every run, in the cache quota the build
+# caches need. Other runs read them from the artifact
+# (.github/actions/restore-shared-compile-checks).
+#
 # Two runs that finish together each add their checks to the list they
 # restored, and the later save is the one later runs restore, so the earlier
 # run's checks can be missing from it. They are still in that branch's own

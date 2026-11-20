@@ -63,6 +63,13 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			    public static func mock(
 			        session: LazilyInstantiated<Session>
 			    ) -> Screen {
+			        Screen.__safeDI_mock(session: session)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        session: LazilyInstantiated<Session>
+			    ) -> Screen {
 			        return Screen(session: session)
 			    }
 			}
@@ -88,6 +95,13 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			#if DEBUG
 			extension Screen {
 			    public static func mock(
+			        session: LazilyInstantiated<Session>
+			    ) -> Screen {
+			        Screen.__safeDI_mock(session: session)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        session: LazilyInstantiated<Session>
 			    ) -> Screen {
 			        return Screen(session: session)
@@ -145,13 +159,20 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Mid {
+			        Mid.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Mid {
 			        func __safeDI_session() -> Session {
 			            if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
 			        }
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        _ = Screen.__safeDI_Screen_mock_78D96D718AF06CB7.self\(pluginComment)
 			        func __safeDI_screenBuilder() -> Screen {
-			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.mock(session: session) }
+			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.__safeDI_mock(session: session) }
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 			        return Mid(screenBuilder: screenBuilder, session: session)
@@ -205,7 +226,7 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        _ = Screen.__safeDI_Screen_mock_78D96D718AF06CB7.self\(pluginComment)
 			        func __safeDI_screenBuilder() -> Screen {
-			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.mock(session: session) }
+			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.__safeDI_mock(session: session) }
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 			        return MidInternal(screenBuilder: screenBuilder, session: session)
@@ -258,13 +279,20 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Mid {
+			        Mid.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Mid {
 			        func __safeDI_session() -> Session {
 			            if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
 			        }
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        _ = Screen.__safeDI_Screen_mock_78D96D718AF06CB7.self\(pluginComment)
 			        func __safeDI_screenBuilder() -> Screen {
-			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.mock(session: session) }
+			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.__safeDI_mock(session: session) }
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 			        return Mid(screenBuilder: screenBuilder, session: session)
@@ -318,7 +346,7 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        _ = Screen.__safeDI_Screen_mock_78D96D718AF06CB7.self\(pluginComment)
 			        func __safeDI_screenBuilder() -> Screen {
-			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.mock(session: session) }
+			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.__safeDI_mock(session: session) }
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 			        return MidInternal(screenBuilder: screenBuilder, session: session)
@@ -376,6 +404,13 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			    public static func mock(
 			        session: SendableLazilyInstantiated<Session>
 			    ) -> Screen {
+			        Screen.__safeDI_mock(session: session)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        session: SendableLazilyInstantiated<Session>
+			    ) -> Screen {
 			        return Screen(session: session)
 			    }
 			}
@@ -431,6 +466,13 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Mid {
+			        Mid.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Mid {
 			        let __safeDI_session__safeDIBuilder = safeDIOverrides.session
 			        @Sendable func __safeDI_session() -> Session {
 			            if let safeDIBuilder = __safeDI_session__safeDIBuilder { safeDIBuilder() } else { Session.instantiate() }
@@ -438,7 +480,7 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			        let session = SendableLazilyInstantiated<Session>(__safeDI_session)
 			        _ = Screen.__safeDI_Screen_mock_236E2EB355F72669.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			        func __safeDI_screenBuilder() -> Screen {
-			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.mock(session: session) }
+			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.__safeDI_mock(session: session) }
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 			        return Mid(screenBuilder: screenBuilder, session: session)
@@ -493,7 +535,7 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			        let session = SendableLazilyInstantiated<Session>(__safeDI_session)
 			        _ = Screen.__safeDI_Screen_mock_236E2EB355F72669.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			        func __safeDI_screenBuilder() -> Screen {
-			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.mock(session: session) }
+			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.__safeDI_mock(session: session) }
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 			        return MidInternal(screenBuilder: screenBuilder, session: session)
@@ -523,6 +565,13 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			#if DEBUG
 			extension Screen {
 			    public static func mock(
+			        session: LazilyInstantiated<Session>? = nil
+			    ) -> Screen {
+			        Screen.__safeDI_mock(session: session)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        session: LazilyInstantiated<Session>? = nil
 			    ) -> Screen {
 			        return Screen(session: session)
@@ -580,13 +629,20 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Mid {
+			        Mid.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Mid {
 			        func __safeDI_session() -> Session {
 			            if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
 			        }
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        _ = Screen.__safeDI_Screen_mock_9291F57C4C5BFEAF.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			        func __safeDI_screenBuilder() -> Screen {
-			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.mock(session: session) }
+			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.__safeDI_mock(session: session) }
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 			        return Mid(screenBuilder: screenBuilder, session: session)
@@ -640,7 +696,7 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        _ = Screen.__safeDI_Screen_mock_9291F57C4C5BFEAF.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			        func __safeDI_screenBuilder() -> Screen {
-			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.mock(session: session) }
+			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.__safeDI_mock(session: session) }
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 			        return MidInternal(screenBuilder: screenBuilder, session: session)
@@ -697,6 +753,14 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        session: LazilyInstantiated<Session>,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        Screen.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        session: LazilyInstantiated<Session>,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
@@ -759,13 +823,20 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Mid {
+			        Mid.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Mid {
 			        func __safeDI_session() -> Session {
 			            if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
 			        }
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        _ = Screen.__safeDI_Screen_mock_1237EAC7E69790A2.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			        func __safeDI_screenBuilder() -> Screen {
-			            Screen.mock(session: session, safeDIOverrides: safeDIOverrides.screenBuilder)
+			            Screen.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides.screenBuilder)
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 			        return Mid(screenBuilder: screenBuilder, session: session)
@@ -819,7 +890,7 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        _ = Screen.__safeDI_Screen_mock_1237EAC7E69790A2.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			        func __safeDI_screenBuilder() -> Screen {
-			            Screen.mock(session: session, safeDIOverrides: safeDIOverrides.screenBuilder)
+			            Screen.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides.screenBuilder)
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 			        return MidInternal(screenBuilder: screenBuilder, session: session)
@@ -877,6 +948,14 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        session: LazilyInstantiated<Session>,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        Screen.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        session: LazilyInstantiated<Session>,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
@@ -939,13 +1018,20 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Mid {
+			        Mid.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Mid {
 			        func __safeDI_session() -> Session {
 			            if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
 			        }
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        _ = Screen.__safeDI_Screen_mock_1237EAC7E69790A2.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			        func __safeDI_screenBuilder() -> Screen {
-			            Screen.mock(session: session, safeDIOverrides: safeDIOverrides.screenBuilder)
+			            Screen.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides.screenBuilder)
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 			        return Mid(screenBuilder: screenBuilder, session: session)
@@ -999,7 +1085,7 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        _ = Screen.__safeDI_Screen_mock_1237EAC7E69790A2.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			        func __safeDI_screenBuilder() -> Screen {
-			            Screen.mock(session: session, safeDIOverrides: safeDIOverrides.screenBuilder)
+			            Screen.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides.screenBuilder)
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 			        return MidInternal(screenBuilder: screenBuilder, session: session)
@@ -1128,6 +1214,15 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        session: Int? = nil,
+			        session_Session: LazilyInstantiated<Session>,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        Screen.__safeDI_mock(session: session, session_Session: session_Session, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        session: Int? = nil,
 			        session_Session: LazilyInstantiated<Session>,
 			        safeDIOverrides: SafeDIOverrides = .init()
@@ -1433,6 +1528,14 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			        session: LazilyInstantiated<Session>? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
+			        Screen.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        session: LazilyInstantiated<Session>? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
 			        func __safeDI_session() -> Session {
 			            if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
 			        }
@@ -1523,10 +1626,25 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        Screen.mock(session: nil, safeDIOverrides: safeDIOverrides)
+			        Screen.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        Screen.__safeDI_mock(session: nil, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    package static func mock(
+			        session: LazilyInstantiated<Session>? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        Screen.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    package static func __safeDI_mock(
 			        session: LazilyInstantiated<Session>? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
@@ -1595,7 +1713,7 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        _ = Screen.__safeDI_Screen_mock_212FA9D99060603B.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			        func __safeDI_screenBuilder() -> Screen {
-			            Screen.mock(session: session, safeDIOverrides: safeDIOverrides.screenBuilder)
+			            Screen.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides.screenBuilder)
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 			        return MidInternal(screenBuilder: screenBuilder, session: session)
@@ -1692,7 +1810,7 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 			        let session = LazilyInstantiated<Session>(__safeDI_session)
 			        _ = Screen.__safeDI_Screen_mock_78D96D718AF06CB7.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			        func __safeDI_screenBuilder() -> Screen {
-			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.mock(session: session) }
+			            if let safeDIBuilder = safeDIOverrides.screenBuilder { safeDIBuilder(session) } else { Screen.__safeDI_mock(session: session) }
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 			        return Panel(screenBuilder: screenBuilder, session: session)
@@ -1741,6 +1859,13 @@ struct SafeDIToolPublicMockLazyWrapperTests: ~Copyable {
 		#if DEBUG
 		extension Consumer {
 		    public static func mock(
+		        session: LazilyInstantiated<Session>? = nil
+		    ) -> Consumer {
+		        Consumer.__safeDI_mock(session: session)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
 		        session: LazilyInstantiated<Session>? = nil
 		    ) -> Consumer {
 		        let session = session ?? (LazilyInstantiated<Session> { Session.preview() })

@@ -277,6 +277,13 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		    public static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Flow {
+		        Flow.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Flow {
 		        func __safeDI_t4Builder() -> T4 {
 		            let t4Builder = Instantiator<T4>(__safeDI_t4Builder)
 		            #sourceLocation(file: "\(fixtures["T4.swift"])", line: 8)
@@ -452,6 +459,13 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 		    }
 
 		    public static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Flow {
+		        Flow.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Flow {
 		        func __safeDI_t4Builder() -> T4 {

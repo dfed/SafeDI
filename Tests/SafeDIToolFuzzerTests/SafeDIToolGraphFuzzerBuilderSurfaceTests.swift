@@ -533,6 +533,17 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func sameSupplyEditRejectedFailure_reportsNothing_whenToolRejectsSendableFamilyForValueBoundOutsideSendableFunction() {
+		// Public mock corpus seed 2486's rejection: the fill reads `holeContext`, which `T6` declares outside the function that
+		// builds the place, so making the place's `Instantiator` a `SendableInstantiator` puts the place in a `@Sendable`
+		// function whose builder is handed only what that function binds. The tool rightly rejects it, and the twins pass.
+		let runs = Self.sendableTwinRuns(base: .rejected(diagnostics: "<fixture-directory>/other/Sources/FuzzOther/S2486_HoleFill.swift:7:33: error: `S2486_Hole` receives `holeContext: S2486_HoleContext`, which `S2486_T6` declares outside the `@Sendable` function that builds `holeBuilder: SendableInstantiator<S2486_Hole>`, and SafeDI hands the builder for `S2486_HoleHost`’s `holeBuilder: SendableInstantiator<S2486_Hole>` (`holeBuilder` of `s2486_HoleSendableBuilder`) only what that function binds. Instantiate `holeContext` outside `S2486_T6` and declare `@Received let holeContext: S2486_HoleContext` on `S2486_T6`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `S2486_Hole` in module `FuzzFeature` or a module it lists among its SafeDI dependencies.\n<fixture-directory>/shop/Sources/FuzzFeature/S2486_T6.swift:12:2: note: `S2486_T6` declares `holeContext: S2486_HoleContext` here."))
+		#expect(runs.sameSupplyEditRejectedFailure == nil)
+		#expect(runs.builderSurfaceJudgments.map(\.judgment) == [.init(isJudged: false, problems: [])])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func sameSupplyEditRejectedFailure_reportsRejection_whenToolRejectsSendableFamilyOtherwise() throws {
 		let runs = Self.sendableTwinRuns(base: .rejected(diagnostics: "<fixture-directory>/FuzzApp/S333_HoleFill.swift:7:33: error: Cycle"))
 		let failure = try #require(runs.sameSupplyEditRejectedFailure)
@@ -840,6 +851,7 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 		(.secondPlaceInInnerSeamOfAnotherModule, .generateDependencyTree, 135),
 		(.holderMovedToInnerSeamOfAnotherModule, .generateDependencyTree, 135),
 		(.placeOfNewBuilderInInnerSeamOfAnotherModule, .generateDependencyTree, 135),
+		(.placeOfHoleTypeNamedAfterSendableLabel, .generateDependencyTree, 59),
 		(.placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied, .generateDependencyTree, 135),
 		// Seed 59 holds `HoleHanded`, which forwards nothing, in an `Instantiator` on `HoleHandedHolder`.
 		(.instantiatorPlaceMovedToPlainPlace, .generateDependencyTree, 59),
@@ -886,6 +898,18 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 		// The tool rejects the public mock corpus's places of one builder that forward other values, as it rejects the seam
 		// corpus's: the judgment runs and finds nothing to report.
 		#expect(try await Self.forwardingOtherValuesJudgment(feature: .generateMockPublic, seed: 3) == .init(isJudged: true, problems: []))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addedSupplyJudgment_reportsNoProblem_whenHoleTypeNamedAfterExistingSendableLabelIsAdded() async throws {
+		// `HoleServiceSendable`'s plain builder label is `HoleService`'s `@Sendable` one: only the new type's builder is named
+		// apart, so `HoleService`'s builders keep their labels, types and order.
+		let seed: UInt64 = 59
+		let without = try await GraphFuzzerOracle.toolOutcome(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree]))
+		let fixture = try #require(GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree], builderSurfaceEdit: .placeOfHoleTypeNamedAfterSendableLabel))
+		let with = try await GraphFuzzerOracle.toolOutcome(of: fixture)
+		#expect(GraphFuzzerBuilderSurface.addedSupplyJudgment(without: without, with: with) == .init(isJudged: true, problems: []))
 	}
 
 	// MARK: Known issues

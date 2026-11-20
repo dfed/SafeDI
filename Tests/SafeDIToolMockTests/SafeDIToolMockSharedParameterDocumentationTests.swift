@@ -1724,13 +1724,30 @@ struct SafeDIToolMockSharedParameterDocumentationTests: ~Copyable {
 		        tags: [String],
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        Screen.mock(tags: tags, token: nil, safeDIOverrides: safeDIOverrides)
+		        Screen.__safeDI_mock(tags: tags, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        tags: [String],
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        Screen.__safeDI_mock(tags: tags, token: nil, safeDIOverrides: safeDIOverrides)
 		    }
 
 		    /// - Parameter tags: Passed to every type that creates this dependency:
 		    ///   `Zebra.tags` and `Apple.tags`. The app creates one for each.
 		    ///   To give each its own, declare a `mockOnly` fake.
 		    static func mock(
+		        tags: [String],
+		        token: Token? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        Screen.__safeDI_mock(tags: tags, token: token, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    static func __safeDI_mock(
 		        tags: [String],
 		        token: Token? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()

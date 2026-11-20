@@ -1450,6 +1450,13 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		    public static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
 		        let filter: any FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder() } else { AppFilter() }
 		        return Root(filter: filter)
 		    }
@@ -1494,6 +1501,13 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 				    public static func mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Root {
+				        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Root {
 				        let filter: any FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder() } else { AppFilter() }
 				        return Root(filter: filter)
 				    }
@@ -1534,6 +1548,13 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Root {
+				        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Root {
 				        let filter: any FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder() } else { AppFilter() }
