@@ -1490,8 +1490,8 @@ private struct ScopeGeneratorUnderConstruction {
 		}
 		reads.mockRootBindingByLabel = fill.mockRootBindingByLabel
 		for field in fill.fields where fill.labelsHandedAsMemo.contains(field.property.label) && field.bindsMemo && field.deferral == .deferred(isSendable: true) {
-			let memo = Property(label: field.property.label, typeDescription: field.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: []))
-			reads.memoArgumentByLabel[memo.label] = callerArgument(reading: memo, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties)
+			let memo = field.memoProperty
+			reads.memoArgumentByMemo[memo] = callerArgument(reading: memo, of: fill.callerNearestDeclarations, lazilyInstantiatedInstanceProperties: fill.callerLazilyInstantiatedInstanceProperties)
 		}
 		return reads
 	}
