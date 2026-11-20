@@ -107,7 +107,7 @@ def combine(reports, base_tool_result, unchanged):
     for title, entries in (("Graphs that differ (corpus, seed, flow, first difference)", differences), ("Graphs not judged", problems)):
         if entries:
             lines += ["", f"### {title}", ""]
-            lines += [f"- `{entry}`" for entry in entries[:LISTED_LIMIT]]
+            lines += [f"- `` {entry} ``" for entry in entries[:LISTED_LIMIT]]
             if len(entries) > LISTED_LIMIT:
                 lines.append(f"- … and {len(entries) - LISTED_LIMIT} more, in the shards' `{REPORT_NAME}`.")
     if failures:
