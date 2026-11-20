@@ -1925,6 +1925,11 @@ jobs:
       # run it accepts as one, and what makes a block say it is not ready.
       - name: Check the Pre-Review Script Against Its Fixtures
         run: python3 -I .claude/skills/pre-review/pre-review.py --self-test
+      # .claude/skills/ci-step-limits/step-limits.py says which step limits a
+      # larger suite has outgrown, so it proves on fixtures which steps it
+      # measures, how it matches a matrix job, and each verdict.
+      - name: Check the Step Limits Script Against Its Fixtures
+        run: python3 -I .claude/skills/ci-step-limits/step-limits.py --self-test
       # The check is the only thing between an unexecuted line and main, so
       # its script proves on fixtures that it unions the platforms, resolves
       # symbolic links and refuses missing data before it reads the reports.
