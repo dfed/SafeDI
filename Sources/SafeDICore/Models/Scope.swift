@@ -529,12 +529,12 @@ final class Scope: Hashable {
 					scope: fill.scope,
 				))
 			} else {
-				let createdScope = scopeGeneratorsUnderConstruction.removeLast()
+				var createdScope = scopeGeneratorsUnderConstruction.removeLast()
 				let scopeGenerator = createdScope.scopeGenerator(collectingGeneratorsToStartInto: &generatorsToStart)
 				if scopeGeneratorsUnderConstruction.isEmpty {
 					return scopeGenerator
 				} else {
-					scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].add(childGenerator: scopeGenerator, createdBy: createdScope)
+					scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].add(childGenerator: scopeGenerator, createdBy: &createdScope)
 				}
 			}
 		}
@@ -1141,6 +1141,10 @@ private struct ScopeGeneratorUnderConstruction {
 
 	/// The generators created so far for `propertiesToGenerate`, in order, followed by those of `fillsOfThisCall`.
 	private(set) var childGenerators = [ScopeGenerator]()
+	/// The `ScopeGenerator.CycleClosingRedeclaredLabels` of `childGenerators`, merged in their order, which this scope's
+	/// generator is created from; then, once `scopeGenerator(collectingGeneratorsToStartInto:)` has created it, its own,
+	/// which `add(childGenerator:createdBy:)` merges into its parent's. No generator keeps one. An alias or a hole has none.
+	private var cycleClosingRedeclaredLabels = ScopeGenerator.CycleClosingRedeclaredLabels()
 	/// How many scopes this scope's subtree has so far: itself, and every scope created beneath it. An alias or a hole,
 	/// which generates a line or two, is not counted.
 	private var subtreeScopeCount = 1
@@ -1162,8 +1166,16 @@ private struct ScopeGeneratorUnderConstruction {
 	static let scopeCountOfLargeSubtree = 64
 
 	/// Adds `childGenerator`, the generator `child` created, to this scope's children.
-	mutating func add(childGenerator: ScopeGenerator, createdBy child: ScopeGeneratorUnderConstruction) {
+	mutating func add(childGenerator: ScopeGenerator, createdBy child: inout ScopeGeneratorUnderConstruction) {
 		childGenerators.append(childGenerator)
+		if cycleClosingRedeclaredLabels.isEmpty {
+			// Nearly every scope has at most one child that takes part in a cycle, whose map it takes whole.
+			swap(&cycleClosingRedeclaredLabels, &child.cycleClosingRedeclaredLabels)
+		} else {
+			for (closedOnDeclaration, redeclarations) in child.cycleClosingRedeclaredLabels {
+				cycleClosingRedeclaredLabels[closedOnDeclaration, default: [:]].merge(redeclarations) { $0.preceding($1) }
+			}
+		}
 		subtreeScopeCount += child.subtreeScopeCount
 		if child.startsCodeBeneathALargeSubtree {
 			childGeneratorsStartingBeneathALargeSubtree.append(childGenerator)
@@ -1802,7 +1814,7 @@ private struct ScopeGeneratorUnderConstruction {
 
 	/// Creates the scope's generator once `childGenerators` holds a generator for each of `propertiesToGenerate`, and starts
 	/// its code, or adds it to `generatorsToStart` when that is not `nil`.
-	func scopeGenerator(collectingGeneratorsToStartInto generatorsToStart: inout [ScopeGenerator]?) -> ScopeGenerator {
+	mutating func scopeGenerator(collectingGeneratorsToStartInto generatorsToStart: inout [ScopeGenerator]?) -> ScopeGenerator {
 		// Every fill this call passes is an enclosing call's or its own.
 		let fillNames = holeArguments.isEmpty ? [:] : GenerationWork.taking(enclosingFillsOfThisCall, by: .gatheringFillsOfACall)
 		let builtGenerator = ScopeGenerator(
@@ -1881,6 +1893,7 @@ private struct ScopeGeneratorUnderConstruction {
 			enclosingLevelCalls: scope.publicMockCall == nil ? [:] : enclosingLevelCalls,
 			namesBoundBySeam: GenerationWork.taking(seamHoles.namesBoundBySeam, by: .joiningNamesBoundBySeam),
 			placeHoldingProperties: placeHoldingPropertiesByType.map { $0[scope.instantiable.concreteInstantiable] ?? [] },
+			cycleClosingRedeclaredLabels: &cycleClosingRedeclaredLabels,
 		)
 		let scopeGenerator = if let fill {
 			ScopeGenerator(
@@ -1897,6 +1910,7 @@ private struct ScopeGeneratorUnderConstruction {
 				plainMemoRoutesOfSendableWrapperReads: fill.plainMemoRoutesOfSendableWrapperReads,
 				memoOriginsByLabel: fill.memoOriginsByLabel,
 				child: builtGenerator,
+				cycleClosingRedeclaredLabels: &cycleClosingRedeclaredLabels,
 			)
 		} else {
 			builtGenerator
