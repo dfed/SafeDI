@@ -49,23 +49,30 @@ extension DependencyTreeGenerator {
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
 		var mockRoots = [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]()
+		// One memo for the mock roots, shared between them as `sharingBetweenMockRoots` says.
+		var constructionMemo = ConstructionMemo(sharing: ConstructionMemo.sharingBetweenMockRoots)
 		var mockRootErrors = [DependencyTreeGeneratorError]()
-		for instantiable in typeDescriptionToFulfillingInstantiableMap.values
+		// Skip types where generateMock is not enabled (unless explicitly listed
+		// in additionalMocksToGenerate), duplicates, and types not in the scope map.
+		// Types from dependent modules are skipped unless they appear in
+		// additionalMocksToGenerate. When generateMock is true and a hand-written
+		// mock exists, the generated mock calls through to the hand-written one
+		// (which must have a different name specified by customMockName).
+		var mockRootCandidates = typeDescriptionToFulfillingInstantiableMap.values
 			.sorted(by: { $0.concreteInstantiable < $1.concreteInstantiable })
-		{
+			.filter { instantiable in
+				(instantiable.generatesMock || additionalMocksToGenerate.contains(instantiable.concreteInstantiable.asSource))
+					&& seen.insert(instantiable.concreteInstantiable).inserted
+			}
+		// The memo oracle builds the mock roots in reverse order too; `mockRoots` is put back in type order below.
+		if ConstructionMemoOracle.buildsMockRootsInReverseOrder {
+			mockRootCandidates.reverse()
+		}
+		for instantiable in mockRootCandidates {
 			let isAdditionalMock = additionalMocksToGenerate.contains(instantiable.concreteInstantiable.asSource)
-			// Skip types where generateMock is not enabled (unless explicitly listed
-			// in additionalMocksToGenerate), duplicates, and types not in the scope map.
-			// Types from dependent modules are skipped unless they appear in
-			// additionalMocksToGenerate. When generateMock is true and a hand-written
-			// mock exists, the generated mock calls through to the hand-written one
-			// (which must have a different name specified by customMockName).
 			// A public mock's tree is built from the scopes with holes.
 			let rootMockScopes = mockScopes.forMockRoot(instantiable)
-			guard instantiable.generatesMock || isAdditionalMock,
-			      seen.insert(instantiable.concreteInstantiable).inserted,
-			      let scope = rootMockScopes.typeDescriptionToScopeMap[instantiable.concreteInstantiable]
-			else { continue }
+			guard let scope = rootMockScopes.typeDescriptionToScopeMap[instantiable.concreteInstantiable] else { continue }
 			let instantiable = mockRootInstantiable(for: instantiable, scope: scope)
 			// Without module scoping, every type belongs to the current module.
 			let isDeclaredInCurrentModule = currentModuleSourceFilePaths.map { currentModuleSourceFilePaths in
@@ -89,6 +96,7 @@ extension DependencyTreeGenerator {
 					childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 					promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 					scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
+					constructionMemo: &constructionMemo,
 				)
 				if instantiable.generateMock == .public, let publicMockContext {
 					var findings = await mockRoot.publicMockFindings(of: instantiable, context: publicMockContext, mockDefaults: flatParameterMockDefaults)
@@ -109,6 +117,9 @@ extension DependencyTreeGenerator {
 			} catch let error as DependencyTreeGeneratorError {
 				mockRootErrors.append(error)
 			}
+		}
+		if ConstructionMemoOracle.buildsMockRootsInReverseOrder {
+			mockRoots.reverse()
 		}
 		// A call of another module's public mock that would pass `nil` for a value the tree holds is rejected before any
 		// code is generated, root by root in type order, and reported in source order, as is a hand-written method named
@@ -142,7 +153,7 @@ extension DependencyTreeGenerator {
 		}
 		// From here on, the module's mock roots are handled together. These passes gate emitting the module's
 		// mocks and read nothing a single root's report needs, so
-		// `requirements(forTypeNamed:generatesMock:mockEmittingModule:)` deliberately does not run them. A check that
+		// `requirements(of:)` deliberately does not run them. A check that
 		// decides whether one root can be generated belongs in `createMockRoot`, which that method and the loop above
 		// share.
 
@@ -245,7 +256,7 @@ extension DependencyTreeGenerator {
 			return results
 		}
 
-		// The second whole-module gate, not run by `requirements(forTypeNamed:generatesMock:mockEmittingModule:)`; see
+		// The second whole-module gate, not run by `requirements(of:)`; see
 		// the note above `validateSendableBuildersCaptureNoNonSendableWrapper`.
 		let nodesReadingConfiguration = try await validateConfigurationsAreBuiltOneWay(mockRoots: mockRoots, cycleEdges: cycleEdges)
 
@@ -385,11 +396,21 @@ extension DependencyTreeGenerator {
 			)
 		}
 
+		// Freeing the mock roots' trees keeps a core busy for a while on a large module, and nothing generated waits for it.
+		Self.releaseInBackground(mockRoots.map(\.scopeGenerator))
+		mockRoots = []
 		return MockGenerationResult(
 			generatedRoots: mergedGeneratedRoots,
 			mockConfigurationCode: mockConfigurationCode,
 			mockConfigurationFulfillers: mockConfigurationFulfillers,
 		)
+	}
+
+	/// Releases `scopeGenerators` on a task of its own, so that freeing their trees delays no caller.
+	private static func releaseInBackground(_ scopeGenerators: consuming [ScopeGenerator]) {
+		Task.detached(priority: .background) { [scopeGenerators] in
+			withExtendedLifetime(scopeGenerators) {}
+		}
 	}
 
 	/// Which declarations a mention in each module of a view can name, the view being `viewer`'s, over `instantiables` and
@@ -446,9 +467,10 @@ extension DependencyTreeGenerator {
 	struct MockScopes {
 		/// These scopes, with the tree of a public mock built from `publicMockTypeDescriptionToScopeMap`.
 		func forMockRoot(_ instantiable: Instantiable) -> MockScopes {
-			guard instantiable.generateMock == .public, let publicMockTypeDescriptionToScopeMap else { return self }
+			guard instantiable.generateMock == .public, let publicMockTypeDescriptionToScopeMap, let frozenPublicMockScopeMap else { return self }
 			var mockScopes = self
 			mockScopes.typeDescriptionToScopeMap = publicMockTypeDescriptionToScopeMap
+			mockScopes.frozenScopeMap = frozenPublicMockScopeMap
 			return mockScopes
 		}
 
@@ -464,9 +486,13 @@ extension DependencyTreeGenerator {
 		/// `@Instantiated` property's type has no declaration (`createMockTypeDescriptionToScopeMapping`). `nil` when the
 		/// module declares no public mock.
 		var publicMockTypeDescriptionToScopeMap: [TypeDescription: Scope]?
+		/// `typeDescriptionToScopeMap`, frozen, which every mock root's tree is built from.
+		var frozenScopeMap: FrozenScopeMap
+		/// `publicMockTypeDescriptionToScopeMap`, frozen.
+		let frozenPublicMockScopeMap: FrozenScopeMap?
 		/// The hand-written mock a flat parameter of `mock()` of each type defaults to
 		/// (`flatParameterMockDefaults(in:emittingModule:)`).
-		let flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault]
+		var flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault]
 		/// Where each concrete type's hand-written methods named `mock` are declared.
 		let handWrittenMockLocationsByConcreteType: [TypeDescription: Set<Dependency.DeclarationLocation?>]
 	}
@@ -475,6 +501,18 @@ extension DependencyTreeGenerator {
 	struct ErasureDeclaration: Hashable {
 		let concreteType: TypeDescription
 		let declaration: TypeRequirements.Erasure.Declaration
+	}
+
+	/// What `mockScopes` validates a listed type's tree against, which `validateListedMockRoot` reads to validate the tree
+	/// of a type listed after the map is built.
+	struct MockScopeValidationInputs {
+		/// The calls of other modules' public mocks the mock trees make.
+		let publicMockCalls: [TypeDescription: PublicMockCall]
+		/// The mock scope map built with no call, with this module's fills.
+		let inlineTypeDescriptionToScopeMap: [TypeDescription: Scope]
+		/// The types each called type's fills instantiate that no declaration can fulfill, when the module compiles its
+		/// generated mocks.
+		let typesNoDeclarationCanFulfillByCalledType: [TypeDescription: Set<TypeDescription>]
 	}
 
 	/// Builds the mock scope map and validates it, and collects what every mock root is built with.
@@ -489,6 +527,22 @@ extension DependencyTreeGenerator {
 		receivedPropertiesCache: inout ReceivedPropertiesCache,
 		foreignPublicMockPlans: inout PublicMockPlans,
 	) async throws -> MockScopes {
+		try await mockScopesWithValidationInputs(
+			additionalMocksToGenerate: additionalMocksToGenerate,
+			mockEmittingModule: mockEmittingModule,
+			receivedPropertiesCache: &receivedPropertiesCache,
+			foreignPublicMockPlans: &foreignPublicMockPlans,
+		).mockScopes
+	}
+
+	/// `mockScopes(additionalMocksToGenerate:mockEmittingModule:receivedPropertiesCache:foreignPublicMockPlans:)`, with what
+	/// it validated the listed types' trees against.
+	func mockScopesWithValidationInputs(
+		additionalMocksToGenerate: Set<String>,
+		mockEmittingModule: EmittingModule?,
+		receivedPropertiesCache: inout ReceivedPropertiesCache,
+		foreignPublicMockPlans: inout PublicMockPlans,
+	) async throws -> (mockScopes: MockScopes, validationInputs: MockScopeValidationInputs) {
 		GenerationLayerObservation.record(.mockScopes(ofModule: seams.currentModule.moduleName), inRunOf: seams.currentModule.moduleName)
 		// Build a map of erased wrapper types → concrete fulfilling types.
 		// This lets mocks construct types like AnyUserService(DefaultUserService())
@@ -531,6 +585,7 @@ extension DependencyTreeGenerator {
 		// Every type built inline, the types whose public mocks the trees call among them, with this module's fills.
 		let inlineTypeDescriptionToScopeMap = typeDescriptionToScopeMap
 		var publicMockCalls = try await publicMockCalls(in: typeDescriptionToScopeMap, foreignPublicMockPlans: &foreignPublicMockPlans)
+		var typesNoDeclarationCanFulfillByCalledType = [TypeDescription: Set<TypeDescription>]()
 		let generatesPublicMock = typeDescriptionToFulfillingInstantiableMap.values.contains(where: { $0.generateMock == .public })
 		// Each kind of mock fills the same places and takes a builder for what a fill instantiates that nothing fulfills: a
 		// public mock through a hole of its own tree, an internal mock as a seam's internal mock does
@@ -543,7 +598,8 @@ extension DependencyTreeGenerator {
 			// module's mock condition, so a build that leaves it inactive never compiles the place the mock cannot fill, as
 			// `validateHandWrittenMocksTakeOnlyFulfilledParameters` is checked only there.
 			if compilesGeneratedMocks {
-				try validateFillsInstantiateOnlyWhatCanBeFulfilled(fills.typesNoDeclarationCanFulfillByCalledType, additionalMocksToGenerate: additionalMocksToGenerate)
+				typesNoDeclarationCanFulfillByCalledType = fills.typesNoDeclarationCanFulfillByCalledType
+				try validateFillsInstantiateOnlyWhatCanBeFulfilled(typesNoDeclarationCanFulfillByCalledType, additionalMocksToGenerate: additionalMocksToGenerate)
 			}
 			// A call that fills a builder declares no dependency for it, so the map is built again with the fills.
 			if !fills.filledHoles.isEmpty {
@@ -555,13 +611,7 @@ extension DependencyTreeGenerator {
 		}
 
 		// The scopes of the types the mock-root loop below generates a mock for because they are listed.
-		let additionalMockRootScopes: Set<Scope> = additionalMocksToGenerate.isEmpty ? [] : Set(
-			typeDescriptionToFulfillingInstantiableMap.values.compactMap { instantiable in
-				additionalMocksToGenerate.contains(instantiable.concreteInstantiable.asSource)
-					? typeDescriptionToScopeMap[instantiable.concreteInstantiable]
-					: nil
-			},
-		)
+		let additionalMockRootScopes = scopes(ofTypesNamed: additionalMocksToGenerate, in: typeDescriptionToScopeMap)
 		// The renames of the declarations the walk below reads are checked before it reads them, as production checks the
 		// renames of its trees before it builds scopes. Each mock root's tree, promoted dependencies included, is checked
 		// again where the root is created.
@@ -605,15 +655,67 @@ extension DependencyTreeGenerator {
 				result[instantiable.concreteInstantiable, default: []].insert(instantiable.mockDeclarationLocation)
 			}
 
-		return MockScopes(
+		let publicMockTypeDescriptionToScopeMap = generatesPublicMock
+			? createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCalls, buildsHoles: true)
+			: nil
+		let mockScopes = MockScopes(
 			erasureDeclarations: erasureDeclarations,
 			erasedToConcreteTypeMap: erasedToConcreteTypeMap,
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
-			publicMockTypeDescriptionToScopeMap: generatesPublicMock
-				? createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCalls, buildsHoles: true)
-				: nil,
+			publicMockTypeDescriptionToScopeMap: publicMockTypeDescriptionToScopeMap,
+			frozenScopeMap: FrozenScopeMap(freezing: typeDescriptionToScopeMap.lazy.map { (key: $0.key, scope: $0.value) }),
+			frozenPublicMockScopeMap: publicMockTypeDescriptionToScopeMap.map { map in FrozenScopeMap(freezing: map.lazy.map { (key: $0.key, scope: $0.value) }) },
 			flatParameterMockDefaults: flatParameterMockDefaults(in: typeDescriptionToScopeMap, emittingModule: mockEmittingModule),
 			handWrittenMockLocationsByConcreteType: handWrittenMockLocationsByConcreteType,
+		)
+		return (
+			mockScopes,
+			MockScopeValidationInputs(
+				publicMockCalls: publicMockCalls,
+				inlineTypeDescriptionToScopeMap: inlineTypeDescriptionToScopeMap,
+				typesNoDeclarationCanFulfillByCalledType: typesNoDeclarationCanFulfillByCalledType,
+			),
+		)
+	}
+
+	/// The scopes in `typeDescriptionToScopeMap` of the types named `typeNames`, as `additionalMocksToGenerate` names them.
+	private func scopes(ofTypesNamed typeNames: Set<String>, in typeDescriptionToScopeMap: [TypeDescription: Scope]) -> Set<Scope> {
+		typeNames.isEmpty ? [] : Set(
+			typeDescriptionToFulfillingInstantiableMap.values.compactMap { instantiable in
+				typeNames.contains(instantiable.concreteInstantiable.asSource)
+					? typeDescriptionToScopeMap[instantiable.concreteInstantiable]
+					: nil
+			},
+		)
+	}
+
+	/// Validates the tree of the type named `typeName` as `mockScopes` validates a listed type's, once `mockScopes` has
+	/// built and validated the map for another listed type: only what listing `typeName` adds is checked, in the order
+	/// `mockScopes` checks it – the fills its tree reaches, its renames, the calls with places its tree makes, and its
+	/// tree's cycles – since every other tree has passed. The checks of fills and of calls with places walk the trees of
+	/// the types that generate a mock again, which have passed; they do work only where the mocks call another module's
+	/// public mock.
+	func validateListedMockRoot(
+		named typeName: String,
+		mockScopes: MockScopes,
+		validationInputs: MockScopeValidationInputs,
+		receivedPropertiesCache: inout ReceivedPropertiesCache,
+	) throws {
+		try validateFillsInstantiateOnlyWhatCanBeFulfilled(validationInputs.typesNoDeclarationCanFulfillByCalledType, additionalMocksToGenerate: [typeName])
+		let listedScopes = scopes(ofTypesNamed: [typeName], in: mockScopes.typeDescriptionToScopeMap)
+		try Self.validateRenamesAreSpelledAsTheMacroAccepts(inTreesRootedAt: Array(listedScopes), typeDescriptionToScopeMap: mockScopes.typeDescriptionToScopeMap)
+		try validateCyclesOfCallsWithPlaces(
+			publicMockCalls: validationInputs.publicMockCalls,
+			inlineTypeDescriptionToScopeMap: validationInputs.inlineTypeDescriptionToScopeMap,
+			additionalMocksToGenerate: [typeName],
+		)
+		try validatePropertiesAreFulfillable(
+			onRootScopes: [],
+			additionalMockRootScopes: listedScopes
+				.sorted { $0.instantiable.concreteInstantiable < $1.instantiable.concreteInstantiable }
+				.map { scope in ValidatedRootScope(scope: scope, boundProperties: Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache).received, isMock: !scope.instantiable.isRoot) },
+			typeDescriptionToScopeMap: mockScopes.typeDescriptionToScopeMap,
+			cyclesOnly: true,
 		)
 	}
 
@@ -686,13 +788,13 @@ extension DependencyTreeGenerator {
 	/// The mock root of `instantiable`, the instantiable `mockRootInstantiable(for:scope:)` returned for `scope`,
 	/// once the type is known to be one a mock can be generated for. Every check that decides whether one mock
 	/// root can be generated belongs here, so that `generateMockCode` and
-	/// `requirements(forTypeNamed:generatesMock:mockEmittingModule:)` run the same ones; a pass that needs every mock
+	/// `requirements(of:)` run the same ones; a pass that needs every mock
 	/// root at once goes after `generateMockCode`'s loop instead.
 	/// - Parameters:
 	///   - generatedMockReason: Why the project generates `mock()` for the type, or `nil` when it does not, so that a
 	///     hand-written method named `mock` is the type's mock rather than a collision.
 	///   - emittingModule: The module the mock's code compiles in, whose access to each type the mock constructs is
-	///     checked, or `nil` when no module emits the mock: `requirements(forTypeNamed:generatesMock:mockEmittingModule:)`
+	///     checked, or `nil` when no module emits the mock: `requirements(of:)`
 	///     reports what a type needs, not what keeps one module from compiling its mock, so it checks no access. This is
 	///     the one check of a single mock root that the two callers do not share; the access that decides which flat
 	///     parameters default is asked of `mockScopes` instead, by both.
@@ -709,6 +811,7 @@ extension DependencyTreeGenerator {
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
 		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
+		constructionMemo: inout ConstructionMemo,
 	) async throws -> ScopeGenerator {
 		// A hand-written method also named `mock` can be confused with the
 		// generated `mock()`: identical signatures redeclare, overlapping ones
@@ -755,6 +858,7 @@ extension DependencyTreeGenerator {
 			for: instantiable,
 			scope: scope,
 			typeDescriptionToScopeMap: mockScopes.typeDescriptionToScopeMap,
+			frozenScopeMap: mockScopes.frozenScopeMap,
 			flatParameterMockDefaults: mockScopes.flatParameterMockDefaults,
 			erasedToConcreteTypeMap: mockScopes.erasedToConcreteTypeMap,
 			publicMockContext: publicMockContext,
@@ -763,6 +867,7 @@ extension DependencyTreeGenerator {
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
+			constructionMemo: &constructionMemo,
 		)
 	}
 
@@ -1053,33 +1158,46 @@ extension DependencyTreeGenerator {
 		// Reuse the same scope for all entries sharing a concreteInstantiable so
 		// every instantiableType is mapped.
 		var visitedConcreteTypeToScope = [TypeDescription: Scope]()
+		// Each entry's order, spelled once: spelled inside a comparison, every type was spelled again for every pair compared.
+		struct OrderedEntry {
+			let instantiable: Instantiable
+			let hasHandWrittenMock: Bool
+			let hasMock: Bool
+			let spellingWithoutAny: String
+			let spelling: String
+		}
 		let typeDescriptionToCompleteScopeMap: [TypeDescription: Scope] = typeDescriptionToFulfillingInstantiableMap.values
+			.map { instantiable in
+				let hasHandWrittenMock = instantiable.mockInitializer != nil
+				return OrderedEntry(
+					instantiable: instantiable,
+					hasHandWrittenMock: hasHandWrittenMock,
+					hasMock: instantiable.generatesMock || hasHandWrittenMock,
+					spellingWithoutAny: instantiable.concreteInstantiable.withoutAny.asSource,
+					spelling: instantiable.concreteInstantiable.asSource,
+				)
+			}
 			.sorted { lhs, rhs in
 				// Non-mockOnly before mockOnly (production claims slots first).
-				if lhs.mockOnly != rhs.mockOnly {
-					return !lhs.mockOnly
-				} else {
+				if lhs.instantiable.mockOnly != rhs.instantiable.mockOnly {
+					!lhs.instantiable.mockOnly
+				} else if lhs.hasHandWrittenMock != rhs.hasHandWrittenMock {
 					// Within the same mockOnly tier, prefer entries with mock info
 					// so scope-reuse creates scopes from mock-capable entries.
 					// Hand-written mocks (mockInitializer) before generateMock,
 					// since hand-written mocks take priority.
-					let lhsHasHandWrittenMock = lhs.mockInitializer != nil
-					let rhsHasHandWrittenMock = rhs.mockInitializer != nil
-					if lhsHasHandWrittenMock != rhsHasHandWrittenMock {
-						return lhsHasHandWrittenMock
-					} else {
-						let lhsHasMock = lhs.generatesMock || lhsHasHandWrittenMock
-						let rhsHasMock = rhs.generatesMock || rhsHasHandWrittenMock
-						if lhsHasMock != rhsHasMock {
-							return lhsHasMock
-						} else {
-							// Stable tiebreaker: sort by concrete type name so scope-reuse
-							// selects the same entry across runs.
-							return lhs.concreteInstantiable < rhs.concreteInstantiable
-						}
-					}
+					lhs.hasHandWrittenMock
+				} else if lhs.hasMock != rhs.hasMock {
+					lhs.hasMock
+				} else if lhs.spellingWithoutAny != rhs.spellingWithoutAny {
+					// Stable tiebreaker: sort by concrete type name so scope-reuse
+					// selects the same entry across runs, as `TypeDescription.<` orders them.
+					lhs.spellingWithoutAny < rhs.spellingWithoutAny
+				} else {
+					lhs.spelling < rhs.spelling
 				}
 			}
+			.map(\.instantiable)
 			.reduce(into: [TypeDescription: Scope]()) { partialResult, instantiable in
 				let scope = visitedConcreteTypeToScope[instantiable.concreteInstantiable] ?? publicMockCalls[instantiable.concreteInstantiable].map { publicMockCall in
 					let leafInstantiable = Self.publicMockLeafInstantiable(of: instantiable, calling: publicMockCall, takesBuildersFromOwnEnums: buildsHoles)

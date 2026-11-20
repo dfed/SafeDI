@@ -1751,6 +1751,198 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_throwsCycleOfLastTypeNamed_whenEarlierTypesNamedHaveNoCycle() async {
+		// Neither type on the cycle is a root or generates a mock, so only the query of `Feature` walks its tree.
+		await assertThrowsQueryError(
+			diagnostics: { moduleFiles in
+				"""
+				\(moduleFiles["CycleModule"]![1].path):4:5: error: Dependency cycle: `Companion` -> `Feature` -> `Companion`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `companion: Companion`, `feature: Feature` to an instantiator.
+				\(moduleFiles["CycleModule"]![2].path):1:1: note: `Companion` is part of the cycle
+				\(moduleFiles["CycleModule"]![1].path):1:1: note: `Feature` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolQuery(
+				typeName: "Cache",
+				additionalTypeNames: ["Logger", "Feature"],
+				modules: [
+					QueryTestModule("CycleModule", [
+						"""
+						@Instantiable
+						public final class Cache: Instantiable {
+						    public init() {}
+						}
+						""",
+						"""
+						@Instantiable
+						public struct Feature: Instantiable {
+						    public init(companion: Companion) { self.companion = companion }
+						    @Instantiated let companion: Companion
+						}
+						""",
+						"""
+						@Instantiable
+						public struct Companion: Instantiable {
+						    public init(feature: Feature) { self.feature = feature }
+						    @Instantiated let feature: Feature
+						}
+						""",
+						"""
+						@Instantiable
+						public final class Logger: Instantiable {
+						    public init() {}
+						}
+						""",
+					]),
+				],
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_throwsCycleOfRoot_whenALaterTypeNamedHasACycleToo() async {
+		// The root's cycle is found while the first type named is queried, so the query reports it, and never reaches
+		// `Feature`'s.
+		await assertThrowsQueryError(
+			diagnostics: { moduleFiles in
+				"""
+				\(moduleFiles["CycleModule"]![2].path):4:5: error: Dependency cycle: `RootCompanion` -> `Root` -> `RootCompanion`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `rootCompanion: RootCompanion`, `root: Root` to an instantiator.
+				\(moduleFiles["CycleModule"]![4].path):1:1: note: `RootCompanion` is part of the cycle
+				\(moduleFiles["CycleModule"]![2].path):1:1: note: `Root` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolQuery(
+				typeName: "Cache",
+				additionalTypeNames: ["Feature"],
+				modules: [
+					QueryTestModule("CycleModule", [
+						"""
+						@Instantiable
+						public final class Cache: Instantiable {
+						    public init() {}
+						}
+						""",
+						"""
+						@Instantiable
+						public struct Feature: Instantiable {
+						    public init(companion: Companion) { self.companion = companion }
+						    @Instantiated let companion: Companion
+						}
+						""",
+						"""
+						@Instantiable(isRoot: true)
+						public struct Root: Instantiable {
+						    public init(rootCompanion: RootCompanion) { self.rootCompanion = rootCompanion }
+						    @Instantiated let rootCompanion: RootCompanion
+						}
+						""",
+						"""
+						@Instantiable
+						public struct Companion: Instantiable {
+						    public init(feature: Feature) { self.feature = feature }
+						    @Instantiated let feature: Feature
+						}
+						""",
+						"""
+						@Instantiable
+						public struct RootCompanion: Instantiable {
+						    public init(root: Root) { self.root = root }
+						    @Instantiated let root: Root
+						}
+						""",
+					]),
+				],
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_buildsMockScopesOncePerView_whenThreeTypesAreNamed() async throws {
+		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
+		let output = try await GenerationLayerObservation.$observer.withValue({ _, layer in
+			if case .mockScopes = layer {
+				continuation.yield("mock scopes")
+			}
+		}) {
+			try await executeSafeDIToolQuery(
+				typeName: "Feature",
+				additionalTypeNames: ["Service", "Cache"],
+				modules: Self.featureModules,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		var mockScopeCount = 0
+		for await _ in stream {
+			mockScopeCount += 1
+		}
+
+		// One for the mock's view and one for production's, however many types are named.
+		#expect(mockScopeCount == 2)
+		#expect(output.report.types.map(\.typeName) == ["Feature", "Service", "Cache"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_reportsEachTypesMockDefaultsAsItsOwnModuleDecidesThem_whenTypesMocksAreGeneratedInDifferentModules() async throws {
+		// `Config.mock()` is internal to ConfigModule, so only the mock ConfigModule generates can default `config` with it.
+		let modules = [
+			QueryTestModule("FeatureModule", [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Feature: Instantiable {
+				    public init(config: Config) {
+				        self.config = config
+				    }
+				    @Forwarded private let config: Config
+				}
+				""",
+			]),
+			QueryTestModule("ConfigModule", [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Settings: Instantiable {
+				    public init(config: Config) {
+				        self.config = config
+				    }
+				    @Forwarded private let config: Config
+				}
+				""",
+				"""
+				public struct Config {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable(mockOnly: true)
+				extension Config {
+				    static func mock() -> Config {
+				        Config()
+				    }
+				}
+				""",
+			]),
+		]
+		let featureOutput = try await executeSafeDIToolQuery(typeName: "Feature", modules: modules, filesToDelete: &filesToDelete)
+		let settingsOutput = try await executeSafeDIToolQuery(typeName: "Settings", modules: modules, filesToDelete: &filesToDelete)
+		#expect(featureOutput.formatted.contains("Required @Forwarded parameters of `Feature.mock()`:\n  config: Config"))
+		#expect(settingsOutput.formatted.contains("Defaulted @Forwarded parameters of `Settings.mock()`:\n  config: Config = Config.mock()"))
+
+		let settingsFirst = try await executeSafeDIToolQuery(typeName: "Settings", additionalTypeNames: ["Feature"], modules: modules, filesToDelete: &filesToDelete)
+		let featureFirst = try await executeSafeDIToolQuery(typeName: "Feature", additionalTypeNames: ["Settings"], modules: modules, filesToDelete: &filesToDelete)
+
+		// Each query reads fixtures of its own, so the reports are compared as text, which names modules, not paths.
+		#expect(settingsFirst.report.types.map(\.formatted) == [settingsOutput.result.formatted, featureOutput.result.formatted])
+		#expect(featureFirst.report.types.map(\.formatted) == [featureOutput.result.formatted, settingsOutput.result.formatted])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func query_throwsPlainError_whenTypeBuildsARenameOfARenameOfItsAncestorOnlyIfAvailable() async {
 		await assertThrowsQueryError(
 			diagnostics: { moduleFiles in
@@ -2957,6 +3149,55 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_throwsErrorOfFirstModuleInfoArgument_whenTwentyFourModuleInfoFilesCannotBeRead() async throws {
+		// Read in parallel, so the reads finish in any order; named against their sort order, so neither order picks
+		// the first argument by chance.
+		let directory = try temporaryModuleDirectory()
+		let unreadableFiles = (0..<24).reversed().map { directory.appendingPathComponent("Missing\($0).safedi").path }
+
+		await assertThrowsQueryError(
+			diagnostics: { _ in
+				"Could not read the SafeDI module info file at '\(directory.path)/Missing23.safedi': No file exists at that path."
+			},
+		) {
+			try await executeSafeDIToolQuery(
+				typeName: "Feature",
+				modules: [],
+				additionalArguments: unreadableFiles.flatMap { ["--module-info", $0] },
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_readsModuleInfoFile_whenItsViewIsCorrupt() async throws {
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Feature",
+			modules: [QueryTestModule("FeatureModule", [Self.standaloneFeature], input: .moduleInfo())],
+			moduleArguments: { _, _, moduleInfoFiles in
+				let moduleInfoFile = moduleInfoFiles["FeatureModule"]!
+				do {
+					try Self.corruptView(ofModuleInfoFileAt: moduleInfoFile)
+				} catch {
+					Issue.record(error)
+				}
+				return ["--module-info", moduleInfoFile.path]
+			},
+			filesToDelete: &filesToDelete,
+		)
+
+		// The file a reader of its view rejects…
+		let moduleInfoData = try Data(contentsOf: URL(fileURLWithPath: output.paths(of: "FeatureModule")[0]))
+		#expect(throws: BinaryFileReadError.self) {
+			try ModuleInfoFile(moduleInfoData: moduleInfoData)
+		}
+		// …still describes its module to the query, which reads no view.
+		#expect(output.result.modules == [output.module("FeatureModule", [output.instantiable("Feature", in: "FeatureModule")])])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func query_throwsError_whenAFileIsInTwoModuleInfoFiles() async {
 		await assertThrowsQueryError(
 			diagnostics: { moduleFiles in
@@ -3060,6 +3301,19 @@ struct SafeDIToolQueryTests: ~Copyable {
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 		filesToDelete.append(directory)
 		return directory
+	}
+
+	/// Makes the view of the module info file at `url`, which the file holds last, claim more modules than the file
+	/// holds, and records the body's checksum again, so that only a reader of the view finds the file malformed.
+	private static func corruptView(ofModuleInfoFileAt url: URL) throws {
+		var data = try Data(contentsOf: url)
+		// The header's 30 bytes end with the body's checksum; the body ends with the count of the view's declarations,
+		// zero in a file whose view is empty.
+		let headerLength = 30
+		data[data.count - 1] = 0x7F
+		let checksum = data[headerLength...].withUnsafeBytes { BinaryFile.checksum(of: $0) }
+		withUnsafeBytes(of: checksum.littleEndian) { data.replaceSubrange(22..<headerLength, with: $0) }
+		try data.write(to: url)
 	}
 
 	/// A feature that instantiates a service and receives a logger, across three modules.
