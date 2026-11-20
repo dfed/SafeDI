@@ -3042,6 +3042,7 @@ struct GraphFuzzerPublicMockDraw {
 		     (.sendableInstantiatorChangedToSendableErasedInstantiator, _),
 		     (.placeOfNewBuilderOfExistingFillingType, _),
 		     (.placeOfNewBuilderInInnerSeamOfAnotherModule, _),
+		     (.placeOfHoleTypeNamedAfterSendableLabel, _),
 		     (.placeForwardingOtherValues, _),
 		     (.placeForwardingOtherValuesRemedied, _),
 		     (.placeForwardingOtherValuesInInnerSeamOfAnotherModule, _),
