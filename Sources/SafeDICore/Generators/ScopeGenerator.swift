@@ -44,6 +44,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///     (`PublicMockLevelFunctions.init`).
 	init(
 		instantiable: Instantiable,
+		sharedInstantiable: SharedInstantiable? = nil,
 		property: Property?,
 		propertiesToGenerate: [ScopeGenerator],
 		propertiesToDeclare: Set<Property>,
@@ -127,7 +128,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			description = fill.hole.builderLabel
 		} else if let property {
 			scopeData = .property(
-				instantiable: instantiable,
+				instantiable: sharedInstantiable ?? SharedInstantiable(instantiable),
 				property: property,
 				forwardedProperties: Set(
 					instantiable
@@ -141,7 +142,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			)
 			description = instantiable.concreteInstantiable.asSource
 		} else {
-			scopeData = .root(instantiable: instantiable, seamRoot: seamRoot)
+			scopeData = .root(instantiable: sharedInstantiable ?? SharedInstantiable(instantiable), seamRoot: seamRoot)
 			description = instantiable.concreteInstantiable.asSource
 		}
 		self.property = property
@@ -2610,8 +2611,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The type this scope builds, or `nil` for an alias.
 	nonisolated var builtInstantiable: Instantiable? {
 		switch scopeData {
-		case let .root(instantiable, _), let .property(instantiable, _, _, _, _, _):
-			instantiable
+		case let .root(instantiableReference, _), let .property(instantiableReference, _, _, _, _, _):
+			instantiableReference.instantiable
 		case .alias, .hole, .fill:
 			nil
 		}
@@ -2971,7 +2972,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// The signature holds a parameter a `@Sendable` function reads in a `SendableLazilyInstantiated`, so this reports
 		// nothing unless that decision misses a read, which is then reported here rather than failing to compile.
 		var declarationsByLabel = [String: [VisibleDeclaration]]()
-		if case let .root(seamInstantiable, seamRoot?) = scopeData {
+		if case let .root(seamInstantiableReference, seamRoot?) = scopeData {
+			let seamInstantiable = seamInstantiableReference.instantiable
 			let autoclosureCallByLabel = seamRoot.autoclosureCallByLabel(of: seamInstantiable)
 			for parameter in seamRoot.signature.parameters {
 				let declaration = if case let .deferred(isSendable) = parameter.deferral, autoclosureCallByLabel[parameter.property.label] == nil {
@@ -3157,7 +3159,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		var findings = OmissionFindings<SeamTierOmission>()
 		for child in orderedChildren {
-			guard case let .property(childInstantiable, _, _, _, isPropertyCycle, seamCall) = child.generator.scopeData else { continue }
+			guard case let .property(childInstantiableReference, _, _, _, isPropertyCycle, seamCall) = child.generator.scopeData else { continue }
+			let childInstantiable = childInstantiableReference.instantiable
 			if isPropertyCycle {
 				// A scope that closes a cycle constructs nothing: it calls the builder function of the declaration it repeats.
 				findings.recordCalls(by: child, of: child.generator.closedOnDeclaration.flatMap { enclosingCycleFunctions[$0] }, among: childDeclarationsByLabel)
@@ -3328,7 +3331,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		var findings = OmissionFindings<PublicMockTierOmission>()
 		for child in orderedChildren {
-			guard case let .property(childInstantiable, childProperty, _, _, isPropertyCycle, _) = child.generator.scopeData else { continue }
+			guard case let .property(childInstantiableReference, childProperty, _, _, isPropertyCycle, _) = child.generator.scopeData else { continue }
+			let childInstantiable = childInstantiableReference.instantiable
 			if isPropertyCycle {
 				// A scope that closes a cycle constructs nothing: it calls the builder function of the declaration it repeats.
 				findings.recordCalls(by: child, of: child.generator.closedOnDeclaration.flatMap { enclosingCycleFunctions[$0] }, among: childDeclarationsByLabel)
@@ -3397,7 +3401,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		while let (generator, instantiable, fillReferenceLocation) = scopesToVisit.popLast() {
 			for child in generator.propertiesToGenerate {
 				switch child.scopeData {
-				case let .property(childInstantiable, property, _, _, isPropertyCycle, _):
+				case let .property(childInstantiableReference, property, _, _, isPropertyCycle, _):
+					let childInstantiable = childInstantiableReference.instantiable
 					guard !isPropertyCycle else { continue }
 					let referenceLocation = fillReferenceLocation ?? instantiable.dependencies.first { $0.property.label == property.label }?.declarationLocation ?? instantiable.declarationLocation
 					if let publicMockCall = child.publicMockCall {
@@ -3440,7 +3445,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A stack of its own, since a tree can be as deep as the module has types.
 		var generatorsToVisit = [self]
 		while let generator = generatorsToVisit.popLast() {
-			if case let .property(instantiable, _, _, _, _, _) = generator.scopeData {
+			if case let .property(instantiableReference, _, _, _, _, _) = generator.scopeData {
+				let instantiable = instantiableReference.instantiable
 				concreteTypes.insert(instantiable.concreteInstantiable)
 			}
 			generatorsToVisit.append(contentsOf: generator.propertiesToGenerate)
@@ -3458,7 +3464,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A stack of its own, since a tree can be as deep as the module has types.
 		var generatorsToVisit = [self]
 		while let generator = generatorsToVisit.popLast() {
-			if case let .property(instantiable, property, _, _, _, _) = generator.scopeData {
+			if case let .property(instantiableReference, property, _, _, _, _) = generator.scopeData {
+				let instantiable = instantiableReference.instantiable
 				let propertyType = property.typeDescription.asInstantiatedType
 				fulfillers.formUnion(FulfillerImports.Fulfiller.fulfillers(
 					building: instantiable,
@@ -3477,7 +3484,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// - Parameter mockDefaults: The hand-written mock a flat parameter of each type defaults to.
 	func fulfillersOfMock(mockDefaults: [TypeDescription: FlatParameterMockDefault]) async -> Set<FulfillerImports.Fulfiller> {
 		var fulfillers = await fulfillersOfTree(buildingMock: true)
-		guard case let .root(instantiable, _) = scopeData else { return fulfillers }
+		guard case let .root(instantiableReference, _) = scopeData else { return fulfillers }
+		let instantiable = instantiableReference.instantiable
 		if let fulfiller = FulfillerImports.Fulfiller(instantiable: instantiable) {
 			fulfillers.insert(fulfiller)
 		}
@@ -3834,7 +3842,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					enclosingSendableBuilders: enclosingSendableBuilders,
 					chain: chain,
 				))
-			} else if case let .property(childInstantiable, childProperty, _, _, isPropertyCycle: false, _) = child.generator.scopeData {
+			} else if case let .property(childInstantiableReference, childProperty, _, _, isPropertyCycle: false, _) = child.generator.scopeData {
+				let childInstantiable = childInstantiableReference.instantiable
 				let childSendableBuilders = child.generator.buildsInSendableFunction
 					? enclosingSendableBuilders + [SendableBuilder(property: childProperty, declaringType: declaringType)]
 					: enclosingSendableBuilders
@@ -3887,8 +3896,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		chain: [TypeDescription],
 	) async -> [NonSendableWrapperCapture] {
 		guard let builtChild = await fill.orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater).first,
-		      case let .property(builtInstantiable, builtProperty, _, _, isPropertyCycle: false, _) = builtChild.generator.scopeData
+		      case let .property(builtInstantiableReference, builtProperty, _, _, isPropertyCycle: false, _) = builtChild.generator.scopeData
 		else { return [] }
+		let builtInstantiable = builtInstantiableReference.instantiable
 		var sendableBuilders = enclosingSendableBuilders
 		var fillDeclarationsByLabel = declarationsByLabel
 		let boundLabels = fill.fillStructBoundLabels
@@ -3922,10 +3932,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private enum ScopeData {
 		/// - Parameter seamRoot: What the root emits when it is a seam's, or `nil` for a root of the dependency tree
 		///   or a mock root.
-		case root(instantiable: Instantiable, seamRoot: SeamRoot?)
+		indirect case root(instantiable: SharedInstantiable, seamRoot: SeamRoot?)
 		/// - Parameter seamCall: How the scope calls the seam it stands for, or `nil` for a scope that builds its type.
 		case property(
-			instantiable: Instantiable,
+			instantiable: SharedInstantiable,
 			property: Property,
 			forwardedProperties: Set<Property>,
 			erasedToConcreteExistential: Bool,
@@ -3941,9 +3951,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 		/// A site in a seam's tree of a property the builder the seam's generated initializer takes builds. `site` is
 		/// `nil` in a tree built only to compute the seam's signature.
-		case hole(property: Property, erasedToConcreteExistential: Bool, site: SeamSignature.Hole?)
+		indirect case hole(property: Property, erasedToConcreteExistential: Bool, site: SeamSignature.Hole?)
 		/// The function, named `functionName`, a caller of a seam generates to fill the builder for `hole`.
-		case fill(hole: SeamSignature.Hole, functionName: String)
+		indirect case fill(hole: SeamSignature.Hole, functionName: String)
 
 		var forwardedProperties: Set<Property> {
 			switch self {
@@ -3956,8 +3966,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		var asDOTNode: String {
 			switch self {
-			case let .root(instantiable, _):
-				instantiable.concreteInstantiable.asSource
+			case let .root(instantiableReference, _):
+				instantiableReference.instantiable.concreteInstantiable.asSource
 			case let .property(_, property, _, _, _, _), let .hole(property, _, _):
 				"\"\(property.asSource)\""
 			case let .alias(property, fulfillingProperty, _, _, _):
@@ -5401,7 +5411,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// production scope's children are its type's own properties, which its construction reads, while a mock root's are
 	/// also the properties it promotes, some only because the tree of a member of their loop receives them.
 	nonisolated private func loopMembersReadOnlyInsideTheirLoop() -> [Int] {
-		guard case let .root(instantiable, _) = scopeData else { return [] }
+		guard case let .root(instantiableReference, _) = scopeData else { return [] }
+		let instantiable = instantiableReference.instantiable
 		let siblingGraph = Self.siblingGraph(of: propertiesToGenerate, requiredOnlyIfAvailableAliasProperties: requiredOnlyIfAvailableAliasProperties)
 		// A child outside a member's loop reads the member's wrapper, and so does a rename this scope declares of it, whose
 		// binding is the wrapper under another label, inside the loop or not. Only a generated child reads: a mock root lists
@@ -6269,7 +6280,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		pushFills(of: self, insideSendableFunction: insideSendableFunction)
 		while let (generator, enclosingIsInsideSendableFunction) = generatorsToVisit.popLast() {
 			// A scope that closes a cycle builds nothing; an alias builds nothing either.
-			guard case let .property(instantiable, property, _, _, false, _) = generator.scopeData else { continue }
+			guard case let .property(instantiableReference, property, _, _, false, _) = generator.scopeData else { continue }
+			let instantiable = instantiableReference.instantiable
 			declaredLabels.insert(property.label)
 			let isInsideSendableFunction = enclosingIsInsideSendableFunction || generator.buildsInSendableFunction
 			if generator.publicMockCall != nil {
@@ -6308,7 +6320,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// with `forwardedArguments`: the function itself when it takes no arguments and erases nothing, and otherwise a
 	/// closure that calls it. Empty for a scope that builds no instantiator, which no caller asks.
 	nonisolated private func instantiatorDeclaration(handing functionName: String, forwardedArguments: String, bindingName: String? = nil, erasesBuiltValue: Bool? = nil) -> String {
-		guard case let .property(instantiable, declaredProperty, _, _, _, _) = scopeData else { return "" }
+		guard case let .property(instantiableReference, declaredProperty, _, _, _, _) = scopeData else { return "" }
+		let instantiable = instantiableReference.instantiable
 		let property = bindingName.map { Property(label: $0, typeDescription: declaredProperty.typeDescription) } ?? declaredProperty
 		// A type constructed by annotation spells its generic arguments only in the declaration.
 		let unwrappedTypeDescription = property
@@ -6615,7 +6628,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fillPlaceBindings: FillPlaceBindings,
 	) async throws -> GeneratedCode {
 		switch scopeData {
-		case let .root(instantiable, seamRoot):
+		case let .root(instantiableReference, seamRoot):
+			let instantiable = instantiableReference.instantiable
 			switch codeGeneration {
 			case .dependencyTree, .overriding:
 				if let seamRoot {
@@ -6643,13 +6657,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				))
 			}
 		case let .property(
-			instantiable,
+			instantiableReference,
 			property,
 			forwardedProperties,
 			erasedToConcreteExistential,
 			isPropertyCycle,
 			seamCall,
 		):
+			let instantiable = instantiableReference.instantiable
 			// Only the children's code is awaited here: what the scope writes around it is decided and spelled by the
 			// synchronous functions below (`.claude/rules/emission-decisions.md`, "A spelling holds no subtree text longer").
 			let argumentList = try constructionArgumentList(of: instantiable, unavailableProperties: unavailableProperties)
@@ -11283,7 +11298,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var generatorsToVisit = [(generator: self, insideSendableScope: false)]
 		while let (generator, insideSendableScope) = generatorsToVisit.popLast() {
 			for child in generator.propertiesToGenerate {
-				if case let .property(childInstantiable, childProperty, _, _, isPropertyCycle, _) = child.scopeData {
+				if case let .property(childInstantiableReference, childProperty, _, _, isPropertyCycle, _) = child.scopeData {
+					let childInstantiable = childInstantiableReference.instantiable
 					let childInsideSendableScope = insideSendableScope || child.buildsInSendableFunction
 					if childInsideSendableScope {
 						let needsConfigurationStruct = isPropertyCycle
@@ -11390,7 +11406,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					loop: loopByGenerator[ObjectIdentifier(childGenerator)],
 					generatorIdentifier: ObjectIdentifier(childGenerator),
 				)))
-			} else if case let .property(childInstantiable, childProperty, _, erasedToConcreteExistential, isPropertyCycle, _) = childGenerator.scopeData {
+			} else if case let .property(childInstantiableReference, childProperty, _, erasedToConcreteExistential, isPropertyCycle, _) = childGenerator.scopeData {
+				let childInstantiable = childInstantiableReference.instantiable
 				let isInstantiator = !childProperty.propertyType.isConstant
 				let childInsideSendable = insideSendableScope || childGenerator.buildsInSendableFunction
 
