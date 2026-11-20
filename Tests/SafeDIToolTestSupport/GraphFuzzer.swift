@@ -2775,6 +2775,7 @@ enum GraphFuzzerGenerator {
 			repeatedAncestorRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.repeatedAncestorRandomSeedMask)
 			guardedMockParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.guardedMockParameterRandomSeedMask)
 			differingPinsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.differingPinsRandomSeedMask)
+			wrapperKindsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperKindsRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -2853,6 +2854,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingGuardedMockParameterShapes(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingTypeBuiltTwiceWithDifferingPins(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingLabelReceivedAsBothWrapperKinds(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3277,6 +3280,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingTypeBuiltTwiceWithDifferingPins`' choices: whether a graph gains `PinHost`'s tree, and every
 		/// shape of that tree.
 		private var differingPinsRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingLabelReceivedAsBothWrapperKinds`' choices: whether a graph gains `WrapKindsHost`'s tree, and
+		/// every shape of that tree.
+		private var wrapperKindsRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -7782,6 +7788,58 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let differingPinsRandomSeedMask: UInt64 = 0x64696666506E6E73
+
+		// MARK: One label received as both wrapper kinds
+
+		/// The base corpus's draw, in mixed graphs, of a mock whose tree receives one label as a `LazilyInstantiated` and
+		/// as a `SendableLazilyInstantiated`, so that its mock root promotes a wrapper of each kind, both of which create the
+		/// instance a by-value receive reads. `WrapKindsHost`, whose mock is generated, instantiates `WrapKindsSource` and
+		/// `WrapKindsPinner`, in either order. `WrapKindsSource` receives `wrapKindsToken: WrapKindsToken` by value and
+		/// instantiates `WrapKindsLeaf`, which receives the label only if available as one wrapper kind; `WrapKindsPinner`
+		/// requires the other kind and, half the time, instantiates `WrapKindsSource` again. The by-value receiver must be
+		/// built after every wrapper sibling whose instance it can read: with the source declared first, a mock that
+		/// waited on one of them read the other before declaring it, which Swift 6.2.4 crashed compiling (seeds 0 and 78). No
+		/// root reaches the tree, and its mirror holds two forms of one label, so the compile is the oracle.
+		/// `wrapperKindsRandom` draws only for this pass, after every other, and only in the base corpus.
+		private mutating func addingLabelReceivedAsBothWrapperKinds(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, wrapperKindsRandom.percentChance(16), sendability == .mixed else { return declarations }
+			var declarations = declarations
+			let pinnerRequiresSendable = wrapperKindsRandom.percentChance(50)
+			let sourceComesFirst = wrapperKindsRandom.percentChance(50)
+			let pinnerBuildsSource = wrapperKindsRandom.percentChance(50)
+			func append(_ name: String, generatesMock: Bool = false, _ properties: [PropertyDeclaration]) {
+				declarations.append(TypeDeclaration(
+					name: name,
+					instantiableArguments: generatesMock ? ["generateMock: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: ["@unchecked Sendable"],
+				))
+			}
+			let tokenName = "\(prefix)WrapKindsToken"
+			let leafName = "\(prefix)WrapKindsLeaf"
+			let sourceName = "\(prefix)WrapKindsSource"
+			let pinnerName = "\(prefix)WrapKindsPinner"
+			let pinnedWrapper = pinnerRequiresSendable ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			let leafWrapper = pinnerRequiresSendable ? "LazilyInstantiated" : "SendableLazilyInstantiated"
+			let source = PropertyDeclaration(attribute: "@Instantiated", label: "wrapKindsSource", type: sourceName)
+			let pinner = PropertyDeclaration(attribute: "@Instantiated", label: "wrapKindsPinner", type: pinnerName)
+			append(tokenName, [])
+			append(leafName, [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "wrapKindsToken", type: "\(leafWrapper)<\(tokenName)>?")])
+			append(sourceName, [
+				PropertyDeclaration(attribute: "@Received", label: "wrapKindsToken", type: tokenName),
+				PropertyDeclaration(attribute: "@Instantiated", label: "wrapKindsLeaf", type: leafName),
+			])
+			var pinnerProperties = [PropertyDeclaration(attribute: "@Received", label: "wrapKindsToken", type: "\(pinnedWrapper)<\(tokenName)>")]
+			if pinnerBuildsSource {
+				pinnerProperties.append(source)
+			}
+			append(pinnerName, pinnerProperties)
+			append("\(prefix)WrapKindsHost", generatesMock: true, sourceComesFirst ? [source, pinner] : [pinner, source])
+			return declarations
+		}
+
+		private static let wrapperKindsRandomSeedMask: UInt64 = 0x7772704B696E6473
 
 		// MARK: Cycle parameters
 
