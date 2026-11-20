@@ -75,9 +75,14 @@ public struct Generate: AsyncParsableCommand {
 	public func run() async throws {
 		let buildLog = BuildLog()
 		do {
-			let warnings = try await generate(buildLog: buildLog).warnings
-			if !warnings.isEmpty {
-				FileHandle.standardError.write(Data("\(buildLog.formatted(warnings))\n".utf8))
+			let output = try await generate(buildLog: buildLog)
+			if !output.warnings.isEmpty {
+				FileHandle.standardError.write(Data("\(buildLog.formatted(output.warnings))\n".utf8))
+			}
+			if SafeDITool.processEndsWithCommand {
+				// The process is about to end, and its end frees everything at once, while releasing what the run built,
+				// one object after another, took a few milliseconds of every module's run under Bazel and Tuist.
+				_ = Unmanaged.passRetained(HeldUntilProcessEnds(output))
 			}
 		} catch let error as any SourceLocatedError {
 			// Print located errors ourselves. ArgumentParser would print `Error: ` ahead of the first line,
@@ -147,8 +152,20 @@ public struct Generate: AsyncParsableCommand {
 		public let warnings: [SourceDiagnostic]
 		/// The module this run generated code for, with the module that declares each of its declarations.
 		public let module: ModuleInfo
-		/// The dependent modules' info, in the order this run combined their declarations.
-		let dependentModules: [ModuleInfo]
+		/// The modules whose info this run read, in the order it combined their declarations.
+		let dependentModuleNames: [String?]
+		/// What the run built on its way to its outputs, which nothing reads: held here so that `run()` can keep it from
+		/// being released when the process ends with the run.
+		let builtValues: [any Sendable]
+	}
+
+	/// An output `run()` keeps until the process ends.
+	private final class HeldUntilProcessEnds: Sendable {
+		init(_ output: Output) {
+			self.output = output
+		}
+
+		let output: Output
 	}
 
 	/// Parses, validates, and writes the configured outputs.
@@ -433,6 +450,13 @@ public struct Generate: AsyncParsableCommand {
 		// A module's generated code names the types the seams and public mocks it calls name, which the modules the views
 		// carry declare: it imports what their files import, as it imports what the files of the modules it was given do.
 		let viewOnlyDeclarations = moduleInfoView.viewOnlyDeclarations
+		// What the rest of the run needs of the module info it read, taken here, so that no later use keeps the decoded
+		// files, their merged view or the dependent modules' declarations as read alive while the trees are validated,
+		// which holds the run's peak memory: about 5 KB per type read. The generator keeps what it needs of them.
+		let moduleInfoViewToWrite = moduleInfoView.view
+		let dependentModuleNames = dependentModuleInfo.map(\.moduleName)
+		let filesWithUnexpectedNodes = dependentModuleInfo.compactMap(\.filesWithUnexpectedNodes).flatMap(\.self) + (module.filesWithUnexpectedNodes ?? [])
+		let instantiableTypeNamesInAnyClause = Set(dependentModuleInfo.flatMap(\.instantiableTypeNamesInAnyClause) + module.instantiableTypeNamesInAnyClause)
 		let isOwnFile = Self.isOwnFile(ownProjectFilePaths: ownProjectFilePaths, comparisonFilePaths: comparisonFilePaths)
 		let generator = DependencyTreeGenerator(
 			importStatements: importingOtherModules(importingModulesReadFromBeneath(dependentModuleInfo.flatMap(\.imports) + viewOnlyDeclarations.flatMap(\.imports) + additionalImportStatements + module.imports)),
@@ -440,16 +464,7 @@ public struct Generate: AsyncParsableCommand {
 			mockImportStatements: importingOtherModules(importingModulesReadFromBeneath(dependentModuleInfo.flatMap(\.mockImports) + viewOnlyDeclarations.flatMap(\.mockImports) + additionalImportStatements + module.mockImports)),
 			typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap,
 			aliasDeclarationReferences: AliasDeclarationReferences(
-				declarationFilePaths: Set(normalizedInstantiables.flatMap { instantiable in
-					instantiable.dependencies.compactMap { dependency in
-						switch dependency.source {
-						case .aliased:
-							dependency.declarationLocation?.filePath
-						case .forwarded, .instantiated, .received:
-							nil
-						}
-					}
-				}),
+				declarationFilePaths: Self.aliasDeclarationFilePaths(of: normalizedInstantiables),
 				compilerFilePaths: compilerFilePaths(manifest: manifest, buildSystemFilePaths: buildSystemFilePaths, inputFilePaths: inputFilePaths),
 				// A plugin's paths relative to its project root, and any other integration's paths as it wrote them.
 				commentFilePath: { [projectFilePaths] filePath in
@@ -500,7 +515,6 @@ public struct Generate: AsyncParsableCommand {
 		// The signatures of the seams the module generates, from that same call, which its module info carries.
 		var storedSeamSignatures = [StoredSeamSignature]()
 		if manifest != nil || combinedOutput != nil {
-			let filesWithUnexpectedNodes = dependentModuleInfo.compactMap(\.filesWithUnexpectedNodes).flatMap(\.self) + (module.filesWithUnexpectedNodes ?? [])
 			if !filesWithUnexpectedNodes.isEmpty {
 				// Write `#error(…)` instead of generated Swift so the
 				// build surfaces the parse failure at the compile step.
@@ -622,7 +636,7 @@ public struct Generate: AsyncParsableCommand {
 					// type that is declared only in clauses these conditions leave inactive.
 					try sourceConfiguration?.validateAdditionalMocksToGenerate(
 						fulfilledBy: typeDescriptionToFulfillingInstantiableMap,
-						orDeclaredAmong: Set(dependentModuleInfo.flatMap(\.instantiableTypeNamesInAnyClause) + module.instantiableTypeNamesInAnyClause),
+						orDeclaredAmong: instantiableTypeNamesInAnyClause,
 					)
 					// A type whose only declaration is `mockOnly` has its mock already: the hand-written one.
 					try sourceConfiguration?.validateAdditionalMocksToGenerate(namingMockOnlyDeclarationsIn: typeDescriptionToFulfillingInstantiableMap)
@@ -879,11 +893,17 @@ public struct Generate: AsyncParsableCommand {
 		// read; and only when its bytes change, so a dependent whose build compares modification times reruns only when
 		// what the file describes changed.
 		if let moduleInfoDestination {
-			try ModuleInfoFile(module: module, moduleName: moduleInfoDestination.moduleName, seamSignatures: storedSeamSignatures.map { $0.withoutPositions() }, view: moduleInfoView.view, storesOwnEntryChecksum: moduleInfoViewsReferToModules)
+			try ModuleInfoFile(module: module, moduleName: moduleInfoDestination.moduleName, seamSignatures: storedSeamSignatures.map { $0.withoutPositions() }, view: moduleInfoViewToWrite, storesOwnEntryChecksum: moduleInfoViewsReferToModules)
 				.moduleInfoData
 				.writeIfChanged(toPath: moduleInfoDestination.path)
 		}
-		return Output(warnings: warnings, module: module, dependentModules: dependentModuleInfo)
+		return Output(
+			warnings: warnings,
+			module: module,
+			dependentModuleNames: dependentModuleNames,
+			// Only what the run reads until its end: holding a value it is done with sooner would raise its peak memory.
+			builtValues: [generator, moduleInfoViewToWrite],
+		)
 	}
 
 	// MARK: Private
@@ -1820,6 +1840,24 @@ public struct Generate: AsyncParsableCommand {
 	/// spelling: Xcode reports a package under `/tmp` to its plugin as `/tmp/…` and hands the compiler
 	/// `/private/tmp/…`, and a plugin that runs `scan` while it plans the build records only the first. This tool
 	/// then does not know how the compiler spells any path.
+	/// The files that declare the aliased dependencies of `instantiables`, collected without an array per declaration.
+	private static func aliasDeclarationFilePaths(of instantiables: [Instantiable]) -> Set<String> {
+		var filePaths = Set<String>()
+		for instantiable in instantiables {
+			for dependency in instantiable.dependencies {
+				switch dependency.source {
+				case .aliased:
+					if let filePath = dependency.declarationLocation?.filePath {
+						filePaths.insert(filePath)
+					}
+				case .forwarded, .instantiated, .received:
+					break
+				}
+			}
+		}
+		return filePaths
+	}
+
 	private func compilerFilePaths(
 		manifest: SafeDIToolManifest?,
 		buildSystemFilePaths: BuildSystemFilePaths?,

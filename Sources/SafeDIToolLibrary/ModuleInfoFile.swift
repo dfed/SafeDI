@@ -349,27 +349,33 @@ struct MergedModuleInfoView {
 	///     mock, whose signature its dependents compute from the modules it depends on directly.
 	/// - Throws: `ModuleInfoDisagreementError` when two files describe one module differently.
 	init(directModules: [(file: ModuleInfoFile, path: String)], ownModuleDeclaresSeamOrPublicMock: Bool, viewsReferToModules: Bool = false) throws(ModuleInfoDisagreementError) {
-		var identities = [String: (identity: ViewedModuleIdentity, bytes: [UInt8], path: String)]()
-		var declarations = [String: (entry: ViewedModule, bytes: [UInt8], path: String)]()
+		// Two entries of one module are compared by the bytes they are written as, which are computed only once a module's
+		// name repeats, and then once for the entry kept: most modules are named once.
+		var identities = [String: (identity: ViewedModuleIdentity, path: String)]()
+		var identityBytes = [String: [UInt8]]()
+		var declarations = [String: (entry: ViewedModule, path: String)]()
+		var declarationBytes = [String: [UInt8]]()
 		var writtenDeclarationNames = Set<String>()
 		func merge(_ identity: ViewedModuleIdentity, from path: String) throws(ModuleInfoDisagreementError) {
-			let bytes = Self.encoded(identity)
 			if let existing = identities[identity.moduleName] {
-				guard existing.bytes == bytes else {
+				let existingBytes = identityBytes[identity.moduleName] ?? Self.encoded(existing.identity)
+				identityBytes[identity.moduleName] = existingBytes
+				guard existingBytes == Self.encoded(identity) else {
 					throw ModuleInfoDisagreementError(moduleName: identity.moduleName, filePaths: [existing.path, path])
 				}
 			} else {
-				identities[identity.moduleName] = (identity, bytes, path)
+				identities[identity.moduleName] = (identity, path)
 			}
 		}
 		func merge(_ entry: ViewedModule, from path: String) throws(ModuleInfoDisagreementError) {
-			let bytes = Self.encoded(entry)
 			if let existing = declarations[entry.moduleName] {
-				guard existing.bytes == bytes else {
+				let existingBytes = declarationBytes[entry.moduleName] ?? Self.encoded(existing.entry)
+				declarationBytes[entry.moduleName] = existingBytes
+				guard existingBytes == Self.encoded(entry) else {
 					throw ModuleInfoDisagreementError(moduleName: entry.moduleName, filePaths: [existing.path, path])
 				}
 			} else {
-				declarations[entry.moduleName] = (entry, bytes, path)
+				declarations[entry.moduleName] = (entry, path)
 			}
 		}
 		// A file's own module first, so a module given both directly and in a view is read from its own file.
@@ -439,12 +445,13 @@ struct MergedModuleInfoView {
 			.sorted { Array($0.moduleName.utf8).lexicographicallyPrecedes(Array($1.moduleName.utf8)) }
 	}
 
-	/// The bytes `value` is written as, which two entries for one module must share: `==` ignores `any` at every depth
-	/// and the order inside an `UnorderedEquatingCollection`, which the bytes do not.
+	/// The bytes `value` is written as, with each string where it is written, which two entries for one module must
+	/// share: `==` ignores `any` at every depth and the order inside an `UnorderedEquatingCollection`, which the bytes
+	/// do not.
 	static func encoded(_ value: some BinaryCodable) -> [UInt8] {
-		var writer = BinaryWriter()
+		var writer = BinaryWriter.writingStringsInline()
 		writer.write(value)
-		return writer.encoded
+		return writer.bytes
 	}
 }
 

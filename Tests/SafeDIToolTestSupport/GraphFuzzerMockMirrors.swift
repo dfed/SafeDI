@@ -663,16 +663,23 @@ struct GraphFuzzerMockMirrorModel {
 			return .instantiated(lazilyInstantiatedProperty, scopeTypeName: scopeTypeName, isErased: isErased)
 		}
 
-		// One wrapper for both forms of a lazily instantiated label.
+		// One wrapper for both forms of a lazily instantiated label. A required wrapper provides its instance, so a
+		// requirement of the instance promotes no wrapper of the other kind beside it.
+		var requiredWrappersByInstance = [GraphFuzzerMirrorProperty: Set<GraphFuzzerMirrorProperty>]()
+		for requiredProperty in allRequired where !requiredProperty.isOptional {
+			guard let instanceProperty = requiredProperty.lazilyInstantiatedInstance else { continue }
+			requiredWrappersByInstance[instanceProperty, default: []].insert(requiredProperty)
+		}
 		var lazilyInstantiatedPropertiesToPromote = Set<GraphFuzzerMirrorProperty>()
 		var instancesOfLazilyInstantiatedProperties = Set(ownChildren.compactMap(\.lazilyInstantiatedInstance))
 		for receivedProperty in allReceived {
 			guard let instanceProperty = receivedProperty.lazilyInstantiatedInstance else { continue }
 			let lazilyInstantiatedProperty = receivedProperty.unwrapped
 			let optionalInstanceProperty = GraphFuzzerMirrorProperty(label: instanceProperty.label, type: instanceProperty.type + "?")
+			let otherKindIsRequired = requiredWrappersByInstance[instanceProperty]?.contains { $0 != lazilyInstantiatedProperty } == true
 			guard allRequired.contains(lazilyInstantiatedProperty)
-				|| (allRequired.contains(instanceProperty) && !isForwarded(instanceProperty))
-				|| (allRequired.contains(optionalInstanceProperty) && !isForwarded(optionalInstanceProperty)),
+				|| (!otherKindIsRequired && allRequired.contains(instanceProperty) && !isForwarded(instanceProperty))
+				|| (!otherKindIsRequired && allRequired.contains(optionalInstanceProperty) && !isForwarded(optionalInstanceProperty)),
 				scopeToPromote(for: lazilyInstantiatedProperty) != nil
 			else { continue }
 			lazilyInstantiatedPropertiesToPromote.insert(lazilyInstantiatedProperty)
@@ -1414,13 +1421,19 @@ extension GraphFuzzerMockMirrorModel {
 		let receivedParameterProperties = lazilyInstantiatedReceivedProperties.isEmpty
 			? received
 			: Set(received.filter { !isFulfilledByForwardedProperty($0) }.map(\.validatedForDependencyCycles))
-		let requiredUnwrappedProperties = Set(mockRoot.required.filter { !isFulfilledByForwardedProperty($0) }.map(\.validatedForDependencyCycles.unwrapped))
+		// As `mockRootParameters`, which classifies by value only where some lazily instantiated dependency is: otherwise a
+		// receive only if available of a wrapper whose instance the tree provides through a wrapper of the other kind, which
+		// cannot be made from it, keeps its override beside a requirement of that instance.
+		func classified(_ property: GraphFuzzerMirrorProperty) -> GraphFuzzerMirrorProperty {
+			lazilyInstantiatedReceivedProperties.isEmpty ? property : property.validatedForDependencyCycles
+		}
+		let requiredUnwrappedProperties = Set(mockRoot.required.filter { !isFulfilledByForwardedProperty($0) }.map { classified($0).unwrapped })
 		var overrideCount = 0
 		for property in receivedParameterProperties
 			where !forwardedProperties.contains(property)
 			&& (!property.isOptional || (!receivedParameterProperties.contains(property.unwrapped) && !forwardedProperties.contains(property.unwrapped)))
 			&& !isProvidedByTreeByValue(property)
-			&& !requiredUnwrappedProperties.contains(property.validatedForDependencyCycles.unwrapped)
+			&& !requiredUnwrappedProperties.contains(classified(property).unwrapped)
 		{
 			overrideCount += 1
 		}

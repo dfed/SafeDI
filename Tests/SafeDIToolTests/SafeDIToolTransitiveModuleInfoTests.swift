@@ -169,7 +169,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		    }
 		}
 		"""])
-		#expect(output.modules["App"]?.generateOutput?.dependentModules.map(\.moduleName) == ["Base", "Left", "Right"])
+		#expect(output.modules["App"]?.generateOutput?.dependentModuleNames == ["Base", "Left", "Right"])
 	}
 
 	@Test(arguments: [
@@ -199,7 +199,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			},
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generateOutput?.dependentModules.map(\.moduleName) == ["Alpha", "Bravo", "Charlie", "Middle", "Xray", "Yankee", "Zulu"])
+		#expect(output.modules["App"]?.generateOutput?.dependentModuleNames == ["Alpha", "Bravo", "Charlie", "Middle", "Xray", "Yankee", "Zulu"])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Alpha)
 		import Alpha
@@ -388,7 +388,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		#endif
 		"""])
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Middle"])
-		#expect(output.modules["App"]?.generateOutput?.dependentModules.map(\.moduleName) == ["Middle"])
+		#expect(output.modules["App"]?.generateOutput?.dependentModuleNames == ["Middle"])
 	}
 
 	@Test
