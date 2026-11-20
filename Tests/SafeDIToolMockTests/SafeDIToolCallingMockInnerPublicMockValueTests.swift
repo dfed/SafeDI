@@ -54,9 +54,10 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		#expect(output.modules["InnerMod"]?.generatedFiles == Self.expectedInnerModFiles)
 		#expect(output.modules["Feat"]?.generatedFiles == Self.expectedFeatFiles)
 		#expect(output.modules["App"]?.generatedFiles == Self.expectedAppFiles)
+		guard compileVerificationIsEnabled else { return }
 		let compilation = try #require(output.compilation)
 		#expect(compilation.failure == nil, "\(compilation.failure.map { "\($0)" } ?? "")")
-		guard compileVerificationIsEnabled, compilation.failure == nil else { return }
+		guard compilation.failure == nil else { return }
 		// The same types in one module, `Root` a root: what inline builds. `Live` receives `Root`’s `db`, as each of `K` and
 		// `Inner` does.
 		let inline = Self.inlineModules(liveReceive: "@Received let db: Db", liveInitializerParameter: "db: Db")
@@ -85,6 +86,7 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
+		guard compileVerificationIsEnabled else { return }
 		let compilation = try #require(output.compilation)
 		#expect(compilation.failure == nil, "\(compilation.failure.map { "\($0)" } ?? "")")
 	}
@@ -195,7 +197,12 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 			Issue.record("Did not throw error!")
 		} catch let error as SafeDIToolMultiModuleTestError {
 			#expect(error.moduleName == "App")
-			#expect("\(error.underlyingError)".split(separator: "\n").first.map(String.init) == diagnostics(error.fixtures).split(separator: "\n").first.map(String.init))
+			// Each side is bound apart: Xcode 26.0’s Swift 6.2 (swiftlang-6.2.0) gives up type-checking the comparison written
+			// as one expression inside `#expect` ("unable to type-check this expression in reasonable time"); Linux’s Swift 6.2.4
+			// accepts it.
+			let reportedFirstLine: String? = "\(error.underlyingError)".split(separator: "\n").first.map(String.init)
+			let expectedFirstLine: String? = diagnostics(error.fixtures).split(separator: "\n").first.map(String.init)
+			#expect(reportedFirstLine == expectedFirstLine)
 		}
 	}
 
