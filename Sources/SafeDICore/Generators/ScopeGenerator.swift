@@ -9536,6 +9536,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			   rootItems.fillingGenerators.isEmpty,
 			   let plan = await Self.mockBodyPlan(of: rootItems, labelMap: rootLabelMap, flatParameterDisambiguationMap: treeDisambiguationMap, context: context)
 			{
+				MockBodyRouting.record(routed: true)
 				bodyBindings = try await GeneratedCode.lines(generateProperties(
 					codeGeneration: .overriding(plan),
 					propertiesGeneratedLater: [],
@@ -9547,6 +9548,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				.components(separatedBy: "\n")
 				.filter { !$0.allSatisfy(\.isWhitespace) }
 			} else {
+				MockBodyRouting.record(routed: false)
 				bodyBindings = await Self.generateMockBodyBindings(
 					items: rootItems,
 					propertyNodeLabelMap: rootLabelMap,
@@ -12112,9 +12114,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// The walk binds a promoted optional node to a non-optional value, and its builder function returns the property's
 			// type where production's returns the concrete type.
 			&& !node.typeDescription.isOptional
+			// Production annotates a value declared implicitly unwrapped (`let logger: Logger! = …`); the walk does not.
+			&& !isImplicitlyUnwrapped(node.typeDescription)
 			&& node.concreteType.asSource == node.instantiatedTypeSpelledAsDeclared.asSource
 			// The walk spells an unlabeled argument bare, production `_:`.
 			&& !node.constructionArguments.contains { $0.outerLabel == "_" }
+	}
+
+	private static func isImplicitlyUnwrapped(_ typeDescription: TypeDescription) -> Bool {
+		if case .implicitlyUnwrappedOptional = typeDescription {
+			true
+		} else {
+			false
+		}
 	}
 
 	/// `async`, as the walk it plans is, so that its frames are allocated with the task: a mock tree can be as deep as the

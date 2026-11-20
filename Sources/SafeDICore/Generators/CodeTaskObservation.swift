@@ -62,3 +62,19 @@ public enum HeldCodeTasks {
 	/// set: by the tests, never by the tool.
 	@TaskLocal public static var observer: (@Sendable (Int) -> Void)?
 }
+
+/// Whether a mock root’s body was written by the production emitter, through its override hook, or by the mock’s own
+/// walk. The tests read it to show that a body they pin is the production emitter’s. Handed to `observer`, which the
+/// tests set, never the tool.
+public enum MockBodyRouting {
+	/// Called once for each mock root’s body, with `true` where the production emitter wrote it, when set: by the tests,
+	/// never by the tool.
+	@TaskLocal public static var observer: (@Sendable (Bool) -> Void)?
+
+	/// Tells `observer`, when set, which emitter wrote a mock root’s body.
+	static func record(routed: Bool) {
+		if let observer {
+			observer(routed)
+		}
+	}
+}
