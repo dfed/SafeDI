@@ -47,30 +47,44 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func readableInitializerFindings_nameGeneratedScopeType_whenSeamCorpusGraphHasHole() async throws {
-		guard case let .accepted(generatedFiles, _) = try await GraphFuzzerOracle.toolOutcome(of: GraphFuzzerGenerator.fixture(forSeed: 15, features: [.generateDependencyTree])) else {
-			Issue.record("Seam corpus seed 15 is no longer accepted")
-			return
-		}
-		let findings = GraphFuzzerBuilderSurface.readableInitializerFindings(in: generatedFiles)
-		#expect(!findings.isEmpty)
-		#expect(findings.allSatisfy { $0.reason.hasPrefix("names the generated type `SafeDI") })
+	func readableInitializerFindings_reportNothing_whenSeamCorpusGraphHasHole() async throws {
+		// Every hole type of a seam takes a builder struct, which only the generated-only initializer names: the readable
+		// initializers take builders that name no generated type.
+		let generatedFiles = try await Self.generatedFilesOfSeamCorpusGraphWithHole()
+
+		#expect(GraphFuzzerBuilderSurface.readableInitializerFindings(in: generatedFiles) == [])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func readableInitializerFindings_reportNothing_whenBuildersTakeNoScope() async throws {
-		// The hand mutation: seed 15's generated files with every builder rewritten to take nothing, as the planned builder
-		// structs' readable initializers will, pass the check that the files as generated fail.
-		guard case let .accepted(generatedFiles, _) = try await GraphFuzzerOracle.toolOutcome(of: GraphFuzzerGenerator.fixture(forSeed: 15, features: [.generateDependencyTree])) else {
-			Issue.record("Seam corpus seed 15 is no longer accepted")
-			return
+	func readableInitializerFindings_nameGeneratedScopeType_whenReadableInitializerBuilderTakesScope() async throws {
+		// The hand mutation: the same graph's readable initializers with every builder rewritten to take a generated scope
+		// type, as they did before every hole type took a builder struct, fail the check that the files as generated pass.
+		let generatedFiles = try await Self.generatedFilesOfSeamCorpusGraphWithHole()
+		let takingScopes = generatedFiles.mapValues {
+			$0.replacingOccurrences(of: "Builder: @escaping () -> ", with: "Builder: @escaping (SafeDIScope_Mutated) -> ")
 		}
-		let withoutScopes = generatedFiles.mapValues {
-			$0.replacingOccurrences(of: #"\([\w.]*SafeDI\w*Scope_\w+\) -> "#, with: "() -> ", options: .regularExpression)
+		let findings = GraphFuzzerBuilderSurface.readableInitializerFindings(in: takingScopes)
+
+		#expect(!findings.isEmpty)
+		#expect(findings.allSatisfy { $0.reason == "names the generated type `SafeDIScope_Mutated`" }, "\(findings)")
+	}
+
+	/// The generated files of seam corpus seed 18, which draws a hole the roots' module fills and whose readable
+	/// initializers take builders `@escaping () -> …`.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func generatedFilesOfSeamCorpusGraphWithHole() async throws -> [String: String] {
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 18, features: [.generateDependencyTree])
+		try #require(fixture.drawsHole, "Seam corpus seed 18 no longer draws a hole")
+		guard case let .accepted(generatedFiles, _) = try await GraphFuzzerOracle.toolOutcome(of: fixture) else {
+			throw GraphFuzzerBuilderSurfaceTestError.seamCorpusSeedIsNoLongerAccepted
 		}
-		#expect(!GraphFuzzerBuilderSurface.readableInitializerFindings(in: generatedFiles).isEmpty)
-		#expect(GraphFuzzerBuilderSurface.readableInitializerFindings(in: withoutScopes) == [])
+		try #require(generatedFiles.values.contains { $0.contains("Builder: @escaping () -> ") }, "No readable initializer of seam corpus seed 18 takes a builder `@escaping () -> …`")
+		return generatedFiles
+	}
+
+	private enum GraphFuzzerBuilderSurfaceTestError: Error {
+		case seamCorpusSeedIsNoLongerAccepted
 	}
 
 	@Test
@@ -715,19 +729,19 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 	// MARK: Edits
 
 	@Test(arguments: [
-		(GraphFuzzerBuilderSurfaceEdit.secondPlaceInAnotherType, GraphFuzzerGeneratorFeature.generateDependencyTree, UInt64(15)),
-		(.placeBehindLazilyInstantiated, .generateDependencyTree, 15),
-		(.placeForwardingOtherValuesRemedied, .generateDependencyTree, 15),
-		(.secondPlaceInInnerSeamOfAnotherModule, .generateDependencyTree, 69),
-		(.holderMovedToInnerSeamOfAnotherModule, .generateDependencyTree, 69),
-		(.placeOfNewBuilderInInnerSeamOfAnotherModule, .generateDependencyTree, 69),
-		(.placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied, .generateDependencyTree, 69),
-		// Seed 15 holds `HoleHanded`, which forwards nothing, in an `Instantiator` on `HoleHandedHolder`.
-		(.instantiatorPlaceMovedToPlainPlace, .generateDependencyTree, 15),
-		(.instantiatorChangedToErasedInstantiator, .generateDependencyTree, 15),
-		(.instantiatorMadeSendable, .generateDependencyTree, 15),
-		(.sendableInstantiatorPlaceMovedToPlainPlace, .generateDependencyTree, 15),
-		(.sendableInstantiatorChangedToSendableErasedInstantiator, .generateDependencyTree, 15),
+		(GraphFuzzerBuilderSurfaceEdit.secondPlaceInAnotherType, GraphFuzzerGeneratorFeature.generateDependencyTree, UInt64(59)),
+		(.placeBehindLazilyInstantiated, .generateDependencyTree, 59),
+		(.placeForwardingOtherValuesRemedied, .generateDependencyTree, 59),
+		(.secondPlaceInInnerSeamOfAnotherModule, .generateDependencyTree, 135),
+		(.holderMovedToInnerSeamOfAnotherModule, .generateDependencyTree, 135),
+		(.placeOfNewBuilderInInnerSeamOfAnotherModule, .generateDependencyTree, 135),
+		(.placeForwardingOtherValuesInInnerSeamOfAnotherModuleRemedied, .generateDependencyTree, 135),
+		// Seed 59 holds `HoleHanded`, which forwards nothing, in an `Instantiator` on `HoleHandedHolder`.
+		(.instantiatorPlaceMovedToPlainPlace, .generateDependencyTree, 59),
+		(.instantiatorChangedToErasedInstantiator, .generateDependencyTree, 59),
+		(.instantiatorMadeSendable, .generateDependencyTree, 59),
+		(.sendableInstantiatorPlaceMovedToPlainPlace, .generateDependencyTree, 59),
+		(.sendableInstantiatorChangedToSendableErasedInstantiator, .generateDependencyTree, 59),
 		(.placeBehindLazilyInstantiated, .generateMockPublic, 3),
 		(.instantiatorPlaceMovedToPlainPlace, .generateMockPublic, 18),
 		(.instantiatorChangedToErasedInstantiator, .generateMockPublic, 18),

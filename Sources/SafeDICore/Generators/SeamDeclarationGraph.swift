@@ -150,6 +150,10 @@ struct SeamDeclarationGraph {
 		let inSendableFunction: Bool
 		/// Whether the type's own builder function is `@Sendable`: the place the fill fills is held in a `Sendable` wrapper.
 		let fulfillerBuildsInSendableFunction: Bool
+		/// Whether the edge is a call's reuse of an enclosing call's fill, which it passes by name: the edge leads to the node of
+		/// the type that fill builds, which the enclosing call's own edge reads. The tree closes there by name, never by a
+		/// cycle, so the edge is never removed, and takes no part in which declarations dominate others.
+		var reusesEnclosingFill = false
 
 		/// The builder the fill is passed for, as its case of the calling type's enum carries it.
 		var filledBuilder: FilledBuilder {
@@ -189,6 +193,15 @@ struct SeamDeclarationGraph {
 		case sendableBeneathPlace
 		/// A call's fill of one of the inner seam's builders (`fillEdges`).
 		case fill(FillEdge)
+
+		/// Whether the edge is a call's reuse of an enclosing call's fill (`FillEdge.reusesEnclosingFill`).
+		var reusesEnclosingFill: Bool {
+			if case let .fill(fillEdge) = self {
+				fillEdge.reusesEnclosingFill
+			} else {
+				false
+			}
+		}
 	}
 
 	/// Reads the graph of one hole type's places in the tree `root` roots, in which `edges` says what each child of a scope
@@ -201,6 +214,7 @@ struct SeamDeclarationGraph {
 		inTreeRootedAt root: ScopeGenerator,
 		edges: (_ parent: ScopeGenerator, _ child: ScopeGenerator) -> [ChildEdge],
 		fillEdges: (_ parent: ScopeGenerator, _ child: ScopeGenerator) -> [(edge: FillEdge, fulfiller: ScopeGenerator)],
+		fulfillingCallsHoldPlaces: Bool = false,
 	) -> PlaceHolding {
 		struct KindedEdge: Hashable {
 			let property: Property
@@ -240,7 +254,8 @@ struct SeamDeclarationGraph {
 				// A fill builds its type with the stack of the seam whose hole it fills, so it never closes on this tree's path.
 				for (fillEdge, fulfiller) in fillEdges(generator, child) {
 					guard let fulfillerProperty = fulfiller.property, let fulfillerType = fulfiller.builtInstantiable?.concreteInstantiable else { continue }
-					let target = nodeIndex(of: Declaration(property: fulfillerProperty.asValidatedForDependencyCycles, concreteType: fulfillerType))
+					let edge = KindedEdge(property: property, target: nodeIndex(of: Declaration(property: fulfillerProperty.asValidatedForDependencyCycles, concreteType: fulfillerType)), kind: .fill(fillEdge))
+					let target = edge.target
 					if let type = types[node] {
 						// The `@Sendable` family's case that holds what a `@Sendable` function beneath the fill builds carries no inner
 						// scope, whatever the fill's.
@@ -251,10 +266,38 @@ struct SeamDeclarationGraph {
 							}
 						}
 					}
-					generatorsToVisit.append((fulfiller, target))
-					let edge = KindedEdge(property: property, target: target, kind: .fill(fillEdge))
 					if seenEdges[node].insert(edge).inserted {
 						successors[node].append(edge)
+					}
+					// The enclosing call's fill edge reads what a reused fill builds.
+					guard !fillEdge.reusesEnclosingFill else { continue }
+					generatorsToVisit.append((fulfiller, target))
+					// A fulfiller that is itself a call handing up an enum of the hole type holds a place, as a child call does: the
+					// fill's case then holds that call's enum. A seam's only: a public mock's fill keeps its enum form.
+					for fulfillerEdge in fulfillingCallsHoldPlaces ? edges(child, fulfiller) : [] {
+						let placeNode: Int
+						let placeKind: PlaceEdge
+						switch fulfillerEdge {
+						case .plainPlace:
+							placeNode = plainPlaceNode
+							placeKind = .plainPlace
+						case .sendablePlace:
+							// A call that hands up its plain enum from a `@Sendable` function is a plain place to the fill, whose edge says
+							// it is built in that function (`FillEdge.inSendableFunction`): the fill's case is then of the `@Sendable`
+							// family and holds the plain enum, as a child call's own case does. Counted here too, the function would put
+							// the case where only a `@Sendable` enum is held, and the call's enum would have no case.
+							placeNode = plainPlaceNode
+							placeKind = .plainPlace
+						case .sendableBeneathPlace:
+							placeNode = sendableBeneathPlaceNode
+							placeKind = .sendableBeneathPlace
+						case .declaration:
+							continue
+						}
+						let placeEdge = KindedEdge(property: fulfillerProperty, target: placeNode, kind: placeKind)
+						if seenEdges[target].insert(placeEdge).inserted {
+							successors[target].append(placeEdge)
+						}
 					}
 				}
 				for childEdge in edges(generator, child) {
@@ -288,12 +331,15 @@ struct SeamDeclarationGraph {
 				}
 			}
 		}
-		let immediateDominators = Self.immediateDominators(successors: successors.map { $0.map { Edge(property: $0.property, target: $0.target) } })
-		// An edge whose target dominates its source closes a cycle on every build: it is removed.
+		let immediateDominators = Self.immediateDominators(successors: successors.map { edges in
+			edges.filter { !$0.kind.reusesEnclosingFill }.map { Edge(property: $0.property, target: $0.target) }
+		})
+		// An edge whose target dominates its source closes a cycle on every build: it is removed. A reuse of an enclosing call's
+		// fill closes the tree by name, so it is left.
 		var leftEdges = Array(repeating: [KindedEdge](), count: successors.count)
 		var predecessorsByLeftEdges = Array(repeating: [(source: Int, kind: PlaceEdge)](), count: successors.count)
 		for (source, edges) in successors.enumerated() {
-			for edge in edges where edge.target <= sendableBeneathPlaceNode || !Self.dominates(edge.target, source, immediateDominators: immediateDominators) {
+			for edge in edges where edge.target <= sendableBeneathPlaceNode || edge.kind.reusesEnclosingFill || !Self.dominates(edge.target, source, immediateDominators: immediateDominators) {
 				leftEdges[source].append(edge)
 				predecessorsByLeftEdges[edge.target].append((source, edge.kind))
 			}

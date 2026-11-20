@@ -230,8 +230,9 @@ public struct SeamSignature: Sendable {
 	public struct Hole: Sendable {
 		/// A value in scope at the site, which the scope struct the builder is handed carries.
 		public struct Field: Sendable {
-			public init(property: Property, access: AccessLevel, accessCause: TypeAccessProof.Cause? = nil, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool = false, parameterTakingType: TypeDescription? = nil, deferral: Parameter.Deferral = .none) {
+			public init(property: Property, access: AccessLevel, accessCause: TypeAccessProof.Cause? = nil, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool = false, parameterTakingType: TypeDescription? = nil, deferral: Parameter.Deferral = .none, bindsMemo: Bool = false) {
 				self.property = property
+				self.bindsMemo = bindsMemo
 				self.deferral = deferral
 				self.access = access
 				self.accessCause = accessCause
@@ -265,6 +266,10 @@ public struct SeamSignature: Sendable {
 			/// holds a deferred parameter in a `LazilyInstantiated` (`SendableLazilyInstantiated` when `@Sendable`), which
 			/// it hands the struct, so the value is created when a fill first reads the field, as inline.
 			public let deferral: Parameter.Deferral
+			/// Whether a fill that reads this deferred parameter's field from the struct binds its memo, read under `memoName`,
+			/// whose instance the fill's tree reads where it reads the value. The field keeps its own property, which decides
+			/// what it satisfies.
+			public let bindsMemo: Bool
 
 			/// Whether the field is bound from a deferred parameter (`SeamSignature.Parameter.isDeferred`).
 			public var isDeferredParameter: Bool {
@@ -396,6 +401,32 @@ public struct SeamSignature: Sendable {
 			public let closedOnDeclaringType: TypeDescription
 			/// The type that instantiates `closedOnProperty` again, closing the cycle.
 			public let reenteringType: TypeDescription
+		}
+
+		/// A declaration on the path from the root of a fill of the seam call whose tree holds this place, inside another fill
+		/// of that call, to a call inside it that builds the filled seam again and passes the fill on: inline, a receive of its
+		/// label beneath the place would read it on the route through that call, while the module that fills this place
+		/// hands the one fill the value of the outer call. Recorded by the seam whose call fills the place built again, for a
+		/// label the visible build rejects a read of (`declarationBoundOnPathToReenteringCall`): one the fill built again holds
+		/// no field of, nor any scope between that fill's root and the place declares. A field of the label bound above the
+		/// seam call does not lift it, a deliberate loss of a shape inline builds correctly, until each route is handed its own
+		/// value.
+		public struct ReenteringCallDeclaration: Sendable {
+			/// The declaration, by the type that declares it, and where.
+			public let property: Property
+			public let declaringType: TypeDescription
+			public let declarationLocation: Dependency.DeclarationLocation?
+			/// The place whose fill's tree holds the path.
+			public let pathPlace: UncarriedDeclaration.PresentedPlace
+			/// The type whose scope makes the call, the property it builds the seam under, and the seam it calls.
+			public let callingType: TypeDescription
+			public let callProperty: Property
+			public let calledSeam: TypeDescription
+			/// The place of the fill the call is passed, which holds this place, and the module of its seam.
+			public let reenteredPlace: UncarriedDeclaration.PresentedPlace
+			public let reenteredSeamModule: ModuleIdentity
+			/// The module that fills `reenteredPlace`: the module of the seam whose call the fills are.
+			public let fillingModule: ModuleIdentity
 		}
 
 		/// A type on the way from the seam that takes a hole's builder to the hole's owner, with the module that declares it.
@@ -537,6 +568,10 @@ public struct SeamSignature: Sendable {
 		/// The declarations a cycle in the tree of the seam that holds the site hands the site's owner when it builds it
 		/// again, which a fill cannot read, the first of each label.
 		public let cycleReentryDeclarations: [CycleReentryDeclaration]
+		/// The declarations on the paths to calls inside fills of the seam call whose tree holds the place that build the
+		/// filled seam again, which a fill of this place cannot read (see `ReenteringCallDeclaration`), every path's, in the
+		/// order of their declarations. A copy a seam passes up keeps them all.
+		public internal(set) var reenteringCallDeclarations = [ReenteringCallDeclaration]()
 		/// The seam the tree calls that presented the hole first, when this one passes it up, or `nil` for a site of this
 		/// seam's own tree.
 		public let innerSeamType: TypeDescription?
@@ -790,6 +825,17 @@ public struct SeamSignature: Sendable {
 	/// the inner enum, the cases that lead from the root enum to the call's case, and the values the call's owner binds
 	/// before it, which the closure the call passes builds.
 	public struct CallRoute: Sendable {
+		init(sitePath: [Property], innerKey: ScopeEnum.Key, rootKey: ScopeEnum.Key, route: [Hole.RouteStep], caseName: String, memberValuesType: TypeDescription? = nil, handsFillLevelStruct: Bool = false, reentersEnclosingFill: Bool = false) {
+			self.sitePath = sitePath
+			self.innerKey = innerKey
+			self.rootKey = rootKey
+			self.route = route
+			self.caseName = caseName
+			self.memberValuesType = memberValuesType
+			self.handsFillLevelStruct = handsFillLevelStruct
+			self.reentersEnclosingFill = reentersEnclosingFill
+		}
+
 		/// The properties from the seam's root to the call's property.
 		public let sitePath: [Property]
 		public let innerKey: ScopeEnum.Key
@@ -798,6 +844,18 @@ public struct SeamSignature: Sendable {
 		public let route: [Hole.RouteStep]
 		/// The call's own case, which holds the inner enum and nothing else.
 		public let caseName: String
+		/// Where the call's enum declares a builder struct, the type of the empty struct the call's own member takes, as the
+		/// seam's extension spells it: the call passes the inner seam the struct that member returns. `nil` where the enum
+		/// declares none.
+		public let memberValuesType: TypeDescription?
+		/// Whether the call is the fulfiller of a fill whose case `route` ends on: it is handed the struct of the fill's own level,
+		/// which the fill is handed, and has no case of its own (`caseName` is empty).
+		public let handsFillLevelStruct: Bool
+		/// Whether the call, inside a fill, re-enters an enclosing call's fill by name, for the builder whose root enum is
+		/// `innerKey`'s: the member of the case `route` ends on returns the called seam's struct, which the call hands that
+		/// call's level function, under the name of the fill's parameter it stands for (`SeamHoles.carriedStruct`). It has no
+		/// case of its own (`caseName` is empty) and hands up nothing.
+		public let reentersEnclosingFill: Bool
 	}
 
 	/// How the seam's tree hands each inner seam's enum up from a call whose case is in an enum nested by type. Read by the
@@ -1284,12 +1342,13 @@ public struct SeamSignature: Sendable {
 		}
 
 		/// A hole's call shape, which a hole that changes changes what the seam's callers and the seams that pass it up
-		/// compute, and the labels of its uncarried and cycle re-entry declarations, which only accumulate where a seam's tree
-		/// reaches the seam again and hands the builder back.
+		/// compute, and the labels of its uncarried, cycle re-entry and re-entering call declarations, which only accumulate
+		/// where a seam's tree reaches the seam again and hands the builder back.
 		public struct Hole: Hashable, Sendable {
 			public let callShape: CallShape.Hole
 			public let uncarriedLabels: Set<String>
 			public let cycleReentryLabels: Set<String>
+			public let reenteringCallLabels: Set<String>
 		}
 
 		public let parameters: [Parameter]
@@ -1321,7 +1380,7 @@ public struct SeamSignature: Sendable {
 		let callShape = callShape
 		return SettledContent(
 			parameters: settledContent(of: parameters),
-			holes: holes.map { SettledContent.Hole(callShape: CallShape.Hole($0), uncarriedLabels: Set($0.uncarriedDeclarations.map(\.property.label)), cycleReentryLabels: Set($0.cycleReentryDeclarations.map(\.property.label))) },
+			holes: holes.map { SettledContent.Hole(callShape: CallShape.Hole($0), uncarriedLabels: Set($0.uncarriedDeclarations.map(\.property.label)), cycleReentryLabels: Set($0.cycleReentryDeclarations.map(\.property.label)), reenteringCallLabels: Set($0.reenteringCallDeclarations.map(\.property.label))) },
 			builders: callShape.builders,
 			scopeEnums: callShape.scopeEnums,
 			tiers: tiers,
@@ -1426,9 +1485,7 @@ public struct SeamCall: Sendable {
 		callerPackageName: String? = nil,
 	) {
 		self.parameters = parameters
-		self.holes = holes
-		self.builders = builders
-		self.scopeEnums = scopeEnums
+		calledBuilders = CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums)
 		self.guardTypeName = guardTypeName
 		self.comment = comment
 		self.unreachableTierIsReported = unreachableTierIsReported
@@ -1447,11 +1504,10 @@ public struct SeamCall: Sendable {
 	/// seam that reaches this one passes on at that access.
 	public let parameters: [SeamSignature.Parameter]
 	/// Every place the call's builders reach, in the order they reach them: every tier takes every builder.
-	public let holes: [SeamSignature.Hole]
-	/// The builders the call passes.
-	public let builders: [SeamSignature.Builder]
-	/// Every enum the call's builders reach.
-	public let scopeEnums: [SeamSignature.ScopeEnum]
+	public var holes: [SeamSignature.Hole] {
+		calledBuilders.holes
+	}
+
 	/// The `SeamSignature.guardTypeName` of the signature the call was generated from.
 	public let guardTypeName: String
 	/// The comment the call carries saying what to do when it does not compile.
@@ -1483,23 +1539,51 @@ public struct SeamCall: Sendable {
 	/// then reported as any other receive's is.
 	public let unreachableTierIsReported: Bool
 
-	/// The builders the call passes.
-	var calledBuilders: CalledBuilders {
-		CalledBuilders(holes: holes, builders: builders, scopeEnums: scopeEnums)
-	}
+	/// The builders the call passes, built once with the call.
+	let calledBuilders: CalledBuilders
 }
 
 /// The builders a call passes another module's seam or public mock: the builders, every enum they reach, and every place
 /// they reach, in the order they reach them, which the calling module fills or passes up.
 struct CalledBuilders: Sendable {
+	init(holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], scopeEnums: [SeamSignature.ScopeEnum]) {
+		self.holes = holes
+		self.builders = builders
+		self.scopeEnums = scopeEnums
+		let enumsByKey = Dictionary(scopeEnums.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+		self.enumsByKey = enumsByKey
+		var builderKeyByReachedPlace = [ReachedPlace: SeamSignature.ScopeEnum.Key]()
+		for builder in builders {
+			for site in SeamSignature.ScopeEnum.sitesReached(from: builder.enumKey, in: enumsByKey) {
+				let place = ReachedPlace(site: site, holeType: builder.enumKey.holeType)
+				if builderKeyByReachedPlace[place] == nil {
+					builderKeyByReachedPlace[place] = builder.enumKey
+				}
+			}
+		}
+		self.builderKeyByReachedPlace = builderKeyByReachedPlace
+	}
+
 	let holes: [SeamSignature.Hole]
 	let builders: [SeamSignature.Builder]
 	let scopeEnums: [SeamSignature.ScopeEnum]
-
 	/// Each enum by its key.
-	var enumsByKey: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum] {
-		Dictionary(scopeEnums.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+	let enumsByKey: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]
+
+	/// The enum key of the first builder of `hole`'s hole type, in builder order, whose enum reaches `hole`'s site, or `nil`
+	/// where none does: found once for the call, never once for each fill that asks.
+	func keyOfFirstBuilderReaching(_ hole: SeamSignature.Hole) -> SeamSignature.ScopeEnum.Key? {
+		builderKeyByReachedPlace[ReachedPlace(site: hole.site, holeType: hole.holeType)]
 	}
+
+	/// A site a builder of a hole type reaches.
+	private struct ReachedPlace: Hashable {
+		let site: SeamSignature.Hole.Site
+		let holeType: SeamSignature.HoleType
+	}
+
+	/// Each site and hole type, the enum key of the first builder of the hole type, in builder order, whose enum reaches it.
+	private let builderKeyByReachedPlace: [ReachedPlace: SeamSignature.ScopeEnum.Key]
 
 	/// The sites `builder` reaches: those of the places of its enum and of the enums its cases hold.
 	func sitesReached(by builder: SeamSignature.Builder, in enumsByKey: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]) -> Set<SeamSignature.Hole.Site> {

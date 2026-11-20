@@ -506,7 +506,7 @@ struct GraphFuzzerPublicMockDraw {
 			// A configuration file is found by its name, which `SafeDIConfiguration.swift` must keep in its own module.
 			GraphFuzzerSeamDependencyDraw.Unit(module: file.module, source: file.declarations.map { $0(rendering) }.joined(separator: "\n\n"), mayMove: file.fileName?.hasSuffix("SafeDIConfiguration.swift") != true)
 		}
-		for (index, destination) in zip(files.indices, GraphFuzzerSeamDependencyDraw.destinations(of: units, typeNamePrefix: prefix, random: &seamDependencyRandom)) {
+		for (index, destination) in zip(files.indices, GraphFuzzerSeamDependencyDraw.destinations(of: units, typeNamePrefix: prefix, percent: GraphFuzzerSeamDependencyDraw.drawPercent, random: &seamDependencyRandom)) {
 			if let destination {
 				files[index].module = destination
 			}

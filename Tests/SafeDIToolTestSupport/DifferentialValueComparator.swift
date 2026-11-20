@@ -2427,18 +2427,16 @@ extension GraphFuzzerFixture {
 	///
 	/// The probe calls the readable initializer, which every seam module of the corpus generates, as a person does, and
 	/// writes the builder as its type takes it: `{ RetainLive() }` where the type is a closure that takes nothing, `() -> T`
-	/// or `@Sendable () -> T` (the builder takes a builder struct, which the readable initializer makes from it),
-	/// `{ ticket in RetainLive(retainTicket: ticket) }` where it is a wrapper's `Builder` (`RetainLeaf`'s place is held in an
-	/// erased instantiator that forwards `retainTicket`), and `{ _ in RetainLive() }` where it takes the scope (the builder
-	/// keeps its closure over the enum, as when `RetainHome` holds another seam's scope); none where the scope's place
-	/// forwards a value, which a builder that reads nothing cannot take. A readable initializer of another form leaves the probe uncompiled, and every graph that
-	/// has it fails as `valueComparatorCouldNotDescribeGraph`, rather than the probe dropping out. The long run pins how many
+	/// or `@Sendable () -> T` (the builder takes a builder struct, which the readable initializer makes from it), and
+	/// `{ ticket in RetainLive(retainTicket: ticket) }` otherwise, where it is a wrapper's `Builder` (the place is held in
+	/// an erased instantiator that forwards `retainTicket`). A readable initializer of another form leaves the probe
+	/// uncompiled, and every graph that has it fails as `valueComparatorCouldNotDescribeGraph`, rather than the probe
+	/// dropping out. The long run pins how many
 	/// graphs the probe judged (`GraphFuzzerRetentionCounts.judgedThroughHandWrittenBuilder`).
 	private func handWrittenRetentionProbe(generatedFiles: [String: String]) -> DifferentialValueProbe? {
 		let homeName = typeNamePrefix + "RetainHome"
 		let liveName = typeNamePrefix + "RetainLive"
 		var liveReadsValue = false
-		var liveIsForwardedValue = false
 		var declaresHome = false
 		for content in swiftFileContent {
 			var typeName: String?
@@ -2448,10 +2446,8 @@ extension GraphFuzzerFixture {
 					typeName = name
 					declaresHome = declaresHome || name == homeName
 				case let .property(attribute, _, _) where typeName == liveName:
-					// A value `RetainLive` is forwarded is what the place hands it, which the hand-written builder takes too.
-					if attribute == "@Forwarded" {
-						liveIsForwardedValue = true
-					} else {
+					// A value `RetainLive` is forwarded is what the place hands it, which the hand-written builder takes too: not a read.
+					if attribute != "@Forwarded" {
 						liveReadsValue = true
 					}
 				case .instantiableAttribute, .instantiateMethod, .property, .other:
@@ -2469,17 +2465,11 @@ extension GraphFuzzerFixture {
 		let label = initializerLine[initializerLine.index(initializerLine.startIndex, offsetBy: initializerPrefix.count)..<initializerLine.index(separator.upperBound, offsetBy: -2)]
 		let parameterType = initializerLine[separator.upperBound...]
 		let takesNothing = parameterType.hasPrefix("@escaping () -> ") || parameterType.hasPrefix("@escaping @Sendable () -> ")
-		// A builder of a wrapper's `Builder` type takes the value the place forwards, which `RetainLive` takes.
-		let takesForwardedValue = parameterType.hasPrefix("@escaping ") && parameterType.contains(">.Builder")
-		// A builder over the scope of a place that forwards a value is handed it inside the scope, which no hand-written
-		// builder reads: no probe.
-		guard !liveIsForwardedValue || takesForwardedValue else { return nil }
+		// Otherwise the builder is of a wrapper's `Builder` type, which takes the value the place forwards, as `RetainLive` does.
 		let builder = if takesNothing {
 			"{ \(liveName)() }"
-		} else if takesForwardedValue {
-			"{ ticket in \(liveName)(retainTicket: ticket) }"
 		} else {
-			"{ _ in \(liveName)() }"
+			"{ ticket in \(liveName)(retainTicket: ticket) }"
 		}
 		return DifferentialValueProbe(
 			name: homeName + Self.handWrittenBuilderProbeNameSuffix,

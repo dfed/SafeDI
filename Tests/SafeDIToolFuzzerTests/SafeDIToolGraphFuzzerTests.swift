@@ -748,6 +748,7 @@ struct SafeDIToolGraphFuzzerTests {
 			.holePlaceInsidePlainFillTwoTypesDeep,
 			.holePlaceInsidePlainFillTwoCalls,
 			.holePlaceInsidePlainFillFulfillerReadsInnerLevel,
+			.holePlacesInsideFillSpellTypeWithAndWithoutAny,
 			.holeUnderLaterLoopMember,
 			.holeUnderEveryLoopMember,
 			.holeLoopOfThreeMembers,
@@ -779,6 +780,9 @@ struct SafeDIToolGraphFuzzerTests {
 			.cycleParameterOpenedByValue,
 			.cycleParameterSendableWrappers,
 		]).subtracting(drawFeatures).sorted() == [])
+		// The re-entered fill's read of a value one route holds, remedied by the seam built again receiving it, in an accepted
+		// graph: the two unremedied reads are rejected by design.
+		#expect(drawFeatures.contains(.reenteredFillReadsValueOfOneRouteRemedied))
 		// A graph with a hole whose builder labels and case names the name-stability oracle compared with those of the graph
 		// without its second place.
 		#expect(acceptedResults.contains { $0.isComparedWithoutSecondHolePlace })
@@ -933,6 +937,120 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of: renamed, modules: modules) == GraphFuzzerSeamDependencyDraw.moduleInfoDependencies(of: fixture, modules: modules))
 	}
 
+	/// `chainFixture`'s chain beneath a seam, `S7_Screen`, with `S7_Caller` in the same-package caller's module and
+	/// `S7_OtherCaller` in the other package's, each instantiating `S7_Screen`, and, when `drawRootName` names one,
+	/// `S7_<drawRootName>`, a root of a draw beneath the seam's module, declared in `drawRootModule`.
+	private static func chainFixtureWithBothCallers(drawRootName: String?, drawRootModule: GraphFuzzerModule = .samePackageCaller) -> GraphFuzzerFixture {
+		var files = chainFixture(screenArguments: "generateDependencyTree: true", callerArguments: "").swiftFileContent
+		files.append(chainFile(module: .otherPackageCaller, name: "OtherCaller", arguments: "", label: "screen", type: "S7_Screen"))
+		if let drawRootName {
+			files.append(chainFile(module: drawRootModule, name: drawRootName, arguments: "isRoot: true", label: "screen", type: "S7_Screen"))
+		}
+		return GraphFuzzerFixture(seed: 7, swiftFileContent: files)
+	}
+
+	/// What each module of `chainFixtureWithBothCallers` lists when it lists every module beneath it.
+	private static let chainModulesBeneath: [GraphFuzzerModule: [GraphFuzzerModule]] = [
+		.seamDependencyLeaf: [],
+		.seamDependencyBase: [.seamDependencyLeaf],
+		.seamDependency: [.seamDependencyLeaf, .seamDependencyBase],
+		.seamModule: [.seamDependencyLeaf, .seamDependencyBase, .seamDependency],
+		.samePackageCaller: [.seamDependencyLeaf, .seamDependencyBase, .seamDependency, .seamModule],
+		.otherPackageCaller: [.seamDependencyLeaf, .seamDependencyBase, .seamDependency, .seamModule],
+	]
+
+	@Test(arguments: MultiModuleIntegration.allCases, ["FillCallRoot", "CarriedRoot", "ReenteredRoot"])
+	func dependencyLists_listEveryModuleBeneathOnlyInDrawRootsModuleAndBeneathCallers_whenGraphDeclaresDrawRoot(integration: MultiModuleIntegration, drawRootName: String) throws {
+		// The module that declares the draw's root, and every module beneath the callers, which declare the draws' seams,
+		// list every module beneath them, as the tool asks of a module that declares a root, a seam's included; the other
+		// caller lists the seam's module alone, so it reads the chain through that module's view.
+		let fixture = Self.chainFixtureWithBothCallers(drawRootName: drawRootName)
+		var expected = Self.chainModulesBeneath
+		expected[.otherPackageCaller] = [.seamModule]
+		#expect(try fixture.dependencyLists(modules: #require(fixture.modules), integration: integration, listsTransitiveDependencies: false) == expected)
+	}
+
+	@Test
+	func dependencyLists_listEveryModuleBeneathInOtherPackageCaller_whenItDeclaresDrawRoot() throws {
+		let fixture = Self.chainFixtureWithBothCallers(drawRootName: "ReenteredRoot", drawRootModule: .otherPackageCaller)
+		var expected = Self.chainModulesBeneath
+		expected[.samePackageCaller] = [.seamModule]
+		#expect(try fixture.dependencyLists(modules: #require(fixture.modules), integration: .moduleInfo, listsTransitiveDependencies: false) == expected)
+	}
+
+	@Test
+	func dependencyLists_listImportedModules_whenGraphDeclaresNoDrawRoot() throws {
+		let fixture = Self.chainFixtureWithBothCallers(drawRootName: nil)
+		var expected = Self.chainModulesImported
+		expected[.samePackageCaller] = [.seamModule]
+		expected[.otherPackageCaller] = [.seamModule]
+		#expect(try fixture.dependencyLists(modules: #require(fixture.modules), integration: .moduleInfo, listsTransitiveDependencies: false) == expected)
+	}
+
+	@Test
+	func dependencyLists_listEveryModuleBeneathInEveryModule_whenRunListsTransitiveDependencies() throws {
+		// The inline build and the known-right path, as 2.2.0 asked, whatever roots the graph declares.
+		let fixture = Self.chainFixtureWithBothCallers(drawRootName: "FillCallRoot")
+		#expect(try fixture.dependencyLists(modules: #require(fixture.modules), integration: .moduleInfo, listsTransitiveDependencies: true) == Self.chainModulesBeneath)
+	}
+
+	@Test
+	func callersReadingThroughView_returnsCallerDeclaringNoDrawRoot_whenGraphDeclaresDrawRoot() {
+		let fixture = Self.chainFixtureWithBothCallers(drawRootName: "CarriedRoot")
+		#expect(fixture.declaresRootOfDrawBeneathSeamsModule)
+		#expect(GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of: fixture) == [.otherPackageCaller])
+	}
+
+	@Test
+	func callersReadingThroughView_returnsBothCallers_whenGraphDeclaresNoDrawRoot() {
+		#expect(GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of: Self.chainFixtureWithBothCallers(drawRootName: nil)) == [.samePackageCaller, .otherPackageCaller])
+	}
+
+	@Test
+	func callersReadingThroughView_returnsNone_whenOnlyCallerDeclaresDrawRoot() {
+		let fixture = Self.chainFixtureWithBothCallers(drawRootName: "FillCallRoot")
+		let withoutOtherCaller = GraphFuzzerFixture(seed: 7, swiftFileContent: fixture.swiftFileContent.filter { GraphFuzzerModule(declaredIn: $0) != .otherPackageCaller })
+		#expect(GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of: withoutOtherCaller) == [])
+	}
+
+	@Test
+	func callersReadingThroughView_returnsNone_whenCallersMockBuildsChain() {
+		// The mock of `S7_Caller` builds `S7_Screen`'s tree, chain and all, so its module lists the modules beneath.
+		#expect(GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of: Self.chainFixture(screenArguments: "", callerArguments: "generateMock: true")) == [])
+	}
+
+	@Test
+	func callersReadingThroughView_returnsNone_whenModuleOmitsPackageName() {
+		// The SwiftPM plugin flow runs only where every module names its package, so the integrations are not compared.
+		let fixture = Self.chainFixtureWithBothCallers(drawRootName: nil)
+		let withoutPackage = GraphFuzzerFixture(seed: 7, swiftFileContent: fixture.swiftFileContent.map { content in
+			guard GraphFuzzerModule(declaredIn: content) == .otherPackageCaller else { return content }
+			return content.replacingOccurrences(of: GraphFuzzerModule.marker + GraphFuzzerModule.otherPackageCaller.name, with: GraphFuzzerModule.marker + GraphFuzzerModule.otherPackageCaller.name + GraphFuzzerModule.packageNameOmittedMarker)
+		})
+		#expect(withoutPackage.modulesOmittingPackageName == [.otherPackageCaller])
+		#expect(GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of: withoutPackage) == [])
+	}
+
+	@Test(arguments: [(UInt64(304), GraphFuzzerSeamDrawFeature.seamDependencyReadThroughView), (347, .seamDependencyChainReadThroughView)])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func integrationsDisagreeFailure_returnsNil_whenOtherPackageCallerReadsThroughViewBesideDrawRoot(seed: UInt64, feature: GraphFuzzerSeamDrawFeature) async throws {
+		// Seam corpus seed 304 moves declarations beneath the seam's module, and seed 347 draws the chain there, each in a
+		// graph that declares a root of the draws beneath the seam's module: that root's module lists every module beneath
+		// it, while `FuzzOther` lists the seam's module alone and computes what it calls from that module's view, which the
+		// two flows compute alike.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
+		#expect(fixture.declaresRootOfDrawBeneathSeamsModule)
+		#expect(GraphFuzzerFeature.seamDrawFeatures(of: fixture).contains(feature))
+		#expect(GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of: fixture) == [.otherPackageCaller])
+		let moduleInfoOutcome = try await GraphFuzzerOracle.toolOutcome(of: fixture)
+		guard case .accepted = moduleInfoOutcome else {
+			Issue.record("Seed \(seed) is expected to be accepted:\n\(moduleInfoOutcome.description)")
+			return
+		}
+		let runs = try await GraphFuzzerToolRuns(fixture: fixture, firstOutcome: moduleInfoOutcome, secondOutcome: moduleInfoOutcome, pluginOutcome: GraphFuzzerOracle.toolOutcome(of: fixture, integration: .swiftPackagePlugin))
+		#expect(runs.integrationsDisagreeFailure == nil)
+	}
+
 	@Test(arguments: [UInt64(4_749), 4_867])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func integrationsDisagreeFailure_returnsNil_whenSeamCorpusMockBuildsChainBeneathItsModulesImport(seed: UInt64) async throws {
@@ -986,11 +1104,21 @@ struct SafeDIToolGraphFuzzerTests {
 		// instantiator nothing beneath reads it from, and a loop of builders around places inside a seam (the retention
 		// oracle's) – gate generator changes only while each of
 		// their shapes lands in at least ten graphs the tool accepts, which the corpus runs pin exactly.
-		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isForwardedLabelAcrossSeamCallShape || feature.isRetentionShape || feature.isForwardingPlaceShape {
+		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isForwardedLabelAcrossSeamCallShape || feature.isRetentionShape || feature.isForwardingPlaceShape || feature.isPassedUpPlaceReadingPassingSeamsValueShape || feature.isFixedSeamCallDefectShape {
 			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
 		}
 		for feature in GraphFuzzerPublicMockDrawFeature.allCases where feature.isCountedWhenAccepted {
 			#expect(Self.publicMockCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+	}
+
+	@Test
+	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forEachShapeReadThroughView() {
+		// The integrations' comparison (`integrationsDisagree`) checks what a caller computes from the seam's module's view
+		// – cell 5b's chain, and moved declarations – only in a graph whose caller lists the seam's module alone; it judges
+		// them only while each lands in at least ten graphs the tool accepts, which the corpus runs pin exactly.
+		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isReadThroughViewShape {
+			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
 		}
 	}
 
@@ -1026,17 +1154,17 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_acceptPlaceForwardingNothingBesidePlainPlace_whenSeamCorpusDeclaresHoleImplInNamespace() async throws {
-		// Seed 663 declares `HoleImpl` in an extension of `HoleNamespace` and holds a place that forwards nothing beside the
+		// Seed 153 declares `HoleImpl` in an extension of `HoleNamespace` and holds a place that forwards nothing beside the
 		// plain place of `any HoleService`, of the same builder: the place names `HoleImpl` as its declaration spells it,
 		// `HoleNamespace.HoleImpl`, which the calling module's fill declares, so the tool accepts the graph.
-		let fixture = GraphFuzzerGenerator.fixture(forSeed: 663, features: [.generateDependencyTree])
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 153, features: [.generateDependencyTree])
 		#expect(GraphFuzzerFeature.seamDrawFeatures(of: fixture).isSuperset(of: [.holeImplInNamespace, .holeNothingForwardedPlaceBesidePlain]))
-		#expect(fixture.swiftFileContent.contains { $0.contains("@Instantiated(fulfilledByType: \"S663_HoleNamespace.S663_HoleImpl\") let holeServiceLater") })
+		#expect(fixture.swiftFileContent.contains { $0.contains("@Instantiated(fulfilledByType: \"S153_HoleNamespace.S153_HoleImpl\") let holeServiceLater") })
 
 		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])
 
 		guard case .accepted = runs.firstOutcome else {
-			Issue.record("Seed 663 is expected to be accepted:\n\(runs.firstOutcome.description)")
+			Issue.record("Seed 153 is expected to be accepted:\n\(runs.firstOutcome.description)")
 			return
 		}
 	}
@@ -1046,7 +1174,8 @@ struct SafeDIToolGraphFuzzerTests {
 	func valueComparisons_countGraphJudgedHoldingErasedInstantiatorAndFindNoLeak_whenRetentionDrawsLeafPlaceThatForwards() async throws {
 		// Seed 454 holds `RetainLeaf`'s place in an `ErasedInstantiator<Int, any S454_RetainApi>`, which `RetainLive` fills
 		// forwarding `retainTicket`: the retention oracle holds that wrapper, and the builder the seam keeps for it keeps
-		// alive no value of `RetainHome`'s level, as inline.
+		// alive no value of `RetainHome`'s level, as inline. The graph's hole draws an instantiator place too, which the
+		// oracle holds in its own experiment.
 		let fixture = GraphFuzzerGenerator.fixture(forSeed: 454, features: [.generateDependencyTree])
 		#expect(GraphFuzzerFeature.seamDrawFeatures(of: fixture).contains(.retentionSeamValueBeforeBuilderForwardingPlace))
 		#expect(fixture.swiftFileContent.contains { $0.contains("let retainApiBuilder: ErasedInstantiator<Int, any S454_RetainApi>") })
@@ -1058,7 +1187,7 @@ struct SafeDIToolGraphFuzzerTests {
 			judgedDrawingRetentionShape: 1,
 			judgedThroughHandWrittenBuilder: 1,
 			unpairedExperiments: 0,
-			judgedHoldingForwardingWrapper: ["ErasedInstantiator": 1],
+			judgedHoldingForwardingWrapper: ["Instantiator": 1, "ErasedInstantiator": 1],
 		))
 		#expect(comparisons.retentionFailures[454] == nil)
 	}
@@ -1996,7 +2125,7 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test(.enabled(if: compileVerificationIsEnabled, "The value comparator compiles generated code only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func valueFailures_reportsOtherValues_whenFillReadsAnotherLevelOfACycleThanItsVisibleBuild() async throws {
-		// Seed 227 draws `addingCycleParameterShapes`' cycle: `CycleB`, built inside the function `CycleSeam`'s
+		// Seed 1637, beyond the seam corpus, draws `addingCycleParameterShapes`' cycle: `CycleB`, built inside the function `CycleSeam`'s
 		// `cycle1ABuilder` closes on, declares `cycle6Tag` again beside its hole, whose fill, `CycleImpl`, reads it, so each
 		// level's fill receives that level's `CycleB`'s tag, as the visible build's `CycleImpl` does. A seam that handed the
 		// fill the tag the function's reader holds instead – the level above's – builds other values than the visible build,
@@ -2014,7 +2143,7 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test(.enabled(if: compileVerificationIsEnabled, "The value comparator compiles generated code only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func results_reportInlineDifference_whenKnownIssueDocumentsOnlyTheFillsDifferenceFromItsVisibleBuild() async throws {
-		// Seed 227's seam, with its fill handed the tag of the level above, builds other values than its visible build and
+		// Seed 1637's seam, with its fill handed the tag of the level above, builds other values than its visible build and
 		// than its inline build. A known issue that documents the difference from the visible build documents nothing about
 		// the inline build, so the inline build's difference is the finding: a known value failure masks no later failure.
 		let (runs, perturbedFiles, warnings) = try await Self.cycleFillReadingLevelAboveRuns()
@@ -2631,12 +2760,35 @@ struct SafeDIToolGraphFuzzerTests {
 		try await Self.expectNoRenamedGraphFailureUnderPathHoldingALabel(of: GraphFuzzerGenerator.fixture(forSeed: 731))
 	}
 
+	@Test(arguments: [UInt64(56), 88])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func toolRuns_rejectBothBuildsWithDeclarationBoundOnPathToReenteringCall_whenFillReadsValueOnlyOneRouteHoldsUnremedied(seed: UInt64) async throws {
+		// `ReenteredGadgetImpl`, which fills a place `ReenteredHost` passes up, reads `reenteredMark` only if available, which
+		// `ReenteredFirstImpl` binds before its call that builds `ReenteredSubB` again, so only that route holds it; seed
+		// 88's `ReenteredHost` also binds the label above its call of `ReenteredTop`, which lifts nothing. The build
+		// that fills the place from the roots' module and the visible build, which fills it in the seam's module, both reject
+		// the read with `declarationBoundOnPathToReenteringCall`, naming the same reader and declaring type.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
+		let drawFeatures = GraphFuzzerFeature.seamDrawFeatures(of: fixture)
+		#expect(drawFeatures.contains(.reenteredFillReadsValueOfOneRoute) || drawFeatures.contains(.reenteredFillReadsValueOfOneRouteBoundAboveCall))
+		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])
+		let prefix = fixture.typeNamePrefix
+		let finding = "`\(prefix)ReenteredGadgetImpl` receives `reenteredMark: \(prefix)ReenteredMark?`, which `\(prefix)ReenteredFirstImpl` declares on the path from the builder for"
+		for (build, outcome) in [("hole", Optional(runs.firstOutcome)), ("visible", runs.visibleOutcome)] {
+			guard case let .rejected(diagnostics)? = outcome else {
+				Issue.record("Seed \(seed)’s \(build) build is not rejected")
+				continue
+			}
+			#expect(diagnostics.contains(finding), "Seed \(seed)’s \(build) build:\n\(diagnostics)")
+		}
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_reportNoRenamedGraphFailure_whenFixtureRootOfGraphSplitAcrossModulesLiesUnderPathHoldingALabelTheRenamingReverses() async throws {
-		// Seed 215 of the seam corpus is split across modules and warns at a fixture file, so its warnings name the
+		// Seed 155 of the seam corpus is split across modules and warns at a fixture file, so its warnings name the
 		// fixture root's path.
-		try await Self.expectNoRenamedGraphFailureUnderPathHoldingALabel(of: GraphFuzzerGenerator.fixture(forSeed: 215, features: [.generateDependencyTree]))
+		try await Self.expectNoRenamedGraphFailureUnderPathHoldingALabel(of: GraphFuzzerGenerator.fixture(forSeed: 155, features: [.generateDependencyTree]))
 	}
 
 	@Test
@@ -3113,6 +3265,22 @@ struct SafeDIToolGraphFuzzerTests {
 
 		#expect(fileNames == ["F98_S12_T1.swift", "F99_S12_T0.swift"])
 		#expect(renaming.restore("/tmp/<fixture-directory>/F98_S12_T1.swift:1:1: error", typeNamePrefix: fixture.typeNamePrefix) == "/tmp/<fixture-directory>/S12_T1.swift:1:1: error")
+	}
+
+	@Test
+	func renaming_reversesFileOrderAndRestoresFileNames_whenGraphHoldsMoreThanAHundredFiles() throws {
+		// A seam corpus graph of the gating draws holds more than a hundred files, whose prefixes take a third digit, so
+		// that each has one width and sorts as its number does.
+		let typeNames = (0..<120).map { index in "S12_Node" + String(repeating: "0", count: 3 - String(index).count) + String(index) }
+		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: typeNames.map { "@Instantiable\npublic final class \($0): Instantiable {\n\tpublic init() {}\n}\n" })
+		let renaming = GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: false, reversesFileNames: true)
+
+		let fileNames = try #require(renaming.fileNames(of: fixture))
+
+		#expect(fileNames.first == "F999_S12_Node000.swift")
+		#expect(fileNames.last == "F880_S12_Node119.swift")
+		#expect(fileNames.sorted() == fileNames.reversed())
+		#expect(renaming.restore("/tmp/<fixture-directory>/F880_S12_Node119.swift:1:1: error", typeNamePrefix: fixture.typeNamePrefix) == "/tmp/<fixture-directory>/S12_Node119.swift:1:1: error")
 	}
 
 	@Test
@@ -4735,6 +4903,85 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func difference_isNil_whenDiagnosticsListTheSameSeamsAndPlacesOfAPassedUpPlaceFindingInAnotherOrder() {
+		// Seam corpus seed 116's merged finding: the seams whose calls present its places, and the places, follow the order of
+		// type names, which moving type names across wrapper names reverses. The same items in another order are the same
+		// diagnostic; another called seam, a place under the other seam's tree, a remedy's other seam, or a fulfill remedy
+		// dropped is not.
+		let deepPlace = "`S116_HoleDeepImpl`’s `holeService: any S116_HoleService` (case `S116_HoleDeepImpl_Scope.holeService` of `s116_HoleServiceSendableBuilder`) in `S116_HoleSeam`’s tree"
+		let stagePlace = "`S116_HoleStageOwner`’s `holeService: any S116_HoleService` (case `S116_HoleStageOwner_Scope.holeService` of `s116_HoleServiceSendableBuilder`) in `S116_HoleStager`’s tree"
+		let serviceRemedy = "declare an @Instantiable type that fulfills `S116_HoleService` in module `FuzzFeature` or a module it lists among its SafeDI dependencies, so `S116_HoleOuter` fills the builders itself"
+		let gadgetRemedy = "declare an @Instantiable type that fulfills `S116_HoleGadget` in module `FuzzFeature` or a module it lists among its SafeDI dependencies, so `S116_HoleOuter` fills the builders itself"
+		func diagnostics(calledSeams: String, places: String, remedySeams: String = "`S116_HoleSeam` and `S116_HoleStager`", remedies: String = "\(serviceRemedy) and \(gadgetRemedy)") -> GraphFuzzerToolOutcome {
+			.rejected(diagnostics: "<fixture-directory>/shop/Sources/FuzzApp/S116_HoleImpl.swift:13:3: error: `S116_HoleNamespace.S116_HoleImpl` receives `holeLogger: S116_HoleLogger`, which `S116_HoleOuter` builds where it calls \(calledSeams), but `S116_HoleOuter` passes the builders for \(places) on from its own caller, which cannot hand them `S116_HoleOuter`’s values. Declare `@Received let holeLogger: S116_HoleLogger` on \(remedySeams), so the builders’ scopes carry it, or \(remedies).\n<fixture-directory>/shop/Sources/FuzzFeature/S116_HoleOuter.swift:11:2: note: `S116_HoleOuter` declares `holeLogger: S116_HoleLogger` here.")
+		}
+		let original = diagnostics(calledSeams: "`S116_HoleSeam` and `S116_HoleStager`", places: "\(deepPlace) and \(stagePlace)")
+
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(calledSeams: "`S116_HoleStager` and `S116_HoleSeam`", places: "\(stagePlace) and \(deepPlace)", remedySeams: "`S116_HoleStager` and `S116_HoleSeam`", remedies: "\(gadgetRemedy) and \(serviceRemedy)")) == nil)
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(calledSeams: "`S116_HoleStager` and `S116_HoleRelay`", places: "\(stagePlace) and \(deepPlace)")) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(calledSeams: "`S116_HoleSeam` and `S116_HoleStager`", places: "\(deepPlace) and \(stagePlace.replacingOccurrences(of: "in `S116_HoleStager`’s tree", with: "in `S116_HoleSeam`’s tree"))")) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(calledSeams: "`S116_HoleSeam` and `S116_HoleStager`", places: "\(deepPlace) and \(stagePlace)", remedySeams: "`S116_HoleSeam` and `S116_HoleRelay`")) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(calledSeams: "`S116_HoleSeam` and `S116_HoleStager`", places: "\(deepPlace) and \(stagePlace)", remedies: serviceRemedy)) == "its diagnostics")
+	}
+
+	@Test
+	func difference_isNil_whenDiagnosticsListTheSameClausesOfAReenteringCallFindingInAnotherOrder() {
+		// Seam corpus seed 331's shape: one clause per declaration and call, and the declaring types, in name order, and a note
+		// per declaring type, in that order, which a renaming of the types or the files reverses. The same items and notes in
+		// another order are the same diagnostic; another call, a place of another builder, a declaring type renamed in the
+		// list, or a note dropped or changed is not.
+		let alphaClause = "`MiddleAlpha` declares on the paths from the builders for `Profile`’s `router: any Router` (case `Profile_Scope.router` of `routerBuilder`) and `Screen`’s `screenRouter: any Router` (case `Screen_Scope.screenRouter` of `routerBuilder`) to the call by which `MiddleAlpha` instantiates `Flow` again (`flowBuilder`)"
+		let reorderedAlphaClause = "`MiddleAlpha` declares on the paths from the builders for `Screen`’s `screenRouter: any Router` (case `Screen_Scope.screenRouter` of `routerBuilder`) and `Profile`’s `router: any Router` (case `Profile_Scope.router` of `routerBuilder`) to the call by which `MiddleAlpha` instantiates `Flow` again (`flowBuilder`)"
+		let zedClause = "`MiddleZed` declares on the path from the builder for `Profile`’s `router: any Router` (case `Profile_Scope.router` of `routerBuilder`) to the call by which `MiddleZed` instantiates `Flow` again (`flowBuilder`)"
+		let alphaNote = "/a/<fixture-directory>/MiddleAlpha.swift:10:5: note: `MiddleAlpha` declares `logger: Logger` here."
+		let zedNote = "/a/<fixture-directory>/MiddleZed.swift:10:5: note: `MiddleZed` declares `logger: Logger` here."
+		func diagnostics(clauses: String, declaringTypes: String = "`MiddleAlpha`’s and `MiddleZed`’s", notes: [String] = [alphaNote, zedNote]) -> GraphFuzzerToolOutcome {
+			.rejected(diagnostics: (["/a/<fixture-directory>/DefaultRouter.swift:10:5: error: `DefaultRouter` receives `logger: Logger`, which \(clauses), but those calls pass the builder on as module `App` fills it, which cannot hand it \(declaringTypes) values. Declare `@Received let logger: Logger` on `Flow`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies."] + notes).joined(separator: "\n"))
+		}
+		let original = diagnostics(clauses: "\(alphaClause) and \(zedClause)")
+
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(clauses: "\(zedClause) and \(reorderedAlphaClause)", declaringTypes: "`MiddleZed`’s and `MiddleAlpha`’s", notes: [zedNote, alphaNote])) == nil)
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(clauses: "\(alphaClause) and \(zedClause.replacingOccurrences(of: "instantiates `Flow` again (`flowBuilder`)", with: "instantiates `Shell` again (`shellBuilder`)"))")) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(clauses: "\(alphaClause) and \(zedClause.replacingOccurrences(of: "of `routerBuilder`", with: "of `defaultRouter_RouterBuilder`"))")) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(clauses: "\(alphaClause) and \(zedClause)", declaringTypes: "`MiddleAlpha`’s and `MiddleOmega`’s")) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(clauses: "\(alphaClause) and \(zedClause)", notes: [zedNote])) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(clauses: "\(alphaClause) and \(zedClause)", notes: [alphaNote, zedNote.replacingOccurrences(of: "`logger: Logger`", with: "`logger: Logger?`")])) == "its diagnostics")
+	}
+
+	@Test
+	func differences_reportNothing_whenFieldOfReenteringPlaceListsItsTypesSeamsAndCallsInAnotherOrder() {
+		// A renaming reorders the lists of a fill's error about a value its seam, opened again, loses, which follow names. Another
+		// type, seam or call in one list still differs.
+		func outcome(_ first: String, _ second: String, call: String = "Builder") -> GraphFuzzerToolOutcome {
+			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `\(first)Owner`’s `service: any Service` and `\(second)Owner`’s `service: any Service` carries from `\(first)Screen` and `\(second)Screen`, and each of their fills instantiates `\(first)Seam` and `\(second)Seam` again (`\(first)\(call)` and `\(second)Builder`). Inline, `Impl` would read `\(first)Screen`’s or `\(second)Screen`’s `id` inside that `\(first)Seam` or `\(second)Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `\(first)Seam` and `\(second)Seam`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
+		}
+
+		#expect(GraphFuzzerToolOutcome.differences(between: outcome("A", "B"), and: outcome("B", "A")) == [])
+		#expect(GraphFuzzerToolOutcome.difference(between: outcome("A", "B"), and: outcome("B", "C")) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: outcome("A", "B"), and: outcome("B", "A", call: "Factory")) == "its diagnostics")
+	}
+
+	@Test
+	func diagnosticEntries_sortsEachErrorsNotesWithTheirFixIts_whenNotesFollowAnError() {
+		// Each note keeps the fix-it line after it, the lines before an error's first note stay with the error, and notes never
+		// move to another error.
+		let diagnostics = [
+			"/a/B.swift:1:1: error: second",
+			"/a/B.swift:1:1-1:2: fixit: of the second",
+			"/a/Z.swift:2:1: note: z",
+			"/a/A.swift:3:1: note: a",
+			"/a/A.swift:3:1-3:2: fixit: of a",
+			"/a/A.swift:1:1: error: first",
+			"/a/Y.swift:4:1: note: y",
+		].joined(separator: "\n")
+
+		#expect(GraphFuzzerToolOutcome.diagnosticEntries(of: diagnostics) == [
+			"/a/A.swift:1:1: error: first\n/a/Y.swift:4:1: note: y",
+			"/a/B.swift:1:1: error: second\n/a/B.swift:1:1-1:2: fixit: of the second\n/a/A.swift:3:1: note: a\n/a/A.swift:3:1-3:2: fixit: of a\n/a/Z.swift:2:1: note: z",
+		])
+	}
+
+	@Test
 	func difference_reportsDiagnostics_whenDiagnosticsDifferInMoreThanTheOrderOfTheirSuggestions() {
 		func diagnostics(chain: String, suggestions: String) -> GraphFuzzerToolOutcome {
 			.rejected(diagnostics: "/a/<fixture-directory>/S12_T1.swift:7:2: error: @Received property `t4: S12_T3` is not @Instantiated or @Forwarded in chain: \(chain). Did you mean one of \(suggestions)?")
@@ -6232,11 +6479,11 @@ struct SafeDIToolGraphFuzzerTests {
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
 		errorMarkers: seamCorpusErrorMarkers,
 		errorGraphCounts: seamCorpusErrorGraphCounts,
-		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape }),
+		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isReadThroughViewShape }),
 		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,
-		gatingSeamDrawFeatures: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isForwardingPlaceShape }),
+		gatingSeamDrawFeatures: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape }),
 		builderSurfaceFlooredKinds: [
 			"base-plain",
 			"base-lazy",
@@ -6274,18 +6521,18 @@ struct SafeDIToolGraphFuzzerTests {
 	static let gatingDrawJudgedGraphFloor = 10
 
 	/// What the retention oracle judges over the seam corpus (`Corpus.retentionCounts`). Pins: derived on CI.
-	static let seamCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 61, judgedDrawingRetentionShape: 51, judgedThroughHandWrittenBuilder: 33, unpairedExperiments: 0, judgedHoldingForwardingWrapper: ["ErasedInstantiator": 30, "SendableErasedInstantiator": 16, "Instantiator": 29, "SendableInstantiator": 11])
+	static let seamCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 37, judgedDrawingRetentionShape: 31, judgedThroughHandWrittenBuilder: 23, unpairedExperiments: 0, judgedHoldingForwardingWrapper: ["ErasedInstantiator": 21, "SendableErasedInstantiator": 9, "Instantiator": 16, "SendableInstantiator": 5])
 
 	/// What the retention oracle judges over the public mock corpus (`Corpus.retentionCounts`). Pins: derived on CI.
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 567, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
 
-	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0x53E979C1BCE5A958
-	static let seamCorpusAcceptedSeedCount = 289
-	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xF226EE7C76286253
+	static let seamCorpusSeedCount = 2_000
+	static let seamCorpusFixtureHash: UInt64 = 0xBFD479D302B40D2D
+	static let seamCorpusAcceptedSeedCount = 250
+	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xB457A077460D0FB1
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
 	/// oracle compares.
-	static let seamCorpusValueOracleInspectedGraphCount = 205
+	static let seamCorpusValueOracleInspectedGraphCount = 184
 	/// How many of the seam corpus's graphs the tool rejects because a caller holds a value the tier it calls omits.
 	static let seamCorpusOmittedValueGraphCount = 0
 	/// The errors of a cycle's label in a seam's tree whose rejections the seam corpus pins, which
@@ -6302,87 +6549,112 @@ struct SafeDIToolGraphFuzzerTests {
 		"cannot be received inside a `@Sendable` function in chain",
 	]
 	/// How many of the seam corpus's graphs the tool rejects with each error of `seamCorpusErrorMarkers`, in its order.
-	static let seamCorpusErrorGraphCounts = [4, 11, 0, 26]
+	static let seamCorpusErrorGraphCounts = [4, 11, 0, 25]
 	/// How many of the seam corpus's graphs the tool accepts show each of `addingCycleParameterShapes`' draws, so that a
 	/// draw the tool rejects every time, or a change that rejects more of them, names the shape. Two draws the tool rejects
 	/// by design are pinned at none: an instantiator declaration between beside by-value ones, which hides the reads beneath
 	/// it, and a fill's read of a label no cycle parameter carries (`declarationBoundOnCycleReentry`, among
 	/// `seamCorpusErrorMarkers`).
 	static let seamCorpusAcceptedDrawFeatureCounts: [GraphFuzzerSeamDrawFeature: Int] = [
-		.cycleParameterDeclaredAfterCloser: 12,
-		.cycleParameterDeclaredAsAlias: 12,
+		.cycleParameterDeclaredAfterCloser: 6,
+		.cycleParameterDeclaredAsAlias: 8,
 		.cycleParameterDeclaredAsHidingInstantiator: 0,
-		.cycleParameterDeclaredAsInstantiators: 17,
-		.cycleParameterDeclaredBySeam: 58,
-		.cycleParameterDeclaredLazily: 20,
-		.cycleParameterDeferredFromCaller: 20,
-		.cycleParameterDeferredNote: 24,
-		.cycleParameterFillReadsLabel: 54,
+		.cycleParameterDeclaredAsInstantiators: 9,
+		.cycleParameterDeclaredBySeam: 41,
+		.cycleParameterDeclaredLazily: 16,
+		.cycleParameterDeferredFromCaller: 15,
+		.cycleParameterDeferredNote: 16,
+		.cycleParameterFillReadsLabel: 40,
 		.cycleParameterFillReadsLabelNoParameterCarries: 0,
-		.cycleParameterFillReadsNote: 29,
-		.cycleParameterHoleAtOrBeneathDeclaration: 29,
-		.cycleParameterHoleBetween: 33,
-		.cycleParameterHoleOnClosedOnType: 32,
-		.cycleParameterHoleOnReader: 6,
-		.cycleParameterHoleOnSeam: 10,
-		.cycleParameterMixedWrapperKinds: 3,
-		.cycleParameterMocked: 18,
-		.cycleParameterNestedCycle: 10,
-		.cycleParameterNoteDeclaredAgain: 7,
-		.cycleParameterNoteReceivedAfterLabel: 11,
-		.cycleParameterOpenedByInstantiator: 37,
-		.cycleParameterOpenedByValue: 13,
-		.cycleParameterOpenedLazily: 31,
-		.cycleParameterReaderBetween: 13,
-		.cycleParameterReaderReceivesInstantiator: 15,
-		.cycleParameterReaderReceivesOnlyIfAvailable: 17,
+		.cycleParameterFillReadsNote: 19,
+		.cycleParameterHoleAtOrBeneathDeclaration: 20,
+		.cycleParameterHoleBetween: 23,
+		.cycleParameterHoleOnClosedOnType: 23,
+		.cycleParameterHoleOnReader: 4,
+		.cycleParameterHoleOnSeam: 7,
+		.cycleParameterMixedWrapperKinds: 1,
+		.cycleParameterMocked: 13,
+		.cycleParameterNestedCycle: 8,
+		.cycleParameterNoteDeclaredAgain: 5,
+		.cycleParameterNoteReceivedAfterLabel: 7,
+		.cycleParameterOpenedByInstantiator: 24,
+		.cycleParameterOpenedByValue: 12,
+		.cycleParameterOpenedLazily: 21,
+		.cycleParameterReaderBetween: 11,
+		.cycleParameterReaderReceivesInstantiator: 8,
+		.cycleParameterReaderReceivesOnlyIfAvailable: 15,
 		.cycleParameterReaderReceivesWrapperOnlyIfAvailable: 2,
-		.cycleParameterReaderRequiresValue: 25,
-		.cycleParameterReaderRequiresWrapper: 4,
-		.cycleParameterSeam: 81,
-		.cycleParameterSendableWrappers: 19,
-		.cycleParameterSideReceivesInstantiator: 3,
-		.cycleParameterSideReceivesValue: 23,
+		.cycleParameterReaderRequiresValue: 17,
+		.cycleParameterReaderRequiresWrapper: 3,
+		.cycleParameterSeam: 57,
+		.cycleParameterSendableWrappers: 14,
+		.cycleParameterSideReceivesInstantiator: 2,
+		.cycleParameterSideReceivesValue: 17,
 		.cycleParameterSideReceivesWrapper: 2,
-		.cycleParameterTwoLevelsDeep: 31,
-		.cycleParameterUndeclaredAbove: 3,
-		.cycleParameterWithoutReader: 10,
-		.forwardedLabelAcrossSeamCall: 107,
-		.forwardedLabelAcrossSeamCallCallerInsideSeam: 35,
-		.forwardedLabelAcrossSeamCallFillReadsLabel: 45,
-		.forwardedLabelAcrossSeamCallInnerOptional: 17,
-		.forwardedLabelAcrossSeamCallOtherTypes: 25,
-		.forwardedLabelAcrossSeamCallOuterDefers: 21,
-		.forwardedLabelAcrossSeamCallPlaceBeneath: 31,
-		.forwardedLabelAcrossSeamCallSameClassType: 18,
-		.forwardedLabelAcrossSeamCallSameValueType: 26,
-		.forwardedLabelAcrossSeamCallSendable: 29,
-		.retentionLoopOfBuilders: 84,
-		.retentionLoopOfBuildersBeneathSeam: 40,
-		.retentionLoopOfBuildersFourMembers: 37,
-		.retentionLoopOfBuildersSendable: 25,
-		.retentionSeamValueBeforeBuilder: 104,
-		.retentionSeamValueBeforeBuilderFillReadsValue: 15,
-		.retentionSeamValueBeforeBuilderInnerSeam: 31,
-		.retentionSeamValueBeforeBuilderLeafThroughInstantiator: 60,
-		.retentionSeamValueBeforeBuilderSendable: 30,
-		.holeErasureBeneathSeamInSendableFamily: 27,
-		.holeErasureInsidePlainFill: 21,
-		.holeErasureInsideSendableFill: 18,
-		.holeForwardingPlace: 31,
-		.holeForwardingPlaceLabeledPair: 28,
+		.cycleParameterTwoLevelsDeep: 23,
+		.cycleParameterUndeclaredAbove: 1,
+		.cycleParameterWithoutReader: 6,
+		.forwardedLabelAcrossSeamCall: 79,
+		.forwardedLabelAcrossSeamCallCallerInsideSeam: 26,
+		.forwardedLabelAcrossSeamCallFillReadsLabel: 34,
+		.forwardedLabelAcrossSeamCallInnerOptional: 12,
+		.forwardedLabelAcrossSeamCallOtherTypes: 17,
+		.forwardedLabelAcrossSeamCallOuterDefers: 15,
+		.forwardedLabelAcrossSeamCallPlaceBeneath: 24,
+		.forwardedLabelAcrossSeamCallSameClassType: 14,
+		.forwardedLabelAcrossSeamCallSameValueType: 21,
+		.forwardedLabelAcrossSeamCallSendable: 22,
+		.retentionLoopOfBuilders: 62,
+		.retentionLoopOfBuildersBeneathSeam: 28,
+		.retentionLoopOfBuildersFourMembers: 29,
+		.retentionLoopOfBuildersSendable: 19,
+		.retentionSeamValueBeforeBuilder: 77,
+		.retentionSeamValueBeforeBuilderFillReadsValue: 13,
+		.retentionSeamValueBeforeBuilderInnerSeam: 26,
+		.retentionSeamValueBeforeBuilderLeafThroughInstantiator: 40,
+		.retentionSeamValueBeforeBuilderSendable: 23,
+		.holeErasureBeneathSeamInSendableFamily: 19,
+		.holeErasureInsidePlainFill: 15,
+		.holeErasureInsideSendableFill: 14,
+		.holeForwardingPlace: 23,
+		.holeForwardingPlaceLabeledPair: 21,
 		.holeForwardingPlacePassedUp: 18,
-		.holeForwardingPlaceSecondPlace: 26,
-		.holeForwardingPlaceSecondPlaceSpelledOtherwise: 23,
-		.holeInstantiatorPlace: 77,
+		.holeForwardingPlaceSecondPlace: 19,
+		.holeForwardingPlaceSecondPlaceSpelledOtherwise: 18,
+		.holeInstantiatorPlace: 48,
 		.holeInstantiatorPlaceBesideErased: 36,
-		.holeInstantiatorPlaceBesidePlain: 44,
-		.holeInstantiatorPlaceBesidePlainAcrossFamilies: 13,
-		.holeNothingForwardedPlace: 90,
-		.holeNothingForwardedPlaceBesideInstantiator: 25,
-		.holeNothingForwardedPlaceBesidePlain: 42,
-		.holeNothingForwardedPlacePassedUp: 34,
-		.retentionSeamValueBeforeBuilderForwardingPlace: 45,
+		.holeInstantiatorPlaceBesidePlain: 38,
+		.holeInstantiatorPlaceBesidePlainAcrossFamilies: 11,
+		.holeNothingForwardedPlace: 60,
+		.holeNothingForwardedPlaceBesideInstantiator: 17,
+		.holeNothingForwardedPlaceBesidePlain: 28,
+		.holeNothingForwardedPlacePassedUp: 38,
+		.retentionSeamValueBeforeBuilderForwardingPlace: 35,
+		.carriedLevel: 48,
+		.carriedLevelFillReadsForwarded: 16,
+		.carriedLevelTwoRoutes: 31,
+		.fillCallReadsOwnLevel: 64,
+		.fillCallReadsOwnLevelInsideSendableFill: 22,
+		.fillCallReadsOwnLevelSendableCall: 22,
+		.fillCallReadsOwnLevelSendableRoute: 9,
+		.fillCallReadsOwnLevelSharedLabel: 19,
+		.holePassedUpPlaceReadsLazyValue: 10,
+		.holePassedUpPlaceReadsOptionalField: 8,
+		.holePassedUpPlaceReadsPassingSeamsValue: 11,
+		.holePassedUpPlaceReadsValueTwoSeamsUp: 10,
+		.passingUpCopies: 46,
+		.passingUpCopiesFillReadsLabel: 17,
+		.passingUpCopiesSeamsBindLabel: 15,
+		.reenteredFill: 71,
+		.reenteredFillCallBeneathFilledType: 20,
+		.reenteredFillCallThroughSeamPassingPlaceUp: 31,
+		.reenteredFillEnclosingFillHoldsPlace: 26,
+		.reenteredFillReadsValueAbove: 30,
+		.reenteredFillReadsValueOfOneRouteRemedied: 22,
+		.reenteredFillReentersEnclosingFill: 24,
+		.reenteredFillSendableCall: 11,
+		.seamDependencyChainReadThroughView: 13,
+		.seamDependencyReadThroughView: 13,
 	]
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
 	/// with their read twin.
@@ -6393,13 +6665,15 @@ struct SafeDIToolGraphFuzzerTests {
 	/// hole, visible and inline alike; and seed 883, whose `S883_Root0()` spends a batch's traversals through `HoleBoth`,
 	/// `HolePing` and `HoleInner2` re-entering `HoleSeam`, with types shared under its hole, on both of its builds alike; and
 	/// seed 945, whose `S945_HoleOtherRoot()` spends a batch's traversals through `HoleOuter`, `HoleRelay` and `HoleImpl`
-	/// re-entering `HoleSeam`, whose place inside a plain fill `HoleNestScreen` holds, on both of its builds alike.
-	static let seamCorpusSeedsTraversingPastTheBatchBudget: Set<UInt64> = [391, 883, 945]
+	/// re-entering `HoleSeam`, whose place inside a plain fill `HoleNestScreen` holds, on both of its builds alike; and the
+	/// smoke batch's seeds 277 and 1890, below the corpus's size (`seamSmokeSeedsTraversingPastTheBatchBudget`).
+	static let seamCorpusSeedsTraversingPastTheBatchBudget: Set<UInt64> = [277, 391, 883, 945, 1_890]
 
 	/// The seam smoke batch's seeds whose probes traverse more wrappers than a batch allows, compared on their own as
 	/// `seamCorpusSeedsTraversingPastTheBatchBudget`'s are: seed 1890, whose `S1890_HoleOtherRoot()` spends a batch's
-	/// traversals through `HoleOuterS`, `HoleRelay` and `HoleDeep` re-entering `HoleSeam`.
-	static let seamSmokeSeedsTraversingPastTheBatchBudget: Set<UInt64> = [1_890]
+	/// traversals through `HoleOuterS`, `HoleRelay` and `HoleDeep` re-entering `HoleSeam`; and seed 277, whose hole re-enters
+	/// `HoleSeam` through a seam passing its place up, plain and `@Sendable`, beside the instantiator place.
+	static let seamSmokeSeedsTraversingPastTheBatchBudget: Set<UInt64> = [277, 1_890]
 
 	/// The ordinary suite's batch of the seam corpus: graphs the tool accepts whose generated code, between them, shows
 	/// every `GraphFuzzerSeamOutputFeature` – both kinds of pass-through, a call reading `.instance`, an `@escaping`
@@ -6438,19 +6712,26 @@ struct SafeDIToolGraphFuzzerTests {
 	/// hole type, for a hole read only if available. Seeds 309, 1010, 1020 and 1890, whose seams later draws gave a second
 	/// hole type that the move reorders, stay for the shapes above: they are listed under `seamBuilderOrderReason`, a
 	/// sanctioned order, which `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` counts as passing
-	/// (`seamBuilderOrderShape(listedBy:)`). Pinned by `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 151, 153, 164, 180, 215, 227, 277, 304, 309, 347, 594, 605, 609, 705, 850, 1_010, 1_020, 1_450, 1_814, 1_890]
+	/// (`seamBuilderOrderShape(listedBy:)`). Seeds 0, 227, 1010 and 1890 are now rejected – both builds reject a
+	/// re-entered fill's unremedied read of a value one route holds, and passing-up copies hide a label – so seeds 93, 273,
+	/// 468, 743, 892 and 1986 show, accepted, the rolls they showed: a cycle of two seams with a `@Sendable` edge (seed 93),
+	/// a diamond with a `@Sendable` seam (seed 273), `HoleOwner` aliasing the field (seeds 468 and 1986), a fulfiller's
+	/// `package` initializer in another package (seed 743), two calls of the plain fill (seed 892) and mixed wrapper kinds
+	/// in the cycle (seed 1986); seeds 151, 309, 594 and 969 draw places inside a plain fill that spell their hole type
+	/// with and without `any`, seed 969 with no known issue, and seeds 68 and 84 the remedied read of a value one route
+	/// holds. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 609, 705, 743, 850, 892, 969, 1_010, 1_020, 1_450, 1_814, 1_890, 1_986]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x3BCF8B66DAB0F208
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x00D882B413AAA30B
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
 	/// `seamCorpus_drawsEachShapeInThePinnedNumberOfGraphs_whenFixturesAreGeneratedWithoutTheTool`.
 	static let seamCorpusDrawFeatureCounts: [GraphFuzzerSeamDrawFeature: Int] = [
 		.collidingFormsBeneathSeam: 67,
-		.innerSeam: 607,
+		.innerSeam: 643,
 		.instanceHeldByCaller: 393,
-		.instanceReceiveBeneathSeam: 242,
+		.instanceReceiveBeneathSeam: 287,
 		.otherKindWrapperReceiveBeneathSeam: 32,
 		.renameAboveSeam: 19,
 		.renameOnSeamOrChild: 392,
@@ -6531,8 +6812,10 @@ struct SafeDIToolGraphFuzzerTests {
 		.otherPackageCaller: 221,
 		.samePackageCallerRunWithoutPackageName: 53,
 		.seamModuleRunWithoutPackageName: 62,
-		.seamDependency: 42,
+		.seamDependency: 35,
 		.seamDependencyChain: 55,
+		.seamDependencyReadThroughView: 76,
+		.seamDependencyChainReadThroughView: 58,
 		.hole: 331,
 		.holeOwnedBySeam: 75,
 		.holeProtocolInMarkerFreeFile: 166,
@@ -6544,8 +6827,8 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeBeneathSendableLazilyInstantiated: 8,
 		.holeOwnerReachedAtTwoSites: 56,
 		.holeReadsField: 158,
-		.holeReadsCallerValue: 99,
-		.holePassedUp: 123,
+		.holeReadsCallerValue: 157,
+		.holePassedUp: 201,
 		.holeReentersSeam: 43,
 		.holeReentersSeamBeneathRedeclaredLabel: 7,
 		.holeReentersInnerSeamOfPassedUpBuilder: 21,
@@ -6592,6 +6875,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.holePlaceInsidePlainFillTwoTypesDeep: 40,
 		.holePlaceInsidePlainFillTwoCalls: 28,
 		.holePlaceInsidePlainFillFulfillerReadsInnerLevel: 23,
+		.holePlacesInsideFillSpellTypeWithAndWithoutAny: 68,
 		.holeUnderLaterLoopMember: 37,
 		.holeUnderEveryLoopMember: 26,
 		.holeLoopOfThreeMembers: 8,
@@ -6715,16 +6999,42 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeForwardingPlaceLabeledPair: 101,
 		.holeForwardingPlaceSecondPlace: 112,
 		.holeForwardingPlaceSecondPlaceSpelledOtherwise: 108,
-		.holeForwardingPlacePassedUp: 65,
+		.holeForwardingPlacePassedUp: 86,
 		.holeInstantiatorPlace: 267,
-		.holeInstantiatorPlaceBesideErased: 124,
-		.holeInstantiatorPlaceBesidePlain: 145,
-		.holeInstantiatorPlaceBesidePlainAcrossFamilies: 58,
+		.holeInstantiatorPlaceBesideErased: 218,
+		.holeInstantiatorPlaceBesidePlain: 235,
+		.holeInstantiatorPlaceBesidePlainAcrossFamilies: 93,
 		.holeNothingForwardedPlace: 321,
-		.holeNothingForwardedPlaceBesidePlain: 178,
-		.holeNothingForwardedPlaceBesideInstantiator: 82,
-		.holeNothingForwardedPlacePassedUp: 119,
+		.holeNothingForwardedPlaceBesidePlain: 151,
+		.holeNothingForwardedPlaceBesideInstantiator: 128,
+		.holeNothingForwardedPlacePassedUp: 194,
 		.retentionSeamValueBeforeBuilderForwardingPlace: 159,
+		.fillCallReadsOwnLevel: 364,
+		.fillCallReadsOwnLevelSharedLabel: 126,
+		.fillCallReadsOwnLevelSendableRoute: 69,
+		.fillCallReadsOwnLevelInsideSendableFill: 102,
+		.fillCallReadsOwnLevelSendableCall: 110,
+		.carriedLevel: 303,
+		.carriedLevelTwoRoutes: 217,
+		.carriedLevelFillReadsForwarded: 104,
+		.passingUpCopies: 259,
+		.passingUpCopiesFillReadsLabel: 128,
+		.passingUpCopiesSeamsBindLabel: 101,
+		.passingUpCopiesHideLabel: 47,
+		.reenteredFill: 371,
+		.reenteredFillReadsValueAbove: 141,
+		.reenteredFillReadsValueOfOneRoute: 54,
+		.reenteredFillReadsValueOfOneRouteBoundAboveCall: 44,
+		.reenteredFillReadsValueOfOneRouteRemedied: 79,
+		.reenteredFillEnclosingFillHoldsPlace: 140,
+		.reenteredFillReentersEnclosingFill: 114,
+		.reenteredFillCallBeneathFilledType: 117,
+		.reenteredFillSendableCall: 59,
+		.reenteredFillCallThroughSeamPassingPlaceUp: 142,
+		.holePassedUpPlaceReadsPassingSeamsValue: 59,
+		.holePassedUpPlaceReadsValueTwoSeamsUp: 53,
+		.holePassedUpPlaceReadsLazyValue: 63,
+		.holePassedUpPlaceReadsOptionalField: 50,
 	]
 
 	/// Seeds in `0..<seamCorpusSeedCount` whose graphs fail today. The 1 000-seed run of this corpus found that each
@@ -6756,7 +7066,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: seamBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)],
-			seeds: [78, 93, 94, 108, 121, 164, 273, 283, 298, 304, 308, 326, 347, 348, 362, 365, 407, 481, 494, 527, 568, 594, 605, 623, 670, 699, 701, 750, 797, 832, 850, 858, 876, 929, 931],
+			seeds: [93, 98, 121, 164, 273, 283, 298, 304, 308, 309, 326, 347, 348, 362, 365, 384, 481, 500, 527, 550, 556, 594, 605, 669, 670, 699, 769, 791, 797, 832, 850, 858, 876, 883, 892, 905, 930, 1_020],
 		),
 		// Seed 391's chain of hole draws that re-enter one another holds more wrappers than a graph compared on its own may
 		// traverse (`DifferentialValueLimits.isolatedFuzzerGraph`), so the comparator describes none of its values beneath
@@ -6772,78 +7082,28 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(lazyCycleConfigurationFieldReason)",
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [19, 116, 311, 338, 383, 567, 595, 836, 948],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "\(seamBuilderOrderReason); and \(lazyCycleConfigurationFieldReason); and \(inSeamLeakReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)] + inSeamLeakSignatures,
-			seeds: [163, 854, 940],
+			seeds: [338, 567, 595, 617, 854, 940, 948],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(mockParameterAndFieldOrderReason)",
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockParameterAndFieldOrder)],
-			seeds: [281],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "\(seamBuilderOrderReason); and \(mockParameterAndFieldOrderReason); and \(inSeamLeakReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockParameterAndFieldOrder)] + inSeamLeakSignatures,
-			seeds: [548],
+			seeds: [281, 300, 548],
 		),
 		// A fill that re-enters its own seam: the place the re-entered seam builds is handed the root dispatcher, not the
 		// fill's values, so `HoleImpl`'s only-if-available `holeNestId` is `nil` where the visible build and the inline
 		// build pass it.
 		GraphFuzzerKnownIssue(
-			reason: "\(fillReenteringItsSeamLosesValueReason); and \(seamBuilderOrderReason); and \(inSeamLeakReason)",
-			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: fillReenteringItsSeamLosesValueDifference), .seamBuildsOtherValuesThanInline(containing: fillReenteringItsSeamLosesValueDifference), .renamedGraphDiffers(.dependencyTreeListOrder)] + inSeamLeakSignatures,
+			reason: "\(fillReenteringItsSeamLosesValueReason); and \(seamBuilderOrderReason)",
+			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: fillReenteringItsSeamLosesValueDifference), .seamBuildsOtherValuesThanInline(containing: fillReenteringItsSeamLosesValueDifference), .renamedGraphDiffers(.dependencyTreeListOrder)],
 			seeds: [600],
 		),
+		// A type that fills a hole from a caller's module receives a label the seam takes as a parameter in another form,
+		// which the seam's check that its tree receives each label in forms one parameter takes does not see: the fill is
+		// handed `nil` where the visible build reports the seam's error.
 		GraphFuzzerKnownIssue(
-			reason: "\(fillReenteringItsSeamLosesValueReason); and \(seamBuilderOrderReason); and \(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
-			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: fillReenteringItsSeamLosesValueDifference), .seamBuildsOtherValuesThanInline(containing: fillReenteringItsSeamLosesValueDifference), .renamedGraphDiffers(.dependencyTreeListOrder)] + inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
-			seeds: [945],
-		),
-		// The in-seam leak (rule 3 of the seam contract), which the retention check must fail on until its fix: a seam's
-		// builder functions capture the values of each level on the way to a place, so holding a builder keeps them alive
-		// where the inline build frees them. Listed so that main stays green while the check gates: the fix makes each entry
-		// stale, which its pull request must remove, and any other change must match the signatures, which name each type,
-		// what is held, and both counts. With it, the retention oracle's written exception until that fix: a builder written
-		// by hand, which may read any value of any level whenever its place is built, keeps each of them alive.
-		GraphFuzzerKnownIssue(
-			reason: inSeamLeakReason,
-			signatures: inSeamLeakSignatures,
-			seeds: [69, 151, 418, 430, 990],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "\(seamBuilderOrderReason); and \(inSeamLeakReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)] + inSeamLeakSignatures,
-			seeds: [15, 68, 83, 98, 227, 309, 556, 663, 787, 883, 892],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "\(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
-			signatures: inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
-			seeds: [867],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "\(seamBuilderOrderReason); and \(inSeamLeakReason); and \(handWrittenBuilderRetentionReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)] + inSeamLeakSignatures + [handWrittenBuilderRetentionSignature],
-			seeds: [930],
-		),
-		// The in-seam leak in graphs that also show a shape the seam corpus inherits from the base corpus's list, or the
-		// order of a seam's pass-throughs.
-		GraphFuzzerKnownIssue(
-			reason: "\(labelSortedPassThroughReason); and \(inSeamLeakReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)] + inSeamLeakSignatures,
-			seeds: [330, 809],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "\(lazyCycleConfigurationFieldReason); and \(inSeamLeakReason)",
-			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)] + inSeamLeakSignatures,
-			seeds: [751],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "\(mockParameterAndFieldOrderReason); and \(inSeamLeakReason)",
-			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)] + inSeamLeakSignatures,
-			seeds: [300],
+			reason: fillReceivesSeamParameterInAnotherFormReason,
+			signatures: [.holeAcceptedWhereVisibleBuildRejects(containing: "the generated initializer takes each property the tree receives from outside the seam as one parameter named after it")],
+			seeds: [1_815],
 		),
 	]
 
@@ -6854,9 +7114,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// the builder surface, which the corpus's list, bounded by its size, cannot hold.
 	static let seamSmokeKnownIssues = addingBuilderSurfaceShapes(
 		seeds: BuilderSurfaceSeeds(
-			base: [1_010, 1_020, 1_450, 1_814, 1_890],
+			base: [],
 			labels: [],
-			sameSupply: [1_020],
+			sameSupply: [],
 			sameSupplyReason: seamMockTakesHoleValueReason,
 			sameSupplyBuilderKindFlips: [],
 			remedyBuilderKindFlips: [],
@@ -6931,22 +7191,14 @@ struct SafeDIToolGraphFuzzerTests {
 	/// mocks (iv). The planned builder structs empty them, each slice the seeds it fixes, but for same supply's, whose
 	/// defect no slice names yet (`seamMockTakesHoleValueReason`).
 	static let seamBuilderSurfaceSeeds = BuilderSurfaceSeeds(
-		base: [
-			15, 18, 19, 24, 25, 30, 56, 59, 68, 69, 78, 80, 83, 84, 93, 94, 98, 108, 116, 121,
-			135, 151, 153, 162, 163, 164, 187, 209, 215, 227, 240, 241, 247, 252, 273, 277, 279, 281, 300, 304,
-			306, 308, 309, 311, 321, 326, 330, 334, 338, 347, 348, 362, 365, 370, 383, 384, 391, 403, 407, 418,
-			430, 448, 454, 468, 471, 478, 481, 494, 517, 527, 532, 548, 550, 556, 567, 568, 594, 595, 600, 605,
-			609, 617, 623, 627, 663, 669, 670, 701, 705, 709, 718, 732, 750, 751, 760, 769, 787, 788, 791, 794,
-			797, 809, 819, 832, 834, 835, 836, 851, 854, 858, 866, 867, 876, 883, 886, 892, 912, 920, 923, 930,
-			931, 934, 940, 942, 945, 947, 948, 950, 969, 990,
-		],
+		base: [],
 		labels: [],
 		sameSupply: [
-			19, 83, 98, 108, 135, 151, 273, 300, 326, 797, 854, 858, 929, 942, 990,
+			98, 135, 151, 273, 300, 326, 797, 854, 858, 990, 1_020,
 		],
 		sameSupplyReason: seamMockTakesHoleValueReason,
-		sameSupplyBuilderKindFlips: [69, 78, 403, 527],
-		remedyBuilderKindFlips: [69, 78, 403, 527],
+		sameSupplyBuilderKindFlips: [],
+		remedyBuilderKindFlips: [],
 		addedSupply: [],
 		forwardingOtherValues: [],
 		callingMocks: [],
@@ -6957,23 +7209,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// The known issues of the smoke batch's seeds beyond the seam corpus, which no corpus run reaches: the in-seam leak,
 	/// until its fix, and the order of a seam's builders by label. In order of their seeds.
-	static let seamSmokeKnownIssuesBeyondTheCorpus: [GraphFuzzerKnownIssue] = [
-		GraphFuzzerKnownIssue(
-			reason: seamBuilderOrderReason,
-			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)],
-			seeds: [1_010, 1_020],
-		),
-		GraphFuzzerKnownIssue(
-			reason: inSeamLeakReason,
-			signatures: inSeamLeakSignatures,
-			seeds: [1_450],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "\(seamBuilderOrderReason); and \(inSeamLeakReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)] + inSeamLeakSignatures,
-			seeds: [1_890],
-		),
-	]
+	static let seamSmokeKnownIssuesBeyondTheCorpus: [GraphFuzzerKnownIssue] = []
 
 	private static let inSeamLeakReason = "A seam's builder functions capture the values of each level on the way to a place, so holding a builder keeps them alive where the inline build frees them, until the in-seam leak fix"
 
@@ -7455,16 +7691,6 @@ struct SafeDIToolGraphFuzzerTests {
 		"_RetainNavigator alive holding retainHome.retainDetailBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 	].map { .seamRetainsWhatInlineFrees(containing: $0) }
 
-	/// A hand-written builder's retention of `addingRetentionShapes`' `RetainNavigator` (`handWrittenRetentionProbe`), whose
-	/// probe holds `RetainHome`'s builder itself.
-	private static let handWrittenBuilderRetentionSignature = GraphFuzzerKnownIssue.Signature.seamRetainsWhatInlineFrees(containing: "_RetainNavigator alive holding retainDetailBuilder once the probe's value is released: 1 on the feature path, 0 on the known-right path")
-
-	private static let fillReenteringItsSeamLosesValueReason = "A fill that re-enters its own seam hands the re-entered seam the root dispatcher, not its own values, so a fill there reads `nil` for an only-if-available value its visible build and its inline build pass; fixed in a later PR"
-
-	private static let fillReenteringItsSeamLosesValueDifference = "> holeService > holeNestId:\n  feature:     holeNestId: nil\n  known right: holeNestId: Int 7"
-
-	private static let handWrittenBuilderRetentionReason = "A builder written by hand, handed to a seam as its readable initializer hands it on, keeps alive every value of each level on the way to its places, even when it reads none, where the inline build frees them, until the in-seam leak fix gives the readable initializer a builder that reads nothing"
-
 	/// The shape of the builder label sort alone, `seamBuilderOrderReason` with the one signature its entries list, when
 	/// `knownIssue` lists that reason among those it joins, or `nil`. The order is sanctioned (CLAUDE.md, "What may follow
 	/// names"), so the seam smoke batch counts a graph whose renamed graph differs by it as exercising its shapes; no other
@@ -7476,6 +7702,12 @@ struct SafeDIToolGraphFuzzerTests {
 
 	private static let seamTraversalLimitReason = "A graph whose probes traverse more wrappers than a graph compared on its own may traverse, so the comparator describes none of its values beneath the point where its traversals run out"
 
+	private static let fillReenteringItsSeamLosesValueReason = "A fill that re-enters its own seam hands the re-entered seam the root dispatcher, not its own values, so a fill there reads `nil` for an only-if-available value its visible build and its inline build pass; fixed in a later PR"
+
+	private static let fillReenteringItsSeamLosesValueDifference = "> holeService > holeNestId:\n  feature:     holeNestId: nil\n  known right: holeNestId: Int 7"
+
+	private static let fillReceivesSeamParameterInAnotherFormReason = "A type that fills a hole from a caller's module is outside the seam's check that its tree receives each label from outside it in forms one parameter takes, so a fill that receives the seam's parameter in another form is handed `nil` where the visible build reports the seam's error; fixed in a later PR"
+
 	private static let seamBuilderOrderReason = "A seam's builders are ordered by label, which its hole type's names spell, so moving type names across wrapper names reorders the builders of a seam with two hole types, its generated initializers and the calls of them"
 
 	private static let labelSortedPassThroughReason = "A seam's pass-through parameters are sorted by label, so reversing the labels reorders its generated initializer and the calls of it"
@@ -7486,9 +7718,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// at all, since the seam's draw changed their graphs, or the base corpus's mock vocabulary draw, which the seam
 	/// corpus does not draw, changed them there (154, 527, 657); the inherited lists leave them out. Observed, not
 	/// derived: a seed here that a run finds failing its inherited shape again is a new failure, and goes back. Seeds
-	/// 311 and 886, which the in-seam leak or the builder order once listed beside it, fail their inherited shape alone;
-	/// 300, 751 and 940 fail it beside the in-seam leak, and are listed with it.
-	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 116, 154, 157, 281, 300, 309, 311, 338, 364, 371, 381, 383, 431, 434, 476, 525, 527, 545, 548, 567, 595, 632, 657, 714, 728, 735, 751, 768, 774, 786, 808, 836, 840, 847, 903, 940, 948]
+	/// 281, 300, 338, 548, 567, 595, 617, 940 and 948 fail it beside the builder order, and are listed with it;
+	/// 593, 751 and 886 no longer fail it.
+	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 116, 154, 157, 281, 300, 309, 338, 364, 371, 381, 383, 431, 434, 476, 525, 527, 545, 548, 567, 593, 595, 617, 632, 657, 714, 728, 735, 751, 768, 774, 786, 808, 836, 840, 847, 886, 903, 912, 940, 948]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
@@ -7498,9 +7730,8 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// Seeds whose seam has two or more pass-throughs. They are sorted by label – kept by ruling: a parameter order
 	/// that follows label order is how mocks and initializers already work – so the oracle's label reversal
-	/// reorders them, which is expected, not a defect, as the mock's label-sorted parameters are in `knownIssues`. Seeds 330
-	/// and 809 of this shape also leak, and are listed apart.
-	private static let labelSortedPassThroughSeeds: [UInt64] = [604, 788, 816, 834, 928, 950]
+	/// reorders them, which is expected, not a defect, as the mock's label-sorted parameters are in `knownIssues`.
+	private static let labelSortedPassThroughSeeds: [UInt64] = [604, 809, 816, 834, 928, 950]
 
 	/// Seeds of the same shape whose generated mock also lists label-sorted parameters, so that it changes too.
 	private static let labelSortedPassThroughSeedsWhoseMockParametersAlsoChange: [UInt64] = [371, 381]
@@ -8296,17 +8527,17 @@ struct SafeDIToolGraphFuzzerTests {
 		throw GraphFuzzerTestError.noSmokeGraphPassesValueForOnlyIfAvailableParameter
 	}
 
-	/// Seed 227's runs, with the files of its seam build perturbed so that the one site of `CycleB`'s hole hands the fill
+	/// Seed 1637's runs, with the files of its seam build perturbed so that the one site of `CycleB`'s hole hands the fill
 	/// the `cycle6Tag` the function's reader holds – the level above's – instead of its own `CycleB`'s, and that build's
 	/// warnings. The perturbed build constructs other values than both the visible build and the inline build.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private static func cycleFillReadingLevelAboveRuns() async throws -> (runs: GraphFuzzerToolRuns, perturbedFiles: [String: String], warnings: [String]) {
-		let seed: UInt64 = 227
+		let seed: UInt64 = 1_637
 		let runs = try await GraphFuzzerOracle.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree]), renamings: [])
 		guard case let .accepted(files, warnings) = runs.firstOutcome, case .accepted = runs.visibleOutcome, case .accepted = runs.inlineOutcome else {
 			throw GraphFuzzerTestError.cycleSeedIsNoLongerAcceptedEveryWay
 		}
-		let seamFileName = try #require(files.keys.first { $0.hasSuffix("/S227_CycleSeam+SafeDI.swift") })
+		let seamFileName = try #require(files.keys.first { $0.hasSuffix("/S\(seed)_CycleSeam+SafeDI.swift") })
 		let seamFile = try #require(files[seamFileName])
 		let siteArguments = "cycle0Service_Values(cycle6Tag: cycle6Tag, "
 		try #require(seamFile.components(separatedBy: siteArguments).count == 2, "Seed \(seed)’s seam no longer hands its one site `CycleB`’s `cycle6Tag`")
@@ -8646,7 +8877,7 @@ enum ValueComparisonUnderTest: CaseIterable {
 
 private enum GraphFuzzerTestError: Error {
 	case noSmokeGraphPassesValueForOnlyIfAvailableParameter
-	/// Seed 227 is no longer accepted with its hole, as its visible build and inline.
+	/// Seed 1637 is no longer accepted with its hole, as its visible build and inline.
 	case cycleSeedIsNoLongerAcceptedEveryWay
 }
 
