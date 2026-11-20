@@ -992,6 +992,16 @@ struct SafeDIToolMockPassedNilByPlaceTests: ~Copyable {
 		        token_Token: Token? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        Screen.__safeDI_mock(source: source, token_Instantiator__Token: token_Instantiator__Token, token_Token: token_Token, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        source: Source? = nil,
+		        token_Instantiator__Token: Instantiator<Token>? = nil,
+		        token_Token: Token? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
 		        let token_Token = if let token_Token { token_Token } else if let safeDIBuilder = safeDIOverrides.token_Token { safeDIBuilder() } else { Token() }
 		        func __safeDI_reader() -> Reader {
 		            let token: Token = token_Token

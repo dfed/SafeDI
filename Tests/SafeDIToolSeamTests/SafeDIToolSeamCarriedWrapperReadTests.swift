@@ -573,6 +573,13 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		    public static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Top {
+		        Top.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Top {
 		        func __safeDI_outer() -> Outer {
 		            let __safeDI_token__safeDIBuilder = safeDIOverrides.outer.token
 		            @Sendable func __safeDI_token() -> Token {

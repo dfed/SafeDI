@@ -99,6 +99,14 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 			        analytics: LazilyInstantiated<Analytics>? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> T0 {
+			        T0.__safeDI_mock(analytics: analytics, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        analytics: LazilyInstantiated<Analytics>? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> T0 {
 			        let t3 = if let safeDIBuilder = safeDIOverrides.t3 { safeDIBuilder() } else { T3() }
 			        func __safeDI_analytics() -> Analytics {
 			            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
@@ -155,6 +163,14 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        analytics: LazilyInstantiated<Analytics>? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> T8 {
+			        T8.__safeDI_mock(analytics: analytics, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        analytics: LazilyInstantiated<Analytics>? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> T8 {
@@ -261,6 +277,14 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 				        analytics: LazilyInstantiated<Analytics>? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> T0 {
+				        T0.__safeDI_mock(analytics: analytics, safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        analytics: LazilyInstantiated<Analytics>? = nil,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> T0 {
 				        let t3 = if let safeDIBuilder = safeDIOverrides.t3 { safeDIBuilder() } else { T3() }
 				        func __safeDI_analytics() -> Analytics {
 				            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
@@ -326,6 +350,14 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        analytics: LazilyInstantiated<Analytics>? = nil,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> T8 {
+				        T8.__safeDI_mock(analytics: analytics, safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        analytics: LazilyInstantiated<Analytics>? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> T8 {
@@ -468,6 +500,14 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 			        analytics: LazilyInstantiated<Analytics>? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> T0 {
+			        T0.__safeDI_mock(analytics: analytics, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        analytics: LazilyInstantiated<Analytics>? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> T0 {
 			        let t3 = if let safeDIBuilder = safeDIOverrides.t3 { safeDIBuilder() } else { T3() }
 			        func __safeDI_analytics() -> Analytics {
 			            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
@@ -521,6 +561,14 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        analytics: LazilyInstantiated<Analytics>? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> T8 {
+			        T8.__safeDI_mock(analytics: analytics, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        analytics: LazilyInstantiated<Analytics>? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> T8 {
@@ -658,6 +706,14 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		        analytics: LazilyInstantiated<Analytics>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T0 {
+		        T0.__safeDI_mock(analytics: analytics, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        analytics: LazilyInstantiated<Analytics>? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> T0 {
 		        let t3 = if let safeDIBuilder = safeDIOverrides.t3 { safeDIBuilder() } else { T3() }
 		        func __safeDI_analytics() -> Analytics {
 		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
@@ -714,6 +770,14 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		    }
 
 		    public static func mock(
+		        analytics: LazilyInstantiated<Analytics>? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> T8 {
+		        T8.__safeDI_mock(analytics: analytics, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
 		        analytics: LazilyInstantiated<Analytics>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T8 {
@@ -858,6 +922,14 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		        analytics: LazilyInstantiated<Analytics>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T0 {
+		        T0.__safeDI_mock(analytics: analytics, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        analytics: LazilyInstantiated<Analytics>? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> T0 {
 		        let t3 = if let safeDIBuilder = safeDIOverrides.t3 { safeDIBuilder() } else { T3() }
 		        func __safeDI_analytics() -> Analytics {
 		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
@@ -917,6 +989,14 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		        analytics: LazilyInstantiated<Analytics>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T8 {
+		        T8.__safeDI_mock(analytics: analytics, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        analytics: LazilyInstantiated<Analytics>? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> T8 {
 		        func __safeDI_analytics() -> Analytics {
 		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
@@ -969,6 +1049,14 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		    }
 
 		    public static func mock(
+		        analytics: LazilyInstantiated<Analytics>? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> T9 {
+		        T9.__safeDI_mock(analytics: analytics, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
 		        analytics: LazilyInstantiated<Analytics>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T9 {
@@ -1097,6 +1185,14 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		    }
 
 		    public static func mock(
+		        analytics: LazilyInstantiated<Analytics>? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> T0 {
+		        T0.__safeDI_mock(analytics: analytics, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
 		        analytics: LazilyInstantiated<Analytics>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T0 {
@@ -1300,6 +1396,14 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		        analytics: LazilyInstantiated<Analytics>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T0 {
+		        T0.__safeDI_mock(analytics: analytics, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        analytics: LazilyInstantiated<Analytics>? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> T0 {
 		        let t3 = if let safeDIBuilder = safeDIOverrides.t3 { safeDIBuilder() } else { T3() }
 		        func __safeDI_analytics() -> Analytics {
 		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
@@ -1356,6 +1460,14 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		    }
 
 		    public static func mock(
+		        analytics: LazilyInstantiated<Analytics>? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> T8 {
+		        T8.__safeDI_mock(analytics: analytics, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
 		        analytics: LazilyInstantiated<Analytics>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T8 {
@@ -1514,6 +1626,13 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		    public static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T8 {
+		        T8.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> T8 {
 		        func __safeDI_service() -> ServiceProtocol {
 		            return ConcreteService.__safeDI_mock(name: safeDIOverrides.service.name, safeDIBuilder: safeDIOverrides.service.safeDIBuilder)
 		        }
@@ -1639,6 +1758,13 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		    public static func mock(
 		        name: String? = nil
 		    ) -> T0 {
+		        T0.__safeDI_mock(name: name)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        name: String? = nil
+		    ) -> T0 {
 		        let name = name ?? ("mock")
 		        return T0.customMock(name: name)
 		    }
@@ -1691,6 +1817,14 @@ struct SafeDIToolPublicMockCustomMockConstructionTests: ~Copyable {
 		    }
 
 		    public static func mock(
+		        analytics: LazilyInstantiated<Analytics>? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> T8 {
+		        T8.__safeDI_mock(analytics: analytics, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
 		        analytics: LazilyInstantiated<Analytics>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> T8 {

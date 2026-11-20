@@ -1,0 +1,102 @@
+{
+  "sources": [
+    {
+      "file": "Sources/SafeDICore/Generators/DependencyTreeGenerator.swift",
+      "type": "DependencyTreeGenerator",
+      "runs": [
+        [
+          "func generateMockCode",
+          "DependencyTreeGenerator+MockOrchestration.swift"
+        ],
+        [
+          "func requirements",
+          "DependencyTreeGenerator+Requirements.swift"
+        ],
+        [
+          "struct MockScopes",
+          "DependencyTreeGenerator+MockOrchestration.swift"
+        ],
+        [
+          "func generateDOTTree",
+          "stay"
+        ],
+        [
+          "enum DependencyTreeGeneratorError",
+          "DependencyTreeGenerator+Errors.swift"
+        ],
+        [
+          "let importStatements",
+          "stay"
+        ],
+        [
+          "func isPubliclyConstructible",
+          "DependencyTreeGenerator+Constructions.swift"
+        ],
+        [
+          "func publicMockCalls",
+          "DependencyTreeGenerator+PublicMockCalls.swift"
+        ],
+        [
+          "var generatedSeamTypes",
+          "stay"
+        ],
+        [
+          "struct ReachedForeignModule",
+          "DependencyTreeGenerator+SeamDriver.swift"
+        ],
+        [
+          "func fileHeader#2",
+          "stay"
+        ],
+        [
+          "func createMockRootScopeGenerator",
+          "DependencyTreeGenerator+MockRootPromotion.swift"
+        ],
+        [
+          "struct ChildrenRequiringEachOther",
+          "DependencyTreeGenerator+CycleValidation.swift"
+        ],
+        [
+          "func createMockTypeDescriptionToScopeMapping",
+          "DependencyTreeGenerator+MockOrchestration.swift"
+        ],
+        [
+          "var rootInstantiables",
+          "stay"
+        ],
+        [
+          "func typesReachableOutsideSeamTrees",
+          "DependencyTreeGenerator+ScopeMapping.swift"
+        ],
+        [
+          "func validatePropertiesAreFulfillable",
+          "DependencyTreeGenerator+FulfillmentValidation.swift"
+        ],
+        [
+          "func validateSendableBuildersCaptureNoNonSendableWrapper",
+          "DependencyTreeGenerator+DeclarationValidation.swift"
+        ],
+        [
+          "extension DependencyTreeGenerator",
+          "DependencyTreeGenerator+Constructions.swift"
+        ],
+        [
+          "extension Instantiable",
+          "stay"
+        ]
+      ],
+      "relocate": [
+        {
+          "file": "Tests/SafeDIGeneratorPluginTests/ErrorReportingSites.swift"
+        }
+      ],
+      "replace": [
+        {
+          "file": "Sources/SafeDICore/Generators/CLAUDE.md",
+          "old": "`DependencyTreeGenerator.swift` builds and validates the production trees and the mock roots;",
+          "new": "`DependencyTreeGenerator.swift` and its `DependencyTreeGenerator+*.swift` files, one per concern, build and validate the production trees and the mock roots;"
+        }
+      ]
+    }
+  ]
+}
