@@ -1415,6 +1415,26 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueOfOneRoute_whenPlaceWhoseFillBuildsSeamAgainCarriesLabelToo() async {
+		// `SubA` binds `x` before `first`, so the place whose fill calls `SubB` again carries `x`, which a fill that builds its
+		// seam again and reads it from the caller's scope is rejected for (`fieldOfReenteringPlace`). `DefaultFirst` binds `x`
+		// again before that call, nearer the reader inline: both builds report the declaration on the path, which their
+		// checks test first.
+		let fixture = Fixture(
+			subADeclarations: ["@Instantiated let x: X", "@Instantiated let first: any First"],
+			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subB: SubB"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
+			"""
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `SubB` again (`subB`), but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsFillReadsValueOfOneRoute_whenTypeAboveSeamCallDeclaresLabelTooAndReaderRequiresIt() async {
 		// `Host` binds `x` before it calls `Top`, so `gadget` carries `Host`'s `x` as a field, but on the route through
 		// `DefaultFirst`'s call of `SubB` inline reads `DefaultFirst`'s: a field of the label does not lift the rejection.
@@ -1604,11 +1624,63 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueOfOneRoute_whenCallOnPathIsOfSeamThatPassesPlaceUp() async {
+		// `DefaultFirst` binds `x` before it calls `Relay`, a seam that builds `SubB` and passes `second` up, so the call is of
+		// `Relay` and the seam built again is `SubB`: the error names the call as written, and the remedy the seam built again.
+		let fixture = Fixture(
+			featureTypes: [seamFixtureType(named: "Relay", isSeam: true, declarations: ["@Instantiated let subB: SubB"])],
+			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let relay: Relay"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, fixtures in
+			"""
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which `DefaultFirst` declares on the path from the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) to the call by which `DefaultFirst` instantiates `Relay` (`relay`), which instantiates `SubB` again, but that call passes the builder on as module `Middle` fills it, which cannot hand it `DefaultFirst`’s values. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Middle"]!["DefaultFirst.swift"]):10:5: note: `DefaultFirst` declares `x: X` here.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenSeamBuiltAgainReceivesLabelDeclaredOnPathToCallOfSeamThatPassesPlaceUp() async throws {
+		// The remedy of the error above, applied as written: `SubB`, the seam built again, receives `x` only if available, so
+		// the scope of `second` carries `DefaultFirst`'s on the route through `Relay` and `nil` on `Top`'s own, as inline reads.
+		let fixture = Fixture(
+			xIsFinalClass: true,
+			featureTypes: [seamFixtureType(named: "Relay", isSeam: true, declarations: ["@Instantiated let subB: SubB"])],
+			subBDeclarations: ["@Received(onlyIfAvailable: true) let x: X?", "@Instantiated let second: any Second"],
+			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let relay: Relay"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		_ = try await executeSafeDIToolMultiModuleTest(modules: fixture.hostFillsEveryPlaceModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		try await expectValuesEqualVisibleBuild(output, fixture)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsInlineValues_whenSeamBuiltAgainReceivesLabelOnlyIfAvailable() async throws {
 		// The first remedy for a reader only if available: `SubB` receives `x` only if available, so the scope of `second`
 		// carries the value of each route, `nil` on `Top`'s own. `X` is a class, so the comparison tells the routes' values apart.
 		let fixture = Fixture(
 			xIsFinalClass: true,
+			subBDeclarations: ["@Received(onlyIfAvailable: true) let x: X?", "@Instantiated let second: any Second"],
+			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subB: SubB"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		_ = try await executeSafeDIToolMultiModuleTest(modules: fixture.hostFillsEveryPlaceModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		try await expectValuesEqualVisibleBuild(output, fixture)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenSeamBuiltAgainReceivesLabelThePlaceWhoseFillBuildsItAgainCarriesToo() async throws {
+		// The remedy of the error both builds report where `SubA` binds `x` before `first` too: `SubB` receives `x` only if
+		// available, so the scope of `second` carries `DefaultFirst`'s on the route through its call, which inline reads.
+		let fixture = Fixture(
+			xIsFinalClass: true,
+			subADeclarations: ["@Instantiated let x: X", "@Instantiated let first: any First"],
 			subBDeclarations: ["@Received(onlyIfAvailable: true) let x: X?", "@Instantiated let second: any Second"],
 			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subB: SubB"],
 			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
@@ -1707,6 +1779,638 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		let fixture = Fixture(
 			xIsFinalClass: true,
 			defaultFirstDeclarations: ["@Instantiated let x: X", "@Instantiated let subB: SubB"],
+			defaultSecondDeclarations: ["@Instantiated let x: X", "@Instantiated let gadget: any Gadget"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		try await expectValuesEqualVisibleBuild(output, fixture)
+	}
+
+	// MARK: A place a caller fills inside the fill built again, reading what the re-entering place carries
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFieldOfReenteringPlace_whenCallerFillsPlaceInsideFillBuiltAgainAndOnlyThePlaceCarriesLabel() async {
+		// `SubA` binds `x` before `first`, whose fill `DefaultFirst` calls `SubB` again, and nothing on the path to that call
+		// declares `x`: inline, the gadget reads `SubA`'s `x` on the route through that call and `nil` on `Top`'s own, while the
+		// one fill `Middle` generates for `second` reads the outer call's. `Host`'s module records what its visible build
+		// rejects, so `App` rejects it too.
+		let fixture = Fixture(
+			subADeclarations: ["@Instantiated let x: X", "@Instantiated let first: any First"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, _ in
+			"""
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFieldOfReenteringPlace_whenTypeAboveSeamCallDeclaresLabelTooAndReaderRequiresIt() async {
+		// `Host` binds `x` before it calls `Top`, so `gadget` carries `Host`'s `x` as a field, but on the route through
+		// `DefaultFirst`'s call of `SubB` inline reads `SubA`'s: a field of the label does not lift the rejection.
+		let fixture = Fixture(
+			subADeclarations: ["@Instantiated let x: X", "@Instantiated let first: any First"],
+			hostDeclarations: ["@Instantiated let x: X", "@Instantiated let top: Top"],
+			gadgetDeclarations: ["@Received let x: X"],
+		)
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, _ in
+			"""
+			\(readerLocation): error: `DefaultGadget` receives `x: X`, which the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get another value. Declare `@Received let x: X` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFieldOfReenteringPlace_whenTypeAboveSeamCallDeclaresLabelTooAndReaderReceivesItOnlyIfAvailable() async {
+		// As above, with the gadget receiving `x` only if available.
+		let fixture = Fixture(
+			subADeclarations: ["@Instantiated let x: X", "@Instantiated let first: any First"],
+			hostDeclarations: ["@Instantiated let x: X", "@Instantiated let top: Top"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, _ in
+			"""
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFieldOfReenteringPlace_whenCallBuildsSeamAgainThroughInstantiatorAndOnlyThePlaceCarriesLabel() async {
+		// `DefaultFirst` builds `SubB` again through an `Instantiator`.
+		let fixture = Fixture(
+			subADeclarations: ["@Instantiated let x: X", "@Instantiated let first: any First"],
+			defaultFirstDeclarations: ["@Instantiated let subBBuilder: Instantiator<SubB>"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, _ in
+			"""
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subBBuilder`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFieldOfReenteringPlaceNamingEveryCall_whenFillOfPlaceThatCarriesLabelBuildsSeamAgainTwice() async {
+		// `DefaultFirst` builds `SubB` again twice, once through an `Instantiator`: `Host` records the field once per call, and
+		// the error names both calls, as the visible build's does.
+		let fixture = Fixture(
+			subADeclarations: ["@Instantiated let x: X", "@Instantiated let first: any First"],
+			defaultFirstDeclarations: ["@Instantiated let subB: SubB", "@Instantiated let subBBuilder: Instantiator<SubB>"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, _ in
+			"""
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB` and `subBBuilder`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but those calls pass the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFieldOfReenteringPlaceNamingEveryPlace_whenTwoPlacesWhoseFillsBuildSeamAgainCarryLabel() async {
+		// `Top` calls `SubA` and `SubC`, each binding an `x` of its own before a place `DefaultFirst` fills, which calls `SubB`
+		// again: `Host` records both places' fields, and the error names both, as the visible build's does.
+		let fixture = Fixture(
+			featureTypes: [seamFixtureType(named: "SubC", isSeam: true, declarations: ["@Instantiated let x: X", "@Instantiated let first: any First"])],
+			subADeclarations: ["@Instantiated let x: X", "@Instantiated let first: any First"],
+			topDeclarations: ["@Instantiated let subA: SubA", "@Instantiated let subC: SubC", "@Instantiated let subB: SubB"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, _ in
+			"""
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builders for `SubA`’s `first: any First` (case `first` of `firstBuilder_SubA`) and `SubC`’s `first: any First` (case `first` of `firstBuilder_SubC`) carry from `SubA` and `SubC`, and each of their fills instantiates `SubB` again (`subB`). Inline, `DefaultGadget` would read `SubA`’s or `SubC`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFieldOfReenteringPlace_whenCallBuildsSeamAgainInSendableFunctionAndOnlyThePlaceCarriesLabel() async {
+		// `DefaultFirst` builds `SubB` again in a `SendableInstantiator`'s `@Sendable` function.
+		let fixture = Fixture(
+			isSendable: true,
+			subADeclarations: ["@Instantiated let x: X", "@Instantiated let first: any First"],
+			defaultFirstDeclarations: ["@Instantiated let subBBuilder: SendableInstantiator<SubB>"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, _ in
+			"""
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subBBuilder`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFieldOfReenteringPlace_whenSeamCalledInsideFillBuiltAgainPassesPlaceUpAndOnlyThePlaceCarriesLabel() async {
+		// The fill of `second` calls `Inner`, whose place `gizmo` `Host` passes up, inside that fill, and `App` fills.
+		let fixture = Fixture(
+			featureTypes: ["public protocol Gizmo {}", seamFixtureType(named: "Inner", isSeam: true, declarations: ["@Instantiated let gizmo: any Gizmo"])],
+			subADeclarations: ["@Instantiated let x: X", "@Instantiated let first: any First"],
+			defaultSecondDeclarations: ["@Instantiated let inner: Inner"],
+			appTypes: [SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "DefaultGizmo", fulfilling: "Gizmo", declarations: ["@Received(onlyIfAvailable: true) let x: X?"])],
+		)
+		await expectBothBuildsThrow(fixture, readerFile: "DefaultGizmo.swift", readerLineInMiddle: 9) { readerLocation, _ in
+			"""
+			\(readerLocation): error: `DefaultGizmo` receives `x: X?`, which the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB`). Inline, `DefaultGizmo` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGizmo` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFieldOfReenteringPlace_whenModuleAboveSeamThatPassesPlaceUpFillsItAndOnlyThePlaceCarriesLabel() async {
+		// `App`'s `Shell` calls `Host` and passes `gadget` up; `Outer` fills it. The copy `Shell` takes keeps what `Host` recorded.
+		let fixture = Fixture(
+			subADeclarations: ["@Instantiated let x: X", "@Instantiated let first: any First"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: fixture.feature),
+			ModuleFixture(name: "Middle", packageName: "Mid", swiftFileContent: fixture.middle.map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let host: Host"])].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
+			ModuleFixture(
+				name: "Outer",
+				packageName: "Outer",
+				swiftFileContent: (fixture.app + [seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let shell: Shell"])]).map { "import Feature\nimport Middle\nimport App\n\n" + $0 },
+				dependencies: ["Feature", "Middle", "App"],
+			),
+		]
+		await assertThrowsMultiModuleError(inModule: "Outer", diagnostics: { fixtures in
+			"""
+			\(fixtures["Outer"]!["DefaultGadget.swift"]):11:5: error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subB`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFieldOfReenteringPlace_whenCallInsideFillIsOfSeamThatPassesPlaceUp() async {
+		// `DefaultFirst` builds `Mid`, which builds `Relay` through an `Instantiator`; `Relay` builds `SubB` and passes `second`
+		// up. The seam built again is `SubB`, beneath `Relay`, which inline reads `SubA`'s `x` inside: the error names the call
+		// as written, and puts the receive on `SubB`. A receive on `Relay` would not reach `second`, which `Relay` passes up.
+		let fixture = Fixture(
+			featureTypes: [seamFixtureType(named: "Relay", isSeam: true, declarations: ["@Instantiated let subB: SubB"])],
+			subADeclarations: ["@Instantiated let x: X", "@Instantiated let first: any First"],
+			middleTypes: [seamFixtureType(named: "Mid", declarations: ["@Instantiated let relayBuilder: Instantiator<Relay>"])],
+			defaultFirstDeclarations: ["@Instantiated let mid: Mid"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, _ in
+			"""
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `Relay` (`relayBuilder`), which instantiates `SubB` again. Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFieldOfReenteringPlace_whenCallInsideFillBeneathFilledTypeBuildsSeamAgainThroughInstantiator() async {
+		// The neighbour of the shape above whose call is of `SubB` itself: the called seam is the seam built again, so the
+		// error says the call instantiates `SubB` again, as before.
+		let fixture = Fixture(
+			subADeclarations: ["@Instantiated let x: X", "@Instantiated let first: any First"],
+			middleTypes: [seamFixtureType(named: "Mid", declarations: ["@Instantiated let subBBuilder: Instantiator<SubB>"])],
+			defaultFirstDeclarations: ["@Instantiated let mid: Mid"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		await expectBothBuildsThrow(fixture, readerLineInMiddle: 9) { readerLocation, _ in
+			"""
+			\(readerLocation): error: `DefaultGadget` receives `x: X?`, which the builder for `SubA`’s `first: any First` (case `first` of `firstBuilder`) carries from `SubA`, and that builder’s fill instantiates `SubB` again (`subBBuilder`). Inline, `DefaultGadget` would read `SubA`’s `x` inside that `SubB`, but the call passes the builder on as module `Middle` fills it, whose scope there does not carry `x`, so `DefaultGadget` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let x: X?` on `SubB`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Second` in module `Feature` or a module it lists among its SafeDI dependencies.
+			"""
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenSeamBuiltAgainReceivesLabelOnlyThePlaceWhoseFillCallsSeamThatPassesPlaceUpCarries() async throws {
+		// The remedy of `generate_throwsFieldOfReenteringPlace_whenCallInsideFillIsOfSeamThatPassesPlaceUp`, applied as written:
+		// `SubB` receives `x` only if available, so `Relay` passes `SubA`'s on to it on the route through `Mid`'s call, and the
+		// scope of `second` carries it there and `nil` on `Top`'s own, as inline reads.
+		let fixture = Fixture(
+			xIsFinalClass: true,
+			featureTypes: [seamFixtureType(named: "Relay", isSeam: true, declarations: ["@Instantiated let subB: SubB"])],
+			subADeclarations: ["@Instantiated let x: X", "@Instantiated let first: any First"],
+			subBDeclarations: ["@Received(onlyIfAvailable: true) let x: X?", "@Instantiated let second: any Second"],
+			middleTypes: [seamFixtureType(named: "Mid", declarations: ["@Instantiated let relayBuilder: Instantiator<Relay>"])],
+			defaultFirstDeclarations: ["@Instantiated let mid: Mid"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
+		extension Relay {
+		    nonisolated public enum SafeDIScope_Second {
+		        nonisolated public struct subB_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let subB: (subB_Values) -> SubB.SafeDIScope_Second.__safeDI_Builder<__safeDI_Built>
+
+		            public init(subB: @escaping (subB_Values) -> SubB.SafeDIScope_Second.__safeDI_Builder<__safeDI_Built>) {
+		                self.subB = subB
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.subB = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_x: @autoclosure @escaping () -> X?, __safeDI_secondBuilder: SafeDIScope_Second.__safeDI_Builder<any Second>) {
+		        let x = LazilyInstantiated<X?>(__safeDI_x)
+		        func __safeDI_subB() -> SubB {
+		            _ = SubB.__safeDI_SubB_E71F79FA52ED67E1.self
+		            return SubB(__safeDI_x: x.instance, __safeDI_secondBuilder: __safeDI_secondBuilder.subB(SafeDIScope_Second.subB_Values()))
+		        }
+		        let subB: SubB = __safeDI_subB()
+		        self.init(subB: subB)
+		    }
+		}
+
+		extension Relay {
+		    public enum __safeDI_Relay_82323C0A623D84B5 {}
+		}
+
+		extension SubA {
+		    nonisolated public enum SafeDIScope_First {
+		        nonisolated public struct first_Values {
+		            public let x: X
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let first: (first_Values) -> __safeDI_Built
+
+		            public init(first: @escaping (first_Values) -> __safeDI_Built) {
+		                self.first = first
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.first = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_firstBuilder: SafeDIScope_First.__safeDI_Builder<any First>) {
+		        let x = X()
+		        let first: any First = __safeDI_firstBuilder.first(SafeDIScope_First.first_Values(x: x))
+		        self.init(x: x, first: first)
+		    }
+		}
+
+		extension SubA {
+		    public enum __safeDI_SubA_9771378DE3440F15 {}
+		}
+
+		extension SubB {
+		    nonisolated public enum SafeDIScope_Second {
+		        nonisolated public struct second_Values {
+		            public let x: X?
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let second: (second_Values) -> __safeDI_Built
+
+		            public init(second: @escaping (second_Values) -> __safeDI_Built) {
+		                self.second = second
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.second = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_x x: X?, __safeDI_secondBuilder: SafeDIScope_Second.__safeDI_Builder<any Second>) {
+		        let second: any Second = __safeDI_secondBuilder.second(SafeDIScope_Second.second_Values(x: x))
+		        self.init(x: x, second: second)
+		    }
+		}
+
+		extension SubB {
+		    public enum __safeDI_SubB_E71F79FA52ED67E1 {}
+		}
+
+		extension Top {
+		    nonisolated public enum SafeDIScope_First {
+		        nonisolated public struct subA_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let subA: (subA_Values) -> SubA.SafeDIScope_First.__safeDI_Builder<__safeDI_Built>
+
+		            public init(subA: @escaping (subA_Values) -> SubA.SafeDIScope_First.__safeDI_Builder<__safeDI_Built>) {
+		                self.subA = subA
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.subA = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    nonisolated public enum SafeDIScope_Second {
+		        nonisolated public struct subB_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let subB: (subB_Values) -> SubB.SafeDIScope_Second.__safeDI_Builder<__safeDI_Built>
+
+		            public init(subB: @escaping (subB_Values) -> SubB.SafeDIScope_Second.__safeDI_Builder<__safeDI_Built>) {
+		                self.subB = subB
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.subB = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_x: @autoclosure @escaping () -> X?, __safeDI_firstBuilder: SafeDIScope_First.__safeDI_Builder<any First>, __safeDI_secondBuilder: SafeDIScope_Second.__safeDI_Builder<any Second>) {
+		        let x = LazilyInstantiated<X?>(__safeDI_x)
+		        func __safeDI_subA() -> SubA {
+		            _ = SubA.__safeDI_SubA_9771378DE3440F15.self
+		            return SubA(__safeDI_firstBuilder: __safeDI_firstBuilder.subA(SafeDIScope_First.subA_Values()))
+		        }
+		        let subA: SubA = __safeDI_subA()
+		        func __safeDI_subB() -> SubB {
+		            _ = SubB.__safeDI_SubB_E71F79FA52ED67E1.self
+		            return SubB(__safeDI_x: x.instance, __safeDI_secondBuilder: __safeDI_secondBuilder.subB(SafeDIScope_Second.subB_Values()))
+		        }
+		        let subB: SubB = __safeDI_subB()
+		        self.init(subA: subA, subB: subB)
+		    }
+		}
+
+		extension Top {
+		    public enum __safeDI_Top_8D20527D093E3C57 {}
+		}
+		"""])
+		expectGeneratedFiles(output.modules["Middle"]?.generatedFiles, ["Middle.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Host {
+		    nonisolated public enum SafeDIScope_Gadget {
+		        nonisolated public struct top_firstBuilder_Values {
+		            public var x: X? { __safeDI_x.instance }
+		            public let __safeDI_x: LazilyInstantiated<X?>
+
+		            init(x: LazilyInstantiated<X?>) {
+		                __safeDI_x = x
+		            }
+		        }
+
+		        nonisolated public struct top_secondBuilder_Values {
+		            public var x: X? { __safeDI_x.instance }
+		            public let __safeDI_x: LazilyInstantiated<X?>
+
+		            init(x: LazilyInstantiated<X?>) {
+		                __safeDI_x = x
+		            }
+		        }
+
+		        nonisolated public enum DefaultFirst_Scope {
+		            nonisolated public struct mid_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let mid: (mid_Values) -> SafeDIScope_Gadget.Mid_Scope.__safeDI_Builder<__safeDI_Built>
+
+		                public init(mid: @escaping (mid_Values) -> SafeDIScope_Gadget.Mid_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                    self.mid = mid
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.mid = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		                }
+		            }
+		        }
+
+		        nonisolated public enum DefaultSecond_Scope {
+		            nonisolated public struct gadget_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let gadget: (gadget_Values) -> __safeDI_Built
+
+		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
+		                    self.gadget = gadget
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.gadget = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        nonisolated public enum Mid_Scope {
+		            nonisolated public struct relayBuilder_secondBuilder_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let relayBuilder_secondBuilder: (relayBuilder_secondBuilder_Values) -> Relay.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>
+
+		                public init(relayBuilder_secondBuilder: @escaping (relayBuilder_secondBuilder_Values) -> Relay.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
+		                    self.relayBuilder_secondBuilder = relayBuilder_secondBuilder
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.relayBuilder_secondBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let top_firstBuilder: (top_firstBuilder_Values) -> Top.SafeDIScope_First.__safeDI_Builder<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>
+		            public let top_secondBuilder: (top_secondBuilder_Values) -> Top.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>
+
+		            public init(top_firstBuilder: @escaping (top_firstBuilder_Values) -> Top.SafeDIScope_First.__safeDI_Builder<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<__safeDI_Built>>, top_secondBuilder: @escaping (top_secondBuilder_Values) -> Top.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<__safeDI_Built>>) {
+		                self.top_firstBuilder = top_firstBuilder
+		                self.top_secondBuilder = top_secondBuilder
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.top_firstBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+		                self.top_secondBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
+		            }
+		        }
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+		    public init(__safeDI_x: @autoclosure @escaping () -> X?, __safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>) {
+		        let x = LazilyInstantiated<X?>(__safeDI_x)
+		        let __safeDI_gadgetBuilder_top_firstBuilder = __safeDI_gadgetBuilder.top_firstBuilder(SafeDIScope_Gadget.top_firstBuilder_Values(x: x))
+		        let __safeDI_gadgetBuilder_top_secondBuilder = __safeDI_gadgetBuilder.top_secondBuilder(SafeDIScope_Gadget.top_secondBuilder_Values(x: x))
+		        func __safeDI_top() -> Top {
+		            _ = Top.__safeDI_Top_8D20527D093E3C57.self\(seamCallComment(seam: "Top", module: "Feature"))
+		            func __safeDI_firstBuilder_SubA_first(_ scope: SubA.SafeDIScope_First.first_Values, __safeDI_top_firstBuilder: SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>) -> any First {
+		                let x = scope.x
+		                func __safeDI_first() -> DefaultFirst {
+		                    let __safeDI_gadgetBuilder_mid = __safeDI_top_firstBuilder.mid(SafeDIScope_Gadget.DefaultFirst_Scope.mid_Values())
+		                    func __safeDI_mid() -> Mid {
+		                        let __safeDI_gadgetBuilder_relayBuilder_secondBuilder = __safeDI_gadgetBuilder_mid.relayBuilder_secondBuilder(SafeDIScope_Gadget.Mid_Scope.relayBuilder_secondBuilder_Values())
+		                        func __safeDI_relayBuilder() -> Relay {
+		                            _ = Relay.__safeDI_Relay_82323C0A623D84B5.self\(seamCallComment(seam: "Relay", module: "Feature"))
+		                            func __safeDI_secondBuilder_Relay(up: Relay.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>>) -> Relay.SafeDIScope_Second.__safeDI_Builder<any Second> {
+		                                .init(subB: { values in __safeDI_secondBuilder_SubB(up: up.subB(values)) })
+		                            }
+		                            return Relay(__safeDI_x: x, __safeDI_secondBuilder: __safeDI_secondBuilder_Relay(up: __safeDI_gadgetBuilder_relayBuilder_secondBuilder))
+		                        }
+		                        let relayBuilder = Instantiator<Relay>(__safeDI_relayBuilder)
+		                        return Mid(relayBuilder: relayBuilder)
+		                    }
+		                    let mid: Mid = __safeDI_mid()
+		                    return DefaultFirst(mid: mid)
+		                }
+		                let first: any First = __safeDI_first()
+		                return first
+		            }
+		            func __safeDI_secondBuilder_SubB_second(_ scope: SubB.SafeDIScope_Second.second_Values, __safeDI_top_secondBuilder: SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>) -> any Second {
+		                func __safeDI_second() -> DefaultSecond {
+		                    let gadget: any Gadget = __safeDI_top_secondBuilder.gadget(SafeDIScope_Gadget.DefaultSecond_Scope.gadget_Values())
+		                    return DefaultSecond(gadget: gadget)
+		                }
+		                let second: any Second = __safeDI_second()
+		                return second
+		            }
+		            func __safeDI_firstBuilder_Top(up: Top.SafeDIScope_First.__safeDI_Builder<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>>) -> Top.SafeDIScope_First.__safeDI_Builder<any First> {
+		                .init(subA: { values in __safeDI_firstBuilder_SubA(up: up.subA(values)) })
+		            }
+		            func __safeDI_firstBuilder_SubA(up: SubA.SafeDIScope_First.__safeDI_Builder<SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>>) -> SubA.SafeDIScope_First.__safeDI_Builder<any First> {
+		                .init(first: { scope in __safeDI_firstBuilder_SubA_first(scope, __safeDI_top_firstBuilder: up.first(scope)) })
+		            }
+		            func __safeDI_secondBuilder_Top(up: Top.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>>) -> Top.SafeDIScope_Second.__safeDI_Builder<any Second> {
+		                .init(subB: { values in __safeDI_secondBuilder_SubB(up: up.subB(values)) })
+		            }
+		            func __safeDI_secondBuilder_SubB(up: SubB.SafeDIScope_Second.__safeDI_Builder<SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>>) -> SubB.SafeDIScope_Second.__safeDI_Builder<any Second> {
+		                .init(second: { scope in __safeDI_secondBuilder_SubB_second(scope, __safeDI_top_secondBuilder: up.second(scope)) })
+		            }
+		            return Top(__safeDI_x: x.instance, __safeDI_firstBuilder: __safeDI_firstBuilder_Top(up: __safeDI_gadgetBuilder_top_firstBuilder), __safeDI_secondBuilder: __safeDI_secondBuilder_Top(up: __safeDI_gadgetBuilder_top_secondBuilder))
+		        }
+		        let top: Top = __safeDI_top()
+		        self.init(top: top)
+		    }
+		}
+
+		extension Host {
+		    public enum __safeDI_Host_F571E2F33C3D2F1A {}
+		}
+		"""])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Middle)
+		import Middle
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_host() -> Host {
+		            _ = Host.__safeDI_Host_F571E2F33C3D2F1A.self\(seamCallComment(seam: "Host", module: "Middle"))
+		            func __safeDI_gadgetBuilder_Host() -> Host.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
+		                .init(top_firstBuilder: { _ in __safeDI_gadgetBuilder_Host_Top_SafeDIScope_First() }, top_secondBuilder: { _ in __safeDI_gadgetBuilder_Host_Top_SafeDIScope_Second() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_DefaultFirst_Scope() -> Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget> {
+		                .init(mid: { _ in __safeDI_gadgetBuilder_Host_Mid_Scope() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_Mid_Scope() -> Host.SafeDIScope_Gadget.Mid_Scope.__safeDI_Builder<any Gadget> {
+		                .init(relayBuilder_secondBuilder: { _ in __safeDI_gadgetBuilder_Host_Relay() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_DefaultSecond_Scope(x: X?) -> Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget> {
+		                .init(gadget: { _ in
+		                    let gadget: any Gadget = DefaultGadget(x: x)
+		                    return gadget
+		                })
+		            }
+		            func __safeDI_gadgetBuilder_Host_Top_SafeDIScope_First() -> Top.SafeDIScope_First.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(subA: { _ in __safeDI_gadgetBuilder_Host_SubA() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_SubA() -> SubA.SafeDIScope_First.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(first: { _ in __safeDI_gadgetBuilder_Host_DefaultFirst_Scope() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_Top_SafeDIScope_Second() -> Top.SafeDIScope_Second.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(subB: { _ in __safeDI_gadgetBuilder_Host_SubB() })
+		            }
+		            func __safeDI_gadgetBuilder_Host_SubB() -> SubB.SafeDIScope_Second.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(second: { values in __safeDI_gadgetBuilder_Host_DefaultSecond_Scope(x: values.x) })
+		            }
+		            func __safeDI_gadgetBuilder_Host_Relay() -> Relay.SafeDIScope_Second.__safeDI_Builder<Host.SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>> {
+		                .init(subB: { _ in __safeDI_gadgetBuilder_Host_SubB() })
+		            }
+		            return Host(__safeDI_x: nil, __safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Host())
+		        }
+		        let host: Host = __safeDI_host()
+		        self.init(host: host)
+		    }
+		}
+		"""])
+		_ = try await executeSafeDIToolMultiModuleTest(modules: fixture.hostFillsEveryPlaceModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		try await expectValuesEqualVisibleBuild(output, fixture)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenSeamBuiltAgainReceivesLabelOnlyThePlaceWhoseFillBuildsItAgainCarries() async throws {
+		// The error's first remedy: `SubB` receives `x` only if available, so the scope of `second` carries `SubA`'s on the route
+		// through `DefaultFirst`'s call and `nil` on `Top`'s own, as inline reads.
+		let fixture = Fixture(
+			xIsFinalClass: true,
+			subADeclarations: ["@Instantiated let x: X", "@Instantiated let first: any First"],
+			subBDeclarations: ["@Received(onlyIfAvailable: true) let x: X?", "@Instantiated let second: any Second"],
+			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		_ = try await executeSafeDIToolMultiModuleTest(modules: fixture.hostFillsEveryPlaceModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		try await expectValuesEqualVisibleBuild(output, fixture)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenSeamBuiltAgainReceivesRequiredLabelOnlyThePlaceWhoseFillBuildsItAgainCarries() async throws {
+		// The first remedy for a required reader, where `Host` binds `x` above its call of `Top`: `SubB` receives `x`, `Host`'s
+		// on `Top`'s own route and `SubA`'s on the route through `DefaultFirst`'s call.
+		let fixture = Fixture(
+			xIsFinalClass: true,
+			subADeclarations: ["@Instantiated let x: X", "@Instantiated let first: any First"],
+			subBDeclarations: ["@Received let x: X", "@Instantiated let second: any Second"],
+			hostDeclarations: ["@Instantiated let x: X", "@Instantiated let top: Top"],
+			gadgetDeclarations: ["@Received let x: X"],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: fixture.modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		_ = try await executeSafeDIToolMultiModuleTest(modules: fixture.hostFillsEveryPlaceModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		try await expectValuesEqualVisibleBuild(output, fixture)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsInlineValues_whenFillBuiltAgainDeclaresLabelAbovePlaceThePlaceWhoseFillBuildsItAgainCarries() async throws {
+		// `DefaultSecond` binds an `x` of its own before `gadget`: inline reads it on every route, and the place carries it.
+		let fixture = Fixture(
+			xIsFinalClass: true,
+			subADeclarations: ["@Instantiated let x: X", "@Instantiated let first: any First"],
 			defaultSecondDeclarations: ["@Instantiated let x: X", "@Instantiated let gadget: any Gadget"],
 			gadgetDeclarations: ["@Received(onlyIfAvailable: true) let x: X?"],
 		)

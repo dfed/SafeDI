@@ -817,14 +817,23 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test(arguments: [(UInt64(153), GraphFuzzerGeneratorFeature.generateDependencyTree), (163, .generateDependencyTree), (98, .generateMockPublic), (208, .generateMockPublic)])
 	func seamDependencyDraw_importsOnlyTheModuleBeneath_whenDeclarationsMoveOrAChainIsDrawnBeneathSeamsModule(seed: UInt64, feature: GraphFuzzerGeneratorFeature) throws {
-		// Each module of the chain beneath the seam's module imports only the module beneath it, and a caller only the seam's
-		// module, so that under the module-info flow a caller reads the chain only through the seam's module's view.
+		// Each module imports only what it lists under the module-info flow. Each module of the chain beneath the seam's module
+		// imports only the module beneath it, and a caller only the seam's module, except a module that lists every module
+		// beneath it because it declares a root of the draws beneath the seam's module
+		// (`GraphFuzzerFixture.modulesListingEveryModuleBeneath`), so that a caller that reads through the seam's module's
+		// view, of which the graph holds at least one, reads the chain only through that view.
 		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [feature])
 		let modules = try #require(fixture.modules)
+		let lists = fixture.dependencyLists(modules: modules, integration: .moduleInfo, listsTransitiveDependencies: false)
+		let modulesListingEveryModuleBeneath = fixture.modulesListingEveryModuleBeneath
 		for (module, content) in zip(modules, fixture.swiftFileContent) {
 			let importedModuleNames = content.split(separator: "\n").filter { $0.hasPrefix("import Fuzz") }.map { String($0.dropFirst("import ".count)) }
-			#expect(importedModuleNames == module.dependencies.filter(modules.contains).map(\.name), "Seed \(seed), \(module.name)")
+			#expect(Set(importedModuleNames).isSubset(of: (lists[module] ?? []).map(\.name)), "Seed \(seed), \(module.name)")
+			if !modulesListingEveryModuleBeneath.contains(module) {
+				#expect(importedModuleNames == module.dependencies.filter(modules.contains).map(\.name), "Seed \(seed), \(module.name)")
+			}
 		}
+		#expect(!GraphFuzzerSeamDependencyDraw.callersReadingThroughView(of: fixture).isEmpty, "Seed \(seed): no caller reads through the seam's module's view")
 		let drawn = GraphFuzzerSeamDependencyDraw.drawn(in: fixture)
 		// Seed 208 moves a declaration beside its chain.
 		let expected: [UInt64: (movesDeclaration: Bool, drawsChain: Bool)] = [153: (true, false), 163: (false, true), 98: (true, false), 208: (true, true)]
@@ -1119,6 +1128,15 @@ struct SafeDIToolGraphFuzzerTests {
 		// them only while each lands in at least ten graphs the tool accepts, which the corpus runs pin exactly.
 		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isReadThroughViewShape {
 			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+	}
+
+	@Test
+	func seamCorpus_acceptsTenGraphsOfEachScreenPlaceNeighbour_whenPinsAreRead() {
+		// A screen's place whose fill reads the screen's value stands in for the unit tests of the neighbours the tool must
+		// accept beside the shape it rejects (`fieldOfReenteringPlace`) only while the corpus accepts enough of each.
+		for feature in [GraphFuzzerSeamDrawFeature.holeScreenValueReadWithoutReentry, .holeScreenValueBuiltBySeam] {
+			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) accepted in fewer than ten graphs")
 		}
 	}
 
@@ -2781,6 +2799,80 @@ struct SafeDIToolGraphFuzzerTests {
 			}
 			#expect(diagnostics.contains(finding), "Seed \(seed)’s \(build) build:\n\(diagnostics)")
 		}
+	}
+
+	@Test(arguments: [UInt64(80), 279, 306])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func toolRuns_rejectBothBuildsWithFieldOfReenteringPlace_whenCallerFillsPlaceInsideFillBuiltAgainUnremedied(seed: UInt64) async throws {
+		// `ReenteredSubA` binds `reenteredTag` before `reenteredFirst`, whose fill `ReenteredFirstImpl` builds `ReenteredSubB`
+		// again – in seed 279 through `ReenteredRelay`, a seam that builds `ReenteredSubB` and passes its place up – and
+		// `ReenteredGadgetImpl`, which fills from the roots' module a place inside the fill of `reenteredSecond` that
+		// `ReenteredHost` passes up, reads it, so only the place whose fill builds the seam again carries it: only if available
+		// in seed 279, also beside `ReenteredHost`'s binding of the label above its call of `ReenteredTop` in seed 306, and
+		// required in seed 80. None declares `HoleSeam`, whose graphs draw the remedy in place of these reads. The build that
+		// fills the place from the roots' module, which reads what `ReenteredHost`'s module records on the place, and the
+		// visible build, which fills it in the seam's module, both reject the read with `fieldOfReenteringPlace`, in the same
+		// words, naming the call as written and offering the receive on `ReenteredSubB`, the seam built again: a receive on
+		// `ReenteredRelay` would not reach the place it passes up.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
+		let drawFeatures = GraphFuzzerFeature.seamDrawFeatures(of: fixture)
+		#expect(!drawFeatures.isDisjoint(with: [.reenteredFillReadsPlaceField, .reenteredFillReadsPlaceFieldBoundAboveCall, .reenteredFillRequiresPlaceField]))
+		#expect(!drawFeatures.contains(.hole))
+		let callsThroughRelay = drawFeatures.contains(.reenteredFillCallThroughSeamPassingPlaceUp)
+		#expect(callsThroughRelay == (seed == 279))
+		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])
+		let prefix = fixture.typeNamePrefix
+		// Each error about the reader's receive of `reenteredTag`, without its location: the reader's file is in another
+		// module in each build.
+		func findings(in diagnostics: String) -> [String] {
+			diagnostics.split(separator: "\n").compactMap { line in
+				guard line.contains("`\(prefix)ReenteredGadgetImpl` receives `reenteredTag: "), let range = line.range(of: ": error: ") else { return nil }
+				return String(line[range.upperBound...])
+			}
+		}
+		let call = callsThroughRelay
+			? "that builder’s fill instantiates `\(prefix)ReenteredRelay` (`"
+			: "that builder’s fill instantiates `\(prefix)ReenteredSubB` again (`"
+		var findingsByBuild = [String: [String]]()
+		for (build, outcome) in [("hole", Optional(runs.firstOutcome)), ("visible", runs.visibleOutcome)] {
+			guard case let .rejected(diagnostics)? = outcome else {
+				Issue.record("Seed \(seed)’s \(build) build is not rejected")
+				continue
+			}
+			let buildFindings = findings(in: diagnostics)
+			findingsByBuild[build] = buildFindings
+			#expect(buildFindings.contains { $0.contains("carries from `\(prefix)ReenteredSubA`, and \(call)") }, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
+			#expect(buildFindings.contains { $0.contains("inside that `\(prefix)ReenteredSubB`, but") && $0.contains("` on `\(prefix)ReenteredSubB`, so the builder’s scope carries it") }, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
+			#expect(!buildFindings.contains { $0.contains("` on `\(prefix)ReenteredRelay`") }, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
+		}
+		#expect(findingsByBuild["hole"] == findingsByBuild["visible"])
+	}
+
+	@Test(arguments: [UInt64(59)])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func toolRuns_acceptBothBuildsWithVisibleBuildsValues_whenSeamBuiltAgainReceivesLabelOnlyTheReenteringPlaceCarries(seed: UInt64) async throws {
+		// The remedy `fieldOfReenteringPlace` offers, applied as the draw applies it: `ReenteredSubB`, the seam built again,
+		// receives `reenteredTag` as `ReenteredGadgetImpl` does. Seed 59's fill calls `ReenteredRelay`, which builds
+		// `ReenteredSubB` and passes its place up, so the receive goes on another seam than the one the call names. Both
+		// builds accept the graph, and every oracle passes, the comparison of the hole build's values with the visible
+		// build's included.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
+		let drawFeatures = GraphFuzzerFeature.seamDrawFeatures(of: fixture)
+		#expect(drawFeatures.isSuperset(of: [.reenteredFillReadsPlaceFieldRemedied, .reenteredFillCallThroughSeamPassingPlaceUp]))
+		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])
+		for (build, outcome) in [("hole", Optional(runs.firstOutcome)), ("visible", runs.visibleOutcome)] {
+			switch outcome {
+			case .accepted?:
+				break
+			case let .rejected(diagnostics)?:
+				Issue.record("Seed \(seed)’s \(build) build is rejected:\n\(diagnostics)")
+			case nil:
+				Issue.record("Seed \(seed) has no \(build) build")
+			}
+		}
+		let results = try await GraphFuzzerOracle.results(of: [runs])
+		#expect(results.map { $0.failure.map { "\($0.kind): \($0.details)" } } == [nil])
+		#expect(results.flatMap { $0.laterFailures.map { "\($0.kind): \($0.details)" } } == [])
 	}
 
 	@Test
@@ -4946,6 +5038,10 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(clauses: "\(alphaClause) and \(zedClause)", declaringTypes: "`MiddleAlpha`’s and `MiddleOmega`’s")) == "its diagnostics")
 		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(clauses: "\(alphaClause) and \(zedClause)", notes: [zedNote])) == "its diagnostics")
 		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(clauses: "\(alphaClause) and \(zedClause)", notes: [alphaNote, zedNote.replacingOccurrences(of: "`logger: Logger`", with: "`logger: Logger?`")])) == "its diagnostics")
+		// A clause whose call is of a seam that builds `Flow`, named as written, sorts as a clause too.
+		let zedRelayClause = zedClause.replacingOccurrences(of: "instantiates `Flow` again (`flowBuilder`)", with: "instantiates `Relay` (`relayBuilder`), which instantiates `Flow` again")
+		#expect(GraphFuzzerToolOutcome.difference(between: diagnostics(clauses: "\(alphaClause) and \(zedRelayClause)"), and: diagnostics(clauses: "\(zedRelayClause) and \(reorderedAlphaClause)", declaringTypes: "`MiddleZed`’s and `MiddleAlpha`’s", notes: [zedNote, alphaNote])) == nil)
+		#expect(GraphFuzzerToolOutcome.difference(between: diagnostics(clauses: "\(alphaClause) and \(zedRelayClause)"), and: diagnostics(clauses: "\(alphaClause) and \(zedRelayClause.replacingOccurrences(of: "`Relay`", with: "`Hub`"))")) == "its diagnostics")
 	}
 
 	@Test
@@ -4959,6 +5055,23 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(GraphFuzzerToolOutcome.differences(between: outcome("A", "B"), and: outcome("B", "A")) == [])
 		#expect(GraphFuzzerToolOutcome.difference(between: outcome("A", "B"), and: outcome("B", "C")) == "its diagnostics")
 		#expect(GraphFuzzerToolOutcome.difference(between: outcome("A", "B"), and: outcome("B", "A", call: "Factory")) == "its diagnostics")
+		// Calls of seams that build the seam built again, named as written.
+		func relayOutcome(_ first: String, _ second: String) -> GraphFuzzerToolOutcome {
+			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `Owner`’s `service: any Service` carries from `Screen`, and that builder’s fill instantiates `\(first)Relay` and `\(second)Relay` (`\(first)Builder` and `\(second)Builder`), which instantiate `Seam` again. Inline, `Impl` would read `Screen`’s `id` inside that `Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `Seam`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
+		}
+		#expect(GraphFuzzerToolOutcome.differences(between: relayOutcome("A", "B"), and: relayOutcome("B", "A")) == [])
+		#expect(GraphFuzzerToolOutcome.difference(between: relayOutcome("A", "B"), and: relayOutcome("B", "C")) == "its diagnostics")
+	}
+
+	@Test
+	func differences_reportNothing_whenFieldOfReenteringPlaceListsRelaysBesideDirectCallInAnotherOrder() {
+		// A fill that opens the seam again both directly and through two seams that build it lists the direct call first, then
+		// the relays and their calls, which follow names. Another relay or call in that list still differs.
+		func outcome(_ first: String, _ second: String) -> GraphFuzzerToolOutcome {
+			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `Owner`’s `service: any Service` carries from `Screen`, and that builder’s fill instantiates `Seam` again (`seamBuilder`) and `\(first)Relay` and `\(second)Relay` (`\(first)Builder` and `\(second)Builder`), which instantiate `Seam` again. Inline, `Impl` would read `Screen`’s `id` inside that `Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `Seam`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
+		}
+		#expect(GraphFuzzerToolOutcome.differences(between: outcome("A", "B"), and: outcome("B", "A")) == [])
+		#expect(GraphFuzzerToolOutcome.difference(between: outcome("A", "B"), and: outcome("B", "C")) == "its diagnostics")
 	}
 
 	@Test
@@ -6479,7 +6592,7 @@ struct SafeDIToolGraphFuzzerTests {
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
 		errorMarkers: seamCorpusErrorMarkers,
 		errorGraphCounts: seamCorpusErrorGraphCounts,
-		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isReadThroughViewShape }),
+		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isReadThroughViewShape || $0.isScreenPlaceShape }),
 		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,
@@ -6541,12 +6654,16 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (`unpassableCycleLabel`), a fill that requires what its scope carries only optionally (`fieldHeldOnlyOptionally`),
 	/// and a plain wrapper captured inside a `Sendable` one (`nonSendableWrapperCaptures`). The third marker is the part of
 	/// `fieldHeldOnlyOptionally`'s message both of its causes share: the seam's tree receiving the label only if available,
-	/// and a builder function a lazy cycle closes on taking it as a parameter.
+	/// and a builder function a lazy cycle closes on taking it as a parameter. The last two are a fill that builds its seam
+	/// again and reads a value only the place it fills carries (`fieldOfReenteringPlace`), which `addingHoleShapes` draws in
+	/// a screen: a read only if available, then a required read, counted apart.
 	static let seamCorpusErrorMarkers = [
 		"holds the same values at every level of that cycle",
 		"which one value cannot carry together",
 		"carries only as `",
 		"cannot be received inside a `@Sendable` function in chain",
+		"would get `nil` or another value.",
+		"would get another value.",
 	]
 	/// How many of the seam corpus's graphs the tool rejects with each error of `seamCorpusErrorMarkers`, in its order.
 	static let seamCorpusErrorGraphCounts = [4, 11, 0, 25]
@@ -6719,8 +6836,10 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `package` initializer in another package (seed 743), two calls of the plain fill (seed 892) and mixed wrapper kinds
 	/// in the cycle (seed 1986); seeds 151, 309, 594 and 969 draw places inside a plain fill that spell their hole type
 	/// with and without `any`, seed 969 with no known issue, and seeds 68 and 84 the remedied read of a value one route
-	/// holds. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 609, 705, 743, 850, 892, 969, 1_010, 1_020, 1_450, 1_814, 1_890, 1_986]
+	/// holds. Seeds 2006 and 3575 are a fill that builds its seam again and reads a value only the place it fills,
+	/// inside an inner seam's screen, carries, which the tool rejects (`fieldOfReenteringPlace`). Pinned by
+	/// `seamSmokeAndKnownIssueFixtureHash`.
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 609, 705, 743, 850, 892, 969, 1_010, 1_020, 1_450, 1_814, 1_890, 1_986, 2_006, 3_575]
 
 	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x00D882B413AAA30B
 
@@ -7026,6 +7145,11 @@ struct SafeDIToolGraphFuzzerTests {
 		.reenteredFillReadsValueOfOneRoute: 54,
 		.reenteredFillReadsValueOfOneRouteBoundAboveCall: 44,
 		.reenteredFillReadsValueOfOneRouteRemedied: 79,
+		.reenteredFillReadsPlaceField: 61,
+		.reenteredFillReadsPlaceFieldBoundAboveCall: 25,
+		.reenteredFillRequiresPlaceField: 44,
+		.reenteredFillReadsPlaceFieldRemedied: 77,
+		.reenteredFillReadsPlaceFieldDeclaredInFill: 64,
 		.reenteredFillEnclosingFillHoldsPlace: 140,
 		.reenteredFillReentersEnclosingFill: 114,
 		.reenteredFillCallBeneathFilledType: 117,
@@ -7088,14 +7212,6 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "\(seamBuilderOrderReason); and \(mockParameterAndFieldOrderReason)",
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockParameterAndFieldOrder)],
 			seeds: [281, 300, 548],
-		),
-		// A fill that re-enters its own seam: the place the re-entered seam builds is handed the root dispatcher, not the
-		// fill's values, so `HoleImpl`'s only-if-available `holeNestId` is `nil` where the visible build and the inline
-		// build pass it.
-		GraphFuzzerKnownIssue(
-			reason: "\(fillReenteringItsSeamLosesValueReason); and \(seamBuilderOrderReason)",
-			signatures: [.holeBuildsOtherValuesThanVisibleBuild(containing: fillReenteringItsSeamLosesValueDifference), .seamBuildsOtherValuesThanInline(containing: fillReenteringItsSeamLosesValueDifference), .renamedGraphDiffers(.dependencyTreeListOrder)],
-			seeds: [600],
 		),
 		// A type that fills a hole from a caller's module receives a label the seam takes as a parameter in another form,
 		// which the seam's check that its tree receives each label in forms one parameter takes does not see: the fill is
@@ -7701,10 +7817,6 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	private static let seamTraversalLimitReason = "A graph whose probes traverse more wrappers than a graph compared on its own may traverse, so the comparator describes none of its values beneath the point where its traversals run out"
-
-	private static let fillReenteringItsSeamLosesValueReason = "A fill that re-enters its own seam hands the re-entered seam the root dispatcher, not its own values, so a fill there reads `nil` for an only-if-available value its visible build and its inline build pass; fixed in a later PR"
-
-	private static let fillReenteringItsSeamLosesValueDifference = "> holeService > holeNestId:\n  feature:     holeNestId: nil\n  known right: holeNestId: Int 7"
 
 	private static let fillReceivesSeamParameterInAnotherFormReason = "A type that fills a hole from a caller's module is outside the seam's check that its tree receives each label from outside it in forms one parameter takes, so a fill that receives the seam's parameter in another form is handed `nil` where the visible build reports the seam's error; fixed in a later PR"
 
