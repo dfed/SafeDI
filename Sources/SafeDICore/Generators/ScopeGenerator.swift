@@ -229,6 +229,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		isReferencedByCycleClosingScope = cycleClosings.isReferencedByCycleClosingScope
 		buildsInSendableFunction = cycleClosings.buildsInSendableFunction
 		cycleClosedOnDeclarationsReferencedFromSendableFunction = cycleClosings.cycleClosedOnDeclarationsReferencedFromSendableFunction
+		treeHoldsSendableFunction = buildsInSendableFunction
+			|| property?.propertyType.isSendable == true
+			|| fill != nil
+			|| seamCall?.parameters.contains { $0.deferral == .deferred(isSendable: true) } == true
+			|| propertiesToGenerate.contains(where: \.treeHoldsSendableFunction)
 		let fillReferences = Self.fillReferences(
 			holeCallArguments: holeCallArguments,
 			builderCallArguments: builderCallArguments,
@@ -1183,6 +1188,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		declaration = nil
 		cycleClosedOnDeclarationsReferencedFromSendableFunction = []
 		buildsInSendableFunction = false
+		treeHoldsSendableFunction = false
 		declaresBuilderFunction = false
 		childrenTakePartInCycle = false
 		typesDeclaredEscaping = []
@@ -1293,6 +1299,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		declaration = holeProperty.propertyType.isConstant ? nil : BuiltDeclaration(property: holeProperty, concreteType: holeProperty.typeDescription.asInstantiatedType)
 		cycleClosedOnDeclarationsReferencedFromSendableFunction = []
 		buildsInSendableFunction = false
+		treeHoldsSendableFunction = false
 		declaresBuilderFunction = !holeProperty.propertyType.isConstant
 		childrenTakePartInCycle = false
 		typesDeclaredEscaping = []
@@ -3696,6 +3703,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		enclosingSendableBuilders: [SendableBuilder],
 		chain: [TypeDescription],
 	) async -> [NonSendableWrapperCapture] {
+		// Outside every `@Sendable` function, a tree that makes none captures nothing.
+		guard !enclosingSendableBuilders.isEmpty || treeHoldsSendableFunction else { return [] }
 		let chain = chain + [instantiable.concreteInstantiable]
 		let sendableBuilderDepth = enclosingSendableBuilders.count
 
@@ -4515,6 +4524,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// (from `seamCall`, `publicMockCall`, `fill` and the children's flags), and `false` for an alias's or a hole's generator,
 	/// which holds neither; `validateFills` is its only reader.
 	let treeHoldsCallOrFill: Bool
+
+	/// Whether this scope, or a scope of its generated subtree, is or makes a function that can be `@Sendable`: a builder
+	/// function that is, a property of a `Sendable` wrapper (a cycle-closing scope calls its function inside the wrapper's
+	/// closure), a fill, or a call of a seam that defers a parameter `@Sendable`. Only such a tree can capture anything
+	/// outside every `@Sendable` function, so `nonSendableWrapperCaptures` walks no other subtree there. Set once,
+	/// bottom-up, by the initializer that builds a scope's generator, and `false` for an alias's or a hole's generator,
+	/// which the walk does not enter; `nonSendableWrapperCaptures` is its only reader.
+	let treeHoldsSendableFunction: Bool
 
 	/// Whether this scope's generated subtree holds a site of a hole of the seam whose tree is generated, on this scope's
 	/// path. A child starts after its siblings that hold no place by `startsAsCarrier(_:)`, which reads this only where

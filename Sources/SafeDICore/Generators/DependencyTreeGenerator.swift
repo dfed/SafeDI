@@ -7638,14 +7638,38 @@ public actor DependencyTreeGenerator {
 		let scope: Scope
 		/// The properties of the scopes `scope` is built inside, innermost first, as cycle validation sees them.
 		let propertyStack: [Property]
-		/// The concrete types of the scopes `scope` is built inside, innermost first, beside `propertyStack`.
-		let concreteTypeStack: [TypeDescription]
+		/// The scopes built for the entries of `propertyStack`, beside it: `scope` first, then the scopes it is built
+		/// inside, up to the mock root's child.
+		let scopeStack: [Scope]
 		/// The lazily instantiated properties on `propertyStack`, keyed by the constant each is validated as.
 		let lazilyInstantiatedDeclarations: [Property: Property]
-		/// The properties the nearest declarations of each label above `scope` declare, as cycle validation sees them, with
-		/// how many scopes the declaring scope is built inside: `0` for the mock root, which declares the properties it
-		/// creates and the dependencies it promotes, several forms of one label among them.
-		let nearestDeclarationByLabel: [String: (properties: [Property], depth: Int)]
+
+		/// The properties the nearest declaration of `label` above `scope` declares, as cycle validation sees them, with how
+		/// many scopes the declaring scope is built inside, or `nil` when no scope above declares the label. Each scope
+		/// above declares, for the scopes it builds, the properties it creates and, at the mock root, which is built inside
+		/// no scope, the dependencies it promotes, several forms of one label among them. Asked only of a dependency that
+		/// might close a cycle, so nothing is gathered for any other.
+		func nearestDeclaration(of label: String, mockRootScope: Scope) -> (properties: [Property], depth: Int)? {
+			for index in scopeStack.indices.dropFirst() {
+				let properties = Self.declarations(of: label, by: scopeStack[index])
+				guard properties.isEmpty else { return (properties, scopeStack.count - index) }
+			}
+			let properties = Self.declarations(of: label, by: mockRootScope)
+			return properties.isEmpty ? nil : (properties, 0)
+		}
+
+		/// The properties of `label` that `scope` declares for the scopes it builds, as cycle validation sees them, in the
+		/// order it declares them.
+		private static func declarations(of label: String, by scope: Scope) -> [Property] {
+			var properties = [Property]()
+			for dependency in scope.instantiable.dependencies where dependency.property.label == label && scope.createdProperties.contains(dependency.property) {
+				properties.append(dependency.property.asValidatedForDependencyCycles)
+			}
+			for propertyToGenerate in scope.propertiesToGenerate where propertyToGenerate.property.label == label && !scope.createdProperties.contains(propertyToGenerate.property) {
+				properties.append(propertyToGenerate.property.asValidatedForDependencyCycles)
+			}
+			return properties
+		}
 	}
 
 	/// The children a mock root promotes, in the order its tree first receives them: the order in which a walk first
@@ -7751,7 +7775,7 @@ public actor DependencyTreeGenerator {
 	/// The walk goes depth first, in the order each scope declares its children, and keeps its own stack of
 	/// the scopes left to walk, since a tree can be as deep as the module has types.
 	private func validateMockRootScopeForCycles(_ mockRootScope: Scope) throws {
-		var scopesToWalk = [ScopeToWalkForCycles(scope: mockRootScope, propertyStack: [], concreteTypeStack: [], lazilyInstantiatedDeclarations: [:], nearestDeclarationByLabel: [:])]
+		var scopesToWalk = [ScopeToWalkForCycles(scope: mockRootScope, propertyStack: [], scopeStack: [], lazilyInstantiatedDeclarations: [:])]
 		while let scopeToWalk = scopesToWalk.popLast() {
 			let scope = scopeToWalk.scope
 			let propertyStack = scopeToWalk.propertyStack
@@ -7783,8 +7807,8 @@ public actor DependencyTreeGenerator {
 					receivedForms: receivedForms,
 					closesByReceive: closingReceive != nil,
 					propertyStack: propertyStack,
-					concreteTypeStack: scopeToWalk.concreteTypeStack,
-					nearestDeclaration: { scopeToWalk.nearestDeclarationByLabel[$0] },
+					concreteTypeOfEntry: { scopeToWalk.scopeStack[$0].instantiable.concreteInstantiable },
+					nearestDeclaration: { scopeToWalk.nearestDeclaration(of: $0, mockRootScope: mockRootScope) },
 				) else {
 					continue
 				}
@@ -7805,47 +7829,24 @@ public actor DependencyTreeGenerator {
 			}
 
 			// Walk the children next.
-			var childrenToWalk = [(declaredProperty: Property, property: Property, scope: Scope)]()
+			let firstChildIndex = scopesToWalk.endIndex
 			for childPropertyToGenerate in scope.propertiesToGenerate {
 				switch childPropertyToGenerate {
 				case let .instantiated(declaredChildProperty, childScope, _):
 					let childProperty = declaredChildProperty.asValidatedForDependencyCycles
-					let childConcreteType = childScope.instantiable.concreteInstantiable
-					guard !propertyStack.indices.contains(where: { propertyStack[$0] == childProperty && scopeToWalk.concreteTypeStack[$0] == childConcreteType }) else { continue }
-					childrenToWalk.append((declaredChildProperty, childProperty, childScope))
+					guard !propertyStack.indices.contains(where: {
+						propertyStack[$0] == childProperty && scopeToWalk.scopeStack[$0].instantiable.concreteInstantiable == childScope.instantiable.concreteInstantiable
+					}) else { continue }
+					scopesToWalk.append(ScopeToWalkForCycles(
+						scope: childScope,
+						propertyStack: [childProperty] + propertyStack,
+						scopeStack: [childScope] + scopeToWalk.scopeStack,
+						lazilyInstantiatedDeclarations: scopeToWalk.lazilyInstantiatedDeclarations.recordingLazilyInstantiated(declaredChildProperty),
+					))
 				case .aliased, .hole:
 					// A hole's tree is a fill's, which a mock never builds: a mock's scopes hold no hole.
 					break
 				}
-			}
-			// Most scopes build no child, so what they declare is gathered only for one that does.
-			guard !childrenToWalk.isEmpty else { continue }
-			// The children see what this scope declares as the nearest declaration of its labels: what it creates, and at the
-			// mock root the dependencies it promotes.
-			var childNearestDeclarationByLabel = scopeToWalk.nearestDeclarationByLabel
-			var labelsDeclaredHere = Set<String>()
-			func declare(_ property: Property) {
-				if labelsDeclaredHere.insert(property.label).inserted {
-					childNearestDeclarationByLabel[property.label] = ([property.asValidatedForDependencyCycles], propertyStack.count)
-				} else {
-					childNearestDeclarationByLabel[property.label]?.properties.append(property.asValidatedForDependencyCycles)
-				}
-			}
-			for dependency in scope.instantiable.dependencies where scope.createdProperties.contains(dependency.property) {
-				declare(dependency.property)
-			}
-			for propertyToGenerate in scope.propertiesToGenerate where !scope.createdProperties.contains(propertyToGenerate.property) {
-				declare(propertyToGenerate.property)
-			}
-			let firstChildIndex = scopesToWalk.endIndex
-			for child in childrenToWalk {
-				scopesToWalk.append(ScopeToWalkForCycles(
-					scope: child.scope,
-					propertyStack: [child.property] + propertyStack,
-					concreteTypeStack: [child.scope.instantiable.concreteInstantiable] + scopeToWalk.concreteTypeStack,
-					lazilyInstantiatedDeclarations: scopeToWalk.lazilyInstantiatedDeclarations.recordingLazilyInstantiated(child.declaredProperty),
-					nearestDeclarationByLabel: childNearestDeclarationByLabel,
-				))
 			}
 			// The scope walked next is the last one on the stack, so the first child goes last.
 			scopesToWalk.reverseElements(from: firstChildIndex)
@@ -8607,7 +8608,7 @@ public actor DependencyTreeGenerator {
 	///   - closesByReceive: Whether `dependency` closes a cycle by receiving (see `closingReceive(of:in:)`).
 	///   - propertyStack: The properties of `scope` and of the scopes it is built inside, innermost first, as cycle
 	///     validation sees them.
-	///   - concreteTypeStack: The concrete types of those scopes, beside `propertyStack`.
+	///   - concreteTypeOfEntry: The concrete type of the scope built for the entry at an index of `propertyStack`.
 	///   - nearestDeclaration: The properties the nearest declarations of a label above `scope` declare, as cycle
 	///     validation sees them – one, but for a mock root's promoted forms of one label – with how many scopes the declaring
 	///     scope is built inside, or `nil` when no scope above declares the label. The entry at index `i` of `propertyStack`
@@ -8618,7 +8619,7 @@ public actor DependencyTreeGenerator {
 		receivedForms: [Property],
 		closesByReceive: Bool,
 		propertyStack: [Property],
-		concreteTypeStack: [TypeDescription],
+		concreteTypeOfEntry: (Int) -> TypeDescription,
 		nearestDeclaration: (String) -> (properties: [Property], depth: Int)?,
 	) -> Int? {
 		if closesByReceive {
@@ -8633,7 +8634,7 @@ public actor DependencyTreeGenerator {
 			// no property with an entry built from a scope.
 			guard propertyStack.contains(receivedForms[0]) else { return nil }
 			let builtType = scope.propertiesToGenerate.first { $0.property == fulfillingProperty }?.builtScope?.instantiable.concreteInstantiable
-			return propertyStack.indices.first { propertyStack[$0] == receivedForms[0] && concreteTypeStack[$0] == builtType }
+			return propertyStack.indices.first { propertyStack[$0] == receivedForms[0] && concreteTypeOfEntry($0) == builtType }
 		}
 	}
 
@@ -11596,7 +11597,7 @@ public actor DependencyTreeGenerator {
 					receivedForms: [propertyForDependency],
 					closesByReceive: closingReceive != nil,
 					propertyStack: childPropertyStack,
-					concreteTypeStack: childParentTypeStack,
+					concreteTypeOfEntry: { childParentTypeStack[$0] },
 					nearestDeclaration: nearestDeclaration,
 				) else {
 					continue
