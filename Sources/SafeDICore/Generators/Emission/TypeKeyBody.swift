@@ -857,9 +857,12 @@ private struct TypeKeyLayout {
 					for site in callSitesByClass[owner].sorted(by: { ($0.owner, $0.index) < ($1.owner, $1.index) }) {
 						let declaration = typeLookUp(label, inClass: site.owner, before: site.index)
 						if case .read = declaration, type(of: declaration) == nil {
+							// A parameter whose type is not known yet passes a value of some type, never `nil`: it is
+							// left out until it is known, so it never makes this parameter optional.
 							isComplete = false
+						} else {
+							types.append(type(of: declaration))
 						}
-						types.append(type(of: declaration))
 					}
 					guard isComplete || parameterTypes[owner][label] == nil else { continue }
 					var combined = Self.parameterType(combining: types)
