@@ -1167,7 +1167,7 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 				#if DEBUG
 				func mockRoots() -> (Root, Root, Shell, Shell) {
 				    (
-				        Root.mock(safeDIOverrides: .init(label: .long)),
+				        Root.mock(label: .long),
 				        Root.mock(theme: .dark),
 				        Shell.mock(safeDIOverrides: .init(root: .init(label: .long))),
 				        Shell.mock(safeDIOverrides: .init(root: .init(theme: .dark, label: nil, { child, theme, label in Root(child: child, theme: theme, label: label) })))
@@ -1191,53 +1191,48 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    /// Overrides for the mock dependency tree.
 			    nonisolated public struct SafeDIOverrides {
 			        public init(
-			            child: (() -> Child)? = nil,
-			            label: Root.Label? = Root.__safeDI_publicMockDefault_label()
+			            child: (() -> Child)? = nil
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
-			                child: child,
-			                label: label
+			                child: child
 			            )
 			        }
 
 			        public var child: (() -> Child)? { __safeDI_storage.child }
-			        /// The default of `Root`’s `label` unless set; `.init(label: nil)` passes `nil`.
-			        public var label: Root.Label? { __safeDI_storage.label }
 
 			        private let __safeDI_storage: __safeDI_Storage
 
 			        private final class __safeDI_Storage {
 			            init(
-			                child: (() -> Child)?,
-			                label: Root.Label?
+			                child: (() -> Child)?
 			            ) {
 			                self.child = child
-			                self.label = label
 			            }
 
 			            let child: (() -> Child)?
-			            let label: Root.Label?
 			        }
 			    }
 
 			    public static func mock(
+			        label: Root.Label? = Root.__safeDI_publicMockDefault_label(),
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        Root.mock(theme: nil, safeDIOverrides: safeDIOverrides)
+			        Root.mock(theme: nil, label: label, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    static func mock(
 			        theme: Root.Theme? = nil,
+			        label: Root.Label? = Root.__safeDI_publicMockDefault_label(),
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let theme = theme ?? (.light)
 			        let child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder() } else { Child() }
-			        return Root(child: child, theme: theme, label: safeDIOverrides.label)
+			        return Root(child: child, theme: theme, label: label)
 			    }
 			}
 
 			extension Root {
-			    public enum __safeDI_Root_mock_95F68EAF30427699 {}
+			    public enum __safeDI_Root_mock_32F63E8F955450F0 {}
 			}
 			#endif
 			""",

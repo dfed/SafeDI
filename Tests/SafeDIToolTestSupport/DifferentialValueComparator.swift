@@ -2441,9 +2441,10 @@ extension DifferentialValuePath {
 
 extension GraphFuzzerFixture {
 	/// A probe constructing each root of the graph, in declaration order, then one calling the generated `mock()` of
-	/// each mocked type whose parameters, if it has any, all have default values, in file name order. A mock with a
-	/// required parameter has no probe: the comparator has no value to pass it, and a feature that needs one judged
-	/// passes probes of its own.
+	/// each mocked type whose parameters, if it has any, all have default values, in file name order, followed, for a
+	/// `.public` type that takes `name: String? = …`, by one passing it a value (`publicMockTypesTakingOwnOptionalName`).
+	/// A mock with a required parameter has no probe: the comparator has no value to pass it, and a feature that needs
+	/// one judged passes probes of its own.
 	/// A root's builder of a tree the comparator does not traverse – `spellSeamBuilder`, `spellHostBuilder` and
 	/// `aliasSeamBuilder`, instantiators whose types forward a value – gets a probe calling it with a sample value,
 	/// so that the seam's tree beneath, and the seam call's arguments, are judged too.
@@ -2503,10 +2504,14 @@ extension GraphFuzzerFixture {
 			probes.append(probe)
 		}
 		let mockFileSuffix = "+SafeDIMock.swift"
+		let typesTakingOwnOptionalName = publicMockTypesTakingOwnOptionalName
 		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName.hasSuffix(mockFileSuffix) && GraphFuzzerMockOverrides.takesNoRequiredParameter(contents) {
 			// A split graph's generated files are keyed by their module's name.
-			let mockedType = fileName.dropLast(mockFileSuffix.count).split(separator: "/").last ?? ""
+			let mockedType = String(fileName.dropLast(mockFileSuffix.count).split(separator: "/").last ?? "")
 			probes.append(DifferentialValueProbe("\(mockedType).mock()"))
+			if typesTakingOwnOptionalName.contains(mockedType) {
+				probes.append(DifferentialValueProbe("\(mockedType).mock(name: \"probe\")"))
+			}
 		}
 		return probes
 	}
@@ -2606,6 +2611,37 @@ extension GraphFuzzerFixture {
 			expression: "\(homeName).mock(\(label): { \(liveName)() })",
 			knownRightExpression: "\(typeNamePrefix)RetainApp.mock().retainHome",
 		)
+	}
+
+	/// The `.public` types of the public mock corpus that build through their initializer and take its optional-typed
+	/// default `name: String? = …`, each of whose mocks taking no required parameter a probe calls with a value of its own,
+	/// `mock(name: "probe")`: both paths take it as a parameter of `mock()`, the public mock as the internal mock does,
+	/// whatever the type's isolation and whether it builds anything. A public mock that held the default in
+	/// `SafeDIOverrides`, as it once did for a type on no actor that builds a dependency
+	/// (`GraphFuzzerPublicMockDrawFeature.ownOptionalDefaultOnNonisolatedTypeThatBuilds`), does not compile the call:
+	/// with that placement restored, seeds 10, 25 and 31 fail as `valueComparatorCouldNotDescribeGraph`.
+	private var publicMockTypesTakingOwnOptionalName: Set<String> {
+		var typeNames = Set<String>()
+		for content in swiftFileContent {
+			var pendingArguments: String?
+			var current: (name: String, arguments: String, readsInitializer: Bool)?
+			for rawLine in content.split(separator: "\n") {
+				let line = rawLine.trimmingCharacters(in: .whitespaces)
+				defer {
+					pendingArguments = line.hasPrefix("@Instantiable") ? line : nil
+				}
+				if let arguments = pendingArguments, let classRange = line.range(of: "final class ") {
+					current = (String(line[classRange.upperBound...].prefix { $0.isLetter || $0.isNumber || $0 == "_" }), arguments, true)
+				} else if let type = current, type.readsInitializer, line.contains("init(") {
+					// The type's initializer, the first `init(` beneath its declaration.
+					current?.readsInitializer = false
+					if type.arguments.contains("generateMock: .public"), !type.arguments.contains("customMockName:"), line.contains("(name: String? = ") || line.contains(", name: String? = ") {
+						typeNames.insert(type.name)
+					}
+				}
+			}
+		}
+		return typeNames
 	}
 
 	/// A probe calling the generated `mock()` of `UnbuildableScreen`, the consumer the public mock corpus's draw of a value a
