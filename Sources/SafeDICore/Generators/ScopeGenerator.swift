@@ -6654,9 +6654,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	// lives on a thread's stack while it runs.
 
 	/// What the construction of `instantiable` in this scope's builder function passes the function it calls.
-	@inline(never)
 	/// - Parameter holeBuilders: For a call of another module's public mock, the builders `mock()` takes for the places of
 	///   each called builder it fills, by the called builder's label (`FillPlaceBindings.holeBuildersByCall`).
+	@inline(never)
 	private func constructionArgumentList(of instantiable: Instantiable, unavailableProperties: Set<Property>, holeBuilders: [String: FillPlaceBindings.HoleBuilder]) throws -> String {
 		// A type built with its hand-written mock, as one built with its initializer, is constructed inside its builder
 		// function, whose own parameters hide the declarations of their labels where it is called.
