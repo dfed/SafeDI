@@ -84,100 +84,6 @@ struct GeneratedCodeTests {
 		#expect(mismatches == [])
 	}
 
-	@Test
-	func spelledAsRoot_returnsWhatSpelledReturns_forTwentyThousandSeededPlansSplitIntoBlocksOfOneByte() async {
-		var generator = SeededGenerator(seed: 0x5AFED2)
-		var mismatches = [String]()
-		for _ in 0..<20_000 {
-			let code = Self.randomCode(depth: 5, using: &generator)
-			let spelled = code.spelled()
-			let blockCount = 1 + Int(generator.next() % 8)
-			let spelledAsRoot = await code.spelledAsRoot(minimumBlockSize: 1 + Int(generator.next() % 3), blockCount: blockCount, concurrency: 3, blockWritingOrder: nil)
-			if Array(spelledAsRoot.utf8) != Array(spelled.utf8) {
-				mismatches.append(spelled)
-			}
-		}
-		#expect(mismatches == [])
-	}
-
-	@Test
-	func spelledAsRoot_placesEachBlockByItsIndex_whenBlocksAreWrittenInReverseOrSeededOrder() async {
-		var generator = SeededGenerator(seed: 0x5AFED3)
-		var mismatches = [String]()
-		for iteration in 0..<5_000 {
-			let code = Self.randomCode(depth: 5, using: &generator)
-			let shuffleSeed = generator.next()
-			let order: @Sendable (Int) -> [Int] = if iteration.isMultiple(of: 2) {
-				{ Array((0..<$0).reversed()) }
-			} else {
-				{ count in
-					var shuffleGenerator = SeededGenerator(seed: shuffleSeed)
-					return (0..<count).shuffled(using: &shuffleGenerator)
-				}
-			}
-			let spelledAsRoot = await code.spelledAsRoot(minimumBlockSize: 1, blockCount: 8, concurrency: 1, blockWritingOrder: order)
-			if Array(spelledAsRoot.utf8) != Array(code.spelled().utf8) {
-				mismatches.append(code.spelled())
-			}
-		}
-		#expect(mismatches == [])
-	}
-
-	@Test
-	func spelledAsRoot_writesBlockAgain_whenItBeginsOnALineThatHasBegun() async {
-		let code = GeneratedCode.indented(
-			.lines([
-				.sequence([.text("let a = "), .indented(.text("b\nc"), by: "\t")]),
-				.indented(.text("d\ne"), by: "\t"),
-			]),
-			by: "  ",
-		)
-		#expect(Self.blocks(of: code).count == 2)
-		#expect(await code.spelledAsRoot(minimumBlockSize: 1, blockCount: 1_000, concurrency: 2, blockWritingOrder: nil) == "  let a = \tb\n  \tc\n  \td\n  \te")
-	}
-
-	@Test
-	func spelledAsRoot_writesBlockAgain_whenACarriageReturnPrecedesIt() async {
-		let code = GeneratedCode.indented(
-			.sequence([.text("a\r"), .indented(.text("\nb"), by: "\t"), .text("\n"), .indented(.text("c"), by: "\t")]),
-			by: "  ",
-		)
-		#expect(Self.blocks(of: code).count == 2)
-		#expect(await code.spelledAsRoot(minimumBlockSize: 1, blockCount: 1_000, concurrency: 2, blockWritingOrder: nil) == code.spelled())
-	}
-
-	@Test
-	func spelledAsRoot_leavesLevelsAsTheyWere_whenABlockWritesNothing() async {
-		let code = GeneratedCode.indented(
-			.lines([.text("a"), .indented(.lines([.text(""), .text("")]), by: "\t"), .indented(.text("b"), by: "\t"), .text("c")]),
-			by: "  ",
-		)
-		#expect(Self.blocks(of: code).count == 2)
-		#expect(await code.spelledAsRoot(minimumBlockSize: 1, blockCount: 1_000, concurrency: 2, blockWritingOrder: nil) == code.spelled())
-	}
-
-	@Test
-	func spelledAsRoot_writesSerially_whenThePlanHoldsOneBlock() async {
-		let code = GeneratedCode.lines([.text("a"), .indented(.text("b\nc"), by: "\t")])
-		#expect(Self.blocks(of: code).count == 1)
-		#expect(await code.spelledAsRoot(minimumBlockSize: 1, blockCount: 1_000, concurrency: 2, blockWritingOrder: nil) == "a\n\tb\n\tc")
-	}
-
-	@Test
-	func spelledAsRoot_returnsWhatSpelledReturns_withTheDefaultBlockSizes() async {
-		let line = String(repeating: "x", count: 100)
-		let body = GeneratedCode.lines((0..<1_000).map { _ in .text(line) })
-		let code = GeneratedCode.lines((0..<8).map { index in
-			.sequence([.text("func f\(index)() {\n"), .indented(body, by: "\t"), .text("\n}")])
-		})
-		#expect(GeneratedCode.blocks(of: code, minimumBlockSize: GeneratedCode.minimumBlockSize, blockCount: 4 * GeneratedCode.blocksPerProcessor).count == 8)
-		#expect(await code.spelledAsRoot() == code.spelled())
-	}
-
-	private static func blocks(of code: GeneratedCode) -> [GeneratedCode.Block] {
-		GeneratedCode.blocks(of: code, minimumBlockSize: 1, blockCount: 1_000)
-	}
-
 	/// The text the emitter wrote before plans: every level indents its whole code again.
 	private static func reindentingEveryLevel(_ code: GeneratedCode) -> String {
 		switch code.node {
@@ -212,7 +118,7 @@ struct GeneratedCodeTests {
 }
 
 /// SplitMix64: the same plans on every run.
-private struct SeededGenerator: RandomNumberGenerator {
+private struct SeededGenerator {
 	var state: UInt64
 
 	init(seed: UInt64) {

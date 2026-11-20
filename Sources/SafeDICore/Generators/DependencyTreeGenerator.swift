@@ -554,19 +554,16 @@ public actor DependencyTreeGenerator {
 		let fulfillers: Set<FulfillerImports.Fulfiller>
 	}
 
-	/// The text of each root's plan, each root's larger levels spelled in parallel.
-	private static func spelled(_ plannedRoots: [PlannedRoot]) async -> [GeneratedRoot] {
-		var generatedRoots = [GeneratedRoot]()
-		generatedRoots.reserveCapacity(plannedRoots.count)
-		for plannedRoot in plannedRoots {
-			await generatedRoots.append(GeneratedRoot(
+	/// The text of each root's plan.
+	private static func spelled(_ plannedRoots: [PlannedRoot]) -> [GeneratedRoot] {
+		plannedRoots.map { plannedRoot in
+			GeneratedRoot(
 				typeDescription: plannedRoot.typeDescription,
 				sourceFilePath: plannedRoot.sourceFilePath,
-				code: plannedRoot.code.spelledAsRoot(),
+				code: plannedRoot.code.spelled(),
 				fulfillers: plannedRoot.fulfillers,
-			))
+			)
 		}
-		return generatedRoots
 	}
 
 	/// The trees of the roots and seams a run of `generate` builds once, validated, which their code, their warnings and
