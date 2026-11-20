@@ -343,13 +343,13 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 			#if DEBUG
 			extension Screen {
 			    nonisolated public enum SafeDISendableMockScope_Gizmo {
-			        nonisolated public struct gizmo_Values: Sendable {}
+			        nonisolated public struct __safeDI_Values: Sendable {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			            public let gizmo: @Sendable (gizmo_Values) -> __safeDI_Built
+			            public let gizmo: @Sendable (__safeDI_Values) -> __safeDI_Built
 
-			            public init(gizmo: @escaping @Sendable (gizmo_Values) -> __safeDI_Built) {
+			            public init(gizmo: @escaping @Sendable (__safeDI_Values) -> __safeDI_Built) {
 			                self.gizmo = gizmo
 			            }
 
@@ -397,7 +397,7 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        @Sendable func __safeDI_gizmo() -> Gizmo {
-			            __safeDI_gizmoSendableBuilder.gizmo(SafeDISendableMockScope_Gizmo.gizmo_Values())
+			            __safeDI_gizmoSendableBuilder.gizmo(SafeDISendableMockScope_Gizmo.__safeDI_Values())
 			        }
 			        let gizmo = SendableLazilyInstantiated<Gizmo>(__safeDI_gizmo)
 			        let __safeDI_settingsBuilder__safeDIBuilder = safeDIOverrides.settingsBuilder

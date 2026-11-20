@@ -6983,13 +6983,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	static func scopeEnumDeclaration(of scopeEnum: SeamSignature.ScopeEnum, nestedEnums: [SeamSignature.ScopeEnum] = [], holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole], typesDeclaredEscaping: Set<TypeDescription>, levelForms: inout LevelBuilderForms, calledRootsTakingValue: Set<SeamSignature.ScopeEnum.Key> = [], indent: String = standardIndent) -> String {
 		let caseIndent = indent + standardIndent
 		var payloadStructs = [String]()
+		// A case that carries no values – every case of a `@Sendable` enum, a call's case, which holds the called enum alone,
+		// and a case whose type binds nothing before its property – has a member that takes the enum's one empty `Sendable`
+		// struct, declared before the payload structs.
+		if scopeEnum.cases.contains(where: { $0.memberValuesTypeName == ReservedName.sharedValuesTypeName }) {
+			payloadStructs.append("\(caseIndent)nonisolated public struct \(ReservedName.sharedValuesTypeName): Sendable {}")
+		}
 		for enumCase in scopeEnum.cases {
-			if let values = enumCase.values {
+			if let values = enumCase.values, values.typeName != ReservedName.sharedValuesTypeName {
 				payloadStructs.append(structDeclaration(named: values.typeName, fields: values.fields, indent: caseIndent, typesDeclaredEscaping: typesDeclaredEscaping, isNonisolated: true))
-			} else if let memberValuesTypeName = enumCase.memberValuesTypeName {
-				// A case that carries no values – every case of a `@Sendable` enum, and a call's case, which holds the called enum
-				// alone – has a member that takes an empty `Sendable` struct.
-				payloadStructs.append("\(caseIndent)nonisolated public struct \(memberValuesTypeName): Sendable {}")
 			}
 		}
 		var body = payloadStructs.joined(separator: "\n\n")
@@ -7169,9 +7171,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			members.append((enumCase.name, "\(sendableAttribute)(\(enumCase.memberValuesTypeName ?? "")) -> \(returnType)", noScopeValue))
 		}
+		// A struct of several closures is copied whole wherever the tree's functions capture it, so a builder of two or more
+		// members is a class, which they capture as one reference; one of a single member stays a struct, which a class's
+		// metadata, allocation and deinitializer would only slow. Its members are `let`s, so the compiler proves a `Sendable`
+		// one so, and none captures the builder, so it is retained by nothing it retains.
+		let declarationKind = members.count > 1 ? "final class" : "struct"
 		var lines = [
 			"\(indent)/// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.",
-			"\(indent)nonisolated public struct \(ReservedName.builderStructTypeName)<\(builtTypeName)>\(isSendable ? ": Sendable" : "") {",
+			"\(indent)nonisolated public \(declarationKind) \(ReservedName.builderStructTypeName)<\(builtTypeName)>\(isSendable ? ": Sendable" : "") {",
 		]
 		// A member is named as its case, which is a label, so it is declared as a member's name is spelled: `Type` and
 		// `Protocol` in backticks. No case is named `self`, which the memberwise initializer's parameter would hide the

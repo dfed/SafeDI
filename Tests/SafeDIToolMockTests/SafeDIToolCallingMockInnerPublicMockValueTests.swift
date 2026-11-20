@@ -632,6 +632,8 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 
 		extension F {
 		    nonisolated public enum SafeDIScope_Api {
+		        nonisolated public struct __safeDI_Values: Sendable {}
+
 		        nonisolated public struct api_Values {
 		            public var db: Db { __safeDI_db.instance }
 		            public let k: K
@@ -645,14 +647,12 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		            }
 		        }
 
-		        nonisolated public struct inner_Values: Sendable {}
-
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
 		            public let api: (api_Values) -> __safeDI_Built
-		            public let inner: (inner_Values) -> Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
+		            public let inner: (__safeDI_Values) -> Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
 
-		            public init(api: @escaping (api_Values) -> __safeDI_Built, inner: @escaping (inner_Values) -> Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
+		            public init(api: @escaping (api_Values) -> __safeDI_Built, inner: @escaping (__safeDI_Values) -> Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
 		                self.api = api
 		                self.inner = inner
 		            }
@@ -672,7 +672,7 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		        let k = K(db: db.instance)
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_A1DB9859AB28893D.self // If this line does not compile, compile the code SafeDI generates for module InnerMod into InnerMod: under Bazel, add InnerMod’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Inner(__safeDI_db: db.instance, __safeDI_apiBuilder: __safeDI_apiBuilder.inner(SafeDIScope_Api.inner_Values()))
+		            return Inner(__safeDI_db: db.instance, __safeDI_apiBuilder: __safeDI_apiBuilder.inner(SafeDIScope_Api.__safeDI_Values()))
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values(db: db, k: k, inner: inner))
@@ -687,20 +687,20 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		#if DEBUG
 		extension F {
 		    nonisolated public enum SafeDIMockScope_Api {
+		        nonisolated public struct __safeDI_Values: Sendable {}
+
 		        nonisolated public struct api_Values {
 		            public let db: Db
 		            public let k: K
 		            public let inner: Inner
 		        }
 
-		        nonisolated public struct inner_Values: Sendable {}
-
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
 		            public let api: (api_Values) -> __safeDI_Built
-		            public let inner: (inner_Values) -> Inner.SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>
+		            public let inner: (__safeDI_Values) -> Inner.SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>
 
-		            public init(api: @escaping (api_Values) -> __safeDI_Built, inner: @escaping (inner_Values) -> Inner.SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>) {
+		            public init(api: @escaping (api_Values) -> __safeDI_Built, inner: @escaping (__safeDI_Values) -> Inner.SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>) {
 		                self.api = api
 		                self.inner = inner
 		            }
@@ -766,7 +766,7 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		        let db = if let db { db } else if let safeDIBuilder = safeDIOverrides.db { safeDIBuilder() } else { Db() }
 		        let k = if let safeDIBuilder = safeDIOverrides.k { safeDIBuilder(db) } else { K(db: db) }
 		        _ = Inner.__safeDI_Inner_mock_A60A0D925D102B18.self // If this line does not compile, compile the code SafeDI generates for module InnerMod into InnerMod: under Bazel, add InnerMod’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let inner = Inner.__safeDI_mock(apiBuilder: __safeDI_apiBuilder.inner(SafeDIMockScope_Api.inner_Values()), db: db, safeDIOverrides: safeDIOverrides.inner)
+		        let inner = Inner.__safeDI_mock(apiBuilder: __safeDI_apiBuilder.inner(SafeDIMockScope_Api.__safeDI_Values()), db: db, safeDIOverrides: safeDIOverrides.inner)
 		        let api: any Api = __safeDI_apiBuilder.api(SafeDIMockScope_Api.api_Values(db: db, k: k, inner: inner))
 		        return F(k: k, api: api, inner: inner)
 		    }

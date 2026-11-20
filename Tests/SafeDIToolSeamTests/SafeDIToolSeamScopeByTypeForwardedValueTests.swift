@@ -87,7 +87,7 @@ struct SafeDIToolSeamScopeByTypeForwardedValueTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
 		extension Host {
 		    nonisolated public enum SafeDIScope_NamedGadget_AnyGadget {
-		        nonisolated public struct panel_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        nonisolated public enum Panel_Scope {
 		            nonisolated public struct maker_Values {
@@ -110,9 +110,9 @@ struct SafeDIToolSeamScopeByTypeForwardedValueTests: ~Copyable {
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let panel: (panel_Values) -> SafeDIScope_NamedGadget_AnyGadget.Panel_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let panel: (__safeDI_Values) -> SafeDIScope_NamedGadget_AnyGadget.Panel_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(panel: @escaping (panel_Values) -> SafeDIScope_NamedGadget_AnyGadget.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
+		            public init(panel: @escaping (__safeDI_Values) -> SafeDIScope_NamedGadget_AnyGadget.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.panel = panel
 		            }
 
@@ -125,7 +125,7 @@ struct SafeDIToolSeamScopeByTypeForwardedValueTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_namedGadget_AnyGadgetBuilder: SafeDIScope_NamedGadget_AnyGadget.__safeDI_Builder<AnyGadget>) {
-		        let __safeDI_namedGadget_AnyGadgetBuilder_panel = __safeDI_namedGadget_AnyGadgetBuilder.panel(SafeDIScope_NamedGadget_AnyGadget.panel_Values())
+		        let __safeDI_namedGadget_AnyGadgetBuilder_panel = __safeDI_namedGadget_AnyGadgetBuilder.panel(SafeDIScope_NamedGadget_AnyGadget.__safeDI_Values())
 		        func __safeDI_panel() -> Panel {
 		            let scope = Value()
 		            let maker = ErasedInstantiator<Name, AnyGadget>(__safeDI_namedGadget_AnyGadgetBuilder_panel.maker(SafeDIScope_NamedGadget_AnyGadget.Panel_Scope.maker_Values(scope: scope)))
@@ -137,7 +137,7 @@ struct SafeDIToolSeamScopeByTypeForwardedValueTests: ~Copyable {
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_6DDCA88C5BA55A83 {}
+		    public enum __safeDI_Host_078F21E5A9E97115 {}
 		}
 		""")
 		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
@@ -148,7 +148,7 @@ struct SafeDIToolSeamScopeByTypeForwardedValueTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_host() -> Host {
-		            _ = Host.__safeDI_Host_6DDCA88C5BA55A83.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Host.__safeDI_Host_078F21E5A9E97115.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_namedGadget_AnyGadgetBuilder_Host_Panel_Scope_maker(scope: Value) -> ErasedInstantiator<Name, AnyGadget>.Builder {
 		                func __safeDI_maker(name: Name) -> NamedGadget {
 		                    NamedGadget(name: name, scope: scope)

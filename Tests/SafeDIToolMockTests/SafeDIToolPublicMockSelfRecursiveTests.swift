@@ -60,18 +60,18 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			extension Feature {
 			    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 			    nonisolated public enum SafeDIMockScope_Api {
-			        nonisolated public struct service_Values {}
+			        nonisolated public struct __safeDI_Values: Sendable {}
 
 			        nonisolated public struct next_Values {
 			            public let service: any Api
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let service: (service_Values) -> __safeDI_Built
+			        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
+			            public let service: (__safeDI_Values) -> __safeDI_Built
 			            public let next: (next_Values) -> SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>
 
-			            public init(service: @escaping (service_Values) -> __safeDI_Built, next: @escaping (next_Values) -> SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>) {
+			            public init(service: @escaping (__safeDI_Values) -> __safeDI_Built, next: @escaping (next_Values) -> SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>) {
 			                self.service = service
 			                self.next = next
 			            }
@@ -120,10 +120,10 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			        apiBuilder __safeDI_apiBuilder: Feature.SafeDIMockScope_Api.__safeDI_Builder<any Api>,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Feature {
-			        let service: any Api = __safeDI_apiBuilder.service(SafeDIMockScope_Api.service_Values())
+			        let service: any Api = __safeDI_apiBuilder.service(SafeDIMockScope_Api.__safeDI_Values())
 			        let __safeDI_apiBuilder_next = __safeDI_apiBuilder.next(SafeDIMockScope_Api.next_Values(service: service))
 			        func __safeDI_next() -> Feature {
-			            let service: any Api = __safeDI_apiBuilder_next.service(SafeDIMockScope_Api.service_Values())
+			            let service: any Api = __safeDI_apiBuilder_next.service(SafeDIMockScope_Api.__safeDI_Values())
 			            let next = Instantiator<Feature>(__safeDI_next)
 			            return Feature.__safeDI_init(service: service, next: next, safeDIBuilder: safeDIOverrides.next.safeDIBuilder)
 			        }
@@ -133,7 +133,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			}
 
 			extension Feature {
-			    public enum __safeDI_Feature_mock_78B17FED03E67B07 {}
+			    public enum __safeDI_Feature_mock_5222A3FCF9E27546 {}
 			}
 			#endif
 
@@ -223,7 +223,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			                    next: { _ in __safeDI_apiBuilder_Feature() }
 			                )
 			            }
-			            _ = Feature.__safeDI_Feature_mock_78B17FED03E67B07.self\(Self.featureCallComment)
+			            _ = Feature.__safeDI_Feature_mock_5222A3FCF9E27546.self\(Self.featureCallComment)
 			            return Feature.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Feature(), safeDIOverrides: safeDIOverrides.feature)
 			        }
 			        let feature: Feature = __safeDI_feature()
@@ -253,20 +253,20 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			extension Feature {
 			    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 			    nonisolated public enum SafeDIMockScope_Api {
-			        nonisolated public struct service_Values {}
+			        nonisolated public struct __safeDI_Values: Sendable {}
 
 			        nonisolated public struct step_Values {
 			            public let service: any Api
 			        }
 
 			        nonisolated public enum Step_Scope {
-			            nonisolated public struct featureBuilder_Values {}
+			            nonisolated public struct __safeDI_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let featureBuilder: (featureBuilder_Values) -> SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>
+			                public let featureBuilder: (__safeDI_Values) -> SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>
 
-			                public init(featureBuilder: @escaping (featureBuilder_Values) -> SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>) {
+			                public init(featureBuilder: @escaping (__safeDI_Values) -> SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>) {
 			                    self.featureBuilder = featureBuilder
 			                }
 
@@ -277,11 +277,11 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let service: (service_Values) -> __safeDI_Built
+			        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
+			            public let service: (__safeDI_Values) -> __safeDI_Built
 			            public let step: (step_Values) -> SafeDIMockScope_Api.Step_Scope.__safeDI_Builder<__safeDI_Built>
 
-			            public init(service: @escaping (service_Values) -> __safeDI_Built, step: @escaping (step_Values) -> SafeDIMockScope_Api.Step_Scope.__safeDI_Builder<__safeDI_Built>) {
+			            public init(service: @escaping (__safeDI_Values) -> __safeDI_Built, step: @escaping (step_Values) -> SafeDIMockScope_Api.Step_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                self.service = service
 			                self.step = step
 			            }
@@ -330,12 +330,12 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			        apiBuilder __safeDI_apiBuilder: Feature.SafeDIMockScope_Api.__safeDI_Builder<any Api>,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Feature {
-			        let service: any Api = __safeDI_apiBuilder.service(SafeDIMockScope_Api.service_Values())
+			        let service: any Api = __safeDI_apiBuilder.service(SafeDIMockScope_Api.__safeDI_Values())
 			        let __safeDI_apiBuilder_step = __safeDI_apiBuilder.step(SafeDIMockScope_Api.step_Values(service: service))
 			        func __safeDI_step() -> Step {
-			            let __safeDI_apiBuilder_featureBuilder = __safeDI_apiBuilder_step.featureBuilder(SafeDIMockScope_Api.Step_Scope.featureBuilder_Values())
+			            let __safeDI_apiBuilder_featureBuilder = __safeDI_apiBuilder_step.featureBuilder(SafeDIMockScope_Api.Step_Scope.__safeDI_Values())
 			            func __safeDI_featureBuilder() -> Feature {
-			                let service: any Api = __safeDI_apiBuilder_featureBuilder.service(SafeDIMockScope_Api.service_Values())
+			                let service: any Api = __safeDI_apiBuilder_featureBuilder.service(SafeDIMockScope_Api.__safeDI_Values())
 			                let step: Step = __safeDI_step()
 			                return Feature.__safeDI_init(service: service, step: step, safeDIBuilder: nil)
 			            }
@@ -348,7 +348,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			}
 
 			extension Feature {
-			    public enum __safeDI_Feature_mock_54BF86ACC74B5A85 {}
+			    public enum __safeDI_Feature_mock_3CDE1ACFD57AFA69 {}
 			}
 			#endif
 
@@ -479,7 +479,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			            func __safeDI_apiBuilder_Feature_Step_Scope() -> Feature.SafeDIMockScope_Api.Step_Scope.__safeDI_Builder<any Api> {
 			                .init(featureBuilder: { _ in __safeDI_apiBuilder_Feature() })
 			            }
-			            _ = Feature.__safeDI_Feature_mock_54BF86ACC74B5A85.self\(Self.featureCallComment)
+			            _ = Feature.__safeDI_Feature_mock_3CDE1ACFD57AFA69.self\(Self.featureCallComment)
 			            return Feature.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Feature(), safeDIOverrides: safeDIOverrides.feature)
 			        }
 			        let feature: Feature = __safeDI_feature()
@@ -508,13 +508,13 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			#if DEBUG
 			extension Feature {
 			    nonisolated public enum SafeDIMockScope_Api {
-			        nonisolated public struct service_Values {}
+			        nonisolated public struct __safeDI_Values: Sendable {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let service: (service_Values) -> __safeDI_Built
+			            public let service: (__safeDI_Values) -> __safeDI_Built
 
-			            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+			            public init(service: @escaping (__safeDI_Values) -> __safeDI_Built) {
 			                self.service = service
 			            }
 
@@ -525,13 +525,13 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			    }
 
 			    nonisolated public enum SafeDISendableMockScope_Api {
-			        nonisolated public struct next_Values: Sendable {}
+			        nonisolated public struct __safeDI_Values: Sendable {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			            public let next: @Sendable (next_Values) -> SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>
+			            public let next: @Sendable (__safeDI_Values) -> SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>
 
-			            public init(next: @escaping @Sendable (next_Values) -> SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>) {
+			            public init(next: @escaping @Sendable (__safeDI_Values) -> SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>) {
 			                self.next = next
 			            }
 
@@ -581,11 +581,11 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			        apiSendableBuilder __safeDI_apiSendableBuilder: Feature.SafeDISendableMockScope_Api.__safeDI_Builder<any Api>,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Feature {
-			        let service: any Api = __safeDI_apiBuilder.service(SafeDIMockScope_Api.service_Values())
+			        let service: any Api = __safeDI_apiBuilder.service(SafeDIMockScope_Api.__safeDI_Values())
 			        let __safeDI_next__safeDIBuilder = safeDIOverrides.next.safeDIBuilder
 			        @Sendable func __safeDI_next() -> Feature {
-			            let __safeDI_apiSendableBuilder_next = __safeDI_apiSendableBuilder.next(SafeDISendableMockScope_Api.next_Values())
-			            let service: any Api = __safeDI_apiSendableBuilder_next.service(SafeDIMockScope_Api.service_Values())
+			            let __safeDI_apiSendableBuilder_next = __safeDI_apiSendableBuilder.next(SafeDISendableMockScope_Api.__safeDI_Values())
+			            let service: any Api = __safeDI_apiSendableBuilder_next.service(SafeDIMockScope_Api.__safeDI_Values())
 			            let next = SendableInstantiator<Feature>(__safeDI_next)
 			            return Feature.__safeDI_init(service: service, next: next, safeDIBuilder: __safeDI_next__safeDIBuilder)
 			        }
@@ -595,7 +595,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			}
 
 			extension Feature {
-			    public enum __safeDI_Feature_mock_FDA6FCC2E103CC22 {}
+			    public enum __safeDI_Feature_mock_A708E83B08E9BC3F {}
 			}
 			#endif
 
@@ -685,7 +685,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Feature() -> Feature.SafeDISendableMockScope_Api.__safeDI_Builder<any Api> {
 			                .init(next: { _ in __safeDI_apiBuilder_Feature() })
 			            }
-			            _ = Feature.__safeDI_Feature_mock_FDA6FCC2E103CC22.self\(Self.featureCallComment)
+			            _ = Feature.__safeDI_Feature_mock_A708E83B08E9BC3F.self\(Self.featureCallComment)
 			            return Feature.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Feature(), apiSendableBuilder: __safeDI_apiSendableBuilder_Feature(), safeDIOverrides: safeDIOverrides.feature)
 			        }
 			        let feature: Feature = __safeDI_feature()
@@ -725,7 +725,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
 			            public let service: (service_Values) -> __safeDI_Built
 			            public let next: (next_Values) -> SafeDIMockScope_Api.__safeDI_Builder<__safeDI_Built>
 

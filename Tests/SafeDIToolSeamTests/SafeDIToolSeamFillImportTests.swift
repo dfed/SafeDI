@@ -75,7 +75,7 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_outerSeam() -> OuterSeam {
-		            _ = OuterSeam.__safeDI_OuterSeam_1E59630E85ECD15B.self\(integration.seamCallComment(type: "OuterSeam", declaringModule: "OuterSeamModule"))
+		            _ = OuterSeam.__safeDI_OuterSeam_2D920999C0224B49.self\(integration.seamCallComment(type: "OuterSeam", declaringModule: "OuterSeamModule"))
 		            func __safeDI_trackerBuilder_OuterSeam() -> OuterSeam.SafeDIScope_Tracker.__safeDI_Builder<any Tracker> {
 		                .init(innerSeam: { _ in __safeDI_trackerBuilder_InnerSeam() })
 		            }
@@ -129,7 +129,7 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 		    /// Code you write and code SafeDI generates can both call this initializer.
 		    public init() {
 		        func __safeDI_innerSeam() -> InnerSeam {
-		            _ = InnerSeam.__safeDI_InnerSeam_685966D1029C82B3.self\(integration.seamCallComment(type: "InnerSeam", declaringModule: "InnerSeamModule"))
+		            _ = InnerSeam.__safeDI_InnerSeam_1D3DF09B60BCE145.self\(integration.seamCallComment(type: "InnerSeam", declaringModule: "InnerSeamModule"))
 		            func __safeDI_trackerBuilder_InnerSeam() -> InnerSeam.SafeDIScope_Tracker.__safeDI_Builder<any Tracker> {
 		                .init(tracker: { _ in
 		                    let tracker: any Tracker = TrackerImpl()
@@ -180,7 +180,7 @@ struct SafeDIToolSeamFillImportTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_outerSeam() -> OuterSeam {
-		            _ = OuterSeam.__safeDI_OuterSeam_1E59630E85ECD15B.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "OuterSeam", declaringModule: "OuterSeamModule"))
+		            _ = OuterSeam.__safeDI_OuterSeam_2D920999C0224B49.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "OuterSeam", declaringModule: "OuterSeamModule"))
 		            func __safeDI_trackerBuilder_OuterSeam() -> OuterSeam.SafeDIScope_Tracker.__safeDI_Builder<any Tracker> {
 		                .init(innerSeam: { _ in __safeDI_trackerBuilder_InnerSeam() })
 		            }

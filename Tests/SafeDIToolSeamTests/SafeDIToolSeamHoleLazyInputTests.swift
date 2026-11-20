@@ -200,13 +200,13 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			extension ExportFeature {
 			    nonisolated public enum SafeDIScope_Uploader {
 			        nonisolated public enum Panel_Scope {
-			            nonisolated public struct uploader_Values {}
+			            nonisolated public struct __safeDI_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let uploader: (uploader_Values) -> __safeDI_Built
+			                public let uploader: (__safeDI_Values) -> __safeDI_Built
 
-			                public init(uploader: @escaping (uploader_Values) -> __safeDI_Built) {
+			                public init(uploader: @escaping (__safeDI_Values) -> __safeDI_Built) {
 			                    self.uploader = uploader
 			                }
 
@@ -218,13 +218,13 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			    }
 
 			    nonisolated public enum SafeDISendableScope_Uploader {
-			        nonisolated public struct panelBuilder_Values: Sendable {}
+			        nonisolated public struct __safeDI_Values: Sendable {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			            public let panelBuilder: @Sendable (panelBuilder_Values) -> SafeDIScope_Uploader.Panel_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let panelBuilder: @Sendable (__safeDI_Values) -> SafeDIScope_Uploader.Panel_Scope.__safeDI_Builder<__safeDI_Built>
 
-			            public init(panelBuilder: @escaping @Sendable (panelBuilder_Values) -> SafeDIScope_Uploader.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
+			            public init(panelBuilder: @escaping @Sendable (__safeDI_Values) -> SafeDIScope_Uploader.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                self.panelBuilder = panelBuilder
 			            }
 
@@ -243,8 +243,8 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			        let screenBuilder = Instantiator<ExportScreen>(__safeDI_screenBuilder)
 			        @Sendable nonisolated func __safeDI_panelBuilder() -> Panel {
-			            let __safeDI_uploaderSendableBuilder_panelBuilder = __safeDI_uploaderSendableBuilder.panelBuilder(SafeDISendableScope_Uploader.panelBuilder_Values())
-			            let uploader: any Uploader = __safeDI_uploaderSendableBuilder_panelBuilder.uploader(SafeDIScope_Uploader.Panel_Scope.uploader_Values())
+			            let __safeDI_uploaderSendableBuilder_panelBuilder = __safeDI_uploaderSendableBuilder.panelBuilder(SafeDISendableScope_Uploader.__safeDI_Values())
+			            let uploader: any Uploader = __safeDI_uploaderSendableBuilder_panelBuilder.uploader(SafeDIScope_Uploader.Panel_Scope.__safeDI_Values())
 			            return Panel(uploader: uploader)
 			        }
 			        let panelBuilder = SendableInstantiator<Panel>(__safeDI_panelBuilder)
@@ -253,7 +253,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			}
 
 			extension ExportFeature {
-			    public enum __safeDI_ExportFeature_564572B42FCDFB7B {}
+			    public enum __safeDI_ExportFeature_4669A7BC5BA4B6DD {}
 			}
 			""",
 		])
@@ -270,8 +270,8 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			        }
 			        let exportService = SendableLazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_exportFeature() -> ExportFeature {
-			            _ = ExportFeature.__safeDI_ExportFeature_564572B42FCDFB7B.self\(Self.pluginComment(integration))
-			            @Sendable func __safeDI_uploaderSendableBuilder_ExportFeature_Panel_Scope_uploader(_ scope: ExportFeature.SafeDIScope_Uploader.Panel_Scope.uploader_Values) -> any Uploader {
+			            _ = ExportFeature.__safeDI_ExportFeature_4669A7BC5BA4B6DD.self\(Self.pluginComment(integration))
+			            @Sendable func __safeDI_uploaderSendableBuilder_ExportFeature_Panel_Scope_uploader(_ scope: ExportFeature.SafeDIScope_Uploader.Panel_Scope.__safeDI_Values) -> any Uploader {
 			                func __safeDI_uploader() -> DefaultUploader {
 			                    func __safeDI_jobBuilder() -> UploadJob {
 			                        UploadJob(exportService: exportService.instance)
@@ -1203,13 +1203,13 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 
 		extension Shell {
 		    nonisolated public enum SafeDIScope_Uploader {
-		        nonisolated public struct exportFeature_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let exportFeature: (exportFeature_Values) -> ExportFeature.SafeDIScope_Uploader.__safeDI_Builder<__safeDI_Built>
+		            public let exportFeature: (__safeDI_Values) -> ExportFeature.SafeDIScope_Uploader.__safeDI_Builder<__safeDI_Built>
 
-		            public init(exportFeature: @escaping (exportFeature_Values) -> ExportFeature.SafeDIScope_Uploader.__safeDI_Builder<__safeDI_Built>) {
+		            public init(exportFeature: @escaping (__safeDI_Values) -> ExportFeature.SafeDIScope_Uploader.__safeDI_Builder<__safeDI_Built>) {
 		                self.exportFeature = exportFeature
 		            }
 
@@ -1229,7 +1229,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		        let headerBuilder = Instantiator<Header>(__safeDI_headerBuilder)
 		        func __safeDI_exportFeature() -> ExportFeature {
 		            _ = ExportFeature.__safeDI_ExportFeature_6AB1C2F5B579DAE9.self
-		            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder.exportFeature(SafeDIScope_Uploader.exportFeature_Values()))
+		            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder.exportFeature(SafeDIScope_Uploader.__safeDI_Values()))
 		        }
 		        let exportFeature: ExportFeature = __safeDI_exportFeature()
 		        self.init(headerBuilder: headerBuilder, exportFeature: exportFeature)
@@ -1286,13 +1286,13 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		""", "Shell+SafeDI.swift": generatedFileHeader + """
 		extension Shell {
 		    nonisolated public enum SafeDIScope_Uploader {
-		        nonisolated public struct exportFeature_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let exportFeature: (exportFeature_Values) -> ExportFeature.SafeDIScope_Uploader.__safeDI_Builder<__safeDI_Built>
+		            public let exportFeature: (__safeDI_Values) -> ExportFeature.SafeDIScope_Uploader.__safeDI_Builder<__safeDI_Built>
 
-		            public init(exportFeature: @escaping (exportFeature_Values) -> ExportFeature.SafeDIScope_Uploader.__safeDI_Builder<__safeDI_Built>) {
+		            public init(exportFeature: @escaping (__safeDI_Values) -> ExportFeature.SafeDIScope_Uploader.__safeDI_Builder<__safeDI_Built>) {
 		                self.exportFeature = exportFeature
 		            }
 
@@ -1312,7 +1312,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 		        let headerBuilder = Instantiator<Header>(__safeDI_headerBuilder)
 		        func __safeDI_exportFeature() -> ExportFeature {
 		            _ = ExportFeature.__safeDI_ExportFeature_6AB1C2F5B579DAE9.self
-		            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder.exportFeature(SafeDIScope_Uploader.exportFeature_Values()))
+		            return ExportFeature(__safeDI_exportService: exportService.instance, __safeDI_uploaderBuilder: __safeDI_uploaderBuilder.exportFeature(SafeDIScope_Uploader.__safeDI_Values()))
 		        }
 		        let exportFeature: ExportFeature = __safeDI_exportFeature()
 		        self.init(headerBuilder: headerBuilder, exportFeature: exportFeature)

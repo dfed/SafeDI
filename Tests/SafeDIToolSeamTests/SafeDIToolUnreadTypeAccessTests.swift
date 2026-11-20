@@ -2665,7 +2665,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		extension Screen {
 		    // SafeDI counts `Brush` and `Image` as `public`: no module it reads declares them narrower. If one is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 		    nonisolated public enum SafeDIMockScope_Brush {
-		        nonisolated public struct badgeBuilder_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        nonisolated public enum Badge_Scope {
 		            nonisolated public struct brush_Values {
@@ -2688,9 +2688,9 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let badgeBuilder: (badgeBuilder_Values) -> SafeDIMockScope_Brush.Badge_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let badgeBuilder: (__safeDI_Values) -> SafeDIMockScope_Brush.Badge_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(badgeBuilder: @escaping (badgeBuilder_Values) -> SafeDIMockScope_Brush.Badge_Scope.__safeDI_Builder<__safeDI_Built>) {
+		            public init(badgeBuilder: @escaping (__safeDI_Values) -> SafeDIMockScope_Brush.Badge_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.badgeBuilder = badgeBuilder
 		            }
 
@@ -2743,7 +2743,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        brushBuilder __safeDI_brushBuilder: Screen.SafeDIMockScope_Brush.__safeDI_Builder<Brush>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        let __safeDI_brushBuilder_badgeBuilder = __safeDI_brushBuilder.badgeBuilder(SafeDIMockScope_Brush.badgeBuilder_Values())
+		        let __safeDI_brushBuilder_badgeBuilder = __safeDI_brushBuilder.badgeBuilder(SafeDIMockScope_Brush.__safeDI_Values())
 		        func __safeDI_badgeBuilder(image: Image) -> Badge {
 		            let brush: Brush = __safeDI_brushBuilder_badgeBuilder.brush(SafeDIMockScope_Brush.Badge_Scope.brush_Values(image: image))
 		            return if let safeDIBuilder = safeDIOverrides.badgeBuilder { safeDIBuilder(image, brush) } else { Badge(image: image, brush: brush) }
@@ -2756,7 +2756,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_mock_DE66497ED46825A5 {}
+		    public enum __safeDI_Screen_mock_9E6C785B1D33C2DF {}
 		}
 		#endif
 		"""])

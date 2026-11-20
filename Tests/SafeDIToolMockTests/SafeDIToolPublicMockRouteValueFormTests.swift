@@ -130,7 +130,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		#if DEBUG
 		extension Office {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct desk_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        nonisolated public struct model_Values {
 		            public let desk: Desk
@@ -156,13 +156,13 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Model_Scope {
-		            nonisolated public struct service_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let service: (service_Values) -> __safeDI_Built
+		                public let service: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                public init(service: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.service = service
 		                }
 
@@ -173,11 +173,11 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let desk: (desk_Values) -> SafeDIMockScope_Service.Desk_Scope.__safeDI_Builder<__safeDI_Built>
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
+		            public let desk: (__safeDI_Values) -> SafeDIMockScope_Service.Desk_Scope.__safeDI_Builder<__safeDI_Built>
 		            public let model: (model_Values) -> SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(desk: @escaping (desk_Values) -> SafeDIMockScope_Service.Desk_Scope.__safeDI_Builder<__safeDI_Built>, model: @escaping (model_Values) -> SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<__safeDI_Built>) {
+		            public init(desk: @escaping (__safeDI_Values) -> SafeDIMockScope_Service.Desk_Scope.__safeDI_Builder<__safeDI_Built>, model: @escaping (model_Values) -> SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.desk = desk
 		                self.model = model
 		            }
@@ -232,7 +232,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        serviceBuilder __safeDI_serviceBuilder: Office.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Office {
-		        let __safeDI_serviceBuilder_desk = __safeDI_serviceBuilder.desk(SafeDIMockScope_Service.desk_Values())
+		        let __safeDI_serviceBuilder_desk = __safeDI_serviceBuilder.desk(SafeDIMockScope_Service.__safeDI_Values())
 		        func __safeDI_desk() -> Desk {
 		            func __safeDI_token() -> Token {
 		                if let safeDIBuilder = safeDIOverrides.desk.token { safeDIBuilder() } else { Token() }
@@ -240,7 +240,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		            let token = LazilyInstantiated<Token>(__safeDI_token)
 		            let __safeDI_serviceBuilder_model = __safeDI_serviceBuilder_desk.model(SafeDIMockScope_Service.Desk_Scope.model_Values(token: token))
 		            func __safeDI_model() -> Model {
-		                let service: any Service = __safeDI_serviceBuilder_model.service(SafeDIMockScope_Service.Model_Scope.service_Values())
+		                let service: any Service = __safeDI_serviceBuilder_model.service(SafeDIMockScope_Service.Model_Scope.__safeDI_Values())
 		                return if let safeDIBuilder = safeDIOverrides.desk.model { safeDIBuilder(service) } else { Model(service: service) }
 		            }
 		            let model: Model = __safeDI_model()
@@ -249,7 +249,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        let desk: Desk = __safeDI_desk()
 		        let __safeDI_serviceBuilder_model = __safeDI_serviceBuilder.model(SafeDIMockScope_Service.model_Values(desk: desk))
 		        func __safeDI_model() -> Model {
-		            let service: any Service = __safeDI_serviceBuilder_model.service(SafeDIMockScope_Service.Model_Scope.service_Values())
+		            let service: any Service = __safeDI_serviceBuilder_model.service(SafeDIMockScope_Service.Model_Scope.__safeDI_Values())
 		            return if let safeDIBuilder = safeDIOverrides.model { safeDIBuilder(service) } else { Model(service: service) }
 		        }
 		        let model: Model = __safeDI_model()
@@ -258,7 +258,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		}
 
 		extension Office {
-		    public enum __safeDI_Office_mock_533562D85E48F99D {}
+		    public enum __safeDI_Office_mock_9AD70193484E65EF {}
 		}
 		#endif
 
@@ -355,7 +355,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		    ) -> OfficeScreen {
 		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_office() -> Office {
-		            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, token: Token) -> any Service {
+		            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Values, token: Token) -> any Service {
 		                let service: any Service = DefaultService(token: token)
 		                return service
 		            }
@@ -371,7 +371,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		            func __safeDI_serviceBuilder_Office_Model_Scope_(token: Token) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
 		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, token: token) })
 		            }
-		            _ = Office.__safeDI_Office_mock_533562D85E48F99D.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Office.__safeDI_Office_mock_9AD70193484E65EF.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(token: token), safeDIOverrides: safeDIOverrides.office)
 		        }
 		        let office: Office = __safeDI_office()
@@ -511,7 +511,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		#if DEBUG
 		extension Office {
 		    nonisolated public enum SafeDIMockScope_Service {
-		        nonisolated public struct desk_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        nonisolated public struct model_Values {
 		            public let desk: Desk
@@ -537,13 +537,13 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Model_Scope {
-		            nonisolated public struct service_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let service: (service_Values) -> __safeDI_Built
+		                public let service: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                public init(service: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.service = service
 		                }
 
@@ -554,11 +554,11 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let desk: (desk_Values) -> SafeDIMockScope_Service.Desk_Scope.__safeDI_Builder<__safeDI_Built>
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
+		            public let desk: (__safeDI_Values) -> SafeDIMockScope_Service.Desk_Scope.__safeDI_Builder<__safeDI_Built>
 		            public let model: (model_Values) -> SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(desk: @escaping (desk_Values) -> SafeDIMockScope_Service.Desk_Scope.__safeDI_Builder<__safeDI_Built>, model: @escaping (model_Values) -> SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<__safeDI_Built>) {
+		            public init(desk: @escaping (__safeDI_Values) -> SafeDIMockScope_Service.Desk_Scope.__safeDI_Builder<__safeDI_Built>, model: @escaping (model_Values) -> SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.desk = desk
 		                self.model = model
 		            }
@@ -613,7 +613,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        serviceBuilder __safeDI_serviceBuilder: Office.SafeDIMockScope_Service.__safeDI_Builder<any Service>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Office {
-		        let __safeDI_serviceBuilder_desk = __safeDI_serviceBuilder.desk(SafeDIMockScope_Service.desk_Values())
+		        let __safeDI_serviceBuilder_desk = __safeDI_serviceBuilder.desk(SafeDIMockScope_Service.__safeDI_Values())
 		        func __safeDI_desk() -> Desk {
 		            func __safeDI_passUp() -> Token {
 		                if let safeDIBuilder = safeDIOverrides.desk.passUp { safeDIBuilder() } else { Token() }
@@ -621,7 +621,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		            let passUp = LazilyInstantiated<Token>(__safeDI_passUp)
 		            let __safeDI_serviceBuilder_model = __safeDI_serviceBuilder_desk.model(SafeDIMockScope_Service.Desk_Scope.model_Values(passUp: passUp))
 		            func __safeDI_model() -> Model {
-		                let service: any Service = __safeDI_serviceBuilder_model.service(SafeDIMockScope_Service.Model_Scope.service_Values())
+		                let service: any Service = __safeDI_serviceBuilder_model.service(SafeDIMockScope_Service.Model_Scope.__safeDI_Values())
 		                return if let safeDIBuilder = safeDIOverrides.desk.model { safeDIBuilder(service) } else { Model(service: service) }
 		            }
 		            let model: Model = __safeDI_model()
@@ -630,7 +630,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        let desk: Desk = __safeDI_desk()
 		        let __safeDI_serviceBuilder_model = __safeDI_serviceBuilder.model(SafeDIMockScope_Service.model_Values(desk: desk))
 		        func __safeDI_model() -> Model {
-		            let service: any Service = __safeDI_serviceBuilder_model.service(SafeDIMockScope_Service.Model_Scope.service_Values())
+		            let service: any Service = __safeDI_serviceBuilder_model.service(SafeDIMockScope_Service.Model_Scope.__safeDI_Values())
 		            return if let safeDIBuilder = safeDIOverrides.model { safeDIBuilder(service) } else { Model(service: service) }
 		        }
 		        let model: Model = __safeDI_model()
@@ -639,7 +639,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		}
 
 		extension Office {
-		    public enum __safeDI_Office_mock_0BCE696681EAA0EC {}
+		    public enum __safeDI_Office_mock_DF614C0910587222 {}
 		}
 		#endif
 
@@ -736,7 +736,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		    ) -> OfficeScreen {
 		        let passUp = if let safeDIBuilder = safeDIOverrides.passUp { safeDIBuilder() } else { Token() }
 		        func __safeDI_office() -> Office {
-		            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, passUp: Token) -> any Service {
+		            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Values, passUp: Token) -> any Service {
 		                let service: any Service = DefaultService(passUp: passUp)
 		                return service
 		            }
@@ -752,7 +752,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		            func __safeDI_serviceBuilder_Office_Model_Scope_(passUp: Token) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
 		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, passUp: passUp) })
 		            }
-		            _ = Office.__safeDI_Office_mock_0BCE696681EAA0EC.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Office.__safeDI_Office_mock_DF614C0910587222.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(passUp: passUp), safeDIOverrides: safeDIOverrides.office)
 		        }
 		        let office: Office = __safeDI_office()
@@ -888,7 +888,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		    ) -> OfficeScreen {
 		        let up = if let safeDIBuilder = safeDIOverrides.up { safeDIBuilder() } else { Token() }
 		        func __safeDI_office() -> Office {
-		            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.service_Values, up: Token) -> any Service {
+		            func __safeDI_serviceBuilder_Office_Model_Scope_service(_ scope: Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Values, up: Token) -> any Service {
 		                let service: any Service = DefaultService(up: up)
 		                return service
 		            }
@@ -904,7 +904,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		            func __safeDI_serviceBuilder_Office_Model_Scope_(up: Token) -> Office.SafeDIMockScope_Service.Model_Scope.__safeDI_Builder<any Service> {
 		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, up: up) })
 		            }
-		            _ = Office.__safeDI_Office_mock_30B1C276807B6ACB.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Office.__safeDI_Office_mock_4AD1FA1EA00B8E47.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(up: up), safeDIOverrides: safeDIOverrides.office)
 		        }
 		        let office: Office = __safeDI_office()
@@ -1014,13 +1014,13 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        }
 
 		        nonisolated public enum A_Scope {
-		            nonisolated public struct api_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		                public let api: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.api = api
 		                }
 
@@ -1051,7 +1051,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        let z = Z(log: log.instance)
 		        let __safeDI_apiBuilder_a = __safeDI_apiBuilder.a(SafeDIScope_Api.a_Values(log: log, z: z))
 		        func __safeDI_a() -> A {
-		            let api: any Api = __safeDI_apiBuilder_a.api(SafeDIScope_Api.A_Scope.api_Values())
+		            let api: any Api = __safeDI_apiBuilder_a.api(SafeDIScope_Api.A_Scope.__safeDI_Values())
 		            return A(api: api)
 		        }
 		        let a: A = __safeDI_a()
@@ -1060,7 +1060,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		}
 
 		extension F {
-		    public enum __safeDI_F_AC31E8AC244F6E79 {}
+		    public enum __safeDI_F_8F8C9937673471C3 {}
 		}
 
 		#if DEBUG
@@ -1072,13 +1072,13 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        }
 
 		        nonisolated public enum A_Scope {
-		            nonisolated public struct api_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		                public let api: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.api = api
 		                }
 
@@ -1157,7 +1157,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        let z = if let safeDIBuilder = safeDIOverrides.z { safeDIBuilder(log) } else { Z(log: log) }
 		        let __safeDI_apiBuilder_a = __safeDI_apiBuilder.a(SafeDIMockScope_Api.a_Values(log: log, z: z))
 		        func __safeDI_a() -> A {
-		            let api: any Api = __safeDI_apiBuilder_a.api(SafeDIMockScope_Api.A_Scope.api_Values())
+		            let api: any Api = __safeDI_apiBuilder_a.api(SafeDIMockScope_Api.A_Scope.__safeDI_Values())
 		            return if let safeDIBuilder = safeDIOverrides.a { safeDIBuilder(api) } else { A(api: api) }
 		        }
 		        let a: A = __safeDI_a()
@@ -1166,7 +1166,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		}
 
 		extension F {
-		    public enum __safeDI_F_mock_96D996AD6269EFC2 {}
+		    public enum __safeDI_F_mock_26B3D0579F23B020 {}
 		}
 		#endif
 		""")
@@ -1185,7 +1185,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        }
 		        let log = LazilyInstantiated<Log>(__safeDI_log)
 		        func __safeDI_f() -> F {
-		            _ = F.__safeDI_F_AC31E8AC244F6E79.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = F.__safeDI_F_8F8C9937673471C3.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_apiBuilder_F() -> F.SafeDIScope_Api.__safeDI_Builder<any Api> {
 		                .init(a: { _ in __safeDI_apiBuilder_F_A_Scope() })
 		            }
@@ -1252,7 +1252,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		                    return api
 		                })
 		            }
-		            _ = F.__safeDI_F_mock_96D996AD6269EFC2.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = F.__safeDI_F_mock_26B3D0579F23B020.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return F.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_F(), log: log.instance, safeDIOverrides: safeDIOverrides.f)
 		        }
 		        let f: F = __safeDI_f()
@@ -1360,13 +1360,13 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        }
 
 		        nonisolated public enum A_Scope {
-		            nonisolated public struct api_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		                public let api: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.api = api
 		                }
 
@@ -1397,7 +1397,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        let z = Z(log: log.instance)
 		        let __safeDI_apiBuilder_a = __safeDI_apiBuilder.a(SafeDIScope_Api.a_Values(log: log, z: z))
 		        func __safeDI_a() -> A {
-		            let api: any Api = __safeDI_apiBuilder_a.api(SafeDIScope_Api.A_Scope.api_Values())
+		            let api: any Api = __safeDI_apiBuilder_a.api(SafeDIScope_Api.A_Scope.__safeDI_Values())
 		            return A(api: api)
 		        }
 		        let a: A = __safeDI_a()
@@ -1406,7 +1406,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		}
 
 		extension F {
-		    public enum __safeDI_F_AC31E8AC244F6E79 {}
+		    public enum __safeDI_F_8F8C9937673471C3 {}
 		}
 
 		#if DEBUG
@@ -1418,13 +1418,13 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        }
 
 		        nonisolated public enum A_Scope {
-		            nonisolated public struct api_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		                public let api: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.api = api
 		                }
 
@@ -1503,7 +1503,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        let z = if let safeDIBuilder = safeDIOverrides.z { safeDIBuilder(log) } else { Z(log: log) }
 		        let __safeDI_apiBuilder_a = __safeDI_apiBuilder.a(SafeDIMockScope_Api.a_Values(log: log, z: z))
 		        func __safeDI_a() -> A {
-		            let api: any Api = __safeDI_apiBuilder_a.api(SafeDIMockScope_Api.A_Scope.api_Values())
+		            let api: any Api = __safeDI_apiBuilder_a.api(SafeDIMockScope_Api.A_Scope.__safeDI_Values())
 		            return if let safeDIBuilder = safeDIOverrides.a { safeDIBuilder(api) } else { A(api: api) }
 		        }
 		        let a: A = __safeDI_a()
@@ -1512,7 +1512,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		}
 
 		extension F {
-		    public enum __safeDI_F_mock_96D996AD6269EFC2 {}
+		    public enum __safeDI_F_mock_26B3D0579F23B020 {}
 		}
 		#endif
 		""")
@@ -1528,7 +1528,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		    public convenience init() {
 		        let log = Log()
 		        func __safeDI_f() -> F {
-		            _ = F.__safeDI_F_AC31E8AC244F6E79.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = F.__safeDI_F_8F8C9937673471C3.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_apiBuilder_F() -> F.SafeDIScope_Api.__safeDI_Builder<any Api> {
 		                .init(a: { _ in __safeDI_apiBuilder_F_A_Scope() })
 		            }
@@ -1592,7 +1592,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		                    return api
 		                })
 		            }
-		            _ = F.__safeDI_F_mock_96D996AD6269EFC2.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = F.__safeDI_F_mock_26B3D0579F23B020.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            return F.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_F(), log: log, safeDIOverrides: safeDIOverrides.f)
 		        }
 		        let f: F = __safeDI_f()
@@ -1704,13 +1704,13 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        }
 
 		        nonisolated public enum A_Scope {
-		            nonisolated public struct api_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		                public let api: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.api = api
 		                }
 
@@ -1741,7 +1741,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        let z = Z(log: log.instance)
 		        let __safeDI_apiBuilder_a = __safeDI_apiBuilder.a(SafeDIScope_Api.a_Values(log: log, z: z))
 		        func __safeDI_a() -> A {
-		            let api: any Api = __safeDI_apiBuilder_a.api(SafeDIScope_Api.A_Scope.api_Values())
+		            let api: any Api = __safeDI_apiBuilder_a.api(SafeDIScope_Api.A_Scope.__safeDI_Values())
 		            return A(api: api)
 		        }
 		        let a: A = __safeDI_a()
@@ -1750,7 +1750,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		}
 
 		extension F {
-		    public enum __safeDI_F_AC31E8AC244F6E79 {}
+		    public enum __safeDI_F_8F8C9937673471C3 {}
 		}
 
 		#if DEBUG
@@ -1762,13 +1762,13 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        }
 
 		        nonisolated public enum A_Scope {
-		            nonisolated public struct api_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		                public let api: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.api = api
 		                }
 
@@ -1847,7 +1847,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        let z = if let safeDIBuilder = safeDIOverrides.z { safeDIBuilder(log) } else { Z(log: log) }
 		        let __safeDI_apiBuilder_a = __safeDI_apiBuilder.a(SafeDIMockScope_Api.a_Values(log: log, z: z))
 		        func __safeDI_a() -> A {
-		            let api: any Api = __safeDI_apiBuilder_a.api(SafeDIMockScope_Api.A_Scope.api_Values())
+		            let api: any Api = __safeDI_apiBuilder_a.api(SafeDIMockScope_Api.A_Scope.__safeDI_Values())
 		            return if let safeDIBuilder = safeDIOverrides.a { safeDIBuilder(api) } else { A(api: api) }
 		        }
 		        let a: A = __safeDI_a()
@@ -1856,7 +1856,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		}
 
 		extension F {
-		    public enum __safeDI_F_mock_96D996AD6269EFC2 {}
+		    public enum __safeDI_F_mock_26B3D0579F23B020 {}
 		}
 		#endif
 		""")
@@ -1875,11 +1875,11 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		        }
 		        let log = LazilyInstantiated<Log>(__safeDI_log)
 		        func __safeDI_f() -> F {
-		            _ = F.__safeDI_F_AC31E8AC244F6E79.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_F_A_Scope_api(_ scope: F.SafeDIScope_Api.A_Scope.api_Values) -> any Api {
+		            _ = F.__safeDI_F_8F8C9937673471C3.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_F_A_Scope_api(_ scope: F.SafeDIScope_Api.A_Scope.__safeDI_Values) -> any Api {
 		                func __safeDI_api() -> Live {
 		                    func __safeDI_fBuilder() -> F {
-		                        _ = F.__safeDI_F_AC31E8AC244F6E79.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		                        _ = F.__safeDI_F_8F8C9937673471C3.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		                        return F(__safeDI_log: log.instance, __safeDI_apiBuilder: __safeDI_apiBuilder_F())
 		                    }
 		                    let fBuilder = Instantiator<F>(__safeDI_fBuilder)
@@ -1943,7 +1943,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		            if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
 		        }
 		        let log = LazilyInstantiated<Log>(__safeDI_log)
-		        _ = F.__safeDI_F_mock_96D996AD6269EFC2.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        _ = F.__safeDI_F_mock_26B3D0579F23B020.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_f() -> F {
 		            let apiBuilder: () -> any Api = __safeDI_apiBuilder
 		            return F.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), log: log.instance, safeDIOverrides: safeDIOverrides.f)

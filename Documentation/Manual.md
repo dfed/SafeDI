@@ -853,13 +853,13 @@ extension Service {
         }
 
         nonisolated public enum Profile_Scope {
-            nonisolated public struct userService_Values {}
+            nonisolated public struct __safeDI_Values: Sendable {}
 
             /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
             nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-                public let userService: (userService_Values) -> __safeDI_Built
+                public let userService: (__safeDI_Values) -> __safeDI_Built
 
-                public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+                public init(userService: @escaping (__safeDI_Values) -> __safeDI_Built) {
                     self.userService = userService
                 }
 
@@ -889,7 +889,7 @@ extension Service {
         let analytics = Analytics()
         let __safeDI_userServiceBuilder_profile = __safeDI_userServiceBuilder.profile(SafeDIScope_UserService.profile_Values(analytics: analytics))
         func __safeDI_profile() -> Profile {
-            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService(SafeDIScope_UserService.Profile_Scope.userService_Values())
+            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService(SafeDIScope_UserService.Profile_Scope.__safeDI_Values())
             return Profile(userService: userService, analytics: analytics)
         }
         let profile: Profile = __safeDI_profile()
@@ -903,7 +903,7 @@ A tree that calls the seam fills the builder when its module can see an implemen
 ```swift
 // Generated in module App, which declares `DefaultUserService`, an implementation of `UserService`.
 func __safeDI_service() -> Service {
-    _ = Service.__safeDI_Service_BEE5EF0BBCBFF8CE.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
+    _ = Service.__safeDI_Service_1BBB44330FA85D74.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
     func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
         .init(profile: { values in __safeDI_userServiceBuilder_Service_Profile_Scope(analytics: values.analytics) })
     }

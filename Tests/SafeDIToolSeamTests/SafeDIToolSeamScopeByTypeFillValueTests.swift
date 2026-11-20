@@ -72,7 +72,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let session = Session()
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_A7ED340089474321.self // \(Self.moduleInfoComment)
+			            _ = Service.__safeDI_Service_69CB2E7544847B44.self // \(Self.moduleInfoComment)
 			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
 			                .init(settings: { values in __safeDI_userServiceBuilder_Service_Settings_Scope(session: session, theme: values.theme) }, home: { _ in __safeDI_userServiceBuilder_Service_Home_Scope() })
 			            }
@@ -124,7 +124,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_32FC276B366756BE.self // \(Self.moduleInfoComment)
+			            _ = Service.__safeDI_Service_6632E16CC7AA6B06.self // \(Self.moduleInfoComment)
 			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
 			                .init(home: { _ in __safeDI_userServiceBuilder_Service_Home_Scope() }, settings: { _ in __safeDI_userServiceBuilder_Service_Settings_Scope(session: nil) })
 			            }
@@ -180,7 +180,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_C4EFC52CB018649A.self // \(Self.moduleInfoComment)
+			            _ = Service.__safeDI_Service_3941C3BCE340DFCC.self // \(Self.moduleInfoComment)
 			            func __safeDI_apiBuilder_Service() -> Service.SafeDIScope_Api.__safeDI_Builder<any Api> {
 			                .init(homeBuilder: { _ in __safeDI_apiBuilder_Service_Home_Scope() }, settings: { _ in __safeDI_apiBuilder_Service_Settings_Scope(tab: nil) })
 			            }
@@ -225,7 +225,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_8B7F57FD1D47F3E2.self // \(Self.moduleInfoComment)
+			            _ = Service.__safeDI_Service_6909E3353942A31F.self // \(Self.moduleInfoComment)
 			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
 			                .init(home: { _ in __safeDI_userServiceBuilder_Service_Home_Scope() }, settingsBuilder: { _ in __safeDI_userServiceBuilder_Service_Settings_Scope() })
 			            }
@@ -267,7 +267,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_58B290B42665E063.self // \(Self.moduleInfoComment)
+			            _ = Service.__safeDI_Service_7936E6EFBCFF0749.self // \(Self.moduleInfoComment)
 			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
 			                .init(settingsBuilder: { _ in __safeDI_userServiceBuilder_Service_Settings_Scope() }, home: { _ in __safeDI_userServiceBuilder_Service_Home_Scope() })
 			            }
@@ -311,7 +311,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let logger = Logger()
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_33604A2387059D3F.self // \(Self.moduleInfoComment)
+			            _ = Service.__safeDI_Service_6052C6A08D9F21B8.self // \(Self.moduleInfoComment)
 			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
 			                .init(settings: { _ in __safeDI_userServiceBuilder_Service_Settings_Scope(logger: logger) }, home: { _ in __safeDI_userServiceBuilder_Service_Home_Scope() })
 			            }
@@ -353,7 +353,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let logger = Logger()
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_CD133EEE9F18DA4F.self // \(Self.moduleInfoComment)
+			            _ = Service.__safeDI_Service_FB09C6CC08D5D808.self // \(Self.moduleInfoComment)
 			            func __safeDI_userServiceBuilder_Service() -> Service.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
 			                .init(home: { _ in __safeDI_userServiceBuilder_Service_Home_Scope() }, settings: { _ in __safeDI_userServiceBuilder_Service_Settings_Scope(logger: logger) })
 			            }
@@ -409,7 +409,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_home() -> Home {
-			            _ = Home.__safeDI_Home_ABA72DBCBBFD6210.self // \(Self.moduleInfoComment)
+			            _ = Home.__safeDI_Home_4A956DC7BD9A6C67.self // \(Self.moduleInfoComment)
 			            func __safeDI_apiBuilder_Home() -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
 			                .init(aBuilder: { _ in __safeDI_apiBuilder_Home_A_Scope() }, b: { _ in __safeDI_apiBuilder_Home_B_Scope(session: nil) })
 			            }
@@ -454,7 +454,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let theme = Theme()
 			        func __safeDI_outer() -> Outer {
-			            _ = Outer.__safeDI_Outer_9229E580D0455D2E.self // \(Self.moduleInfoComment)
+			            _ = Outer.__safeDI_Outer_A501EB444A09633E.self // \(Self.moduleInfoComment)
 			            func __safeDI_apiBuilder_Outer() -> Outer.SafeDIScope_Api.__safeDI_Builder<any Api> {
 			                .init(inner: { _ in __safeDI_apiBuilder_Inner() })
 			            }
@@ -556,7 +556,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let token = Token()
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Office"))
+			            _ = Office.__safeDI_Office_9789B684E7EC9413.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Office"))
 			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
 			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
 			            }
@@ -597,7 +597,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let token = Token()
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_C1C4CFA43B1FA192.self // \(Self.moduleInfoComment)
+			            _ = Office.__safeDI_Office_DFC7305B78615C1F.self // \(Self.moduleInfoComment)
 			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
 			                .init(model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) }, desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() })
 			            }
@@ -636,7 +636,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let token = Token()
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_79E9D8C7948FA1D0.self // \(Self.moduleInfoComment)
+			            _ = Office.__safeDI_Office_A128AA77788B5F91.self // \(Self.moduleInfoComment)
 			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
 			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: SendableLazilyInstantiated<Token>({ token })) })
 			            }
@@ -680,7 +680,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			        }
 			        let token = LazilyInstantiated<Token>(__safeDI_token)
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_198FC1FC010778A5.self // \(Self.moduleInfoComment)
+			            _ = Office.__safeDI_Office_FCCE73EEC67AF202.self // \(Self.moduleInfoComment)
 			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
 			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: token.instance) })
 			            }
@@ -721,7 +721,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let token = Token()
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
+			            _ = Office.__safeDI_Office_9789B684E7EC9413.self // \(Self.moduleInfoComment)
 			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
 			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
 			            }
@@ -766,7 +766,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let token = Token()
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
+			            _ = Office.__safeDI_Office_9789B684E7EC9413.self // \(Self.moduleInfoComment)
 			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
 			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
 			            }
@@ -812,7 +812,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let token = Token()
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_3809615F3E68B69C.self // \(Self.moduleInfoComment)
+			            _ = Office.__safeDI_Office_5B476660198F63F1.self // \(Self.moduleInfoComment)
 			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
 			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: LazilyInstantiated<Token>({ token })) })
 			            }
@@ -852,7 +852,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
+			            _ = Office.__safeDI_Office_9789B684E7EC9413.self // \(Self.moduleInfoComment)
 			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
 			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: nil) })
 			            }
@@ -894,8 +894,8 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 				    public init() {
 				        let token = Token()
 				        func __safeDI_office() -> Office {
-				            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
-				            func __safeDI_userServiceBuilder_Office_Model_Scope_userService(_ scope: Office.SafeDIScope_UserService.Model_Scope.userService_Values, token: LazilyInstantiated<Token>?) -> any UserService {
+				            _ = Office.__safeDI_Office_9789B684E7EC9413.self // \(Self.moduleInfoComment)
+				            func __safeDI_userServiceBuilder_Office_Model_Scope_userService(_ scope: Office.SafeDIScope_UserService.Model_Scope.__safeDI_Values, token: LazilyInstantiated<Token>?) -> any UserService {
 				                func __safeDI_userService() -> DefaultUserService {
 				                    #sourceLocation(file: "\(appSources)/DefaultUserService.swift", line: 9)
 				                    let renamed: Token? = token?.instance
@@ -953,8 +953,8 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let token = Token()
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Office_Model_Scope_userService(_ scope: Office.SafeDIScope_UserService.Model_Scope.userService_Values, token: LazilyInstantiated<Token>?) -> any UserService {
+			            _ = Office.__safeDI_Office_9789B684E7EC9413.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office_Model_Scope_userService(_ scope: Office.SafeDIScope_UserService.Model_Scope.__safeDI_Values, token: LazilyInstantiated<Token>?) -> any UserService {
 			                func __safeDI_userService() -> DefaultUserService {
 			                    func __safeDI_loopABuilder(token: Token?) -> LoopA {
 			                        func __safeDI_loopBBuilder() -> LoopB {
@@ -1027,7 +1027,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_token token: Token?) {
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
+			            _ = Office.__safeDI_Office_9789B684E7EC9413.self // \(Self.moduleInfoComment)
 			            func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
 			                .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: token.map { value in LazilyInstantiated<Token>({ value }) }) })
 			            }
@@ -1079,11 +1079,11 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let token = Token()
 			        func __safeDI_office() -> Office {
-			            _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
-			            func __safeDI_userServiceBuilder_Office_Model_Scope_userService(_ scope: Office.SafeDIScope_UserService.Model_Scope.userService_Values, token: LazilyInstantiated<Token>) -> any UserService {
+			            _ = Office.__safeDI_Office_9789B684E7EC9413.self // \(Self.moduleInfoComment)
+			            func __safeDI_userServiceBuilder_Office_Model_Scope_userService(_ scope: Office.SafeDIScope_UserService.Model_Scope.__safeDI_Values, token: LazilyInstantiated<Token>) -> any UserService {
 			                func __safeDI_userService() -> DefaultUserService {
 			                    func __safeDI_panel() -> Panel {
-			                        _ = Panel.__safeDI_Panel_A5FB2CD0EC7D53C9.self // \(Self.moduleInfoComment)
+			                        _ = Panel.__safeDI_Panel_505992C02A082FB1.self // \(Self.moduleInfoComment)
 			                        func __safeDI_gadgetBuilder_Panel() -> Panel.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
 			                            .init(gadget: { _ in
 			                                let gadget: any Gadget = DefaultGadget(token: token.instance)
@@ -1141,7 +1141,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        func __safeDI_screenBuilder(token: Token?) -> Screen {
 			            func __safeDI_office() -> Office {
-			                _ = Office.__safeDI_Office_9860F4FAED7567A6.self // \(Self.moduleInfoComment)
+			                _ = Office.__safeDI_Office_9789B684E7EC9413.self // \(Self.moduleInfoComment)
 			                func __safeDI_userServiceBuilder_Office() -> Office.SafeDIScope_UserService.__safeDI_Builder<any UserService> {
 			                    .init(desk: { _ in __safeDI_userServiceBuilder_Office_Desk_Scope() }, model: { _ in __safeDI_userServiceBuilder_Office_Model_Scope(token: token.map { value in LazilyInstantiated<Token>({ value }) }) })
 			                }

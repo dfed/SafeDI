@@ -61,13 +61,13 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		extension F {
 		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public enum K_Scope {
-		            nonisolated public struct api_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		                public let api: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.api = api
 		                }
 
@@ -79,13 +79,13 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		    }
 
 		    nonisolated public enum SafeDISendableScope_Api {
-		        nonisolated public struct k_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-		            public let k: @Sendable (k_Values) -> SafeDIScope_Api.K_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let k: @Sendable (__safeDI_Values) -> SafeDIScope_Api.K_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(k: @escaping @Sendable (k_Values) -> SafeDIScope_Api.K_Scope.__safeDI_Builder<__safeDI_Built>) {
+		            public init(k: @escaping @Sendable (__safeDI_Values) -> SafeDIScope_Api.K_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.k = k
 		            }
 
@@ -99,8 +99,8 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_db db: Db, __safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
 		        @Sendable nonisolated func __safeDI_k() -> K {
-		            let __safeDI_apiSendableBuilder_k = __safeDI_apiSendableBuilder.k(SafeDISendableScope_Api.k_Values())
-		            let api: any Api = __safeDI_apiSendableBuilder_k.api(SafeDIScope_Api.K_Scope.api_Values())
+		            let __safeDI_apiSendableBuilder_k = __safeDI_apiSendableBuilder.k(SafeDISendableScope_Api.__safeDI_Values())
+		            let api: any Api = __safeDI_apiSendableBuilder_k.api(SafeDIScope_Api.K_Scope.__safeDI_Values())
 		            return K(api: api)
 		        }
 		        let k = SendableInstantiator<K>(__safeDI_k)
@@ -109,7 +109,7 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		}
 
 		extension F {
-		    public enum __safeDI_F_D6F6EA6BFBAB0E58 {}
+		    public enum __safeDI_F_DD58567C5CCD61A4 {}
 		}
 
 		#if DEBUG
@@ -128,13 +128,13 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		extension F {
 		    nonisolated public enum SafeDIMockScope_Api {
 		        nonisolated public enum K_Scope {
-		            nonisolated public struct api_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		                public let api: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.api = api
 		                }
 
@@ -146,13 +146,13 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		    }
 
 		    nonisolated public enum SafeDISendableMockScope_Api {
-		        nonisolated public struct k_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-		            public let k: @Sendable (k_Values) -> SafeDIMockScope_Api.K_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let k: @Sendable (__safeDI_Values) -> SafeDIMockScope_Api.K_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(k: @escaping @Sendable (k_Values) -> SafeDIMockScope_Api.K_Scope.__safeDI_Builder<__safeDI_Built>) {
+		            public init(k: @escaping @Sendable (__safeDI_Values) -> SafeDIMockScope_Api.K_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.k = k
 		            }
 
@@ -219,8 +219,8 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		        let db = if let db { db } else if let safeDIBuilder = safeDIOverrides.db { safeDIBuilder() } else { Db() }
 		        let __safeDI_k__safeDIBuilder = safeDIOverrides.k
 		        @Sendable func __safeDI_k() -> K {
-		            let __safeDI_apiSendableBuilder_k = __safeDI_apiSendableBuilder.k(SafeDISendableMockScope_Api.k_Values())
-		            let api: any Api = __safeDI_apiSendableBuilder_k.api(SafeDIMockScope_Api.K_Scope.api_Values())
+		            let __safeDI_apiSendableBuilder_k = __safeDI_apiSendableBuilder.k(SafeDISendableMockScope_Api.__safeDI_Values())
+		            let api: any Api = __safeDI_apiSendableBuilder_k.api(SafeDIMockScope_Api.K_Scope.__safeDI_Values())
 		            return if let safeDIBuilder = __safeDI_k__safeDIBuilder { safeDIBuilder(api) } else { K(api: api) }
 		        }
 		        let k = SendableInstantiator<K>(__safeDI_k)
@@ -229,7 +229,7 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		}
 
 		extension F {
-		    public enum __safeDI_F_mock_FB934F1CC08C8BFE {}
+		    public enum __safeDI_F_mock_FC0C9C0EF47E5D1C {}
 		}
 		#endif
 		"""])
@@ -579,7 +579,7 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 			                    return api
 			                })
 			            }
-			            _ = F.__safeDI_F_mock_FB934F1CC08C8BFE.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "F", declaringModule: "Feat"))
+			            _ = F.__safeDI_F_mock_FC0C9C0EF47E5D1C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "F", declaringModule: "Feat"))
 			            return F.__safeDI_mock(apiSendableBuilder: __safeDI_apiSendableBuilder_F(), db: db, safeDIOverrides: safeDIOverrides.f)
 			        }
 			        let f: F = __safeDI_f()
@@ -644,7 +644,7 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 			                    return api
 			                })
 			            }
-			            _ = F.__safeDI_F_mock_FB934F1CC08C8BFE.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "F", declaringModule: "Feat"))
+			            _ = F.__safeDI_F_mock_FC0C9C0EF47E5D1C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "F", declaringModule: "Feat"))
 			            return F.__safeDI_mock(apiSendableBuilder: __safeDI_apiSendableBuilder_F(), db: db, safeDIOverrides: safeDIOverrides.f)
 			        }
 			        let f: F = __safeDI_f()

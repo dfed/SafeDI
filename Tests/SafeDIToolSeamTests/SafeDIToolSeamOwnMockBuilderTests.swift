@@ -63,16 +63,16 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 		extension Service {
 		    nonisolated public enum SafeDIScope_UserService {
-		        nonisolated public struct profileBuilder_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        nonisolated public enum Profile_Scope {
-		            nonisolated public struct userService_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let userService: (userService_Values) -> __safeDI_Built
+		                public let userService: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+		                public init(userService: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.userService = userService
 		                }
 
@@ -84,9 +84,9 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let profileBuilder: (profileBuilder_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let profileBuilder: (__safeDI_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(profileBuilder: @escaping (profileBuilder_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>) {
+		            public init(profileBuilder: @escaping (__safeDI_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.profileBuilder = profileBuilder
 		            }
 
@@ -104,9 +104,9 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
-		        let __safeDI_userServiceBuilder_profileBuilder = __safeDI_userServiceBuilder.profileBuilder(SafeDIScope_UserService.profileBuilder_Values())
+		        let __safeDI_userServiceBuilder_profileBuilder = __safeDI_userServiceBuilder.profileBuilder(SafeDIScope_UserService.__safeDI_Values())
 		        func __safeDI_profileBuilder() -> Profile {
-		            let userService: any UserService = __safeDI_userServiceBuilder_profileBuilder.userService(SafeDIScope_UserService.Profile_Scope.userService_Values())
+		            let userService: any UserService = __safeDI_userServiceBuilder_profileBuilder.userService(SafeDIScope_UserService.Profile_Scope.__safeDI_Values())
 		            return Profile(userService: userService)
 		        }
 		        let profileBuilder = Instantiator<Profile>(__safeDI_profileBuilder)
@@ -115,7 +115,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_DAEE219B0D380A33 {}
+		    public enum __safeDI_Service_4A8EC3A411315067 {}
 		}
 
 		#if DEBUG
@@ -191,20 +191,20 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 		extension Service {
 		    nonisolated public enum SafeDIScope_UserService {
-		        nonisolated public struct profile_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        nonisolated public struct settings_Values {
 		            public let profile: Profile
 		        }
 
 		        nonisolated public enum Profile_Scope {
-		            nonisolated public struct userService_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let userService: (userService_Values) -> __safeDI_Built
+		                public let userService: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+		                public init(userService: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.userService = userService
 		                }
 
@@ -215,13 +215,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Settings_Scope {
-		            nonisolated public struct service_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let service: (service_Values) -> __safeDI_Built
+		                public let service: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                public init(service: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.service = service
 		                }
 
@@ -232,11 +232,11 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let profile: (profile_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
+		            public let profile: (__safeDI_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>
 		            public let settings: (settings_Values) -> SafeDIScope_UserService.Settings_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(profile: @escaping (profile_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>, settings: @escaping (settings_Values) -> SafeDIScope_UserService.Settings_Scope.__safeDI_Builder<__safeDI_Built>) {
+		            public init(profile: @escaping (__safeDI_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>, settings: @escaping (settings_Values) -> SafeDIScope_UserService.Settings_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.profile = profile
 		                self.settings = settings
 		            }
@@ -256,15 +256,15 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
-		        let __safeDI_userServiceBuilder_profile = __safeDI_userServiceBuilder.profile(SafeDIScope_UserService.profile_Values())
+		        let __safeDI_userServiceBuilder_profile = __safeDI_userServiceBuilder.profile(SafeDIScope_UserService.__safeDI_Values())
 		        func __safeDI_profile() -> Profile {
-		            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService(SafeDIScope_UserService.Profile_Scope.userService_Values())
+		            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService(SafeDIScope_UserService.Profile_Scope.__safeDI_Values())
 		            return Profile(userService: userService)
 		        }
 		        let profile: Profile = __safeDI_profile()
 		        let __safeDI_userServiceBuilder_settings = __safeDI_userServiceBuilder.settings(SafeDIScope_UserService.settings_Values(profile: profile))
 		        func __safeDI_settings() -> Settings {
-		            let service: any UserService = __safeDI_userServiceBuilder_settings.service(SafeDIScope_UserService.Settings_Scope.service_Values())
+		            let service: any UserService = __safeDI_userServiceBuilder_settings.service(SafeDIScope_UserService.Settings_Scope.__safeDI_Values())
 		            return Settings(service: service)
 		        }
 		        let settings: Settings = __safeDI_settings()
@@ -273,7 +273,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_C3EEAD236AD18278 {}
+		    public enum __safeDI_Service_155B9EDFCE2AF6A4 {}
 		}
 
 		#if DEBUG
@@ -386,13 +386,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 		extension Inner {
 		    nonisolated public enum SafeDIScope_UserService {
-		        nonisolated public struct userService_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let userService: (userService_Values) -> __safeDI_Built
+		            public let userService: (__safeDI_Values) -> __safeDI_Built
 
-		            public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+		            public init(userService: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                self.userService = userService
 		            }
 
@@ -405,13 +405,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
-		        let userService: any UserService = __safeDI_userServiceBuilder.userService(SafeDIScope_UserService.userService_Values())
+		        let userService: any UserService = __safeDI_userServiceBuilder.userService(SafeDIScope_UserService.__safeDI_Values())
 		        self.init(userService: userService)
 		    }
 		}
 
 		extension Inner {
-		    public enum __safeDI_Inner_30B081DD2CB1DAD9 {}
+		    public enum __safeDI_Inner_5080BC8A55A15E6D {}
 		}
 		"""])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
@@ -424,13 +424,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 		extension Service {
 		    nonisolated public enum SafeDIScope_UserService {
-		        nonisolated public struct inner_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let inner: (inner_Values) -> Inner.SafeDIScope_UserService.__safeDI_Builder<__safeDI_Built>
+		            public let inner: (__safeDI_Values) -> Inner.SafeDIScope_UserService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(inner: @escaping (inner_Values) -> Inner.SafeDIScope_UserService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(inner: @escaping (__safeDI_Values) -> Inner.SafeDIScope_UserService.__safeDI_Builder<__safeDI_Built>) {
 		                self.inner = inner
 		            }
 
@@ -444,8 +444,8 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
 		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_30B081DD2CB1DAD9.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Inner(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder.inner(SafeDIScope_UserService.inner_Values()))
+		            _ = Inner.__safeDI_Inner_5080BC8A55A15E6D.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Inner(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder.inner(SafeDIScope_UserService.__safeDI_Values()))
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(inner: inner)
@@ -453,7 +453,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_DB8E5D9D7B267A9D {}
+		    public enum __safeDI_Service_2919505A340A84D1 {}
 		}
 
 		#if DEBUG
@@ -545,16 +545,16 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 		extension Service {
 		    nonisolated public enum SafeDIScope_DefaultUserService_AnyUserService {
-		        nonisolated public struct profile_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        nonisolated public enum Profile_Scope {
-		            nonisolated public struct userService_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let userService: (userService_Values) -> __safeDI_Built
+		                public let userService: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+		                public init(userService: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.userService = userService
 		                }
 
@@ -566,9 +566,9 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let profile: (profile_Values) -> SafeDIScope_DefaultUserService_AnyUserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let profile: (__safeDI_Values) -> SafeDIScope_DefaultUserService_AnyUserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(profile: @escaping (profile_Values) -> SafeDIScope_DefaultUserService_AnyUserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>) {
+		            public init(profile: @escaping (__safeDI_Values) -> SafeDIScope_DefaultUserService_AnyUserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.profile = profile
 		            }
 
@@ -581,9 +581,9 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_defaultUserService_AnyUserServiceBuilder: SafeDIScope_DefaultUserService_AnyUserService.__safeDI_Builder<AnyUserService>) {
-		        let __safeDI_defaultUserService_AnyUserServiceBuilder_profile = __safeDI_defaultUserService_AnyUserServiceBuilder.profile(SafeDIScope_DefaultUserService_AnyUserService.profile_Values())
+		        let __safeDI_defaultUserService_AnyUserServiceBuilder_profile = __safeDI_defaultUserService_AnyUserServiceBuilder.profile(SafeDIScope_DefaultUserService_AnyUserService.__safeDI_Values())
 		        func __safeDI_profile() -> Profile {
-		            let userService: AnyUserService = __safeDI_defaultUserService_AnyUserServiceBuilder_profile.userService(SafeDIScope_DefaultUserService_AnyUserService.Profile_Scope.userService_Values())
+		            let userService: AnyUserService = __safeDI_defaultUserService_AnyUserServiceBuilder_profile.userService(SafeDIScope_DefaultUserService_AnyUserService.Profile_Scope.__safeDI_Values())
 		            return Profile(userService: userService)
 		        }
 		        let profile: Profile = __safeDI_profile()
@@ -592,7 +592,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_142FC66B1EEE39D0 {}
+		    public enum __safeDI_Service_94B8BA09792071C9 {}
 		}
 
 		#if DEBUG
@@ -650,20 +650,20 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 		extension Service {
 		    nonisolated public enum SafeDIScope_UserService {
-		        nonisolated public struct settings_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        nonisolated public struct account_Values {
 		            public let settings: Settings
 		        }
 
 		        nonisolated public enum Settings_Scope {
-		            nonisolated public struct service_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let service: (service_Values) -> __safeDI_Built
+		                public let service: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                public init(service: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.service = service
 		                }
 
@@ -674,13 +674,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Account_Scope {
-		            nonisolated public struct service_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let service: (service_Values) -> __safeDI_Built
+		                public let service: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                public init(service: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.service = service
 		                }
 
@@ -691,11 +691,11 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let settings: (settings_Values) -> SafeDIScope_UserService.Settings_Scope.__safeDI_Builder<__safeDI_Built>
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
+		            public let settings: (__safeDI_Values) -> SafeDIScope_UserService.Settings_Scope.__safeDI_Builder<__safeDI_Built>
 		            public let account: (account_Values) -> SafeDIScope_UserService.Account_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(settings: @escaping (settings_Values) -> SafeDIScope_UserService.Settings_Scope.__safeDI_Builder<__safeDI_Built>, account: @escaping (account_Values) -> SafeDIScope_UserService.Account_Scope.__safeDI_Builder<__safeDI_Built>) {
+		            public init(settings: @escaping (__safeDI_Values) -> SafeDIScope_UserService.Settings_Scope.__safeDI_Builder<__safeDI_Built>, account: @escaping (account_Values) -> SafeDIScope_UserService.Account_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.settings = settings
 		                self.account = account
 		            }
@@ -715,15 +715,15 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
-		        let __safeDI_userServiceBuilder_settings = __safeDI_userServiceBuilder.settings(SafeDIScope_UserService.settings_Values())
+		        let __safeDI_userServiceBuilder_settings = __safeDI_userServiceBuilder.settings(SafeDIScope_UserService.__safeDI_Values())
 		        func __safeDI_settings() -> Settings {
-		            let service: any UserService = __safeDI_userServiceBuilder_settings.service(SafeDIScope_UserService.Settings_Scope.service_Values())
+		            let service: any UserService = __safeDI_userServiceBuilder_settings.service(SafeDIScope_UserService.Settings_Scope.__safeDI_Values())
 		            return Settings(service: service)
 		        }
 		        let settings: Settings = __safeDI_settings()
 		        let __safeDI_userServiceBuilder_account = __safeDI_userServiceBuilder.account(SafeDIScope_UserService.account_Values(settings: settings))
 		        func __safeDI_account() -> Account {
-		            let service: any UserService = __safeDI_userServiceBuilder_account.service(SafeDIScope_UserService.Account_Scope.service_Values())
+		            let service: any UserService = __safeDI_userServiceBuilder_account.service(SafeDIScope_UserService.Account_Scope.__safeDI_Values())
 		            return Account(service: service)
 		        }
 		        let account: Account = __safeDI_account()
@@ -732,7 +732,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_51CFC5BE54D28FC0 {}
+		    public enum __safeDI_Service_274F4B5E35106BA9 {}
 		}
 
 		#if DEBUG
@@ -843,13 +843,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Settings_Scope {
-		            nonisolated public struct service_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let service: (service_Values) -> __safeDI_Built
+		                public let service: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                public init(service: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.service = service
 		                }
 
@@ -885,7 +885,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        let reader = Reader(service: service.instance)
 		        let __safeDI_userServiceBuilder_settings = __safeDI_userServiceBuilder.settings(SafeDIScope_UserService.settings_Values(service: service, reader: reader))
 		        func __safeDI_settings() -> Settings {
-		            let service: any UserService = __safeDI_userServiceBuilder_settings.service(SafeDIScope_UserService.Settings_Scope.service_Values())
+		            let service: any UserService = __safeDI_userServiceBuilder_settings.service(SafeDIScope_UserService.Settings_Scope.__safeDI_Values())
 		            return Settings(service: service)
 		        }
 		        let settings: Settings = __safeDI_settings()
@@ -894,7 +894,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_63925CB4A26D4D3E {}
+		    public enum __safeDI_Service_F7CDB24559639503 {}
 		}
 
 		#if DEBUG
@@ -970,13 +970,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Profile_Scope {
-		            nonisolated public struct userService_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let userService: (userService_Values) -> __safeDI_Built
+		                public let userService: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+		                public init(userService: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.userService = userService
 		                }
 
@@ -1014,7 +1014,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        let userServiceBuilder = Instantiator<Analytics>(__safeDI_userServiceBuilder)
 		        let __safeDI_userServiceBuilder_profile = __safeDI_userServiceBuilder_.profile(SafeDIScope_UserService.profile_Values(userServiceBuilder: userServiceBuilder))
 		        func __safeDI_profile() -> Profile {
-		            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService(SafeDIScope_UserService.Profile_Scope.userService_Values())
+		            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService(SafeDIScope_UserService.Profile_Scope.__safeDI_Values())
 		            return Profile(userService: userService)
 		        }
 		        let profile: Profile = __safeDI_profile()
@@ -1023,7 +1023,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_F9356196B9207CE9 {}
+		    public enum __safeDI_Service_D13391464CA9BC3D {}
 		}
 
 		#if DEBUG
@@ -1110,7 +1110,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 		extension Service {
 		    nonisolated public enum SafeDIScope_UserService {
-		        nonisolated public struct badge_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        nonisolated public enum Badge_Scope {
 		            nonisolated public struct userService_Values {
@@ -1133,9 +1133,9 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let badge: (badge_Values) -> SafeDIScope_UserService.Badge_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let badge: (__safeDI_Values) -> SafeDIScope_UserService.Badge_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(badge: @escaping (badge_Values) -> SafeDIScope_UserService.Badge_Scope.__safeDI_Builder<__safeDI_Built>) {
+		            public init(badge: @escaping (__safeDI_Values) -> SafeDIScope_UserService.Badge_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.badge = badge
 		            }
 
@@ -1153,7 +1153,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_userServiceBuilder __safeDI_userServiceBuilder_: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
-		        let __safeDI_userServiceBuilder_badge = __safeDI_userServiceBuilder_.badge(SafeDIScope_UserService.badge_Values())
+		        let __safeDI_userServiceBuilder_badge = __safeDI_userServiceBuilder_.badge(SafeDIScope_UserService.__safeDI_Values())
 		        func __safeDI_badge() -> Badge {
 		            func __safeDI_userServiceBuilder() -> Analytics {
 		                Analytics()
@@ -1168,7 +1168,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_207889A9A88D111F {}
+		    public enum __safeDI_Service_1F2DAA42095B256E {}
 		}
 
 		#if DEBUG
@@ -1291,13 +1291,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 		extension Service {
 		    nonisolated public enum SafeDIScope_Analytics {
-		        nonisolated public struct analytics_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let analytics: (analytics_Values) -> __safeDI_Built
+		            public let analytics: (__safeDI_Values) -> __safeDI_Built
 
-		            public init(analytics: @escaping (analytics_Values) -> __safeDI_Built) {
+		            public init(analytics: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                self.analytics = analytics
 		            }
 
@@ -1310,13 +1310,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_analyticsBuilder: SafeDIScope_Analytics.__safeDI_Builder<any Analytics>) {
-		        let analytics: any Analytics = __safeDI_analyticsBuilder.analytics(SafeDIScope_Analytics.analytics_Values())
+		        let analytics: any Analytics = __safeDI_analyticsBuilder.analytics(SafeDIScope_Analytics.__safeDI_Values())
 		        self.init(analytics: analytics)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_E07D8A52C6ED2A5E {}
+		    public enum __safeDI_Service_BD1F17DA7326E9E2 {}
 		}
 
 		#if DEBUG
@@ -1347,13 +1347,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 		extension Service {
 		    nonisolated public enum SafeDIScope_UserService {
-		        nonisolated public struct userService_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let userService: (userService_Values) -> __safeDI_Built
+		            public let userService: (__safeDI_Values) -> __safeDI_Built
 
-		            public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+		            public init(userService: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                self.userService = userService
 		            }
 
@@ -1372,7 +1372,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
 		        func __safeDI_userService() -> any UserService {
-		            __safeDI_userServiceBuilder.userService(SafeDIScope_UserService.userService_Values())
+		            __safeDI_userServiceBuilder.userService(SafeDIScope_UserService.__safeDI_Values())
 		        }
 		        let userService = LazilyInstantiated<any UserService>(__safeDI_userService)
 		        self.init(userService: userService)
@@ -1380,7 +1380,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_DE15AB8B7FF442DE {}
+		    public enum __safeDI_Service_11EC73F609A6C004 {}
 		}
 
 		#if DEBUG
@@ -1409,13 +1409,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		extension Service {
 		    nonisolated public enum SafeDIScope_UserService {
 		        nonisolated public enum SendableProfile_Scope {
-		            nonisolated public struct userService_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let userService: (userService_Values) -> __safeDI_Built
+		                public let userService: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+		                public init(userService: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.userService = userService
 		                }
 
@@ -1427,13 +1427,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    }
 
 		    nonisolated public enum SafeDISendableScope_UserService {
-		        nonisolated public struct profileBuilder_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-		            public let profileBuilder: @Sendable (profileBuilder_Values) -> SafeDIScope_UserService.SendableProfile_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let profileBuilder: @Sendable (__safeDI_Values) -> SafeDIScope_UserService.SendableProfile_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(profileBuilder: @escaping @Sendable (profileBuilder_Values) -> SafeDIScope_UserService.SendableProfile_Scope.__safeDI_Builder<__safeDI_Built>) {
+		            public init(profileBuilder: @escaping @Sendable (__safeDI_Values) -> SafeDIScope_UserService.SendableProfile_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.profileBuilder = profileBuilder
 		            }
 
@@ -1452,8 +1452,8 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_userServiceSendableBuilder: SafeDISendableScope_UserService.__safeDI_Builder<any UserService>) {
 		        @Sendable nonisolated func __safeDI_profileBuilder() -> SendableProfile {
-		            let __safeDI_userServiceSendableBuilder_profileBuilder = __safeDI_userServiceSendableBuilder.profileBuilder(SafeDISendableScope_UserService.profileBuilder_Values())
-		            let userService: any UserService = __safeDI_userServiceSendableBuilder_profileBuilder.userService(SafeDIScope_UserService.SendableProfile_Scope.userService_Values())
+		            let __safeDI_userServiceSendableBuilder_profileBuilder = __safeDI_userServiceSendableBuilder.profileBuilder(SafeDISendableScope_UserService.__safeDI_Values())
+		            let userService: any UserService = __safeDI_userServiceSendableBuilder_profileBuilder.userService(SafeDIScope_UserService.SendableProfile_Scope.__safeDI_Values())
 		            return SendableProfile(userService: userService)
 		        }
 		        let profileBuilder = SendableInstantiator<SendableProfile>(__safeDI_profileBuilder)
@@ -1462,7 +1462,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_876B32F9C29D8A44 {}
+		    public enum __safeDI_Service_5BCACA82C6076416 {}
 		}
 
 		#if DEBUG
@@ -1523,13 +1523,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 		extension Service {
 		    nonisolated public enum SafeDIScope_DefaultUserService_UserService {
-		        nonisolated public struct userServiceBuilder_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let userServiceBuilder: (userServiceBuilder_Values) -> ErasedInstantiator<(), __safeDI_Built>.Builder
+		            public let userServiceBuilder: (__safeDI_Values) -> ErasedInstantiator<(), __safeDI_Built>.Builder
 
-		            public init(userServiceBuilder: @escaping (userServiceBuilder_Values) -> ErasedInstantiator<(), __safeDI_Built>.Builder) {
+		            public init(userServiceBuilder: @escaping (__safeDI_Values) -> ErasedInstantiator<(), __safeDI_Built>.Builder) {
 		                self.userServiceBuilder = userServiceBuilder
 		            }
 
@@ -1547,13 +1547,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_defaultUserService_UserServiceBuilder: SafeDIScope_DefaultUserService_UserService.__safeDI_Builder<any UserService>) {
-		        let userServiceBuilder = ErasedInstantiator<(), any UserService>(__safeDI_defaultUserService_UserServiceBuilder.userServiceBuilder(SafeDIScope_DefaultUserService_UserService.userServiceBuilder_Values()))
+		        let userServiceBuilder = ErasedInstantiator<(), any UserService>(__safeDI_defaultUserService_UserServiceBuilder.userServiceBuilder(SafeDIScope_DefaultUserService_UserService.__safeDI_Values()))
 		        self.init(userServiceBuilder: userServiceBuilder)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_F31E2D27E1AA09DF {}
+		    public enum __safeDI_Service_1CBD022685324A8A {}
 		}
 
 		#if DEBUG
@@ -1618,13 +1618,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Settings_Scope {
-		            nonisolated public struct service_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let service: (service_Values) -> __safeDI_Built
+		                public let service: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                public init(service: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.service = service
 		                }
 
@@ -1661,7 +1661,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        let reader = Reader(alarm: alarm.instance, zone: zone.instance)
 		        let __safeDI_userServiceBuilder_settings = __safeDI_userServiceBuilder.settings(SafeDIScope_UserService.settings_Values(alarm: alarm, zone: zone, reader: reader))
 		        func __safeDI_settings() -> Settings {
-		            let service: any UserService = __safeDI_userServiceBuilder_settings.service(SafeDIScope_UserService.Settings_Scope.service_Values())
+		            let service: any UserService = __safeDI_userServiceBuilder_settings.service(SafeDIScope_UserService.Settings_Scope.__safeDI_Values())
 		            return Settings(service: service)
 		        }
 		        let settings: Settings = __safeDI_settings()
@@ -1670,7 +1670,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_2BCB59648D74E2A6 {}
+		    public enum __safeDI_Service_89C7D40F8915D31B {}
 		}
 
 		#if DEBUG
@@ -1737,13 +1737,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 		extension Service {
 		    nonisolated public enum SafeDIScope_DefaultUserService_UserService {
-		        nonisolated public struct userServiceBuilder_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let userServiceBuilder: (userServiceBuilder_Values) -> ErasedInstantiator<String, __safeDI_Built>.Builder
+		            public let userServiceBuilder: (__safeDI_Values) -> ErasedInstantiator<String, __safeDI_Built>.Builder
 
-		            public init(userServiceBuilder: @escaping (userServiceBuilder_Values) -> ErasedInstantiator<String, __safeDI_Built>.Builder) {
+		            public init(userServiceBuilder: @escaping (__safeDI_Values) -> ErasedInstantiator<String, __safeDI_Built>.Builder) {
 		                self.userServiceBuilder = userServiceBuilder
 		            }
 
@@ -1761,13 +1761,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_defaultUserService_UserServiceBuilder: SafeDIScope_DefaultUserService_UserService.__safeDI_Builder<any UserService>) {
-		        let userServiceBuilder = ErasedInstantiator<String, any UserService>(__safeDI_defaultUserService_UserServiceBuilder.userServiceBuilder(SafeDIScope_DefaultUserService_UserService.userServiceBuilder_Values()))
+		        let userServiceBuilder = ErasedInstantiator<String, any UserService>(__safeDI_defaultUserService_UserServiceBuilder.userServiceBuilder(SafeDIScope_DefaultUserService_UserService.__safeDI_Values()))
 		        self.init(userServiceBuilder: userServiceBuilder)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_55A9646ABAD6EEE4 {}
+		    public enum __safeDI_Service_6D89CF9492A722C9 {}
 		}
 
 		#if DEBUG
@@ -1829,13 +1829,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 		extension Panel {
 		    nonisolated public enum SafeDIScope_UserService {
-		        nonisolated public struct userService_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let userService: (userService_Values) -> __safeDI_Built
+		            public let userService: (__safeDI_Values) -> __safeDI_Built
 
-		            public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+		            public init(userService: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                self.userService = userService
 		            }
 
@@ -1848,25 +1848,25 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
-		        let userService: any UserService = __safeDI_userServiceBuilder.userService(SafeDIScope_UserService.userService_Values())
+		        let userService: any UserService = __safeDI_userServiceBuilder.userService(SafeDIScope_UserService.__safeDI_Values())
 		        self.init(userService: userService)
 		    }
 		}
 
 		extension Panel {
-		    public enum __safeDI_Panel_A4A565E3243258A7 {}
+		    public enum __safeDI_Panel_3F3F782018586817 {}
 		}
 
 		#if DEBUG
 		extension Panel {
 		    nonisolated public enum SafeDIMockScope_UserService {
-		        nonisolated public struct userService_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let userService: (userService_Values) -> __safeDI_Built
+		            public let userService: (__safeDI_Values) -> __safeDI_Built
 
-		            public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+		            public init(userService: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                self.userService = userService
 		            }
 
@@ -1886,13 +1886,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    public static func __safeDI_mock(
 		        userServiceBuilder __safeDI_userServiceBuilder: Panel.SafeDIMockScope_UserService.__safeDI_Builder<any UserService>
 		    ) -> Panel {
-		        let userService: any UserService = __safeDI_userServiceBuilder.userService(SafeDIMockScope_UserService.userService_Values())
+		        let userService: any UserService = __safeDI_userServiceBuilder.userService(SafeDIMockScope_UserService.__safeDI_Values())
 		        return Panel(userService: userService)
 		    }
 		}
 
 		extension Panel {
-		    public enum __safeDI_Panel_mock_F6067D88F054320F {}
+		    public enum __safeDI_Panel_mock_154EFC806EDC50F9 {}
 		}
 		#endif
 		"""])
@@ -1906,13 +1906,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 		extension Service {
 		    nonisolated public enum SafeDIScope_UserService {
-		        nonisolated public struct panel_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let panel: (panel_Values) -> Panel.SafeDIScope_UserService.__safeDI_Builder<__safeDI_Built>
+		            public let panel: (__safeDI_Values) -> Panel.SafeDIScope_UserService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(panel: @escaping (panel_Values) -> Panel.SafeDIScope_UserService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(panel: @escaping (__safeDI_Values) -> Panel.SafeDIScope_UserService.__safeDI_Builder<__safeDI_Built>) {
 		                self.panel = panel
 		            }
 
@@ -1926,8 +1926,8 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
 		        func __safeDI_panel() -> Panel {
-		            _ = Panel.__safeDI_Panel_A4A565E3243258A7.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Panel(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder.panel(SafeDIScope_UserService.panel_Values()))
+		            _ = Panel.__safeDI_Panel_3F3F782018586817.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Panel(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder.panel(SafeDIScope_UserService.__safeDI_Values()))
 		        }
 		        let panel: Panel = __safeDI_panel()
 		        self.init(panel: panel)
@@ -1935,7 +1935,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_6C51FB7539DC4297 {}
+		    public enum __safeDI_Service_225353A8D34389A7 {}
 		}
 
 		#if DEBUG
@@ -1970,7 +1970,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
 		        let __safeDI_userServiceBuilder = userServiceBuilder
-		        _ = Panel.__safeDI_Panel_mock_F6067D88F054320F.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        _ = Panel.__safeDI_Panel_mock_154EFC806EDC50F9.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_panel() -> Panel {
 		            let userServiceBuilder: () -> any UserService = __safeDI_userServiceBuilder
 		            return if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(userServiceBuilder) } else { Panel.__safeDI_mock(userServiceBuilder: .init(__safeDI_noScope: userServiceBuilder)) }
@@ -1996,16 +1996,16 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 		extension Service {
 		    nonisolated public enum SafeDIScope_UserService {
-		        nonisolated public struct profile_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        nonisolated public enum Profile_Scope {
-		            nonisolated public struct userService_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let userService: (userService_Values) -> __safeDI_Built
+		                public let userService: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+		                public init(userService: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.userService = userService
 		                }
 
@@ -2017,9 +2017,9 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let profile: (profile_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let profile: (__safeDI_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(profile: @escaping (profile_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>) {
+		            public init(profile: @escaping (__safeDI_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.profile = profile
 		            }
 
@@ -2037,9 +2037,9 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// From code you write, call the initializer above instead.
 		    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
-		        let __safeDI_userServiceBuilder_profile = __safeDI_userServiceBuilder.profile(SafeDIScope_UserService.profile_Values())
+		        let __safeDI_userServiceBuilder_profile = __safeDI_userServiceBuilder.profile(SafeDIScope_UserService.__safeDI_Values())
 		        func __safeDI_profile() -> Profile {
-		            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService(SafeDIScope_UserService.Profile_Scope.userService_Values())
+		            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService(SafeDIScope_UserService.Profile_Scope.__safeDI_Values())
 		            return Profile(userService: userService)
 		        }
 		        let profile = LazilyInstantiated<Profile>(__safeDI_profile)
@@ -2048,7 +2048,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_1D557571CF0CB191 {}
+		    public enum __safeDI_Service_0C03FE6A6DC095F0 {}
 		}
 
 		#if DEBUG
@@ -2111,20 +2111,20 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 
 		extension Service {
 		    nonisolated public enum SafeDIScope_UserService {
+		        nonisolated public struct __safeDI_Values: Sendable {}
+
 		        nonisolated public struct profile_Values {
 		            public let panel: Panel
 		        }
 
-		        nonisolated public struct panel_Values: Sendable {}
-
 		        nonisolated public enum Profile_Scope {
-		            nonisolated public struct userService_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let userService: (userService_Values) -> __safeDI_Built
+		                public let userService: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+		                public init(userService: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.userService = userService
 		                }
 
@@ -2135,11 +2135,11 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
 		            public let profile: (profile_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>
-		            public let panel: (panel_Values) -> Panel.SafeDIScope_UserService.__safeDI_Builder<__safeDI_Built>
+		            public let panel: (__safeDI_Values) -> Panel.SafeDIScope_UserService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(profile: @escaping (profile_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>, panel: @escaping (panel_Values) -> Panel.SafeDIScope_UserService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(profile: @escaping (profile_Values) -> SafeDIScope_UserService.Profile_Scope.__safeDI_Builder<__safeDI_Built>, panel: @escaping (__safeDI_Values) -> Panel.SafeDIScope_UserService.__safeDI_Builder<__safeDI_Built>) {
 		                self.profile = profile
 		                self.panel = panel
 		            }
@@ -2155,13 +2155,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
 		        func __safeDI_panel() -> Panel {
-		            _ = Panel.__safeDI_Panel_A4A565E3243258A7.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Panel(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder.panel(SafeDIScope_UserService.panel_Values()))
+		            _ = Panel.__safeDI_Panel_3F3F782018586817.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Panel(__safeDI_userServiceBuilder: __safeDI_userServiceBuilder.panel(SafeDIScope_UserService.__safeDI_Values()))
 		        }
 		        let panel: Panel = __safeDI_panel()
 		        let __safeDI_userServiceBuilder_profile = __safeDI_userServiceBuilder.profile(SafeDIScope_UserService.profile_Values(panel: panel))
 		        func __safeDI_profile() -> Profile {
-		            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService(SafeDIScope_UserService.Profile_Scope.userService_Values())
+		            let userService: any UserService = __safeDI_userServiceBuilder_profile.userService(SafeDIScope_UserService.Profile_Scope.__safeDI_Values())
 		            return Profile(userService: userService)
 		        }
 		        let profile: Profile = __safeDI_profile()
@@ -2170,7 +2170,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_DB6F71793A8EB426 {}
+		    public enum __safeDI_Service_B91E6A65D0A3C9AC {}
 		}
 
 		#if DEBUG
@@ -2216,7 +2216,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		            return if let safeDIBuilder = safeDIOverrides.profile { safeDIBuilder(userService) } else { Profile(userService: userService) }
 		        }
 		        let profile: Profile = __safeDI_profile()
-		        _ = Panel.__safeDI_Panel_mock_F6067D88F054320F.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        _ = Panel.__safeDI_Panel_mock_154EFC806EDC50F9.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_panel() -> Panel {
 		            let userServiceBuilder: () -> any UserService = __safeDI_userServiceBuilder
 		            return if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder(userServiceBuilder) } else { Panel.__safeDI_mock(userServiceBuilder: .init(__safeDI_noScope: userServiceBuilder)) }
@@ -2459,13 +2459,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		extension Screen {
 		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public enum Gadget_Scope {
-		            nonisolated public struct api_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		                public let api: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.api = api
 		                }
 
@@ -2477,16 +2477,14 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    }
 
 		    nonisolated public enum SafeDISendableScope_Api {
-		        nonisolated public struct dBuilder_Values: Sendable {}
-
-		        nonisolated public struct gadgetBuilder_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-		            public let dBuilder: @Sendable (dBuilder_Values) -> D.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
-		            public let gadgetBuilder: @Sendable (gadgetBuilder_Values) -> SafeDIScope_Api.Gadget_Scope.__safeDI_Builder<__safeDI_Built>
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let dBuilder: @Sendable (__safeDI_Values) -> D.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
+		            public let gadgetBuilder: @Sendable (__safeDI_Values) -> SafeDIScope_Api.Gadget_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(dBuilder: @escaping @Sendable (dBuilder_Values) -> D.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>, gadgetBuilder: @escaping @Sendable (gadgetBuilder_Values) -> SafeDIScope_Api.Gadget_Scope.__safeDI_Builder<__safeDI_Built>) {
+		            public init(dBuilder: @escaping @Sendable (__safeDI_Values) -> D.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>, gadgetBuilder: @escaping @Sendable (__safeDI_Values) -> SafeDIScope_Api.Gadget_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.dBuilder = dBuilder
 		                self.gadgetBuilder = gadgetBuilder
 		            }
@@ -2502,13 +2500,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
 		        @Sendable nonisolated func __safeDI_dBuilder() -> D {
-		            _ = D.__safeDI_D_46F8289AEC73F305.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return D(__safeDI_apiBuilder: __safeDI_apiSendableBuilder.dBuilder(SafeDISendableScope_Api.dBuilder_Values()))
+		            _ = D.__safeDI_D_57FD7221FD34F3AF.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return D(__safeDI_apiBuilder: __safeDI_apiSendableBuilder.dBuilder(SafeDISendableScope_Api.__safeDI_Values()))
 		        }
 		        let dBuilder = SendableInstantiator<D>(__safeDI_dBuilder)
 		        @Sendable nonisolated func __safeDI_gadgetBuilder() -> Gadget {
-		            let __safeDI_apiSendableBuilder_gadgetBuilder = __safeDI_apiSendableBuilder.gadgetBuilder(SafeDISendableScope_Api.gadgetBuilder_Values())
-		            let api: any Api = __safeDI_apiSendableBuilder_gadgetBuilder.api(SafeDIScope_Api.Gadget_Scope.api_Values())
+		            let __safeDI_apiSendableBuilder_gadgetBuilder = __safeDI_apiSendableBuilder.gadgetBuilder(SafeDISendableScope_Api.__safeDI_Values())
+		            let api: any Api = __safeDI_apiSendableBuilder_gadgetBuilder.api(SafeDIScope_Api.Gadget_Scope.__safeDI_Values())
 		            return Gadget(api: api)
 		        }
 		        let gadgetBuilder = SendableInstantiator<Gadget>(__safeDI_gadgetBuilder)
@@ -2517,7 +2515,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_2A58D81765F32205 {}
+		    public enum __safeDI_Screen_7EC26EC543DE8255 {}
 		}
 
 		#if DEBUG
@@ -2557,7 +2555,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        apiSendableBuilder: @escaping @Sendable () -> any Api,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        _ = D.__safeDI_D_mock_1410F11B00C13F09.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        _ = D.__safeDI_D_mock_783028AA7F6461D5.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let __safeDI_dBuilder__safeDIBuilder = safeDIOverrides.dBuilder
 		        @Sendable func __safeDI_dBuilder() -> D {
 		            let apiBuilder: () -> any Api = apiSendableBuilder

@@ -1503,13 +1503,13 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		#expect(try #require(output.modules["Feature"]).generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
 		    nonisolated public enum SafeDISendableScope_Service {
-		        nonisolated public struct service_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-		            public let service: @Sendable (service_Values) -> __safeDI_Built
+		            public let service: @Sendable (__safeDI_Values) -> __safeDI_Built
 
-		            public init(service: @escaping @Sendable (service_Values) -> __safeDI_Built) {
+		            public init(service: @escaping @Sendable (__safeDI_Values) -> __safeDI_Built) {
 		                self.service = service
 		            }
 
@@ -1541,7 +1541,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		        let serviceBuilder = LazilyInstantiated<Thing?>(__safeDI_serviceBuilder)
 		        let badge = Badge(serviceBuilder: serviceBuilder.instance)
 		        @Sendable nonisolated func __safeDI_service() -> any Service {
-		            __safeDI_serviceSendableBuilder.service(SafeDISendableScope_Service.service_Values())
+		            __safeDI_serviceSendableBuilder.service(SafeDISendableScope_Service.__safeDI_Values())
 		        }
 		        let service = SendableLazilyInstantiated<any Service>(__safeDI_service)
 		        self.init(service: service, badge: badge)

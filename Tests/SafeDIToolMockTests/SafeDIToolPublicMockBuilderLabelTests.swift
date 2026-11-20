@@ -83,13 +83,13 @@ struct SafeDIToolPublicMockBuilderLabelTests: ~Copyable {
 		#if DEBUG
 		extension F {
 		    nonisolated public enum SafeDIMockScope_Impl_Api {
-		        nonisolated public struct a_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let a: (a_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder
+		            public let a: (__safeDI_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder
 
-		            public init(a: @escaping (a_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder) {
+		            public init(a: @escaping (__safeDI_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder) {
 		                self.a = a
 		            }
 
@@ -109,13 +109,13 @@ struct SafeDIToolPublicMockBuilderLabelTests: ~Copyable {
 		    public static func __safeDI_mock(
 		        impl_ApiBuilder __safeDI_impl_ApiBuilder: F.SafeDIMockScope_Impl_Api.__safeDI_Builder<any Api>
 		    ) -> F {
-		        let a = ErasedInstantiator<Int, any Api>(__safeDI_impl_ApiBuilder.a(SafeDIMockScope_Impl_Api.a_Values()))
+		        let a = ErasedInstantiator<Int, any Api>(__safeDI_impl_ApiBuilder.a(SafeDIMockScope_Impl_Api.__safeDI_Values()))
 		        return F(a: a)
 		    }
 		}
 
 		extension F {
-		    public enum __safeDI_F_mock_C767B7BC2835A9DA {}
+		    public enum __safeDI_F_mock_024889D7859418CF {}
 		}
 		#endif
 		"""])

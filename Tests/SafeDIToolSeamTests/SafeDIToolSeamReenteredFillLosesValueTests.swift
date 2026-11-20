@@ -355,12 +355,12 @@ struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_checkout() -> Checkout {
-			            _ = Checkout.__safeDI_Checkout_8FBC389E416C6D10.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            _ = Checkout.__safeDI_Checkout_BB1C7127A3270D4C.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            func __safeDI_paymentsBuilder_Checkout_CheckoutScreen_Scope_payments(_ scope: Checkout.SafeDIScope_Payments.CheckoutScreen_Scope.payments_Values) -> any Payments {
 			                let cart = scope.cart
 			                func __safeDI_payments() -> LivePayments {
 			                    func __safeDI_retryBuilder() -> Checkout {
-			                        _ = Checkout.__safeDI_Checkout_8FBC389E416C6D10.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                        _ = Checkout.__safeDI_Checkout_BB1C7127A3270D4C.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			                        return Checkout(__safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout())
 			                    }
 			                    let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
@@ -410,11 +410,11 @@ struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_checkout() -> Checkout {
-			            _ = Checkout.__safeDI_Checkout_C61679B5CE822FFA.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_paymentsBuilder_Checkout_CartItemImpl_Scope_payments(_ scope: Checkout.SafeDIScope_Payments.CartItemImpl_Scope.payments_Values, cart: Cart) -> any Payments {
+			            _ = Checkout.__safeDI_Checkout_A8383AFD2209BA99.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_paymentsBuilder_Checkout_CartItemImpl_Scope_payments(_ scope: Checkout.SafeDIScope_Payments.CartItemImpl_Scope.__safeDI_Values, cart: Cart) -> any Payments {
 			                func __safeDI_payments() -> LivePayments {
 			                    func __safeDI_retryBuilder() -> Checkout {
-			                        _ = Checkout.__safeDI_Checkout_C61679B5CE822FFA.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			                        _ = Checkout.__safeDI_Checkout_A8383AFD2209BA99.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			                        return Checkout(__safeDI_paymentsBuilder: __safeDI_paymentsBuilder_Checkout())
 			                    }
 			                    let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
@@ -655,7 +655,7 @@ struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
 			    ) -> Holder {
 			        let cart: Cart? = safeDIOverrides.cart
 			        func __safeDI_checkout() -> Checkout {
-			            func __safeDI_paymentsBuilder_Checkout_payments(_ scope: Checkout.SafeDIMockScope_Payments.payments_Values, cart: Cart?) -> any Payments {
+			            func __safeDI_paymentsBuilder_Checkout_payments(_ scope: Checkout.SafeDIMockScope_Payments.__safeDI_Values, cart: Cart?) -> any Payments {
 			                func __safeDI_payments() -> LivePayments {
 			                    func __safeDI_retryBuilder() -> Checkout {
 			                        Checkout.__safeDI_mock(paymentsBuilder: __safeDI_paymentsBuilder_Checkout(cart: cart))
@@ -684,7 +684,7 @@ struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
 			            func __safeDI_paymentsBuilder_Checkout_CartScreen_Scope() -> Checkout.SafeDIMockScope_Payments.CartScreen_Scope.__safeDI_Builder<any Payments> {
 			                .init(payments: { scope in __safeDI_paymentsBuilder_Checkout_CartScreen_Scope_payments(scope) })
 			            }
-			            _ = Checkout.__safeDI_Checkout_mock_359E532F0A5DC74B.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            _ = Checkout.__safeDI_Checkout_mock_248460F414267FF4.self // If this line does not compile, compile the code SafeDI generates for module Shared into Shared: under Bazel, add Shared’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Checkout.__safeDI_mock(paymentsBuilder: __safeDI_paymentsBuilder_Checkout(cart: cart), safeDIOverrides: safeDIOverrides.checkout)
 			        }
 			        let checkout: Checkout = __safeDI_checkout()

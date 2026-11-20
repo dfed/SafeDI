@@ -129,13 +129,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Nest {
 		    nonisolated public enum SafeDIScope_NestService {
-		        nonisolated public struct nestService_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let nestService: (nestService_Values) -> __safeDI_Built
+		            public let nestService: (__safeDI_Values) -> __safeDI_Built
 
-		            public init(nestService: @escaping (nestService_Values) -> __safeDI_Built) {
+		            public init(nestService: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                self.nestService = nestService
 		            }
 
@@ -148,13 +148,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_nestServiceBuilder: SafeDIScope_NestService.__safeDI_Builder<any NestService>) {
-		        let nestService: any NestService = __safeDI_nestServiceBuilder.nestService(SafeDIScope_NestService.nestService_Values())
+		        let nestService: any NestService = __safeDI_nestServiceBuilder.nestService(SafeDIScope_NestService.__safeDI_Values())
 		        self.init(nestService: nestService)
 		    }
 		}
 
 		extension Nest {
-		    public enum __safeDI_Nest_89D63F9124E92B75 {}
+		    public enum __safeDI_Nest_656AF7BB9514ADB0 {}
 		}
 		"""])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
@@ -167,13 +167,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -190,7 +190,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = LazilyInstantiated<ChainToken?>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_C4104938716F228A.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam)
@@ -388,13 +388,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Nest {
 		    nonisolated public enum SafeDIScope_NestService {
-		        nonisolated public struct nestService_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let nestService: (nestService_Values) -> __safeDI_Built
+		            public let nestService: (__safeDI_Values) -> __safeDI_Built
 
-		            public init(nestService: @escaping (nestService_Values) -> __safeDI_Built) {
+		            public init(nestService: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                self.nestService = nestService
 		            }
 
@@ -407,13 +407,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_nestServiceBuilder: SafeDIScope_NestService.__safeDI_Builder<any NestService>) {
-		        let nestService: any NestService = __safeDI_nestServiceBuilder.nestService(SafeDIScope_NestService.nestService_Values())
+		        let nestService: any NestService = __safeDI_nestServiceBuilder.nestService(SafeDIScope_NestService.__safeDI_Values())
 		        self.init(nestService: nestService)
 		    }
 		}
 
 		extension Nest {
-		    public enum __safeDI_Nest_89D63F9124E92B75 {}
+		    public enum __safeDI_Nest_656AF7BB9514ADB0 {}
 		}
 		"""])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
@@ -426,13 +426,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -449,7 +449,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_55DA8662DD70A848.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam)
@@ -784,8 +784,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		extension OtherRoot {
 		    public convenience init() {
 		        func __safeDI_outer() -> Outer {
-		            _ = Outer.__safeDI_Outer_2A6802B99AE13E38.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_holeServiceBuilder_Seam_NestImpl_Scope_holeService(_ scope: Seam.SafeDIScope_HoleService.NestImpl_Scope.holeService_Values, chainToken: ChainToken?) -> any HoleService {
+		            _ = Outer.__safeDI_Outer_21D10E65233A33D4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_holeServiceBuilder_Seam_NestImpl_Scope_holeService(_ scope: Seam.SafeDIScope_HoleService.NestImpl_Scope.__safeDI_Values, chainToken: ChainToken?) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
 		                    func __safeDI_relayBuilder() -> Relay {
 		                        _ = Relay.__safeDI_Relay_6E41D8FCDF4140B3.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
@@ -883,13 +883,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_ServiceImpl_Service {
-		        nonisolated public struct inner_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let inner: (inner_Values) -> Inner.SafeDIScope_ServiceImpl_Service.__safeDI_Builder<__safeDI_Built>
+		            public let inner: (__safeDI_Values) -> Inner.SafeDIScope_ServiceImpl_Service.__safeDI_Builder<__safeDI_Built>
 
-		            public init(inner: @escaping (inner_Values) -> Inner.SafeDIScope_ServiceImpl_Service.__safeDI_Builder<__safeDI_Built>) {
+		            public init(inner: @escaping (__safeDI_Values) -> Inner.SafeDIScope_ServiceImpl_Service.__safeDI_Builder<__safeDI_Built>) {
 		                self.inner = inner
 		            }
 
@@ -905,7 +905,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let token = LazilyInstantiated<Token?>(__safeDI_token)
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_33FC336DE4179A64.self
-		            return Inner(__safeDI_token: token.instance, __safeDI_serviceImpl_ServiceBuilder: __safeDI_serviceImpl_ServiceBuilder.inner(SafeDIScope_ServiceImpl_Service.inner_Values()))
+		            return Inner(__safeDI_token: token.instance, __safeDI_serviceImpl_ServiceBuilder: __safeDI_serviceImpl_ServiceBuilder.inner(SafeDIScope_ServiceImpl_Service.__safeDI_Values()))
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(inner: inner)
@@ -1018,13 +1018,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_ServiceImpl_Service {
-		        nonisolated public struct inner_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let inner: (inner_Values) -> Inner.SafeDIScope_ServiceImpl_Service.__safeDI_Builder<__safeDI_Built>
+		            public let inner: (__safeDI_Values) -> Inner.SafeDIScope_ServiceImpl_Service.__safeDI_Builder<__safeDI_Built>
 
-		            public init(inner: @escaping (inner_Values) -> Inner.SafeDIScope_ServiceImpl_Service.__safeDI_Builder<__safeDI_Built>) {
+		            public init(inner: @escaping (__safeDI_Values) -> Inner.SafeDIScope_ServiceImpl_Service.__safeDI_Builder<__safeDI_Built>) {
 		                self.inner = inner
 		            }
 
@@ -1040,7 +1040,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let token = LazilyInstantiated<Token>(__safeDI_token)
 		        func __safeDI_inner() -> Inner {
 		            _ = Inner.__safeDI_Inner_FF9A3431C4147E8C.self
-		            return Inner(__safeDI_token: token.instance, __safeDI_serviceImpl_ServiceBuilder: __safeDI_serviceImpl_ServiceBuilder.inner(SafeDIScope_ServiceImpl_Service.inner_Values()))
+		            return Inner(__safeDI_token: token.instance, __safeDI_serviceImpl_ServiceBuilder: __safeDI_serviceImpl_ServiceBuilder.inner(SafeDIScope_ServiceImpl_Service.__safeDI_Values()))
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        self.init(inner: inner)
@@ -1117,13 +1117,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -1140,7 +1140,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam)
@@ -1218,13 +1218,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -1235,13 +1235,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -1275,9 +1275,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_2A8D23C10A89B5A9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -1300,7 +1300,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_91488962FEFEFE32 {}
+		    public enum __safeDI_Mid_C9E7A7B945AD1E35 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -1324,7 +1324,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_91488962FEFEFE32.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Mid.__safeDI_Mid_C9E7A7B945AD1E35.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
 		                .init(outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() })
 		            }
@@ -1382,13 +1382,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -1405,7 +1405,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam)
@@ -1483,13 +1483,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -1500,13 +1500,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -1540,9 +1540,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_2A8D23C10A89B5A9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -1565,7 +1565,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_91488962FEFEFE32 {}
+		    public enum __safeDI_Mid_C9E7A7B945AD1E35 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -1589,7 +1589,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_91488962FEFEFE32.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Mid.__safeDI_Mid_C9E7A7B945AD1E35.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
 		                .init(outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() })
 		            }
@@ -1673,13 +1673,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -1696,7 +1696,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_29C9310C7F40EFF2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam)
@@ -1764,16 +1764,16 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Mid {
 		    nonisolated public enum SafeDISendableScope_GadgetImpl_GadgetService {
-		        nonisolated public struct outer_holeServiceBuilder_Sendable_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct gadgetBuilder_Values: Sendable {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-		                public let gadgetBuilder: @Sendable (gadgetBuilder_Values) -> SendableErasedInstantiator<(), __safeDI_Built>.Builder
+		                public let gadgetBuilder: @Sendable (__safeDI_Values) -> SendableErasedInstantiator<(), __safeDI_Built>.Builder
 
-		                public init(gadgetBuilder: @escaping @Sendable (gadgetBuilder_Values) -> SendableErasedInstantiator<(), __safeDI_Built>.Builder) {
+		                public init(gadgetBuilder: @escaping @Sendable (__safeDI_Values) -> SendableErasedInstantiator<(), __safeDI_Built>.Builder) {
 		                    self.gadgetBuilder = gadgetBuilder
 		                }
 
@@ -1785,9 +1785,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-		            public let outer_holeServiceBuilder_Sendable: @Sendable (outer_holeServiceBuilder_Sendable_Values) -> SafeDISendableScope_GadgetImpl_GadgetService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let outer_holeServiceBuilder_Sendable: @Sendable (__safeDI_Values) -> SafeDISendableScope_GadgetImpl_GadgetService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(outer_holeServiceBuilder_Sendable: @escaping @Sendable (outer_holeServiceBuilder_Sendable_Values) -> SafeDISendableScope_GadgetImpl_GadgetService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>) {
+		            public init(outer_holeServiceBuilder_Sendable: @escaping @Sendable (__safeDI_Values) -> SafeDISendableScope_GadgetImpl_GadgetService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.outer_holeServiceBuilder_Sendable = outer_holeServiceBuilder_Sendable
 		            }
 
@@ -1851,13 +1851,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -1868,13 +1868,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -1903,21 +1903,21 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_chainToken: @autoclosure @escaping @Sendable () -> ChainToken, __safeDI_gadgetImpl_GadgetServiceSendableBuilder: SafeDISendableScope_GadgetImpl_GadgetService.__safeDI_Builder<any GadgetService>, __safeDI_thingImpl_ThingServiceBuilder: SafeDIScope_ThingImpl_ThingService.__safeDI_Builder<any ThingService>, __safeDI_thingServiceBuilder: SafeDIScope_ThingService.__safeDI_Builder<any ThingService>) {
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
-		        let __safeDI_gadgetImpl_GadgetServiceSendableBuilder_outer_holeServiceBuilder_Sendable = __safeDI_gadgetImpl_GadgetServiceSendableBuilder.outer_holeServiceBuilder_Sendable(SafeDISendableScope_GadgetImpl_GadgetService.outer_holeServiceBuilder_Sendable_Values())
+		        let __safeDI_gadgetImpl_GadgetServiceSendableBuilder_outer_holeServiceBuilder_Sendable = __safeDI_gadgetImpl_GadgetServiceSendableBuilder.outer_holeServiceBuilder_Sendable(SafeDISendableScope_GadgetImpl_GadgetService.__safeDI_Values())
 		        let __safeDI_thingImpl_ThingServiceBuilder_outer_holeServiceBuilder = __safeDI_thingImpl_ThingServiceBuilder.outer_holeServiceBuilder(SafeDIScope_ThingImpl_ThingService.outer_holeServiceBuilder_Values(chainToken: chainToken))
 		        let __safeDI_thingServiceBuilder_outer_holeServiceBuilder = __safeDI_thingServiceBuilder.outer_holeServiceBuilder(SafeDIScope_ThingService.outer_holeServiceBuilder_Values(chainToken: chainToken))
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_D422BB9F89915A21.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder_thingImpl_ThingServiceBuilder: SafeDIScope_ThingImpl_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>, __safeDI_outer_holeServiceBuilder_thingServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder_thingServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder_thingServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
 		                    let thingBuilder = ErasedInstantiator<(), any ThingService>(__safeDI_outer_holeServiceBuilder_thingImpl_ThingServiceBuilder.thingBuilder(SafeDIScope_ThingImpl_ThingService.HoleImpl_Scope.thingBuilder_Values(workerBuilder: workerBuilder)))
-		                    let gadgetBuilder = SendableErasedInstantiator<(), any GadgetService>(__safeDI_gadgetImpl_GadgetServiceSendableBuilder_outer_holeServiceBuilder_Sendable.gadgetBuilder(SafeDISendableScope_GadgetImpl_GadgetService.HoleImpl_Scope.gadgetBuilder_Values()))
+		                    let gadgetBuilder = SendableErasedInstantiator<(), any GadgetService>(__safeDI_gadgetImpl_GadgetServiceSendableBuilder_outer_holeServiceBuilder_Sendable.gadgetBuilder(SafeDISendableScope_GadgetImpl_GadgetService.HoleImpl_Scope.__safeDI_Values()))
 		                    return HoleImpl(workerBuilder: workerBuilder, thingBuilder: thingBuilder, gadgetBuilder: gadgetBuilder)
 		                }
 		                let holeService: any HoleService = __safeDI_holeService()
@@ -1937,7 +1937,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_C5CD33F8A001D538 {}
+		    public enum __safeDI_Mid_CFB9CB1341F93E1F {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -1961,7 +1961,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_C5CD33F8A001D538.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Mid.__safeDI_Mid_CFB9CB1341F93E1F.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            @Sendable nonisolated func __safeDI_gadgetImpl_GadgetServiceSendableBuilder_Mid_HoleImpl_Scope_gadgetBuilder() -> SendableErasedInstantiator<(), any GadgetService>.Builder {
 		                @Sendable nonisolated func __safeDI_gadgetBuilder() -> GadgetImpl {
 		                    GadgetImpl()
@@ -2058,13 +2058,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -2081,7 +2081,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam)
@@ -2159,13 +2159,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -2176,13 +2176,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -2216,9 +2216,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_2A8D23C10A89B5A9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -2241,7 +2241,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_91488962FEFEFE32 {}
+		    public enum __safeDI_Mid_C9E7A7B945AD1E35 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -2265,8 +2265,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_91488962FEFEFE32.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: ChainToken) -> any ThingService {
+		            _ = Mid.__safeDI_Mid_C9E7A7B945AD1E35.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Values, chainToken: ChainToken) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
 		                    @Sendable func __safeDI_readerBuilder() -> TokenReader {
 		                        TokenReader(chainToken: chainToken)
@@ -2341,13 +2341,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -2364,7 +2364,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam)
@@ -2453,13 +2453,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -2470,18 +2470,18 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            nonisolated public struct thing_Values {
 		                public let workerBuilder: Instantiator<Worker>
 		            }
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		            nonisolated public final class __safeDI_Builder<__safeDI_Built> {
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 		                public let thing: (thing_Values) -> __safeDI_Built
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>, thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>, thing: @escaping (thing_Values) -> __safeDI_Built) {
 		                    self.workerBuilder = workerBuilder
 		                    self.thing = thing
 		                }
@@ -2494,7 +2494,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
 		            public let worker: (worker_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 		            public let outer_holeServiceBuilder: (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
 
@@ -2517,7 +2517,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        let __safeDI_thingServiceBuilder_worker = __safeDI_thingServiceBuilder.worker(SafeDIScope_ThingService.worker_Values(chainToken: chainToken))
 		        func __safeDI_worker() -> Worker {
-		            let thing: any ThingService = __safeDI_thingServiceBuilder_worker.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		            let thing: any ThingService = __safeDI_thingServiceBuilder_worker.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		            return Worker(thing: thing)
 		        }
 		        let worker: Worker = __safeDI_worker()
@@ -2526,9 +2526,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_2A8D23C10A89B5A9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -2552,7 +2552,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_F9763548447D8EA4 {}
+		    public enum __safeDI_Mid_FEC927C633CCC02F {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -2576,7 +2576,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_F9763548447D8EA4.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Mid.__safeDI_Mid_FEC927C633CCC02F.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
 		                .init(worker: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: LazilyInstantiated<ChainToken>({ chainToken.instance })) }, outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() })
 		            }
@@ -2637,13 +2637,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -2660,7 +2660,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam)
@@ -2749,13 +2749,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -2766,13 +2766,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -2783,7 +2783,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
 		            public let outer_holeServiceBuilder: (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
 		            public let midWorkerBuilder: (midWorkerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
@@ -2809,9 +2809,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_2A8D23C10A89B5A9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -2831,7 +2831,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let outer: Outer = __safeDI_outer()
 		        let __safeDI_thingServiceBuilder_midWorkerBuilder = __safeDI_thingServiceBuilder.midWorkerBuilder(SafeDIScope_ThingService.midWorkerBuilder_Values(chainToken: chainToken, outer: outer))
 		        func __safeDI_midWorkerBuilder() -> Worker {
-		            let thing: any ThingService = __safeDI_thingServiceBuilder_midWorkerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		            let thing: any ThingService = __safeDI_thingServiceBuilder_midWorkerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		            return Worker(thing: thing)
 		        }
 		        let midWorkerBuilder = Instantiator<Worker>(__safeDI_midWorkerBuilder)
@@ -2840,7 +2840,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_09660EDC25AFFBAF {}
+		    public enum __safeDI_Mid_FE17154EF8DB3070 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -2864,7 +2864,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_09660EDC25AFFBAF.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Mid.__safeDI_Mid_FE17154EF8DB3070.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
 		                .init(outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() }, midWorkerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: LazilyInstantiated<ChainToken>({ chainToken.instance })) })
 		            }
@@ -2918,16 +2918,14 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seamB_Values: Sendable {}
-
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seamB: (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
+		            public let seamB: (__safeDI_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seamB: @escaping (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>, seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seamB: @escaping (__safeDI_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>, seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seamB = seamB
 		                self.seam = seam
 		            }
@@ -2946,12 +2944,12 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seamB() -> SeamB {
 		            _ = SeamB.__safeDI_SeamB_DC2838BAE7387202.self
-		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.seamB_Values()))
+		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seamB: SeamB = __safeDI_seamB()
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam, seamB: seamB)
@@ -3073,13 +3071,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -3090,13 +3088,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -3130,9 +3128,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_964A004ABC6F5712.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_SeamB_SeamB_holeService(_ scope: SeamB.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -3143,9 +3141,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            }
 		            func __safeDI_holeServiceBuilder_Seam_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -3171,7 +3169,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_F23FC3F4F4EE1753 {}
+		    public enum __safeDI_Mid_4F0B05A7DE9D5C26 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -3195,7 +3193,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_F23FC3F4F4EE1753.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Mid.__safeDI_Mid_4F0B05A7DE9D5C26.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
 		                .init(outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() })
 		            }
@@ -3251,13 +3249,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -3274,7 +3272,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam)
@@ -3363,13 +3361,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -3380,13 +3378,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -3397,7 +3395,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
 		            public let outer_holeServiceBuilder: (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
 		            public let midWorkerBuilder: (midWorkerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
@@ -3423,9 +3421,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_2A8D23C10A89B5A9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -3445,7 +3443,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let outer: Outer = __safeDI_outer()
 		        let __safeDI_thingServiceBuilder_midWorkerBuilder = __safeDI_thingServiceBuilder.midWorkerBuilder(SafeDIScope_ThingService.midWorkerBuilder_Values(chainToken: chainToken, outer: outer))
 		        func __safeDI_midWorkerBuilder() -> Worker {
-		            let thing: any ThingService = __safeDI_thingServiceBuilder_midWorkerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		            let thing: any ThingService = __safeDI_thingServiceBuilder_midWorkerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		            return Worker(thing: thing)
 		        }
 		        let midWorkerBuilder = Instantiator<Worker>(__safeDI_midWorkerBuilder)
@@ -3454,7 +3452,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_09660EDC25AFFBAF {}
+		    public enum __safeDI_Mid_FE17154EF8DB3070 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -3475,7 +3473,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		    public convenience init() {
 		        let chainToken = ChainToken()
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_09660EDC25AFFBAF.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Mid.__safeDI_Mid_FE17154EF8DB3070.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
 		                .init(outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() }, midWorkerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: LazilyInstantiated<ChainToken>({ chainToken })) })
 		            }
@@ -3538,13 +3536,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -3561,7 +3559,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam)
@@ -3650,13 +3648,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -3667,13 +3665,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -3684,7 +3682,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
 		            public let outer_holeServiceBuilder: (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
 		            public let midWorkerBuilder: (midWorkerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
@@ -3710,9 +3708,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_2A8D23C10A89B5A9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -3732,7 +3730,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let outer: Outer = __safeDI_outer()
 		        let __safeDI_thingServiceBuilder_midWorkerBuilder = __safeDI_thingServiceBuilder.midWorkerBuilder(SafeDIScope_ThingService.midWorkerBuilder_Values(chainToken: chainToken, outer: outer))
 		        func __safeDI_midWorkerBuilder() -> Worker {
-		            let thing: any ThingService = __safeDI_thingServiceBuilder_midWorkerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		            let thing: any ThingService = __safeDI_thingServiceBuilder_midWorkerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		            return Worker(thing: thing)
 		        }
 		        let midWorkerBuilder = Instantiator<Worker>(__safeDI_midWorkerBuilder)
@@ -3741,7 +3739,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_09660EDC25AFFBAF {}
+		    public enum __safeDI_Mid_FE17154EF8DB3070 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -3765,7 +3763,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_09660EDC25AFFBAF.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Mid.__safeDI_Mid_FE17154EF8DB3070.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
 		                .init(outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() }, midWorkerBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: LazilyInstantiated<ChainToken?>({ chainToken.instance })) })
 		            }
@@ -3830,16 +3828,14 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seamB_Values: Sendable {}
-
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seamB: (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
+		            public let seamB: (__safeDI_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seamB: @escaping (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>, seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seamB: @escaping (__safeDI_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>, seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seamB = seamB
 		                self.seam = seam
 		            }
@@ -3858,12 +3854,12 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seamB() -> SeamB {
 		            _ = SeamB.__safeDI_SeamB_62D6F929FACD1732.self
-		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.seamB_Values()))
+		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seamB: SeamB = __safeDI_seamB()
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam, seamB: seamB)
@@ -3985,13 +3981,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -4002,13 +3998,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -4042,9 +4038,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_5071F6181F92B263.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_SeamB_SeamB_holeService(_ scope: SeamB.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -4055,9 +4051,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            }
 		            func __safeDI_holeServiceBuilder_Seam_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -4083,7 +4079,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_EEE0CEEF1D070954 {}
+		    public enum __safeDI_Mid_4FFC7B7ECE96D9DF {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -4107,7 +4103,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_EEE0CEEF1D070954.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Mid.__safeDI_Mid_4FFC7B7ECE96D9DF.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
 		                .init(outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() })
 		            }
@@ -4164,13 +4160,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -4187,7 +4183,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam)
@@ -4265,13 +4261,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -4282,13 +4278,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -4299,7 +4295,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
 		            public let outer_holeServiceBuilder: (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
 		            public let midWorkerBuilder: (midWorkerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
@@ -4325,9 +4321,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_2A8D23C10A89B5A9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -4347,7 +4343,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let outer: Outer = __safeDI_outer()
 		        let __safeDI_thingServiceBuilder_midWorkerBuilder = __safeDI_thingServiceBuilder.midWorkerBuilder(SafeDIScope_ThingService.midWorkerBuilder_Values(chainToken: chainToken, outer: outer))
 		        func __safeDI_midWorkerBuilder() -> Worker {
-		            let thing: any ThingService = __safeDI_thingServiceBuilder_midWorkerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		            let thing: any ThingService = __safeDI_thingServiceBuilder_midWorkerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		            return Worker(thing: thing)
 		        }
 		        let midWorkerBuilder = Instantiator<Worker>(__safeDI_midWorkerBuilder)
@@ -4356,7 +4352,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_1C76F3D67ED89056 {}
+		    public enum __safeDI_Mid_92078A18D5F32239 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -4376,7 +4372,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		extension TopRoot {
 		    public convenience init() {
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_1C76F3D67ED89056.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Mid.__safeDI_Mid_92078A18D5F32239.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
 		                .init(outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() }, midWorkerBuilder: { values in __safeDI_thingServiceBuilder_Mid_Worker_Scope(chainToken: LazilyInstantiated<ChainToken>({ [handed = values.chainToken] in handed })) })
 		            }
@@ -4430,13 +4426,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -4456,7 +4452,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(chainToken: chainToken, seam: seam)
@@ -4524,16 +4520,16 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Mid {
 		    nonisolated public enum SafeDIScope_ThingService {
-		        nonisolated public struct outer_holeServiceBuilder_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -4544,13 +4540,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -4562,9 +4558,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let outer_holeServiceBuilder: (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
+		            public let outer_holeServiceBuilder: (__safeDI_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
 
-		            public init(outer_holeServiceBuilder: @escaping (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>) {
+		            public init(outer_holeServiceBuilder: @escaping (__safeDI_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
@@ -4578,14 +4574,14 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_thingServiceBuilder: SafeDIScope_ThingService.__safeDI_Builder<any ThingService>) {
-		        let __safeDI_thingServiceBuilder_outer_holeServiceBuilder = __safeDI_thingServiceBuilder.outer_holeServiceBuilder(SafeDIScope_ThingService.outer_holeServiceBuilder_Values())
+		        let __safeDI_thingServiceBuilder_outer_holeServiceBuilder = __safeDI_thingServiceBuilder.outer_holeServiceBuilder(SafeDIScope_ThingService.__safeDI_Values())
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_6E0AB25F1FE9A45C.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -4608,7 +4604,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_1A358C58811C7FA2 {}
+		    public enum __safeDI_Mid_0095BD9FFE05D9DD {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -4628,7 +4624,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		extension TopRoot {
 		    public convenience init() {
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_1A358C58811C7FA2.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Mid.__safeDI_Mid_0095BD9FFE05D9DD.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
 		                .init(outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() })
 		            }
@@ -4681,13 +4677,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -4704,7 +4700,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam)
@@ -4777,13 +4773,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -4794,13 +4790,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -4837,9 +4833,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_2A8D23C10A89B5A9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -4862,7 +4858,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_C88F6699B02C426C {}
+		    public enum __safeDI_Mid_EE42D97524F80263 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -4882,7 +4878,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		extension TopRoot {
 		    public convenience init() {
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_C88F6699B02C426C.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Mid.__safeDI_Mid_EE42D97524F80263.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid() -> Mid.SafeDIScope_ThingService.__safeDI_Builder<any ThingService> {
 		                .init(outer_holeServiceBuilder: { _ in __safeDI_thingServiceBuilder_Mid_Outer() })
 		            }
@@ -5071,13 +5067,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum ServiceImpl_Scope {
-		            nonisolated public struct gadget_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let gadget: (gadget_Values) -> __safeDI_Built
+		                public let gadget: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
+		                public init(gadget: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.gadget = gadget
 		                }
 
@@ -5113,7 +5109,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Inner.__safeDI_Inner_DF6D02696D95A74B.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_serviceBuilder_Inner_service(_ scope: Inner.SafeDIScope_Service.service_Values, __safeDI_inner_serviceBuilder: SafeDIScope_Gadget.ServiceImpl_Scope.__safeDI_Builder<any Gadget>) -> any Service {
 		                func __safeDI_service() -> ServiceImpl {
-		                    let gadget: any Gadget = __safeDI_inner_serviceBuilder.gadget(SafeDIScope_Gadget.ServiceImpl_Scope.gadget_Values())
+		                    let gadget: any Gadget = __safeDI_inner_serviceBuilder.gadget(SafeDIScope_Gadget.ServiceImpl_Scope.__safeDI_Values())
 		                    return ServiceImpl(gadget: gadget)
 		                }
 		                let service: any Service = __safeDI_service()
@@ -5130,7 +5126,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Outer {
-		    public enum __safeDI_Outer_24BEF9DE777E8813 {}
+		    public enum __safeDI_Outer_C0F14BC4E5CCE803 {}
 		}
 		"""])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
@@ -5146,16 +5142,16 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Top {
 		    nonisolated public enum SafeDIScope_Gizmo {
-		        nonisolated public struct outer_gadgetBuilder_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        nonisolated public enum GadgetImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_Gizmo.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_Gizmo.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_Gizmo.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_Gizmo.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -5166,13 +5162,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct gizmo_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let gizmo: (gizmo_Values) -> __safeDI_Built
+		                public let gizmo: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(gizmo: @escaping (gizmo_Values) -> __safeDI_Built) {
+		                public init(gizmo: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.gizmo = gizmo
 		                }
 
@@ -5184,9 +5180,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let outer_gadgetBuilder: (outer_gadgetBuilder_Values) -> Outer.SafeDIScope_Gadget.__safeDI_Builder<SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<__safeDI_Built>>
+		            public let outer_gadgetBuilder: (__safeDI_Values) -> Outer.SafeDIScope_Gadget.__safeDI_Builder<SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<__safeDI_Built>>
 
-		            public init(outer_gadgetBuilder: @escaping (outer_gadgetBuilder_Values) -> Outer.SafeDIScope_Gadget.__safeDI_Builder<SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<__safeDI_Built>>) {
+		            public init(outer_gadgetBuilder: @escaping (__safeDI_Values) -> Outer.SafeDIScope_Gadget.__safeDI_Builder<SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.outer_gadgetBuilder = outer_gadgetBuilder
 		            }
 
@@ -5199,14 +5195,14 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_gizmoBuilder: SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo>) {
-		        let __safeDI_gizmoBuilder_outer_gadgetBuilder = __safeDI_gizmoBuilder.outer_gadgetBuilder(SafeDIScope_Gizmo.outer_gadgetBuilder_Values())
+		        let __safeDI_gizmoBuilder_outer_gadgetBuilder = __safeDI_gizmoBuilder.outer_gadgetBuilder(SafeDIScope_Gizmo.__safeDI_Values())
 		        func __safeDI_outer() -> Outer {
-		            _ = Outer.__safeDI_Outer_24BEF9DE777E8813.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_gadgetBuilder_Outer_ServiceImpl_Scope_gadget(_ scope: Outer.SafeDIScope_Gadget.ServiceImpl_Scope.gadget_Values, __safeDI_outer_gadgetBuilder: SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>) -> any Gadget {
+		            _ = Outer.__safeDI_Outer_C0F14BC4E5CCE803.self // If this line does not compile, compile the code SafeDI generates for module Session into Session: under Bazel, add Session’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_gadgetBuilder_Outer_ServiceImpl_Scope_gadget(_ scope: Outer.SafeDIScope_Gadget.ServiceImpl_Scope.__safeDI_Values, __safeDI_outer_gadgetBuilder: SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Builder<any Gizmo>) -> any Gadget {
 		                func __safeDI_gadget() -> GadgetImpl {
-		                    let __safeDI_gizmoBuilder_workerBuilder = __safeDI_outer_gadgetBuilder.workerBuilder(SafeDIScope_Gizmo.GadgetImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_gizmoBuilder_workerBuilder = __safeDI_outer_gadgetBuilder.workerBuilder(SafeDIScope_Gizmo.GadgetImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let gizmo: any Gizmo = __safeDI_gizmoBuilder_workerBuilder.gizmo(SafeDIScope_Gizmo.Worker_Scope.gizmo_Values())
+		                        let gizmo: any Gizmo = __safeDI_gizmoBuilder_workerBuilder.gizmo(SafeDIScope_Gizmo.Worker_Scope.__safeDI_Values())
 		                        return Worker(gizmo: gizmo)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -5232,7 +5228,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Top {
-		    public enum __safeDI_Top_0B2DF9918D8230A9 {}
+		    public enum __safeDI_Top_45E28712A50C176B {}
 		}
 		"""])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
@@ -5252,7 +5248,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_top() -> Top {
-		            _ = Top.__safeDI_Top_0B2DF9918D8230A9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Top.__safeDI_Top_45E28712A50C176B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_gizmoBuilder_Top() -> Top.SafeDIScope_Gizmo.__safeDI_Builder<any Gizmo> {
 		                .init(outer_gadgetBuilder: { _ in __safeDI_gizmoBuilder_Top_Outer() })
 		            }
@@ -5322,13 +5318,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seamB_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seamB: (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seamB: (__safeDI_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seamB: @escaping (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seamB: @escaping (__safeDI_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seamB = seamB
 		            }
 
@@ -5345,7 +5341,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seamB() -> SeamB {
 		            _ = SeamB.__safeDI_SeamB_DC2838BAE7387202.self
-		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.seamB_Values()))
+		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seamB: SeamB = __safeDI_seamB()
 		        self.init(seamB: seamB)
@@ -5478,13 +5474,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -5495,13 +5491,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -5512,7 +5508,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
 		            public let outer_holeServiceBuilder: (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
 		            public let midWorkerBuilder: (midWorkerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
@@ -5538,9 +5534,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_315CDB5B658F55C9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_SeamB_holeService(_ scope: SeamB.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -5560,7 +5556,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let outer: Outer = __safeDI_outer()
 		        let __safeDI_thingServiceBuilder_midWorkerBuilder = __safeDI_thingServiceBuilder.midWorkerBuilder(SafeDIScope_ThingService.midWorkerBuilder_Values(chainToken: chainToken, outer: outer))
 		        func __safeDI_midWorkerBuilder() -> Worker {
-		            let thing: any ThingService = __safeDI_thingServiceBuilder_midWorkerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		            let thing: any ThingService = __safeDI_thingServiceBuilder_midWorkerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		            return Worker(thing: thing)
 		        }
 		        let midWorkerBuilder = Instantiator<Worker>(__safeDI_midWorkerBuilder)
@@ -5569,7 +5565,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_787AB232D7981AEF {}
+		    public enum __safeDI_Mid_8DEDB719400A4D1E {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -5593,8 +5589,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_787AB232D7981AEF.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
+		            _ = Mid.__safeDI_Mid_8DEDB719400A4D1E.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
 		                    let reader = WrapperReader(chainToken: chainToken)
 		                    return ThingImpl(chainToken: chainToken.instance, reader: reader)
@@ -5650,13 +5646,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seamB_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seamB: (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seamB: (__safeDI_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seamB: @escaping (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seamB: @escaping (__safeDI_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seamB = seamB
 		            }
 
@@ -5673,7 +5669,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seamB() -> SeamB {
 		            _ = SeamB.__safeDI_SeamB_DC2838BAE7387202.self
-		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.seamB_Values()))
+		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seamB: SeamB = __safeDI_seamB()
 		        self.init(seamB: seamB)
@@ -5795,13 +5791,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -5812,13 +5808,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -5852,9 +5848,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_315CDB5B658F55C9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_SeamB_holeService(_ scope: SeamB.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -5877,7 +5873,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_83D97ED3FF522210 {}
+		    public enum __safeDI_Mid_FAA488108EA67CF5 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -5901,8 +5897,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_83D97ED3FF522210.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
+		            _ = Mid.__safeDI_Mid_FAA488108EA67CF5.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
 		                    let reader = WrapperReader(chainToken: chainToken)
 		                    return ThingImpl(chainToken: chainToken.instance, reader: reader)
@@ -5959,16 +5955,14 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seamB_Values: Sendable {}
-
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seamB: (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
+		            public let seamB: (__safeDI_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seamB: @escaping (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>, seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seamB: @escaping (__safeDI_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>, seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seamB = seamB
 		                self.seam = seam
 		            }
@@ -5987,12 +5981,12 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seamB() -> SeamB {
 		            _ = SeamB.__safeDI_SeamB_DC2838BAE7387202.self
-		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.seamB_Values()))
+		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seamB: SeamB = __safeDI_seamB()
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam, seamB: seamB)
@@ -6114,13 +6108,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -6131,13 +6125,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -6171,9 +6165,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_964A004ABC6F5712.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_SeamB_SeamB_holeService(_ scope: SeamB.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -6184,9 +6178,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            }
 		            func __safeDI_holeServiceBuilder_Seam_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -6212,7 +6206,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_F23FC3F4F4EE1753 {}
+		    public enum __safeDI_Mid_4F0B05A7DE9D5C26 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -6236,8 +6230,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_F23FC3F4F4EE1753.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values) -> any ThingService {
+		            _ = Mid.__safeDI_Mid_4F0B05A7DE9D5C26.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Values) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
 		                    let reader = WrapperReader(chainToken: chainToken)
 		                    return ThingImpl(reader: reader)
@@ -6343,13 +6337,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -6366,7 +6360,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam)
@@ -6444,13 +6438,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -6461,13 +6455,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -6501,9 +6495,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_2A8D23C10A89B5A9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -6526,7 +6520,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_91488962FEFEFE32 {}
+		    public enum __safeDI_Mid_C9E7A7B945AD1E35 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -6550,8 +6544,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_91488962FEFEFE32.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: LazilyInstantiated<ChainToken>) -> any ThingService {
+		            _ = Mid.__safeDI_Mid_C9E7A7B945AD1E35.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Values, chainToken: LazilyInstantiated<ChainToken>) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
 		                    let reader = WrapperReader(chainToken: chainToken.instance)
 		                    return ThingImpl(chainToken: chainToken.instance, reader: reader)
@@ -6608,13 +6602,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -6631,7 +6625,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam)
@@ -6709,13 +6703,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -6726,13 +6720,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -6766,9 +6760,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_2A8D23C10A89B5A9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -6791,7 +6785,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_91488962FEFEFE32 {}
+		    public enum __safeDI_Mid_C9E7A7B945AD1E35 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -6815,8 +6809,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_91488962FEFEFE32.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values) -> any ThingService {
+		            _ = Mid.__safeDI_Mid_C9E7A7B945AD1E35.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Values) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
 		                    let reader = WrapperReader(chainToken: chainToken)
 		                    return ThingImpl(chainToken: chainToken, reader: reader)
@@ -6873,13 +6867,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seamB_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seamB: (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seamB: (__safeDI_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seamB: @escaping (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seamB: @escaping (__safeDI_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seamB = seamB
 		            }
 
@@ -6896,7 +6890,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seamB() -> SeamB {
 		            _ = SeamB.__safeDI_SeamB_DC2838BAE7387202.self
-		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.seamB_Values()))
+		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seamB: SeamB = __safeDI_seamB()
 		        self.init(seamB: seamB)
@@ -7029,13 +7023,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -7046,13 +7040,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -7063,7 +7057,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
 		            public let outer_holeServiceBuilder: (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
 		            public let midWorkerBuilder: (midWorkerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
@@ -7089,9 +7083,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_315CDB5B658F55C9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_SeamB_holeService(_ scope: SeamB.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -7111,7 +7105,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let outer: Outer = __safeDI_outer()
 		        let __safeDI_thingServiceBuilder_midWorkerBuilder = __safeDI_thingServiceBuilder.midWorkerBuilder(SafeDIScope_ThingService.midWorkerBuilder_Values(chainToken: chainToken, outer: outer))
 		        func __safeDI_midWorkerBuilder() -> Worker {
-		            let thing: any ThingService = __safeDI_thingServiceBuilder_midWorkerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		            let thing: any ThingService = __safeDI_thingServiceBuilder_midWorkerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		            return Worker(thing: thing)
 		        }
 		        let midWorkerBuilder = Instantiator<Worker>(__safeDI_midWorkerBuilder)
@@ -7120,7 +7114,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_787AB232D7981AEF {}
+		    public enum __safeDI_Mid_8DEDB719400A4D1E {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -7144,8 +7138,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_787AB232D7981AEF.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
+		            _ = Mid.__safeDI_Mid_8DEDB719400A4D1E.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
 		                    @Sendable func __safeDI_readerHolder() -> WrapperReader {
 		                        WrapperReader(chainToken: chainToken)
@@ -7204,13 +7198,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seamB_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seamB: (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seamB: (__safeDI_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seamB: @escaping (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seamB: @escaping (__safeDI_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seamB = seamB
 		            }
 
@@ -7227,7 +7221,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seamB() -> SeamB {
 		            _ = SeamB.__safeDI_SeamB_DC2838BAE7387202.self
-		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.seamB_Values()))
+		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seamB: SeamB = __safeDI_seamB()
 		        self.init(seamB: seamB)
@@ -7360,13 +7354,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -7377,13 +7371,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -7394,7 +7388,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
 		            public let outer_holeServiceBuilder: (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
 		            public let midWorkerBuilder: (midWorkerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
@@ -7420,9 +7414,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_315CDB5B658F55C9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_SeamB_holeService(_ scope: SeamB.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -7442,7 +7436,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let outer: Outer = __safeDI_outer()
 		        let __safeDI_thingServiceBuilder_midWorkerBuilder = __safeDI_thingServiceBuilder.midWorkerBuilder(SafeDIScope_ThingService.midWorkerBuilder_Values(chainToken: chainToken, outer: outer))
 		        func __safeDI_midWorkerBuilder() -> Worker {
-		            let thing: any ThingService = __safeDI_thingServiceBuilder_midWorkerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		            let thing: any ThingService = __safeDI_thingServiceBuilder_midWorkerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		            return Worker(thing: thing)
 		        }
 		        let midWorkerBuilder = Instantiator<Worker>(__safeDI_midWorkerBuilder)
@@ -7451,7 +7445,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_787AB232D7981AEF {}
+		    public enum __safeDI_Mid_8DEDB719400A4D1E {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -7475,8 +7469,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_787AB232D7981AEF.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
+		            _ = Mid.__safeDI_Mid_8DEDB719400A4D1E.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
 		                    @Sendable func __safeDI_readerHolder() -> WrapperReader {
 		                        WrapperReader(chainToken: chainToken)
@@ -7535,13 +7529,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seamB_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seamB: (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seamB: (__safeDI_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seamB: @escaping (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seamB: @escaping (__safeDI_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seamB = seamB
 		            }
 
@@ -7558,7 +7552,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seamB() -> SeamB {
 		            _ = SeamB.__safeDI_SeamB_DC2838BAE7387202.self
-		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.seamB_Values()))
+		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seamB: SeamB = __safeDI_seamB()
 		        self.init(seamB: seamB)
@@ -7691,13 +7685,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -7708,13 +7702,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -7725,7 +7719,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
 		            public let outer_holeServiceBuilder: (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
 		            public let midWorkerBuilder: (midWorkerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
@@ -7751,9 +7745,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_315CDB5B658F55C9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_SeamB_holeService(_ scope: SeamB.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -7773,7 +7767,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let outer: Outer = __safeDI_outer()
 		        let __safeDI_thingServiceBuilder_midWorkerBuilder = __safeDI_thingServiceBuilder.midWorkerBuilder(SafeDIScope_ThingService.midWorkerBuilder_Values(chainToken: chainToken, outer: outer))
 		        func __safeDI_midWorkerBuilder() -> Worker {
-		            let thing: any ThingService = __safeDI_thingServiceBuilder_midWorkerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		            let thing: any ThingService = __safeDI_thingServiceBuilder_midWorkerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		            return Worker(thing: thing)
 		        }
 		        let midWorkerBuilder = Instantiator<Worker>(__safeDI_midWorkerBuilder)
@@ -7782,7 +7776,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_787AB232D7981AEF {}
+		    public enum __safeDI_Mid_8DEDB719400A4D1E {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -7806,8 +7800,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_787AB232D7981AEF.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
+		            _ = Mid.__safeDI_Mid_8DEDB719400A4D1E.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
 		                    @Sendable func __safeDI_leafBuilder() -> ChainLeaf {
 		                        ChainLeaf(chainToken: chainToken.instance)
@@ -7931,13 +7925,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -7954,7 +7948,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam)
@@ -8032,13 +8026,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -8049,13 +8043,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -8089,9 +8083,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_2A8D23C10A89B5A9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -8114,7 +8108,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_91488962FEFEFE32 {}
+		    public enum __safeDI_Mid_C9E7A7B945AD1E35 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -8138,8 +8132,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_91488962FEFEFE32.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values) -> any ThingService {
+		            _ = Mid.__safeDI_Mid_C9E7A7B945AD1E35.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Values) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
 		                    @Sendable func __safeDI_readerHolder() -> WrapperReader {
 		                        WrapperReader(chainToken: chainToken)
@@ -8199,13 +8193,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -8221,7 +8215,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		    public convenience init(__safeDI_chainToken chainToken: SendableLazilyInstantiated<ChainToken>, __safeDI_holeServiceBuilder: SafeDIScope_HoleService.__safeDI_Builder<any HoleService>) {
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_D5997723301E33C6.self
-		            return Seam(__safeDI_chainToken: chainToken, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam)
@@ -8287,13 +8281,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -8304,13 +8298,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -8343,9 +8337,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_31C603A9519520BD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -8368,7 +8362,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_8BCF8E47E0BA286F {}
+		    public enum __safeDI_Mid_DFE8B45255806DF4 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -8392,8 +8386,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_8BCF8E47E0BA286F.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
+		            _ = Mid.__safeDI_Mid_DFE8B45255806DF4.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
 		                    @Sendable func __safeDI_leafBuilder() -> ChainLeaf {
 		                        ChainLeaf(chainToken: chainToken)
@@ -8456,13 +8450,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -8479,7 +8473,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam)
@@ -8557,13 +8551,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -8574,13 +8568,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -8614,9 +8608,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_2A8D23C10A89B5A9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -8639,7 +8633,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_91488962FEFEFE32 {}
+		    public enum __safeDI_Mid_C9E7A7B945AD1E35 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -8663,8 +8657,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_91488962FEFEFE32.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: LazilyInstantiated<ChainToken>) -> any ThingService {
+		            _ = Mid.__safeDI_Mid_C9E7A7B945AD1E35.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Values, chainToken: LazilyInstantiated<ChainToken>) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
 		                    #sourceLocation(file: "\(thingImplPath)", line: 9)
 		                    let token: ChainToken = chainToken.instance
@@ -8725,13 +8719,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -8748,7 +8742,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam)
@@ -8826,13 +8820,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -8843,13 +8837,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -8883,9 +8877,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_2A8D23C10A89B5A9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -8908,7 +8902,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_91488962FEFEFE32 {}
+		    public enum __safeDI_Mid_C9E7A7B945AD1E35 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -8932,8 +8926,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_91488962FEFEFE32.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values) -> any ThingService {
+		            _ = Mid.__safeDI_Mid_C9E7A7B945AD1E35.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Values) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
 		                    #sourceLocation(file: "\(thingImplPath)", line: 9)
 		                    let token: SendableLazilyInstantiated<ChainToken> = chainToken
@@ -9094,13 +9088,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -9120,7 +9114,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_D5997723301E33C6.self
-		            return Seam(__safeDI_chainToken: chainToken, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(chainToken: chainToken, seam: seam)
@@ -9181,16 +9175,16 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Mid {
 		    nonisolated public enum SafeDIScope_ThingService {
-		        nonisolated public struct outer_holeServiceBuilder_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -9201,13 +9195,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -9219,9 +9213,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let outer_holeServiceBuilder: (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
+		            public let outer_holeServiceBuilder: (__safeDI_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
 
-		            public init(outer_holeServiceBuilder: @escaping (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>) {
+		            public init(outer_holeServiceBuilder: @escaping (__safeDI_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
@@ -9235,14 +9229,14 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_thingServiceBuilder: SafeDIScope_ThingService.__safeDI_Builder<any ThingService>) {
-		        let __safeDI_thingServiceBuilder_outer_holeServiceBuilder = __safeDI_thingServiceBuilder.outer_holeServiceBuilder(SafeDIScope_ThingService.outer_holeServiceBuilder_Values())
+		        let __safeDI_thingServiceBuilder_outer_holeServiceBuilder = __safeDI_thingServiceBuilder.outer_holeServiceBuilder(SafeDIScope_ThingService.__safeDI_Values())
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_03CDAF456B5F899F.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -9265,7 +9259,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_9A62E49B61705CAD {}
+		    public enum __safeDI_Mid_F1AC02614C2E6CBE {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -9285,8 +9279,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		extension TopRoot {
 		    public convenience init() {
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_9A62E49B61705CAD.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
+		            _ = Mid.__safeDI_Mid_F1AC02614C2E6CBE.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
 		                    let reader = WrapperReader(chainToken: chainToken)
 		                    return ThingImpl(reader: reader)
@@ -9357,13 +9351,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -9383,7 +9377,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_D5997723301E33C6.self
-		            return Seam(__safeDI_chainToken: chainToken, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(chainToken: chainToken, seam: seam)
@@ -9444,16 +9438,16 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Mid {
 		    nonisolated public enum SafeDIScope_ThingService {
-		        nonisolated public struct outer_holeServiceBuilder_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -9464,13 +9458,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -9482,9 +9476,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let outer_holeServiceBuilder: (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
+		            public let outer_holeServiceBuilder: (__safeDI_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
 
-		            public init(outer_holeServiceBuilder: @escaping (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>) {
+		            public init(outer_holeServiceBuilder: @escaping (__safeDI_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
@@ -9498,14 +9492,14 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_thingServiceBuilder: SafeDIScope_ThingService.__safeDI_Builder<any ThingService>) {
-		        let __safeDI_thingServiceBuilder_outer_holeServiceBuilder = __safeDI_thingServiceBuilder.outer_holeServiceBuilder(SafeDIScope_ThingService.outer_holeServiceBuilder_Values())
+		        let __safeDI_thingServiceBuilder_outer_holeServiceBuilder = __safeDI_thingServiceBuilder.outer_holeServiceBuilder(SafeDIScope_ThingService.__safeDI_Values())
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_03CDAF456B5F899F.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -9528,7 +9522,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_9A62E49B61705CAD {}
+		    public enum __safeDI_Mid_F1AC02614C2E6CBE {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -9548,8 +9542,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		extension TopRoot {
 		    public convenience init() {
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_9A62E49B61705CAD.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
+		            _ = Mid.__safeDI_Mid_F1AC02614C2E6CBE.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
 		                    let reader = WrapperReader(chainToken: chainToken)
 		                    return ThingImpl(reader: reader)
@@ -9605,13 +9599,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -9627,7 +9621,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		    public convenience init(__safeDI_chainToken chainToken: SendableLazilyInstantiated<ChainToken>, __safeDI_holeServiceBuilder: SafeDIScope_HoleService.__safeDI_Builder<any HoleService>) {
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_D5997723301E33C6.self
-		            return Seam(__safeDI_chainToken: chainToken, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(seam: seam)
@@ -9693,13 +9687,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -9710,13 +9704,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -9753,9 +9747,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_31C603A9519520BD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -9778,7 +9772,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_E148452745CF506D {}
+		    public enum __safeDI_Mid_A9F294865D25D736 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -9798,8 +9792,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		extension TopRoot {
 		    public convenience init() {
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_E148452745CF506D.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
+		            _ = Mid.__safeDI_Mid_A9F294865D25D736.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
 		                    let reader = WrapperReader(chainToken: chainToken)
 		                    return ThingImpl(reader: reader)
@@ -9856,13 +9850,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seam_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seam: (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seam: (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seam: @escaping (seam_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seam: @escaping (__safeDI_Values) -> Seam.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seam = seam
 		            }
 
@@ -9882,7 +9876,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seam() -> Seam {
 		            _ = Seam.__safeDI_Seam_2AD7242F90FE57C2.self
-		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.seam_Values()))
+		            return Seam(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seam(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seam: Seam = __safeDI_seam()
 		        self.init(chainToken: chainToken, seam: seam)
@@ -9962,13 +9956,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -9979,13 +9973,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -10020,9 +10014,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Outer.__safeDI_Outer_6E0AB25F1FE9A45C.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -10045,7 +10039,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_359DBD60BC16E313 {}
+		    public enum __safeDI_Mid_640B18CBC0D766C4 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -10069,8 +10063,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 		        let chainToken = LazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_359DBD60BC16E313.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: LazilyInstantiated<ChainToken>) -> any ThingService {
+		            _ = Mid.__safeDI_Mid_640B18CBC0D766C4.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Values, chainToken: LazilyInstantiated<ChainToken>) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
 		                    let reader = WrapperReader(chainToken: chainToken)
 		                    return ThingImpl(chainToken: chainToken.instance, reader: reader)
@@ -10127,13 +10121,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Outer {
 		    nonisolated public enum SafeDIScope_HoleService {
-		        nonisolated public struct seamB_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let seamB: (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
+		            public let seamB: (__safeDI_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>
 
-		            public init(seamB: @escaping (seamB_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
+		            public init(seamB: @escaping (__safeDI_Values) -> SeamB.SafeDIScope_HoleService.__safeDI_Builder<__safeDI_Built>) {
 		                self.seamB = seamB
 		            }
 
@@ -10153,7 +10147,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
 		        func __safeDI_seamB() -> SeamB {
 		            _ = SeamB.__safeDI_SeamB_DC2838BAE7387202.self
-		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.seamB_Values()))
+		            return SeamB(__safeDI_chainToken: chainToken.instance, __safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder.seamB(SafeDIScope_HoleService.__safeDI_Values()))
 		        }
 		        let seamB: SeamB = __safeDI_seamB()
 		        self.init(chainToken: chainToken, seamB: seamB)
@@ -10265,16 +10259,16 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension Mid {
 		    nonisolated public enum SafeDIScope_ThingService {
-		        nonisolated public struct outer_holeServiceBuilder_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        nonisolated public enum HoleImpl_Scope {
-		            nonisolated public struct workerBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let workerBuilder: (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let workerBuilder: (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(workerBuilder: @escaping (workerBuilder_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(workerBuilder: @escaping (__safeDI_Values) -> SafeDIScope_ThingService.Worker_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.workerBuilder = workerBuilder
 		                }
 
@@ -10285,13 +10279,13 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Worker_Scope {
-		            nonisolated public struct thing_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let thing: (thing_Values) -> __safeDI_Built
+		                public let thing: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(thing: @escaping (thing_Values) -> __safeDI_Built) {
+		                public init(thing: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.thing = thing
 		                }
 
@@ -10303,9 +10297,9 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let outer_holeServiceBuilder: (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
+		            public let outer_holeServiceBuilder: (__safeDI_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>
 
-		            public init(outer_holeServiceBuilder: @escaping (outer_holeServiceBuilder_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>) {
+		            public init(outer_holeServiceBuilder: @escaping (__safeDI_Values) -> Outer.SafeDIScope_HoleService.__safeDI_Builder<SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<__safeDI_Built>>) {
 		                self.outer_holeServiceBuilder = outer_holeServiceBuilder
 		            }
 
@@ -10319,14 +10313,14 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_thingServiceBuilder: SafeDIScope_ThingService.__safeDI_Builder<any ThingService>) {
-		        let __safeDI_thingServiceBuilder_outer_holeServiceBuilder = __safeDI_thingServiceBuilder.outer_holeServiceBuilder(SafeDIScope_ThingService.outer_holeServiceBuilder_Values())
+		        let __safeDI_thingServiceBuilder_outer_holeServiceBuilder = __safeDI_thingServiceBuilder.outer_holeServiceBuilder(SafeDIScope_ThingService.__safeDI_Values())
 		        func __safeDI_outer() -> Outer {
 		            _ = Outer.__safeDI_Outer_7ED071A634563EF4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_holeServiceBuilder_SeamB_holeService(_ scope: SeamB.SafeDIScope_HoleService.holeService_Values, __safeDI_outer_holeServiceBuilder: SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Builder<any ThingService>) -> any HoleService {
 		                func __safeDI_holeService() -> HoleImpl {
-		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.workerBuilder_Values())
+		                    let __safeDI_thingServiceBuilder_workerBuilder = __safeDI_outer_holeServiceBuilder.workerBuilder(SafeDIScope_ThingService.HoleImpl_Scope.__safeDI_Values())
 		                    func __safeDI_workerBuilder() -> Worker {
-		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.thing_Values())
+		                        let thing: any ThingService = __safeDI_thingServiceBuilder_workerBuilder.thing(SafeDIScope_ThingService.Worker_Scope.__safeDI_Values())
 		                        return Worker(thing: thing)
 		                    }
 		                    let workerBuilder = Instantiator<Worker>(__safeDI_workerBuilder)
@@ -10349,7 +10343,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_81F3DB0A507565FE {}
+		    public enum __safeDI_Mid_8D3AC4D5EAB76257 {}
 		}
 		"""])
 		#expect(output.modules["Top"]?.generatedFiles == ["Top.swift": generatedFileHeader + """
@@ -10369,8 +10363,8 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		extension TopRoot {
 		    public convenience init() {
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_81F3DB0A507565FE.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
+		            _ = Mid.__safeDI_Mid_8D3AC4D5EAB76257.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.__safeDI_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
 		                    let reader = WrapperReader(chainToken: chainToken)
 		                    return ThingImpl(chainToken: chainToken.instance, reader: reader)

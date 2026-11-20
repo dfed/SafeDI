@@ -461,13 +461,13 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		        }
 
 		        nonisolated public enum ServiceOwner_Scope {
-		            nonisolated public struct service_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let service: (service_Values) -> __safeDI_Built
+		                public let service: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                public init(service: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.service = service
 		                }
 
@@ -497,7 +497,7 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		        let config = LazilyInstantiated<Config>(__safeDI_config)
 		        let __safeDI_serviceBuilder_owner = __safeDI_serviceBuilder.owner(SafeDIScope_Service.owner_Values(onForward: onForward, config: config))
 		        func __safeDI_owner() -> ServiceOwner {
-		            let service: any Service = __safeDI_serviceBuilder_owner.service(SafeDIScope_Service.ServiceOwner_Scope.service_Values())
+		            let service: any Service = __safeDI_serviceBuilder_owner.service(SafeDIScope_Service.ServiceOwner_Scope.__safeDI_Values())
 		            return ServiceOwner(onForward: onForward, config: config.instance, service: service)
 		        }
 		        let owner: ServiceOwner = __safeDI_owner()
@@ -506,7 +506,7 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_239E7FD9F9C5644D {}
+		    public enum __safeDI_Screen_B2AAA6C24A9B02AA {}
 		}
 		""", "Unexpected output \(file)")
 	}

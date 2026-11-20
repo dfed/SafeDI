@@ -528,13 +528,13 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    }
 
 			    nonisolated public enum SafeDISendableScope_Api {
-			        nonisolated public struct aBuilder_Values: Sendable {}
+			        nonisolated public struct __safeDI_Values: Sendable {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			            public let aBuilder: @Sendable (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let aBuilder: @Sendable (__safeDI_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
 
-			            public init(aBuilder: @escaping @Sendable (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
+			            public init(aBuilder: @escaping @Sendable (__safeDI_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                self.aBuilder = aBuilder
 			            }
 
@@ -549,7 +549,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    public init(__safeDI_tag: @autoclosure @escaping @Sendable () -> Tag, __safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
 			        let tag = SendableLazilyInstantiated<Tag>(__safeDI_tag)
 			        @Sendable nonisolated func __safeDI_aBuilder(tag: Tag) -> A {
-			            let __safeDI_apiSendableBuilder_aBuilder = __safeDI_apiSendableBuilder.aBuilder(SafeDISendableScope_Api.aBuilder_Values())
+			            let __safeDI_apiSendableBuilder_aBuilder = __safeDI_apiSendableBuilder.aBuilder(SafeDISendableScope_Api.__safeDI_Values())
 			            let reader = TagReader(tag: tag)
 			            @Sendable nonisolated func __safeDI_bBuilder(tag: Tag) -> B {
 			                let aBuilder = SendableInstantiator<A> {
@@ -758,13 +758,13 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    }
 
 			    nonisolated public enum SafeDISendableScope_Api {
-			        nonisolated public struct aBuilder_Values: Sendable {}
+			        nonisolated public struct __safeDI_Values: Sendable {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			            public let aBuilder: @Sendable (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let aBuilder: @Sendable (__safeDI_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
 
-			            public init(aBuilder: @escaping @Sendable (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
+			            public init(aBuilder: @escaping @Sendable (__safeDI_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                self.aBuilder = aBuilder
 			            }
 
@@ -779,7 +779,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    public init(__safeDI_tag: @autoclosure @escaping @Sendable () -> Tag, __safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
 			        let tag = SendableLazilyInstantiated<Tag>(__safeDI_tag)
 			        @Sendable nonisolated func __safeDI_aBuilder(tag: Tag) -> A {
-			            let __safeDI_apiSendableBuilder_aBuilder = __safeDI_apiSendableBuilder.aBuilder(SafeDISendableScope_Api.aBuilder_Values())
+			            let __safeDI_apiSendableBuilder_aBuilder = __safeDI_apiSendableBuilder.aBuilder(SafeDISendableScope_Api.__safeDI_Values())
 			            let reader = TagReader(tag: tag)
 			            @Sendable nonisolated func __safeDI_bBuilder(tag: Tag) -> B {
 			                let aBuilder = SendableInstantiator<A> {
@@ -1311,13 +1311,13 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		        }
 
 		        nonisolated public enum A_Scope {
-		            nonisolated public struct inner_Values: Sendable {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let inner: (inner_Values) -> Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
+		                public let inner: (__safeDI_Values) -> Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
 
-		                public init(inner: @escaping (inner_Values) -> Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
+		                public init(inner: @escaping (__safeDI_Values) -> Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
 		                    self.inner = inner
 		                }
 
@@ -1350,7 +1350,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		            let reader = TagReader(tag: tag)
 		            func __safeDI_inner() -> Inner {
 		                _ = Inner.__safeDI_Inner_61E28C480FC4B293.self\(innerCallComment)
-		                return Inner(__safeDI_tag: tag, __safeDI_apiBuilder: __safeDI_apiBuilder_aBuilder.inner(SafeDIScope_Api.A_Scope.inner_Values()))
+		                return Inner(__safeDI_tag: tag, __safeDI_apiBuilder: __safeDI_apiBuilder_aBuilder.inner(SafeDIScope_Api.A_Scope.__safeDI_Values()))
 		            }
 		            let inner: Inner = __safeDI_inner()
 		            func __safeDI_bBuilder(tag: Tag) -> B {

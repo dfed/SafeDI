@@ -479,10 +479,14 @@ extension DependencyTreeGenerator {
 				enumTypeNameByDescribed[current] = name
 				enumTypeByDescribed[current] = SeamSignature.ScopeEnum.nestedType(named: name, in: rootTypeName)
 			}
-			// A payload struct's name is taken from its case, as is the name of the empty struct a builder struct's member of a
-			// case that carries no values takes.
+			// A payload struct's name is taken from its case. Every case that carries no values – a case of a `@Sendable`
+			// enum, a call's case, or a case whose type binds nothing before its property – takes the enum's one empty struct,
+			// whose reserved name no case's can take.
 			for current in familyDescribed {
-				valuesTypeNamesByDescribed[current] = zip(draftCases(of: current.type, isSendable: isSendable), caseNamesByDescribed[current, default: []]).map { _, caseName in
+				valuesTypeNamesByDescribed[current] = zip(draftCases(of: current.type, isSendable: isSendable), caseNamesByDescribed[current, default: []]).map { draftCase, caseName in
+					guard let fields = draftCase.fields, !fields.isEmpty else {
+						return ReservedName.sharedValuesTypeName
+					}
 					var valuesTypeName = "\(caseName)_Values".spelledAsJoinedIdentifier
 					while takenTypeNames.contains(valuesTypeName) {
 						valuesTypeName = "\(valuesTypeName)_".spelledAsJoinedIdentifier

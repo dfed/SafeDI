@@ -170,6 +170,11 @@ public enum ReservedName: Hashable, Sendable {
 	/// member spells can be hidden by it.
 	static let builderStructGenericParameterName = "\(builderFunctionNamePrefix)Built"
 
+	/// The name of the empty `Sendable` struct an enum with a builder struct declares once, which every member of a case
+	/// that carries no values takes: a case of a `@Sendable` enum, a call's case, or a plain case whose type binds nothing
+	/// before its property. It ends in `_Values`, as every payload struct's name does.
+	static let sharedValuesTypeName = "\(builderFunctionNamePrefix)Values"
+
 	/// The argument label of the initializer of a level's builder struct that wraps a builder that takes nothing, which a
 	/// seam's readable initializer passes the builder a person wrote to.
 	static let noScopeArgumentLabel = "\(builderFunctionNamePrefix)noScope"

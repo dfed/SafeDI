@@ -113,7 +113,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			    public init() {
 			        func __safeDI_screenABuilder() -> ScreenA {
 			            let screenBBuilder = Instantiator<ScreenB>(__safeDI_screenBBuilder)
-			            _ = ScreenA.__safeDI_ScreenA_E2E61649C1295C1A.self\(Self.callComment(module: "Feature"))
+			            _ = ScreenA.__safeDI_ScreenA_F1D83E34826F2E0A.self\(Self.callComment(module: "Feature"))
 			            func __safeDI_widgetBuilder_ScreenA() -> ScreenA.SafeDIScope_Widget.__safeDI_Builder<any Widget> {
 			                .init(widget: { _ in
 			                    let widget: any Widget = DefaultWidget(screenBBuilder: screenBBuilder)
@@ -587,7 +587,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			"Feature.swift": generatedFileHeader + """
 			extension Flow {
 			    nonisolated public enum SafeDIScope_Widget {
-			        nonisolated public struct aBuilder_Values {}
+			        nonisolated public struct __safeDI_Values: Sendable {}
 
 			        nonisolated public enum A_Scope {
 			            nonisolated public struct widget_Values {
@@ -610,9 +610,9 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let aBuilder: (__safeDI_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
 
-			            public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>) {
+			            public init(aBuilder: @escaping (__safeDI_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                self.aBuilder = aBuilder
 			            }
 
@@ -625,7 +625,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_widgetBuilder: SafeDIScope_Widget.__safeDI_Builder<any Widget>) {
-			        let __safeDI_widgetBuilder_aBuilder = __safeDI_widgetBuilder.aBuilder(SafeDIScope_Widget.aBuilder_Values())
+			        let __safeDI_widgetBuilder_aBuilder = __safeDI_widgetBuilder.aBuilder(SafeDIScope_Widget.__safeDI_Values())
 			        func __safeDI_aBuilder() -> A {
 			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			            let widget: any Widget = __safeDI_widgetBuilder_aBuilder.widget(SafeDIScope_Widget.A_Scope.widget_Values(bBuilder: bBuilder))
@@ -642,7 +642,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			}
 
 			extension Flow {
-			    public enum __safeDI_Flow_20DCF66259ADDF0C {}
+			    public enum __safeDI_Flow_4CF10606703B14AE {}
 			}
 			""",
 		])
@@ -655,7 +655,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_flow() -> Flow {
-			            _ = Flow.__safeDI_Flow_20DCF66259ADDF0C.self\(Self.callComment(module: "Feature"))
+			            _ = Flow.__safeDI_Flow_4CF10606703B14AE.self\(Self.callComment(module: "Feature"))
 			            func __safeDI_widgetBuilder_Flow() -> Flow.SafeDIScope_Widget.__safeDI_Builder<any Widget> {
 			                .init(aBuilder: { _ in __safeDI_widgetBuilder_Flow_A_Scope() })
 			            }
@@ -720,13 +720,13 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			    }
 
 			    nonisolated public enum SafeDISendableScope_Widget {
-			        nonisolated public struct aBuilder_Values: Sendable {}
+			        nonisolated public struct __safeDI_Values: Sendable {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			            public let aBuilder: @Sendable (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let aBuilder: @Sendable (__safeDI_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
 
-			            public init(aBuilder: @escaping @Sendable (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>) {
+			            public init(aBuilder: @escaping @Sendable (__safeDI_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                self.aBuilder = aBuilder
 			            }
 
@@ -740,7 +740,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_widgetSendableBuilder: SafeDISendableScope_Widget.__safeDI_Builder<any Widget>) {
 			        @Sendable nonisolated func __safeDI_aBuilder() -> A {
-			            let __safeDI_widgetSendableBuilder_aBuilder = __safeDI_widgetSendableBuilder.aBuilder(SafeDISendableScope_Widget.aBuilder_Values())
+			            let __safeDI_widgetSendableBuilder_aBuilder = __safeDI_widgetSendableBuilder.aBuilder(SafeDISendableScope_Widget.__safeDI_Values())
 			            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
 			            let widget: any Widget = __safeDI_widgetSendableBuilder_aBuilder.widget(SafeDIScope_Widget.A_Scope.widget_Values(bBuilder: bBuilder))
 			            return A(bBuilder: bBuilder, widget: widget)
@@ -817,16 +817,16 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			"Feature.swift": generatedFileHeader + """
 			extension Flow {
 			    nonisolated public enum SafeDIScope_Widget {
-			        nonisolated public struct xBuilder_Values {}
+			        nonisolated public struct __safeDI_Values: Sendable {}
 
 			        nonisolated public enum X_Scope {
-			            nonisolated public struct p_Values {}
+			            nonisolated public struct __safeDI_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let p: (p_Values) -> SafeDIScope_Widget.P_Scope.__safeDI_Builder<__safeDI_Built>
+			                public let p: (__safeDI_Values) -> SafeDIScope_Widget.P_Scope.__safeDI_Builder<__safeDI_Built>
 
-			                public init(p: @escaping (p_Values) -> SafeDIScope_Widget.P_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                public init(p: @escaping (__safeDI_Values) -> SafeDIScope_Widget.P_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                    self.p = p
 			                }
 
@@ -837,13 +837,13 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        }
 
 			        nonisolated public enum P_Scope {
-			            nonisolated public struct aBuilder_Values {}
+			            nonisolated public struct __safeDI_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
+			                public let aBuilder: (__safeDI_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
 
-			                public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                public init(aBuilder: @escaping (__safeDI_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                    self.aBuilder = aBuilder
 			                }
 
@@ -875,9 +875,9 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let xBuilder: (xBuilder_Values) -> SafeDIScope_Widget.X_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let xBuilder: (__safeDI_Values) -> SafeDIScope_Widget.X_Scope.__safeDI_Builder<__safeDI_Built>
 
-			            public init(xBuilder: @escaping (xBuilder_Values) -> SafeDIScope_Widget.X_Scope.__safeDI_Builder<__safeDI_Built>) {
+			            public init(xBuilder: @escaping (__safeDI_Values) -> SafeDIScope_Widget.X_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                self.xBuilder = xBuilder
 			            }
 
@@ -890,11 +890,11 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_widgetBuilder: SafeDIScope_Widget.__safeDI_Builder<any Widget>) {
-			        let __safeDI_widgetBuilder_xBuilder = __safeDI_widgetBuilder.xBuilder(SafeDIScope_Widget.xBuilder_Values())
+			        let __safeDI_widgetBuilder_xBuilder = __safeDI_widgetBuilder.xBuilder(SafeDIScope_Widget.__safeDI_Values())
 			        func __safeDI_xBuilder() -> X {
-			            let __safeDI_widgetBuilder_p = __safeDI_widgetBuilder_xBuilder.p(SafeDIScope_Widget.X_Scope.p_Values())
+			            let __safeDI_widgetBuilder_p = __safeDI_widgetBuilder_xBuilder.p(SafeDIScope_Widget.X_Scope.__safeDI_Values())
 			            func __safeDI_p() -> P {
-			                let __safeDI_widgetBuilder_aBuilder = __safeDI_widgetBuilder_p.aBuilder(SafeDIScope_Widget.P_Scope.aBuilder_Values())
+			                let __safeDI_widgetBuilder_aBuilder = __safeDI_widgetBuilder_p.aBuilder(SafeDIScope_Widget.P_Scope.__safeDI_Values())
 			                func __safeDI_aBuilder() -> A {
 			                    let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			                    let xBuilder = Instantiator<X>(__safeDI_xBuilder)
@@ -918,7 +918,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			}
 
 			extension Flow {
-			    public enum __safeDI_Flow_73CD2DC53157BB36 {}
+			    public enum __safeDI_Flow_652428A94F85DFA5 {}
 			}
 			""",
 		])
@@ -931,7 +931,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_flow() -> Flow {
-			            _ = Flow.__safeDI_Flow_73CD2DC53157BB36.self\(Self.callComment(module: "Feature"))
+			            _ = Flow.__safeDI_Flow_652428A94F85DFA5.self\(Self.callComment(module: "Feature"))
 			            func __safeDI_widgetBuilder_Flow() -> Flow.SafeDIScope_Widget.__safeDI_Builder<any Widget> {
 			                .init(xBuilder: { _ in __safeDI_widgetBuilder_Flow_X_Scope() })
 			            }
@@ -986,9 +986,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			"Feature.swift": generatedFileHeader + """
 			extension Flow {
 			    nonisolated public enum SafeDIScope_Widget {
-			        nonisolated public struct aBuilder_Values {}
-
-			        nonisolated public struct bBuilder_Values {}
+			        nonisolated public struct __safeDI_Values: Sendable {}
 
 			        nonisolated public enum A_Scope {
 			            nonisolated public struct widget_Values {
@@ -1031,11 +1029,11 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
-			            public let bBuilder: (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>
+			        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
+			            public let aBuilder: (__safeDI_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let bBuilder: (__safeDI_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>
 
-			            public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>, bBuilder: @escaping (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>) {
+			            public init(aBuilder: @escaping (__safeDI_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>, bBuilder: @escaping (__safeDI_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                self.aBuilder = aBuilder
 			                self.bBuilder = bBuilder
 			            }
@@ -1051,8 +1049,8 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_widgetBuilder: SafeDIScope_Widget.__safeDI_Builder<any Widget>) {
 			        let __safeDI_aBuilder_loopLevels = __safeDI_LoopLevels_01862F7E5AE3CC3D(
-			            __safeDI_widgetBuilder_aBuilder: __safeDI_widgetBuilder.aBuilder(SafeDIScope_Widget.aBuilder_Values()),
-			            __safeDI_widgetBuilder_bBuilder: __safeDI_widgetBuilder.bBuilder(SafeDIScope_Widget.bBuilder_Values())
+			            __safeDI_widgetBuilder_aBuilder: __safeDI_widgetBuilder.aBuilder(SafeDIScope_Widget.__safeDI_Values()),
+			            __safeDI_widgetBuilder_bBuilder: __safeDI_widgetBuilder.bBuilder(SafeDIScope_Widget.__safeDI_Values())
 			        )
 			        func __safeDI_aBuilder() -> A {
 			            let __safeDI_widgetBuilder_aBuilder = __safeDI_aBuilder_loopLevels.__safeDI_widgetBuilder_aBuilder
@@ -1089,7 +1087,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			}
 
 			extension Flow {
-			    public enum __safeDI_Flow_4C218B5535260BA5 {}
+			    public enum __safeDI_Flow_C8208E8D977F934E {}
 			}
 			""",
 		])
@@ -1102,7 +1100,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_flow() -> Flow {
-			            _ = Flow.__safeDI_Flow_4C218B5535260BA5.self\(Self.callComment(module: "Feature"))
+			            _ = Flow.__safeDI_Flow_C8208E8D977F934E.self\(Self.callComment(module: "Feature"))
 			            func __safeDI_widgetBuilder_Flow() -> Flow.SafeDIScope_Widget.__safeDI_Builder<any Widget> {
 			                .init(aBuilder: { _ in __safeDI_widgetBuilder_Flow_A_Scope() }, bBuilder: { _ in __safeDI_widgetBuilder_Flow_B_Scope() })
 			            }
@@ -1157,7 +1155,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			"Feature.swift": generatedFileHeader + """
 			extension Flow {
 			    nonisolated public enum SafeDIScope_Widget {
-			        nonisolated public struct bBuilder_Values {}
+			        nonisolated public struct __safeDI_Values: Sendable {}
 
 			        nonisolated public enum B_Scope {
 			            nonisolated public struct widget_Values {
@@ -1181,9 +1179,9 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let bBuilder: (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let bBuilder: (__safeDI_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>
 
-			            public init(bBuilder: @escaping (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>) {
+			            public init(bBuilder: @escaping (__safeDI_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                self.bBuilder = bBuilder
 			            }
 
@@ -1196,7 +1194,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_widgetBuilder: SafeDIScope_Widget.__safeDI_Builder<any Widget>) {
-			        let __safeDI_widgetBuilder_bBuilder = __safeDI_widgetBuilder.bBuilder(SafeDIScope_Widget.bBuilder_Values())
+			        let __safeDI_widgetBuilder_bBuilder = __safeDI_widgetBuilder.bBuilder(SafeDIScope_Widget.__safeDI_Values())
 			        func __safeDI_aBuilder() -> A {
 			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			            let mark = Mark()
@@ -1215,7 +1213,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			}
 
 			extension Flow {
-			    public enum __safeDI_Flow_B72DAC7E237022B6 {}
+			    public enum __safeDI_Flow_D5B85330D057B8E5 {}
 			}
 			""",
 		])
@@ -1248,9 +1246,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			"Feature.swift": generatedFileHeader + """
 			extension Flow {
 			    nonisolated public enum SafeDIScope_Widget {
-			        nonisolated public struct aBuilder_Values {}
-
-			        nonisolated public struct bBuilder_Values {}
+			        nonisolated public struct __safeDI_Values: Sendable {}
 
 			        nonisolated public struct leaf_Values {
 			            public let aBuilder: Instantiator<A>
@@ -1271,7 +1267,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            }
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            nonisolated public final class __safeDI_Builder<__safeDI_Built> {
 			                public let leaf: (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<__safeDI_Built>
 			                public let widget: (widget_Values) -> __safeDI_Built
 
@@ -1308,13 +1304,13 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        }
 
 			        nonisolated public enum Leaf_Scope {
-			            nonisolated public struct widget_Values {}
+			            nonisolated public struct __safeDI_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let widget: (widget_Values) -> __safeDI_Built
+			                public let widget: (__safeDI_Values) -> __safeDI_Built
 
-			                public init(widget: @escaping (widget_Values) -> __safeDI_Built) {
+			                public init(widget: @escaping (__safeDI_Values) -> __safeDI_Built) {
 			                    self.widget = widget
 			                }
 
@@ -1325,12 +1321,12 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
-			            public let bBuilder: (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>
+			        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
+			            public let aBuilder: (__safeDI_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
+			            public let bBuilder: (__safeDI_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>
 			            public let leaf: (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<__safeDI_Built>
 
-			            public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>, bBuilder: @escaping (bBuilder_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>, leaf: @escaping (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<__safeDI_Built>) {
+			            public init(aBuilder: @escaping (__safeDI_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>, bBuilder: @escaping (__safeDI_Values) -> SafeDIScope_Widget.B_Scope.__safeDI_Builder<__safeDI_Built>, leaf: @escaping (leaf_Values) -> SafeDIScope_Widget.Leaf_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                self.aBuilder = aBuilder
 			                self.bBuilder = bBuilder
 			                self.leaf = leaf
@@ -1348,8 +1344,8 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 			    public init(__safeDI_widgetBuilder: SafeDIScope_Widget.__safeDI_Builder<any Widget>) {
 			        let __safeDI_aBuilder_loopLevels = __safeDI_LoopLevels_01862F7E5AE3CC3D(
-			            __safeDI_widgetBuilder_aBuilder: __safeDI_widgetBuilder.aBuilder(SafeDIScope_Widget.aBuilder_Values()),
-			            __safeDI_widgetBuilder_bBuilder: __safeDI_widgetBuilder.bBuilder(SafeDIScope_Widget.bBuilder_Values())
+			            __safeDI_widgetBuilder_aBuilder: __safeDI_widgetBuilder.aBuilder(SafeDIScope_Widget.__safeDI_Values()),
+			            __safeDI_widgetBuilder_bBuilder: __safeDI_widgetBuilder.bBuilder(SafeDIScope_Widget.__safeDI_Values())
 			        )
 			        func __safeDI_aBuilder() -> A {
 			            let __safeDI_widgetBuilder_aBuilder = __safeDI_aBuilder_loopLevels.__safeDI_widgetBuilder_aBuilder
@@ -1359,7 +1355,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            let mark = Mark()
 			            let __safeDI_widgetBuilder_leaf = __safeDI_widgetBuilder_aBuilder.leaf(SafeDIScope_Widget.A_Scope.leaf_Values(cBuilder: cBuilder, mark: mark))
 			            func __safeDI_leaf() -> Leaf {
-			                let widget: any Widget = __safeDI_widgetBuilder_leaf.widget(SafeDIScope_Widget.Leaf_Scope.widget_Values())
+			                let widget: any Widget = __safeDI_widgetBuilder_leaf.widget(SafeDIScope_Widget.Leaf_Scope.__safeDI_Values())
 			                return Leaf(cBuilder: cBuilder, widget: widget)
 			            }
 			            let leaf: Leaf = __safeDI_leaf()
@@ -1375,7 +1371,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			            }
 			            let __safeDI_widgetBuilder_leaf = __safeDI_widgetBuilder_bBuilder.leaf(SafeDIScope_Widget.B_Scope.leaf_Values(aBuilder: aBuilder, cBuilder: cBuilder))
 			            func __safeDI_leaf() -> Leaf {
-			                let widget: any Widget = __safeDI_widgetBuilder_leaf.widget(SafeDIScope_Widget.Leaf_Scope.widget_Values())
+			                let widget: any Widget = __safeDI_widgetBuilder_leaf.widget(SafeDIScope_Widget.Leaf_Scope.__safeDI_Values())
 			                return Leaf(cBuilder: cBuilder, widget: widget)
 			            }
 			            let leaf: Leaf = __safeDI_leaf()
@@ -1391,7 +1387,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        }
 			        let __safeDI_widgetBuilder_leaf = __safeDI_widgetBuilder.leaf(SafeDIScope_Widget.leaf_Values(aBuilder: aBuilder, bBuilder: bBuilder, cBuilder: cBuilder))
 			        func __safeDI_leaf() -> Leaf {
-			            let widget: any Widget = __safeDI_widgetBuilder_leaf.widget(SafeDIScope_Widget.Leaf_Scope.widget_Values())
+			            let widget: any Widget = __safeDI_widgetBuilder_leaf.widget(SafeDIScope_Widget.Leaf_Scope.__safeDI_Values())
 			            return Leaf(cBuilder: cBuilder, widget: widget)
 			        }
 			        let leaf: Leaf = __safeDI_leaf()
@@ -1414,7 +1410,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			}
 
 			extension Flow {
-			    public enum __safeDI_Flow_A4C61C9D59943E7A {}
+			    public enum __safeDI_Flow_37E246D7E25683D9 {}
 			}
 			""",
 		])
@@ -1458,13 +1454,13 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        }
 
 			        nonisolated public enum Flow_Scope {
-			            nonisolated public struct aBuilder_Values {}
+			            nonisolated public struct __safeDI_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let aBuilder: (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
+			                public let aBuilder: (__safeDI_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
 
-			                public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                public init(aBuilder: @escaping (__safeDI_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>) {
 			                    self.aBuilder = aBuilder
 			                }
 
@@ -1495,7 +1491,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			        }
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
 			            public let flow: (flow_Values) -> SafeDIScope_Widget.Flow_Scope.__safeDI_Builder<__safeDI_Built>
 			            public let a: (a_Values) -> SafeDIScope_Widget.A_Scope.__safeDI_Builder<__safeDI_Built>
 
@@ -1516,7 +1512,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			    public init(__safeDI_bBuilder bBuilder: Instantiator<B>?, __safeDI_widgetBuilder: SafeDIScope_Widget.__safeDI_Builder<any Widget>) {
 			        let __safeDI_widgetBuilder_flow = __safeDI_widgetBuilder.flow(SafeDIScope_Widget.flow_Values(bBuilder: bBuilder))
 			        func __safeDI_flow() -> Flow {
-			            let __safeDI_widgetBuilder_aBuilder = __safeDI_widgetBuilder_flow.aBuilder(SafeDIScope_Widget.Flow_Scope.aBuilder_Values())
+			            let __safeDI_widgetBuilder_aBuilder = __safeDI_widgetBuilder_flow.aBuilder(SafeDIScope_Widget.Flow_Scope.__safeDI_Values())
 			            func __safeDI_aBuilder() -> A {
 			                let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			                let mark = Mark()
@@ -1544,7 +1540,7 @@ struct SafeDIToolSeamReceivedBuilderCycleTests: ~Copyable {
 			}
 
 			extension Hub {
-			    public enum __safeDI_Hub_DA97B1A14D632C12 {}
+			    public enum __safeDI_Hub_E73023EFA2B20730 {}
 			}
 			""",
 		])

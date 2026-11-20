@@ -64,13 +64,13 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Detail_Scope {
-		            nonisolated public struct api_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		                public let api: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.api = api
 		                }
 
@@ -101,7 +101,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		        let navigator = Navigator()
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(SafeDIScope_Api.detailBuilder_Values(logger: logger, navigator: navigator))
 		        func __safeDI_detailBuilder() -> Detail {
-		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.api_Values())
+		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.__safeDI_Values())
 		            return Detail(api: api)
 		        }
 		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -110,7 +110,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		}
 
 		extension Home {
-		    public enum __safeDI_Home_4F107D538D5CEFB9 {}
+		    public enum __safeDI_Home_748AD28BA26B9A03 {}
 		}
 		""")
 		#expect(variant.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
@@ -121,7 +121,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_home() -> Home {
-		            _ = Home.__safeDI_Home_4F107D538D5CEFB9.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Home.__safeDI_Home_748AD28BA26B9A03.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_apiBuilder_Home() -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
 		                .init(detailBuilder: { values in __safeDI_apiBuilder_Home_Detail_Scope(logger: values.logger) })
 		            }
@@ -158,13 +158,13 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Step_Scope {
-		            nonisolated public struct detailBuilder_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let detailBuilder: (detailBuilder_Values) -> SafeDIScope_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>
+		                public let detailBuilder: (__safeDI_Values) -> SafeDIScope_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>
 
-		                public init(detailBuilder: @escaping (detailBuilder_Values) -> SafeDIScope_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                public init(detailBuilder: @escaping (__safeDI_Values) -> SafeDIScope_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                    self.detailBuilder = detailBuilder
 		                }
 
@@ -175,13 +175,13 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Detail_Scope {
-		            nonisolated public struct api_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		                public let api: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.api = api
 		                }
 
@@ -211,9 +211,9 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		        let logger = Logger()
 		        let __safeDI_apiBuilder_stepBuilder = __safeDI_apiBuilder.stepBuilder(SafeDIScope_Api.stepBuilder_Values(logger: logger))
 		        func __safeDI_stepBuilder() -> Step {
-		            let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder_stepBuilder.detailBuilder(SafeDIScope_Api.Step_Scope.detailBuilder_Values())
+		            let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder_stepBuilder.detailBuilder(SafeDIScope_Api.Step_Scope.__safeDI_Values())
 		            func __safeDI_detailBuilder() -> Detail {
-		                let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.api_Values())
+		                let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.__safeDI_Values())
 		                return Detail(api: api)
 		            }
 		            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -225,7 +225,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		}
 
 		extension Home {
-		    public enum __safeDI_Home_10036056DB5D92A2 {}
+		    public enum __safeDI_Home_D27D402480D5B108 {}
 		}
 		""")
 		#expect(variant.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
@@ -236,7 +236,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_home() -> Home {
-		            _ = Home.__safeDI_Home_10036056DB5D92A2.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Home.__safeDI_Home_D27D402480D5B108.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_apiBuilder_Home() -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
 		                .init(stepBuilder: { values in __safeDI_apiBuilder_Home_Step_Scope(logger: values.logger) })
 		            }
@@ -276,18 +276,18 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Detail_Scope {
-		            nonisolated public struct api_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            nonisolated public struct backupApi_Values {
 		                public let api: any Api
 		            }
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		            nonisolated public final class __safeDI_Builder<__safeDI_Built> {
+		                public let api: (__safeDI_Values) -> __safeDI_Built
 		                public let backupApi: (backupApi_Values) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built, backupApi: @escaping (backupApi_Values) -> __safeDI_Built) {
+		                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built, backupApi: @escaping (backupApi_Values) -> __safeDI_Built) {
 		                    self.api = api
 		                    self.backupApi = backupApi
 		                }
@@ -319,7 +319,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		        let logger = Logger()
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(SafeDIScope_Api.detailBuilder_Values(logger: logger))
 		        func __safeDI_detailBuilder() -> Detail {
-		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.api_Values())
+		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.__safeDI_Values())
 		            let backupApi: any Api = __safeDI_apiBuilder_detailBuilder.backupApi(SafeDIScope_Api.Detail_Scope.backupApi_Values(api: api))
 		            return Detail(api: api, backupApi: backupApi)
 		        }
@@ -329,7 +329,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		}
 
 		extension Home {
-		    public enum __safeDI_Home_BFA755DDE09710DE {}
+		    public enum __safeDI_Home_D52E30B94F03FD42 {}
 		}
 		""")
 		#expect(variant.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
@@ -340,7 +340,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_home() -> Home {
-		            _ = Home.__safeDI_Home_BFA755DDE09710DE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Home.__safeDI_Home_D52E30B94F03FD42.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_apiBuilder_Home() -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
 		                .init(detailBuilder: { values in __safeDI_apiBuilder_Home_Detail_Scope(logger: values.logger) })
 		            }
@@ -381,13 +381,13 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		extension Home {
 		    nonisolated public enum SafeDIScope_Api {
 		        nonisolated public enum Detail_Scope {
-		            nonisolated public struct api_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		                public let api: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.api = api
 		                }
 
@@ -399,13 +399,13 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		    }
 
 		    nonisolated public enum SafeDISendableScope_Api {
-		        nonisolated public struct detailBuilder_Values: Sendable {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-		            public let detailBuilder: @Sendable (detailBuilder_Values) -> SafeDIScope_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>
+		            public let detailBuilder: @Sendable (__safeDI_Values) -> SafeDIScope_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(detailBuilder: @escaping @Sendable (detailBuilder_Values) -> SafeDIScope_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>) {
+		            public init(detailBuilder: @escaping @Sendable (__safeDI_Values) -> SafeDIScope_Api.Detail_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.detailBuilder = detailBuilder
 		            }
 
@@ -420,8 +420,8 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		    public convenience init(__safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
 		        let logger = Logger()
 		        @Sendable nonisolated func __safeDI_detailBuilder() -> Detail {
-		            let __safeDI_apiSendableBuilder_detailBuilder = __safeDI_apiSendableBuilder.detailBuilder(SafeDISendableScope_Api.detailBuilder_Values())
-		            let api: any Api = __safeDI_apiSendableBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.api_Values())
+		            let __safeDI_apiSendableBuilder_detailBuilder = __safeDI_apiSendableBuilder.detailBuilder(SafeDISendableScope_Api.__safeDI_Values())
+		            let api: any Api = __safeDI_apiSendableBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.__safeDI_Values())
 		            return Detail(api: api)
 		        }
 		        let detailBuilder = SendableInstantiator<Detail>(__safeDI_detailBuilder)
@@ -430,7 +430,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		}
 
 		extension Home {
-		    public enum __safeDI_Home_29126001AA0F4296 {}
+		    public enum __safeDI_Home_51EB450C5014E87E {}
 		}
 		""")
 		#expect(variant.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
@@ -441,7 +441,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_home() -> Home {
-		            _ = Home.__safeDI_Home_29126001AA0F4296.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Home.__safeDI_Home_51EB450C5014E87E.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Home() -> Home.SafeDISendableScope_Api.__safeDI_Builder<any Api> {
 		                .init(detailBuilder: { _ in __safeDI_apiBuilder_Home_Detail_Scope() })
 		            }
@@ -480,13 +480,13 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Detail_Scope {
-		            nonisolated public struct api_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		                public let api: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.api = api
 		                }
 
@@ -517,7 +517,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		        let tracker = Tracker()
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(SafeDIScope_Api.detailBuilder_Values(logger: logger, tracker: tracker))
 		        func __safeDI_detailBuilder() -> Detail {
-		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.api_Values())
+		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.__safeDI_Values())
 		            return Detail(api: api)
 		        }
 		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -526,7 +526,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		}
 
 		extension Home {
-		    public enum __safeDI_Home_A1C1C95F19438A07 {}
+		    public enum __safeDI_Home_87F2F565E1D88EB5 {}
 		}
 		""")
 		#expect(variant.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
@@ -537,7 +537,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_home() -> Home {
-		            _ = Home.__safeDI_Home_A1C1C95F19438A07.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Home.__safeDI_Home_87F2F565E1D88EB5.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_apiBuilder_Home() -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
 		                .init(detailBuilder: { values in __safeDI_apiBuilder_Home_Detail_Scope(logger: values.logger) })
 		            }
@@ -574,13 +574,13 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Detail_Scope {
-		            nonisolated public struct api_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		                public let api: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.api = api
 		                }
 
@@ -615,7 +615,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		        let logger = Logger()
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(SafeDIScope_Api.detailBuilder_Values(logger: logger))
 		        func __safeDI_detailBuilder() -> Detail {
-		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.api_Values())
+		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.__safeDI_Values())
 		            return Detail(api: api)
 		        }
 		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -624,7 +624,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		}
 
 		extension Home {
-		    public enum __safeDI_Home_F48CB5381D875DB4 {}
+		    public enum __safeDI_Home_3E036909E4C287F0 {}
 		}
 		""")
 		#expect(variant.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
@@ -635,7 +635,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_home() -> Home {
-		            _ = Home.__safeDI_Home_F48CB5381D875DB4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Home.__safeDI_Home_3E036909E4C287F0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_apiBuilder_Home() -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
 		                .init(detailBuilder: { values in __safeDI_apiBuilder_Home_Detail_Scope(logger: values.logger) })
 		            }
@@ -673,13 +673,13 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Detail_Scope {
-		            nonisolated public struct api_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		                public let api: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.api = api
 		                }
 
@@ -709,7 +709,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		        let logger = Logger()
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(SafeDIScope_Api.detailBuilder_Values(logger: logger))
 		        func __safeDI_detailBuilder() -> Detail {
-		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.api_Values())
+		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.__safeDI_Values())
 		            return Detail(api: api)
 		        }
 		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -719,7 +719,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		}
 
 		extension Home {
-		    public enum __safeDI_Home_F48CB5381D875DB4 {}
+		    public enum __safeDI_Home_3E036909E4C287F0 {}
 		}
 		""")
 		#expect(variant.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
@@ -730,7 +730,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_home() -> Home {
-		            _ = Home.__safeDI_Home_F48CB5381D875DB4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Home.__safeDI_Home_3E036909E4C287F0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_apiBuilder_Home() -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
 		                .init(detailBuilder: { values in __safeDI_apiBuilder_Home_Detail_Scope(logger: values.logger) })
 		            }
@@ -767,13 +767,13 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Detail_Scope {
-		            nonisolated public struct api_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		                public let api: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.api = api
 		                }
 
@@ -803,7 +803,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		        let logger = Logger()
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(SafeDIScope_Api.detailBuilder_Values(logger: logger))
 		        func __safeDI_detailBuilder() -> Detail {
-		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.api_Values())
+		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.__safeDI_Values())
 		            return Detail(api: api)
 		        }
 		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -812,7 +812,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		}
 
 		extension Home {
-		    public enum __safeDI_Home_F48CB5381D875DB4 {}
+		    public enum __safeDI_Home_3E036909E4C287F0 {}
 		}
 		""")
 		#expect(variant.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
@@ -823,7 +823,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_home() -> Home {
-		            _ = Home.__safeDI_Home_F48CB5381D875DB4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Home.__safeDI_Home_3E036909E4C287F0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_apiBuilder_Home() -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
 		                .init(detailBuilder: { values in __safeDI_apiBuilder_Home_Detail_Scope(logger: values.logger) })
 		            }
@@ -860,13 +860,13 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Detail_Scope {
-		            nonisolated public struct api_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		                public let api: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.api = api
 		                }
 
@@ -896,7 +896,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		        let logger = Logger()
 		        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(SafeDIScope_Api.detailBuilder_Values(logger: logger))
 		        func __safeDI_detailBuilder() -> Detail {
-		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.api_Values())
+		            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.__safeDI_Values())
 		            return Detail(api: api)
 		        }
 		        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -905,7 +905,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		}
 
 		extension Home {
-		    public enum __safeDI_Home_F48CB5381D875DB4 {}
+		    public enum __safeDI_Home_3E036909E4C287F0 {}
 		}
 		""")
 		#expect(variant.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
@@ -916,7 +916,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_home() -> Home {
-		            _ = Home.__safeDI_Home_F48CB5381D875DB4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Home.__safeDI_Home_3E036909E4C287F0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_apiBuilder_Home() -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
 		                .init(detailBuilder: { values in __safeDI_apiBuilder_Home_Detail_Scope(logger: values.logger) })
 		            }
@@ -952,13 +952,13 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 	        }
 
 	        nonisolated public enum Detail_Scope {
-	            nonisolated public struct api_Values {}
+	            nonisolated public struct __safeDI_Values: Sendable {}
 
 	            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 	            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-	                public let api: (api_Values) -> __safeDI_Built
+	                public let api: (__safeDI_Values) -> __safeDI_Built
 
-	                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+	                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built) {
 	                    self.api = api
 	                }
 
@@ -988,7 +988,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 	        let logger = Logger()
 	        let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder.detailBuilder(SafeDIScope_Api.detailBuilder_Values(logger: logger))
 	        func __safeDI_detailBuilder() -> Detail {
-	            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.api_Values())
+	            let api: any Api = __safeDI_apiBuilder_detailBuilder.api(SafeDIScope_Api.Detail_Scope.__safeDI_Values())
 	            return Detail(api: api)
 	        }
 	        let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
@@ -997,7 +997,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 	}
 
 	extension Home {
-	    public enum __safeDI_Home_F48CB5381D875DB4 {}
+	    public enum __safeDI_Home_3E036909E4C287F0 {}
 	}
 	"""
 
@@ -1010,7 +1010,7 @@ struct SafeDIToolSeamGuardTests: ~Copyable {
 	extension Root {
 	    public convenience init() {
 	        func __safeDI_home() -> Home {
-	            _ = Home.__safeDI_Home_F48CB5381D875DB4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+	            _ = Home.__safeDI_Home_3E036909E4C287F0.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 	            func __safeDI_apiBuilder_Home() -> Home.SafeDIScope_Api.__safeDI_Builder<any Api> {
 	                .init(detailBuilder: { values in __safeDI_apiBuilder_Home_Detail_Scope(logger: values.logger) })
 	            }

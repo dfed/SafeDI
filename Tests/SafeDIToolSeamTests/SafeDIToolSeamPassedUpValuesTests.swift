@@ -203,19 +203,19 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 
 		extension List {
 		    nonisolated public enum SafeDIScope_Api {
+		        nonisolated public struct __safeDI_Values: Sendable {}
+
 		        nonisolated public struct api_Values {
 		            public let id: Int
 		            public let detailBuilder: Instantiator<Detail>
 		        }
 
-		        nonisolated public struct detailBuilder_Values: Sendable {}
-
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
 		            public let api: (api_Values) -> __safeDI_Built
-		            public let detailBuilder: (detailBuilder_Values) -> Detail.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
+		            public let detailBuilder: (__safeDI_Values) -> Detail.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
 
-		            public init(api: @escaping (api_Values) -> __safeDI_Built, detailBuilder: @escaping (detailBuilder_Values) -> Detail.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
+		            public init(api: @escaping (api_Values) -> __safeDI_Built, detailBuilder: @escaping (__safeDI_Values) -> Detail.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
 		                self.api = api
 		                self.detailBuilder = detailBuilder
 		            }
@@ -237,7 +237,7 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		    public init(__safeDI_id id: Int, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
 		        func __safeDI_detailBuilder(id: Int) -> Detail {
 		            _ = Detail.__safeDI_Detail_4FD7A6651375681C.self // If this line does not compile, compile the code SafeDI generates for module Inner into Inner: under Bazel, add Inner’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Detail(__safeDI_id: id, __safeDI_apiBuilder: __safeDI_apiBuilder.detailBuilder(SafeDIScope_Api.detailBuilder_Values()))
+		            return Detail(__safeDI_id: id, __safeDI_apiBuilder: __safeDI_apiBuilder.detailBuilder(SafeDIScope_Api.__safeDI_Values()))
 		        }
 		        let detailBuilder = Instantiator<Detail> {
 		            __safeDI_detailBuilder(id: $0)
@@ -301,19 +301,19 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Node {
 		    nonisolated public enum SafeDIScope_Api {
+		        nonisolated public struct __safeDI_Values: Sendable {}
+
 		        nonisolated public struct api_Values {
 		            public let id: Int
 		            public let nextBuilder: Instantiator<Node>
 		        }
 
-		        nonisolated public struct nextBuilder_Values: Sendable {}
-
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
 		            public let api: (api_Values) -> __safeDI_Built
-		            public let nextBuilder: (nextBuilder_Values) -> Node.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
+		            public let nextBuilder: (__safeDI_Values) -> Node.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
 
-		            public init(api: @escaping (api_Values) -> __safeDI_Built, nextBuilder: @escaping (nextBuilder_Values) -> Node.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
+		            public init(api: @escaping (api_Values) -> __safeDI_Built, nextBuilder: @escaping (__safeDI_Values) -> Node.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
 		                self.api = api
 		                self.nextBuilder = nextBuilder
 		            }
@@ -335,7 +335,7 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 		    public convenience init(__safeDI_id id: Int, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
 		        func __safeDI_nextBuilder(id: Int) -> Node {
 		            _ = Node.__safeDI_Node_DD5EE0BBCEB980F4.self
-		            return Node(__safeDI_id: id, __safeDI_apiBuilder: __safeDI_apiBuilder.nextBuilder(SafeDIScope_Api.nextBuilder_Values()))
+		            return Node(__safeDI_id: id, __safeDI_apiBuilder: __safeDI_apiBuilder.nextBuilder(SafeDIScope_Api.__safeDI_Values()))
 		        }
 		        let nextBuilder = Instantiator<Node> {
 		            __safeDI_nextBuilder(id: $0)

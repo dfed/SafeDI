@@ -63,7 +63,7 @@ struct SafeDIToolSeamHoleSiteBodyTests: ~Copyable {
 		let expected: String = generatedFileHeader + """
 		extension Office {
 		    nonisolated public enum SafeDIScope_Api {
-		        nonisolated public struct panel_Values {}
+		        nonisolated public struct __safeDI_Values: Sendable {}
 
 		        nonisolated public struct panelBuilder_Values {
 		            public let panel: Panel
@@ -75,13 +75,13 @@ struct SafeDIToolSeamHoleSiteBodyTests: ~Copyable {
 		        }
 
 		        nonisolated public enum Panel_Scope {
-		            nonisolated public struct api_Values {}
+		            nonisolated public struct __safeDI_Values: Sendable {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		                public let api: (__safeDI_Values) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
+		                public init(api: @escaping (__safeDI_Values) -> __safeDI_Built) {
 		                    self.api = api
 		                }
 
@@ -92,12 +92,12 @@ struct SafeDIToolSeamHoleSiteBodyTests: ~Copyable {
 		        }
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let panel: (panel_Values) -> SafeDIScope_Api.Panel_Scope.__safeDI_Builder<__safeDI_Built>
+		        nonisolated public final class __safeDI_Builder<__safeDI_Built> {
+		            public let panel: (__safeDI_Values) -> SafeDIScope_Api.Panel_Scope.__safeDI_Builder<__safeDI_Built>
 		            public let panelBuilder: (panelBuilder_Values) -> SafeDIScope_Api.Panel_Scope.__safeDI_Builder<__safeDI_Built>
 		            public let lazyPanel: (lazyPanel_Values) -> SafeDIScope_Api.Panel_Scope.__safeDI_Builder<__safeDI_Built>
 
-		            public init(panel: @escaping (panel_Values) -> SafeDIScope_Api.Panel_Scope.__safeDI_Builder<__safeDI_Built>, panelBuilder: @escaping (panelBuilder_Values) -> SafeDIScope_Api.Panel_Scope.__safeDI_Builder<__safeDI_Built>, lazyPanel: @escaping (lazyPanel_Values) -> SafeDIScope_Api.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
+		            public init(panel: @escaping (__safeDI_Values) -> SafeDIScope_Api.Panel_Scope.__safeDI_Builder<__safeDI_Built>, panelBuilder: @escaping (panelBuilder_Values) -> SafeDIScope_Api.Panel_Scope.__safeDI_Builder<__safeDI_Built>, lazyPanel: @escaping (lazyPanel_Values) -> SafeDIScope_Api.Panel_Scope.__safeDI_Builder<__safeDI_Built>) {
 		                self.panel = panel
 		                self.panelBuilder = panelBuilder
 		                self.lazyPanel = lazyPanel
@@ -114,21 +114,21 @@ struct SafeDIToolSeamHoleSiteBodyTests: ~Copyable {
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
-		        let __safeDI_apiBuilder_panel = __safeDI_apiBuilder.panel(SafeDIScope_Api.panel_Values())
+		        let __safeDI_apiBuilder_panel = __safeDI_apiBuilder.panel(SafeDIScope_Api.__safeDI_Values())
 		        func __safeDI_panel() -> Panel {
-		            let api: any Api = __safeDI_apiBuilder_panel.api(SafeDIScope_Api.Panel_Scope.api_Values())
+		            let api: any Api = __safeDI_apiBuilder_panel.api(SafeDIScope_Api.Panel_Scope.__safeDI_Values())
 		            return Panel(api: api)
 		        }
 		        let panel: Panel = __safeDI_panel()
 		        let __safeDI_apiBuilder_panelBuilder = __safeDI_apiBuilder.panelBuilder(SafeDIScope_Api.panelBuilder_Values(panel: panel))
 		        func __safeDI_panelBuilder() -> Panel {
-		            let api: any Api = __safeDI_apiBuilder_panelBuilder.api(SafeDIScope_Api.Panel_Scope.api_Values())
+		            let api: any Api = __safeDI_apiBuilder_panelBuilder.api(SafeDIScope_Api.Panel_Scope.__safeDI_Values())
 		            return Panel(api: api)
 		        }
 		        let panelBuilder = Instantiator<Panel>(__safeDI_panelBuilder)
 		        let __safeDI_apiBuilder_lazyPanel = __safeDI_apiBuilder.lazyPanel(SafeDIScope_Api.lazyPanel_Values(panel: panel, panelBuilder: panelBuilder))
 		        func __safeDI_lazyPanel() -> Panel {
-		            let api: any Api = __safeDI_apiBuilder_lazyPanel.api(SafeDIScope_Api.Panel_Scope.api_Values())
+		            let api: any Api = __safeDI_apiBuilder_lazyPanel.api(SafeDIScope_Api.Panel_Scope.__safeDI_Values())
 		            return Panel(api: api)
 		        }
 		        let lazyPanel = LazilyInstantiated<Panel>(__safeDI_lazyPanel)
@@ -137,7 +137,7 @@ struct SafeDIToolSeamHoleSiteBodyTests: ~Copyable {
 		}
 
 		extension Office {
-		    public enum __safeDI_Office_AB45FBF4C71EB72B {}
+		    public enum __safeDI_Office_E34B3C14E71BA391 {}
 		}
 		"""
 		#expect(generated == expected)

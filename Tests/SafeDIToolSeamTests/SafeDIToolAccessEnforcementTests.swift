@@ -1202,13 +1202,13 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 				integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + """
 				extension Service {
 				    nonisolated public enum SafeDIScope_UserService {
-				        nonisolated public struct userService_Values {}
+				        nonisolated public struct __safeDI_Values: Sendable {}
 
 				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-				            public let userService: (userService_Values) -> __safeDI_Built
+				            public let userService: (__safeDI_Values) -> __safeDI_Built
 
-				            public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+				            public init(userService: @escaping (__safeDI_Values) -> __safeDI_Built) {
 				                self.userService = userService
 				            }
 
@@ -1221,13 +1221,13 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
-				        let userService: any UserService = __safeDI_userServiceBuilder.userService(SafeDIScope_UserService.userService_Values())
+				        let userService: any UserService = __safeDI_userServiceBuilder.userService(SafeDIScope_UserService.__safeDI_Values())
 				        self.init(userService: userService)
 				    }
 				}
 
 				extension Service {
-				    public enum __safeDI_Service_DE15AB8B7FF442DE {}
+				    public enum __safeDI_Service_11EC73F609A6C004 {}
 				}
 				""",
 			])
@@ -1259,8 +1259,8 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_DE15AB8B7FF442DE.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
-			            func __safeDI_userServiceBuilder_Service_userService(_ scope: Service.SafeDIScope_UserService.userService_Values) -> any UserService {
+			            _ = Service.__safeDI_Service_11EC73F609A6C004.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
+			            func __safeDI_userServiceBuilder_Service_userService(_ scope: Service.SafeDIScope_UserService.__safeDI_Values) -> any UserService {
 			                func __safeDI_userService() -> DefaultUserService {
 			                    _ = DefaultUserService.__safeDI_DefaultUserService_CBF29CE484222325.self\(integration.seamCallComment(type: "DefaultUserService", declaringModule: "FeatureImpl"))
 			                    return DefaultUserService()
@@ -1283,13 +1283,13 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 				integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + """
 				extension Service {
 				    nonisolated public enum SafeDIScope_UserService {
-				        nonisolated public struct userService_Values {}
+				        nonisolated public struct __safeDI_Values: Sendable {}
 
 				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-				            public let userService: (userService_Values) -> __safeDI_Built
+				            public let userService: (__safeDI_Values) -> __safeDI_Built
 
-				            public init(userService: @escaping (userService_Values) -> __safeDI_Built) {
+				            public init(userService: @escaping (__safeDI_Values) -> __safeDI_Built) {
 				                self.userService = userService
 				            }
 
@@ -1302,13 +1302,13 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 				    public convenience init(__safeDI_userServiceBuilder: SafeDIScope_UserService.__safeDI_Builder<any UserService>) {
-				        let userService: any UserService = __safeDI_userServiceBuilder.userService(SafeDIScope_UserService.userService_Values())
+				        let userService: any UserService = __safeDI_userServiceBuilder.userService(SafeDIScope_UserService.__safeDI_Values())
 				        self.init(userService: userService)
 				    }
 				}
 
 				extension Service {
-				    public enum __safeDI_Service_DE15AB8B7FF442DE {}
+				    public enum __safeDI_Service_11EC73F609A6C004 {}
 				}
 				""",
 			])
@@ -1340,8 +1340,8 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_DE15AB8B7FF442DE.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
-			            func __safeDI_userServiceBuilder_Service_userService(_ scope: Service.SafeDIScope_UserService.userService_Values) -> any UserService {
+			            _ = Service.__safeDI_Service_11EC73F609A6C004.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
+			            func __safeDI_userServiceBuilder_Service_userService(_ scope: Service.SafeDIScope_UserService.__safeDI_Values) -> any UserService {
 			                func __safeDI_userService() -> DefaultUserService {
 			                    _ = DefaultUserService.__safeDI_DefaultUserService_CBF29CE484222325.self\(integration.seamCallComment(type: "DefaultUserService", declaringModule: "FeatureImpl"))
 			                    return DefaultUserService()

@@ -71,7 +71,7 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 		    public init() {
 		        let token = Token()
 		        func __safeDI_office() -> Office {
-		            _ = Office.__safeDI_Office_BE2826E04FD0676E.self // \(SafeDIToolSeamCallerArgumentFormTests.moduleInfoComment)
+		            _ = Office.__safeDI_Office_53CD34C34D825659.self // \(SafeDIToolSeamCallerArgumentFormTests.moduleInfoComment)
 		            func __safeDI_apiBuilder_Office() -> Office.SafeDIScope_Api.__safeDI_Builder<any Api> {
 		                .init(panel: { _ in __safeDI_apiBuilder_Office_Panel_Scope() })
 		            }
@@ -131,7 +131,7 @@ struct SafeDIToolSeamCallerArgumentFormTests: ~Copyable {
 		    public init() {
 		        let token = Token()
 		        func __safeDI_office() -> Office {
-		            _ = Office.__safeDI_Office_8C350C040CB8FBDD.self // \(SafeDIToolSeamCallerArgumentFormTests.moduleInfoComment)
+		            _ = Office.__safeDI_Office_64E6F2EE25BDC804.self // \(SafeDIToolSeamCallerArgumentFormTests.moduleInfoComment)
 		            func __safeDI_apiBuilder_Office() -> Office.SafeDIScope_Api.__safeDI_Builder<any Api> {
 		                .init(shelf: { _ in __safeDI_apiBuilder_Office_Shelf_Scope() })
 		            }
