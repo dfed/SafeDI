@@ -3765,8 +3765,8 @@ public actor DependencyTreeGenerator {
 			}
 			rootScopesToGenerate.append(rootScope)
 		}
-		// A calling mock whose fill of a called public mock's place makes such a construction reports the same declarations
-		// (`holesFilled(byCallsOf:in:)`).
+		// A calling mock whose fill of a called public mock's place makes such a construction reports it too, where the mock
+		// makes it as the twin does (`holesFilled(byCallsOf:in:)`).
 		guard inaccessibleConstructions.isEmpty else {
 			throw DependencyTreeGeneratorError.inaccessibleConstructions(inaccessibleConstructions)
 		}
@@ -4115,17 +4115,19 @@ public actor DependencyTreeGenerator {
 					isInMockFill: isInMockFill,
 				))
 			}
-			// A seam call's fills are constructions of this module's code: the fulfilling type and its tree, built with
-			// their initializers as the type's own module builds them, reached where the call is. A fill starts a path of its
-			// own, whose candidate is the fill's type when another module SafeDI knows declares it: declared a seam, that
-			// module builds the type's tree and the fill calls the initializer generated for it. No candidate above the seam
-			// reaches the fill: a type above the seam declared a seam would pass the builder up to this module whenever its
-			// own module cannot see the fulfilling type, so it would keep the fill out of this module for no path. A mock's
-			// tree calls no seam's generated initializer, but a mock root's tree fills the places of the public mocks of other
-			// modules it calls as its production twin fills them, so its fills are walked too, built as the inline mock
-			// builds them (`holesFilled(byCallsOf:in:)`). A mock builds every seam's tree inline and the twin calls no public
-			// mock, so neither remedy reaches a mock's fill: its error offers what the twin's offers in every case, widening
-			// the declaration.
+			// A seam call's fills are constructions of this module's code: the fulfilling type and its tree, built with their
+			// initializers as the type's own module builds them, reached where the call is. A fill starts a path of its own,
+			// whose candidate is the fill's type when another module SafeDI knows declares it: declared a seam, that module
+			// builds the type's tree and the fill calls the initializer generated for it. No candidate above the seam reaches
+			// the fill: a type above the seam declared a seam would pass the builder up to this module whenever its own module
+			// cannot see the fulfilling type, so it would keep the fill out of this module for no path. A mock's tree calls no
+			// seam's generated initializer, but a mock root's tree fills the places of the public mocks of other modules it
+			// calls as its production twin fills them, so its fills are walked too, built as the inline mock builds them
+			// (`holesFilled(byCallsOf:in:)`). A mock builds every seam's tree inline and the twin calls no public mock, so
+			// neither remedy reaches a mock's fill: its error offers only widening the declaration. Built as the inline mock
+			// builds it, a fill calls a type's hand-written mock method where it has one, as a mock root's own tree does, where
+			// the twin calls the initializer: a deliberate difference (`seam-and-mock-contract.md`, rule 7). The mock reports
+			// that method's access where the twin reports nothing, and nothing of an initializer only the twin calls.
 			if !isMock || walksFillsOfPublicMockCalls {
 				for case let .fill(hole, fillScope) in scope.holeArguments {
 					scopesToWalk.append((
@@ -9219,14 +9221,14 @@ public actor DependencyTreeGenerator {
 	/// built for production fills it: where a declaration it sees fulfills the place, as the mock's tree built inline would
 	/// build it (`fulfillingMockScope(of:in:)`: a hand-written mock or a `mockOnly` fake included), and the fill builds that
 	/// tree as the inline mock would, hand-written mock methods included. A construction in it this module cannot reach is
-	/// the access error production reports, which the mock root whose tree reaches the call reports too, in a build that
-	/// compiles the generated mocks; a build that does not passes such a place up. What the fill receives beside the values
-	/// the place's scope struct carries is received from the calling mock's tree, as production's fill receives it from
-	/// the caller's: a value the tree provides is handed to the fill, one
-	/// nothing provides is a parameter of `mock()`, and one the called mock's tree binds where the fill cannot read it is the
-	/// error production reports (`validateFills`). Every other place is passed up: the calling mock takes it, through a case
-	/// of its own enum or as a parameter its caller passes. A place a route reaches without a value its fill reads is filled
-	/// there with the caller's, as on every other route.
+	/// an access error, which the mock root whose tree reaches the call reports, in a build that compiles the generated
+	/// mocks: production's, but where the fill calls a hand-written mock method that production does not call; a build
+	/// that does not compile them passes such a place up. What the fill receives beside the values the place's scope
+	/// struct carries is received from the calling mock's tree, as production's fill receives it from the caller's: a
+	/// value the tree provides is handed to the fill, one nothing provides is a parameter of `mock()`, and one the called
+	/// mock's tree binds where the fill cannot read it is the error production reports (`validateFills`). Every other
+	/// place is passed up: the calling mock takes it, through a case of its own enum or as a parameter its caller passes.
+	/// A place a route reaches without a value its fill reads is filled there with the caller's, as on every other route.
 	///
 	/// A type a fill's tree instantiates that no declaration the module sees fulfills is a place of a public mock's own tree,
 	/// which is built with holes, and an internal mock's fill binds it from a builder `mock()` takes
@@ -9253,12 +9255,14 @@ public actor DependencyTreeGenerator {
 			for hole in publicMockCall.holes {
 				guard let fulfillingScope = Self.fulfillingMockScope(of: hole, in: typeDescriptionToScopeMap) else { continue }
 				// A fill whose tree constructs a type this module cannot reach, such as an `internal` type of another module, is
-				// filled, as its production twin fills it, and the mock root whose tree reaches the call reports the twin's
-				// access error (`createMockRootScopeGenerator`, which walks the fills of the calls in its tree). The generated
-				// mocks are under the module's mock condition, so a build that leaves it inactive, which never compiles the fill,
-				// passes the place up and reports nothing, as `validateFillsInstantiateOnlyWhatCanBeFulfilled` is checked only
-				// where the mocks compile. An `if` rather than `||`, whose autoclosure Swift 6.2 rejects for capturing the scope
-				// ("sending 'fulfillingScope' risks causing data races").
+				// filled, as its production twin fills it, and the mock root whose tree reaches the call reports the access error
+				// of each construction the fill makes (`createMockRootScopeGenerator`, which walks the fills of the calls in its
+				// tree): the twin's, but for a hand-written mock method the fill calls where the twin calls the initializer
+				// (`constructions(inTreeRootedAt:…)`). The generated mocks are under the module's mock condition, so a build that
+				// leaves it inactive, which never compiles the fill, passes the place up and reports nothing, as
+				// `validateFillsInstantiateOnlyWhatCanBeFulfilled` is checked only where the mocks compile. An `if` rather than
+				// `||`, whose autoclosure Swift 6.2 rejects for capturing the scope ("sending 'fulfillingScope' risks causing data
+				// races").
 				let isFilled = if compilesGeneratedMocks {
 					true
 				} else {
