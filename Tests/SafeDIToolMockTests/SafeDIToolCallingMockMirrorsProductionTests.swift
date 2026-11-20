@@ -2895,9 +2895,9 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		// The internal mock builds `token`, as inline does; the public one takes it, and builds it where its caller passes `nil`.
 		let expectedSignature = switch caller {
 		case .internal:
-			"static func mock(\n        safeDIOverrides: SafeDIOverrides = .init()\n    ) -> HubScreen {"
+			"static func mock(\n        gadgetBuilder: (() -> any Gadget)? = nil,\n        serviceBuilder: (() -> any Service)? = nil,\n        safeDIOverrides: SafeDIOverrides = .init()\n    ) -> HubScreen {"
 		case .public:
-			"static func mock(\n        token: Token? = nil,\n        safeDIOverrides: SafeDIOverrides = .init()\n    ) -> HubScreen {"
+			"static func mock(\n        gadgetBuilder: (() -> any Gadget)? = nil,\n        serviceBuilder: (() -> any Service)? = nil,\n        token: Token? = nil,\n        safeDIOverrides: SafeDIOverrides = .init()\n    ) -> HubScreen {"
 		}
 		#expect(Self.mockSignature(of: "HubScreen", in: firstFiles["App.swift"] ?? "") == expectedSignature)
 		for order in orders.dropFirst() {

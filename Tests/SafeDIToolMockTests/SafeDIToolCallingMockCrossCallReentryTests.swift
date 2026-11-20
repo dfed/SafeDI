@@ -963,7 +963,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                .init(serviceBuilder: { _ in __safeDI_defaultService_ServiceBuilder_Page_serviceBuilder() })
 		            }
 		            _ = Page.__safeDI_Page_mock_D15A253F853DBCB8.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder(__safeDI_defaultService_ServiceBuilder_Page_serviceBuilder()) } else { Page.__safeDI_mock(defaultService_ServiceBuilder: defaultService_ServiceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_defaultService_ServiceBuilder_Page()) }
+		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder(defaultService_ServiceBuilder ?? __safeDI_defaultService_ServiceBuilder_Page_serviceBuilder()) } else { Page.__safeDI_mock(defaultService_ServiceBuilder: defaultService_ServiceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_defaultService_ServiceBuilder_Page()) }
 		        }
 		        let page: Page = __safeDI_page()
 		        return Screen(page: page)
@@ -1170,7 +1170,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		let graph = Self.graph(caller: caller, builder: "Instantiator", deferredPlace: false, fillReadsCallersToken: true, typeBetweenDeclaresToken: true)
 		let modules = graph.modules(.mock)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		let spelling = Self.appSpelling(of: caller)
+		let spelling = Self.appSpellingTakingServiceBuilder(of: caller)
 
 		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
 		#if canImport(SafeDI)
@@ -1313,6 +1313,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    }
 
 		    \(spelling.member)static func mock(
+		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		\(spelling.generatedOnlyMock)        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
@@ -1325,7 +1326,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                            func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page(token: token) })
 		                            }
-		                            return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book())
+		                            return Book.__safeDI_mock(serviceBuilder: \(spelling.builder).map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 		                        }
 		                        let book: Book = __safeDI_book()
 		                        return Middle(token: token, book: book)
@@ -1340,7 +1341,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, token: token) })
 		            }
 		            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-		            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(token: token))
+		            return Page.__safeDI_mock(serviceBuilder: \(spelling.builder).map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page(token: token))
 		        }
 		        let page: Page = __safeDI_page()
 		        return Screen(token: token, page: page)
@@ -1360,7 +1361,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		let graph = Self.graph(caller: caller, builder: "Instantiator", deferredPlace: false, fillReadsCallersToken: true, typeBetweenDeclaresToken: true, enclosingCallIsOfHolder: true)
 		let modules = graph.modules(.mock)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		let spelling = Self.appSpelling(of: caller)
+		let spelling = Self.appSpellingTakingServiceBuilder(of: caller)
 
 		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
 		#if canImport(SafeDI)
@@ -1559,6 +1560,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    }
 
 		    \(spelling.member)static func mock(
+		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		\(spelling.generatedOnlyMock)        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
@@ -1571,7 +1573,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                            func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                                .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page(token: token) })
 		                            }
-		                            return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book())
+		                            return Book.__safeDI_mock(serviceBuilder: \(spelling.builder).map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 		                        }
 		                        let book: Book = __safeDI_book()
 		                        return Middle(token: token, book: book)
@@ -1589,7 +1591,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, token: token) })
 		            }
 		            _ = Shelf.__safeDI_Shelf_mock_0AA2046DBF99EF48.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Shelf", declaringModule: "Mid"))
-		            return Shelf.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Shelf(token: token), safeDIOverrides: safeDIOverrides.shelf)
+		            return Shelf.__safeDI_mock(serviceBuilder: \(spelling.builder).map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Shelf(token: token), safeDIOverrides: safeDIOverrides.shelf)
 		        }
 		        let shelf: Shelf = __safeDI_shelf()
 		        return Screen(token: token, shelf: shelf)
@@ -1609,7 +1611,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		let graph = Self.graph(caller: caller, builder: "Instantiator", deferredPlace: false, fillReadsCallersToken: true, typeBetweenDeclaresToken: true, enclosingCallIsOfHolder: true, middleHoldsFilledType: true)
 		let modules = graph.modules(.mock)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		let spelling = Self.appSpelling(of: caller)
+		let spelling = Self.appSpellingTakingServiceBuilder(of: caller)
 
 		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
 		#if canImport(SafeDI)
@@ -1808,6 +1810,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    }
 
 		    \(spelling.member)static func mock(
+		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		\(spelling.generatedOnlyMock)        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
@@ -1835,7 +1838,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, token: token) })
 		            }
 		            _ = Shelf.__safeDI_Shelf_mock_0AA2046DBF99EF48.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Shelf", declaringModule: "Mid"))
-		            return Shelf.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Shelf(token: token), safeDIOverrides: safeDIOverrides.shelf)
+		            return Shelf.__safeDI_mock(serviceBuilder: \(spelling.builder).map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Shelf(token: token), safeDIOverrides: safeDIOverrides.shelf)
 		        }
 		        let shelf: Shelf = __safeDI_shelf()
 		        return Screen(token: token, shelf: shelf)
@@ -1855,7 +1858,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		let graph = Self.graph(caller: caller, builder: "Instantiator", deferredPlace: false, calledMockHoldsBuilderBeneathRoot: true)
 		let modules = graph.modules(.mock)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		let spelling = Self.appSpelling(of: caller)
+		let spelling = Self.appSpellingTakingServiceBuilder(of: caller)
 
 		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
 		#if canImport(SafeDI)
@@ -2075,6 +2078,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    }
 
 		    \(spelling.member)static func mock(
+		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		\(spelling.generatedOnlyMock)        func __safeDI_page() -> Page {
@@ -2087,7 +2091,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                        func __safeDI_serviceBuilder_Book_Binder_Scope() -> Book.SafeDIMockScope_Service.Binder_Scope.__safeDI_Builder<any Service> {
 		                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
 		                        }
-		                        return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book())
+		                        return Book.__safeDI_mock(serviceBuilder: \(spelling.builder).map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 		                    }
 		                    let book: Book = __safeDI_book()
 		                    return DefaultService(book: book)
@@ -2099,7 +2103,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 		            }
 		            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
+		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ if let \(spelling.builder) { \(spelling.builder)() } else { __safeDI_serviceBuilder_Page_service() } }) } else { Page.__safeDI_mock(serviceBuilder: \(spelling.builder).map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page()) }
 		        }
 		        let page: Page = __safeDI_page()
 		        return Screen(page: page)
@@ -2427,7 +2431,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		let graph = Self.hiddenTokenGraph(caller: caller, hiddenToken: .calledMockBeforeBuilder, pageReceivesToken: true)
 		let modules = graph.modules(.mock)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-		let spelling = Self.appSpelling(of: caller)
+		let spelling = Self.appSpellingTakingServiceBuilder(of: caller)
 
 		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
 		#if canImport(SafeDI)
@@ -2635,6 +2639,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    }
 
 		    \(spelling.member)static func mock(
+		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		\(spelling.generatedOnlyMock)        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
@@ -2646,7 +2651,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                        func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
 		                        }
-		                        return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book())
+		                        return Book.__safeDI_mock(serviceBuilder: \(spelling.builder).map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 		                    }
 		                    let book: Book = __safeDI_book()
 		                    return DefaultService(token: token, book: book)
@@ -2658,7 +2663,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope) })
 		            }
 		            _ = Page.__safeDI_Page_mock_C5813F6661CC087D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-		            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(), token: token, safeDIOverrides: safeDIOverrides.page)
+		            return Page.__safeDI_mock(serviceBuilder: \(spelling.builder).map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page(), token: token, safeDIOverrides: safeDIOverrides.page)
 		        }
 		        let page: Page = __safeDI_page()
 		        return Screen(token: token, page: page)
@@ -3684,6 +3689,23 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 				"public ",
 				"\nextension Screen {\n    public enum __safeDI_Screen_mock_51799E6AA5E7B634 {}\n}\n",
 				"        Screen.__safeDI_mock(safeDIOverrides: safeDIOverrides)\n    }\n\n    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.\n    public static func __safeDI_mock(\n        safeDIOverrides: SafeDIOverrides = .init()\n    ) -> Screen {\n",
+			)
+		}
+	}
+
+	/// `appSpelling(of:)` for a `Screen` whose calls fill places of `any Service`, so its mock takes the optional
+	/// `serviceBuilder`, and the name the body reads it by (`builder`).
+	private static func appSpellingTakingServiceBuilder(of caller: GraphFuzzerCallingMockCell.Caller) -> (overrides: String, member: String, guardExtension: String, generatedOnlyMock: String, builder: String) {
+		switch caller {
+		case .internal, .listed:
+			("", "", "", "", "serviceBuilder")
+		case .public:
+			(
+				"nonisolated public ",
+				"public ",
+				"\nextension Screen {\n    public enum __safeDI_Screen_mock_E1553F902C7FFA09 {}\n}\n",
+				"        Screen.__safeDI_mock(serviceBuilder: serviceBuilder, safeDIOverrides: safeDIOverrides)\n    }\n\n    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.\n    public static func __safeDI_mock(\n        serviceBuilder __safeDI_serviceBuilder: (() -> any Service)? = nil,\n        safeDIOverrides: SafeDIOverrides = .init()\n    ) -> Screen {\n",
+				"__safeDI_serviceBuilder",
 			)
 		}
 	}
