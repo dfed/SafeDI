@@ -174,7 +174,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			view: ModuleInfoView(moduleGraph: [moduleInfoFile.ownIdentity], declarations: [moduleInfoFile.ownEntry]),
 		)
 		var foundTypeNames = Set<String>()
-		for value in reflectedStructuresAndEnumerations(in: project.scannedModuleInfo) + reflectedStructuresAndEnumerations(in: moduleInfoFileWithView) {
+		for value in Self.cachedStructuresAndEnumerations(in: project.scannedModuleInfo) + Self.cachedStructuresAndEnumerations(in: moduleInfoFileWithView) {
 			let typeName = String(reflecting: type(of: value))
 			foundTypeNames.insert(typeName)
 			guard let schemaMember = value as? any BinarySchemaMember else {
@@ -806,6 +806,41 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	/// The number of cases an enum's layout lists.
+	/// The structs and enums `value` holds, as `reflectedStructuresAndEnumerations(in:)` finds them, except the storage
+	/// of a property its layout lists as unwritten: a type held there that is no schema member, such as the box
+	/// `Instantiable` keeps its rarely set fields in, holds fields written under their own names, so only the schema
+	/// members it holds are cached values.
+	private static func cachedStructuresAndEnumerations(in value: Any, isInsideUnwrittenProperty: Bool = false) -> [Any] {
+		let mirror = Mirror(reflecting: value)
+		let unwrittenProperties = unwrittenProperties(of: value)
+		let nested = mirror.children.flatMap { child in
+			cachedStructuresAndEnumerations(
+				in: child.value,
+				isInsideUnwrittenProperty: isInsideUnwrittenProperty || unwrittenProperties.contains(child.label ?? ""),
+			)
+		}
+		guard mirror.displayStyle == .struct || mirror.displayStyle == .enum,
+		      !isInsideUnwrittenProperty || value is any BinarySchemaMember
+		else {
+			return nested
+		}
+		return [value] + nested
+	}
+
+	/// The properties the layout of `value`'s type lists as unwritten, when it is a schema member's struct.
+	private static func unwrittenProperties(of value: Any) -> [String] {
+		func unwrittenProperties<Member: BinarySchemaMember>(ofMember _: Member) -> [String] {
+			guard case let .structure(_, unwrittenProperties) = Member.binaryLayout else {
+				return []
+			}
+			return unwrittenProperties
+		}
+		guard let member = value as? any BinarySchemaMember else {
+			return []
+		}
+		return unwrittenProperties(ofMember: member)
+	}
+
 	private static func caseCount<Member: BinarySchemaMember>(of _: Member.Type) -> Int {
 		switch Member.binaryLayout {
 		case .structure:
