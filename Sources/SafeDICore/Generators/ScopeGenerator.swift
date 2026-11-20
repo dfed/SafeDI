@@ -6787,6 +6787,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// (`ScopeGenerator.publicMockWrapperParameters`). A deliberate gap, the other site of which is that function: where
 			// the called mock still takes the value by value, a call passes a `LazilyInstantiated` property's instance
 			// (`<label>.instance`), which is created at the call, even when nothing in the called mock's tree reads it.
+			// A second deliberate gap, the other site of which is the graph fuzzer's M8.32 exemption
+			// (`statedPublicMockValueDivergences`), stated in `public-mock-builders.md`: where the called mock takes a
+			// plain value (`x: T`, or `x: T? = nil`, which 2.3.0 shipped as API), the call reads `.instance` too. Where the
+			// called tree reads the value only behind an instantiator, the instance is created at the call rather than at
+			// that first read; elsewhere the called type's own construction reads it, and only the order of creation within
+			// that construction moves.
 			try instantiable.generateArgumentList(
 				unavailableProperties: bodyUnavailableProperties(unavailableProperties),
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
