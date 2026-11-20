@@ -708,6 +708,38 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 	}
 
 	@Test
+	func drawFeatures_readUnbuildableValueShapes_whenSeedsDrawThem() {
+		func features(ofSeed seed: UInt64) -> Set<GraphFuzzerPublicMockDrawFeature> {
+			GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
+		}
+		let drawn: Set<GraphFuzzerPublicMockDrawFeature> = [.unbuildableValuePublicMockCall, .unbuildableValuePublicMockCallPublicTier, .unbuildableValuePublicMockCallTierOmits]
+		// Seed 5 passes a public class to the public tier; seed 155's consumer in another package reaches a public tier that
+		// omits `[3 of Int]`, the roll that fails with the omission walk's declarations reverted; seed 0 draws none.
+		#expect(features(ofSeed: 5).intersection(drawn) == [.unbuildableValuePublicMockCall, .unbuildableValuePublicMockCallPublicTier])
+		#expect(features(ofSeed: 155).intersection(drawn) == [.unbuildableValuePublicMockCall, .unbuildableValuePublicMockCallTierOmits])
+		#expect(features(ofSeed: 0).isDisjoint(with: drawn))
+	}
+
+	@Test
+	func drawFeatures_readHoleLabelShapes_whenSeedsDrawThem() {
+		func features(ofSeed seed: UInt64) -> Set<GraphFuzzerPublicMockDrawFeature> {
+			GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
+		}
+		let drawn: Set<GraphFuzzerPublicMockDrawFeature> = [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingHeldInInstantiator, .holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated, .holeLabelReceivedByPromotedSiblingEqualsGeneratedName]
+		// Seed 981 holds the hole as itself, seed 937 in an `Instantiator`, seed 815 in a `LazilyInstantiated`; the tool
+		// rejects each, and each is accepted and fails to compile with `publicMockHoleSiteBoundApartFinding` reverted. Seeds
+		// 663 (the hole as itself) and 528 (in a `LazilyInstantiated`) label the hole with the name SafeDI generates for the
+		// `LazilyInstantiated` it wraps; the tool rejects each, and each is accepted and fails to compile where the finding
+		// is dropped for a label no type receives. Seed 1 draws none.
+		#expect(features(ofSeed: 981).intersection(drawn) == [.holeLabelReceivedByPromotedSibling])
+		#expect(features(ofSeed: 937).intersection(drawn) == [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingHeldInInstantiator])
+		#expect(features(ofSeed: 815).intersection(drawn) == [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated])
+		#expect(features(ofSeed: 663).intersection(drawn) == [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingEqualsGeneratedName])
+		#expect(features(ofSeed: 528).intersection(drawn) == [.holeLabelReceivedByPromotedSibling, .holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated, .holeLabelReceivedByPromotedSiblingEqualsGeneratedName])
+		#expect(features(ofSeed: 1).isDisjoint(with: drawn))
+	}
+
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func outputFeatures_readNoBuilderStruct_whenPublicMockKeepsClosureOverEnum() {
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [])
