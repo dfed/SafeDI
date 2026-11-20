@@ -447,7 +447,7 @@ extension DependencyTreeGenerator {
 		// The instances the tree reads by value through a wrapper a public mock takes as a parameter, which it reads as
 		// `<label>.instance` when it builds the type that reads it, as production reads a received wrapper's instance.
 		var instancesReadThroughWrapperParameters = Set<Property>()
-		let (mockRootTable, mockRootRecord) = frozenScopeMap.freezing(rootScope: mockRootScope)
+		let (mockRootTable, mockRootRecord) = MockRootPlan(mockRootScope: mockRootScope, frozenScopeMap: frozenScopeMap).freezingRoot()
 		func mockRootGenerator(builders: ShapedBuilders?) throws -> ScopeGenerator {
 			try mockRootRecord.createScopeGenerator(
 				in: mockRootTable,
@@ -1395,4 +1395,24 @@ extension DependencyTreeGenerator {
 			scopesToWalk[firstChildIndex...].reverse()
 		}
 	}
+}
+
+/// A mock root whose own checks have passed: the cycles and hidden receives of the trees of the dependencies it
+/// promotes, and the access of every construction its mock makes. Made only in this file, where
+/// `createMockRootScopeGenerator` runs those checks, and the one way that function freezes the root's tree, so no other
+/// mock root's outcome decides whether this one is built. As `ValidatedWorld` is, a convention the compiler enforces by
+/// access.
+struct MockRootPlan {
+	fileprivate init(mockRootScope: Scope, frozenScopeMap: FrozenScopeMap) {
+		self.mockRootScope = mockRootScope
+		self.frozenScopeMap = frozenScopeMap
+	}
+
+	/// The root's record, and the table its tree is found in.
+	func freezingRoot() -> (table: ScopeTable, record: ScopeRecord) {
+		frozenScopeMap.freezing(rootScope: mockRootScope)
+	}
+
+	private let mockRootScope: Scope
+	private let frozenScopeMap: FrozenScopeMap
 }
