@@ -28,7 +28,7 @@ public final class Profile: Instantiable {
 	@Received private let analytics: Analytics
 }
 
-/// An inner seam with a place of the same hole, so that the outer seam’s builder is handed a scope.
+/// A seam that calls another seam whose hole it cannot fill, and has a place of that hole of its own.
 @Instantiable(generateDependencyTree: true)
 public final class AccountHub: Instantiable {
 	public init(account: AccountService, settings: AccountSettings) {

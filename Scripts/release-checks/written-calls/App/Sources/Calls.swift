@@ -45,18 +45,10 @@ func callSeams(user: User, database: Database, logger: Logger, analytics: Analyt
 	let _: AccountService = AccountService(profileStoreBuilder: { DefaultProfileStore() })
 	let _: AccountService = AccountService(profileStoreBuilder: DefaultProfileStore.init)
 
-	// “Generating a dependency tree per module”: a builder handed a scope, which `{ _ in … }` fills alike everywhere,
-	// and a pattern that singles out one place.
-	let _: AccountHub = AccountHub(profileStoreBuilder: { _ in DefaultProfileStore() })
-	let _: AccountHub = AccountHub(profileStoreBuilder: { scope in
-		switch scope {
-		case let .account(.profile(values, .profileStore)):
-			_ = values.analytics
-			return DefaultProfileStore()
-		case let .settings(_, settingsScope):
-			return settingsScope.makeProfileStore()
-		}
-	})
+	// “Generating a dependency tree per module”: a seam that calls another seam whose holes it cannot fill takes
+	// builders for them too, of the same forms, so a caller never writes anything else.
+	let _: AccountHub = AccountHub(profileStoreBuilder: { DefaultProfileStore() })
+	let _: AccountHub = AccountHub(profileStoreBuilder: DefaultProfileStore.init)
 
 	// “Generating a dependency tree per module”: the builder of places held in instantiators is the wrapper’s
 	// `Builder`, which is handed the forwarded value; a place in a `Sendable` wrapper has a `Sendable` builder; and a
@@ -69,13 +61,6 @@ func callSeams(user: User, database: Database, logger: Logger, analytics: Analyt
 
 	// “Adopting SafeDI in a large codebase”: an app target calls a seam that takes a `@Forwarded` property.
 	let _: AppEntry = AppEntry(configuration: LaunchConfiguration(environment: "production"))
-}
-
-// “Generating a dependency tree per module”: a function on a type’s enum treats every place beneath that type alike.
-extension AccountHub.SafeDIScope_ProfileStore.AccountSettings_Scope {
-	func makeProfileStore() -> any ProfileStore {
-		DefaultProfileStore()
-	}
 }
 
 // MARK: Mocks
@@ -158,7 +143,7 @@ func callMocks() {
 
 	// “Public mocks”: the `package` tier, from a module of the same package, which also takes `session`.
 	let _: PaymentService = PaymentService.mock(session: PaymentSession())
-	let _: PaymentService = PaymentService.mock(retries: 5, analytics: Analytics(), session: PaymentSession(), safeDIOverrides: .init(tokenCache: .init(capacity: 5)))
+	let _: PaymentService = PaymentService.mock(retries: 5, analytics: LazilyInstantiated { Analytics() }, session: PaymentSession(), safeDIOverrides: .init(tokenCache: .init(capacity: 5)))
 }
 
 // “Overriding dependencies”: the fields of `SafeDIOverrides` and `SafeDIMockConfiguration` are read-only, so an

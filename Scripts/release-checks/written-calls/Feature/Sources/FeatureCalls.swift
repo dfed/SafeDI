@@ -3,6 +3,14 @@
 #if DEBUG
 struct StubProfileStore: ProfileStore {}
 
+struct StubUploader: Uploader {}
+
+// “Dependency kinds in the generated mock”: a seam’s `mock()` takes the builder its initializer takes for a hole, in
+// place of the flat parameter.
+func callUploadCenterMock() {
+	let _: UploadCenter = UploadCenter.mock(uploaderBuilder: { StubUploader() })
+}
+
 func callProfileScreenMocks() {
 	let a = AnyProfileStore(StubProfileStore())
 	let b = AnyProfileStore(StubProfileStore())
