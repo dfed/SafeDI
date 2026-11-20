@@ -56,3 +56,5 @@ public enum AccessLevel: Codable, Hashable, Sendable {
 		}
 	}
 }
+
+// Probe: forces a rebuild of SafeDICore to time a Verify build. Never merged.
