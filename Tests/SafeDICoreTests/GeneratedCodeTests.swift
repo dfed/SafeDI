@@ -38,6 +38,13 @@ struct GeneratedCodeTests {
 	}
 
 	@Test
+	func spelled_returnsWhatTheWriterWrites_whenCodeIsOnlyText() {
+		let text = "\na\r\n\n  b\n\n"
+		#expect(GeneratedCode.text(text).spelled() == GeneratedCode.sequence([.text(text)]).spelled())
+		#expect(GeneratedCode.text(text).spelled() == text)
+	}
+
+	@Test
 	func spelled_keepsEmptyLines_whenIndentationIsEmpty() {
 		#expect(GeneratedCode.indented(.text("a\n\nb\n"), by: "").spelled() == "a\n\nb\n")
 	}

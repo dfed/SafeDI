@@ -97,9 +97,15 @@ struct GeneratedCode: Sendable {
 
 	/// The text of the code.
 	func spelled() -> String {
-		var writer = GeneratedCodeWriter()
-		writer.write(self)
-		return writer.text
+		// Text outside every level is written as it is, so a plan that is only text is that text, shared rather than
+		// copied: a mock's code is hosted as one text as large as the module's mocks, which a copy would hold twice.
+		if case let .text(text) = storage {
+			return text
+		} else {
+			var writer = GeneratedCodeWriter()
+			writer.write(self)
+			return writer.text
+		}
 	}
 
 	/// The text of the code's lines that hold more than whitespace, joined by line feeds
