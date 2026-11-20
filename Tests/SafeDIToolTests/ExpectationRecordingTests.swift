@@ -411,3 +411,5 @@ struct ExpectationRecordingTests: ~Copyable {
 		let description: String
 	}
 }
+
+// Probe: a change in one test file, to time a Verify build that starts from its parent build. Never merged.
