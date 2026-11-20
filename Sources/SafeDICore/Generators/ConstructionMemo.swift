@@ -413,6 +413,11 @@ struct ConstructionLog {
 
 	/// These reads as `context` answers them, or `nil` when `context` answers one otherwise.
 	func answeredAlike(in context: ConstructionContext) -> Self? {
+		// SPIKE ONLY (contention bound): SAFEDI_SPIKE_REPLAY=stub takes every candidate's reads as answered alike, so no read
+		// is replayed. The tree built is then wrong; only its construction time is read.
+		if SpikeContention.stubsReplay {
+			return self
+		}
 		// Most candidates differ in some read, so the answers are kept in an array until every read is answered alike.
 		// The reads that tell most candidates apart, which closes a cycle and on what, are asked first, so a candidate that
 		// differs is set aside after a read or two.

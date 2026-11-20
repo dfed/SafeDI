@@ -8,6 +8,9 @@ enum SpikeContention {
 	static let rounds: Int? = ProcessInfo.processInfo.environment["SAFEDI_SPIKE_CONTENTION"].flatMap(Int.init)
 
 	/// With SAFEDI_SPIKE_CONTENTION_OWN_TABLE=1, each thread constructs from a table and records frozen for it alone.
+	static let stubsReplay = ProcessInfo.processInfo.environment["SAFEDI_SPIKE_REPLAY"] == "stub"
+	static let memoOff = ProcessInfo.processInfo.environment["SAFEDI_SPIKE_REPLAY"] == "off"
+
 	static let ownTable = ProcessInfo.processInfo.environment["SAFEDI_SPIKE_CONTENTION_OWN_TABLE"] == "1"
 
 	static func measure(label: String, _ construct: @escaping @Sendable () throws -> Void) throws {
@@ -18,7 +21,9 @@ enum SpikeContention {
 		guard let rounds else { return }
 		// Warm up once.
 		for construct in constructions {
-			try construct()
+			try ConstructionMemo.$isEnabled.withValue(!memoOff) {
+				try construct()
+			}
 		}
 		for round in 0..<rounds {
 			for threads in (ProcessInfo.processInfo.environment["SAFEDI_SPIKE_CONTENTION_KS"].map { $0.split(separator: ",").compactMap { Int($0) } } ?? [1, 2, 3, 4]) {
@@ -26,7 +31,9 @@ enum SpikeContention {
 				let start = DispatchTime.now().uptimeNanoseconds
 				DispatchQueue.concurrentPerform(iterations: threads) { index in
 					let threadStart = DispatchTime.now().uptimeNanoseconds
-					try? constructions[index]()
+					ConstructionMemo.$isEnabled.withValue(!memoOff) {
+						try? constructions[index]()
+					}
 					times.set(index, DispatchTime.now().uptimeNanoseconds - threadStart)
 				}
 				let wall = DispatchTime.now().uptimeNanoseconds - start
