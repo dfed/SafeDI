@@ -2775,6 +2775,7 @@ enum GraphFuzzerGenerator {
 			repeatedAncestorRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.repeatedAncestorRandomSeedMask)
 			guardedMockParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.guardedMockParameterRandomSeedMask)
 			differingPinsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.differingPinsRandomSeedMask)
+			mockSharedPlaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.mockSharedPlaceRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -2853,6 +2854,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingGuardedMockParameterShapes(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingTypeBuiltTwiceWithDifferingPins(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingMockSharedPlaceShapes(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3277,6 +3280,8 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingTypeBuiltTwiceWithDifferingPins`' choices: whether a graph gains `PinHost`'s tree, and every
 		/// shape of that tree.
 		private var differingPinsRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingMockSharedPlaceShapes`' choices: whether a graph gains `MockSharedScreen`'s tree, and its variant.
+		private var mockSharedPlaceRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -7782,6 +7787,89 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let differingPinsRandomSeedMask: UInt64 = 0x64696666506E6E73
+
+		// MARK: Mock shared places
+
+		/// How the places of `addingMockSharedPlaceShapes`' `MockSharedLeaf` read its dependency, or hold it.
+		enum MockSharedPlaceVariant: CaseIterable {
+			/// Every place reads the `mockSharedService` `MockSharedScreen` instantiates, so the three are one class.
+			case equalReads
+			/// `MockSharedScreen` receives `mockSharedService`, which its mock promotes, and `MockSharedPlaceB` instantiates
+			/// one of its own before its leaf: one place reads the promoted value and another a value its parent built.
+			case promotedAndParentBuiltReads
+			/// `MockSharedLeaf` receives `mockSharedService` only if available, and `MockSharedPlaceB` receives it only if
+			/// available too, so its place resolves the read to an optional declaration and the others to a value.
+			case optionalDeclarationRead
+			/// `MockSharedPlaceC` holds its leaf erased to `MockSharedAnyLeaf`, a class of its own beside the plain places'.
+			case erasedPlace
+		}
+
+		/// The base corpus's draw of a type one mock builds at three places (roll j of the mock shared-place draw), whose
+		/// mock a shared body builds in one function per class: `MockSharedScreen`, with `generateMock: true`, builds
+		/// `MockSharedPlaceA`, `MockSharedPlaceB` and `MockSharedPlaceC`, each of which instantiates `mockSharedLeaf`,
+		/// which receives `mockSharedService` (`MockSharedPlaceVariant`). The optional-declaration and erased variants make
+		/// two classes; the others one. No root reaches the tree, so only the mock, and the value oracle's mirror of it,
+		/// judge it. `mockSharedPlaceRandom` draws only for this pass, after every other, and only in the base corpus.
+		private mutating func addingMockSharedPlaceShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, mockSharedPlaceRandom.percentChance(4) else { return declarations }
+			let variants = MockSharedPlaceVariant.allCases
+			let variant = variants[Int(mockSharedPlaceRandom.next() % UInt64(variants.count))]
+			var declarations = declarations
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func append(_ name: String, generatesMock: Bool = false, _ properties: [PropertyDeclaration], additionalDeclarations: [String] = []) {
+				var declaration = TypeDeclaration(
+					name: name,
+					instantiableArguments: generatesMock ? ["generateMock: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: conformances,
+				)
+				declaration.additionalDeclarations = additionalDeclarations
+				declarations.append(declaration)
+			}
+			let serviceName = "\(prefix)MockSharedService"
+			let leafName = "\(prefix)MockSharedLeaf"
+			let erasedLeafName = "\(prefix)MockSharedAnyLeaf"
+			let requiredService = PropertyDeclaration(attribute: "@Received", label: "mockSharedService", type: serviceName)
+			let optionalService = PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "mockSharedService", type: serviceName + "?")
+			let instantiatedService = PropertyDeclaration(attribute: "@Instantiated", label: "mockSharedService", type: serviceName)
+			let leafPlace = PropertyDeclaration(attribute: "@Instantiated", label: "mockSharedLeaf", type: leafName)
+			append(serviceName, [])
+			append(
+				leafName,
+				[variant == .optionalDeclarationRead ? optionalService : requiredService],
+				additionalDeclarations: variant == .erasedPlace
+					? ["public struct \(erasedLeafName)\(helperTypesAreSendable ? ": Sendable" : "") {\n\tpublic init(_ value: \(leafName)) {\n\t\tself.value = value\n\t}\n\n\tpublic let value: \(leafName)\n}"]
+					: [],
+			)
+			append("\(prefix)MockSharedPlaceA", [leafPlace])
+			switch variant {
+			case .equalReads, .erasedPlace:
+				append("\(prefix)MockSharedPlaceB", [leafPlace])
+			case .promotedAndParentBuiltReads:
+				append("\(prefix)MockSharedPlaceB", [instantiatedService, leafPlace])
+			case .optionalDeclarationRead:
+				append("\(prefix)MockSharedPlaceB", [optionalService, leafPlace])
+			}
+			if variant == .erasedPlace {
+				append("\(prefix)MockSharedPlaceC", [PropertyDeclaration(
+					attribute: "@Instantiated(fulfilledByType: \"\(leafName)\", erasedToConcreteExistential: true)",
+					label: "mockSharedLeaf",
+					type: erasedLeafName,
+				)])
+			} else {
+				append("\(prefix)MockSharedPlaceC", [leafPlace])
+			}
+			append("\(prefix)MockSharedScreen", generatesMock: true, [
+				variant == .promotedAndParentBuiltReads ? requiredService : instantiatedService,
+				PropertyDeclaration(attribute: "@Instantiated", label: "mockSharedPlaceA", type: "\(prefix)MockSharedPlaceA"),
+				PropertyDeclaration(attribute: "@Instantiated", label: "mockSharedPlaceB", type: "\(prefix)MockSharedPlaceB"),
+				PropertyDeclaration(attribute: "@Instantiated", label: "mockSharedPlaceC", type: "\(prefix)MockSharedPlaceC"),
+			])
+			return declarations
+		}
+
+		private static let mockSharedPlaceRandomSeedMask: UInt64 = 0x6D6F636B53686172
 
 		// MARK: Cycle parameters
 
@@ -12850,6 +12938,10 @@ struct GraphFuzzerFailure: Equatable {
 		/// another configuration by value (`GraphFuzzerToolRuns.configurationStorageFailure`), which every builder function
 		/// that captures it copies whole.
 		case configurationStoresAnotherByValue = "a generated configuration stores another configuration by value"
+		/// A generated `mock()` builds one class – the same parameter types, return type and body once generated names are
+		/// mapped – in two of the functions its body declares for shared places (`GraphFuzzerToolRuns.mockSharedBodyFailure`),
+		/// so a place got a copy of the function it should have called.
+		case mockSharedBodyRepeatsClass = "a generated mock builds one class in two shared functions"
 		/// A closure a caller's level function returns, or a fill function such a closure hands its values to, keeps a
 		/// level's values struct alive, or a level function takes one (`GraphFuzzerLevelFunctionCaptures`): what the
 		/// closure builds would keep alive values its fill does not read.
@@ -14455,7 +14547,7 @@ enum GraphFuzzerOracle {
 			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
 			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.publicMockOverridesOrderFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
-			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeOracleFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
+			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.configurationStorageFailure, runs.mockSharedBodyFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeOracleFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
 			// Whether a closure a level function returns keeps a level's values, read from the generated text, so it judges
 			// with compiles and without.
