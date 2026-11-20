@@ -1150,6 +1150,9 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case spelledOnlyIfAvailablePassThrough
 	/// The spelled value as the property a rename on the seam or in its tree fulfills.
 	case spelledAliasFulfillingProperty
+	/// The spelled existential's rename naming the protocol without `any` in `ofType:`, on the seam or on the child before
+	/// the child's receive of the value: the alias-spelling roll.
+	case spelledAliasNamingProtocolWithoutAny
 	/// The spelled value's optional form received only if available by a second child, `SpellSibling`, beside the
 	/// form `SpellChild` receives.
 	case spelledOptionalFormOnSibling
@@ -1903,6 +1906,12 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// That call made, by value, by `ReenteredHub`, a type of the module beneath the seam's that `ReenteredFirstImpl` builds
 	/// in a `SendableInstantiator`: the `@Sendable` function above the call makes the reused level function `@Sendable`.
 	case reenteredFillCallThroughSeamPassingPlaceUpByTypeOfAnotherModule
+
+	/// Whether `addingSpelledProperties`' alias-spelling roll draws this shape, whose count in accepted graphs the seam
+	/// corpus pins too (`acceptedDrawFeatureCounts`), at least ten.
+	var isAliasSpellingRollShape: Bool {
+		self == .spelledAliasNamingProtocolWithoutAny
+	}
 
 	/// Whether `addingCycleParameterShapes` draws this shape, whose count in accepted graphs the seam corpus pins too
 	/// (`acceptedDrawFeatureCounts`).
@@ -2724,6 +2733,7 @@ enum GraphFuzzerGenerator {
 			random = GraphFuzzerRandomNumberGenerator(seed: seed)
 			seamRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.seamRandomSeedMask)
 			spellingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.spellingRandomSeedMask)
+			aliasSpellingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.aliasSpellingRandomSeedMask)
 			uncreatedAliasRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.uncreatedAliasRandomSeedMask)
 			generatedNameRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.generatedNameRandomSeedMask)
 			unbuildableDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unbuildableDependencyRandomSeedMask)
@@ -3165,6 +3175,9 @@ enum GraphFuzzerGenerator {
 		/// feature on, after `addingSeam` and before `addingUncreatedAliasShapes`, so every graph without it is drawn as
 		/// before and a seam graph it leaves plain is drawn as it was before the pass existed.
 		private var spellingRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only how `addingSpelledProperties` spells and places an existential's rename, which only a graph that draws
+		/// one reaches, so every other graph is drawn as it was before the roll existed.
+		private var aliasSpellingRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingUncreatedAliasShapes`, which draws only with the `generateDependencyTree`
 		/// feature on, last of every pass, so a seam graph it leaves plain is drawn as it was before the pass existed.
 		private var uncreatedAliasRandom: GraphFuzzerRandomNumberGenerator
@@ -4891,15 +4904,25 @@ enum GraphFuzzerGenerator {
 					additionalConformances: conformances,
 				))
 			}
-			// A rename of the value on the seam or on the child, which the seam's signature takes before the rename.
-			if spelling.canBeRenamed, !type.hasSuffix("?"), spellingRandom.percentChance(30) {
+			// A rename of the value on the seam or on the child, which the seam's signature takes before the rename. The
+			// alias-spelling roll (`aliasSpellingRandom`) gives an existential a rename four times in five where the draw
+			// above gave it none, and its rename now and then names the protocol without `any` in `ofType:`, an expression the
+			// `ExistentialAny` upcoming feature does not flag, declared on the child before the child's receive of the value,
+			// so a walk of the tree meets the rename's spelling first: the seam's parameter and a mock's take the most
+			// explicit of their receivers' spellings, never the first a walk meets.
+			let drawsRename = spelling.canBeRenamed && !type.hasSuffix("?") && spellingRandom.percentChance(30)
+			let drawsExistentialRename = !drawsRename && spelling == .existential && aliasSpellingRandom.percentChance(80)
+			if drawsRename || drawsExistentialRename {
+				let namesProtocolWithoutAny = spelling == .existential && aliasSpellingRandom.percentChance(70)
 				let alias = PropertyDeclaration(
-					attribute: "@Received(fulfilledByDependencyNamed: \"\(label)\", ofType: \(GraphFuzzerSpelling.ofTypeSpelling(of: type)).self)",
+					attribute: "@Received(fulfilledByDependencyNamed: \"\(label)\", ofType: \(namesProtocolWithoutAny ? String(type.dropFirst("any ".count)) : GraphFuzzerSpelling.ofTypeSpelling(of: type)).self)",
 					label: "\(label)Alias",
 					type: type,
 				)
-				if spellingRandom.percentChance(50) {
+				if drawsRename ? spellingRandom.percentChance(50) : aliasSpellingRandom.percentChance(50) {
 					seam.properties.append(alias)
+				} else if namesProtocolWithoutAny {
+					child.properties.insert(alias, at: 0)
 				} else {
 					child.properties.append(alias)
 				}
@@ -4913,6 +4936,7 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let spellingRandomSeedMask: UInt64 = 0x7370656C6C696E67
+		private static let aliasSpellingRandomSeedMask: UInt64 = 0x616C696173537065
 
 		// MARK: Uncreated aliases
 
@@ -10419,6 +10443,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 			if aliasedLabel(of: property.attribute) == GraphFuzzerSpelling.label {
 				features.insert(.spelledAliasFulfillingProperty)
+				if property.attribute.hasSuffix("SpellProtocol.self)") {
+					features.insert(.spelledAliasNamingProtocolWithoutAny)
+				}
 			}
 		}
 		// `addingSpelledProperties`' second child and mocked tree.

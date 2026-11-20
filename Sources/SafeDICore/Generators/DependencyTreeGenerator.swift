@@ -5910,11 +5910,17 @@ public actor DependencyTreeGenerator {
 		// The forms the tree receives, from the receives that leave the seam on some path. Every tree receiver is a
 		// parameter candidate: a receive beneath a declaration of its label that does not provide it never reaches
 		// here, since validation reports it as the inline hidden-label error from the seam's chain.
-		let receivedProperties = Set(treeReceivers.map(\.property))
-		// In sorted order, so that which of two spellings `==` calls equal (`any P` and `P`) a parameter takes is the
-		// same in every process, in the seam's module and in each caller's. An `onlyIfAvailable` alias's fulfilling
-		// property is spelled non-optional (`ofType: X.self`) and received only if available: it is the optional form,
-		// which the parameter its optional receives take provides, and from which the alias is bound.
+		// Each in its receivers' most explicit spelling, an alias's receive as its property spells it, so which of two
+		// spellings `==` calls equal (`any P` and `P`) a parameter takes is decided by neither the walk's order nor the
+		// set's (`ValueSpellings`).
+		var receivedProperties = Set<Property>()
+		for receiver in treeReceivers {
+			receivedProperties.insertKeepingMostExplicitSpelling(receiver.aliasProperty.map { ValueSpellings.fulfillingProperty(receiver.property, spelledAsAlias: $0) } ?? receiver.property)
+		}
+		// In sorted order, so that the forms of each label are in the same order in every process, in the seam's module
+		// and in each caller's. An `onlyIfAvailable` alias's fulfilling property is spelled non-optional (`ofType: X.self`)
+		// and received only if available: it is the optional form, which the parameter its optional receives take provides,
+		// and from which the alias is bound.
 		var formsByLabel = [String: [Property]]()
 		for receivedProperty in receivedProperties.sorted() {
 			let property = requiredProperties.contains(receivedProperty) || receivedProperty.typeDescription.isOptional
@@ -5930,8 +5936,11 @@ public actor DependencyTreeGenerator {
 			// A label the tree receives only through nested seam calls that omit it is a parameter on no tier: each call
 			// passes `nil` for it, as no tier of this seam can pass it on, so a caller holding a value for it is told.
 			let labelReceivers = receivers(ofLabel: label)
+			// The forms of the label are one value, which every parameter of it spells one way.
+			let valueSpellings = ValueSpellings(of: forms)
 			if !ownLabels.contains(label), !labelReceivers.isEmpty, labelReceivers.allSatisfy(\.isNoTier), let form = forms.first {
-				let property = form.typeDescription.isOptional ? form : form.asOptionalProperty
+				let unspelledProperty = form.typeDescription.isOptional ? form : form.asOptionalProperty
+				let property = valueSpellings.spelling(ofValueOf: unspelledProperty)
 				let access = proof.access(ofParameterTyped: property.typeDescription, mentionedFrom: .declaration(seam), admittedModules: Set([seam.moduleName] + labelReceivers.map(\.moduleName)))
 				// A parameter on no tier is taken by none, so its tier access records the level of the nested seam's tier that
 				// omits it instead: what that seam would have to take it at, which a caller holding a value is told.
@@ -5957,30 +5966,31 @@ public actor DependencyTreeGenerator {
 				errors.append(labelCollision(label, among: receivers(ofLabel: label)))
 				continue
 			}
-			let parameterProperty: Property
+			let unspelledParameterProperty: Property
 			let isRequired: Bool
 			var deferral = SeamSignature.Parameter.Deferral.none
 			switch providingForm {
 			case let .requiredWrapper(requiredWrapper):
-				parameterProperty = requiredWrapper
+				unspelledParameterProperty = requiredWrapper
 				isRequired = true
 			case let .value(value):
 				// One by-value property and its optional form are one parameter: the unwrapped form where a receiver
 				// requires a non-optional form, and otherwise the optional type, required where some receiver requires
 				// it, since the property the caller's tree declares may be optional too (a forwarded `x: X?`).
 				let takesUnwrappedForm = requiredProperties.contains(value)
-				parameterProperty = takesUnwrappedForm ? value : Property(label: label, typeDescription: .optional(value.typeDescription))
+				unspelledParameterProperty = takesUnwrappedForm ? value : Property(label: label, typeDescription: .optional(value.typeDescription))
 				isRequired = takesUnwrappedForm || forms.contains(where: requiredProperties.contains)
 				// A by-value pass-through the tree reads is deferred: the tree reads it where it would read the caller's value
 				// inline, when a receiver is first built. An instantiator is a value whose instantiation is deferred already,
 				// which the caller hands on as inline. It is `@Sendable` where a `@Sendable` function inside the tree reads it.
-				if parameterProperty.asUnwrappedProperty.propertyType.isConstant, parameterReads.reads(label) {
+				if unspelledParameterProperty.asUnwrappedProperty.propertyType.isConstant, parameterReads.reads(label) {
 					deferral = .deferred(isSendable: parameterReads.readsInsideSendableFunction(label))
 				}
 			case let .optionalWrapper(wrapper):
-				parameterProperty = Property(label: label, typeDescription: .optional(wrapper.typeDescription))
-				isRequired = requiredProperties.contains(parameterProperty)
+				unspelledParameterProperty = Property(label: label, typeDescription: .optional(wrapper.typeDescription))
+				isRequired = requiredProperties.contains(unspelledParameterProperty)
 			}
+			let parameterProperty = valueSpellings.spelling(ofValueOf: unspelledParameterProperty)
 			// The parameter is as visible as the narrowest type it names, as the declarations of the seam's module and of
 			// its receivers' modules prove it; each receiver records that access, at which a seam that reaches this one
 			// passes it on.
@@ -6526,7 +6536,7 @@ public actor DependencyTreeGenerator {
 				)
 				let scopeReceived = scopeReceivedProperties.received
 				let scopeOnlyIfAvailable = scopeReceivedProperties.onlyIfAvailable
-				allReceived.formUnion(scopeReceived)
+				allReceived.formUnionKeepingMostExplicitSpelling(scopeReceived)
 				allOnlyIfAvailable.formUnion(scopeOnlyIfAvailable)
 				for newProperty in scopeReceived.subtracting(scopeOnlyIfAvailable) where allRequired.insert(newProperty).inserted {
 					worklist.append(newProperty)
@@ -6551,7 +6561,7 @@ public actor DependencyTreeGenerator {
 					)
 					guard Self.inaccessibleConstructions(constructions, from: emittingModule, extendedTypes: extendedTypeDeclarations).isEmpty else { continue }
 				}
-				allReceived.insert(property)
+				allReceived.insertKeepingMostExplicitSpelling(property)
 				allRequired.insert(property)
 				worklist.append(property)
 			}
@@ -6619,10 +6629,9 @@ public actor DependencyTreeGenerator {
 				&& !isProvidedByMockedTypeAlias(receivedProperty)
 				&& !instancePropertiesOfLazilyInstantiatedProperties.contains(receivedProperty.asUnwrappedProperty)
 		}
-		// A promoted dependency the mocked type receives takes its spelling, in the override and the binding. A deliberate gap,
-		// as in `ScopeGenerator.mockRootParameters`: where two receivers in the tree spell a dependency the mocked type does not
-		// receive apart, the mocked type declares no spelling to prefer, and the promoted dependency takes one of theirs.
-		let mockedTypeSpellings = ScopeGenerator.MockedTypeSpellings(of: instantiable)
+		// A promoted dependency the mocked type receives takes its spelling, in the override and the binding, and any other
+		// the most explicit of its receivers' spellings in the tree, as `ScopeGenerator.mockRootParameters` spells the rest.
+		let mockedTypeSpellings = ScopeGenerator.MockedTypeSpellings(of: instantiable, treeReceivedProperties: allReceived)
 		var promotedPropertiesToGenerate = [Scope.PropertyToGenerate]()
 		for receivedProperty in propertiesToPromote.sorted()
 			where receivedProperty.asUnwrappedProperty == receivedProperty || !propertiesToPromote.contains(receivedProperty.asUnwrappedProperty)
@@ -8784,7 +8793,7 @@ public actor DependencyTreeGenerator {
 							|| (!propertiesToDeclare.contains(property.asUnwrappedProperty) && !forwardedProperties.contains(property.asUnwrappedProperty))
 					) && (!childOnlyIfAvailable.contains(property) || !declarations.providesAFormReadByOnlyIfAvailableReceive(of: property))
 				}
-			received.formUnion(childReceivedFromAncestors)
+			received.formUnionKeepingMostExplicitSpelling(childReceivedFromAncestors)
 			required.formUnion(childReceivedFromAncestors.subtracting(childOnlyIfAvailable))
 			for property in walkedChild.receivedProperties.passedByPublicMockCalls where !declarations.providesWhatPublicMockCallPasses(property) {
 				passedByPublicMockCalls.insert(property)
@@ -8811,7 +8820,7 @@ public actor DependencyTreeGenerator {
 			}
 			let fillOnlyIfAvailable = walkedFill.receivedProperties.onlyIfAvailable
 			for property in walkedFill.receivedProperties.received where !isProvidedByFields(property) {
-				received.insert(property)
+				received.insertKeepingMostExplicitSpelling(property)
 				if fillOnlyIfAvailable.contains(property) {
 					onlyIfAvailable.insert(property)
 				} else {
@@ -8852,7 +8861,7 @@ public actor DependencyTreeGenerator {
 			for dependency in scope.instantiable.dependencies where scope.publicMockCall == nil || dependency.source != .received(onlyIfAvailable: true) {
 				switch dependency.source {
 				case let .received(isOnlyIfAvailable):
-					received.insert(dependency.property)
+					received.insertKeepingMostExplicitSpelling(dependency.property)
 					if isOnlyIfAvailable {
 						onlyIfAvailable.insert(dependency.property)
 					} else {
@@ -8867,7 +8876,7 @@ public actor DependencyTreeGenerator {
 						? !declarations.providesAFormReadByOnlyIfAvailableReceive(of: fulfillingProperty)
 						: !propertiesToDeclare.contains(fulfillingProperty) && !forwardedProperties.contains(fulfillingProperty)
 					else { break }
-					received.insert(fulfillingProperty)
+					received.insertKeepingMostExplicitSpelling(ValueSpellings.fulfillingProperty(fulfillingProperty, spelledAsAlias: dependency.property))
 					if isOnlyIfAvailable {
 						onlyIfAvailable.insert(fulfillingProperty)
 					} else {
