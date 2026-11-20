@@ -414,8 +414,7 @@ public struct Generate: AsyncParsableCommand {
 		// the signature that module computed too: without the build system's word, finding them normalizes the path of
 		// every declaration, which a project without either must not pay for, and nothing consults the set for any other
 		// declaration.
-		let readsSeamOrPublicMock = normalizedInstantiables.contains(where: { $0.generatesDependencyTree || $0.generateMock == .public })
-		let ownFilePaths: Set<String> = if readsSeamOrPublicMock {
+		let ownFilePaths: Set<String> = if normalizedInstantiables.contains(where: { $0.generatesDependencyTree || $0.generateMock == .public }) {
 			Set(ownFilePaths(of: module, membership: membership, ownProjectFilePaths: ownProjectFilePaths, comparisonFilePaths: comparisonFilePaths))
 		} else {
 			[]
@@ -434,14 +433,7 @@ public struct Generate: AsyncParsableCommand {
 		// A module's generated code names the types the seams and public mocks it calls name, which the modules the views
 		// carry declare: it imports what their files import, as it imports what the files of the modules it was given do.
 		let viewOnlyDeclarations = moduleInfoView.viewOnlyDeclarations
-		// A run with a seam or a public mock asks whether a declaration's file is its own for every declaration its access
-		// proof and its seams' tier checks read, many times each, so it spells each file the declarations it reads record
-		// once, here; a file no such declaration records is spelled when asked.
-		let isOwnFile = Self.isOwnFile(
-			ownProjectFilePaths: ownProjectFilePaths,
-			comparisonFilePaths: comparisonFilePaths,
-			spellingAhead: readsSeamOrPublicMock ? Set((normalizedInstantiables.map(\.sourceFilePath) + plainTypeDeclarationsReadByThisRun.map(\.sourceFilePath)).compactMap(\.self)) : [],
-		)
+		let isOwnFile = Self.isOwnFile(ownProjectFilePaths: ownProjectFilePaths, comparisonFilePaths: comparisonFilePaths)
 		let generator = DependencyTreeGenerator(
 			importStatements: importingOtherModules(importingModulesReadFromBeneath(dependentModuleInfo.flatMap(\.imports) + viewOnlyDeclarations.flatMap(\.imports) + additionalImportStatements + module.imports)),
 			// A dependent module's mock-only declarations reach this module's mocks, so its mock imports do too.
@@ -1034,20 +1026,14 @@ public struct Generate: AsyncParsableCommand {
 
 	/// Whether a file a declaration records is one of the module's own files (see `ownProjectFilePaths`), so that the
 	/// generated code needs only `internal` access to a declaration in it.
-	/// - Parameter recordedFilePaths: Files, as declarations record them, whose answer is computed once, here, and
-	///   looked up when asked; any other file is spelled for comparison each time it is asked about.
+	/// A run with a seam asks this about every declaration its access proof and its seams' tier checks read, many times
+	/// each, so a path is spelled for comparison only when its file name is an own file's (`ProjectFileSet`).
 	private static func isOwnFile(
 		ownProjectFilePaths: Set<ProjectFilePath>,
 		comparisonFilePaths: ProjectFilePaths,
-		spellingAhead recordedFilePaths: Set<String> = [],
 	) -> @Sendable (String) -> Bool {
-		let isOwnFileByRecordedFilePath = Dictionary(
-			recordedFilePaths.map { ($0, ownProjectFilePaths.contains(comparisonFilePaths.projectFilePath(of: $0))) },
-			uniquingKeysWith: { first, _ in first },
-		)
-		return { filePath in
-			isOwnFileByRecordedFilePath[filePath] ?? ownProjectFilePaths.contains(comparisonFilePaths.projectFilePath(of: filePath))
-		}
+		let ownFiles = ProjectFileSet(ownProjectFilePaths, spelledBy: comparisonFilePaths)
+		return { filePath in ownFiles.contains(filePathAsRecorded: filePath) }
 	}
 
 	/// What the module's own files (see `ownProjectFilePaths`) say that decides an import added for a fulfiller. A build
