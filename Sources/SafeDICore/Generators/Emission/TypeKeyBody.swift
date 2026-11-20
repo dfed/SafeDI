@@ -303,13 +303,13 @@ private struct TypeKeyLayout {
 	/// where they all read `nil`, else the nearest declaration at its binding.
 	func resolution(of label: String, atPlace body: Int) -> PathValue {
 		if bodies[body].cycleParameterLabels.contains(label) {
-			return bodies[body].record?.callCycleArguments.first(where: { $0.label == label }).map {
+			bodies[body].record?.callCycleArguments.first(where: { $0.label == label }).map {
 				pathValue(of: $0, inBody: bodies[body].parent, before: bodies[body].position)
 			} ?? .none
 		} else if let value = escapingReads[body][label] {
-			return value
+			value
 		} else {
-			return lookUp(label, inBody: bodies[body].parent, before: bodies[body].position)
+			lookUp(label, inBody: bodies[body].parent, before: bodies[body].position)
 		}
 	}
 
@@ -820,16 +820,15 @@ private struct TypeKeyLayout {
 							declarations.append(typeDeclaration(for: closerValue(of: label, closing: closer, onPlace: member)))
 						}
 					}
-					let outcome: ReadOutcome
-					if declarations.allSatisfy({ $0 == .none }) {
-						outcome = .none
+					let outcome: ReadOutcome = if declarations.allSatisfy({ $0 == .none }) {
+						.none
 					} else if let first = declarations.first,
 					          declarations.allSatisfy({ $0 == first }),
 					          typeLookUp(label, inClass: placementOwner[owner], before: placementIndex[owner]) == first
 					{
-						outcome = .captured(first)
+						.captured(first)
 					} else {
-						outcome = .passed
+						.passed
 					}
 					if outcomes[owner][label] != outcome {
 						outcomes[owner][label] = outcome
