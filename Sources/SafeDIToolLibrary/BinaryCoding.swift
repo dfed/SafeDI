@@ -151,7 +151,21 @@ struct BinaryLayoutPayloadElement: CustomStringConvertible {
 struct BinaryWriter {
 	// MARK: Initialization
 
-	init() {}
+	init() {
+		self.init(writesStringsInline: false)
+	}
+
+	private init(writesStringsInline: Bool) {
+		self.writesStringsInline = writesStringsInline
+	}
+
+	/// A writer that writes each string where it is written, its length then its UTF-8 bytes, rather than its index in
+	/// a table. Two values it writes as the same bytes are written as the same bytes by a writer that keeps a table, and
+	/// the other way around, since each spelling follows from the other; it skips looking each string up, so it compares
+	/// two values faster. What it writes is never read.
+	static func writingStringsInline() -> BinaryWriter {
+		BinaryWriter(writesStringsInline: true)
+	}
 
 	// MARK: Internal
 
@@ -185,14 +199,20 @@ struct BinaryWriter {
 	}
 
 	mutating func writeString(_ string: String) {
-		let key = StringTableKey(string: string)
-		if let index = stringIndices[key] {
-			writeUnsigned(index)
+		if writesStringsInline {
+			let utf8 = string.utf8
+			writeUnsigned(UInt64(utf8.count))
+			bytes.append(contentsOf: utf8)
 		} else {
-			let index = UInt64(strings.count)
-			stringIndices[key] = index
-			strings.append(string)
-			writeUnsigned(index)
+			let key = StringTableKey(string: string)
+			if let index = stringIndices[key] {
+				writeUnsigned(index)
+			} else {
+				let index = UInt64(strings.count)
+				stringIndices[key] = index
+				strings.append(string)
+				writeUnsigned(index)
+			}
 		}
 	}
 
@@ -306,6 +326,8 @@ struct BinaryWriter {
 			string.withUTF8 { hasher.combine(bytes: UnsafeRawBufferPointer($0)) }
 		}
 	}
+
+	private let writesStringsInline: Bool
 
 	/// A value written through ``writeShared(_:)``, hashed by its count and its first and last elements alone: hashing
 	/// every element of each of many long arrays costs what writing them did, while an array equal to one already
