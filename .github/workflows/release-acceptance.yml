@@ -86,16 +86,16 @@ jobs:
         with:
           command: swift package resolve --package-path older-release
       # Only the tool and the macros, never 2.3.0's tests, which write into the
-      # system temporary directory. Measured on a 4-core cloud machine with
-      # Swift 6.2: 7 min 57 s for the tool and 6 min 58 s for the macros (a
-      # cloud-machine figure; confirm on CI and set each limit to twice it).
+      # system temporary directory. Measured on CI (run 44690981519): 8 min 13 s
+      # for the tool and 8 min 49 s for the macros, so each limit is about twice
+      # its time.
       - name: Build Older Release Tool
         if: ${{ steps.older-release-cache.outputs.cache-hit != 'true' }}
-        timeout-minutes: 16
+        timeout-minutes: 17
         run: swift build -c release --traits sourceBuild --package-path older-release --product SafeDITool
       - name: Build Older Release Macros
         if: ${{ steps.older-release-cache.outputs.cache-hit != 'true' }}
-        timeout-minutes: 14
+        timeout-minutes: 18
         run: swift build -c release --traits sourceBuild --package-path older-release --product SafeDI
       - name: Save Older Release Build
         if: ${{ github.ref == 'refs/heads/main' && steps.older-release-cache.outputs.cache-hit != 'true' }}
@@ -176,10 +176,10 @@ jobs:
     if: ${{ !cancelled() && needs.release-acceptance-older-release.result == 'success' && (needs.release-acceptance-build.result == 'success' || inputs.bundle) }}
     runs-on: ubuntu-latest
     container: swift:6.2
-    # The job's parts sum to about 40 minutes at their longest: the
+    # The job's parts sum to about 27 minutes at their longest: the
     # container's start (11 minutes once, run 43879263598), two downloads
-    # and an unpack, and the comparison under its own limit of 25.
-    timeout-minutes: 45
+    # and an unpack, and the comparison under its own limit of 13.
+    timeout-minutes: 30
     permissions:
       contents: read
     strategy:
@@ -211,11 +211,11 @@ jobs:
           tar -xzf "$BUNDLE.tar.gz"
           tar -xzf older-release.tar.gz
           mkdir -p release-acceptance
-      # Against 2.2.0 (run 43739187246), which compared 1669 graphs by value,
-      # the four shards of 1250 seeds took 3 min 28 s to 5 min 24 s each.
-      # Against 2.3.0 every graph both accept is compared: to be measured.
+      # Measured on CI against 2.3.0 (run 44690981519): the four shards of
+      # 1250 seeds took 5 min 8 s to 6 min 31 s each, so about twice the
+      # longest.
       - name: Compare with the Older Release
-        timeout-minutes: 25
+        timeout-minutes: 13
         env:
           SAFEDI_RELEASE_ACCEPTANCE_RELEASE: '2.3.0'
           SAFEDI_RELEASE_ACCEPTANCE_TOOL: ${{ github.workspace }}/older-release-package/SafeDITool
@@ -265,4 +265,6 @@ jobs:
           pattern: release-acceptance-report-*
           path: reports
       - name: Combine
-        run: python3 .github/scripts/combine-release-acceptance-reports.py reports 4 >> "$GITHUB_STEP_SUMMARY"
+        # Into the log as well as the summary, so the counts can be read
+        # through the API, which serves no step summary.
+        run: python3 .github/scripts/combine-release-acceptance-reports.py reports 4 | tee -a "$GITHUB_STEP_SUMMARY"
