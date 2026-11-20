@@ -2851,7 +2851,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// The tree's code is spelled once, here: each level holds its children's code rather than a copy of its text.
 		let code = try await generatePlan(codeGeneration: codeGeneration)
 		PlaceObservation.record(code)
-		return code.spelled()
+		// The root's larger levels are spelled at their final indentation in parallel.
+		return await code.spelledAsRoot()
 	}
 
 	/// The plan of this scope's code as the root of what is generated, with nothing generated before it, which
