@@ -165,27 +165,6 @@ extension DependencyTreeGenerator {
 		// set guarantees the same back-edges are filtered everywhere.
 		let cycleEdges = Self.computeCycleEdges(in: typeDescriptionToScopeMap)
 
-		// Pre-pass: union the set of concrete type names whose
-		// `SafeDIMockConfiguration` struct must be `@Sendable`-typed. A struct is
-		// shared across every root that references the type, so the annotation
-		// has to agree — union all roots' sendable references once, then pass it
-		// down to each root's emission.
-		let sendableConfigurationTypeNames: Set<String> = await withTaskGroup(
-			of: Set<String>.self,
-			returning: Set<String>.self,
-		) { taskGroup in
-			for (_, mockRoot) in mockRoots {
-				taskGroup.addTask {
-					await mockRoot.collectSendableConfigurationTypeNames()
-				}
-			}
-			var union = Set<String>()
-			for await result in taskGroup {
-				union.formUnion(result)
-			}
-			return union
-		}
-
 		// A type with a hand-written mock configures every property with the defaults the mock declares, whether
 		// the property is built with the mock or with `init`: the struct is shared, so it cannot hold both. A
 		// property built with `init` beneath a cycle edge, which no override reaches, passes the struct's default
@@ -201,12 +180,56 @@ extension DependencyTreeGenerator {
 				)
 			}
 
-		// Generate mock code and collect configuration types in parallel.
+		// Each root's tree is read in two phases, and released after each, so that the trees are not all alive together: a
+		// tree holds a node per path, and every root's tree held until the module's mocks were generated was most of the
+		// generator's peak memory. The first phase reads what every root's emission needs or the module generates after it,
+		// keeping only nodes that hold their children and nothing beneath them (`ScopeGenerator.MockTreeSummary`); the
+		// second builds the tree again to generate the root's code.
+		//
+		// The sendable configuration types are unioned across every root: a struct is shared across every root that
+		// references the type, so the annotation has to agree, and each root's emission reads the union.
+		let mockDeclarationLocations = mockDeclarationLocationsOfTypesWithHandWrittenMocks()
+		let concreteTypesWithHandWrittenMocks = Set(mockDeclarationLocations.keys)
+		let summaries = await withTaskGroup(
+			of: (index: Int, summary: ScopeGenerator.MockTreeSummary).self,
+			returning: [ScopeGenerator.MockTreeSummary].self,
+		) { taskGroup in
+			for (index, (instantiable, mockRoot)) in mockRoots.enumerated() {
+				taskGroup.addTask {
+					await (index: index, summary: mockRoot.mockTreeSummary(
+						isPublicMock: instantiable.generateMock == .public,
+						handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+						concreteTypesWithHandWrittenMocks: concreteTypesWithHandWrittenMocks,
+						mockRoot: instantiable.concreteInstantiable,
+						cycleEdges: cycleEdges,
+					))
+				}
+			}
+			var summaries = [ScopeGenerator.MockTreeSummary?](repeating: nil, count: mockRoots.count)
+			for await result in taskGroup {
+				summaries[result.index] = result.summary
+			}
+			return summaries.compactMap(\.self)
+		}
+		let sendableConfigurationTypeNames = summaries.reduce(into: Set<String>()) { union, summary in
+			union.formUnion(summary.sendableConfigurationTypeNames)
+		}
+		// The second whole-module gate, not run by `requirements(forTypeNamed:generatesMock:mockEmittingModule:)`; see
+		// the note above `validateSendableBuildersCaptureNoNonSendableWrapper`. Its error is thrown after the roots' code is
+		// generated, so that an error generating a root's code is reported first, as when the gate read each tree after it.
+		let configurationValidation = Result {
+			try Self.validateConfigurationsAreBuiltOneWay(
+				configurationNodesByConstruction: summaries.map(\.configurationNodesByConstruction),
+				mockDeclarationLocations: mockDeclarationLocations,
+			)
+		}
+
+		// Generate each root's mock code.
 		let generatedRoots = try await withThrowingTaskGroup(
 			of: GeneratedMockRoot.self,
 			returning: [GeneratedMockRoot].self,
 		) { taskGroup in
-			for (instantiable, mockRoot) in mockRoots {
+			for ((instantiable, mockRoot), summary) in zip(mockRoots, summaries) {
 				taskGroup.addTask {
 					async let code = mockRoot.generateCode(
 						codeGeneration: .mock(ScopeGenerator.MockContext(
@@ -218,24 +241,20 @@ extension DependencyTreeGenerator {
 							publicMockContext: publicMockContext,
 						)),
 					)
-					let isPublicMock = instantiable.generateMock == .public
-					async let configurationTypes = mockRoot.collectConfigurationTypes(
-						isPublicMock: isPublicMock,
-						handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
-					)
 					async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
-					let publicConstructionNodes = isPublicMock ? await mockRoot.collectPublicConstructionNodes() : []
-					return try await GeneratedMockRoot(
+					let generatedRoot = try await GeneratedMockRoot(
 						root: GeneratedRoot(
 							typeDescription: instantiable.concreteInstantiable,
 							sourceFilePath: instantiable.sourceFilePath,
 							code: code,
 							fulfillers: fulfillers,
 						),
-						configurationTypes: configurationTypes,
-						isPublicMock: isPublicMock,
-						publicConstructionNodes: publicConstructionNodes,
+						configurationTypes: summary.configurationTypes,
+						isPublicMock: instantiable.generateMock == .public,
+						publicConstructionNodes: summary.publicConstructionNodes,
 					)
+					await mockRoot.releaseRootMockParameterTree()
+					return generatedRoot
 				}
 			}
 			var results = [GeneratedMockRoot]()
@@ -245,9 +264,7 @@ extension DependencyTreeGenerator {
 			return results
 		}
 
-		// The second whole-module gate, not run by `requirements(forTypeNamed:generatesMock:mockEmittingModule:)`; see
-		// the note above `validateSendableBuildersCaptureNoNonSendableWrapper`.
-		let nodesReadingConfiguration = try await validateConfigurationsAreBuiltOneWay(mockRoots: mockRoots, cycleEdges: cycleEdges)
+		let nodesReadingConfiguration = try configurationValidation.get()
 
 		let rootedTypeNames = Set(generatedRoots.map(\.root.typeDescription.asSource))
 		// Deduplicate configuration types by type name across all roots.
@@ -778,30 +795,22 @@ extension DependencyTreeGenerator {
 	/// A node beneath an edge in `cycleEdges` reads no overrides from its struct, so it is not compared (see
 	/// `ScopeGenerator.collectConfigurationNodesByConstruction`).
 	///
-	/// - Parameter mockRoots: The mock roots in concrete type order, so the properties a diagnostic names are
-	///   the same on every run.
+	/// - Parameters:
+	///   - configurationNodesByConstruction: Each mock root's `ScopeGenerator.MockTreeSummary.configurationNodesByConstruction`,
+	///     the roots in concrete type order, so the properties a diagnostic names are the same on every run.
+	///   - mockDeclarationLocations: `mockDeclarationLocationsOfTypesWithHandWrittenMocks()`.
 	/// - Returns: For each type with a hand-written mock, the first node that reads its struct. When the type
 	///   is built both ways, the two kinds of node read the same struct, so either describes it.
-	private func validateConfigurationsAreBuiltOneWay(
-		mockRoots: [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)],
-		cycleEdges: Set<ScopeGenerator.CycleEdge>,
-	) async throws -> [TypeDescription: ScopeGenerator.MockParameterNode] {
-		var mockDeclarationLocations = [TypeDescription: Set<Dependency.DeclarationLocation?>]()
-		for instantiable in typeDescriptionToFulfillingInstantiableMap.values where instantiable.mockInitializer != nil {
-			mockDeclarationLocations[instantiable.concreteInstantiable, default: []].insert(instantiable.mockDeclarationLocation)
-		}
+	private static func validateConfigurationsAreBuiltOneWay(
+		configurationNodesByConstruction: [[ScopeGenerator.BuiltMockParameterNode]],
+		mockDeclarationLocations: [TypeDescription: Set<Dependency.DeclarationLocation?>],
+	) throws -> [TypeDescription: ScopeGenerator.MockParameterNode] {
 		guard !mockDeclarationLocations.isEmpty else { return [:] }
 
 		var firstNodes = [ScopeGenerator.ConstructedType: ScopeGenerator.BuiltMockParameterNode]()
-		for (instantiable, mockRoot) in mockRoots {
-			for builtNode in await mockRoot.collectConfigurationNodesByConstruction(
-				of: Set(mockDeclarationLocations.keys),
-				mockRoot: instantiable.concreteInstantiable,
-				cycleEdges: cycleEdges,
-			) {
-				let constructedType = ScopeGenerator.ConstructedType(concreteType: builtNode.node.concreteType, usesMockInitializer: builtNode.node.useMockInitializer)
-				firstNodes[constructedType] = firstNodes[constructedType] ?? builtNode
-			}
+		for builtNode in configurationNodesByConstruction.joined() {
+			let constructedType = ScopeGenerator.ConstructedType(concreteType: builtNode.node.concreteType, usesMockInitializer: builtNode.node.useMockInitializer)
+			firstNodes[constructedType] = firstNodes[constructedType] ?? builtNode
 		}
 
 		let conflicts = mockDeclarationLocations.keys.compactMap { concreteType -> DependencyTreeGeneratorError.ConfigurationBuiltTwoWays? in
@@ -826,6 +835,15 @@ extension DependencyTreeGenerator {
 			let builtByMock = firstNodes[ScopeGenerator.ConstructedType(concreteType: concreteType, usesMockInitializer: true)]
 			result[concreteType] = (builtWithoutMock ?? builtByMock)?.node
 		}
+	}
+
+	/// Where each type with a hand-written mock declares it, by the type's concrete type.
+	private func mockDeclarationLocationsOfTypesWithHandWrittenMocks() -> [TypeDescription: Set<Dependency.DeclarationLocation?>] {
+		var mockDeclarationLocations = [TypeDescription: Set<Dependency.DeclarationLocation?>]()
+		for instantiable in typeDescriptionToFulfillingInstantiableMap.values where instantiable.mockInitializer != nil {
+			mockDeclarationLocations[instantiable.concreteInstantiable, default: []].insert(instantiable.mockDeclarationLocation)
+		}
+		return mockDeclarationLocations
 	}
 
 	/// A mock root's generated code, with the nodes of the types whose `SafeDIMockConfiguration`
