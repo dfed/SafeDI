@@ -9236,33 +9236,46 @@ public actor DependencyTreeGenerator {
 		// Reuse the same scope for all entries sharing a concreteInstantiable so
 		// every instantiableType is mapped.
 		var visitedConcreteTypeToScope = [TypeDescription: Scope]()
+		// Each entry's order, spelled once: spelled inside a comparison, every type was spelled again for every pair compared.
+		struct OrderedEntry {
+			let instantiable: Instantiable
+			let hasHandWrittenMock: Bool
+			let hasMock: Bool
+			let spellingWithoutAny: String
+			let spelling: String
+		}
 		let typeDescriptionToCompleteScopeMap: [TypeDescription: Scope] = typeDescriptionToFulfillingInstantiableMap.values
+			.map { instantiable in
+				let hasHandWrittenMock = instantiable.mockInitializer != nil
+				return OrderedEntry(
+					instantiable: instantiable,
+					hasHandWrittenMock: hasHandWrittenMock,
+					hasMock: instantiable.generatesMock || hasHandWrittenMock,
+					spellingWithoutAny: instantiable.concreteInstantiable.withoutAny.asSource,
+					spelling: instantiable.concreteInstantiable.asSource,
+				)
+			}
 			.sorted { lhs, rhs in
 				// Non-mockOnly before mockOnly (production claims slots first).
-				if lhs.mockOnly != rhs.mockOnly {
-					return !lhs.mockOnly
-				} else {
+				if lhs.instantiable.mockOnly != rhs.instantiable.mockOnly {
+					return !lhs.instantiable.mockOnly
+				} else if lhs.hasHandWrittenMock != rhs.hasHandWrittenMock {
 					// Within the same mockOnly tier, prefer entries with mock info
 					// so scope-reuse creates scopes from mock-capable entries.
 					// Hand-written mocks (mockInitializer) before generateMock,
 					// since hand-written mocks take priority.
-					let lhsHasHandWrittenMock = lhs.mockInitializer != nil
-					let rhsHasHandWrittenMock = rhs.mockInitializer != nil
-					if lhsHasHandWrittenMock != rhsHasHandWrittenMock {
-						return lhsHasHandWrittenMock
-					} else {
-						let lhsHasMock = lhs.generatesMock || lhsHasHandWrittenMock
-						let rhsHasMock = rhs.generatesMock || rhsHasHandWrittenMock
-						if lhsHasMock != rhsHasMock {
-							return lhsHasMock
-						} else {
-							// Stable tiebreaker: sort by concrete type name so scope-reuse
-							// selects the same entry across runs.
-							return lhs.concreteInstantiable < rhs.concreteInstantiable
-						}
-					}
+					return lhs.hasHandWrittenMock
+				} else if lhs.hasMock != rhs.hasMock {
+					return lhs.hasMock
+				} else if lhs.spellingWithoutAny != rhs.spellingWithoutAny {
+					// Stable tiebreaker: sort by concrete type name so scope-reuse
+					// selects the same entry across runs, as `TypeDescription.<` orders them.
+					return lhs.spellingWithoutAny < rhs.spellingWithoutAny
+				} else {
+					return lhs.spelling < rhs.spelling
 				}
 			}
+			.map(\.instantiable)
 			.reduce(into: [TypeDescription: Scope]()) { partialResult, instantiable in
 				let scope = visitedConcreteTypeToScope[instantiable.concreteInstantiable] ?? publicMockCalls[instantiable.concreteInstantiable].map { publicMockCall in
 					let leafInstantiable = Self.publicMockLeafInstantiable(of: instantiable, calling: publicMockCall, takesBuildersFromOwnEnums: buildsHoles)
