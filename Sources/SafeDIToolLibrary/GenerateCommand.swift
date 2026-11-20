@@ -145,8 +145,8 @@ public struct Generate: AsyncParsableCommand {
 		public let warnings: [SourceDiagnostic]
 		/// The module this run generated code for, with the module that declares each of its declarations.
 		public let module: ModuleInfo
-		/// The dependent modules' info, in the order this run combined their declarations.
-		let dependentModules: [ModuleInfo]
+		/// The modules whose info this run read, in the order it combined their declarations.
+		let dependentModuleNames: [String?]
 	}
 
 	/// Parses, validates, and writes the configured outputs.
@@ -409,6 +409,13 @@ public struct Generate: AsyncParsableCommand {
 		// A module's generated code names the types the seams and public mocks it calls name, which the modules the views
 		// carry declare: it imports what their files import, as it imports what the files of the modules it was given do.
 		let viewOnlyDeclarations = moduleInfoView.viewOnlyDeclarations
+		// What the rest of the run needs of the module info it read, taken here, so that no later use keeps the decoded
+		// files, their merged view or the dependent modules' declarations as read alive while the trees are validated,
+		// which holds the run's peak memory: about 5 KB per type read. The generator keeps what it needs of them.
+		let moduleInfoViewToWrite = moduleInfoView.view
+		let dependentModuleNames = dependentModuleInfo.map(\.moduleName)
+		let filesWithUnexpectedNodes = dependentModuleInfo.compactMap(\.filesWithUnexpectedNodes).flatMap(\.self) + (module.filesWithUnexpectedNodes ?? [])
+		let instantiableTypeNamesInAnyClause = Set(dependentModuleInfo.flatMap(\.instantiableTypeNamesInAnyClause) + module.instantiableTypeNamesInAnyClause)
 		let isOwnFile = Self.isOwnFile(ownProjectFilePaths: ownProjectFilePaths, comparisonFilePaths: comparisonFilePaths)
 		let generator = DependencyTreeGenerator(
 			importStatements: importingOtherModules(importingModulesReadFromBeneath(dependentModuleInfo.flatMap(\.imports) + viewOnlyDeclarations.flatMap(\.imports) + additionalImportStatements + module.imports)),
@@ -474,7 +481,6 @@ public struct Generate: AsyncParsableCommand {
 		// The DOT graph, drawn by the call of `generate(_:)` that generates the module's code when the run asks for one.
 		var dotGraph: String?
 		if manifest != nil || combinedOutput != nil {
-			let filesWithUnexpectedNodes = dependentModuleInfo.compactMap(\.filesWithUnexpectedNodes).flatMap(\.self) + (module.filesWithUnexpectedNodes ?? [])
 			if !filesWithUnexpectedNodes.isEmpty {
 				// Write `#error(…)` instead of generated Swift so the
 				// build surfaces the parse failure at the compile step.
@@ -596,7 +602,7 @@ public struct Generate: AsyncParsableCommand {
 					// type that is declared only in clauses these conditions leave inactive.
 					try sourceConfiguration?.validateAdditionalMocksToGenerate(
 						fulfilledBy: typeDescriptionToFulfillingInstantiableMap,
-						orDeclaredAmong: Set(dependentModuleInfo.flatMap(\.instantiableTypeNamesInAnyClause) + module.instantiableTypeNamesInAnyClause),
+						orDeclaredAmong: instantiableTypeNamesInAnyClause,
 					)
 					// A type whose only declaration is `mockOnly` has its mock already: the hand-written one.
 					try sourceConfiguration?.validateAdditionalMocksToGenerate(namingMockOnlyDeclarationsIn: typeDescriptionToFulfillingInstantiableMap)
@@ -852,11 +858,11 @@ public struct Generate: AsyncParsableCommand {
 		// read; and only when its bytes change, so a dependent whose build compares modification times reruns only when
 		// what the file describes changed.
 		if let moduleInfoDestination {
-			try ModuleInfoFile(module: module, moduleName: moduleInfoDestination.moduleName, view: moduleInfoView.view)
+			try ModuleInfoFile(module: module, moduleName: moduleInfoDestination.moduleName, view: moduleInfoViewToWrite)
 				.moduleInfoData
 				.writeIfChanged(toPath: moduleInfoDestination.path)
 		}
-		return Output(warnings: warnings, module: module, dependentModules: dependentModuleInfo)
+		return Output(warnings: warnings, module: module, dependentModuleNames: dependentModuleNames)
 	}
 
 	// MARK: Private
