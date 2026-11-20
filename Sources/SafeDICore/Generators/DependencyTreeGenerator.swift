@@ -5093,6 +5093,19 @@ public actor DependencyTreeGenerator {
 				Self.populatePropertiesToGenerate(of: scope, from: typeDescriptionToScopeMap, instantiables: instantiables, aliasDeclarationReferences: aliasDeclarationReferences)
 			}
 		}
+		// Which labels each fill reads only if available, once every scope's tree is complete, for a place whose fields hold a
+		// `LazilyInstantiated`: a fill takes such a wrapper optionally where the caller hands it
+		// (`Scope.Fill.optionalLazilyInstantiatedLabels`). No other fill's parameters depend on it, so no other fill is walked.
+		// The walk enters the fills of the seam calls inside the fulfilling type's tree, which receive from the fill's scope as
+		// the fill's tree does.
+		var receivedPropertiesCache = ReceivedPropertiesCache(walksSeamCallFills: true)
+		for scope in scopes where scope.seamCall != nil {
+			for case let .fill(hole, fulfillingScope) in scope.holeArguments where hole.fields.contains(where: { $0.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding != nil }) {
+				let received = Self.collectReceivedProperties(from: fulfillingScope, cache: &receivedPropertiesCache)
+				let requiredLabels = Set(received.received.subtracting(received.onlyIfAvailable).map(\.label))
+				scope.fillLabelsReadOnlyIfAvailable[hole.site] = Set(received.received.map(\.label)).subtracting(requiredLabels)
+			}
+		}
 		return typeDescriptionToScopeMap
 	}
 
@@ -7969,6 +7982,9 @@ public actor DependencyTreeGenerator {
 		var unfinishedWalkDepths = [ObjectIdentifier: Int]()
 		/// Results that lack what a scope whose walk is unfinished receives.
 		var incomplete = [ObjectIdentifier: WalkedReceivedProperties]()
+		/// Whether a walk enters the fills of a seam's call too, as it enters a public mock call's: what a fill of a seam's
+		/// caller receives, its nested seam calls' fills included (`Scope.fillLabelsReadOnlyIfAvailable`).
+		var walksSeamCallFills = false
 	}
 
 	/// A scope's received properties as one walk found them.
@@ -8065,28 +8081,31 @@ public actor DependencyTreeGenerator {
 		} else {
 			let walkDepth = cache.unfinishedWalkDepths.count
 			cache.unfinishedWalkDepths[id] = walkDepth
-			return .unfinished(UnfinishedReceivedPropertiesWalk(scope: scope, walkDepth: walkDepth))
+			return .unfinished(UnfinishedReceivedPropertiesWalk(scope: scope, walkDepth: walkDepth, walksSeamCallFills: cache.walksSeamCallFills))
 		}
 	}
 
 	/// A scope whose received properties `walkReceivedProperties` is collecting, with what it has collected from
 	/// the trees of the children walked so far.
 	private struct UnfinishedReceivedPropertiesWalk {
-		init(scope: Scope, walkDepth: Int) {
+		init(scope: Scope, walkDepth: Int, walksSeamCallFills: Bool) {
 			self.scope = scope
 			self.walkDepth = walkDepth
 			propertiesToGenerate = scope.propertiesToGenerate
 			declarations = ScopeDeclarations(scope: scope)
-			// A seam call's fills, in a production tree, call no public mock, so only a public mock call's are walked.
+			// A seam call's fills, in a production tree, call no public mock, so only a public mock call's are walked, unless the
+			// walk asks what a seam's fill receives (`ReceivedPropertiesCache.walksSeamCallFills`).
 			var fills = [(scope: Scope, fieldForms: Set<Property>)]()
-			if scope.publicMockCall != nil {
+			if scope.publicMockCall != nil || walksSeamCallFills && scope.seamCall != nil {
 				let innerScopeReaders = scope.calledBuilders.map { InnerScopeReaders(enumsByKey: $0.enumsByKey) }
 				for case let .fill(hole, fillScope) in scope.holeArguments {
 					// A public mock takes no deferred parameter, so its fill binds every field, but one that a level of an inner
 					// seam's enum holds on some route to the place and not on another, which the fill reads of the caller's scope
-					// on that other route (`InnerScopeReaders.labelsSomeInnerRouteLacks(of:)`).
+					// on that other route (`InnerScopeReaders.labelsSomeInnerRouteLacks(of:)`). A seam's fill reads a field bound
+					// from a deferred parameter of the caller's scope too (`fillUnderConstruction`).
 					let labelsSomeInnerRouteLacks = innerScopeReaders?.labelsSomeInnerRouteLacks(of: hole) ?? []
-					fills.append((fillScope, ScopeGenerator.fieldForms(of: hole, boundLabels: Set(hole.fields.map(\.property.label)).subtracting(labelsSomeInnerRouteLacks))))
+					let boundLabels = Set(hole.fields.filter { scope.publicMockCall != nil || !$0.isDeferredParameter }.map(\.property.label))
+					fills.append((fillScope, ScopeGenerator.fieldForms(of: hole, boundLabels: boundLabels.subtracting(labelsSomeInnerRouteLacks))))
 				}
 			}
 			self.fills = fills
