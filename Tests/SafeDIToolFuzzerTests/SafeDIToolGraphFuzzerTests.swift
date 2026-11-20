@@ -842,6 +842,9 @@ struct SafeDIToolGraphFuzzerTests {
 		// asserts in the caller's module too.
 		#expect(acceptedResults.contains { $0.isComparedAcrossIntegrations })
 		#expect(acceptedResults.contains { $0.isComparedAcrossIntegrations && GraphFuzzerFeature.seamDrawFeatures(of: $0.fixture).contains(.recordedInFlagClause) })
+		// A split graph that declares a seam, whose modules generated the same code reading the stored seam signatures as
+		// computing them again.
+		#expect(acceptedResults.contains { $0.isComparedWithRecomputedSignatures })
 		// Seams naming a type a block that guards mock-only declarations declares, with each way the block's other clauses,
 		// or another file's, declare it, and one in the seam's module, which the oracle compiles as a release build too.
 		#expect(Set([
@@ -6374,6 +6377,7 @@ struct SafeDIToolGraphFuzzerTests {
 								isInspectedByValueOracle: results[index].isInspectedByValueOracle,
 								isComparedByValueOracle: results[index].isComparedByValueOracle,
 								isComparedAcrossIntegrations: results[index].isComparedAcrossIntegrations,
+								isComparedWithRecomputedSignatures: results[index].isComparedWithRecomputedSignatures,
 								isComparedWithReadTwin: results[index].isComparedWithReadTwin,
 								retentionCounts: results[index].retentionCounts,
 								valueOracle: results[index].valueOracle,

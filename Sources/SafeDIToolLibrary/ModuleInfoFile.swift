@@ -46,6 +46,7 @@ public struct ModuleInfoFile: Codable, Sendable {
 		conditionalCompilationDecisions: [ConditionalCompilationDecision],
 		instantiableTypeNamesInAnyClause: [String],
 		plainTypeDeclarations: [PlainTypeDeclaration],
+		seamSignatures: [StoredSeamSignature],
 		view: ModuleInfoView,
 	) {
 		self.moduleName = moduleName
@@ -59,11 +60,12 @@ public struct ModuleInfoFile: Codable, Sendable {
 		self.conditionalCompilationDecisions = conditionalCompilationDecisions
 		self.instantiableTypeNamesInAnyClause = instantiableTypeNamesInAnyClause
 		self.plainTypeDeclarations = plainTypeDeclarations
+		self.seamSignatures = seamSignatures
 		self.view = view
 	}
 
 	/// The file of `module`, named `moduleName`, which a run that writes a module info file always knows.
-	public init(module: ModuleInfo, moduleName: String, view: ModuleInfoView) {
+	public init(module: ModuleInfo, moduleName: String, seamSignatures: [StoredSeamSignature], view: ModuleInfoView) {
 		self.init(
 			moduleName: moduleName,
 			packageName: module.packageName,
@@ -76,6 +78,7 @@ public struct ModuleInfoFile: Codable, Sendable {
 			conditionalCompilationDecisions: module.conditionalCompilationDecisions,
 			instantiableTypeNamesInAnyClause: module.instantiableTypeNamesInAnyClause,
 			plainTypeDeclarations: module.plainTypeDeclarations,
+			seamSignatures: seamSignatures,
 			view: view,
 		)
 	}
@@ -102,6 +105,9 @@ public struct ModuleInfoFile: Codable, Sendable {
 	let instantiableTypeNamesInAnyClause: [String]
 	/// See `ModuleInfo.plainTypeDeclarations`.
 	let plainTypeDeclarations: [PlainTypeDeclaration]
+	/// The signature of each seam the module declares, sorted by seam, as the module's run computed it: a module that
+	/// calls one reads it here rather than computing it again. Empty for a module that declares no seam.
+	let seamSignatures: [StoredSeamSignature]
 	/// What the module's dependents need of the modules it depends on, directly or not.
 	let view: ModuleInfoView
 
@@ -141,6 +147,30 @@ public struct ModuleInfoFile: Codable, Sendable {
 			mockImports: mockImports,
 			instantiables: instantiables.map { $0.withoutPositions() },
 			plainTypeDeclarations: plainTypeDeclarations.map { $0.withoutPositions() },
+			seamSignatures: seamSignatures,
+		)
+	}
+
+	/// This file without the seam signatures it and its view carry, which leaves each module that reads it to compute them
+	/// from the declarations, as a run under the SwiftPM plugin's target graph does: the graph fuzzer compares the two.
+	public var withoutSeamSignatures: ModuleInfoFile {
+		ModuleInfoFile(
+			moduleName: moduleName,
+			packageName: packageName,
+			dependencyModuleNames: dependencyModuleNames,
+			imports: imports,
+			mockImports: mockImports,
+			instantiables: instantiables,
+			configurations: configurations,
+			filesWithUnexpectedNodes: filesWithUnexpectedNodes,
+			conditionalCompilationDecisions: conditionalCompilationDecisions,
+			instantiableTypeNamesInAnyClause: instantiableTypeNamesInAnyClause,
+			plainTypeDeclarations: plainTypeDeclarations,
+			seamSignatures: [],
+			view: ModuleInfoView(
+				moduleGraph: view.moduleGraph,
+				declarations: view.declarations.map { ViewedModule(moduleName: $0.moduleName, imports: $0.imports, mockImports: $0.mockImports, instantiables: $0.instantiables, plainTypeDeclarations: $0.plainTypeDeclarations, seamSignatures: []) },
+			),
 		)
 	}
 
@@ -186,6 +216,8 @@ struct ViewedModule: Codable {
 	let mockImports: [ImportStatement]
 	let instantiables: [Instantiable]
 	let plainTypeDeclarations: [PlainTypeDeclaration]
+	/// See `ModuleInfoFile.seamSignatures`.
+	let seamSignatures: [StoredSeamSignature]
 
 	/// Whether the module declares a seam or a public mock.
 	var declaresSeamOrPublicMock: Bool {
@@ -274,9 +306,16 @@ struct MergedModuleInfoView {
 				writtenDeclarationNames.insert(entry.moduleName)
 			}
 		}
+		// A module's file and every view carry the same signatures of its seams, without positions.
+		let directModuleNames = Set(directModules.map(\.file.moduleName))
+		var storedSeamSignatures = [String: [StoredSeamSignature]]()
+		for (moduleName, declaration) in declarations where !declaration.entry.seamSignatures.isEmpty {
+			storedSeamSignatures[moduleName] = declaration.entry.seamSignatures
+		}
+		storedSeamSignaturesByModuleName = storedSeamSignatures
 		identitiesByModuleName = identities.mapValues(\.identity)
 		declarationsByModuleName = declarations.mapValues(\.entry)
-		directModuleNames = Set(directModules.map(\.file.moduleName))
+		self.directModuleNames = directModuleNames
 		view = ModuleInfoView(
 			moduleGraph: identities.values.map(\.identity).sorted { Array($0.moduleName.utf8).lexicographicallyPrecedes(Array($1.moduleName.utf8)) },
 			declarations: writtenDeclarationNames
@@ -292,6 +331,9 @@ struct MergedModuleInfoView {
 	let declarationsByModuleName: [String: ViewedModule]
 	/// The modules whose files the run was given.
 	let directModuleNames: Set<String>
+	/// The signatures of the seams of each module the files carry the declarations of, by module name: the file's own,
+	/// with positions, for a module whose file the run was given.
+	let storedSeamSignaturesByModuleName: [String: [StoredSeamSignature]]
 	/// The view the run's own module info file carries.
 	let view: ModuleInfoView
 

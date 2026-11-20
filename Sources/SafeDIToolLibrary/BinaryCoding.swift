@@ -464,6 +464,26 @@ extension Array: BinaryCodable where Element: BinaryCodable {
 	}
 }
 
+extension Dictionary: BinaryCodable where Key: BinaryCodable & Comparable, Value: BinaryCodable {
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		let count = try reader.readCount()
+		self.init(minimumCapacity: count)
+		for _ in 0..<count {
+			let key = try Key(readingFrom: &reader)
+			self[key] = try Value(readingFrom: &reader)
+		}
+	}
+
+	/// Writes the entries sorted by key, because a dictionary's iteration order differs between processes.
+	func write(to writer: inout BinaryWriter) {
+		writer.writeUnsigned(UInt64(count))
+		for (key, value) in sorted(by: { $0.key < $1.key }) {
+			writer.write(key)
+			writer.write(value)
+		}
+	}
+}
+
 extension Set: BinaryCodable where Element: BinaryCodable & Comparable {
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init([Element](readingFrom: &reader))

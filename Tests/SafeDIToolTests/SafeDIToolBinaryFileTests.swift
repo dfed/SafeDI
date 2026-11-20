@@ -167,10 +167,11 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		// before the change are not read after it.
 		let project = try await scannedKitchenSinkProject()
 		// A module info file holds the module's declarations, as the cache does, and a view of other modules'.
-		let moduleInfoFile = ModuleInfoFile(module: project.scannedModuleInfo.moduleInfo, moduleName: "Kitchen", view: .empty)
+		let moduleInfoFile = ModuleInfoFile(module: project.scannedModuleInfo.moduleInfo, moduleName: "Kitchen", seamSignatures: [], view: .empty)
 		let moduleInfoFileWithView = ModuleInfoFile(
 			module: project.scannedModuleInfo.moduleInfo,
 			moduleName: "Sink",
+			seamSignatures: [],
 			view: ModuleInfoView(moduleGraph: [moduleInfoFile.ownIdentity], declarations: [moduleInfoFile.ownEntry]),
 		)
 		var foundTypeNames = Set<String>()
@@ -186,8 +187,71 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			}
 		}
 
-		#expect(Set(BinaryFile.schemaMembers.map { String(reflecting: $0) }) == foundTypeNames)
+		// A kitchen sink of declarations computes no seam's signature, whose types `seamSignatureSchema_listsEveryStoredPropertyOfEverySignatureStruct` checks.
+		#expect(Set(BinaryFile.schemaMembers.map { String(reflecting: $0) }) == foundTypeNames.union(Self.seamSignatureMembers.map { String(reflecting: $0) }))
 	}
+
+	@Test
+	func seamSignatureSchema_listsEveryStoredPropertyOfEverySignatureStruct() throws {
+		// A stored property added to a type a seam's signature holds without being listed in its `binaryLayout` fails
+		// here: every module that calls the seam reads the signature its module's run wrote, so a property left
+		// unwritten would reach the callers empty.
+		for member in Self.seamSignatureMembers {
+			guard let sampleType = member as? any BinarySample.Type else {
+				Issue.record("\(member) has no sample value")
+				continue
+			}
+			let sample = try sampleType.sample(isDistinct: true)
+			if Mirror(reflecting: sample).displayStyle == .struct, let schemaMember = sample as? any BinarySchemaMember {
+				Self.expectLayoutListsEveryStoredProperty(of: schemaMember)
+			}
+		}
+	}
+
+	/// The types a module info file writes only inside the signature of a seam its module declares.
+	private static let seamSignatureMembers: [any BinarySchemaMember.Type] = [
+		StoredSeamSignature.self,
+		SeamSignature.self,
+		SeamSignature.Receiver.self,
+		SeamSignature.NestedSeamCall.self,
+		SeamSignature.Parameter.self,
+		SeamSignature.Parameter.Deferral.self,
+		SeamSignature.Hole.self,
+		SeamSignature.Hole.Field.self,
+		SeamSignature.Hole.Field.SeamParameterOrigin.self,
+		SeamSignature.Hole.UncarriedDeclaration.self,
+		SeamSignature.Hole.UncarriedDeclaration.Reason.self,
+		SeamSignature.Hole.UncarriedDeclaration.SendableFunction.self,
+		SeamSignature.Hole.UncarriedDeclaration.AliasOrigin.self,
+		SeamSignature.Hole.UncarriedDeclaration.CycleParameterOrigin.self,
+		SeamSignature.Hole.UncarriedDeclaration.PresentedPlace.self,
+		SeamSignature.Hole.CycleReentryDeclaration.self,
+		SeamSignature.Hole.ReenteringCallDeclaration.self,
+		SeamSignature.Hole.FieldOfReenteringPlace.self,
+		SeamSignature.Hole.ReenteringPlaceField.self,
+		SeamSignature.Hole.DeclarationHiddenByField.self,
+		SeamSignature.Hole.PathType.self,
+		SeamSignature.Hole.EnumPlace.self,
+		SeamSignature.Hole.RouteStep.self,
+		SeamSignature.Hole.RouteStep.Member.self,
+		SeamSignature.Hole.RouteStep.Values.self,
+		SeamSignature.Hole.RouteStep.InnerScope.self,
+		SeamSignature.Hole.DeclaredProperty.self,
+		SeamSignature.Hole.Site.self,
+		SeamSignature.CallRoute.self,
+		SeamSignature.HoleType.self,
+		SeamSignature.ScopeEnum.self,
+		SeamSignature.ScopeEnum.Key.self,
+		SeamSignature.ScopeEnum.Values.self,
+		SeamSignature.ScopeEnum.Case.self,
+		SeamSignature.ScopeEnum.Case.Kind.self,
+		SeamSignature.Builder.self,
+		TypeAccessProof.Cause.self,
+		TypeAccessProof.Prover.self,
+		TypeAccessProof.MemberKind.self,
+		ModuleIdentity.self,
+		AccessRequirement.self,
+	]
 
 	@Test
 	func binaryLayout_matchesBytesEachCachedStructWritesAndReads_whenEachFieldInTurnHoldsADistinctValue() throws {
@@ -584,7 +648,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		)
 
 		#expect {
-			try ModuleInfoFile(module: moduleInfo, moduleName: "Deep", view: .empty).moduleInfoData
+			try ModuleInfoFile(module: moduleInfo, moduleName: "Deep", seamSignatures: [], view: .empty).moduleInfoData
 		} throws: { error in
 			// Named by its outermost type: spelling the nested type recurses as deeply as it nests.
 			"\(error)" == "SafeDI cannot write `Level0` to a module info file: a type its declaration names nests more than 128 types deep, which is more than SafeDI reads back. To fix this, declare a typealias for part of that type, so that no type in the declaration nests more than 128 types deep."
@@ -600,7 +664,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		// unchanged, and keeps every fact a signature reads: which file holds each declaration, and whether each spells an
 		// access modifier. A position field added later is caught here, and so is a fact stripped by mistake.
 		let module = try await scannedKitchenSinkProject().scannedModuleInfo.moduleInfo
-		let file = ModuleInfoFile(module: module, moduleName: "Kitchen", view: .empty)
+		let file = ModuleInfoFile(module: module, moduleName: "Kitchen", seamSignatures: [], view: .empty)
 		func positions(in value: Any) -> [Any] {
 			reflectedStructuresAndEnumerations(in: value).filter { $0 is Dependency.DeclarationLocation || $0 is Dependency.SourceRange }
 		}
@@ -1310,6 +1374,12 @@ extension Array: BinarySample where Element: BinarySample {
 	}
 }
 
+extension Dictionary: BinarySample where Key: BinarySample & Comparable, Value: BinarySample {
+	fileprivate static func sample(isDistinct: Bool) throws -> [Key: Value] {
+		isDistinct ? [try Key.sample(isDistinct: false): try Value.sample(isDistinct: false)] : [:]
+	}
+}
+
 extension Set: BinarySample where Element: BinarySample & Comparable {
 	fileprivate static func sample(isDistinct: Bool) throws -> Set<Element> {
 		isDistinct ? [try Element.sample(isDistinct: false)] : []
@@ -1352,3 +1422,44 @@ extension TypeDescription: BinarySample {}
 extension TypeDescription.VoidSpelling: BinarySample {}
 extension TypeDescription.TupleElement: BinarySample {}
 extension UnorderedEquatingCollection: BinarySample where Element: BinarySample {}
+extension StoredSeamSignature: BinarySample {}
+extension SeamSignature: BinarySample {}
+extension SeamSignature.Receiver: BinarySample {}
+extension SeamSignature.NestedSeamCall: BinarySample {}
+extension SeamSignature.Parameter: BinarySample {}
+extension SeamSignature.Parameter.Deferral: BinarySample {}
+extension SeamSignature.Hole: BinarySample {}
+extension SeamSignature.Hole.Field: BinarySample {}
+extension SeamSignature.Hole.Field.SeamParameterOrigin: BinarySample {}
+extension SeamSignature.Hole.UncarriedDeclaration: BinarySample {}
+extension SeamSignature.Hole.UncarriedDeclaration.Reason: BinarySample {}
+extension SeamSignature.Hole.UncarriedDeclaration.SendableFunction: BinarySample {}
+extension SeamSignature.Hole.UncarriedDeclaration.AliasOrigin: BinarySample {}
+extension SeamSignature.Hole.UncarriedDeclaration.CycleParameterOrigin: BinarySample {}
+extension SeamSignature.Hole.UncarriedDeclaration.PresentedPlace: BinarySample {}
+extension SeamSignature.Hole.CycleReentryDeclaration: BinarySample {}
+extension SeamSignature.Hole.ReenteringCallDeclaration: BinarySample {}
+extension SeamSignature.Hole.FieldOfReenteringPlace: BinarySample {}
+extension SeamSignature.Hole.ReenteringPlaceField: BinarySample {}
+extension SeamSignature.Hole.DeclarationHiddenByField: BinarySample {}
+extension SeamSignature.Hole.PathType: BinarySample {}
+extension SeamSignature.Hole.EnumPlace: BinarySample {}
+extension SeamSignature.Hole.RouteStep: BinarySample {}
+extension SeamSignature.Hole.RouteStep.Member: BinarySample {}
+extension SeamSignature.Hole.RouteStep.Values: BinarySample {}
+extension SeamSignature.Hole.RouteStep.InnerScope: BinarySample {}
+extension SeamSignature.Hole.DeclaredProperty: BinarySample {}
+extension SeamSignature.Hole.Site: BinarySample {}
+extension SeamSignature.CallRoute: BinarySample {}
+extension SeamSignature.HoleType: BinarySample {}
+extension SeamSignature.ScopeEnum: BinarySample {}
+extension SeamSignature.ScopeEnum.Key: BinarySample {}
+extension SeamSignature.ScopeEnum.Values: BinarySample {}
+extension SeamSignature.ScopeEnum.Case: BinarySample {}
+extension SeamSignature.ScopeEnum.Case.Kind: BinarySample {}
+extension SeamSignature.Builder: BinarySample {}
+extension TypeAccessProof.Cause: BinarySample {}
+extension TypeAccessProof.Prover: BinarySample {}
+extension TypeAccessProof.MemberKind: BinarySample {}
+extension ModuleIdentity: BinarySample {}
+extension AccessRequirement: BinarySample {}

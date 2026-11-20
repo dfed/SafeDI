@@ -357,6 +357,7 @@ func executeSafeDIToolMultiModuleTest(
 	writesTargetGraph: Bool = true,
 	scansDuringGenerate: Bool = false,
 	moduleInfoOverrides: [String: String] = [:],
+	discardsStoredSeamSignatures: Bool = false,
 	writesDOTTrees: Bool = false,
 	modulesBeneath: ((_ moduleNames: [String]) -> [String])? = nil,
 	filesToDelete: inout [URL],
@@ -596,7 +597,12 @@ func executeSafeDIToolMultiModuleTest(
 			}
 		}
 
-		let moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
+		var moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
+		if discardsStoredSeamSignatures, let moduleInfoOutput, let writtenFile = moduleInfoFile {
+			// The modules above compute every seam's signature again, as the SwiftPM plugin's flow does.
+			moduleInfoFile = writtenFile.withoutSeamSignatures
+			try writtenFile.withoutSeamSignatures.moduleInfoData.write(to: moduleInfoOutput)
+		}
 		if let moduleInfo = moduleInfoFile?.module {
 			expectMockConditionAgrees(configured: moduleInfo.configurations.first?.mockConditionalCompilation, fixture: module.fixture, sourceLocation: sourceLocation)
 		}

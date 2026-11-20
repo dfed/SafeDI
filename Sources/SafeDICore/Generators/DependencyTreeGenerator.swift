@@ -4359,6 +4359,8 @@ public actor DependencyTreeGenerator {
 	/// The plan of the public mock that `foreignPublicMock`'s module generated for `type`, computed as that module
 	/// computed it, from the declarations it sees; `nil` when that module could not generate it, which its own run
 	/// reports.
+	/// A deliberate gap beside a foreign seam's signature, which a module info carries (`foreignSeamRoots`): the plan is
+	/// computed again here, only for a mock whose constructions this module cannot reach, and is a whole generator's.
 	/// - Parameter modulesReadByRunOfModule: See `EmittingModule.init`.
 	private func foreignPublicMockPlan(
 		of type: TypeDescription,
@@ -4370,10 +4372,12 @@ public actor DependencyTreeGenerator {
 		if let existingGenerator = publicMockGeneratorsByModuleName[moduleName] {
 			generator = existingGenerator
 		} else {
+			// Resolved only for a module whose public mock a plan needs, once per module.
+			let visible = try foreignPublicMock.visibleDeclarations()
 			generator = DependencyTreeGenerator(
 				importStatements: [],
 				mockImportStatements: [],
-				typeDescriptionToFulfillingInstantiableMap: foreignPublicMock.visibleInstantiables,
+				typeDescriptionToFulfillingInstantiableMap: visible.instantiables,
 				aliasDeclarationReferences: aliasDeclarationReferences,
 				compilesGeneratedMocks: compilesGeneratedMocks,
 				// The declaring module's files are not this run's own: its declarations record its name.
@@ -4393,14 +4397,14 @@ public actor DependencyTreeGenerator {
 					// Read from that module's view of the modules it depends on, or, under the target graph, from every
 					// module's.
 					foreignPublicMocks: seams.foreignDeclarations(seenByModuleNamed: moduleName).publicMocks.filter { entry in
-						entry.value.declaringModule.moduleName != moduleName && foreignPublicMock.visibleInstantiables[entry.key] != nil
+						entry.value.declaringModule.moduleName != moduleName && visible.instantiables[entry.key] != nil
 					},
 					// The views of every module, so that the plans this one computes in turn read what each of those modules
 					// saw, never what this module's filter left: under module info a public mock two modules beneath this one
 					// is not among the public mocks this module sees.
 					foreignDeclarationsSeenByModule: seams.foreignDeclarationsSeenByModule,
 				),
-				plainTypeDeclarations: foreignPublicMock.visiblePlainTypeDeclarations,
+				plainTypeDeclarations: visible.plainTypeDeclarations,
 			)
 			publicMockGeneratorsByModuleName[moduleName] = generator
 		}
@@ -4763,6 +4767,7 @@ public actor DependencyTreeGenerator {
 		}
 		var computedModules = Set<String>()
 		var expandedModules = Set<String>()
+		var visibleDeclarationsByModuleName = [String: SeamResolution.VisibleDeclarations]()
 		var modulesToCompute = Array(foreignModules(reachedFrom: reachableTypeDescriptions, in: typeDescriptionToFulfillingInstantiableMap, seenBy: nil).reversed())
 		while let module = modulesToCompute.last {
 			guard !computedModules.contains(module.moduleName) else {
@@ -4770,10 +4775,32 @@ public actor DependencyTreeGenerator {
 				continue
 			}
 			let moduleSeam = module.seams[0].seam
+			// A module info carries the signatures its module's own run computed, beside the declarations it computed them
+			// from and only once every validation passed, so a module whose every seam has one is read, never computed again.
+			// A foreign public mock's plan is computed again (`foreignPublicMockPlan`), a deliberate gap.
+			let storedSeamRoots = module.seams.compactMap { seam in
+				seam.seam.storedSignature.map { (type: seam.type, seamRoot: $0.signature.map { ScopeGenerator.SeamRoot(signature: $0) }) }
+			}
+			if storedSeamRoots.count == module.seams.count {
+				modulesToCompute.removeLast()
+				computedModules.insert(module.moduleName)
+				for (seamType, seamRoot) in storedSeamRoots {
+					seamRoots[seamType] = seamRoot
+				}
+				continue
+			}
+			// Resolved once per module, on its first visit.
+			let visible: SeamResolution.VisibleDeclarations
+			if let resolved = visibleDeclarationsByModuleName[module.moduleName] {
+				visible = resolved
+			} else {
+				visible = try moduleSeam.visibleDeclarations()
+				visibleDeclarationsByModuleName[module.moduleName] = visible
+			}
 			// A module's reached modules are pushed above it on its first visit only; on its second it is computed
 			// with the signatures found by then, so the loop ends whatever the module infos claim to reach.
 			if expandedModules.insert(module.moduleName).inserted {
-				let dependencies = foreignModules(reachedFrom: Set(module.seams.map(\.type)), in: moduleSeam.visibleInstantiables, seenBy: module.moduleName)
+				let dependencies = foreignModules(reachedFrom: Set(module.seams.map(\.type)), in: visible.instantiables, seenBy: module.moduleName)
 					.filter { !computedModules.contains($0.moduleName) }
 				if !dependencies.isEmpty {
 					modulesToCompute.append(contentsOf: dependencies.reversed())
@@ -4787,8 +4814,8 @@ public actor DependencyTreeGenerator {
 			// can hold a tree this run cannot build, which is reported with the other seam errors.
 			let computation = try Self.seamSignatures(
 				forSeams: Set(module.seams.map(\.type)),
-				in: moduleSeam.visibleInstantiables,
-				plainTypeDeclarations: moduleSeam.visiblePlainTypeDeclarations,
+				in: visible.instantiables,
+				plainTypeDeclarations: visible.plainTypeDeclarations,
 				aliasDeclarationReferences: aliasDeclarationReferences,
 				fixedSignatures: seamRoots.compactMapValues(\.self),
 				callerModule: moduleSeam.declaringModule,
@@ -4820,6 +4847,16 @@ public actor DependencyTreeGenerator {
 		let seamRoots = memoizedSeamRoots ?? Result { try computeSeamRoots() }
 		memoizedSeamRoots = seamRoots
 		return seamRoots
+	}
+
+	/// The signature of each seam this module generates, sorted by seam, which its module info carries for the modules
+	/// that call the seams (`SeamResolution.ForeignSeam.storedSignature`).
+	public func storedSignaturesOfGeneratedSeams() throws -> [StoredSeamSignature] {
+		guard !generatedSeamTypes.isEmpty else { return [] }
+		let seamRoots = try seamRoots.get()
+		return generatedSeamTypes.sorted().compactMap { seamType in
+			seamRoots[seamType].map { StoredSeamSignature(seamType: seamType, signature: $0?.signature) }
+		}
 	}
 
 	/// `seamRoots`, once computed.
