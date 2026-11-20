@@ -917,7 +917,7 @@ public actor DependencyTreeGenerator {
 				label: builder.label,
 				typeSource: builder.parameterType.strippingEscaping.asSource,
 				defaultExpression: nil,
-				reason: .noInstantiableFulfillsType(builder.holeType.instantiatedType),
+				reason: .noInstantiableFulfillsType(builder.places.first?.instantiatedType ?? builder.family.holeType.instantiatedType),
 			))
 		}
 
@@ -3792,7 +3792,8 @@ public actor DependencyTreeGenerator {
 				declaringModuleMockCondition: foreignPublicMock.declaringModuleMockCondition,
 				callerModuleMockCondition: seams.currentModuleMockCondition,
 				receiversByLabel: ownPlan.receiversByLabel,
-				typesDeclaredEscaping: ownPlan.typesDeclaredEscaping.intersection(tierParameters.map(\.type)),
+				// A builder's `Builder` type, which a calling internal mock that passes its places up takes, is a function too.
+				typesDeclaredEscaping: ownPlan.typesDeclaredEscaping.intersection(tierParameters.map(\.type)).union(tierParameters.compactMap { $0.builder?.readableParameterType.nameDeclaredEscaping }),
 				calledBuilders: CalledBuilders(
 					holes: (ownPlan.plan.holes + ownPlan.plan.unpresentedHoles).map { $0.atTier(tier) },
 					builders: ownPlan.plan.builders.map { $0.atTier(tier) },
@@ -8539,7 +8540,7 @@ public actor DependencyTreeGenerator {
 		var candidates = [Candidate]()
 		for calledType in publicMockCalls.keys.sorted() {
 			guard let publicMockCall = publicMockCalls[calledType] else { continue }
-			let readers = InnerScopeReaders(enumsByKey: publicMockCall.calledBuilders.enumsByKey, nameByKey: [:])
+			let readers = InnerScopeReaders(enumsByKey: publicMockCall.calledBuilders.enumsByKey)
 			for hole in publicMockCall.holes {
 				guard let fulfillingScope = Self.fulfillingMockScope(of: hole, in: typeDescriptionToScopeMap),
 				      Self.inaccessibleConstructions(

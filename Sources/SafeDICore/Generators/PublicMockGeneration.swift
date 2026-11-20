@@ -133,6 +133,8 @@ extension ScopeGenerator {
 	/// each member it omits to its `omittedValue`. The members are in the struct's storage (`ConfigurationStorage`),
 	/// which is not `Sendable`, since a public struct is not `Sendable` unless it declares it, which none of these does.
 	static func publicStructBody(members: [PublicStructMember], indent: String) -> [String] {
+		// A mock's `SafeDIOverrides` whose only member was a closure its call cannot be handed keeps its initializer.
+		guard !members.isEmpty else { return ["\(indent)public init() {}"] }
 		let memberIndent = "\(indent)\(standardIndent)"
 		let storage = ConfigurationStorage(fields: members.map { member in
 			ConfigurationStorage.Field(
@@ -198,7 +200,9 @@ extension ScopeGenerator {
 			!cycleEdges.contains(CycleEdge(parent: concreteType.asSource, child: child.concreteType.asSource))
 		}
 		let childLabelMap = disambiguatePropertyLabels(for: nonCycleChildren)
-		for child in nonCycleChildren {
+		// A child whose call can hand its override closure no builder a person writes has no member
+		// (`MockParameterNode.offersOverrideClosure`).
+		for child in nonCycleChildren where child.offersOverrideClosure {
 			members.append(publicMember(
 				for: child,
 				named: disambiguatedLabel(for: child, labelMap: childLabelMap),
@@ -1042,9 +1046,9 @@ extension ScopeGenerator {
 		let holes = shapedBuilders?.holes ?? []
 		let builders = shapedBuilders?.builders ?? []
 		for builder in builders {
-			// The function type the builder is, without `@escaping`, which a caller's leaf receives it as: a closure over the
-			// enum, whose places a caller passes up, also where the mock takes the builder struct, which the call converts it to.
-			let functionType = Self.enumFormParameterType(of: builder).strippingEscaping
+			// The type of the builder a person writes, without `@escaping`, which a caller's leaf receives it as: an internal caller
+			// that passes the builder's places up takes it so, and hands the call its struct (`.init(__safeDI_noScope:)`).
+			let functionType = builder.readableParameterType.strippingEscaping
 			leadingParameters.append(PublicMockParameter(
 				name: builder.label,
 				type: functionType,
@@ -1081,10 +1085,6 @@ extension ScopeGenerator {
 			parameters.append(PublicMockParameter(name: ReservedName.mockOverridesParameterName, type: overridesType, typeSource: overridesType.asSource, defaultSource: ".init()", defaultKind: .expression, access: .public, role: .overrides))
 		}
 		let tiers = [AccessLevel.public] + Set(parameters.map(\.access)).filter { $0 < .public }.sorted(by: >)
-		// The narrowest tier's body binds each builder by the name that tier takes it under, but a builder struct, which the
-		// function only generated code calls takes under that name.
-		let narrowestTier = tiers[tiers.count - 1]
-		defaultResolutions.insert(contentsOf: builders.filter { !$0.takesBuilderStruct }.map { "\(bodyIndent)let \($0.internalName) = \($0.label(inTierAt: narrowestTier))" }, at: 0)
 		var hash = SeamSignatureHash()
 		for parameter in parameters {
 			hash.combine(parameter.name)
@@ -1112,16 +1112,6 @@ extension ScopeGenerator {
 		plan.builders = builders
 		plan.scopeEnums = shapedBuilders?.scopeEnums ?? []
 		return plan
-	}
-
-	/// The type of `builder` as a closure over its root enum: its parameter's type, or, where the mock takes the enum's builder
-	/// struct, a closure over the enum the struct is nested in, which a caller that passes the builder's places up takes.
-	static func enumFormParameterType(of builder: SeamSignature.Builder) -> TypeDescription {
-		guard builder.takesBuilderStruct, case let .nested(_, enumType, generics) = builder.parameterType, let builtType = generics.first else {
-			return builder.parameterType
-		}
-		let functionType = TypeDescription.closure(arguments: [enumType], isAsync: false, doesThrow: false, returnType: builtType)
-		return (builder.enumKey.isSendable ? functionType.asSendableFunction : functionType).asFunctionParameter
 	}
 
 	/// How visible a public mock's parameter of `type` is: as visible as the narrowest type it names, as the declarations of
@@ -1287,7 +1277,9 @@ extension ScopeGenerator {
 		context: PublicMockContext,
 		indent: String,
 	) -> String {
-		let members = rootChildren.map { child in
+		// A child whose call can hand its override closure no builder a person writes has no member
+		// (`MockParameterNode.offersOverrideClosure`).
+		let members = rootChildren.filter(\.offersOverrideClosure).map { child in
 			publicMember(
 				for: child,
 				named: disambiguatedLabel(for: child, labelMap: rootLabelMap),
@@ -1410,7 +1402,7 @@ struct PublicMockFinding: Hashable, Sendable {
 		case let .builder(hole):
 			// A public mock's builder takes a place of its shaped signature, which has its case nested by type (`enumPlace`). The
 			// case is named alone, never qualified by its enum, since a diagnostic names no generated type.
-			"whose case `\(hole.enumPlace?.caseName ?? hole.property.label)` builds `\(hole.builtType.asSource)` for the hole `\(hole.property.label)`"
+			"whose member `\(hole.enumPlace?.caseName ?? hole.property.label)` builds `\(hole.builtType.asSource)` for the hole `\(hole.property.label)`"
 		}
 		let parameterName = if case let .builder(hole) = parameter.kind {
 			hole.builderLabel

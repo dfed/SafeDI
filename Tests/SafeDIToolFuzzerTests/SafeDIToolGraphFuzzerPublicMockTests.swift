@@ -321,6 +321,128 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		#expect(overriding.publicMockRootLevelFailure == nil)
 	}
 
+	/// The runs of `seed`'s public mock graph, accepted with `consumerMock` as `OverriddenScreen`'s generated mock in `FuzzApp`.
+	private func overrideClosureRuns(seed: UInt64, consumerMock: String) -> GraphFuzzerToolRuns {
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic])
+		let accepted = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzApp/S\(seed)_OverriddenScreen+SafeDIMock.swift": consumerMock], warnings: [])
+		return GraphFuzzerToolRuns(fixture: fixture, firstOutcome: accepted, secondOutcome: accepted, knownRightOutcome: accepted)
+	}
+
+	/// `OverriddenScreen`'s generated mock, whose overrides hold `members`.
+	private func overriddenScreenMock(seed: UInt64, members: [String]) -> String {
+		"extension S\(seed)_OverriddenScreen {\n    public struct SafeDIOverrides {\n        public init() {}\n\(members.map { "        \($0)\n" }.joined())    }\n}\n"
+	}
+
+	@Test
+	func publicMockOverrideClosureFailure_reportsOfferedClosure_whenCallCannotHandBuilderPersonWrites() throws {
+		// A graph whose call of `OverriddenDetail` cannot hand its override closure a builder a person writes fails when the
+		// consumer's overrides hold the closure, and passes when they do not; a graph that does not draw the call passes either
+		// way.
+		let seed = try #require((UInt64(0)..<1_000).first { !GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: $0, features: [.generateMockPublic])).isDisjoint(with: GraphFuzzerPublicMockDrawFeature.overrideClosureCannotHandShapes) })
+		let member = "public let overriddenDetailBuilder: ((S\(seed)_OverriddenSession, @escaping () -> any S\(seed)_OverriddenPlace1Api) -> S\(seed)_OverriddenDetail)?"
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: [member])).publicMockOverrideClosureFailure?.kind == .publicMockOffersOverrideClosureItsCallCannotHand)
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: [])).publicMockOverrideClosureFailure == nil)
+		let otherSeed = try #require((UInt64(0)..<1_000).first { !GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: $0, features: [.generateMockPublic])).contains(.overrideClosureCall) })
+		#expect(overrideClosureRuns(seed: otherSeed, consumerMock: overriddenScreenMock(seed: otherSeed, members: [member])).publicMockOverrideClosureFailure == nil)
+	}
+
+	@Test
+	func publicMockOverrideClosureFailure_reportsDroppedClosure_whenCallCanHandBuilderPersonWrites() throws {
+		// A graph whose call of `OverriddenDetail` can hand its override closure a builder a person writes for each place fails
+		// when the consumer's overrides hold no closure, and passes when they hold one, by value or through an instantiator.
+		let seed = try #require((UInt64(0)..<1_000).first { GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: $0, features: [.generateMockPublic])).contains(.overrideClosureCallCanHand) })
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: [])).publicMockOverrideClosureFailure?.kind == .publicMockDropsOverrideClosureItsCallCanHand)
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: ["public let overriddenDetail: ((@escaping () -> any S\(seed)_OverriddenPlace1Api) -> S\(seed)_OverriddenDetail)?"])).publicMockOverrideClosureFailure == nil)
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: ["let overriddenDetailBuilder: ((@escaping () -> any S\(seed)_OverriddenPlace1Api) -> S\(seed)_OverriddenDetail)?"])).publicMockOverrideClosureFailure == nil)
+	}
+
+	/// The first public mock corpus seed whose call of `OverriddenDetail` can hand its override closure a builder a person
+	/// writes, with the place held as an erased instantiator.
+	private func overrideClosureCanHandErasedInstantiatorSeed() throws -> UInt64 {
+		try #require((UInt64(0)..<1_000).first { GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: $0, features: [.generateMockPublic])).isSuperset(of: [.overrideClosureCallCanHand, .overrideClosureCallPlaceIsErasedInstantiator]) })
+	}
+
+	/// `OverriddenDetail`'s generated file, whose `public` `mock()` takes the session, the erased instantiator's builder, and a
+	/// defaulted value, in that order, and whose `package` one takes the builder alone.
+	private func overriddenDetailMock(seed: UInt64) -> String {
+		"extension S\(seed)_OverriddenDetail {\n    public static func mock(\n        overriddenSession: S\(seed)_OverriddenSession,\n        s\(seed)_OverriddenPlace1Live_S\(seed)_OverriddenPlace1ApiBuilder: @escaping ErasedInstantiator<(), any S\(seed)_OverriddenPlace1Api>.Builder,\n        overriddenFlag: Bool = false\n    ) -> S\(seed)_OverriddenDetail {\n    }\n\n    package static func mock(\n        s\(seed)_OverriddenPlace1Live_S\(seed)_OverriddenPlace1ApiBuilder: @escaping ErasedInstantiator<(), any S\(seed)_OverriddenPlace1Api>.Builder\n    ) -> S\(seed)_OverriddenDetail {\n    }\n}\n"
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addingOverrideClosureCallers_passesEachHandedValueOnUnderTheLabelOfItsType_whenCallCanHandBuilders() throws {
+		// The consumer's overrides hand the closure the builder before the session; the public `mock()` takes them the other
+		// way around, beside a defaulted value, so the closure passes each on by its type, in the mock's order.
+		let seed = try overrideClosureCanHandErasedInstantiatorSeed()
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic])
+		let generatedFiles = [
+			"FuzzApp/S\(seed)_OverriddenScreen+SafeDIMock.swift": overriddenScreenMock(seed: seed, members: ["public let overriddenDetail: ((ErasedInstantiator<(), any S\(seed)_OverriddenPlace1Api>.Builder, S\(seed)_OverriddenSession) -> S\(seed)_OverriddenDetail)?"]),
+			"FuzzFeature/S\(seed)_OverriddenDetail+SafeDIMock.swift": overriddenDetailMock(seed: seed),
+		]
+		#expect(GraphFuzzerOracle.addingOverrideClosureCallers(to: generatedFiles, of: fixture) == generatedFiles.merging([
+			"FuzzApp/S\(seed)_OverriddenScreen+SafeDIPublicMockCaller.swift": "import FuzzFeature\n\n#if DEBUG\nenum S\(seed)_OverriddenScreenOverrideClosureCaller {\n\tstatic func overrides() -> S\(seed)_OverriddenScreen.SafeDIOverrides {\n\t\t.init(overriddenDetail: { overriddenArgument0, overriddenArgument1 in S\(seed)_OverriddenDetail.mock(overriddenSession: overriddenArgument1, s\(seed)_OverriddenPlace1Live_S\(seed)_OverriddenPlace1ApiBuilder: overriddenArgument0) })\n\t}\n}\n#endif\n",
+		]) { $1 })
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addingOverrideClosureCallers_addsNoCaller_whenOverridesHoldNoClosure() throws {
+		let seed = try overrideClosureCanHandErasedInstantiatorSeed()
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic])
+		let generatedFiles = [
+			"FuzzApp/S\(seed)_OverriddenScreen+SafeDIMock.swift": overriddenScreenMock(seed: seed, members: []),
+			"FuzzFeature/S\(seed)_OverriddenDetail+SafeDIMock.swift": overriddenDetailMock(seed: seed),
+		]
+		#expect(GraphFuzzerOracle.addingOverrideClosureCallers(to: generatedFiles, of: fixture) == generatedFiles)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addingOverrideClosureCallers_addsNoCaller_whenFixtureIsKnownRight() throws {
+		// The known-right path spells every mock `true`, so it gets no caller.
+		let seed = try overrideClosureCanHandErasedInstantiatorSeed()
+		let generatedFiles = [
+			"FuzzApp/S\(seed)_OverriddenScreen+SafeDIMock.swift": overriddenScreenMock(seed: seed, members: ["let overriddenDetail: ((@escaping ErasedInstantiator<(), any S\(seed)_OverriddenPlace1Api>.Builder) -> S\(seed)_OverriddenDetail)?"]),
+			"FuzzFeature/S\(seed)_OverriddenDetail+SafeDIMock.swift": overriddenDetailMock(seed: seed),
+		]
+		#expect(GraphFuzzerOracle.addingOverrideClosureCallers(to: generatedFiles, of: GraphFuzzerGenerator.knownRightPublicMockFixture(forSeed: seed)) == generatedFiles)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addingOverrideClosureCallers_addsCallerUnderRenamedNames_whenGraphMovesTypeNamesAcrossWrapperNames() throws {
+		// A renamed graph's names are read from its generated code, so its caller is the drawn graph's, renamed: restoring the
+		// renaming gives the drawn graph's file.
+		let seed = try overrideClosureCanHandErasedInstantiatorSeed()
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic])
+		let renaming = try #require(GraphFuzzerRenaming.all.first { $0.movesTypeNamesAcrossWrapperNames })
+		let prefix = fixture.typeNamePrefix
+		let renamedFixture = fixture.renamed(by: renaming)
+		let generatedFiles = [
+			"FuzzApp/S\(seed)_OverriddenScreen+SafeDIMock.swift": overriddenScreenMock(seed: seed, members: ["let overriddenDetail: ((@escaping ErasedInstantiator<(), any S\(seed)_OverriddenPlace1Api>.Builder) -> S\(seed)_OverriddenDetail)?"]),
+			"FuzzFeature/S\(seed)_OverriddenDetail+SafeDIMock.swift": overriddenDetailMock(seed: seed).replacingOccurrences(of: "overriddenSession: S\(seed)_OverriddenSession,\n        ", with: ""),
+		]
+		let renamedFiles = Dictionary(uniqueKeysWithValues: generatedFiles.map { (renaming.rename($0.key, typeNamePrefix: prefix), renaming.rename($0.value, typeNamePrefix: prefix)) })
+		let callerFileName = "FuzzApp/S\(seed)_OverriddenScreen+SafeDIPublicMockCaller.swift"
+		let caller = try #require(GraphFuzzerOracle.addingOverrideClosureCallers(to: generatedFiles, of: fixture)[callerFileName])
+		let renamedCaller = try #require(GraphFuzzerOracle.addingOverrideClosureCallers(to: renamedFiles, of: renamedFixture)[renaming.rename(callerFileName, typeNamePrefix: prefix)])
+		#expect(renaming.restore(renamedCaller, typeNamePrefix: prefix) == caller)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addingOverrideClosureCallers_recordsIssue_whenNoMockTakesWhatTheClosureIsHanded() throws {
+		let seed = try overrideClosureCanHandErasedInstantiatorSeed()
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic])
+		let generatedFiles = [
+			"FuzzApp/S\(seed)_OverriddenScreen+SafeDIMock.swift": overriddenScreenMock(seed: seed, members: ["let overriddenDetail: ((@escaping () -> any S\(seed)_OverriddenPlace1Api) -> S\(seed)_OverriddenDetail)?"]),
+			"FuzzFeature/S\(seed)_OverriddenDetail+SafeDIMock.swift": overriddenDetailMock(seed: seed),
+		]
+		withKnownIssue {
+			_ = GraphFuzzerOracle.addingOverrideClosureCallers(to: generatedFiles, of: fixture)
+		}
+	}
+
 	// MARK: Builder structs
 
 	@Test
@@ -337,32 +459,45 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func addingPublicMockCallers_recordsIssue_whenCallPassesTwoBuildersToMockThatTakesClosuresThatTakeNothing() {
+	func addingPublicMockCallers_convertsEachBuilderByItsLabel_whenCallPassesTwoBuildersToMockThatTakesClosuresThatTakeNothing() {
+		// Each builder the mock takes as a closure that takes nothing is converted where the call passes it, however many
+		// the mock takes, so a mock that takes one per filling type is called as one that takes one per hole type is.
 		let call = "S1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() }, s1_OtherBuilder: { _ in S1_Other() })"
 		let drawn = GraphFuzzerFixture(seed: 1, swiftFileContent: ["// module: FuzzFeature\n\n@Instantiable(generateMock: .public)\npublic final class S1_T6: Instantiable {}\n\n\(GraphFuzzerPublicMockDraw.publicMockCallerMarker)FuzzOther: \(call)\n"])
-		let switched = ["FuzzFeature/S1_T6+SafeDIMock.swift": "extension S1_T6 {\n    public static func mock(\n        s1_HoleBuilder: @escaping () -> S1_Hole,\n        s1_OtherBuilder: @escaping () -> S1_Other\n    ) -> S1_T6 {\n    }\n}\n"]
-		withKnownIssue {
-			_ = GraphFuzzerOracle.addingPublicMockCallers(to: switched, of: drawn)
-		}
+		#expect(GraphFuzzerOracle.addingPublicMockCallers(to: Self.mockTakingTwoBuilders, of: drawn)["FuzzOther/S1_T6+SafeDIPublicMockCaller.swift"]?.contains("\t\tS1_T6.mock(s1_HoleBuilder: { S1_Hole() }, s1_OtherBuilder: { S1_Other() })\n") == true)
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func addingPublicMockCallers_recordsIssue_whenPublicMockTakesBuilderTheDrawnCallDoesNotPass() {
+	func addingPublicMockCallers_convertsTheBuilderTheCallPasses_whenPublicMockTakesAnotherBuilderTheCallDoesNotPass() {
+		// A builder surface edit gives the mock a builder after the draw wrote the call, which the same-supply judgment
+		// judges instead; the builder the call passes is converted as ever.
 		let call = "S1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() })"
 		let drawn = GraphFuzzerFixture(seed: 1, swiftFileContent: ["// module: FuzzFeature\n\n@Instantiable(generateMock: .public)\npublic final class S1_T6: Instantiable {}\n\n\(GraphFuzzerPublicMockDraw.publicMockCallerMarker)FuzzOther: \(call)\n"])
-		withKnownIssue {
-			_ = GraphFuzzerOracle.addingPublicMockCallers(to: Self.mockTakingTwoBuilders, of: drawn)
-		}
+		#expect(GraphFuzzerOracle.addingPublicMockCallers(to: Self.mockTakingTwoBuilders, of: drawn)["FuzzOther/S1_T6+SafeDIPublicMockCaller.swift"]?.contains("\t\tS1_T6.mock(s1_HoleBuilder: { S1_Hole() })\n") == true)
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func addingPublicMockCallers_convertsTheCallsBuilder_whenBuilderSurfaceEditGivesPublicMockAnotherBuilder() {
-		// The edit adds a builder after the draw wrote the call, which the same-supply judgment judges instead.
+	func addingPublicMockCallers_convertsEachBuilderByItsForm_whenCallPassesNoneOfTheMocksLabels() {
+		// A graph renamed to change an order renames the mock's labels, spelled from type names, but not the drawn call. A
+		// label one of the mock's labels ends is not one of them: the conversion reads whole labels.
 		let call = "S1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() })"
-		let edited = GraphFuzzerFixture(seed: 1, swiftFileContent: ["// module: FuzzFeature\n\n@Instantiable(generateMock: .public)\npublic final class S1_T6: Instantiable {}\n\n\(GraphFuzzerPublicMockDraw.publicMockCallerMarker)FuzzOther: \(call)\n"], isBuilderSurfaceEdit: true)
-		#expect(GraphFuzzerOracle.addingPublicMockCallers(to: Self.mockTakingTwoBuilders, of: edited)["FuzzOther/S1_T6+SafeDIPublicMockCaller.swift"]?.contains("\t\tS1_T6.mock(s1_HoleBuilder: { S1_Hole() })\n") == true)
+		let drawn = GraphFuzzerFixture(seed: 1, swiftFileContent: ["// module: FuzzFeature\n\n@Instantiable(generateMock: .public)\npublic final class S1_T6: Instantiable {}\n\n\(GraphFuzzerPublicMockDraw.publicMockCallerMarker)FuzzOther: \(call)\n"])
+		let renamedMock = ["FuzzFeature/S1_T6+SafeDIMock.swift": "extension S1_T6 {\n    public static func mock(\n        HoleBuilder: @escaping () -> S1_Hole\n    ) -> S1_T6 {\n    }\n}\n"]
+		#expect(GraphFuzzerOracle.addingPublicMockCallers(to: renamedMock, of: drawn)["FuzzOther/S1_T6+SafeDIPublicMockCaller.swift"]?.contains("\t\tS1_T6.mock(s1_HoleBuilder: { S1_Hole() })\n") == true)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addingPublicMockCallers_callsFromMainActor_whenMockedTypeSpellsMainActorMockAttributes() {
+		let call = "S1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() })"
+		let switched = ["FuzzFeature/S1_T6+SafeDIMock.swift": "extension S1_T6 {\n    @MainActor public static func mock(\n        s1_HoleBuilder: @escaping () -> S1_Hole\n    ) -> S1_T6 {\n    }\n}\n"]
+		let isolated = GraphFuzzerFixture(seed: 1, swiftFileContent: ["// module: FuzzFeature\n\n@Instantiable(mockAttributes: \"@MainActor\", generateMock: .public)\npublic final class S1_T6: Instantiable {}\n\n\(GraphFuzzerPublicMockDraw.publicMockCallerMarker)FuzzOther: \(call)\n"])
+		#expect(GraphFuzzerOracle.addingPublicMockCallers(to: switched, of: isolated)["FuzzOther/S1_T6+SafeDIPublicMockCaller.swift"]?.contains("\t@MainActor public static func call() -> S1_T6 {\n") == true)
+		// A mocked type without the attribute, or with it on another type of the file, is called from a nonisolated function.
+		let plain = GraphFuzzerFixture(seed: 1, swiftFileContent: ["// module: FuzzFeature\n\n@Instantiable(mockAttributes: \"@MainActor\", generateMock: .public)\npublic final class S1_T6Twin: Instantiable {}\n\n@Instantiable(generateMock: .public)\npublic final class S1_T6: Instantiable {}\n\n\(GraphFuzzerPublicMockDraw.publicMockCallerMarker)FuzzOther: \(call)\n"])
+		#expect(GraphFuzzerOracle.addingPublicMockCallers(to: switched, of: plain)["FuzzOther/S1_T6+SafeDIPublicMockCaller.swift"]?.contains("\tpublic static func call() -> S1_T6 {\n") == true)
 	}
 
 	/// `S1_T6`'s generated file, whose `public` `mock()` takes two closures that take nothing.
@@ -416,17 +551,132 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 			    static func mock() -> S1_T7 {
 			        func __safeDI_s1_HoleBuilder_S1_T6() -> S1_T6.SafeDIMockScope_S1_Hole.__safeDI_Builder<S1_Hole> {
 			        }
-			        func __safeDI_s1_HoleBuilder_S1_T6_S1_HoleHost_Scope(_ __safeDI_s1_HoleBuilder_S1_T6_wrap: @escaping (S1_T6.SafeDIMockScope_S1_Hole.S1_HoleHost_Scope) -> S1_T6.SafeDIMockScope_S1_Hole) -> S1_T6.SafeDIMockScope_S1_Hole.S1_HoleHost_Scope.__safeDI_Builder<S1_Hole> {
-			        }
 			        let t6 = S1_T6.__safeDI_mock(s1_HoleBuilder: __safeDI_s1_HoleBuilder_S1_T6())
-			        let t6Second = S1_T6.__safeDI_mock(s1_HoleBuilder: .init(s1_Hole: { __safeDI_s1_HoleValues in s1_HoleBuilder(.s1_Hole(__safeDI_s1_HoleValues)) }))
 			    }
 			}
 			""",
 		]
 		let features = GraphFuzzerPublicMockDraw.outputFeatures(of: fixture, generatedFiles: generatedFiles)
-		#expect(features.isSuperset(of: [.holeBuilder, .generatedOnlyMockFunction, .holeLoopBuilder, .holeLoopBuilderOfBuilderStruct, .consumerCall, .consumerFillsHole, .consumerPassesLevelFunctionsStruct, .consumerConvertsClosureOverEnum, .consumerConvertsOverReopenedLevel]))
+		#expect(features.isSuperset(of: [.holeBuilder, .generatedOnlyMockFunction, .holeLoopBuilder, .holeLoopBuilderOfBuilderStruct, .consumerCall, .consumerFillsHole, .consumerPassesLevelFunctionsStruct]))
 		#expect(!features.contains(.constructionFunction))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func outputFeatures_readIsolatedGeneratedOnlyFunction_whenMockAttributesIsolateMockToMainActor() {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [])
+		let isolated = GraphFuzzerPublicMockDraw.outputFeatures(of: fixture, generatedFiles: [
+			"FuzzFeature/S1_T6+SafeDIMock.swift": """
+			extension S1_T6 {
+			    @MainActor public static func mock(
+			        s1_HoleBuilder: @escaping () -> S1_Hole
+			    ) -> S1_T6 {
+			        S1_T6.__safeDI_mock(s1_HoleBuilder: .init(__safeDI_noScope: s1_HoleBuilder))
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    @MainActor public static func __safeDI_mock(
+			        s1_HoleBuilder __safeDI_s1_HoleBuilder: S1_T6.SafeDIMockScope_S1_Hole.__safeDI_Builder<S1_Hole>
+			    ) -> S1_T6 {
+			    }
+			}
+			""",
+		])
+		#expect(isolated.isSuperset(of: [.generatedOnlyMockFunction, .isolatedGeneratedOnlyMockFunction]))
+		// The same function without the attribute, and an isolated construction function, are not it.
+		let nonisolated = GraphFuzzerPublicMockDraw.outputFeatures(of: fixture, generatedFiles: [
+			"FuzzFeature/S1_T6+SafeDIMock.swift": """
+			extension S1_T6 {
+			    public static func __safeDI_mock(
+			        s1_HoleBuilder __safeDI_s1_HoleBuilder: S1_T6.SafeDIMockScope_S1_Hole.__safeDI_Builder<S1_Hole>
+			    ) -> S1_T6 {
+			    }
+
+			    @MainActor static func __safeDI_mock(hole: S1_Hole, safeDIBuilder: ((S1_Hole) -> S1_T6)?) -> S1_T6 {
+			    }
+			}
+			""",
+		])
+		#expect(nonisolated.contains(.generatedOnlyMockFunction))
+		#expect(!nonisolated.contains(.isolatedGeneratedOnlyMockFunction))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func outputFeatures_readGeneratedOnlyFunctionBesideConstructionFunction_whenOneTypeDeclaresBoth() {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [])
+		let generatedOnly = """
+		extension S1_T6 {
+		    public static func __safeDI_mock(
+		        s1_HoleBuilder __safeDI_s1_HoleBuilder: S1_T6.SafeDIMockScope_S1_Hole.__safeDI_Builder<S1_Hole>
+		    ) -> S1_T6 {
+		    }
+		}
+		"""
+		let both = GraphFuzzerPublicMockDraw.outputFeatures(of: fixture, generatedFiles: [
+			"FuzzFeature/S1_T6+SafeDIMock.swift": generatedOnly,
+			"FuzzFeature/S1_T6Deck+SafeDIMock.swift": "extension S1_T6 {\n    static func __safeDI_mock(hole: S1_Hole, safeDIBuilder: ((S1_Hole) -> S1_T6)?) -> S1_T6 {\n    }\n}\n",
+		])
+		#expect(both.isSuperset(of: [.generatedOnlyMockFunction, .constructionFunction, .generatedOnlyMockFunctionBesideConstructionFunction]))
+		// Each function on a type of its own is not it.
+		let apart = GraphFuzzerPublicMockDraw.outputFeatures(of: fixture, generatedFiles: [
+			"FuzzFeature/S1_T6+SafeDIMock.swift": generatedOnly,
+			"FuzzFeature/S1_T0+SafeDIMock.swift": "extension S1_T0 {\n    static func __safeDI_mock(t3: S1_T3, safeDIBuilder: ((S1_T3) -> S1_T0)?) -> S1_T0 {\n    }\n}\n",
+		])
+		#expect(apart.isSuperset(of: [.generatedOnlyMockFunction, .constructionFunction]))
+		#expect(!apart.contains(.generatedOnlyMockFunctionBesideConstructionFunction))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func outputFeatures_readPlacesPassedUpWithoutScope_whenConsumersPassBuildersAPersonWritesAndMembersOfTheirOwnStruct() {
+		// A consumer that passes a place up takes the builder a person writes and hands the called mock a level function over
+		// it, the builder wrapped as it is, or a member of its own struct; a `@Sendable` builder struct and `@Sendable`
+		// level functions are read as the plain ones are.
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [])
+		let features = GraphFuzzerPublicMockDraw.outputFeatures(of: fixture, generatedFiles: [
+			"FuzzFeature/S1_T6+SafeDIMock.swift": """
+			extension S1_T6 {
+			    public static func __safeDI_mock(
+			        s1_HoleSendableBuilder __safeDI_s1_HoleSendableBuilder: S1_T6.SafeDISendableMockScope_S1_Hole.__safeDI_Builder<S1_Hole>
+			    ) -> S1_T6 {
+			    }
+			}
+			""",
+			"FuzzApp/S1_T7+SafeDIMock.swift": """
+			extension S1_T7 {
+			    static func mock(
+			        s1_HoleBuilder: @escaping () -> S1_Hole,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> S1_T7 {
+			        func __safeDI_t6() -> S1_T6 {
+			            @Sendable nonisolated func __safeDI_s1_HoleBuilder_S1_T6(up: S1_T6.SafeDIMockScope_S1_Hole.__safeDI_Builder<S1_Hole>) -> S1_T6.SafeDIMockScope_S1_Hole.__safeDI_Builder<S1_Hole> {
+			            }
+			            return S1_T6.__safeDI_mock(s1_HoleBuilder: __safeDI_s1_HoleBuilder_S1_T6(up: .init(__safeDI_noScope: s1_HoleBuilder)), safeDIOverrides: safeDIOverrides.t6)
+			        }
+			    }
+			}
+			""",
+		])
+		#expect(features.isSuperset(of: [.holeBuilder, .sendableHoleBuilder, .consumerPassesHoleBuilderUp, .consumerFillsHole, .consumerPassesPlaceUpWithoutScope]))
+		let member = GraphFuzzerPublicMockDraw.outputFeatures(of: fixture, generatedFiles: [
+			"FuzzOther/S1_T8+SafeDIMock.swift": "extension S1_T8 {\n    public static func __safeDI_mock(\n    ) -> S1_T8 {\n        let t6 = S1_T6.__safeDI_mock(s1_HoleBuilder: __safeDI_s1_HoleBuilder.t6(SafeDIMockScope_S1_Hole.t6_Values()))\n    }\n}\n",
+		])
+		#expect(member.contains(.consumerPassesPlaceUpWithoutScope))
+	}
+
+	@Test
+	func drawFeatures_readHoleMockAttributesAndHandWrittenMock_whenSeedsDrawThem() {
+		func features(ofSeed seed: UInt64) -> Set<GraphFuzzerPublicMockDrawFeature> {
+			GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
+		}
+		let drawn: Set<GraphFuzzerPublicMockDrawFeature> = [.holeMockIsolatedToMainActor, .holeHandWrittenMockBuiltInPublicMock, .holeHandWrittenMockTakesNoOverrides]
+		// Seed 7 isolates `T6`'s mock alone; seed 18 builds `T6` with its hand-written mock in `T6Deck` where `T6` builds a
+		// tree of its own; seed 63 draws all three, `T6` instantiating nothing but its hole; seed 0 draws none.
+		#expect(features(ofSeed: 7).intersection(drawn) == [.holeMockIsolatedToMainActor])
+		#expect(features(ofSeed: 18).intersection(drawn) == [.holeHandWrittenMockBuiltInPublicMock])
+		#expect(features(ofSeed: 63).isSuperset(of: drawn))
+		#expect(features(ofSeed: 0).isDisjoint(with: drawn))
 	}
 
 	@Test
@@ -458,7 +708,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		]
 		let features = GraphFuzzerPublicMockDraw.outputFeatures(of: fixture, generatedFiles: generatedFiles)
 		#expect(features.isSuperset(of: [.holeBuilder, .holeLoopBuilder, .consumerCall, .constructionFunction]))
-		#expect(features.isDisjoint(with: [.generatedOnlyMockFunction, .holeLoopBuilderOfBuilderStruct, .consumerPassesLevelFunctionsStruct, .consumerConvertsClosureOverEnum, .consumerConvertsOverReopenedLevel]))
+		#expect(features.isDisjoint(with: [.generatedOnlyMockFunction, .holeLoopBuilderOfBuilderStruct, .consumerPassesLevelFunctionsStruct]))
 	}
 
 	@Test
@@ -498,6 +748,18 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		#expect(GraphFuzzerOracle.leafCalls(ofMockedType: "S1_T7", in: ["FuzzApp/S1_T7+SafeDIMock.swift": mock], prefix: "S1_") == [
 			GraphFuzzerOracle.PublicMockLeafCall(leafLabel: "anyT0", passedLabels: [], instanceLabels: []),
 			GraphFuzzerOracle.PublicMockLeafCall(leafLabel: "t1", passedLabels: ["theme"], instanceLabels: []),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func leafCalls_readCallOfGeneratedOnlyMockFunction_whenCalledMockTakesBuilders() {
+		// A consumer calls a public mock that takes builders through its function only generated code calls, directly
+		// (`t6`) or inside the leaf's eraser (`anyT0`), handing it a wrapper's instance as `mock(` would.
+		let mock = "import FuzzFeature\n\nextension S1_T8 {\n    static func mock() -> S1_T8 {\n        let holeSession = LazilyInstantiated<S1_HoleSession>(__safeDI_holeSession)\n        let anyT0 = S1_AnyT0(S1_T0.__safeDI_mock(theme: nil, s1_HoleBuilder: __safeDI_s1_HoleBuilder_S1_T0()))\n        let t6 = S1_T6.__safeDI_mock(holeSession: holeSession.instance, s1_HoleBuilder: __safeDI_s1_HoleBuilder_S1_T6(), safeDIOverrides: safeDIOverrides.t6)\n        return S1_T8(anyT0: anyT0, t6: t6, holeSession: holeSession)\n    }\n}\n"
+		#expect(GraphFuzzerOracle.leafCalls(ofMockedType: "S1_T8", in: ["FuzzOther/S1_T8+SafeDIMock.swift": mock], prefix: "S1_") == [
+			GraphFuzzerOracle.PublicMockLeafCall(leafLabel: "anyT0", passedLabels: ["s1_HoleBuilder"], instanceLabels: []),
+			GraphFuzzerOracle.PublicMockLeafCall(leafLabel: "t6", passedLabels: ["holeSession", "s1_HoleBuilder"], instanceLabels: ["holeSession"]),
 		])
 	}
 
@@ -555,7 +817,8 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 	func statedPublicMockValueDivergences_exemptOnlyWhatLeafCallsExplain_whenConsumerCallsPublicMocks() async throws {
 		// The two divergences section 5 states, derived from the leaf calls of graphs shaped as the fuzzer draws them.
 		// M8.32: a consumer passes `analytics.instance` of the wrapper it holds; the leaf's re-made wrapper and the early
-		// read are exempt (seed 901) – unless the leaf wraps a new instance, whose wrapper still fails (seed 902). M8.9b: two
+		// read are exempt (seed 901), through a call of the function only generated code calls too (seed 906) – unless the
+		// leaf wraps a new instance, whose wrapper still fails (seed 902). M8.9b: two
 		// leaves each build the `session` their caller in another package cannot name (seed 903), or one builds it and the
 		// other, receiving it only if available, holds `nil` (seed 905) – but a caller that holds `session` itself and passes
 		// it to neither leaf still fails (seed 904).
@@ -571,6 +834,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 			Self.instancePerLeafCase(seed: 903, callerHoldsSession: false),
 			Self.instancePerLeafCase(seed: 904, callerHoldsSession: true),
 			Self.instancePerLeafCase(seed: 905, callerHoldsSession: false, secondLeafReceivesOnlyIfAvailable: true),
+			Self.heldWrapperCase(seed: 906, leafWrapsHeldInstance: true, callsGeneratedOnlyFunction: true),
 		]
 		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: cases.map(\.graph), filesToDelete: &filesToDelete))
 		let remaining = try zip(cases, comparisons).map { testCase, comparison in
@@ -583,6 +847,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		#expect(remaining[1] == [DifferentialValueDifference(probe: "S902_T8.mock()", path: ["<1> S902_T8", "analytics"], feature: "analytics: <4> LazilyInstantiated<S902_Analytics> (instance read last)", knownRight: "analytics: <3> LazilyInstantiated<S902_Analytics> (seen, first at <1> S902_T8 > t0 > analytics)")])
 		#expect(remaining[2] == [])
 		#expect(remaining[4] == [])
+		#expect(remaining[5] == [])
 		#expect(remaining[3] == [DifferentialValueDifference(probe: "S904_T7.mock()", path: ["<1> S904_T7", "t0", "session"], feature: "session: <4> S904_Session", knownRight: "session: <2> S904_Session (seen, first at <1> S904_T7 > session)"), DifferentialValueDifference(probe: "S904_T7.mock()", path: ["<1> S904_T7", "t1", "session"], feature: "session: <6> S904_Session", knownRight: "session: <2> S904_Session (seen, first at <1> S904_T7 > session)")])
 	}
 
@@ -686,8 +951,9 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 
 	/// M8.32: `T8`, in another package, holds `analytics` lazily, receives `T0`, which receives the wrapper, and calls
 	/// `T0`'s public mock with `analytics.instance`, which the mock wraps again – around the instance it is passed, or,
-	/// unless `leafWrapsHeldInstance`, around a new one.
-	private static func heldWrapperCase(seed: UInt64, leafWrapsHeldInstance: Bool) -> StatedDivergenceCase {
+	/// unless `leafWrapsHeldInstance`, around a new one. When `callsGeneratedOnlyFunction`, the mock is the function only
+	/// generated code calls, `__safeDI_mock(`, as a call of a mock that takes builders is.
+	private static func heldWrapperCase(seed: UInt64, leafWrapsHeldInstance: Bool, callsGeneratedOnlyFunction: Bool = false) -> StatedDivergenceCase {
 		let p = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 		let stamp = DifferentialValueCreationStamp.property(counterNamed: "\(p)Counter")
 		let files = [
@@ -696,13 +962,14 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 			"// module: FuzzOther\nimport FuzzFeature\n\n@Instantiable(generateMock: true)\npublic final class \(p)T8: Instantiable {\n\t\(stamp)\n\n\tpublic init(t0: \(p)T0, analytics: LazilyInstantiated<\(p)Analytics>) {\n\t\tself.t0 = t0\n\t\tself.analytics = analytics\n\t}\n\n\t@Received let t0: \(p)T0\n\t@Instantiated let analytics: LazilyInstantiated<\(p)Analytics>\n}\n",
 		]
 		let reWrapped = leafWrapsHeldInstance ? "analytics ?? \(p)Analytics()" : "\(p)Analytics()"
+		let mockFunction = callsGeneratedOnlyFunction ? "__safeDI_mock" : "mock"
 		return statedDivergenceCase(
 			seed: seed,
 			files: files,
 			knownRightFiles: files.map { $0.replacingOccurrences(of: "generateMock: .public", with: "generateMock: true") },
 			featureFiles: [
-				"FuzzFeature/\(p)T0+SafeDIMock.swift": "extension \(p)T0 {\n    public static func mock(analytics: \(p)Analytics? = nil) -> \(p)T0 {\n        \(p)T0(analytics: LazilyInstantiated { \(reWrapped) })\n    }\n}\n",
-				"FuzzOther/\(p)T8+SafeDIMock.swift": "import FuzzFeature\n\nextension \(p)T8 {\n    static func mock() -> \(p)T8 {\n        let analytics = LazilyInstantiated<\(p)Analytics> { \(p)Analytics() }\n        let t0 = \(p)T0.mock(analytics: analytics.instance)\n        return \(p)T8(t0: t0, analytics: analytics)\n    }\n}\n",
+				"FuzzFeature/\(p)T0+SafeDIMock.swift": "extension \(p)T0 {\n    public static func \(mockFunction)(analytics: \(p)Analytics? = nil) -> \(p)T0 {\n        \(p)T0(analytics: LazilyInstantiated { \(reWrapped) })\n    }\n}\n",
+				"FuzzOther/\(p)T8+SafeDIMock.swift": "import FuzzFeature\n\nextension \(p)T8 {\n    static func mock() -> \(p)T8 {\n        let analytics = LazilyInstantiated<\(p)Analytics> { \(p)Analytics() }\n        let t0 = \(p)T0.\(mockFunction)(analytics: analytics.instance)\n        return \(p)T8(t0: t0, analytics: analytics)\n    }\n}\n",
 			],
 			knownRightGeneratedFiles: [
 				"FuzzOther/\(p)T8+SafeDIMock.swift": "import FuzzFeature\n\nextension \(p)T8 {\n    static func mock() -> \(p)T8 {\n        let analytics = LazilyInstantiated<\(p)Analytics> { \(p)Analytics() }\n        return \(p)T8(t0: \(p)T0(analytics: analytics), analytics: analytics)\n    }\n}\n",

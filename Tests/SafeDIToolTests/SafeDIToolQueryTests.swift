@@ -3012,6 +3012,44 @@ struct SafeDIToolQueryTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_reportsSendableBuilderOfHoleTypeAsRequired_whenTypeThatGeneratesItsDependencyTreeBuildsPlaceInSendableFunction() async throws {
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Feature",
+			modules: [
+				QueryTestModule("FeatureModule", [
+					"""
+					public protocol UserService: Sendable {}
+
+					@Instantiable(generateDependencyTree: true, generateMock: true)
+					public final class Feature: Instantiable {
+					    public init(profileBuilder: SendableInstantiator<Profile>) {
+					        self.profileBuilder = profileBuilder
+					    }
+					    @Instantiated private let profileBuilder: SendableInstantiator<Profile>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Profile: Instantiable, Sendable {
+					    public init(userService: any UserService) {
+					        self.userService = userService
+					    }
+					    @Instantiated private let userService: any UserService
+					}
+					""",
+				]),
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		// `Feature`'s mock takes the `@Sendable` builder its seam takes for a place built in a `@Sendable` function.
+		#expect(output.result.unfulfilledDependencies == [
+			TypeReport.UnfulfilledDependency(label: "userServiceSendableBuilder", type: "@Sendable () -> any UserService", defaultExpression: nil, reasonKind: .noInstantiableFulfillsType, reason: "No @Instantiable declaration fulfills `UserService`."),
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

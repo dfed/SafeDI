@@ -1629,25 +1629,25 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            root: ((@escaping (Root.SafeDIMockScope_AppFilter_FilterProtocol) -> any FilterProtocol) -> Root)? = nil
+		            root: ((@escaping () -> any FilterProtocol) -> Root)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                root: root
 		            )
 		        }
 
-		        var root: ((@escaping (Root.SafeDIMockScope_AppFilter_FilterProtocol) -> any FilterProtocol) -> Root)? { __safeDI_storage.root }
+		        var root: ((@escaping () -> any FilterProtocol) -> Root)? { __safeDI_storage.root }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
 		        private final class __safeDI_Storage {
 		            init(
-		                root: ((@escaping (Root.SafeDIMockScope_AppFilter_FilterProtocol) -> any FilterProtocol) -> Root)?
+		                root: ((@escaping () -> any FilterProtocol) -> Root)?
 		            ) {
 		                self.root = root
 		            }
 
-		            let root: ((@escaping (Root.SafeDIMockScope_AppFilter_FilterProtocol) -> any FilterProtocol) -> Root)?
+		            let root: ((@escaping () -> any FilterProtocol) -> Root)?
 		        }
 		    }
 
@@ -1655,15 +1655,15 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> App {
 		        func __safeDI_root() -> Root {
-		            func __safeDI_appFilter_FilterProtocolBuilder_Root(_ scope: Root.SafeDIMockScope_AppFilter_FilterProtocol) -> any FilterProtocol {
-		                switch scope {
-		                case .filter:
-		                    let filter: any FilterProtocol = AppFilter()
-		                    return filter
-		                }
+		            func __safeDI_appFilter_FilterProtocolBuilder_Root_filter() -> any FilterProtocol {
+		                let filter: any FilterProtocol = AppFilter()
+		                return filter
+		            }
+		            func __safeDI_appFilter_FilterProtocolBuilder_Root() -> Root.SafeDIMockScope_AppFilter_FilterProtocol.__safeDI_Builder<any FilterProtocol> {
+		                .init(filter: { _ in __safeDI_appFilter_FilterProtocolBuilder_Root_filter() })
 		            }
 		            _ = Root.__safeDI_Root_mock_B14A32056046B596.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return if let safeDIBuilder = safeDIOverrides.root { safeDIBuilder(__safeDI_appFilter_FilterProtocolBuilder_Root) } else { Root.__safeDI_mock(appFilter_FilterProtocolBuilder: .init(filter: { __safeDI_filterValues in __safeDI_appFilter_FilterProtocolBuilder_Root(.filter(__safeDI_filterValues)) })) }
+		            return if let safeDIBuilder = safeDIOverrides.root { safeDIBuilder({ __safeDI_appFilter_FilterProtocolBuilder_Root_filter() }) } else { Root.__safeDI_mock(appFilter_FilterProtocolBuilder: __safeDI_appFilter_FilterProtocolBuilder_Root()) }
 		        }
 		        let root: Root = __safeDI_root()
 		        return App(root: root)
