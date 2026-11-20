@@ -627,7 +627,7 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_passesCloserItsOwnNearestDeclaration_whenClosingEdgeResolvesReadOtherwiseThanPlace() async throws {
-		// Review 2, A1. `S` builds `E` again beneath `P`, which declares `x` again, so the second lap's `K` must read `P`'s `x`, not the root's. The loop `P` -> `S` -> `E` is placed in the first `E`'s body, where `P`'s `x` is not visible, so `S` and the second `E` take it as a parameter and `P` passes its own.
+		// Review 2, A1. `S` builds `E` again beneath `P`, which declares `x` again, so the second lap's `K` must read `P`'s `x`, not the root's. The two builds of `E`, the root's constant and `S`'s instantiator, are one class, so `E`'s function takes `x`: the root passes its own, and `S`, beneath `P`, passes `P`'s.
 		try await expectTypeKeyTree(
 			of: [
 				Self.type("Root", isRoot: true, "@Instantiated let x: X", "@Instantiated let e: E"),
@@ -641,30 +641,25 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        let x = X()
-			        func __safeDI_e() -> E {
+			        func __safeDI_e(x: X) -> E {
 			            let k = K(x: x)
-			            func __safeDI_p() -> P {
-			                let x = X()
-			                let sBuilder = Instantiator<S> {
-			                    __safeDI_sBuilder(x: x)
-			                }
-			                return P(x: x, sBuilder: sBuilder)
-			            }
-			            func __safeDI_sBuilder(x: X) -> S {
-			                let eBuilder = Instantiator<E> {
-			                    __safeDI_eBuilder(x: x)
-			                }
-			                return S(eBuilder: eBuilder)
-			            }
-			            func __safeDI_eBuilder(x: X) -> E {
-			                let k = K(x: x)
-			                let p: P = __safeDI_p()
-			                return E(k: k, p: p)
-			            }
 			            let p: P = __safeDI_p()
 			            return E(k: k, p: p)
 			        }
-			        let e: E = __safeDI_e()
+			        func __safeDI_p() -> P {
+			            let x = X()
+			            let sBuilder = Instantiator<S> {
+			                __safeDI_sBuilder(x: x)
+			            }
+			            return P(x: x, sBuilder: sBuilder)
+			        }
+			        func __safeDI_sBuilder(x: X) -> S {
+			            let eBuilder = Instantiator<E> {
+			                __safeDI_e(x: x)
+			            }
+			            return S(eBuilder: eBuilder)
+			        }
+			        let e: E = __safeDI_e(x: x)
 			        self.init(x: x, e: e)
 			    }
 			}
