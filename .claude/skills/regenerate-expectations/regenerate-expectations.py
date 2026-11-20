@@ -18,9 +18,9 @@ After each run, write that directory's manifest of Tests/:
 Record without SAFEDI_SKIP_COMPILE_CHECK. A test that reads `compileVerificationIsEnabled` skips part or all of
 itself under that variable, so what it would have recorded is missing and its expectations stay as they were, with
 nothing to say so. A record run made under the variable leaves a marker in its directory, and applying such records
-is refused (exit 2) with every place under Tests/ that reads `compileVerificationIsEnabled`.
---allow-compile-skipped-records applies them anyway, prints the same list as a warning, and puts it first in the
-report: use it only when none of those places guards an expectation the change alters, and say so in the change.
+is refused (exit 2) with the count of the places under Tests/ that read `compileVerificationIsEnabled` and the
+first few of them. --allow-compile-skipped-records applies them anyway, prints the same as a warning, and lists
+every such place first in the report: use it only when none of those places guards an expectation the change alters, and say so in the change.
 
 Applying. With both record directories, the change's rules file and an empty report directory:
   python3 -I .claude/skills/regenerate-expectations/regenerate-expectations.py --base-records BASE --head-records HEAD --rules RULES.json \\
@@ -97,6 +97,8 @@ HEADER_NAME = "generated-file-header.txt"
 COMPILE_SKIPPED_NAME = "compile-verification-skipped.txt"
 # What a test reads to learn that compile verification is off, and so what marks the code a skipped run did not run.
 COMPILE_VERIFICATION_FLAG = "compileVerificationIsEnabled"
+# How many of those places a refusal or a warning names before it gives their count; the report lists them all.
+READERS_NAMED = 5
 UUID = r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"
 ASSERTION_FUNCTIONS = {
     "plain": "assertThrowsError",
@@ -1153,7 +1155,9 @@ def compile_skipped_records(arguments):
     readers = compile_verification_readers(arguments.checkout)
     if not readers:
         return []
-    listing = "\n".join(f"  {reader}" for reader in readers)
+    listing = "\n".join(f"  {reader}" for reader in readers[:READERS_NAMED])
+    if len(readers) > READERS_NAMED:
+        listing += f"\n  and {len(readers) - READERS_NAMED} more: grep -rn {COMPILE_VERIFICATION_FLAG} Tests"
     explanation = (
         f"{' and '.join(skipped)} recorded under SAFEDI_SKIP_COMPILE_CHECK, so every test that reads "
         f"{COMPILE_VERIFICATION_FLAG} skipped part or all of itself and recorded nothing for it; its expectations would "
@@ -1978,6 +1982,12 @@ def self_test(root):
     status, summary = test.run(allow_compile_skipped_records=True)
     expect(status == 1 and summary["rewritten"] == 1 and summary["compileSkippedReaders"] == ["Tests/Mod/FileTests.swift:5"] and '"New"' in test.source() and '"Stale"' in test.source(), f"compile-skipped records allowed: {status} {summary}")
     expect("RECORDED WITH COMPILE VERIFICATION OFF (SAFEDI_SKIP_COMPILE_CHECK). compileVerificationIsEnabled is read at (1):\n  Tests/Mod/FileTests.swift:5\n" in test.report_text() and "\n  Tests/Mod/FileTests.swift:5\n" in test.report_text(), "compile-skipped records allowed: reported")
+    test = case("compile-skipped-records-many-readers")
+    test.test_file(test_function('\t\t#expect(run() == "Old")\n' + "\n".join("\t\tif compileVerificationIsEnabled {}" for _ in range(READERS_NAMED + 2))))
+    test.records([generation_record("k", 4, "Old")], [generation_record("k", 4, "New")])
+    write_file(os.path.join(test.base, COMPILE_SKIPPED_NAME), "skipped\n")
+    status, summary = test.run()
+    expect(status == 2 and f"read at ({READERS_NAMED + 2}):" in summary.get("error", "") and f"\n  Tests/Mod/FileTests.swift:{4 + READERS_NAMED}\n  and 2 more: grep -rn compileVerificationIsEnabled Tests\n" in summary.get("error", "") and f"FileTests.swift:{5 + READERS_NAMED}" not in summary.get("error", ""), f"compile-skipped records, many readers: {status} {summary}")
     test = case("compile-skipped-records-no-reader")
     test.test_file(test_function('\t\t#expect(run() == "Old")'))
     test.records([generation_record("k", 4, "Old")], [generation_record("k", 4, "New")])
