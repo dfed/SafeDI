@@ -409,7 +409,6 @@ public actor DependencyTreeGenerator {
 			for rootInfo in rootScopeGenerators {
 				taskGroup.addTask {
 					let code = try await rootInfo.scopeGenerator.generatePlan()
-					PlaceObservation.record(code)
 					return await PlannedRoot(
 						typeDescription: rootInfo.typeDescription,
 						sourceFilePath: rootInfo.sourceFilePath,

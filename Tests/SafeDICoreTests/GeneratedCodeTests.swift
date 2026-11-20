@@ -49,27 +49,19 @@ struct GeneratedCodeTests {
 	}
 
 	@Test
-	func spelled_writesPlaceCodeAsItIs_whenPlanHoldsPlace() {
-		let place = PlacePlan(kind: .builtByFunction, functionNames: ["__safeDI_a"], closedOnFunctionName: nil, code: .text("x\ny"))
-		#expect(GeneratedCode.indented(.place(place), by: "\t").spelled() == "\tx\n\ty")
-	}
-
-	@Test
 	func release_returnsWithoutNestingALevelsRelease_whenTaskDropsPlanAHundredThousandLevelsDeep() async {
 		// A concurrency thread's stack is half a megabyte on Apple platforms, which releasing a level from within the
 		// release of the level above it overflowed long before a hundred thousand levels.
 		let spelled = await Task.detached {
 			var code = GeneratedCode.text("x")
 			for level in 0..<100_000 {
-				switch level % 4 {
+				switch level % 3 {
 				case 0:
 					code = .indented(code, by: "")
 				case 1:
 					code = .sequence([code])
-				case 2:
-					code = .lines([code])
 				default:
-					code = .place(PlacePlan(kind: .alias, functionNames: [], closedOnFunctionName: nil, code: code))
+					code = .lines([code])
 				}
 			}
 			return code.spelled()
@@ -199,14 +191,12 @@ struct GeneratedCodeTests {
 			indentation.isEmpty
 				? reindentingEveryLevel(code)
 				: GeneratedCodeText.indentingNonEmptyLines(of: reindentingEveryLevel(code), by: indentation)
-		case let .place(plan):
-			reindentingEveryLevel(plan.code)
 		}
 	}
 
 	private static func randomCode(depth: Int, using generator: inout SeededGenerator) -> GeneratedCode {
 		let tokens = ["x", "\n", "\r", "é", "\u{301}", " ", "\n\n", "\r\n"]
-		let kind = depth == 0 ? 0 : Int(generator.next() % 5)
+		let kind = depth == 0 ? 0 : Int(generator.next() % 4)
 		switch kind {
 		case 0:
 			let count = Int(generator.next() % 5)
@@ -214,11 +204,9 @@ struct GeneratedCodeTests {
 		case 1, 2:
 			let pieces = (0..<Int(generator.next() % 4)).map { _ in randomCode(depth: depth - 1, using: &generator) }
 			return kind == 1 ? .sequence(pieces) : .lines(pieces)
-		case 3:
+		default:
 			let indentations = ["", "\t", "    ", "\r"]
 			return .indented(randomCode(depth: depth - 1, using: &generator), by: indentations[Int(generator.next() % UInt64(indentations.count))])
-		default:
-			return .place(PlacePlan(kind: .alias, functionNames: [], closedOnFunctionName: nil, code: randomCode(depth: depth - 1, using: &generator)))
 		}
 	}
 }
