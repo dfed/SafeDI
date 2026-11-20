@@ -3720,6 +3720,9 @@ public actor DependencyTreeGenerator {
 			}
 			rootScopesToGenerate.append(rootScope)
 		}
+		// A calling mock whose fill of a called public mock's place makes such a construction passes the place up and is
+		// accepted instead, a deliberate gap accepted for now that the calling-mock mirror work in 2.3.1 closes
+		// (`holesFilled(byCallsOf:in:)`, `seam-and-mock-contract.md`, rule 7).
 		guard inaccessibleConstructions.isEmpty else {
 			throw DependencyTreeGeneratorError.inaccessibleConstructions(inaccessibleConstructions)
 		}
@@ -9103,6 +9106,10 @@ public actor DependencyTreeGenerator {
 		for calledType in publicMockCalls.keys.sorted() {
 			guard let publicMockCall = publicMockCalls[calledType] else { continue }
 			for hole in publicMockCall.holes {
+				// A deliberate gap, accepted for now: where the fill's tree constructs a type this module cannot reach, such as
+				// an `internal` type of another package, the calling mock passes the place up and is accepted, while its
+				// production twin reports that construction's access error (`rootScopesThisModuleGenerates(from:checkingSeamTrees:)`).
+				// The calling-mock mirror work in 2.3.1 has the calling mock report it too (`seam-and-mock-contract.md`, rule 7).
 				guard let fulfillingScope = Self.fulfillingMockScope(of: hole, in: typeDescriptionToScopeMap),
 				      Self.inaccessibleConstructions(
 				      	Self.constructions(

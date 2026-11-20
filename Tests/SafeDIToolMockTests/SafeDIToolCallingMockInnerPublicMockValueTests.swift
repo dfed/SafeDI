@@ -183,7 +183,7 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		// `db: Db?`, which `Live`’s required receive cannot read, and so does `F`’s public mock, which builds no `db`.
 		let diagnostics = { (fixtures: [String: FixturePaths]) in
 			"""
-			\(fixtures["App"]!["AppTypes.swift"]):12:5: error: `Live` receives `db: Db`, which the values struct SafeDI hands the builder for `F`’s `api: any Api` (`api` of `apiBuilder`) carries only as `db: Db?`, since `F`’s tree receives it only if available. Declare `@Received let db: Db` on `F`, or receive it on `Live` with `@Received(onlyIfAvailable: true) let db: Db?`.
+			\(fixtures["App"]!["AppTypes.swift"]):12:5: error: `Live` receives `db: Db`, which SafeDI hands the builder for `F`’s `api: any Api` (`api` of `apiBuilder`) only as `db: Db?`, since `F`’s tree receives it only if available. Declare `@Received let db: Db` on `F`, or receive it on `Live` with `@Received(onlyIfAvailable: true) let db: Db?`.
 			\(fixtures["Feat"]!["FeatTypes.swift"]):24:5: note: `K` receives `db: Db?` here.
 			"""
 		}
