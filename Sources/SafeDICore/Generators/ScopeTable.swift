@@ -142,15 +142,23 @@ struct ScopeTable: Sendable {
 		records[Int(id.index)]
 	}
 
-	/// The position of the scope the map held under `key`, or `nil` when it held none.
+	/// The position of the scope the map held under `key`, or `nil` when it held none: for a signature pass's table, when
+	/// the pass's map holds no `key`, whatever the base holds.
 	func id(forKey key: TypeDescription) -> ScopeID? {
-		idByKey[key]
+		if let reachableKeys, !reachableKeys.contains(key) {
+			nil
+		} else {
+			idByKey[key]
+		}
 	}
 
 	/// The records, in `ScopeID` order.
 	fileprivate(set) var records = [ScopeRecord]()
 	/// The map's keys, each with the position of its scope. For lookup only: never iterated.
 	fileprivate(set) var idByKey = [TypeDescription: ScopeID]()
+	/// For a signature pass's table, the keys the pass's map holds, which its reachable types fulfill
+	/// (`FrozenScopeMap.overlaying`): a key outside them names no record. `nil` for a table frozen from a map, whose keys are its own.
+	fileprivate(set) var reachableKeys: Set<TypeDescription>?
 }
 
 /// A complete scope map frozen into a `ScopeTable`, with what names each of its scopes there: used where the map lives, to
@@ -202,6 +210,43 @@ struct FrozenScopeMap {
 	/// The frozen table.
 	private(set) var table = ScopeTable()
 
+	/// The table of one signature pass, from this base, frozen once from a seam world in which every seam of the declaration
+	/// map is built and not called: each record of a type that is no seam depends on the declarations alone, so it is the
+	/// base's; the record of each seam the pass calls is the pass's own, made from `passScopeMap`'s scope that calls it, its
+	/// fills found by `fulfillingKey`, then looked up among the pass map's keys alone (`ScopeTable.reachableKeys`), since a
+	/// place whose fulfilling type the pass does not reach is passed up. A key the pass map lacks names no record.
+	/// The overlay oracle checks, over the seam corpus, that each key's record equals the record frozen from the pass's map.
+	func overlaying(
+		passScopeMap: [TypeDescription: Scope],
+		fulfillingKey: (SeamSignature.Hole) -> TypeDescription?,
+	) -> FrozenScopeMap {
+		var frozenScopeMap = self
+		frozenScopeMap.table.reachableKeys = Set(passScopeMap.keys)
+		var callScopeByID = [ScopeID: Scope]()
+		for (key, scope) in passScopeMap {
+			if let id = table.idByKey[key] {
+				frozenScopeMap.idByScope[ObjectIdentifier(scope)] = id
+				if scope.seamCall != nil {
+					callScopeByID[id] = scope
+				}
+			}
+		}
+		// The pass's scopes are held for as long as their identifiers name positions.
+		frozenScopeMap.overlaidScopes = Array(passScopeMap.values)
+		for (id, scope) in callScopeByID.sorted(by: { $0.key.index < $1.key.index }) {
+			let holeArguments = (scope.seamCall?.holes ?? []).map { hole -> ScopeRecord.HoleArgument in
+				if let key = fulfillingKey(hole), let fillID = frozenScopeMap.table.id(forKey: key) {
+					.fill(hole, fillID)
+				} else {
+					.passUp(hole)
+				}
+			}
+			frozenScopeMap.table.records[Int(id.index)] = frozenScopeMap.record(freezing: scope, holeArguments: holeArguments)
+		}
+		frozenScopeMap.freezePendingScopes()
+		return frozenScopeMap
+	}
+
 	/// The record of `scope` – a mock root's or a seam's root, which is in no map, or a root the map holds – frozen against
 	/// the table, and the table its children are found in: this one, with a record appended for each scope it refers to
 	/// that the map did not hold.
@@ -215,6 +260,8 @@ struct FrozenScopeMap {
 	/// The scopes, in `ScopeID` order. Holding them keeps each identifier in `idByScope` naming its own scope.
 	private var scopes = [Scope]()
 	private var idByScope = [ObjectIdentifier: ScopeID]()
+	/// A signature pass's scopes, which `idByScope` names by their base positions (`overlaying`).
+	private var overlaidScopes = [Scope]()
 
 	/// The position of `scope`, given to it now when it has none.
 	private mutating func id(of scope: Scope) -> ScopeID {
@@ -236,8 +283,8 @@ struct FrozenScopeMap {
 		}
 	}
 
-	/// The record of `scope`, giving a position to each scope it refers to.
-	private mutating func record(freezing scope: Scope) -> ScopeRecord {
+	/// The record of `scope`, giving a position to each scope it refers to: with `holeArguments` where they are given.
+	private mutating func record(freezing scope: Scope, holeArguments givenHoleArguments: [ScopeRecord.HoleArgument]? = nil) -> ScopeRecord {
 		var propertiesToGenerate = [ScopeRecord.PropertyToGenerate]()
 		propertiesToGenerate.reserveCapacity(scope.propertiesToGenerate.count)
 		for propertyToGenerate in scope.propertiesToGenerate {
@@ -250,7 +297,7 @@ struct FrozenScopeMap {
 				propertiesToGenerate.append(.aliased(property, fulfilledBy: fulfillingProperty, erasedToConcreteExistential: erasedToConcreteExistential, onlyIfAvailable: onlyIfAvailable, declarationReference: declarationReference))
 			}
 		}
-		let holeArguments = scope.holeArguments.map { holeArgument -> ScopeRecord.HoleArgument in
+		let holeArguments = givenHoleArguments ?? scope.holeArguments.map { holeArgument -> ScopeRecord.HoleArgument in
 			switch holeArgument {
 			case let .fill(hole, fillScope):
 				.fill(hole, id(of: fillScope))
@@ -259,6 +306,55 @@ struct FrozenScopeMap {
 			}
 		}
 		return ScopeRecord(freezing: scope, propertiesToGenerate: propertiesToGenerate, holeArguments: holeArguments)
+	}
+}
+
+extension ScopeTable {
+	/// The record each of `keys` names, as text in which each scope it refers to is named by the smallest of `keys` that
+	/// names it, never by its position, so that two tables of one pass that number their records differently compare
+	/// (the overlay oracle). A key that names no record is left out.
+	func projectionByKey(_ keys: some Collection<TypeDescription>) -> [TypeDescription: String] {
+		var smallestKeyByID = [ScopeID: TypeDescription]()
+		for key in keys {
+			if let id = id(forKey: key), smallestKeyByID[id].map({ TypeDescription.precedesInScopeOrder(key, $0) }) ?? true {
+				smallestKeyByID[id] = key
+			}
+		}
+		func name(_ id: ScopeID) -> String {
+			smallestKeyByID[id]?.asSource ?? "unkeyed \(self[id].instantiable.concreteInstantiable.asSource)"
+		}
+		var projectionByKey = [TypeDescription: String]()
+		for key in keys {
+			guard let id = id(forKey: key) else { continue }
+			let record = self[id]
+			var text = "\(record.instantiable.concreteInstantiable.asSource)"
+			if let seamCall = record.seamCall {
+				text.append(" calls \(seamCall.guardTypeName)")
+			}
+			for propertyToGenerate in record.propertiesToGenerate {
+				switch propertyToGenerate {
+				case let .instantiated(property, childID, _):
+					text.append(" \(property.asSource) -> \(name(childID))")
+				case let .hole(property, _):
+					text.append(" \(property.asSource) -> hole")
+				case let .aliased(property, fulfillingProperty, _, _, _):
+					text.append(" \(property.asSource) = \(fulfillingProperty.asSource)")
+				}
+			}
+			for holeArgument in record.holeArguments {
+				switch holeArgument {
+				case let .fill(hole, fillID):
+					text.append(" fill \(hole.property.asSource) -> \(name(fillID))")
+				case let .passUp(hole):
+					text.append(" pass up \(hole.property.asSource)")
+				}
+			}
+			for line in record.fillLabelsReadOnlyIfAvailable.map({ " \($0.key) reads only if available \($0.value.sorted())" }).sorted() {
+				text.append(line)
+			}
+			projectionByKey[key] = text
+		}
+		return projectionByKey
 	}
 }
 
@@ -301,6 +397,10 @@ public enum ScopeTableObservation {
 	@TaskLocal public static var entryOrder: (@Sendable (_ entryCount: Int) -> [Int])?
 	/// Called with each table a map freezes, as text (`ScopeTable.projection`).
 	@TaskLocal public static var observer: (@Sendable (_ projection: String) -> Void)?
+	/// When set, called once per seam signature pass with each key whose record in the pass's table, assembled from the base
+	/// and the pass's overlay, differs from the record frozen from the pass's own map (by `ScopeTable.projectionByKey`), and
+	/// each key outside the pass's map that names a record: the overlay oracle. Empty when the two agree.
+	@TaskLocal public static var overlayOracle: (@Sendable (_ mismatches: [String]) -> Void)?
 }
 
 extension TypeDescription {
