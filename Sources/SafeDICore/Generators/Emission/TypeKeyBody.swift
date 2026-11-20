@@ -302,15 +302,14 @@ private struct TypeKeyLayout {
 	/// binding passes a cycle parameter, else the first declaration outside it its reads of the label resolve to, `.none`
 	/// where they all read `nil`, else the nearest declaration at its binding.
 	func resolution(of label: String, atPlace body: Int) -> PathValue {
-		let place = bodies[body]
-		if place.cycleParameterLabels.contains(label) {
-			return place.record?.callCycleArguments.first(where: { $0.label == label }).map {
-				pathValue(of: $0, inBody: place.parent, before: place.position)
+		if bodies[body].cycleParameterLabels.contains(label) {
+			return bodies[body].record?.callCycleArguments.first(where: { $0.label == label }).map {
+				pathValue(of: $0, inBody: bodies[body].parent, before: bodies[body].position)
 			} ?? .none
 		} else if let value = escapingReads[body][label] {
 			return value
 		} else {
-			return lookUp(label, inBody: place.parent, before: place.position)
+			return lookUp(label, inBody: bodies[body].parent, before: bodies[body].position)
 		}
 	}
 
@@ -441,8 +440,7 @@ private struct TypeKeyLayout {
 				}
 			}
 		}
-		let bound = bodies[body].forwardedLabels.union(bodies[body].positionsByLabel.keys)
-		return list.filter { !bound.contains($0) }
+		return list.filter { !bodies[body].forwardedLabels.contains($0) && bodies[body].positionsByLabel[$0] == nil }
 	}
 
 	private func escapingReadsOfBody(_ body: Int) -> [String: PathValue] {
@@ -483,8 +481,7 @@ private struct TypeKeyLayout {
 				}
 			}
 		}
-		let bound = bodies[body].forwardedLabels.union(bodies[body].cycleParameterLabels).union(bodies[body].positionsByLabel.keys)
-		return escaping.filter { !bound.contains($0.key) }
+		return escaping.filter { !bodies[body].forwardedLabels.contains($0.key) && !bodies[body].cycleParameterLabels.contains($0.key) && bodies[body].positionsByLabel[$0.key] == nil }
 	}
 
 	// MARK: Classes
