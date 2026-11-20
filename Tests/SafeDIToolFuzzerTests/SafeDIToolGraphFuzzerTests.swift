@@ -2294,6 +2294,18 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func seamSmokeSeeds_judgeGeneratedOnlyInitializerDefaults_inGraphsTheToolAccepts() async throws {
+		// The oracle judges each initializer only generated code calls, so a change that stops it finding them fails here
+		// rather than quietly judging nothing.
+		let judgedCount = try await seamSmokeResults.value.count { result in
+			guard case let .accepted(generatedFiles, _) = result.outcome else { return false }
+			return GraphFuzzerGeneratedOnlyInitializerDefaults.initializerCount(in: generatedFiles) > 0
+		}
+		#expect(judgedCount >= 10, "Judged \(judgedCount) of \(Self.seamSmokeSeeds.count) graphs")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func smokeSeeds_applyRemedies_inGraphsTheToolRejects() async throws {
 		// The remedy oracle judges rejected graphs, so a change that stops it reading the tool's errors, or stops it applying
 		// what they state, fails here rather than quietly judging nothing.
