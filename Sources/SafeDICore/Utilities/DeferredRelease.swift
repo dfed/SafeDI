@@ -70,9 +70,10 @@ struct DeferredReleaseSlot<Value: RangeReplaceableCollection & Sendable>: ~Copya
 /// An object whose owned values never change after `init` holds them in a `DeferredReleaseSlot`, which hands them over
 /// for it; one that changes them after `init` (`Scope`) swaps them out in its own `deinit` and calls `release(_:)`.
 enum DeferredRelease {
-	/// Releases `ownedValues`, which must hold the last references to what they hold: after the deinitializer that
-	/// called this returns when this thread is already releasing, and now otherwise. A caller moves the values out
-	/// of their storage with `swap` and passes them with `consume`, so that no copy of them outlives this call.
+	/// Releases `ownedValues`: after the deinitializer that called this returns when this thread is already releasing,
+	/// and now otherwise. A caller moves the values out of their storage with `swap` and passes them with `consume`, so
+	/// that its own storage keeps no copy of them; a copy a reader still holds keeps what it holds alive, and that copy
+	/// releases it.
 	static func release(_ ownedValues: consuming some Collection) {
 		// Most objects are leaves of their tree, which own nothing to release.
 		guard !ownedValues.isEmpty else { return }
