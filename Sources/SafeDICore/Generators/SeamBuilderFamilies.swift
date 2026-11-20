@@ -246,6 +246,13 @@ extension DependencyTreeGenerator {
 		var memberBindingKeysByLabel = [String: Set<ValuesBindingKey>]()
 		var builders = [SeamSignature.Builder]()
 		var internalNameByFamily = [SeamSignature.ScopeEnum.Key: String]()
+		var levels = LevelsOfEveryHoleType(
+			generator: generator,
+			holes: flatHoles,
+			parameters: parameters,
+			bindsReceivesAgain: bindsReceivesAgain,
+			namesApartAtRoot: namesApartAtRoot,
+		)
 		for holeType in orderedHoleTypes {
 			let stem = stemByHoleType[holeType, default: ""]
 			let rootTypeNames = (plain: "\(scopeTypeNames.plain)\(stem)".spelledAsIdentifier, sendable: "\(scopeTypeNames.sendable)\(stem)".spelledAsIdentifier)
@@ -264,11 +271,11 @@ extension DependencyTreeGenerator {
 					holesBySite: holesBySite,
 					parameters: parameters,
 					bindsReceivesAgain: bindsReceivesAgain,
-					namesApartAtRoot: namesApartAtRoot,
 					reenteredFillsByKey: reenteredFillsByKey,
 					proof: proof,
 					instantiables: instantiables,
 					reachedEnum: reachedEnum,
+					levels: &levels,
 				)
 				// Every hole type of a seam and of a public mock takes a builder struct, whatever places it reaches: the seam's tree
 				// calls a member per level, bound under names of their own, and binds no payload. A seam's own internal mock takes
@@ -736,44 +743,77 @@ extension DependencyTreeGenerator {
 
 	/// The stem each of `holeTypes` is named by, from what it builds alone: its instantiated type as an identifier where
 	/// the type it returns is the same, else the instantiated type's followed by `_` and the returned type's. Only a stem
-	/// that equals another's, or gives a label another gives, is named apart, by its types; no rung names an owner, a
+	/// that equals another's, or whose plain label equals another's plain or `@Sendable` label, is named apart, by its types; no rung names an owner, a
 	/// path or a parameter, so adding a place of a hole type already built never renames one, and adding a hole type renames
 	/// another only when their stems or labels coincide.
 	static func stems(of holeTypes: [SeamSignature.HoleType]) -> [SeamSignature.HoleType: String] {
 		func stem(of type: TypeDescription) -> String {
 			type.simplified.asIdentifier.spelledWithoutBackticks
 		}
-		func labels(of stem: String) -> Set<String> {
-			[plainBuilderLabel(ofStem: stem), sendableBuilderLabel(ofStem: stem)]
-		}
-		func collides(_ index: Int, among stems: [String]) -> Bool {
-			stems.indices.contains { other in
-				other != index && (stems[other] == stems[index] || !labels(of: stems[other]).isDisjoint(with: labels(of: stems[index])))
-			}
-		}
 		var stems = holeTypes.map { holeType in
 			holeType.instantiatedType == holeType.builtType
 				? stem(of: holeType.instantiatedType)
 				: "\(stem(of: holeType.instantiatedType))_\(stem(of: holeType.builtType))"
 		}
-		let colliding = holeTypes.indices.filter { collides($0, among: stems) }
+		// A stem collides where another stem equals it, or gives its plain label as its own plain or `@Sendable` label: a
+		// stem's plain label equal to another's `@Sendable` label names apart only the stem whose plain label it is
+		// (`ServiceSendable` beside `Service`), so a hole type's own labels never follow another type's name. Equal stems give
+		// equal plain labels, so counting the stems that give each label in each family finds every collision with one pass
+		// over the stems: comparing every pair of stems, and lowering both stems' capitals for each pair, grew with the
+		// square of the hole types.
+		var labelCounts = BuilderLabelCounts(stems: stems)
+		let colliding = holeTypes.indices.filter { labelCounts.collides(stems[$0]) }
 		if !colliding.isEmpty {
+			let collidingIndices = Set(colliding)
 			let renamed = ScopeGenerator.identifierSafeNames(
 				for: colliding.map { (label: stems[$0], suffixTypes: [holeTypes[$0].instantiatedType, holeTypes[$0].builtType]) },
-				reservedNames: Set(holeTypes.indices.filter { !colliding.contains($0) }.map { stems[$0] }),
+				reservedNames: Set(holeTypes.indices.filter { !collidingIndices.contains($0) }.map { stems[$0] }),
 				countingWorkAs: .namingEntriesApart,
 			)
 			for (index, name) in zip(colliding, renamed) {
+				labelCounts.replace(stems[index], with: name.spelledWithoutBackticks)
 				stems[index] = name.spelledWithoutBackticks
 			}
 			// Two stems may still give one label: each that does takes a trailing underscore until none does.
 			for index in stems.indices {
-				while collides(index, among: stems) {
+				while labelCounts.collides(stems[index]) {
+					labelCounts.replace(stems[index], with: stems[index] + "_")
 					stems[index] += "_"
 				}
 			}
 		}
 		return Dictionary(zip(holeTypes, stems), uniquingKeysWith: { first, _ in first })
+	}
+
+	/// How many of a set of stems give each builder label, in each family (`stems(of:)`).
+	private struct BuilderLabelCounts {
+		init(stems: [String]) {
+			for stem in stems {
+				add(stem)
+			}
+		}
+
+		/// Whether another stem than one `stem` stands for gives `stem`'s plain label, as its plain or its `@Sendable` label. A
+		/// stem's own two labels differ, so its own `@Sendable` label is never counted against it.
+		func collides(_ stem: String) -> Bool {
+			let plainLabel = plainBuilderLabel(ofStem: stem)
+			return plainCountByLabel[plainLabel, default: 0] > 1 || sendableCountByLabel[plainLabel, default: 0] > 0
+		}
+
+		/// Counts `newStem` in the place of one `oldStem`.
+		mutating func replace(_ oldStem: String, with newStem: String) {
+			plainCountByLabel[plainBuilderLabel(ofStem: oldStem), default: 0] -= 1
+			sendableCountByLabel[sendableBuilderLabel(ofStem: oldStem), default: 0] -= 1
+			add(newStem)
+		}
+
+		private var plainCountByLabel = [String: Int]()
+		private var sendableCountByLabel = [String: Int]()
+
+		private mutating func add(_ stem: String) {
+			plainCountByLabel[plainBuilderLabel(ofStem: stem), default: 0] += 1
+			sendableCountByLabel[sendableBuilderLabel(ofStem: stem), default: 0] += 1
+		}
 	}
 
 	/// The stem with its leading capitals lowered, keeping the last when a lowercase letter follows it, then `Builder`.
