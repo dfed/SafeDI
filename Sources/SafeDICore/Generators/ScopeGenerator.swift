@@ -9551,14 +9551,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				MockBodyRouting.record(routed: true)
 				// The body is held as one string, its lines joined, rather than a string per line: a module's mocks can be tens
 				// of megabytes, which the strings of their lines would hold again beside the text they are joined into.
-				let body = try await GeneratedCodeText.nonBlankLinesJoined(of: GeneratedCode.lines(generateProperties(
+				let body = try await GeneratedCode.lines(generateProperties(
 					codeGeneration: .overriding(plan),
 					propertiesGeneratedLater: [],
 					enclosingFunctionNames: [:],
 					leadingMemberWhitespace: bodyIndent,
 					fillPlaceBindings: .none,
 				))
-				.spelled())
+				.spelledNonBlankLines()
 				// A body whose items write nothing, such as one that binds only overrides of what it receives only if
 				// available, adds no line, as the lines it split into added none.
 				if !body.isEmpty {

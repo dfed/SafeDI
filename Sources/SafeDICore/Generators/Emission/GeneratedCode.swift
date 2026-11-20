@@ -102,6 +102,15 @@ struct GeneratedCode: Sendable {
 		return writer.text
 	}
 
+	/// The text of the code's lines that hold more than whitespace, joined by line feeds
+	/// (`GeneratedCodeText.nonBlankLinesJoined(ofUTF8:)`), read from the bytes the code is spelled into, so the text is
+	/// held once rather than spelled into a string and copied again without its blank lines.
+	func spelledNonBlankLines() -> String {
+		var writer = GeneratedCodeWriter()
+		writer.write(self)
+		return writer.nonBlankLinesJoined
+	}
+
 	private enum Storage: Sendable {
 		case text(String)
 		case children(Children)
@@ -207,6 +216,10 @@ private struct GeneratedCodeWriter {
 
 	var text: String {
 		String(decoding: bytes, as: UTF8.self)
+	}
+
+	var nonBlankLinesJoined: String {
+		bytes.withUnsafeBufferPointer(GeneratedCodeText.nonBlankLinesJoined(ofUTF8:))
 	}
 
 	mutating func write(_ code: GeneratedCode) {

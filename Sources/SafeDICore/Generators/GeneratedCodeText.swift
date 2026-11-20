@@ -52,34 +52,31 @@ enum GeneratedCodeText {
 		return String(decoding: result, as: UTF8.self)
 	}
 
-	/// The lines of `code` that hold more than whitespace, joined by line feeds: the same bytes as
+	/// The lines of the UTF-8 `code` that hold more than whitespace, joined by line feeds: the same bytes as
 	/// `code.components(separatedBy: "\n").filter { !$0.allSatisfy(\.isWhitespace) }.joined(separator: "\n")`, written
 	/// into one string of `code`'s size rather than a string per line, which a mock body as large as the module's mocks
-	/// would hold beside the text they are joined into. Code with a carriage return, which forms one `Character` with a
-	/// line feed after it, takes that expression itself.
-	static func nonBlankLinesJoined(of code: String) -> String {
+	/// would hold beside the text they are joined into. It reads the bytes a plan was spelled into, so the spelled text is
+	/// never decoded into a string of its own first. Code with a carriage return, which forms one `Character` with a line
+	/// feed after it, takes that expression itself.
+	static func nonBlankLinesJoined(ofUTF8 bytes: UnsafeBufferPointer<UInt8>) -> String {
 		let lineFeed = UInt8(ascii: "\n")
-		let carriageReturn = UInt8(ascii: "\r")
-		var code = code
-		return code.withUTF8 { bytes in
-			guard !bytes.contains(carriageReturn) else {
-				return String(decoding: bytes, as: UTF8.self)
-					.components(separatedBy: "\n")
-					.filter { !$0.allSatisfy(\.isWhitespace) }
-					.joined(separator: "\n")
+		guard !bytes.contains(UInt8(ascii: "\r")) else {
+			return String(decoding: bytes, as: UTF8.self)
+				.components(separatedBy: "\n")
+				.filter { !$0.allSatisfy(\.isWhitespace) }
+				.joined(separator: "\n")
+		}
+		// Written straight into the string's storage, reserved at the code's size, which no line it drops makes too small:
+		// a buffer of bytes decoded into a string afterwards would hold the text twice.
+		return String(unsafeUninitializedCapacity: bytes.count) { result in
+			var count = 0
+			var lineStart = bytes.startIndex
+			for index in bytes.indices where bytes[index] == lineFeed {
+				appendIfNotBlank(UnsafeBufferPointer(rebasing: bytes[lineStart..<index]), to: result, count: &count)
+				lineStart = index + 1
 			}
-			// Written straight into the string's storage, reserved at the code's size, which no line it drops makes too small:
-			// a buffer of bytes decoded into a string afterwards would hold the text twice.
-			return String(unsafeUninitializedCapacity: bytes.count) { result in
-				var count = 0
-				var lineStart = bytes.startIndex
-				for index in bytes.indices where bytes[index] == lineFeed {
-					appendIfNotBlank(UnsafeBufferPointer(rebasing: bytes[lineStart..<index]), to: result, count: &count)
-					lineStart = index + 1
-				}
-				appendIfNotBlank(UnsafeBufferPointer(rebasing: bytes[lineStart...]), to: result, count: &count)
-				return count
-			}
+			appendIfNotBlank(UnsafeBufferPointer(rebasing: bytes[lineStart...]), to: result, count: &count)
+			return count
 		}
 	}
 

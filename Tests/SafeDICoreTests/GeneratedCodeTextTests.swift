@@ -67,7 +67,7 @@ struct GeneratedCodeTextTests {
 	@Test
 	func nonBlankLinesJoined_dropsLinesOfWhitespace_whenCodeHasBlankAndIndentedLines() {
 		let code = "\n\tlet a = A()\n  \t\n\u{0B}\nlet b = B()\n"
-		#expect(GeneratedCodeText.nonBlankLinesJoined(of: code) == "\tlet a = A()\nlet b = B()")
+		#expect(Self.nonBlankLinesJoined(of: code) == "\tlet a = A()\nlet b = B()")
 	}
 
 	@Test
@@ -81,10 +81,15 @@ struct GeneratedCodeTextTests {
 				.components(separatedBy: "\n")
 				.filter { !$0.allSatisfy(\.isWhitespace) }
 				.joined(separator: "\n")
-			return Array(GeneratedCodeText.nonBlankLinesJoined(of: code).utf8) != Array(expected.utf8)
+			return Array(Self.nonBlankLinesJoined(of: code).utf8) != Array(expected.utf8)
 		}
 		#expect(codes.count == 55_987)
 		#expect(mismatches.map { Array($0.unicodeScalars) } == [])
+	}
+
+	private static func nonBlankLinesJoined(of code: String) -> String {
+		var code = code
+		return code.withUTF8(GeneratedCodeText.nonBlankLinesJoined(ofUTF8:))
 	}
 
 	@Test
