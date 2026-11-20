@@ -65,6 +65,28 @@ struct GeneratedCodeTextTests {
 	}
 
 	@Test
+	func nonBlankLines_dropsLinesOfWhitespace_whenCodeHasBlankAndIndentedLines() {
+		let code = "\n\tlet a = A()\n  \t\n\u{0B}\nlet b = B()\n"
+		#expect(GeneratedCodeText.nonBlankLines(of: code) == ["\tlet a = A()", "let b = B()"])
+	}
+
+	@Test
+	func nonBlankLines_returnsWhatSplittingAndFilteringReturns_forEveryStringOfUpToSixTokens() {
+		// Every string of up to six of these tokens: a line feed, a carriage return that forms `"\r\n"` with a line feed
+		// beside it, a multi-byte character, a non-ASCII whitespace character, ASCII whitespace, and plain text.
+		let tokens = ["x", "\n", "\r", "\u{A0}", "\t", " "]
+		let codes = Self.strings(of: tokens, upToLength: 6)
+		let mismatches = codes.filter { code in
+			let expected = code
+				.components(separatedBy: "\n")
+				.filter { !$0.allSatisfy(\.isWhitespace) }
+			return GeneratedCodeText.nonBlankLines(of: code).map { Array($0.utf8) } != expected.map { Array($0.utf8) }
+		}
+		#expect(codes.count == 55_987)
+		#expect(mismatches.map { Array($0.unicodeScalars) } == [])
+	}
+
+	@Test
 	func overrideRelativePath_dropsOverridesPrefixAndJoinsLabelsWithUnderscores_whenPathIsNested() {
 		#expect(GeneratedCodeText.overrideRelativePath(of: "safeDIOverrides.child.grandchild") == "child_grandchild")
 	}
