@@ -354,6 +354,37 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// scan's cache sound without any condition joining `consultedCompilationConditions`.
 	public var isInsideCompilerDecidedBlock = false
 
+	/// The labels of the dependencies the declaration's members declare in the `#if` clauses SafeDITool's evaluation did
+	/// not select, in source order, each once, with the first such clause that declares it: what a hand-written mock may
+	/// take that this build's declaration does not declare. Empty where every clause is read, as the macro reads them.
+	/// Only blocks whose clauses guard SafeDI content are skipped, and their conditions are consulted, so scan's cache
+	/// of it is sound.
+	public var dependencyLabelsInUnselectedClauses = [DependencyLabelInUnselectedClause]()
+	/// The labels of `dependencies` declared inside an `#if` block, in declaration order: those a hand-written mock moved
+	/// into another clause may not find. Covered by the same consulted conditions as `dependencyLabelsInUnselectedClauses`.
+	public var dependencyLabelsInsideConditionalBlocks = [String]()
+
+	/// A dependency label a member declares in an `#if` clause SafeDITool's evaluation did not select, with that clause.
+	public struct DependencyLabelInUnselectedClause: Codable, Hashable, Sendable {
+		public init(label: String, clause: String, clauseLocation: Dependency.DeclarationLocation?, isDeclaredDirectlyInClause: Bool) {
+			self.label = label
+			self.clause = clause
+			self.clauseLocation = clauseLocation
+			self.isDeclaredDirectlyInClause = isDeclaredDirectlyInClause
+		}
+
+		/// The label, as a dependency's property spells it.
+		public let label: String
+		/// The clause's directive and condition as written, such as `#if FEATURE`, `#elseif OTHER` or `#else`: the
+		/// outermost clause around the declaration that the evaluation did not select.
+		public let clause: String
+		/// Where the clause's directive begins, or `nil` for a declaration a module info file carries without positions.
+		public let clauseLocation: Dependency.DeclarationLocation?
+		/// Whether the dependency is declared in the clause itself, rather than in a block nested in it, so that a
+		/// hand-written mock moved into the clause finds it wherever the clause is compiled.
+		public let isDeclaredDirectlyInClause: Bool
+	}
+
 	/// The name the declaring module gives this declaration's concrete type, when the run that read it spells the type
 	/// with the module's name, as `ModA.Store`, because another module also declares a type of that name and the module the
 	/// run looks from cannot name this one (`distinguishingTypesUnnameable(from:among:plainTypeDeclarations:modulesRead:)`).

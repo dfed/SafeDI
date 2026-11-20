@@ -60,6 +60,14 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 	public let activeCompilationConditions: Set<String>
 	public let mockConditionalCompilation: String?
 
+	/// Whether this build compiles the module's generated mocks, which are wrapped in `#if <mockConditionalCompilation>`:
+	/// always when they are generated without a condition, and otherwise where the condition is active. The condition is
+	/// read as a bare condition, as the selections that take it to be active (`mockOnlyScannableClauses`) or inactive
+	/// (`whereMockConditionIsInactive`) read it.
+	public var compilesGeneratedMocks: Bool {
+		mockConditionalCompilation.map(activeCompilationConditions.contains) ?? true
+	}
+
 	// MARK: Internal
 
 	/// This evaluator as a build where the mock condition is inactive selects clauses: without that condition, and with
