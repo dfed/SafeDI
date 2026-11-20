@@ -1153,6 +1153,8 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// The spelled existential's rename naming the protocol without `any` in `ofType:`, on the seam or on the child before
 	/// the child's receive of the value: the alias-spelling roll.
 	case spelledAliasNamingProtocolWithoutAny
+	/// That rename on `SpellChild`, which generates its mock, as its only receive of the value: the alias-only roll.
+	case spelledAliasOnlyReceiveOfMockedChild
 	/// The spelled value's optional form received only if available by a second child, `SpellSibling`, beside the
 	/// form `SpellChild` receives.
 	case spelledOptionalFormOnSibling
@@ -1908,7 +1910,7 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// Whether `addingSpelledProperties`' alias-spelling roll draws this shape, whose count in accepted graphs the seam
 	/// corpus pins too (`acceptedDrawFeatureCounts`), at least ten.
 	var isAliasSpellingRollShape: Bool {
-		self == .spelledAliasNamingProtocolWithoutAny
+		self == .spelledAliasNamingProtocolWithoutAny || self == .spelledAliasOnlyReceiveOfMockedChild
 	}
 
 	/// Whether `addingCycleParameterShapes` draws this shape, whose count in accepted graphs the seam corpus pins too
@@ -2732,6 +2734,7 @@ enum GraphFuzzerGenerator {
 			seamRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.seamRandomSeedMask)
 			spellingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.spellingRandomSeedMask)
 			aliasSpellingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.aliasSpellingRandomSeedMask)
+			aliasOnlyReceiverRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.aliasOnlyReceiverRandomSeedMask)
 			uncreatedAliasRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.uncreatedAliasRandomSeedMask)
 			generatedNameRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.generatedNameRandomSeedMask)
 			unbuildableDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unbuildableDependencyRandomSeedMask)
@@ -3179,6 +3182,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only how `addingSpelledProperties` spells and places an existential's rename, which only a graph that draws
 		/// one reaches, so every other graph is drawn as it was before the roll existed.
 		private var aliasSpellingRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether `addingSpelledProperties` makes the child's rename that names the protocol without `any` its only
+		/// receive of the value, which only a graph that draws such a rename on the child reaches.
+		private var aliasOnlyReceiverRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingUncreatedAliasShapes`, which draws only with the `generateDependencyTree`
 		/// feature on, last of every pass, so a seam graph it leaves plain is drawn as it was before the pass existed.
 		private var uncreatedAliasRandom: GraphFuzzerRandomNumberGenerator
@@ -4914,6 +4920,7 @@ enum GraphFuzzerGenerator {
 			// so a walk of the tree meets the rename's spelling first: the seam's parameter and a mock's take the most
 			// explicit of their receivers' spellings, never the first a walk meets.
 			let drawsRename = spelling.canBeRenamed && !type.hasSuffix("?") && spellingRandom.percentChance(30)
+			var aliasIsChildsOnlyReceive = false
 			let drawsExistentialRename = !drawsRename && spelling == .existential && aliasSpellingRandom.percentChance(80)
 			if drawsRename || drawsExistentialRename {
 				let namesProtocolWithoutAny = spelling == .existential && aliasSpellingRandom.percentChance(70)
@@ -4922,7 +4929,15 @@ enum GraphFuzzerGenerator {
 					label: "\(label)Alias",
 					type: type,
 				)
-				if drawsRename ? spellingRandom.percentChance(50) : aliasSpellingRandom.percentChance(50) {
+				let drawsOnSeam = drawsRename ? spellingRandom.percentChance(50) : aliasSpellingRandom.percentChance(50)
+				// The alias-only roll (`aliasOnlyReceiverRandom`): three renames in five that name the protocol without `any`
+				// become `SpellChild`'s only receive of the value, and the child generates its mock, which binds the value it
+				// receives only through the alias as the alias's property spells it, `any` included, never as `ofType:` does.
+				aliasIsChildsOnlyReceive = namesProtocolWithoutAny && aliasOnlyReceiverRandom.percentChance(60)
+				if aliasIsChildsOnlyReceive {
+					child.properties.removeAll { $0.label == label }
+					child.properties.insert(alias, at: 0)
+				} else if drawsOnSeam {
 					seam.properties.append(alias)
 				} else if namesProtocolWithoutAny {
 					child.properties.insert(alias, at: 0)
@@ -4930,7 +4945,7 @@ enum GraphFuzzerGenerator {
 					child.properties.append(alias)
 				}
 			}
-			if spellingRandom.percentChance(20) {
+			if spellingRandom.percentChance(20) || aliasIsChildsOnlyReceive {
 				child.instantiableArguments.append("generateMock: true")
 			} else if spellingRandom.percentChance(15) {
 				seam.instantiableArguments.append("generateMock: true")
@@ -4940,6 +4955,7 @@ enum GraphFuzzerGenerator {
 
 		private static let spellingRandomSeedMask: UInt64 = 0x7370656C6C696E67
 		private static let aliasSpellingRandomSeedMask: UInt64 = 0x616C696173537065
+		private static let aliasOnlyReceiverRandomSeedMask: UInt64 = 0x616C6961734F6E6C
 
 		// MARK: Uncreated aliases
 
@@ -10512,6 +10528,14 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		// `addingSpelledProperties`' second child and mocked tree.
 		if propertiesByType.keys.contains(where: { $0.hasSuffix("SpellSibling") }) {
 			features.insert(.spelledOptionalFormOnSibling)
+		}
+		// The alias-only roll: `SpellChild`, which generates its mock, receives the value only through its rename that names the
+		// protocol without `any`.
+		for (typeName, properties) in propertiesByType where typeName.hasSuffix("SpellChild") && mockedTypeNames.contains(typeName)
+			&& !properties.contains(where: { $0.label == GraphFuzzerSpelling.label })
+			&& properties.contains(where: { aliasedLabel(of: $0.attribute) == GraphFuzzerSpelling.label && $0.attribute.hasSuffix("SpellProtocol.self)") })
+		{
+			features.insert(.spelledAliasOnlyReceiveOfMockedChild)
 		}
 		if mockedTypeNames.contains(where: { $0.hasSuffix("SpellChild") || $0.hasSuffix("SpellSeam") }) {
 			features.insert(.spelledTreeMocked)
