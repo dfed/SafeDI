@@ -100,7 +100,7 @@ struct SafeDIToolTypeKeyViewTests: ~Copyable {
 			let targets = (0..<screenCount).map { screen in [1, 3, 7].map { (screen + $0) % screenCount }.sorted() }
 			try await counts.append(viewCounts(of: Self.screensOpeningEachOther(roles: roles, targets: targets)))
 		}
-		#expect(counts == [[135], [1946]])
+		#expect(counts == [[135], [1_946]])
 	}
 
 	// MARK: Private
