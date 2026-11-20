@@ -891,6 +891,8 @@ extension DependencyTreeGenerator {
 		var labelsReadThroughReceivesByScope = [Scope: Set<String>]()
 		/// See `labelsReadFromAbove(by:)`.
 		var labelsReadFromAboveByScope = [Scope: Set<String>]()
+		/// See `reachesInstantiationCycle(from:)`.
+		var reachesInstantiationCycleByScope = [Scope: Bool]()
 		/// The scopes whose receives a walk of `scope` follows: the scopes of the types it receives or renames.
 		func receivedScopes(of scope: Scope) -> [Scope] {
 			var scopes = [Scope]()
@@ -921,14 +923,56 @@ extension DependencyTreeGenerator {
 			return scopes
 		}
 		/// The union, for `start` and every scope `successors` reaches from it, of `labels` of each, remembered in `cache` for
-		/// each scope reached. Tarjan's strongly connected components on an explicit stack, so each component shares one answer
-		/// and a deep graph needs no recursion.
+		/// each scope reached.
 		func labelsReached(
 			from start: Scope,
 			successors: (Scope) -> [Scope],
 			labels: (Scope) -> Set<String>,
 			cache: inout [Scope: Set<String>],
 		) -> Set<String> {
+			valueReached(
+				from: start,
+				successors: successors,
+				componentValue: { component, _ in
+					var componentLabels = Set<String>()
+					for member in component {
+						componentLabels.formUnion(labels(member))
+					}
+					return componentLabels
+				},
+				combining: { $0.formUnion($1) },
+				empty: [],
+				cache: &cache,
+			)
+		}
+		/// Whether a walk of `scope`'s subtree closes a dependency cycle wherever it is reached: whether a cycle of
+		/// instantiated scopes is reachable from it, which the walk follows until a child repeats an entry of its instantiation
+		/// stack. Such a walk raises `memoBlockingEventCount` where it closes the cycle, so it is never remembered, and keying it
+		/// is work for nothing.
+		func reachesInstantiationCycle(from scope: Scope) -> Bool {
+			valueReached(
+				from: scope,
+				successors: instantiatedScopes(of:),
+				componentValue: { component, successorsByScope in
+					component.count > 1 || component.contains { successorsByScope[$0, default: []].contains($0) }
+				},
+				combining: { $0 = $0 || $1 },
+				empty: false,
+				cache: &reachesInstantiationCycleByScope,
+			)
+		}
+		/// For `start` and every scope `successors` reaches from it, `componentValue` of its strongly connected component
+		/// (given the component and each member's successors) combined with the values of the components it reaches,
+		/// remembered in `cache` for each scope reached. Tarjan's strongly connected components on an explicit stack, so each
+		/// component shares one answer and a deep graph needs no recursion.
+		func valueReached<Value>(
+			from start: Scope,
+			successors: (Scope) -> [Scope],
+			componentValue: (_ component: Set<Scope>, _ successorsByScope: [Scope: [Scope]]) -> Value,
+			combining combine: (inout Value, Value) -> Void,
+			empty: Value,
+			cache: inout [Scope: Value],
+		) -> Value {
 			if let cached = cache[start] {
 				return cached
 			}
@@ -977,20 +1021,19 @@ extension DependencyTreeGenerator {
 							}
 						}
 						let componentScopes = Set(component)
-						var componentLabels = Set<String>()
+						var value = componentValue(componentScopes, successorsByScope)
 						for member in component {
-							componentLabels.formUnion(labels(member))
 							for successor in successorsByScope[member, default: []] where !componentScopes.contains(successor) {
-								componentLabels.formUnion(cache[successor, default: []])
+								combine(&value, cache[successor, default: empty])
 							}
 						}
 						for member in component {
-							cache[member] = componentLabels
+							cache[member] = value
 						}
 					}
 				}
 			}
-			return cache[start, default: []]
+			return cache[start, default: empty]
 		}
 		/// Every label a walk of `scope`'s subtree can compare with an entry of its instantiation stack, or look up in what is
 		/// receivable there: each label a scope it instantiates, or a scope it follows a receive to, declares, receives,
@@ -1199,8 +1242,9 @@ extension DependencyTreeGenerator {
 					for child in children {
 						switch child {
 						case let .scope(childToValidate):
-							// A scope reached once is never keyed: only a scope reached again can be skipped.
-							if skipsCleanSubtrees, !validationWalkScopesReached.insert(childToValidate.scope).inserted {
+							// A scope reached once is never keyed: only a scope reached again can be skipped. Nor is one whose walk
+							// closes a cycle, which is never remembered.
+							if skipsCleanSubtrees, !validationWalkScopesReached.insert(childToValidate.scope).inserted, !reachesInstantiationCycle(from: childToValidate.scope) {
 								let childKey = cleanSubtreeKey(of: childToValidate, rootContextIndex: rootContextIndex)
 								if cleanSubtrees.contains(childKey) {
 									validationWalkObserver?(.skippedCleanSubtree)
