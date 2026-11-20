@@ -460,7 +460,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		let seeds = GraphFuzzerCallingMockCell.all.compactMap { cell in
 			draws.first { $0.cell == cell && $0.valueProbes != nil }?.seed
 		}
-		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293, 450, 451, 452, 453, 530, 531, 610, 611, 612, 613, 614, 615, 670, 671, 672, 673, 674, 675, 730, 743, 738, 733, 734, 735, 790, 791, 792, 793, 794, 795, 1030, 1031, 1032, 1033, 1034, 1035])
+		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293, 450, 451, 452, 453, 530, 531, 610, 611, 612, 613, 614, 615, 670, 671, 672, 673, 674, 675, 730, 743, 738, 733, 734, 735, 790, 791, 792, 793, 794, 795, 1_030, 1_031, 1_032, 1_033, 1_034, 1_035])
 		for seed in seeds {
 			var filesToDelete = [URL]()
 			defer {
@@ -1293,9 +1293,9 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func callingMock_passesOverrideToCall_whenDrawnCalledTypeReceivesValueOnlyIfAvailableNothingProvides() async throws {
-		let draw = GraphFuzzerCallingMockDraw(seed: 1030)
+		let draw = GraphFuzzerCallingMockDraw(seed: 1_030)
 
-		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 1030)
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 1_030)
 
 		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .calledTypeReceivesValueOnlyIfAvailableNothingProvides, caller: .internal, place: .plain))
 		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
