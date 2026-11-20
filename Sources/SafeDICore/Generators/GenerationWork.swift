@@ -61,6 +61,9 @@ public struct GenerationWork: Sendable {
 		/// Reserving the names a seam call's fills and dispatchers avoid: the enclosing calls' fills and the names the seam
 		/// whose tree holds the call binds, which each call takes.
 		case reservingNamesOfACall
+		/// Laying a production root's body out by the type key (`TypeKeyBody`): each view of the plan, one for all of a
+		/// plan node's places that agree on what they read outside it, is laid out once, so the views count, not the places.
+		case layingOutTypeKeyViews
 	}
 
 	/// The step that did the work.
