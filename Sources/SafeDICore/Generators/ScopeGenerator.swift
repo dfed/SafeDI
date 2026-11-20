@@ -6816,7 +6816,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A type inside a fill an internal mock declares binds each place of it nothing builds from the builder `mock()`
 		// takes for the place (`FillPlace`), once per build, before its children, which receive the place's value.
 		let fillPlaceBindingLines = fillPlaceBindings.bindingsByGenerator[ObjectIdentifier(self), default: []].map { GeneratedCode.text("\(Self.standardIndent)\($0.binding)") }
-		let memberCallLines = memberCallLines.map(GeneratedCode.text)
+		let memberCallCode = memberCallLines.map(GeneratedCode.text)
 
 		let propertyType = property.propertyType
 		switch propertyType {
@@ -6891,7 +6891,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// compiler is unable to type-check this expression in reasonable time").
 			var generatedProperties = unboxingLines.map(GeneratedCode.text)
 			generatedProperties += forwardedInnerScopeLines.map(GeneratedCode.text)
-			generatedProperties += memberCallLines
+			generatedProperties += memberCallCode
 			generatedProperties += rebindingLines.map(GeneratedCode.text)
 			generatedProperties += seamGuardLines
 			generatedProperties += fillPlaceBindingLines
@@ -6976,7 +6976,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// as a constant, so it is never the deferred hop of a cycle.
 			let cycleArguments = cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", ")
 			let functionName = builderFunctionNames.functionName ?? Self.functionName(toBuild: property)
-			let generatedProperties = memberCallLines + seamGuardLines + fillPlaceBindingLines + childCode
+			let generatedProperties = memberCallCode + seamGuardLines + fillPlaceBindingLines + childCode
 			// The function a cycle closes on also takes the parameters its cycle-closing scopes pass.
 			let function = BuilderNode(
 				name: functionName,
@@ -6998,7 +6998,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return PlacePlan(kind: .builtByFunction, functionNames: [functionName], closedOnFunctionName: nil, code: function.spelled(after: valuesBindingLines, followedBy: lastLine))
 		case .constant:
 			let callArguments = cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", ")
-			let generatedProperties = memberCallLines + seamGuardLines + fillPlaceBindingLines + childCode
+			let generatedProperties = memberCallCode + seamGuardLines + fillPlaceBindingLines + childCode
 			let body = BuilderBody(statements: generatedProperties)
 			let hasGeneratedContent = body.hasStatements
 			let propertyDeclaration = BindingDeclaration(
