@@ -2624,6 +2624,10 @@ public actor DependencyTreeGenerator {
 				/// Receive the label the same way everywhere, or declare the form that provides the others on the seam,
 				/// spelled as a receiver spells it: the wrapper of the one kind received, else the by-value property.
 				case declareProvidingForm(String)
+				/// Receive the label the same way everywhere, or declare on the seam the by-value form a type of its tree
+				/// requires: the providing form would be a wrapper only the seam itself receives, which no declaration the
+				/// seam's module sees outside the seam provides, so nothing proves a caller holds it.
+				case declareRequiredForm(String)
 			}
 
 			/// Why the seam's generated initializer cannot take the parameters its tree needs. Each case names the
@@ -2851,6 +2855,8 @@ public actor DependencyTreeGenerator {
 					"Receive `\(label)` the same way in every type of the tree."
 				case let .declareProvidingForm(providingForm):
 					"Receive `\(label)` the same way in every type of the tree, or declare it on \(seamName) as the form that provides the others: `@\(Dependency.Source.receivedRawValue) let \(label): \(providingForm)`."
+				case let .declareRequiredForm(requiredForm):
+					"Receive `\(label)` the same way in every type of the tree, or declare it on \(seamName) as the form its tree requires: `@\(Dependency.Source.receivedRawValue) let \(label): \(requiredForm)`."
 				}
 			}
 
@@ -3139,6 +3145,61 @@ public actor DependencyTreeGenerator {
 			/// Whether an `@Instantiated` declaration of `property` could fulfill it, which decides whether the hint
 			/// suggests one.
 			let instantiatedDeclaration: InstantiatedDeclaration
+			/// Where `property` is received inside a `@Sendable` function that a `Sendable` wrapper of the chain builds the
+			/// receiver in, the declarations that fulfill it without that function capturing them; `nil` elsewhere.
+			let sendableBoundaryAdvice: SendableBoundaryAdvice?
+			/// The declarations of `property`'s label, of forms that do not provide it, that the tree of a type whose mock is
+			/// generated holds above the receiver, so a declaration of `property` above the mocked type would leave the
+			/// receive hidden in that mock: the advice relabels them too. Each once, in the order the walk meets them.
+			let declarationsHidingReceiveInMocks: [HidingDeclaration]
+
+			/// A declaration of a label that a receive beneath it in some tree is hidden by.
+			struct HidingDeclaration: Hashable {
+				let property: Property
+				let declaringType: TypeDescription
+
+				var asSource: String {
+					"`\(property.asSource)` on `\(declaringType.asSource)`"
+				}
+			}
+
+			/// The repairs of a receive of a non-optional `Instantiator` or `LazilyInstantiated` inside a `@Sendable`
+			/// function, which cannot capture a declaration of it made outside the function. Each is listed only where it
+			/// passes the checks it would meet (`DependencyTreeGenerator.sendableBoundaryAdvice`).
+			struct SendableBoundaryAdvice: Hashable {
+				/// The innermost `Sendable` wrapper on the chain, as declared, whose `@Sendable` function builds the receiver.
+				let boundary: Property
+				/// The type that declares `boundary`.
+				let boundaryDeclaringType: TypeDescription
+				/// The type `boundary` builds.
+				let builtType: TypeDescription
+				/// The property's `Sendable` twin, which a `@Sendable` function can capture, where declaring it on
+				/// `boundaryDeclaringType` passes; `nil` otherwise.
+				let sendableForm: TypeDescription?
+				/// The types the function builds on the chain, outermost first, where declaring the property on one of them
+				/// passes; empty otherwise.
+				let typesInsideFunction: [TypeDescription]
+
+				/// The hint for a receive of `property`, or `nil` where neither repair passes and the hint is today's.
+				func hint(for property: Property) -> String? {
+					var repairs = [String]()
+					if let sendableForm {
+						repairs.append("`@\(Dependency.Source.instantiatedRawValue) let \(property.label): \(sendableForm.asSource)` on `\(boundaryDeclaringType.asSource)` and receive this property as `\(sendableForm.asSource)`")
+					}
+					if !typesInsideFunction.isEmpty {
+						repairs.append("`@\(Dependency.Source.instantiatedRawValue) let \(property.asSource)` on \(typesInsideFunction.map { "`\($0.asSource)`" }.joined(separator: " or on "))")
+					}
+					guard !repairs.isEmpty else { return nil }
+					let article = property.propertyType.isLazilyInstantiated ? "a" : "an"
+					var hint = "`\(boundary.asSource)` on `\(boundaryDeclaringType.asSource)` builds `\(builtType.asSource)` in a `@Sendable` function, which cannot capture \(article) `\(property.typeDescription.asSource)` declared outside it. Declare \(repairs.joined(separator: ", or declare "))"
+					if repairs.count > 1 {
+						hint.append(", to fix.")
+					} else {
+						hint.append(" to fix.")
+					}
+					return hint
+				}
+			}
 
 			/// Whether an `@Instantiated` declaration of a received property's non-optional form could fulfill it. The
 			/// macro rejects an optional `@Instantiated` property, so the hint always suggests the non-optional form, which
@@ -3155,6 +3216,11 @@ public actor DependencyTreeGenerator {
 				/// The tree of the type the non-optional form builds requires that form, or its optional form, from above
 				/// it, so wherever it is declared, that tree receives it while it is still being built: a dependency cycle.
 				case closesCycle
+				/// The tree of the type the non-optional form builds requires the property the chain's root declares for the
+				/// receiver's chain, a constant or lazily instantiated one no type of the chain declares again, whose tree
+				/// holds the receiver: declared on the root, the two siblings require each other; declared on any type of the
+				/// chain, that tree receives the root's property while it is still being built. A dependency cycle either way.
+				case closesCycleThrough(Property)
 
 				/// Whether an `@Instantiated` declaration of `property`'s non-optional form could fulfill it, among the
 				/// declarations of `fulfillingInstantiables`.
@@ -3166,6 +3232,25 @@ public actor DependencyTreeGenerator {
 					}
 					return fulfillingInstantiable.dependencies.contains { $0.source == .forwarded } ? .typeHasForwardedProperties : .possible
 				}
+			}
+
+			/// The one suggested alternative, where it is the optional form of the property, the property's type is the
+			/// receiver's own constant type, and the receiver's mock is generated and builds the receiver itself (it forwards
+			/// nothing): the mock promotes the receive and builds it as the receiver, whose tree receives it still being built,
+			/// a dependency cycle a required receive of the suggestion closes. Received only if available, it is passed `nil`
+			/// there, and production hands it the value the suggestion names.
+			private var suggestedReceiveOnlyIfAvailableClosingNoCycleInMock: Property? {
+				guard suggestedAlternatives.count == 1,
+				      case let suggestedAlternative = suggestedAlternatives[0],
+				      suggestedAlternative.label == property.label,
+				      suggestedAlternative.typeDescription.isOptional,
+				      suggestedAlternative.typeDescription.unwrapped == property.typeDescription,
+				      property.propertyType.isConstant,
+				      instantiable.generatesMock,
+				      instantiable.instantiableTypes.contains(property.typeDescription.asInstantiatedType),
+				      !instantiable.dependencies.contains(where: { $0.source == .forwarded })
+				else { return nil }
+				return suggestedAlternative
 			}
 
 			/// A single `error:` line. The suggestion or fix hint is folded into it rather than emitted as a
@@ -3203,6 +3288,21 @@ public actor DependencyTreeGenerator {
 					} else {
 						" to fix."
 					}
+					// A declaration of the property above a mocked type whose tree declares the label in another form would leave
+					// the receive hidden in that mock, so the advice relabels those declarations too.
+					var possibleDeclarationEnd = instantiatedDeclarationEnd
+					if let lastHidingDeclaration = declarationsHidingReceiveInMocks.last {
+						let relabeling = if declarationsHidingReceiveInMocks.count == 1 {
+							"give \(lastHidingDeclaration.asSource) a different label"
+						} else {
+							"give \(declarationsHidingReceiveInMocks.dropLast().map(\.asSource).joined(separator: ", ")) and \(lastHidingDeclaration.asSource) different labels"
+						}
+						possibleDeclarationEnd = if property.typeDescription.isOptional {
+							", \(relabeling)\(instantiatedDeclarationEnd)"
+						} else {
+							", and \(relabeling), to fix."
+						}
+					}
 					// A forwarded property can be optional, and fulfills a required receive of exactly its type.
 					let forwardingRemedy = "`@\(Dependency.Source.forwardedRawValue) let \(property.asSource)` on a type below `\(root.asSource)` in the chain, and pass the value to the `Instantiator` that builds that type"
 					hint = if suggestedProperty.propertyType.isErasedInstantiator {
@@ -3211,10 +3311,14 @@ public actor DependencyTreeGenerator {
 					} else {
 						switch instantiatedDeclaration {
 						case .possible:
-							"Declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain\(instantiatedDeclarationEnd)"
+							sendableBoundaryAdvice?.hint(for: property)
+								?? "Declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain\(possibleDeclarationEnd)"
 						case .closesCycle:
 							// The remedies of the cycle error a declaration would lead to.
 							"Declaring `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` would close a dependency cycle wherever it is declared, because the tree of `\(suggestedProperty.typeDescription.asInstantiatedType.asSource)` requires `\(suggestedProperty.label)`, which is still being built there. \(DependencyTreeGeneratorError.onlyIfAvailableRemedy)"
+						case let .closesCycleThrough(requiredProperty):
+							// The remedies of the cycle error a declaration would lead to, wherever it is declared.
+							"Declaring `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` would close a dependency cycle wherever it is declared, because the tree of `\(suggestedProperty.typeDescription.asInstantiatedType.asSource)` receives `\(requiredProperty.asSource)`, which requires `\(suggestedProperty.label)`. \(DependencyTreeGeneratorError.onlyIfAvailableRemedy)"
 						case .typeHasForwardedProperties:
 							"`\(typeName)` has @\(Dependency.Source.forwardedRawValue) properties, so SafeDI builds it only through an `Instantiator`, never as an @\(Dependency.Source.instantiatedRawValue) constant. Declare \(forwardingRemedy), to fix."
 						case .typeIsNotInstantiable:
@@ -3223,6 +3327,12 @@ public actor DependencyTreeGenerator {
 							"No @\(InstantiableVisitor.macroName) declaration fulfills `\(fulfilledTypeName)`, so SafeDI cannot instantiate it. \(DependencyTreeGeneratorError.fulfillingDeclarationRemedy(typeName: fulfilledTypeName)), and declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain\(instantiatedDeclarationEnd) Or declare \(forwardingRemedy)."
 						}
 					}
+					fixIts = []
+				} else if suggestedAlternatives.count == 1, let suggestedReceive = suggestedReceiveOnlyIfAvailableClosingNoCycleInMock {
+					// Received as required, the suggested optional form of the receiver's own type is still being built when the
+					// receiver's mock builds the receiver, so the suggestion receives it only if available. That edits the
+					// attribute and the type, which one fix-it cannot span without rewriting what lies between them.
+					hint = "Did you mean `@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true) let \(suggestedReceive.asSource)`? Received as required, `\(suggestedReceive.asSource)` is still being built when the mock of `\(instantiable.concreteInstantiable.asSource)` builds `\(instantiable.concreteInstantiable.asSource)`."
 					fixIts = []
 				} else if suggestedAlternatives.count == 1 {
 					let suggestedAlternative = suggestedAlternatives[0]
@@ -5900,10 +6010,21 @@ public actor DependencyTreeGenerator {
 		// Every label's collision and every tier's omission is collected, so the seam reports each of its errors.
 		var errors = [DependencyTreeGeneratorError]()
 		func labelCollision(_ label: String, among collidingReceivers: [SeamReceiver]) -> DependencyTreeGeneratorError {
-			.seam(.init(seam: seam, kind: .parameters(.parametersShareLabel(
+			var remedy = Self.labelCollisionRemedy(among: collidingReceivers.map(\.property), requiredProperties: requiredProperties)
+			if case .declareProvidingForm = remedy,
+			   let requiredForm = Self.requiredFormOfWrapperOnlySeamReceives(
+			   	among: collidingReceivers.map { ($0.property, $0.declaringType) },
+			   	seam: seam.concreteInstantiable,
+			   	requiredProperties: requiredProperties,
+			   	instantiables: instantiables,
+			   )
+			{
+				remedy = .declareRequiredForm(requiredForm.typeDescription.asSource)
+			}
+			return .seam(.init(seam: seam, kind: .parameters(.parametersShareLabel(
 				label: label,
 				receivers: collidingReceivers.map(\.asErrorReceiver),
-				remedy: Self.labelCollisionRemedy(among: collidingReceivers.map(\.property), requiredProperties: requiredProperties),
+				remedy: remedy,
 			))))
 		}
 
@@ -6199,6 +6320,42 @@ public actor DependencyTreeGenerator {
 		guard wrapperKinds.isEmpty || !hasRequiredOptionalValue else { return .receiveTheSameWay }
 		let providingForm = forms.first(where: isWrapper) ?? forms[0]
 		return .declareProvidingForm(providingForm.typeDescription.unwrapped.asSource)
+	}
+
+	/// The by-value form of one label that a type of a seam's tree requires, where every wrapper form of the label is the
+	/// seam's own receive and no declaration `instantiables` holds outside the seam provides that wrapper: then
+	/// `labelCollisionRemedy(among:requiredProperties:)`'s providing form, the wrapper, is one nothing proves a caller
+	/// holds, while the tree's requirement of the value is a fact of the graph in hand. `nil` otherwise. Only the seam's
+	/// own collision asks: a fill's collision keeps the providing form, since its caller is the module that fills it.
+	static func requiredFormOfWrapperOnlySeamReceives(
+		among receivers: [(property: Property, declaringType: TypeDescription)],
+		seam: TypeDescription,
+		requiredProperties: Set<Property>,
+		instantiables: [TypeDescription: Instantiable],
+	) -> Property? {
+		let wrappers = receivers.filter { $0.property.typeDescription.unwrapped.lazilyInstantiatedInstanceType != nil }
+		guard !wrappers.isEmpty,
+		      wrappers.allSatisfy({ $0.declaringType == seam }),
+		      let requiredForm = receivers.first(where: { receiver in
+		      	receiver.property.typeDescription.lazilyInstantiatedInstanceType == nil
+		      		&& !receiver.property.typeDescription.isOptional
+		      		&& requiredProperties.contains(receiver.property)
+		      })?.property
+		else { return nil }
+		let wrapperProperties = Set(wrappers.map(\.property.asUnwrappedProperty))
+		// Whether any declaration outside the seam provides the wrapper; the answer, not an element, is what is used, so
+		// the dictionary's order decides nothing.
+		let wrapperProvidedOutsideSeam = instantiables.values.contains { instantiable in
+			instantiable.concreteInstantiable != seam && instantiable.dependencies.contains { dependency in
+				switch dependency.source {
+				case .instantiated, .forwarded, .aliased:
+					wrapperProperties.contains(dependency.property)
+				case .received:
+					false
+				}
+			}
+		}
+		return wrapperProvidedOutsideSeam ? nil : requiredForm
 	}
 
 	/// The one form that provides each of `forms`, the forms of one label a seam's tree receives from outside it that the
@@ -8444,6 +8601,93 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
+	/// The repairs of an unfulfilled receive of `receivedProperty`, a non-optional `Instantiator` or `LazilyInstantiated`,
+	/// inside the `@Sendable` function of the innermost `Sendable` wrapper on its chain, which cannot capture a declaration
+	/// made outside it; `nil` where no such wrapper is on the chain. Each repair is offered only where it passes what it
+	/// would meet: the wrapper's `Sendable` twin, declared beside the `Sendable` wrapper, where the tree of the type it
+	/// builds, now built in a `@Sendable` function, receives no `Instantiator`, `ErasedInstantiator` or
+	/// `LazilyInstantiated` it would capture; a declaration on a type inside the function where that tree requires no
+	/// value of the chain that function is still building, which would close a dependency cycle. A receive of an
+	/// optional wrapper, or of an `ErasedInstantiator`, whose declaration names the type it builds, keeps today's advice.
+	/// - Parameters:
+	///   - instantiationStack: The properties of `receiver` and of the scopes it is built inside, innermost first, each
+	///     lazily instantiated one as declared.
+	///   - parentTypeStack: The concrete types of the scopes `receiver` is built inside, innermost first.
+	private static func sendableBoundaryAdvice(
+		for receivedProperty: Property,
+		receivedBy receiver: Scope,
+		instantiationStack: [Property],
+		parentTypeStack: [TypeDescription],
+		root: TypeDescription,
+		typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
+	) -> DependencyTreeGeneratorError.UnfulfillableProperty.SendableBoundaryAdvice? {
+		let sendableTwinName: String
+		switch receivedProperty.propertyType {
+		case .instantiator:
+			sendableTwinName = Dependency.sendableInstantiatorType
+		case .lazilyInstantiated:
+			sendableTwinName = Dependency.sendableLazilyInstantiatedType
+		case .constant, .erasedInstantiator, .sendableInstantiator, .sendableErasedInstantiator, .sendableLazilyInstantiated:
+			return nil
+		}
+		guard case let .simple(_, generics) = receivedProperty.typeDescription,
+		      let boundaryIndex = instantiationStack.firstIndex(where: \.propertyType.isSendable),
+		      let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[receivedProperty.typeDescription.asInstantiatedType]
+		else { return nil }
+		func builtType(at index: Int) -> TypeDescription {
+			index == 0 ? receiver.instantiable.concreteInstantiable : parentTypeStack[index - 1]
+		}
+		let boundaryDeclaringType = boundaryIndex + 1 < instantiationStack.count ? builtType(at: boundaryIndex + 1) : root
+		let builtTreeCapturesNothing = !treeReceivesNonSendableWrapper(from: builtInstantiable, typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap)
+		let builtTreeRequiresNothingBeingBuilt = !instantiationStack[...boundaryIndex].contains { stackProperty in
+			!stackProperty.propertyType.isInstantiator
+				&& !stackProperty.propertyType.isErasedInstantiator
+				&& treeRequires(stackProperty.asValidatedForDependencyCycles, from: builtInstantiable, typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap)
+		}
+		return .init(
+			boundary: instantiationStack[boundaryIndex],
+			boundaryDeclaringType: boundaryDeclaringType,
+			builtType: builtType(at: boundaryIndex),
+			sendableForm: builtTreeCapturesNothing ? .simple(name: sendableTwinName, generics: generics) : nil,
+			typesInsideFunction: builtTreeRequiresNothingBeingBuilt ? (0...boundaryIndex).reversed().map(builtType(at:)) : [],
+		)
+	}
+
+	/// Whether the tree of `instantiable` receives an `Instantiator`, `ErasedInstantiator` or `LazilyInstantiated`, in
+	/// any form, that no type of the tree declares: a value a `@Sendable` function that builds `instantiable` would capture.
+	private static func treeReceivesNonSendableWrapper(
+		from instantiable: Instantiable,
+		typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
+	) -> Bool {
+		var reachedTypes: Set<TypeDescription> = [instantiable.concreteInstantiable]
+		var instantiablesToVisit = [instantiable]
+		var receivedWrappers = Set<Property>()
+		var declaredProperties = Set<Property>()
+		while let reachedInstantiable = instantiablesToVisit.popLast() {
+			for dependency in reachedInstantiable.dependencies {
+				switch dependency.source {
+				case .received:
+					receivedWrappers.insert(dependency.property.asUnwrappedProperty)
+				case let .aliased(fulfillingProperty, _, _):
+					receivedWrappers.insert(fulfillingProperty.asUnwrappedProperty)
+					declaredProperties.insert(dependency.property.asUnwrappedProperty)
+				case .instantiated:
+					declaredProperties.insert(dependency.property)
+					if let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[dependency.asInstantiatedType],
+					   reachedTypes.insert(builtInstantiable.concreteInstantiable).inserted
+					{
+						instantiablesToVisit.append(builtInstantiable)
+					}
+				case .forwarded:
+					declaredProperties.insert(dependency.property.asUnwrappedProperty)
+				}
+			}
+		}
+		return receivedWrappers.subtracting(declaredProperties).contains { property in
+			!property.propertyType.isConstant && !property.propertyType.isSendable
+		}
+	}
+
 	/// Whether the tree of `instantiable` – the types it builds, constants and builders alike, and theirs – requires
 	/// `property`, or its optional form, from above it: whether a type in it receives either without `onlyIfAvailable`, or
 	/// renames either without it, beneath no type of the tree that declares either form, the nearer declaration such a
@@ -10413,20 +10657,109 @@ public actor DependencyTreeGenerator {
 		/// receive in that tree resolves to the declaration still building it. The tree is walked through the declarations
 		/// the module's types fulfill, since a type no root reaches has no scope; only an unfulfillable receive asks, so the
 		/// walk runs only on the failure path.
-		func instantiatedDeclaration(of receivedProperty: Property) -> DependencyTreeGeneratorError.UnfulfillableProperty.InstantiatedDeclaration {
+		/// - Parameters:
+		///   - receiver: The scope that receives `receivedProperty`.
+		///   - instantiationStack: The properties of `receiver` and of the scopes it is built inside, innermost first, as
+		///     cycle validation sees them.
+		///   - root: The type at the root of the tree.
+		///   - closestDeclarationByLabel: The closest declaration of each label above `receiver`.
+		func instantiatedDeclaration(
+			of receivedProperty: Property,
+			receivedBy receiver: Scope,
+			instantiationStack: [Property],
+			root: TypeDescription,
+			closestDeclarationByLabel: [String: DependencyTreeGeneratorError.LabelDeclaration],
+		) -> DependencyTreeGeneratorError.UnfulfillableProperty.InstantiatedDeclaration {
 			let declaration = DependencyTreeGeneratorError.UnfulfillableProperty.InstantiatedDeclaration.of(receivedProperty, among: typeDescriptionToFulfillingInstantiableMap)
 			let declaredProperty = receivedProperty.asUnwrappedProperty
-			// An erased instantiator's declaration names the type it builds, which the hint leaves to the user. An
-			// instantiator's tree may receive that instantiator while it is still being built (see "Received builder loops"
-			// in `cycle-validation.md`), so only a constant or a `LazilyInstantiated` declaration can close a cycle.
+			// An erased instantiator's declaration names the type it builds, which the hint leaves to the user.
 			guard case .possible = declaration,
 			      !declaredProperty.propertyType.isErasedInstantiator,
-			      !declaredProperty.propertyType.isInstantiator,
 			      let declaredInstantiable = typeDescriptionToFulfillingInstantiableMap[declaredProperty.typeDescription.asInstantiatedType]
 			else { return declaration }
-			return Self.treeRequires(declaredProperty, from: declaredInstantiable, typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap)
-				? .closesCycle
-				: declaration
+			// An instantiator's tree may receive that instantiator while it is still being built (see "Received builder loops"
+			// in `cycle-validation.md`), so only a constant or a `LazilyInstantiated` declaration closes a cycle through itself.
+			if !declaredProperty.propertyType.isInstantiator,
+			   Self.treeRequires(declaredProperty, from: declaredInstantiable, typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap)
+			{
+				return .closesCycle
+			}
+			// Any declaration closes a cycle through the root's property for the chain, where the declaration's tree requires
+			// it, it is a value (a cycle through an instantiator alone is a loop of builders, accepted), and no type of the
+			// chain declares its label again: declared on the root, the two siblings require each other, and declared on any
+			// type of the chain, the declaration's tree receives the root's property while it is still being built. Where a
+			// type of the chain declares the label again, a declaration above that type would leave the tree's receive
+			// unfulfilled, which is no cycle, so the advice is today's.
+			guard let rootProperty = instantiationStack.last,
+			      rootProperty.propertyType.isConstant,
+			      let closestDeclaration = closestDeclarationByLabel[rootProperty.label],
+			      closestDeclaration.declaringType == root,
+			      closestDeclaration.property.asValidatedForDependencyCycles == rootProperty,
+			      !receiver.instantiable.dependencies.contains(where: { $0.property.label == rootProperty.label }),
+			      Self.treeRequires(rootProperty, from: declaredInstantiable, typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap)
+			else { return declaration }
+			return .closesCycleThrough(rootProperty)
+		}
+		/// The mocked types, each once, in type order, which `declarationsHidingReceiveInMocks(of:receivedBy:)` walks. Only
+		/// an unfulfillable receive asks, so the list is made on the failure path.
+		lazy var mockedInstantiables: [Instantiable] = {
+			var mockedTypes = Set<TypeDescription>()
+			return typeDescriptionToFulfillingInstantiableMap.values
+				.filter { $0.generatesMock && mockedTypes.insert($0.concreteInstantiable).inserted }
+				.sorted { $0.concreteInstantiable < $1.concreteInstantiable }
+		}()
+		var declarationsHidingReceiveByReceive = [Property: [TypeDescription: [DependencyTreeGeneratorError.UnfulfillableProperty.HidingDeclaration]]]()
+		/// The declarations of `receivedProperty`'s label that the tree of a type whose mock is generated holds closest
+		/// above a build of `receiver` and that do not provide the receive (its property, its unwrapped form, or a lazily
+		/// instantiated wrapper of either): a declaration of the property above the mocked type, as the advice for an
+		/// unfulfillable receive names, would leave the receive hidden in that mock. Each mocked type's tree is walked
+		/// depth first in declaration order, each type once, so each hiding declaration is met once, in an order no set
+		/// decides.
+		func declarationsHidingReceiveInMocks(of receivedProperty: Property, receivedBy receiver: TypeDescription) -> [DependencyTreeGeneratorError.UnfulfillableProperty.HidingDeclaration] {
+			if let memoized = declarationsHidingReceiveByReceive[receivedProperty]?[receiver] {
+				return memoized
+			}
+			let providingProperties: Set<Property> = [receivedProperty, receivedProperty.asUnwrappedProperty]
+			var hidingDeclarations = [DependencyTreeGeneratorError.UnfulfillableProperty.HidingDeclaration]()
+			for mockedInstantiable in mockedInstantiables {
+				var reachedTypes: Set<TypeDescription> = [mockedInstantiable.concreteInstantiable]
+				var instantiablesToVisit: [(instantiable: Instantiable, closestDeclaration: DependencyTreeGeneratorError.UnfulfillableProperty.HidingDeclaration?)] = [(mockedInstantiable, nil)]
+				while let instantiableToVisit = instantiablesToVisit.popLast() {
+					let reachedInstantiable = instantiableToVisit.instantiable
+					let closestDeclaration = instantiableToVisit.closestDeclaration
+					if reachedInstantiable.concreteInstantiable == receiver,
+					   let closestDeclaration,
+					   !providingProperties.contains(closestDeclaration.property),
+					   !providingProperties.contains(closestDeclaration.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding ?? closestDeclaration.property),
+					   !hidingDeclarations.contains(closestDeclaration)
+					{
+						hidingDeclarations.append(closestDeclaration)
+					}
+					var childClosestDeclaration = closestDeclaration
+					for dependency in reachedInstantiable.dependencies where dependency.property.label == receivedProperty.label {
+						switch dependency.source {
+						case .instantiated, .forwarded, .aliased:
+							childClosestDeclaration = .init(property: dependency.property, declaringType: reachedInstantiable.concreteInstantiable)
+						case .received:
+							continue
+						}
+					}
+					for dependency in reachedInstantiable.dependencies.reversed() {
+						switch dependency.source {
+						case .instantiated:
+							if let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[dependency.asInstantiatedType],
+							   reachedTypes.insert(builtInstantiable.concreteInstantiable).inserted
+							{
+								instantiablesToVisit.append((builtInstantiable, childClosestDeclaration))
+							}
+						case .received, .forwarded, .aliased:
+							continue
+						}
+					}
+				}
+			}
+			declarationsHidingReceiveByReceive[receivedProperty, default: [:]][receiver] = hidingDeclarations
+			return hidingDeclarations
 		}
 		/// Each hidden receive each root's tree reaches, with the one chain of scopes it is reported from: of every chain of
 		/// that tree that reaches it, the first the walk meets, which is the first in declaration order (see
@@ -11457,7 +11790,22 @@ public actor DependencyTreeGenerator {
 								|| receivedProperty.label == alternative.label)
 								&& closestDeclarationByLabel[alternative.label]?.fulfills(anyOf: [alternative, alternative.asUnwrappedProperty]) != false
 						}.sorted(),
-						instantiatedDeclaration: instantiatedDeclaration(of: receivedProperty),
+						instantiatedDeclaration: instantiatedDeclaration(
+							of: receivedProperty,
+							receivedBy: scope,
+							instantiationStack: instantiationStack,
+							root: root,
+							closestDeclarationByLabel: closestDeclarationByLabel,
+						),
+						sendableBoundaryAdvice: Self.sendableBoundaryAdvice(
+							for: receivedProperty,
+							receivedBy: scope,
+							instantiationStack: instantiationStack.map { lazilyInstantiatedDeclarations[$0] ?? $0 },
+							parentTypeStack: scopeToValidate.parentTypeStack,
+							root: root,
+							typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap,
+						),
+						declarationsHidingReceiveInMocks: declarationsHidingReceiveInMocks(of: receivedProperty, receivedBy: scope.instantiable.concreteInstantiable),
 					))
 				}
 			}
