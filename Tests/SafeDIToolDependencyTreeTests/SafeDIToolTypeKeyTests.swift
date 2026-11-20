@@ -250,10 +250,9 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 			        let x = LazilyInstantiated<X>(__safeDI_x)
 			        func __safeDI_aBuilder(x: LazilyInstantiated<X>) -> A {
 			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-			            func __safeDI_dBuilder() -> D {
-			                D(x: x.instance)
+			            let dBuilder = Instantiator<D> {
+			                __safeDI_dBuilder(x: x)
 			            }
-			            let dBuilder = Instantiator<D>(__safeDI_dBuilder)
 			            return A(midBuilder: midBuilder, dBuilder: dBuilder)
 			        }
 			        func __safeDI_midBuilder() -> Mid {
@@ -262,6 +261,9 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 			                __safeDI_aBuilder(x: x)
 			            }
 			            return Mid(x: x, aBuilder: aBuilder)
+			        }
+			        func __safeDI_dBuilder(x: LazilyInstantiated<X>) -> D {
+			            D(x: x.instance)
 			        }
 			        let aBuilder = Instantiator<A> {
 			            __safeDI_aBuilder(x: x)
@@ -296,11 +298,11 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 			            return Leaf(itemBuilder: itemBuilder)
 			        }
 			        let leaf: Leaf = __safeDI_leaf()
+			        @Sendable func __safeDI_leaf_() -> Leaf {
+			            let itemBuilder = SendableInstantiator<Item>(__safeDI_itemBuilder)
+			            return Leaf(itemBuilder: itemBuilder)
+			        }
 			        @Sendable func __safeDI_hostBuilder() -> Host {
-			            func __safeDI_leaf_() -> Leaf {
-			                let itemBuilder = SendableInstantiator<Item>(__safeDI_itemBuilder)
-			                return Leaf(itemBuilder: itemBuilder)
-			            }
 			            let leaf: Leaf = __safeDI_leaf_()
 			            return Host(leaf: leaf)
 			        }
@@ -314,8 +316,8 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_leavesSendableFamilyFunctionUndecorated_whenItCapturesBuildersNonSendableLocals() async throws {
-		// `Leaf` is built twice inside `Host`'s `@Sendable` builder function and reads `Host`'s `cache`, which is not `Sendable`. The shared function is in the `Sendable` family but captures `cache`, so it is not written `@Sendable`; Swift 6 rejects the decorated form, so the compile check is the test.
+	mutating func generate_decoratesSendableFamilyFunction_whenItTakesBuildersNonSendableLocalAsParameter() async throws {
+		// `Leaf` is built twice inside `Host`'s `@Sendable` builder function and reads `Host`'s `cache`, which is not `Sendable`. Every builder function is declared in the root's body, so the shared function takes `cache` as a parameter, captures nothing, and is written `@Sendable` with the rest of its family; Swift 6 accepts it, so the compile check is the test.
 		try await expectTypeKeyTree(
 			of: [
 				Self.type("Root", isRoot: true, "@Instantiated let hostBuilder: SendableInstantiator<Host>"),
@@ -328,21 +330,25 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 			equals: """
 			extension Root {
 			    public convenience init() {
+			        @Sendable func __safeDI_a(cache: Cache) -> A {
+			            let leafBuilder = Instantiator<Leaf> {
+			                __safeDI_leafBuilder(cache: cache)
+			            }
+			            return A(leafBuilder: leafBuilder)
+			        }
+			        @Sendable func __safeDI_leafBuilder(cache: Cache) -> Leaf {
+			            Leaf(cache: cache)
+			        }
+			        @Sendable func __safeDI_b(cache: Cache) -> B {
+			            let leafBuilder = Instantiator<Leaf> {
+			                __safeDI_leafBuilder(cache: cache)
+			            }
+			            return B(leafBuilder: leafBuilder)
+			        }
 			        @Sendable func __safeDI_hostBuilder() -> Host {
 			            let cache = Cache()
-			            func __safeDI_leafBuilder() -> Leaf {
-			                Leaf(cache: cache)
-			            }
-			            func __safeDI_a() -> A {
-			                let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			                return A(leafBuilder: leafBuilder)
-			            }
-			            let a: A = __safeDI_a()
-			            func __safeDI_b() -> B {
-			                let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			                return B(leafBuilder: leafBuilder)
-			            }
-			            let b: B = __safeDI_b()
+			            let a: A = __safeDI_a(cache: cache)
+			            let b: B = __safeDI_b(cache: cache)
 			            return Host(cache: cache, a: a, b: b)
 			        }
 			        let hostBuilder = SendableInstantiator<Host>(__safeDI_hostBuilder)
@@ -355,8 +361,8 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_placesSharedFunctionInLowestCommonBody_whenEveryPlaceIsBeneathOneChild() async throws {
-		// `Leaf` has six places beneath `Screen`, whose parents `Screen` declares in an order that is neither their file order nor its reverse, and one near miss under `Other`, which reads the root's lazy `service` and so is another class. The six share one function in `Screen`'s body; the near miss keeps its own.
+	mutating func generate_placesSharedFunctionInRootBody_whenEveryPlaceIsBeneathOneChild() async throws {
+		// `Leaf` has six places beneath `Screen`, whose parents `Screen` declares in an order that is neither their file order nor its reverse, and one near miss under `Other`, which reads the root's lazy `service` and so is another class. The six share one function in the root's body, which takes `Screen`'s `service` as a parameter; the near miss keeps its own.
 		try await expectTypeKeyTree(
 			of: [
 				Self.type("Root", isRoot: true, "@Instantiated let service: LazilyInstantiated<Service>", "@Instantiated let screen: Screen", "@Instantiated let other: Other"),
@@ -378,48 +384,60 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 			            Service()
 			        }
 			        let service = LazilyInstantiated<Service>(__safeDI_service)
+			        func __safeDI_p3(service: Service) -> P3 {
+			            let leafBuilder = Instantiator<Leaf> {
+			                __safeDI_leafBuilder(service: service)
+			            }
+			            return P3(leafBuilder: leafBuilder)
+			        }
+			        func __safeDI_leafBuilder(service: Service) -> Leaf {
+			            Leaf(service: service)
+			        }
+			        func __safeDI_p0(service: Service) -> P0 {
+			            let leafBuilder = Instantiator<Leaf> {
+			                __safeDI_leafBuilder(service: service)
+			            }
+			            return P0(leafBuilder: leafBuilder)
+			        }
+			        func __safeDI_p5(service: Service) -> P5 {
+			            let leafBuilder = Instantiator<Leaf> {
+			                __safeDI_leafBuilder(service: service)
+			            }
+			            return P5(leafBuilder: leafBuilder)
+			        }
+			        func __safeDI_p1(service: Service) -> P1 {
+			            let leafBuilder = Instantiator<Leaf> {
+			                __safeDI_leafBuilder(service: service)
+			            }
+			            return P1(leafBuilder: leafBuilder)
+			        }
+			        func __safeDI_p4(service: Service) -> P4 {
+			            let leafBuilder = Instantiator<Leaf> {
+			                __safeDI_leafBuilder(service: service)
+			            }
+			            return P4(leafBuilder: leafBuilder)
+			        }
+			        func __safeDI_p2(service: Service) -> P2 {
+			            let leafBuilder = Instantiator<Leaf> {
+			                __safeDI_leafBuilder(service: service)
+			            }
+			            return P2(leafBuilder: leafBuilder)
+			        }
 			        func __safeDI_screen() -> Screen {
 			            let service = Service()
-			            func __safeDI_leafBuilder() -> Leaf {
-			                Leaf(service: service)
-			            }
-			            func __safeDI_p3() -> P3 {
-			                let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			                return P3(leafBuilder: leafBuilder)
-			            }
-			            let p3: P3 = __safeDI_p3()
-			            func __safeDI_p0() -> P0 {
-			                let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			                return P0(leafBuilder: leafBuilder)
-			            }
-			            let p0: P0 = __safeDI_p0()
-			            func __safeDI_p5() -> P5 {
-			                let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			                return P5(leafBuilder: leafBuilder)
-			            }
-			            let p5: P5 = __safeDI_p5()
-			            func __safeDI_p1() -> P1 {
-			                let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			                return P1(leafBuilder: leafBuilder)
-			            }
-			            let p1: P1 = __safeDI_p1()
-			            func __safeDI_p4() -> P4 {
-			                let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			                return P4(leafBuilder: leafBuilder)
-			            }
-			            let p4: P4 = __safeDI_p4()
-			            func __safeDI_p2() -> P2 {
-			                let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			                return P2(leafBuilder: leafBuilder)
-			            }
-			            let p2: P2 = __safeDI_p2()
+			            let p3: P3 = __safeDI_p3(service: service)
+			            let p0: P0 = __safeDI_p0(service: service)
+			            let p5: P5 = __safeDI_p5(service: service)
+			            let p1: P1 = __safeDI_p1(service: service)
+			            let p4: P4 = __safeDI_p4(service: service)
+			            let p2: P2 = __safeDI_p2(service: service)
 			            return Screen(service: service, p3: p3, p0: p0, p5: p5, p1: p1, p4: p4, p2: p2)
 			        }
 			        let screen: Screen = __safeDI_screen()
+			        func __safeDI_leafBuilder_() -> Leaf {
+			            Leaf(service: service.instance)
+			        }
 			        func __safeDI_other() -> Other {
-			            func __safeDI_leafBuilder_() -> Leaf {
-			                Leaf(service: service.instance)
-			            }
 			            let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder_)
 			            return Other(leafBuilder: leafBuilder)
 			        }
@@ -451,11 +469,11 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_charlie() -> Leaf {
-			            func __safeDI_itemBuilder() -> Item {
-			                Item()
-			            }
 			            let itemBuilder = Instantiator<Item>(__safeDI_itemBuilder)
 			            return Leaf(itemBuilder: itemBuilder)
+			        }
+			        func __safeDI_itemBuilder() -> Item {
+			            Item()
 			        }
 			        func __safeDI_p3() -> P3 {
 			            let charlie = Instantiator<Leaf>(__safeDI_charlie)
@@ -716,21 +734,23 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 			        let x = X()
 			        func __safeDI_aBuilder(x: LazilyInstantiated<X>) -> A {
 			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-			            func __safeDI_dBuilder() -> D {
-			                D(x: x.instance)
+			            let dBuilder = Instantiator<D> {
+			                __safeDI_dBuilder(x: x)
 			            }
-			            let dBuilder = Instantiator<D>(__safeDI_dBuilder)
 			            return A(midBuilder: midBuilder, dBuilder: dBuilder)
 			        }
 			        func __safeDI_midBuilder() -> Mid {
-			            func __safeDI_x() -> X {
-			                X()
-			            }
 			            let x = LazilyInstantiated<X>(__safeDI_x)
 			            let aBuilder = Instantiator<A> {
 			                __safeDI_aBuilder(x: x)
 			            }
 			            return Mid(x: x, aBuilder: aBuilder)
+			        }
+			        func __safeDI_x() -> X {
+			            X()
+			        }
+			        func __safeDI_dBuilder(x: LazilyInstantiated<X>) -> D {
+			            D(x: x.instance)
 			        }
 			        let aBuilder = Instantiator<A> {
 			            __safeDI_aBuilder(x: LazilyInstantiated<X> { x })
@@ -764,10 +784,9 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 			        let x = LazilyInstantiated<X>(__safeDI_x)
 			        func __safeDI_aBuilder(x: LazilyInstantiated<X>) -> A {
 			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-			            func __safeDI_dBuilder() -> D {
-			                D(x: x.instance)
+			            let dBuilder = Instantiator<D> {
+			                __safeDI_dBuilder(x: x)
 			            }
-			            let dBuilder = Instantiator<D>(__safeDI_dBuilder)
 			            return A(midBuilder: midBuilder, dBuilder: dBuilder)
 			        }
 			        func __safeDI_midBuilder() -> Mid {
@@ -776,6 +795,9 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 			                __safeDI_aBuilder(x: LazilyInstantiated<X> { x })
 			            }
 			            return Mid(x: x, aBuilder: aBuilder)
+			        }
+			        func __safeDI_dBuilder(x: LazilyInstantiated<X>) -> D {
+			            D(x: x.instance)
 			        }
 			        let aBuilder = Instantiator<A> {
 			            __safeDI_aBuilder(x: x)
@@ -806,10 +828,9 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 			        let x = X()
 			        func __safeDI_aBuilder(x: X) -> A {
 			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-			            func __safeDI_dBuilder() -> D {
-			                D(x: x)
+			            let dBuilder = Instantiator<D> {
+			                __safeDI_dBuilder(x: x)
 			            }
-			            let dBuilder = Instantiator<D>(__safeDI_dBuilder)
 			            return A(midBuilder: midBuilder, dBuilder: dBuilder)
 			        }
 			        func __safeDI_midBuilder() -> Mid {
@@ -818,6 +839,9 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 			                __safeDI_aBuilder(x: x)
 			            }
 			            return Mid(x: x, aBuilder: aBuilder)
+			        }
+			        func __safeDI_dBuilder(x: X) -> D {
+			            D(x: x)
 			        }
 			        let aBuilder = Instantiator<A> {
 			            __safeDI_aBuilder(x: x)

@@ -92,11 +92,7 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		            return Thing(leaf: leaf)
 		        }
 		        let `default`: Thing = __safeDI_default()
-		        func __safeDI_class() -> Thing {
-		            let leaf = Leaf()
-		            return Thing(leaf: leaf)
-		        }
-		        let `class` = Instantiator<Thing>(__safeDI_class)
+		        let `class` = Instantiator<Thing>(__safeDI_default)
 		        self.init(default: `default`, class: `class`)
 		    }
 		}
@@ -1417,11 +1413,8 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 		        let childBuilder = ErasedInstantiator<(`class`: Leaf, `default`: Leaf), Screen> {
 		            __safeDI_childBuilder(class: $0.`class`, default: $0.`default`)
 		        }
-		        func __safeDI_escapedChildBuilder(`class`: Leaf, `default`: Leaf) -> Child {
-		            Child(class: `class`, default: `default`)
-		        }
 		        let escapedChildBuilder = ErasedInstantiator<(`class`: Leaf, `default`: Leaf), Screen> {
-		            __safeDI_escapedChildBuilder(class: $0.`class`, default: $0.`default`)
+		            __safeDI_childBuilder(class: $0.`class`, default: $0.`default`)
 		        }
 		        self.init(childBuilder: childBuilder, escapedChildBuilder: escapedChildBuilder)
 		    }
