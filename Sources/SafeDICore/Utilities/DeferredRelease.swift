@@ -26,14 +26,49 @@
 	import Musl
 #endif
 
-/// Releases the objects of a tree one at a time.
+/// The part of an object that owns the next level of a tree: the values it holds the last references to, which its
+/// deinitialization releases through `DeferredRelease` rather than from within it.
 ///
 /// An object that owns the next level of a tree releases it when it is deinitialized, and each object of that level
 /// releases the level below it from its own deinitializer, nested inside the first. A tree as deep as a module has
 /// types would nest a deinitializer for each level on the thread's stack, which a concurrency thread's half megabyte
-/// cannot hold. A deinitializer hands what it owns to `release(_:)` instead: the first one on a thread releases it,
-/// and the deinitializers that run while it does hand theirs over to it too, so it releases each level after the one
-/// above, never inside it.
+/// cannot hold. An object holds such values in a `let` of this type instead: the slot is never copied and never
+/// changes after `init`, so an object that is `Sendable` stays so without a mutable stored property, and when the object
+/// is deinitialized the slot moves its values out and hands them to `DeferredRelease`, so that no reference to them
+/// outlives the hand-over.
+struct DeferredReleaseSlot<Value: RangeReplaceableCollection & Sendable>: ~Copyable, Sendable {
+	init(_ value: Value) {
+		storage = Storage(value: value)
+	}
+
+	deinit {
+		// `storage` is noncopyable, so the deinitializer can consume it, and the consumed copy is mutable, so its value
+		// can be swapped out: a copyable stored property of a deinitializer's `self` can be neither.
+		var storage = consume storage
+		var value = Value()
+		swap(&value, &storage.value)
+		DeferredRelease.release(consume value)
+	}
+
+	/// The values the slot holds.
+	var value: Value {
+		storage.value
+	}
+
+	/// Holds `value` in a noncopyable type, which the slot's deinitializer can consume.
+	private struct Storage: ~Copyable {
+		var value: Value
+	}
+
+	private let storage: Storage
+}
+
+/// Releases the objects of a tree one at a time.
+///
+/// A deinitializer hands what it owns to `release(_:)`: the first one on a thread releases it, and the deinitializers
+/// that run while it does hand theirs over to it too, so it releases each level after the one above, never inside it.
+/// An object whose owned values never change after `init` holds them in a `DeferredReleaseSlot`, which hands them over
+/// for it; one that changes them after `init` (`Scope`) swaps them out in its own `deinit` and calls `release(_:)`.
 enum DeferredRelease {
 	/// Releases `ownedValues`, which must hold the last references to what they hold: after the deinitializer that
 	/// called this returns when this thread is already releasing, and now otherwise. A caller moves the values out
