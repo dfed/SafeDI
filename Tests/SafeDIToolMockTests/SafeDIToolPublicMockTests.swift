@@ -2272,7 +2272,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// `T? = nil`, an optional forwarded one defaulting to its provider, a required received dependency nothing builds,
 		// a builder for an instantiated one nothing fulfills, handed a public scope struct of the values built before it,
 		// a received dependency the mock builds through a builder function, an alias in the tree, and an optional default
-		// whose default is `nil`, which needs no provider.
+		// whose default is `nil`, a parameter of `mock()` beside the mock's `SafeDIOverrides` that needs no provider.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2400,37 +2400,30 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    nonisolated public struct SafeDIOverrides {
 			        public init(
 			            config: __safeDI_Config_MockConfiguration = .init(),
-			            child: ((Config, Config) -> Child)? = nil,
-			            onCancel: (() -> Void)? = nil
+			            child: ((Config, Config) -> Child)? = nil
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
 			                config: config,
-			                child: child,
-			                onCancel: onCancel
+			                child: child
 			            )
 			        }
 
 			        public var config: __safeDI_Config_MockConfiguration { __safeDI_storage.config }
 			        public var child: ((Config, Config) -> Child)? { __safeDI_storage.child }
-			        /// The value of `Service`’s `onCancel`, `nil` unless set.
-			        public var onCancel: (() -> Void)? { __safeDI_storage.onCancel }
 
 			        private let __safeDI_storage: __safeDI_Storage
 
 			        private final class __safeDI_Storage {
 			            init(
 			                config: __safeDI_Config_MockConfiguration,
-			                child: ((Config, Config) -> Child)?,
-			                onCancel: (() -> Void)?
+			                child: ((Config, Config) -> Child)?
 			            ) {
 			                self.config = config
 			                self.child = child
-			                self.onCancel = onCancel
 			            }
 
 			            let config: __safeDI_Config_MockConfiguration
 			            let child: ((Config, Config) -> Child)?
-			            let onCancel: (() -> Void)?
 			        }
 			    }
 
@@ -2438,12 +2431,13 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        count: Int? = nil,
 			        name: String,
 			        tag: String? = Service.__safeDI_publicMockDefault_tag(),
+			        onCancel: (() -> Void)? = nil,
 			        token: Token,
 			        thingBuilder: @escaping () -> Thing,
 			        config: Config? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Service {
-			        Service.__safeDI_mock(count: count, name: name, tag: tag, token: token, thingBuilder: .init(__safeDI_noScope: thingBuilder), config: config, safeDIOverrides: safeDIOverrides)
+			        Service.__safeDI_mock(count: count, name: name, tag: tag, onCancel: onCancel, token: token, thingBuilder: .init(__safeDI_noScope: thingBuilder), config: config, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
@@ -2451,6 +2445,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        count: Int? = nil,
 			        name: String,
 			        tag: String? = Service.__safeDI_publicMockDefault_tag(),
+			        onCancel: (() -> Void)? = nil,
 			        token: Token,
 			        thingBuilder __safeDI_thingBuilder: Service.SafeDIMockScope_Thing.__safeDI_Builder<Thing>,
 			        config: Config? = nil,
@@ -2469,12 +2464,12 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        }
 			        let child: Child = __safeDI_child()
 			        let thing: Thing = __safeDI_thingBuilder.thing(SafeDIMockScope_Thing.thing_Values(name: name, count: count, tag: tag, token: token, config: config, child: child))
-			        return Service(name: name, count: count, tag: tag, token: token, thing: thing, child: child, onCancel: safeDIOverrides.onCancel)
+			        return Service(name: name, count: count, tag: tag, token: token, thing: thing, child: child, onCancel: onCancel)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_mock_77454EB8BDFB1BEC {}
+			    public enum __safeDI_Service_mock_EEE095B6BC838221 {}
 			}
 			#endif
 			""",
@@ -3327,37 +3322,31 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    /// Overrides for the mock dependency tree.
 			    nonisolated public struct SafeDIOverrides {
 			        public init(
-			            bBuilder: __safeDI_B_MockConfiguration = .init(),
-			            tag: String? = A.__safeDI_publicMockDefault_tag()
+			            bBuilder: __safeDI_B_MockConfiguration = .init()
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
-			                bBuilder: bBuilder,
-			                tag: tag
+			                bBuilder: bBuilder
 			            )
 			        }
 
 			        public var bBuilder: __safeDI_B_MockConfiguration { __safeDI_storage.bBuilder }
-			        /// The default of `A`’s `tag` unless set; `.init(tag: nil)` passes `nil`.
-			        public var tag: String? { __safeDI_storage.tag }
 
 			        private let __safeDI_storage: __safeDI_Storage
 
 			        private final class __safeDI_Storage {
 			            init(
-			                bBuilder: __safeDI_B_MockConfiguration,
-			                tag: String?
+			                bBuilder: __safeDI_B_MockConfiguration
 			            ) {
 			                self.bBuilder = bBuilder
-			                self.tag = tag
 			            }
 
 			            let bBuilder: __safeDI_B_MockConfiguration
-			            let tag: String?
 			        }
 			    }
 
 			    public static func mock(
 			        label: String? = nil,
+			        tag: String? = A.__safeDI_publicMockDefault_tag(),
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
 			        let label = label ?? ("a")
@@ -3370,12 +3359,12 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            return B.__safeDI_init(aBuilder: aBuilder, safeDIBuilder: safeDIOverrides.bBuilder.safeDIBuilder)
 			        }
 			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-			        return A(bBuilder: bBuilder, label: label, tag: safeDIOverrides.tag)
+			        return A(bBuilder: bBuilder, label: label, tag: tag)
 			    }
 			}
 
 			extension A {
-			    public enum __safeDI_A_mock_C0F16A51E96B1930 {}
+			    public enum __safeDI_A_mock_0740CA04F08F73DE {}
 			}
 			#endif
 			""",
@@ -5006,8 +4995,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_generatesPublicAndPackageTiers_whenCanonicalServiceTakesPackageParameter() async throws {
 		// M2.2, M3.14, M3.18, M3.18b, M4.1, M4.2, M5.5, M5.3, M6.1, M6.3, M6.3b: the canonical `Service`. Its public tier
-		// omits the package `session`, which its package tier takes; `name` and `policy` are fields of `SafeDIOverrides`,
-		// `policy` `package`, as `Policy`'s declaration is; another package calls the public tier.
+		// omits the package `session`, which its package tier takes; `name` and `policy` are parameters of `mock()`, as an
+		// internal mock takes them, `policy` only of the package tier, as `Policy`'s declaration is, which the public tier
+		// passes its provider's value; another package calls the public tier.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.canonicalModules(appCaller: Self.canonicalAppCaller),
 			integration: .moduleInfo,
@@ -5078,16 +5068,13 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        public init(
 			            logger: __safeDI_Core_FakeLogger_MockConfiguration = .init(),
 			            analytics: (() -> Analytics)? = nil,
-			            tokenCache: __safeDI_Core_TokenCache_MockConfiguration = .init(),
-			            name: String? = Service.__safeDI_publicMockDefault_name()
+			            tokenCache: __safeDI_Core_TokenCache_MockConfiguration = .init()
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
 			                logger: logger,
 			                analytics: analytics,
 			                session: nil,
-			                tokenCache: tokenCache,
-			                name: name,
-			                policy: Service.__safeDI_publicMockDefault_policy()
+			                tokenCache: tokenCache
 			            )
 			        }
 
@@ -5095,17 +5082,13 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            logger: __safeDI_Core_FakeLogger_MockConfiguration = .init(),
 			            analytics: (() -> Analytics)? = nil,
 			            session: (() -> Session)? = nil,
-			            tokenCache: __safeDI_Core_TokenCache_MockConfiguration = .init(),
-			            name: String? = Service.__safeDI_publicMockDefault_name(),
-			            policy: Policy? = Service.__safeDI_publicMockDefault_policy()
+			            tokenCache: __safeDI_Core_TokenCache_MockConfiguration = .init()
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
 			                logger: logger,
 			                analytics: analytics,
 			                session: session,
-			                tokenCache: tokenCache,
-			                name: name,
-			                policy: policy
+			                tokenCache: tokenCache
 			            )
 			        }
 
@@ -5113,10 +5096,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
 			        package var session: (() -> Session)? { __safeDI_storage.session }
 			        public var tokenCache: __safeDI_Core_TokenCache_MockConfiguration { __safeDI_storage.tokenCache }
-			        /// The default of `Service`’s `name` unless set; `.init(name: nil)` passes `nil`.
-			        public var name: String? { __safeDI_storage.name }
-			        /// The default of `Service`’s `policy` unless set; `.init(policy: nil)` passes `nil`.
-			        package var policy: Policy? { __safeDI_storage.policy }
 
 			        private let __safeDI_storage: __safeDI_Storage
 
@@ -5125,38 +5104,35 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			                logger: __safeDI_Core_FakeLogger_MockConfiguration,
 			                analytics: (() -> Analytics)?,
 			                session: (() -> Session)?,
-			                tokenCache: __safeDI_Core_TokenCache_MockConfiguration,
-			                name: String?,
-			                policy: Policy?
+			                tokenCache: __safeDI_Core_TokenCache_MockConfiguration
 			            ) {
 			                self.logger = logger
 			                self.analytics = analytics
 			                self.session = session
 			                self.tokenCache = tokenCache
-			                self.name = name
-			                self.policy = policy
 			            }
 
 			            let logger: __safeDI_Core_FakeLogger_MockConfiguration
 			            let analytics: (() -> Analytics)?
 			            let session: (() -> Session)?
 			            let tokenCache: __safeDI_Core_TokenCache_MockConfiguration
-			            let name: String?
-			            let policy: Policy?
 			        }
 			    }
 
 			    public static func mock(
 			        retries: Int? = nil,
+			        name: String? = Service.__safeDI_publicMockDefault_name(),
 			        analytics: LazilyInstantiated<Analytics>? = nil,
 			        theme: Theme? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Service {
-			        Service.mock(retries: retries, analytics: analytics, session: nil, theme: theme, safeDIOverrides: safeDIOverrides)
+			        Service.mock(retries: retries, name: name, policy: Service.__safeDI_publicMockDefault_policy(), analytics: analytics, session: nil, theme: theme, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    package static func mock(
 			        retries: Int? = nil,
+			        name: String? = Service.__safeDI_publicMockDefault_name(),
+			        policy: Policy? = Service.__safeDI_publicMockDefault_policy(),
 			        analytics: LazilyInstantiated<Analytics>? = nil,
 			        session: Session? = nil,
 			        theme: Theme? = nil,
@@ -5176,7 +5152,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            return TokenCache.__safeDI_init(analytics: analytics.instance, session: session, theme: theme, capacity: safeDIOverrides.tokenCache.capacity, safeDIBuilder: safeDIOverrides.tokenCache.safeDIBuilder)
 			        }
 			        let tokenCache: TokenCache = __safeDI_tokenCache()
-			        return Service(analytics: analytics, logger: logger, tokenCache: tokenCache, retries: retries, name: safeDIOverrides.name, policy: safeDIOverrides.policy)
+			        return Service(analytics: analytics, logger: logger, tokenCache: tokenCache, retries: retries, name: name, policy: policy)
 			    }
 			}
 
@@ -5717,7 +5693,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	mutating func generate_takesOwnOptionalDefaultsAsParametersWithIsolatedProviders_whenTypeIsBoundToGlobalActor() async throws {
 		// M6.3b: `Dashboard` is bound to the main actor, so its `mock()` is, and its own optional default reads the actor's
 		// state, as an internal mock's parameter default may. The default is a parameter of `mock()` whose provider shares
-		// its isolation, never a field of the nonisolated `SafeDIOverrides` initializer, whose default could not call it.
+		// its isolation, as every public mock takes its own optional-typed defaults.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -5857,8 +5833,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_commentsOnNonisolatedProviders_whenTypeIsIsolatedByConformanceSafeDICannotSee() async throws {
 		// D530-3, decision 53: `ProfileView` is isolated by its conformance to `Screenish`, which SafeDI cannot see, so the
-		// provider of its own optional default is `nonisolated`, as the field of `SafeDIOverrides` that calls it is, and a
-		// comment above it names the opt-in for a default that reads the actor's state. A literal default compiles.
+		// provider of its own optional default, which `mock()` takes as a parameter although the mock has a
+		// `SafeDIOverrides`, is `nonisolated`, and a comment above it names the opt-in for a default that reads the actor's
+		// state. A literal default compiles.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				Self.inferredIsolationDeclarations,
@@ -5888,45 +5865,39 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    /// Overrides for the mock dependency tree.
 			    nonisolated public struct SafeDIOverrides {
 			        public init(
-			            theme: (() -> Theme)? = nil,
-			            label: String? = ProfileView.__safeDI_publicMockDefault_label()
+			            theme: (() -> Theme)? = nil
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
-			                theme: theme,
-			                label: label
+			                theme: theme
 			            )
 			        }
 
 			        public var theme: (() -> Theme)? { __safeDI_storage.theme }
-			        /// The default of `ProfileView`’s `label` unless set; `.init(label: nil)` passes `nil`.
-			        public var label: String? { __safeDI_storage.label }
 
 			        private let __safeDI_storage: __safeDI_Storage
 
 			        private final class __safeDI_Storage {
 			            init(
-			                theme: (() -> Theme)?,
-			                label: String?
+			                theme: (() -> Theme)?
 			            ) {
 			                self.theme = theme
-			                self.label = label
 			            }
 
 			            let theme: (() -> Theme)?
-			            let label: String?
 			        }
 			    }
 
 			    public static func mock(
+			        label: String? = ProfileView.__safeDI_publicMockDefault_label(),
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> ProfileView {
 			        let theme = if let safeDIBuilder = safeDIOverrides.theme { safeDIBuilder() } else { Theme() }
-			        return ProfileView(theme: theme, label: safeDIOverrides.label)
+			        return ProfileView(theme: theme, label: label)
 			    }
 			}
 
 			extension ProfileView {
-			    public enum __safeDI_ProfileView_mock_51799E6AA5E7B634 {}
+			    public enum __safeDI_ProfileView_mock_81EB86AE43991940 {}
 			}
 			#endif
 			""",
@@ -6234,10 +6205,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				    _ = Service.mock(inner2: Outer.Inner(), onSelect: { _ in }, sendableSelect: {}, size: (1, 2), tags: [], baseTheme: BaseTheme(), onTap: {}, pair: (1, true), sendableTap: {}, theme: Theme())
 				    _ = Service.mock(
 				        inner2: Outer.Inner(), onSelect: { _ in }, sendableSelect: {}, size: (1, 2), tags: ["a"],
-				        retries: 9, onFinish: {}, baseTheme: BaseTheme(), onTap: {}, pair: (1, true), sendableTap: {}, theme: Theme(),
+				        retries: 9, onFinish: {}, title: nil, onCancel: {}, baseTheme: BaseTheme(), onTap: {}, pair: (1, true), sendableTap: {}, theme: Theme(),
 				        analytics: Analytics(), auth: DefaultAuth(), inner: Outer.Inner(), onDismiss: {}, optionalAuth: DefaultAuth(),
 				        sessionBuilder: Instantiator<Session> { Session() },
-				        safeDIOverrides: .init(auth: { DefaultAuth() }, leaf: .init(capacity: 3, onDone: {}, names: ["n"], label: nil), title: nil, onCancel: {})
+				        safeDIOverrides: .init(auth: { DefaultAuth() }, leaf: .init(capacity: 3, onDone: {}, names: ["n"], label: nil))
 				    )
 				}
 				#endif
@@ -6268,18 +6239,14 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            inner: (() -> Outer.Inner)? = nil,
 		            analytics: (() -> Analytics)? = nil,
 		            sessionBuilder: (() -> Session)? = nil,
-		            leaf: __safeDI_Core_Leaf_MockConfiguration = .init(),
-		            title: String? = Service.__safeDI_publicMockDefault_title(),
-		            onCancel: (() -> Void)? = nil
+		            leaf: __safeDI_Core_Leaf_MockConfiguration = .init()
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                auth: auth,
 		                inner: inner,
 		                analytics: analytics,
 		                sessionBuilder: sessionBuilder,
-		                leaf: leaf,
-		                title: title,
-		                onCancel: onCancel
+		                leaf: leaf
 		            )
 		        }
 
@@ -6288,10 +6255,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        public var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
 		        public var sessionBuilder: (() -> Session)? { __safeDI_storage.sessionBuilder }
 		        public var leaf: __safeDI_Core_Leaf_MockConfiguration { __safeDI_storage.leaf }
-		        /// The default of `Service`’s `title` unless set; `.init(title: nil)` passes `nil`.
-		        public var title: String? { __safeDI_storage.title }
-		        /// The value of `Service`’s `onCancel`, `nil` unless set.
-		        public var onCancel: (() -> Void)? { __safeDI_storage.onCancel }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -6301,17 +6264,13 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                inner: (() -> Outer.Inner)?,
 		                analytics: (() -> Analytics)?,
 		                sessionBuilder: (() -> Session)?,
-		                leaf: __safeDI_Core_Leaf_MockConfiguration,
-		                title: String?,
-		                onCancel: (() -> Void)?
+		                leaf: __safeDI_Core_Leaf_MockConfiguration
 		            ) {
 		                self.auth = auth
 		                self.inner = inner
 		                self.analytics = analytics
 		                self.sessionBuilder = sessionBuilder
 		                self.leaf = leaf
-		                self.title = title
-		                self.onCancel = onCancel
 		            }
 
 		            let auth: (() -> any Auth)?
@@ -6319,8 +6278,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            let analytics: (() -> Analytics)?
 		            let sessionBuilder: (() -> Session)?
 		            let leaf: __safeDI_Core_Leaf_MockConfiguration
-		            let title: String?
-		            let onCancel: (() -> Void)?
 		        }
 		    }
 
@@ -6333,6 +6290,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        tags: [String],
 		        retries: Int? = nil,
 		        onFinish: (() -> Void)? = nil,
+		        title: String? = Service.__safeDI_publicMockDefault_title(),
+		        onCancel: (() -> Void)? = nil,
 		        baseTheme: BaseTheme,
 		        onTap: @escaping () -> Void,
 		        pair: (Int, Bool),
@@ -6346,7 +6305,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        sessionBuilder: Instantiator<Session>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
-		        Service.mock(inner2: inner2, onSelect: onSelect, sendableSelect: sendableSelect, size: size, tags: tags, retries: retries, onFinish: onFinish, baseTheme: baseTheme, onTap: onTap, pair: pair, sendableTap: sendableTap, theme: theme, analytics: analytics, auth: auth, handler: nil, inner: inner, onDismiss: onDismiss, optionalAuth: optionalAuth, sessionBuilder: sessionBuilder, safeDIOverrides: safeDIOverrides)
+		        Service.mock(inner2: inner2, onSelect: onSelect, sendableSelect: sendableSelect, size: size, tags: tags, retries: retries, onFinish: onFinish, title: title, onCancel: onCancel, baseTheme: baseTheme, onTap: onTap, pair: pair, sendableTap: sendableTap, theme: theme, analytics: analytics, auth: auth, handler: nil, inner: inner, onDismiss: onDismiss, optionalAuth: optionalAuth, sessionBuilder: sessionBuilder, safeDIOverrides: safeDIOverrides)
 		    }
 
 		    package static func mock(
@@ -6357,6 +6316,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        tags: [String],
 		        retries: Int? = nil,
 		        onFinish: (() -> Void)? = nil,
+		        title: String? = Service.__safeDI_publicMockDefault_title(),
+		        onCancel: (() -> Void)? = nil,
 		        baseTheme: BaseTheme,
 		        onTap: @escaping () -> Void,
 		        pair: (Int, Bool),
@@ -6384,12 +6345,12 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            return Leaf.__safeDI_init(onTap: onTap, sendableTap: sendableTap, pair: pair, theme: theme, baseTheme: baseTheme, auth: auth, inner: inner, analytics: analytics, sessionBuilder: sessionBuilder, onDismiss: onDismiss, handler: handler, optionalAuth: optionalAuth, capacity: safeDIOverrides.leaf.capacity, onDone: safeDIOverrides.leaf.onDone, names: safeDIOverrides.leaf.names, label: safeDIOverrides.leaf.label, safeDIBuilder: safeDIOverrides.leaf.safeDIBuilder)
 		        }
 		        let leaf: Leaf = __safeDI_leaf()
-		        return Service(onSelect: onSelect, sendableSelect: sendableSelect, size: size, tags: tags, inner2: inner2, leaf: leaf, retries: retries, onFinish: onFinish, title: safeDIOverrides.title, onCancel: safeDIOverrides.onCancel)
+		        return Service(onSelect: onSelect, sendableSelect: sendableSelect, size: size, tags: tags, inner2: inner2, leaf: leaf, retries: retries, onFinish: onFinish, title: title, onCancel: onCancel)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_mock_191982787DB3160A {}
+		    public enum __safeDI_Service_mock_AB44E141E8C547BB {}
 		}
 		#endif
 
