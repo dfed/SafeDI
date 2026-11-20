@@ -102,12 +102,6 @@ struct GeneratedCode: Sendable {
 		return writer.text
 	}
 
-	// MARK: Private
-
-	private init(storage: Storage) {
-		self.storage = storage
-	}
-
 	private enum Storage: Sendable {
 		case text(String)
 		case children(Children)
