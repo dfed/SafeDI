@@ -27,10 +27,11 @@ import Testing
 /// A type in a mock's tree and the types it builds receive one label from the same declaration in production: in the
 /// mocked type's own tree, the declaration above the mocked type, and in the tree of a dependency the mock promotes,
 /// which stands for one built above the mocked type, the declaration above that tree. A type in either tree that
-/// receives a label as one type above a type that receives the label as another, with no declaration of the label
+/// requires a label as one type above a type that requires the label as another, with no declaration of the label
 /// between, is therefore rejected, as production rejects the pair wherever the tree is built. The mock passes the first
 /// type the property under its label inside the function that builds it and the types it builds, where the second
-/// would read it.
+/// would read it. Where one of the two receives is only if available, production always passes it `nil`, and so does
+/// the mock (issue #718).
 struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 	// MARK: Initialization
 
@@ -193,108 +194,6 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 					public final class Child: Instantiable {
 					    public init(leaf: Leaf) { self.leaf = leaf }
 					    @Received let leaf: Leaf
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Leaf: Instantiable {
-					    public init() {}
-					}
-
-					public final class Unbuildable {}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenTypeBuiltInsidePromotedDependencyAliasesLabelOnlyIfAvailableThatPromotedDependencyReceivesAsAnotherType() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["Child.swift"]):4:5: error: @Received property `leaf: Leaf` is hidden in chain: Promoted -> Child. In the mock of `Screen`, `Promoted` stands for a dependency built above `Screen`, and `Promoted` receives `leaf: Unbuildable` with the same label, so the types below `Promoted` receive `leaf: Unbuildable` instead, as they do wherever `Promoted` is built. Receive `leaf: Leaf` and `leaf: Unbuildable` under different labels to fix.
-				\(fixtures["Promoted.swift"]):4:5: note: `leaf: Unbuildable` is received here
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public final class Screen: Instantiable {
-					    public init(leaf: Leaf, promoted: Promoted) { self.leaf = leaf; self.promoted = promoted }
-					    @Instantiated let leaf: Leaf
-					    @Received let promoted: Promoted
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Promoted: Instantiable {
-					    public init(leaf: Unbuildable, child: Child) { self.leaf = leaf; self.child = child }
-					    @Received let leaf: Unbuildable
-					    @Instantiated let child: Child
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Child: Instantiable {
-					    public init(renamedLeaf: Leaf?) { self.renamedLeaf = renamedLeaf }
-					    @Received(fulfilledByDependencyNamed: "leaf", ofType: Leaf.self, onlyIfAvailable: true) let renamedLeaf: Leaf?
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Leaf: Instantiable {
-					    public init() {}
-					}
-
-					public final class Unbuildable {}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenPromotedDependencyReceivesLabelOnlyIfAvailableAsAnotherTypeThanTypeBuiltInsideIt() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["Child.swift"]):4:5: error: @Received property `leaf: Leaf` is hidden in chain: Promoted -> Child. In the mock of `Screen`, `Promoted` stands for a dependency built above `Screen`, and `Promoted` receives `leaf: Unbuildable?` with the same label, so the types below `Promoted` receive `leaf: Unbuildable?` instead, as they do wherever `Promoted` is built. Receive `leaf: Leaf` and `leaf: Unbuildable?` under different labels to fix.
-				\(fixtures["Promoted.swift"]):4:5: note: `leaf: Unbuildable?` is received here
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public final class Screen: Instantiable {
-					    public init(leaf: Leaf, promoted: Promoted) { self.leaf = leaf; self.promoted = promoted }
-					    @Instantiated let leaf: Leaf
-					    @Received let promoted: Promoted
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Promoted: Instantiable {
-					    public init(leaf: Unbuildable?, child: Child) { self.leaf = leaf; self.child = child }
-					    @Received(onlyIfAvailable: true) let leaf: Unbuildable?
-					    @Instantiated let child: Child
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Child: Instantiable {
-					    public init(renamedLeaf: Leaf) { self.renamedLeaf = renamedLeaf }
-					    @Received(fulfilledByDependencyNamed: "leaf", ofType: Leaf.self) let renamedLeaf: Leaf
 					}
 					""",
 					"""
@@ -616,50 +515,6 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenPromotedDependencyAliasesLabelOnlyIfAvailableThatItReceivesAsAnotherType() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["Promoted.swift"]):5:5: error: @Received property `leaf: Leaf` is hidden in chain: Promoted. In the mock of `Screen`, `Promoted` stands for a dependency built above `Screen`, and `Promoted` receives `leaf: Unbuildable` with the same label, so `Promoted` and the types below it receive `leaf: Unbuildable` instead, as they do wherever `Promoted` is built. Receive `leaf: Leaf` and `leaf: Unbuildable` under different labels to fix.
-				\(fixtures["Promoted.swift"]):4:5: note: `leaf: Unbuildable` is received here
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public final class Screen: Instantiable {
-					    public init(leaf: Leaf, promoted: Promoted) { self.leaf = leaf; self.promoted = promoted }
-					    @Instantiated let leaf: Leaf
-					    @Received let promoted: Promoted
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Promoted: Instantiable {
-					    public init(leaf: Unbuildable, renamedLeaf: Leaf?) { self.leaf = leaf; self.renamedLeaf = renamedLeaf }
-					    @Received let leaf: Unbuildable
-					    @Received(fulfilledByDependencyNamed: "leaf", ofType: Leaf.self, onlyIfAvailable: true) let renamedLeaf: Leaf?
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Leaf: Instantiable {
-					    public init() {}
-					}
-
-					public final class Unbuildable {}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenPromotedDependencyAliasesLabelItReceivesAsTypeTheMockBuilds() async {
 		// The mock binds the `leaf: Leaf` it promotes under its label and passes the alias the parameter it takes for
 		// `leaf: Unbuildable` by name, so its code would compile, but no production tree can build `Promoted`.
@@ -879,80 +734,6 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenMockedTypeReceivesLabelAboveTypeItBuildsThatReceivesItOnlyIfAvailableAsAnotherType() async {
-		// The mock compiles, offering `Child` a `count: Bool?` override, but `Screen`'s required receive pins the
-		// declaration above `Screen` to `count: String`, so production always passes `Child` `nil`.
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["Child.swift"]):4:5: error: @Received property `count: Bool?` is hidden in chain: Screen -> Child. In the mock of `Screen`, `Screen` receives `count: String` with the same label, so the types below `Screen` receive `count: String` instead, as they do wherever `Screen` is built. Receive `count: Bool?` and `count: String` under different labels to fix.
-				\(fixtures["Screen.swift"]):4:5: note: `count: String` is received here
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public final class Screen: Instantiable {
-					    public init(count: String, child: Child) { self.count = count; self.child = child }
-					    @Received let count: String
-					    @Instantiated let child: Child
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Child: Instantiable {
-					    public init(count: Bool?) { self.count = count }
-					    @Received(onlyIfAvailable: true) let count: Bool?
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenMockedTypeReceivesLabelOnlyIfAvailableAboveTypeItBuildsThatReceivesItAsAnotherType() async {
-		// The mock compiles, offering `Screen` a `count: String?` override, but `Child`'s required receive pins the
-		// declaration above `Screen` to `count: Bool`, so production always passes `Screen` `nil`.
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["Child.swift"]):4:5: error: @Received property `count: Bool` is hidden in chain: Screen -> Child. In the mock of `Screen`, `Screen` receives `count: String?` with the same label, so the types below `Screen` receive `count: String?` instead, as they do wherever `Screen` is built. Receive `count: Bool` and `count: String?` under different labels to fix.
-				\(fixtures["Screen.swift"]):4:5: note: `count: String?` is received here
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public final class Screen: Instantiable {
-					    public init(count: String?, child: Child) { self.count = count; self.child = child }
-					    @Received(onlyIfAvailable: true) let count: String?
-					    @Instantiated let child: Child
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Child: Instantiable {
-					    public init(count: Bool) { self.count = count }
-					    @Received let count: Bool
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenMockedTypeReceivesLabelAboveLazilyInstantiatedTypeItBuildsThatReceivesItAsAnotherType() async {
 		// Reduced from graph fuzzer seed 106445, which a 2.2.0 mock accepted. The sibling form is accepted
 		// (`mock_passesMockedTypeItsReceivedDependencyByItsSiblingName_whenPromotedLazilyInstantiatedDependencyReceivesItsLabelAsAnotherType`).
@@ -1149,185 +930,6 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenTypeInMockedTypesTreeReceivesLabelAboveTypeItBuildsThatReceivesItOnlyIfAvailableAsAnotherType() async {
-		// The mock binds `count: Bool?` under the label at its root and passes `Middle` its `count: String` under the
-		// label inside the function that builds `Child`, which would read it (public fuzzer seed 574).
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["Child.swift"]):4:5: error: @Received property `count: Bool?` is hidden in chain: Screen -> Middle -> Child. In the mock of `Screen`, `Middle` receives `count: String` with the same label, so the types below `Middle` receive `count: String` instead, as they do wherever `Screen` is built. Receive `count: Bool?` and `count: String` under different labels to fix.
-				\(fixtures["Middle.swift"]):4:5: note: `count: String` is received here
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public final class Screen: Instantiable {
-					    public init(middle: Middle) { self.middle = middle }
-					    @Instantiated let middle: Middle
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Middle: Instantiable {
-					    public init(count: String, child: Child) { self.count = count; self.child = child }
-					    @Received let count: String
-					    @Instantiated let child: Child
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Child: Instantiable {
-					    public init(count: Bool?) { self.count = count }
-					    @Received(onlyIfAvailable: true) let count: Bool?
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenTypeInMockedTypesTreeReceivesLabelOnlyIfAvailableAboveTypeItBuildsThatReceivesItAsAnotherType() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["Child.swift"]):4:5: error: @Received property `count: Bool` is hidden in chain: Screen -> Middle -> Child. In the mock of `Screen`, `Middle` receives `count: String?` with the same label, so the types below `Middle` receive `count: String?` instead, as they do wherever `Screen` is built. Receive `count: Bool` and `count: String?` under different labels to fix.
-				\(fixtures["Middle.swift"]):4:5: note: `count: String?` is received here
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public final class Screen: Instantiable {
-					    public init(middle: Middle) { self.middle = middle }
-					    @Instantiated let middle: Middle
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Middle: Instantiable {
-					    public init(count: String?, child: Child) { self.count = count; self.child = child }
-					    @Received(onlyIfAvailable: true) let count: String?
-					    @Instantiated let child: Child
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Child: Instantiable {
-					    public init(count: Bool) { self.count = count }
-					    @Received let count: Bool
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenTypeInPromotedDependencysTreeReceivesLabelOnlyIfAvailableAboveTypeItBuildsThatReceivesItAsAnotherType() async {
-		// The mock compiles, offering `Middle` a `count: String?` override, but `Child`'s required receive pins the
-		// declaration above `Promoted` to `count: Bool`, so production always passes `Middle` `nil`.
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["Child.swift"]):4:5: error: @Received property `count: Bool` is hidden in chain: Promoted -> Middle -> Child. In the mock of `Screen`, `Promoted` stands for a dependency built above `Screen`, and `Middle` receives `count: String?` with the same label, so the types below `Middle` receive `count: String?` instead, as they do wherever `Promoted` is built. Receive `count: Bool` and `count: String?` under different labels to fix.
-				\(fixtures["Middle.swift"]):4:5: note: `count: String?` is received here
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public final class Screen: Instantiable {
-					    public init(promoted: Promoted) { self.promoted = promoted }
-					    @Received let promoted: Promoted
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Promoted: Instantiable {
-					    public init(middle: Middle) { self.middle = middle }
-					    @Instantiated let middle: Middle
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Middle: Instantiable {
-					    public init(count: String?, child: Child) { self.count = count; self.child = child }
-					    @Received(onlyIfAvailable: true) let count: String?
-					    @Instantiated let child: Child
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Child: Instantiable {
-					    public init(count: Bool) { self.count = count }
-					    @Received let count: Bool
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenPublicMockedTypesTreeReceivesLabelAboveTypeThatReceivesItOnlyIfAvailableAsAnotherType() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["Child.swift"]):4:5: error: @Received property `count: Bool?` is hidden in chain: Screen -> Middle -> Child. In the mock of `Screen`, `Middle` receives `count: String` with the same label, so the types below `Middle` receive `count: String` instead, as they do wherever `Screen` is built. Receive `count: Bool?` and `count: String` under different labels to fix.
-				\(fixtures["Middle.swift"]):4:5: note: `count: String` is received here
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: .public)
-					public final class Screen: Instantiable {
-					    public init(middle: Middle) { self.middle = middle }
-					    @Instantiated let middle: Middle
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Middle: Instantiable {
-					    public init(count: String, child: Child) { self.count = count; self.child = child }
-					    @Received let count: String
-					    @Instantiated let child: Child
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Child: Instantiable {
-					    public init(count: Bool?) { self.count = count }
-					    @Received(onlyIfAvailable: true) let count: Bool?
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenMockedTypeForwardsLabelAboveTypeItBuildsThatReceivesItAsAnotherType() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
@@ -1361,7 +963,1697 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenMockedTypeRequiresLabelAboveReceiveOnlyIfAvailableAboveTypeThatRequiresItAsAnotherType() async {
+		// `Middle`'s receive only if available pins nothing, so `Child`'s required `token: Token` meets `Screen`'s required
+		// `token: Instantiator<Token>`, which no one declaration provides with it: production cannot build `Child`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):4:5: error: @Received property `token: Token` is hidden in chain: Screen -> Middle -> Child. In the mock of `Screen`, `Screen` receives `token: Instantiator<Token>` with the same label, so the types below `Screen` receive `token: Instantiator<Token>` instead, as they do wherever `Screen` is built. Receive `token: Token` and `token: Instantiator<Token>` under different labels to fix.
+				\(fixtures["Screen.swift"]):4:5: note: `token: Instantiator<Token>` is received here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(token: Instantiator<Token>, middle: Middle) { self.token = token; self.middle = middle }
+					    @Received let token: Instantiator<Token>
+					    @Instantiated let middle: Middle
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Middle: Instantiable {
+					    public init(token: Token?, child: Child) { self.token = token; self.child = child }
+					    @Received(onlyIfAvailable: true) let token: Token?
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(token: Token) { self.token = token }
+					    @Received let token: Token
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Token: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Generation Tests
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesNilToReceiveOnlyIfAvailable_whenTypeItBuildsReceivesLabelAsAnotherForm() async throws {
+		// Issue #718. `Screen` receives `token: Token?` only if available and `Child`, which it builds, requires
+		// `token: Instantiator<Token>`, which no one declaration provides with it. Production always passes `Screen` `nil`,
+		// since `Child`'s required receive pins the declaration above `Screen` to the instantiator, so the mock passes `nil`
+		// too and offers no override for it.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Token: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(token: Instantiator<Token>) {
+				        self.token = token
+				    }
+
+				    @Received let token: Instantiator<Token>
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(token: Token?, child: Child) {
+				        self.token = token
+				        self.child = child
+				    }
+
+				    @Received(onlyIfAvailable: true) let token: Token?
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable(isRoot: true)
+				public final class Parent: Instantiable {
+				    public init(token: Instantiator<Token>, screen: Screen) {
+				        self.token = token
+				        self.screen = screen
+				    }
+
+				    @Instantiated let token: Instantiator<Token>
+				    @Instantiated let screen: Screen
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.dependencyTreeFiles["Parent+SafeDI.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		extension Parent {
+		    public convenience init() {
+		        func __safeDI_token() -> Token {
+		            Token()
+		        }
+		        let token = Instantiator<Token>(__safeDI_token)
+		        func __safeDI_screen() -> Screen {
+		            let child = Child(token: token)
+		            return Screen(token: nil, child: child)
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        self.init(token: token, screen: screen)
+		    }
+		}
+		""", "Unexpected output \(output.dependencyTreeFiles["Parent+SafeDI.swift"] ?? "")")
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            token: (() -> Token)? = nil,
+		            child: ((Instantiator<Token>) -> Child)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                token: token,
+		                child: child
+		            )
+		        }
+
+		        var token: (() -> Token)? { __safeDI_storage.token }
+		        var child: ((Instantiator<Token>) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                token: (() -> Token)?,
+		                child: ((Instantiator<Token>) -> Child)?
+		            ) {
+		                self.token = token
+		                self.child = child
+		            }
+
+		            let token: (() -> Token)?
+		            let child: ((Instantiator<Token>) -> Child)?
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_token() -> Token {
+		            if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+		        }
+		        let token = Instantiator<Token>(__safeDI_token)
+		        let child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(token) } else { Child(token: token) }
+		        return Screen(token: nil, child: child)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_bindsAliasToNil_whenTypeBuiltInsidePromotedDependencyAliasesLabelOnlyIfAvailableThatPromotedDependencyReceivesAsAnotherType() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(leaf: Leaf, promoted: Promoted) { self.leaf = leaf; self.promoted = promoted }
+				    @Instantiated let leaf: Leaf
+				    @Received let promoted: Promoted
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Promoted: Instantiable {
+				    public init(leaf: Unbuildable, child: Child) { self.leaf = leaf; self.child = child }
+				    @Received let leaf: Unbuildable
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(renamedLeaf: Leaf?) { self.renamedLeaf = renamedLeaf }
+				    @Received(fulfilledByDependencyNamed: "leaf", ofType: Leaf.self, onlyIfAvailable: true) let renamedLeaf: Leaf?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Leaf: Instantiable {
+				    public init() {}
+				}
+
+				public final class Unbuildable {}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            leaf: (() -> Leaf)? = nil,
+		            promoted: Promoted.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                leaf: leaf,
+		                promoted: promoted
+		            )
+		        }
+
+		        var leaf: (() -> Leaf)? { __safeDI_storage.leaf }
+		        var promoted: Promoted.SafeDIMockConfiguration { __safeDI_storage.promoted }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                leaf: (() -> Leaf)?,
+		                promoted: Promoted.SafeDIMockConfiguration
+		            ) {
+		                self.leaf = leaf
+		                self.promoted = promoted
+		            }
+
+		            let leaf: (() -> Leaf)?
+		            let promoted: Promoted.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        leaf_Unbuildable: Unbuildable,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
+		        func __safeDI_promoted() -> Promoted {
+		            let leaf: Unbuildable = leaf_Unbuildable
+		            func __safeDI_child() -> Child {
+		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		                let renamedLeaf: Leaf? = nil
+		                #sourceLocation()
+		                return if let safeDIBuilder = safeDIOverrides.promoted.child { safeDIBuilder(renamedLeaf) } else { Child(renamedLeaf: renamedLeaf) }
+		            }
+		            let child: Child = __safeDI_child()
+		            return if let safeDIBuilder = safeDIOverrides.promoted.safeDIBuilder { safeDIBuilder(leaf, child) } else { Promoted(leaf: leaf, child: child) }
+		        }
+		        let promoted: Promoted = __safeDI_promoted()
+		        return Screen(leaf: leaf, promoted: promoted)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesNilToReceiveOnlyIfAvailable_whenPromotedDependencyReceivesLabelOnlyIfAvailableAsAnotherTypeThanTypeBuiltInsideIt() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(leaf: Leaf, promoted: Promoted) { self.leaf = leaf; self.promoted = promoted }
+				    @Instantiated let leaf: Leaf
+				    @Received let promoted: Promoted
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Promoted: Instantiable {
+				    public init(leaf: Unbuildable?, child: Child) { self.leaf = leaf; self.child = child }
+				    @Received(onlyIfAvailable: true) let leaf: Unbuildable?
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(renamedLeaf: Leaf) { self.renamedLeaf = renamedLeaf }
+				    @Received(fulfilledByDependencyNamed: "leaf", ofType: Leaf.self) let renamedLeaf: Leaf
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Leaf: Instantiable {
+				    public init() {}
+				}
+
+				public final class Unbuildable {}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            leaf: (() -> Leaf)? = nil,
+		            promoted: Promoted.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                leaf: leaf,
+		                promoted: promoted
+		            )
+		        }
+
+		        var leaf: (() -> Leaf)? { __safeDI_storage.leaf }
+		        var promoted: Promoted.SafeDIMockConfiguration { __safeDI_storage.promoted }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                leaf: (() -> Leaf)?,
+		                promoted: Promoted.SafeDIMockConfiguration
+		            ) {
+		                self.leaf = leaf
+		                self.promoted = promoted
+		            }
+
+		            let leaf: (() -> Leaf)?
+		            let promoted: Promoted.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
+		        func __safeDI_promoted() -> Promoted {
+		            func __safeDI_child() -> Child {
+		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		                let renamedLeaf: Leaf = leaf
+		                #sourceLocation()
+		                return if let safeDIBuilder = safeDIOverrides.promoted.child { safeDIBuilder(renamedLeaf) } else { Child(renamedLeaf: renamedLeaf) }
+		            }
+		            let child: Child = __safeDI_child()
+		            return if let safeDIBuilder = safeDIOverrides.promoted.safeDIBuilder { safeDIBuilder(nil, child) } else { Promoted(leaf: nil, child: child) }
+		        }
+		        let promoted: Promoted = __safeDI_promoted()
+		        return Screen(leaf: leaf, promoted: promoted)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_bindsAliasToNil_whenPromotedDependencyAliasesLabelOnlyIfAvailableThatItReceivesAsAnotherType() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(leaf: Leaf, promoted: Promoted) { self.leaf = leaf; self.promoted = promoted }
+				    @Instantiated let leaf: Leaf
+				    @Received let promoted: Promoted
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Promoted: Instantiable {
+				    public init(leaf: Unbuildable, renamedLeaf: Leaf?) { self.leaf = leaf; self.renamedLeaf = renamedLeaf }
+				    @Received let leaf: Unbuildable
+				    @Received(fulfilledByDependencyNamed: "leaf", ofType: Leaf.self, onlyIfAvailable: true) let renamedLeaf: Leaf?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Leaf: Instantiable {
+				    public init() {}
+				}
+
+				public final class Unbuildable {}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            leaf: (() -> Leaf)? = nil,
+		            promoted: ((Unbuildable, Leaf?) -> Promoted)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                leaf: leaf,
+		                promoted: promoted
+		            )
+		        }
+
+		        var leaf: (() -> Leaf)? { __safeDI_storage.leaf }
+		        var promoted: ((Unbuildable, Leaf?) -> Promoted)? { __safeDI_storage.promoted }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                leaf: (() -> Leaf)?,
+		                promoted: ((Unbuildable, Leaf?) -> Promoted)?
+		            ) {
+		                self.leaf = leaf
+		                self.promoted = promoted
+		            }
+
+		            let leaf: (() -> Leaf)?
+		            let promoted: ((Unbuildable, Leaf?) -> Promoted)?
+		        }
+		    }
+
+		    static func mock(
+		        leaf_Unbuildable: Unbuildable,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder() } else { Leaf() }
+		        func __safeDI_promoted() -> Promoted {
+		            let leaf: Unbuildable = leaf_Unbuildable
+		            #sourceLocation(file: "\(output.fixtures["Promoted.swift"])", line: 5)
+		            let renamedLeaf: Leaf? = nil
+		            #sourceLocation()
+		            return if let safeDIBuilder = safeDIOverrides.promoted { safeDIBuilder(leaf, renamedLeaf) } else { Promoted(leaf: leaf, renamedLeaf: renamedLeaf) }
+		        }
+		        let promoted: Promoted = __safeDI_promoted()
+		        return Screen(leaf: leaf, promoted: promoted)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesNilToReceiveOnlyIfAvailable_whenMockedTypeReceivesLabelAboveTypeItBuildsThatReceivesItOnlyIfAvailableAsAnotherType() async throws {
+		// `Screen`'s required receive pins the declaration above `Screen` to `count: String`, so production always passes
+		// `Child` `nil`. So does the mock, which offers no `count: Bool?` override.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(count: String, child: Child) { self.count = count; self.child = child }
+				    @Received let count: String
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(count: Bool?) { self.count = count }
+				    @Received(onlyIfAvailable: true) let count: Bool?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            child: ((Bool?) -> Child)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
+		        }
+
+		        var child: ((Bool?) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: ((Bool?) -> Child)?
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: ((Bool?) -> Child)?
+		        }
+		    }
+
+		    static func mock(
+		        count: String,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(nil) } else { Child(count: nil) }
+		        return Screen(count: count, child: child)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesNilToReceiveOnlyIfAvailable_whenMockedTypeReceivesLabelOnlyIfAvailableAboveTypeItBuildsThatReceivesItAsAnotherType() async throws {
+		// `Child`'s required receive pins the declaration above `Screen` to `count: Bool`, so production always passes
+		// `Screen` `nil`. So does the mock, which offers no `count: String?` override.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(count: String?, child: Child) { self.count = count; self.child = child }
+				    @Received(onlyIfAvailable: true) let count: String?
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(count: Bool) { self.count = count }
+				    @Received let count: Bool
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            child: ((Bool) -> Child)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child
+		            )
+		        }
+
+		        var child: ((Bool) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: ((Bool) -> Child)?
+		            ) {
+		                self.child = child
+		            }
+
+		            let child: ((Bool) -> Child)?
+		        }
+		    }
+
+		    static func mock(
+		        count: Bool,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(count) } else { Child(count: count) }
+		        return Screen(count: nil, child: child)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesNilToReceiveOnlyIfAvailable_whenTypeInMockedTypesTreeReceivesLabelAboveTypeItBuildsThatReceivesItOnlyIfAvailableAsAnotherType() async throws {
+		// `Middle`'s required receive pins the declaration above `Screen` to `count: String`, so production always passes
+		// `Child` `nil`. So does the mock, which binds no `count: Bool?` (public fuzzer seed 574).
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(middle: Middle) { self.middle = middle }
+				    @Instantiated let middle: Middle
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Middle: Instantiable {
+				    public init(count: String, child: Child) { self.count = count; self.child = child }
+				    @Received let count: String
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(count: Bool?) { self.count = count }
+				    @Received(onlyIfAvailable: true) let count: Bool?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            middle: Middle.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                middle: middle
+		            )
+		        }
+
+		        var middle: Middle.SafeDIMockConfiguration { __safeDI_storage.middle }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                middle: Middle.SafeDIMockConfiguration
+		            ) {
+		                self.middle = middle
+		            }
+
+		            let middle: Middle.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        count: String,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_middle() -> Middle {
+		            let child = if let safeDIBuilder = safeDIOverrides.middle.child { safeDIBuilder(nil) } else { Child(count: nil) }
+		            return if let safeDIBuilder = safeDIOverrides.middle.safeDIBuilder { safeDIBuilder(count, child) } else { Middle(count: count, child: child) }
+		        }
+		        let middle: Middle = __safeDI_middle()
+		        return Screen(middle: middle)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesNilToReceiveOnlyIfAvailable_whenTypeInMockedTypesTreeReceivesLabelOnlyIfAvailableAboveTypeItBuildsThatReceivesItAsAnotherType() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(middle: Middle) { self.middle = middle }
+				    @Instantiated let middle: Middle
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Middle: Instantiable {
+				    public init(count: String?, child: Child) { self.count = count; self.child = child }
+				    @Received(onlyIfAvailable: true) let count: String?
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(count: Bool) { self.count = count }
+				    @Received let count: Bool
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            middle: Middle.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                middle: middle
+		            )
+		        }
+
+		        var middle: Middle.SafeDIMockConfiguration { __safeDI_storage.middle }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                middle: Middle.SafeDIMockConfiguration
+		            ) {
+		                self.middle = middle
+		            }
+
+		            let middle: Middle.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        count: Bool,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_middle() -> Middle {
+		            let child = if let safeDIBuilder = safeDIOverrides.middle.child { safeDIBuilder(count) } else { Child(count: count) }
+		            return if let safeDIBuilder = safeDIOverrides.middle.safeDIBuilder { safeDIBuilder(nil, child) } else { Middle(count: nil, child: child) }
+		        }
+		        let middle: Middle = __safeDI_middle()
+		        return Screen(middle: middle)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesNilToReceiveOnlyIfAvailable_whenTypeInPromotedDependencysTreeReceivesLabelOnlyIfAvailableAboveTypeItBuildsThatReceivesItAsAnotherType() async throws {
+		// `Child`'s required receive pins the declaration above `Promoted` to `count: Bool`, so production always passes
+		// `Middle` `nil`. So does the mock, which offers no `count: String?` override.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(promoted: Promoted) { self.promoted = promoted }
+				    @Received let promoted: Promoted
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Promoted: Instantiable {
+				    public init(middle: Middle) { self.middle = middle }
+				    @Instantiated let middle: Middle
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Middle: Instantiable {
+				    public init(count: String?, child: Child) { self.count = count; self.child = child }
+				    @Received(onlyIfAvailable: true) let count: String?
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(count: Bool) { self.count = count }
+				    @Received let count: Bool
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            promoted: Promoted.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                promoted: promoted
+		            )
+		        }
+
+		        var promoted: Promoted.SafeDIMockConfiguration { __safeDI_storage.promoted }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                promoted: Promoted.SafeDIMockConfiguration
+		            ) {
+		                self.promoted = promoted
+		            }
+
+		            let promoted: Promoted.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        count: Bool,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_promoted() -> Promoted {
+		            func __safeDI_middle() -> Middle {
+		                let child = if let safeDIBuilder = safeDIOverrides.promoted.middle.child { safeDIBuilder(count) } else { Child(count: count) }
+		                return if let safeDIBuilder = safeDIOverrides.promoted.middle.safeDIBuilder { safeDIBuilder(nil, child) } else { Middle(count: nil, child: child) }
+		            }
+		            let middle: Middle = __safeDI_middle()
+		            return if let safeDIBuilder = safeDIOverrides.promoted.safeDIBuilder { safeDIBuilder(middle) } else { Promoted(middle: middle) }
+		        }
+		        let promoted: Promoted = __safeDI_promoted()
+		        return Screen(promoted: promoted)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesNilToReceiveOnlyIfAvailable_whenPublicMockedTypesTreeReceivesLabelAboveTypeThatReceivesItOnlyIfAvailableAsAnotherType() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: .public)
+				public final class Screen: Instantiable {
+				    public init(middle: Middle) { self.middle = middle }
+				    @Instantiated let middle: Middle
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Middle: Instantiable {
+				    public init(count: String, child: Child) { self.count = count; self.child = child }
+				    @Received let count: String
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(count: Bool?) { self.count = count }
+				    @Received(onlyIfAvailable: true) let count: Bool?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            middle: __safeDI_Middle_MockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                middle: middle
+		            )
+		        }
+
+		        public var middle: __safeDI_Middle_MockConfiguration { __safeDI_storage.middle }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                middle: __safeDI_Middle_MockConfiguration
+		            ) {
+		                self.middle = middle
+		            }
+
+		            let middle: __safeDI_Middle_MockConfiguration
+		        }
+		    }
+
+		    public static func mock(
+		        count: String,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_middle() -> Middle {
+		            let child = if let safeDIBuilder = safeDIOverrides.middle.child { safeDIBuilder(nil) } else { Child(count: nil) }
+		            return Middle.__safeDI_init(count: count, child: child, safeDIBuilder: safeDIOverrides.middle.safeDIBuilder)
+		        }
+		        let middle: Middle = __safeDI_middle()
+		        return Screen(middle: middle)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_mock_4F5A40BF3DA5309D {}
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesNilToReceiveOnlyIfAvailable_whenMockedTypeRequiresInstantiatorAboveTypeItBuildsThatReceivesInstanceOnlyIfAvailable() async throws {
+		// `Screen` requires `token: Instantiator<Token>`, which pins the declaration above it to the instantiator, so
+		// production always passes `Child` `nil` for its `token: Token?`. The mock builds the instantiator for `Screen`
+		// and passes `Child` `nil`, with no override for it.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Token: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(token: Token?) {
+				        self.token = token
+				    }
+
+				    @Received(onlyIfAvailable: true) let token: Token?
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(token: Instantiator<Token>, child: Child) {
+				        self.token = token
+				        self.child = child
+				    }
+
+				    @Received let token: Instantiator<Token>
+				    @Instantiated let child: Child
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            child: ((Token?) -> Child)? = nil,
+		            token: (() -> Token)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                child: child,
+		                token: token
+		            )
+		        }
+
+		        var child: ((Token?) -> Child)? { __safeDI_storage.child }
+		        var token: (() -> Token)? { __safeDI_storage.token }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                child: ((Token?) -> Child)?,
+		                token: (() -> Token)?
+		            ) {
+		                self.child = child
+		                self.token = token
+		            }
+
+		            let child: ((Token?) -> Child)?
+		            let token: (() -> Token)?
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(nil) } else { Child(token: nil) }
+		        func __safeDI_token() -> Token {
+		            if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+		        }
+		        let token = Instantiator<Token>(__safeDI_token)
+		        return Screen(token: token, child: child)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesNilToReceiveOnlyIfAvailable_whenItsTypeAliasesLabelAsAnotherForm() async throws {
+		// `Child` receives `token: Token?` only if available and aliases `token` as `Instantiator<Token>`, which it requires,
+		// so production always passes its receive `nil`. The mock does too, and offers it nothing.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Token: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(token: Token?, tokenBuilder: Instantiator<Token>) {
+				        self.token = token
+				        self.tokenBuilder = tokenBuilder
+				    }
+
+				    @Received(onlyIfAvailable: true) let token: Token?
+				    @Received(fulfilledByDependencyNamed: "token", ofType: Instantiator<Token>.self) let tokenBuilder: Instantiator<Token>
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(child: Child) {
+				        self.child = child
+				    }
+
+				    @Instantiated let child: Child
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            token: (() -> Token)? = nil,
+		            child: ((Token?, Instantiator<Token>) -> Child)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                token: token,
+		                child: child
+		            )
+		        }
+
+		        var token: (() -> Token)? { __safeDI_storage.token }
+		        var child: ((Token?, Instantiator<Token>) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                token: (() -> Token)?,
+		                child: ((Token?, Instantiator<Token>) -> Child)?
+		            ) {
+		                self.token = token
+		                self.child = child
+		            }
+
+		            let token: (() -> Token)?
+		            let child: ((Token?, Instantiator<Token>) -> Child)?
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_token() -> Token {
+		            if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+		        }
+		        let token = Instantiator<Token>(__safeDI_token)
+		        func __safeDI_child() -> Child {
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
+		            let tokenBuilder: Instantiator<Token> = token
+		            #sourceLocation()
+		            return if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(nil, tokenBuilder) } else { Child(token: nil, tokenBuilder: tokenBuilder) }
+		        }
+		        let child: Child = __safeDI_child()
+		        return Screen(child: child)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesDeclarationToReceiveOnlyIfAvailable_whenTypeBetweenDeclaresLabelBeneathReceivePassedNil() async throws {
+		// `Child`'s required `token: Instantiator<Token>` pins the declaration above `Screen`, so `Screen` is passed `nil`,
+		// but `Leaf` receives `token: Token?` beneath `Holder`, which declares `token: Token`, so it is passed `Holder`'s.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Token: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(token: Instantiator<Token>) {
+				        self.token = token
+				    }
+
+				    @Received let token: Instantiator<Token>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Holder: Instantiable {
+				    public init(token: Token, leaf: Leaf) {
+				        self.token = token
+				        self.leaf = leaf
+				    }
+
+				    @Instantiated let token: Token
+				    @Instantiated let leaf: Leaf
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Leaf: Instantiable {
+				    public init(token: Token?) {
+				        self.token = token
+				    }
+
+				    @Received(onlyIfAvailable: true) let token: Token?
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(token: Token?, child: Child, holder: Holder) {
+				        self.token = token
+				        self.child = child
+				        self.holder = holder
+				    }
+
+				    @Received(onlyIfAvailable: true) let token: Token?
+				    @Instantiated let child: Child
+				    @Instantiated let holder: Holder
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            token: (() -> Token)? = nil,
+		            child: ((Instantiator<Token>) -> Child)? = nil,
+		            holder: Holder.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                token: token,
+		                child: child,
+		                holder: holder
+		            )
+		        }
+
+		        var token: (() -> Token)? { __safeDI_storage.token }
+		        var child: ((Instantiator<Token>) -> Child)? { __safeDI_storage.child }
+		        var holder: Holder.SafeDIMockConfiguration { __safeDI_storage.holder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                token: (() -> Token)?,
+		                child: ((Instantiator<Token>) -> Child)?,
+		                holder: Holder.SafeDIMockConfiguration
+		            ) {
+		                self.token = token
+		                self.child = child
+		                self.holder = holder
+		            }
+
+		            let token: (() -> Token)?
+		            let child: ((Instantiator<Token>) -> Child)?
+		            let holder: Holder.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_token() -> Token {
+		            if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+		        }
+		        let token = Instantiator<Token>(__safeDI_token)
+		        let child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(token) } else { Child(token: token) }
+		        func __safeDI_holder() -> Holder {
+		            let token = if let safeDIBuilder = safeDIOverrides.holder.token { safeDIBuilder() } else { Token() }
+		            let leaf = if let safeDIBuilder = safeDIOverrides.holder.leaf { safeDIBuilder(token) } else { Leaf(token: token) }
+		            return if let safeDIBuilder = safeDIOverrides.holder.safeDIBuilder { safeDIBuilder(token, leaf) } else { Holder(token: token, leaf: leaf) }
+		        }
+		        let holder: Holder = __safeDI_holder()
+		        return Screen(token: nil, child: child, holder: holder)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_offersOverrideToPromotedDependency_whenMockedTypesTreePassesItsReceiveOfThatFormNil() async throws {
+		// `Child`'s required `token: Instantiator<Token>` pins the declaration above `Screen`, so `Screen` is passed `nil`.
+		// `Promoted` stands for a dependency built above `Screen`, where nothing pins the declaration above it, so the mock
+		// binds `token: Token?` for `Promoted` alone and offers it an override.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Token: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(token: Instantiator<Token>) {
+				        self.token = token
+				    }
+
+				    @Received let token: Instantiator<Token>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Promoted: Instantiable {
+				    public init(token: Token?) {
+				        self.token = token
+				    }
+
+				    @Received(onlyIfAvailable: true) let token: Token?
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(token: Token?, child: Child, promoted: Promoted) {
+				        self.token = token
+				        self.child = child
+				        self.promoted = promoted
+				    }
+
+				    @Received(onlyIfAvailable: true) let token: Token?
+				    @Instantiated let child: Child
+				    @Received let promoted: Promoted
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            token: (() -> Token)? = nil,
+		            child: ((Instantiator<Token>) -> Child)? = nil,
+		            promoted: ((Token?) -> Promoted)? = nil,
+		            token_Token: Token? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                token: token,
+		                child: child,
+		                promoted: promoted
+		            )
+		            self.token_Token = token_Token
+		        }
+
+		        var token: (() -> Token)? { __safeDI_storage.token }
+		        var child: ((Instantiator<Token>) -> Child)? { __safeDI_storage.child }
+		        var promoted: ((Token?) -> Promoted)? { __safeDI_storage.promoted }
+		        let token_Token: Token?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                token: (() -> Token)?,
+		                child: ((Instantiator<Token>) -> Child)?,
+		                promoted: ((Token?) -> Promoted)?
+		            ) {
+		                self.token = token
+		                self.child = child
+		                self.promoted = promoted
+		            }
+
+		            let token: (() -> Token)?
+		            let child: ((Instantiator<Token>) -> Child)?
+		            let promoted: ((Token?) -> Promoted)?
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let token_Token: Token? = safeDIOverrides.token_Token
+		        func __safeDI_token() -> Token {
+		            if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+		        }
+		        let token = Instantiator<Token>(__safeDI_token)
+		        let child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(token) } else { Child(token: token) }
+		        func __safeDI_promoted() -> Promoted {
+		            let token: Token? = token_Token
+		            return if let safeDIBuilder = safeDIOverrides.promoted { safeDIBuilder(token) } else { Promoted(token: token) }
+		        }
+		        let promoted: Promoted = __safeDI_promoted()
+		        return Screen(token: nil, child: child, promoted: promoted)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesNilToReceiveOnlyIfAvailable_whenTypeThatPinsItBuildsItselfAgainThroughInstantiator() async throws {
+		// `A` requires `token: Instantiator<Token>` and builds itself again through `B`, so the walk meets `A` beneath its
+		// own required receive, which it carries once: the walk ends, and `Screen` is passed `nil`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class A: Instantiable {
+				    public init(token: Instantiator<Token>, bBuilder: Instantiator<B>) {
+				        self.token = token
+				        self.bBuilder = bBuilder
+				    }
+
+				    @Received let token: Instantiator<Token>
+				    @Instantiated let bBuilder: Instantiator<B>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class B: Instantiable {
+				    public init(aBuilder: Instantiator<A>) {
+				        self.aBuilder = aBuilder
+				    }
+
+				    @Instantiated let aBuilder: Instantiator<A>
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(token: Token?, a: A) {
+				        self.token = token
+				        self.a = a
+				    }
+
+				    @Received(onlyIfAvailable: true) let token: Token?
+				    @Instantiated let a: A
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Token: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            token: (() -> Token)? = nil,
+		            a: A.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                token: token,
+		                a: a
+		            )
+		        }
+
+		        var token: (() -> Token)? { __safeDI_storage.token }
+		        var a: A.SafeDIMockConfiguration { __safeDI_storage.a }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                token: (() -> Token)?,
+		                a: A.SafeDIMockConfiguration
+		            ) {
+		                self.token = token
+		                self.a = a
+		            }
+
+		            let token: (() -> Token)?
+		            let a: A.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_token() -> Token {
+		            if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+		        }
+		        let token = Instantiator<Token>(__safeDI_token)
+		        func __safeDI_a() -> A {
+		            func __safeDI_bBuilder() -> B {
+		                func __safeDI_aBuilder() -> A {
+		                    let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+		                    return A(token: token, bBuilder: bBuilder)
+		                }
+		                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		                return if let safeDIBuilder = safeDIOverrides.a.bBuilder.safeDIBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+		            }
+		            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+		            return if let safeDIBuilder = safeDIOverrides.a.safeDIBuilder { safeDIBuilder(token, bBuilder) } else { A(token: token, bBuilder: bBuilder) }
+		        }
+		        let a: A = __safeDI_a()
+		        return Screen(token: nil, a: a)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_takesNoParameterForReceivePassedNil_whenPublicMockIsCalledFromAnotherModule() async throws {
+		// Issue #718's shape with a public mock: `Child`'s required `token: Instantiator<Token>` pins the declaration above
+		// `Screen`, so `Screen`'s public mock passes it `nil` and takes no parameter for it. `Host`'s mock, in another
+		// package, calls it.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+					"""
+					@Instantiable
+					public final class Token: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(token: Instantiator<Token>) {
+					        self.token = token
+					    }
+
+					    @Received public let token: Instantiator<Token>
+					}
+					""",
+					"""
+					@Instantiable(generateMock: .public)
+					public final class Screen: Instantiable {
+					    init(token: Token?, child: Child) {
+					        self.token = token
+					        self.child = child
+					    }
+
+					    @Received(onlyIfAvailable: true) public let token: Token?
+					    @Instantiated public let child: Child
+					}
+					""",
+				]),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+					"""
+					import Feature
+
+					@Instantiable(generateMock: true)
+					public final class Host: Instantiable {
+					    public init(screen: Screen) {
+					        self.screen = screen
+					    }
+
+					    @Instantiated let screen: Screen
+					}
+
+					func tokenOfScreen() -> Token? {
+					    Screen.mock().token
+					}
+					""",
+				], dependencies: ["Feature"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    nonisolated public struct SafeDIOverrides {
+		        public init(
+		            token: (() -> Token)? = nil,
+		            child: ((Instantiator<Token>) -> Child)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                token: token,
+		                child: child
+		            )
+		        }
+
+		        public var token: (() -> Token)? { __safeDI_storage.token }
+		        public var child: ((Instantiator<Token>) -> Child)? { __safeDI_storage.child }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                token: (() -> Token)?,
+		                child: ((Instantiator<Token>) -> Child)?
+		            ) {
+		                self.token = token
+		                self.child = child
+		            }
+
+		            let token: (() -> Token)?
+		            let child: ((Instantiator<Token>) -> Child)?
+		        }
+		    }
+
+		    public static func mock(
+		        token: Instantiator<Token>? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_token() -> Token {
+		            if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+		        }
+		        let token = if let token { token } else { Instantiator<Token>(__safeDI_token) }
+		        let child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(token) } else { Child(token: token) }
+		        return Screen(token: nil, child: child)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_mock_65AF11639C4ED97D {}
+		}
+		#endif
+		"""])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		#if DEBUG
+		extension Host {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            token: (() -> Token)? = nil,
+		            screen: Screen.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                token: token,
+		                screen: screen
+		            )
+		        }
+
+		        var token: (() -> Token)? { __safeDI_storage.token }
+		        var screen: Screen.SafeDIOverrides { __safeDI_storage.screen }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                token: (() -> Token)?,
+		                screen: Screen.SafeDIOverrides
+		            ) {
+		                self.token = token
+		                self.screen = screen
+		            }
+
+		            let token: (() -> Token)?
+		            let screen: Screen.SafeDIOverrides
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Host {
+		        func __safeDI_token() -> Token {
+		            if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
+		        }
+		        let token = Instantiator<Token>(__safeDI_token)
+		        _ = Screen.__safeDI_Screen_mock_65AF11639C4ED97D.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let screen = Screen.mock(token: token, safeDIOverrides: safeDIOverrides.screen)
+		        return Host(screen: screen)
+		    }
+		}
+		#endif
+		"""])
+	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)

@@ -678,21 +678,38 @@ private struct ScopeGeneratorUnderConstruction {
 		func binding(of property: Property) -> Property? {
 			scope.createdBinding(of: property) ?? nearestDeclarations.binding(of: property)
 		}
+		// A receive a mock passes `nil` reads nothing above this scope, though the mock root binds a form of it, since
+		// production always passes it `nil` (see `NearestDeclarations.binding(_:passingNilTo:)`). The receives are keyed
+		// by type, not by place: a deliberate gap, since a type the mock's trees build twice, pinned in one place and not
+		// in the other, is listed in neither and keeps its override in both (see
+		// `DependencyTreeGenerator.receivesPassedNilInMockTree`).
+		let concreteType = scope.instantiable.concreteInstantiable
+		func isPassedNilByMock(_ property: Property) -> Bool {
+			nearestDeclarations.passesNil(to: property, receivedBy: concreteType) && scope.createdBinding(of: property) == nil
+		}
 		var unavailableOptionalProperties = Set<Property>()
+		var receivesPassedNil = Set<Property>()
 		var aliasBindings = [Property: Property]()
 		for dependency in scope.instantiable.dependencies {
 			switch dependency.source {
 			case .instantiated, .forwarded:
 				break
 			case let .received(onlyIfAvailable):
-				if onlyIfAvailable, binding(of: dependency.property) == nil {
+				guard onlyIfAvailable else { break }
+				if isPassedNilByMock(dependency.property) {
+					receivesPassedNil.insert(dependency.property)
+					unavailableOptionalProperties.insert(dependency.property)
+				} else if binding(of: dependency.property) == nil {
 					unavailableOptionalProperties.insert(dependency.property)
 				}
 			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
 				// An `onlyIfAvailable` alias is always declared: bound to its fulfilling property where a form of it is
 				// available, and to `nil` otherwise. The type declaring it is passed the alias either way.
 				guard onlyIfAvailable else { break }
-				if let aliasBinding = binding(of: fulfillingProperty) {
+				if isPassedNilByMock(fulfillingProperty) {
+					receivesPassedNil.insert(fulfillingProperty)
+					unavailableOptionalProperties.insert(fulfillingProperty)
+				} else if let aliasBinding = binding(of: fulfillingProperty) {
 					aliasBindings[dependency.property] = aliasBinding
 				} else {
 					unavailableOptionalProperties.insert(fulfillingProperty)
@@ -700,6 +717,7 @@ private struct ScopeGeneratorUnderConstruction {
 			}
 		}
 		self.unavailableOptionalProperties = unavailableOptionalProperties
+		self.receivesPassedNil = receivesPassedNil
 		self.aliasBindings = aliasBindings
 		self.scope = scope
 		self.property = property
@@ -1302,6 +1320,7 @@ private struct ScopeGeneratorUnderConstruction {
 			fulfillingProperty: fulfillingProperty,
 			fulfillingPropertyIsLazilyInstantiatedInstance: instanceProperties.contains(fulfillingProperty.asUnwrappedProperty),
 			unavailableOptionalProperties: unavailableOptionalProperties,
+			fulfillingPropertyIsPassedNil: receivesPassedNil.contains(fulfillingProperty),
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			onlyIfAvailable: onlyIfAvailable,
 			// The declared property an `onlyIfAvailable` alias is bound from decides whether its value may be `nil`: a
@@ -1535,6 +1554,7 @@ private struct ScopeGeneratorUnderConstruction {
 			// A scope that closes a cycle creates no children.
 			propertiesToDeclare: isPropertyCycle ? [] : scope.propertiesToDeclare,
 			unavailableOptionalProperties: unavailableOptionalProperties,
+			receivesPassedNil: receivesPassedNil,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			forwardedLazilyInstantiatedInstanceProperties: scope.forwardedLazilyInstantiatedInstanceProperties,
 			erasedToConcreteExistential: erasedToConcreteExistential,
@@ -1679,6 +1699,9 @@ private struct ScopeGeneratorUnderConstruction {
 	private let callSiteLazilyInstantiatedInstanceProperties: Set<Property>
 	private let childLazilyInstantiatedInstanceProperties: Set<Property>
 	private let unavailableOptionalProperties: Set<Property>
+	/// Those of `unavailableOptionalProperties` that a mock passes `nil` though its root binds a form they read, which
+	/// therefore receive nothing from above this scope. Empty outside a mock's tree.
+	private let receivesPassedNil: Set<Property>
 	/// The generator the pass before created for this scope, or `nil` in the first pass (see `createScopeGenerator`).
 	private let previousPassGenerator: ScopeGenerator?
 	/// The properties of each type in the tree that hold a place, by which each scope's children start
@@ -2192,6 +2215,10 @@ struct NearestDeclaration: Sendable {
 	/// The forms of the label being built between the declaration and the scope: a receive of one of them reads a
 	/// declaration that is not built yet.
 	var formsBeingBuilt = Set<Property>()
+	/// The receives of the label only if available that read none of the declaration's forms, by the concrete type that
+	/// declares each: the property each receives (an alias's fulfilling property). Only a mock root's bindings hold any
+	/// (see `NearestDeclarations.binding(_:passingNilTo:)`), so a declaration nearer the receive reads as production's.
+	var receivesPassedNil = [TypeDescription: Set<Property>]()
 }
 
 /// The nearest declaration of each label on the path from a tree's root to a scope. A label absent here is declared
@@ -2224,6 +2251,7 @@ struct NearestDeclarations: Sendable {
 		guard !changedDeclarations.isEmpty else { return self }
 		var sharing = Self()
 		sharing.enclosingLayer = Layer(declarations: changedDeclarations, enclosingLayer: enclosingLayer)
+		sharing.holdsReceivesPassedNil = holdsReceivesPassedNil
 		return sharing
 	}
 
@@ -2258,6 +2286,9 @@ struct NearestDeclarations: Sendable {
 	private var enclosingLayer: Layer?
 	/// The declarations changed since `enclosingLayer`, which hide those of their labels there.
 	private var changedDeclarations = [String: NearestDeclaration]()
+	/// Whether a declaration enclosing the whole tree holds `NearestDeclaration.receivesPassedNil`, which only a mock
+	/// root's can, so that no other tree looks for one.
+	private var holdsReceivesPassedNil = false
 
 	/// Makes `nearestDeclaration` the nearest declaration of `label`.
 	private mutating func set(_ nearestDeclaration: NearestDeclaration, for label: String) {
@@ -2268,13 +2299,31 @@ struct NearestDeclarations: Sendable {
 extension NearestDeclarations {
 	/// The declarations a mock root's tree is enclosed by: each of `boundProperties`, the received properties the mock
 	/// binds, in `Property` order, each form bound to the first property that provides it. The mock binds each form once
-	/// and names every binding apart, so no binding hides another.
-	static func binding(_ boundProperties: some Collection<Property>) -> Self {
+	/// and names every binding apart, so no binding hides another. A receive in `receivesPassedNil`, by label and then by
+	/// the concrete type that declares it, reads none of them: production always passes it `nil`, since another receive
+	/// of its label pins the one declaration both read to a form it cannot read (see
+	/// `DependencyTreeGenerator.receivesPassedNilInMockTree`).
+	static func binding(
+		_ boundProperties: some Collection<Property>,
+		passingNilTo receivesPassedNil: [String: [TypeDescription: Set<Property>]] = [:],
+	) -> Self {
 		var nearestDeclarations = Self()
 		for boundProperty in boundProperties.sorted() {
 			nearestDeclarations.join(boundProperty, providing: CycleParameter.forms(providedBy: boundProperty))
 		}
+		for (label, receivesPassedNilByType) in receivesPassedNil {
+			var nearestDeclaration = nearestDeclarations[label] ?? NearestDeclaration()
+			nearestDeclaration.receivesPassedNil = receivesPassedNilByType
+			nearestDeclarations.set(nearestDeclaration, for: label)
+			nearestDeclarations.holdsReceivesPassedNil = true
+		}
 		return nearestDeclarations.sharingDeclarations()
+	}
+
+	/// Whether a receive of `property` only if available on `receivingType` reads none of the forms the nearest
+	/// declaration of its label binds, which a mock passes `nil` as production does.
+	func passesNil(to property: Property, receivedBy receivingType: TypeDescription) -> Bool {
+		holdsReceivesPassedNil && self[property.label]?.receivesPassedNil[receivingType]?.contains(property) == true
 	}
 
 	/// The binding a receive of `property` only if available reads, or `nil` when the property is unavailable: the

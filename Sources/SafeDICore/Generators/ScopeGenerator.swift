@@ -32,12 +32,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///     cycle, which builds nothing.
 	///   - closedOnDeclaration: For a scope that closes a property cycle, the declaration it repeats (see
 	///     `closedOnDeclaration`).
+	///   - receivesPassedNil: The properties the type's dependencies receive only if available that a mock passes `nil`
+	///     though its root binds a form they read, as production always passes them `nil` (see
+	///     `NearestDeclarations.binding(_:passingNilTo:)`): among `unavailableOptionalProperties`, and received from no
+	///     scope above, so that the mock root binds and offers nothing that only they would read.
 	init(
 		instantiable: Instantiable,
 		property: Property?,
 		propertiesToGenerate: [ScopeGenerator],
 		propertiesToDeclare: Set<Property>,
 		unavailableOptionalProperties: Set<Property>,
+		receivesPassedNil: Set<Property> = [],
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		forwardedLazilyInstantiatedInstanceProperties: [Property],
 		erasedToConcreteExistential: Bool,
@@ -466,6 +471,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			case .instantiated, .forwarded:
 				continue
 			case let .received(isOnlyIfAvailable):
+				// A receive a mock passes `nil` reads nothing from above.
+				guard !receivesPassedNil.contains(dependency.property) else { continue }
 				receivedProperty = dependency.property
 				onlyIfAvailable = isOnlyIfAvailable
 			case let .aliased(fulfillingProperty, _, isOnlyIfAvailable):
@@ -473,12 +480,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// (e.g., as an @Instantiated sibling) or forwarded, the alias
 				// binds against that local — it doesn't need to be received.
 				// An `onlyIfAvailable` alias binds a local of any form it reads.
+				// Nor does one a mock binds to `nil`.
 				guard !Self.declaresFulfillingProperty(
 					of: fulfillingProperty,
 					onlyIfAvailable: isOnlyIfAvailable,
 					declaredProperties: aliasBindingDeclaredProperties,
 					forwardedProperties: forwardedProperties,
-				) else { continue }
+				), !receivesPassedNil.contains(fulfillingProperty) else { continue }
 				receivedProperty = fulfillingProperty
 				onlyIfAvailable = isOnlyIfAvailable
 			}
@@ -590,17 +598,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			case .instantiated, .forwarded:
 				continue
 			case let .received(onlyIfAvailable):
-				guard onlyIfAvailable else { continue }
+				guard onlyIfAvailable, !receivesPassedNil.contains(dependency.property) else { continue }
 				onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.insert(dependency.property.asUnwrappedProperty)
 			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
 				// Skip locally-declared and forwarded fulfilling properties —
-				// the alias binds to the local, not to an ancestor.
+				// the alias binds to the local, not to an ancestor – and those a mock binds the alias `nil` for.
 				guard onlyIfAvailable, !Self.declaresFulfillingProperty(
 					of: fulfillingProperty,
 					onlyIfAvailable: true,
 					declaredProperties: aliasBindingDeclaredProperties,
 					forwardedProperties: forwardedProperties,
-				) else { continue }
+				), !receivesPassedNil.contains(fulfillingProperty) else { continue }
 				onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.insert(fulfillingProperty.asUnwrappedProperty)
 			}
 		}
@@ -767,6 +775,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fulfillingProperty: Property,
 		fulfillingPropertyIsLazilyInstantiatedInstance: Bool,
 		unavailableOptionalProperties: Set<Property>,
+		fulfillingPropertyIsPassedNil: Bool = false,
 		erasedToConcreteExistential: Bool,
 		onlyIfAvailable: Bool,
 		fulfillingBindingIsOptional: Bool,
@@ -781,13 +790,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			onlyIfAvailable: onlyIfAvailable,
 			declarationReference: declarationReference,
 		)
-		receivedProperties = [fulfillingProperty]
+		// An alias a mock binds to `nil`, as production always does, reads nothing from above (see `receivesPassedNil` of
+		// the scope that declares it).
+		receivedProperties = fulfillingPropertyIsPassedNil ? [] : [fulfillingProperty]
 		receivedOnlyByPublicMockCalls = []
 		passedByPublicMockCalls = []
 		if onlyIfAvailable {
 			requiredReceivedProperties = []
 			unwrappedOptionalRequiredReceivedProperties = []
-			onlyIfAvailableUnwrappedReceivedProperties = [fulfillingProperty.asUnwrappedProperty]
+			onlyIfAvailableUnwrappedReceivedProperties = fulfillingPropertyIsPassedNil ? [] : [fulfillingProperty.asUnwrappedProperty]
 			onlyIfAvailableDependencies = [OnlyIfAvailableDependency(unwrappedFulfillingProperty: fulfillingProperty.asUnwrappedProperty, unavailableProperties: [fulfillingProperty])]
 		} else {
 			requiredReceivedProperties = [fulfillingProperty]
@@ -8280,7 +8291,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				case .aliased, .forwarded:
 					false
 				}
-				if readsInstanceOfLazilyInstantiatedProperty {
+				if dependency.source == .received(onlyIfAvailable: true), unavailableOptionalProperties.contains(dependency.property) {
+					// Every only-if-available receive no ancestor provides is passed `nil`, as production passes it: those
+					// `receivesPassedNil` names (a form the root binds, read by no one) and those nothing above declares.
+					parts.append("\(argument.label.spelledAsArgumentLabel): nil")
+				} else if readsInstanceOfLazilyInstantiatedProperty {
 					let resolved = Self.disambiguatedLazilyInstantiatedBinding(
 						named: dependency.property.label,
 						withInstanceOfType: dependency.property.typeDescription.unwrapped,
