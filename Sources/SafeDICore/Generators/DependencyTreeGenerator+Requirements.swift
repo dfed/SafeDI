@@ -52,7 +52,7 @@ extension DependencyTreeGenerator {
 	/// they reject has no generated mock for the report to disagree with, and `generate` reports them with their fix-its.
 	///
 	/// The mock scope map reads no type the query names, so it is built once, with the first type listed, and every
-	/// later type is validated on its own (`validateListedMockRoot(named:mockScopes:validationInputs:receivedPropertiesCache:)`):
+	/// later type is validated on its own (`validateListedMockRoot(named:mockScopes:receivedPropertiesCache:)`):
 	/// once the first type's call succeeds, every tree but a later type's own has passed, so each type reports what a
 	/// call that listed it alone reports. No type after the first that throws is built: each reports that type's error,
 	/// since the caller reports that error and nothing after it.
@@ -60,19 +60,17 @@ extension DependencyTreeGenerator {
 		var results = [Result<TypeRequirements?, any Error>]()
 		// What every type's mock root is built from, once the first type's call has built it.
 		// `defaultsReadEmittingModule` says whether its flat parameter defaults were decided by a module's access.
-		var built: (mockScopes: MockScopes, validationInputs: MockScopeValidationInputs, receivedPropertiesCache: ReceivedPropertiesCache, defaultsReadEmittingModule: Bool)?
+		var built: (mockScopes: MockScopes, receivedPropertiesCache: ReceivedPropertiesCache, defaultsReadEmittingModule: Bool)?
 		for (index, query) in queries.enumerated() {
 			do {
 				let mockEmittingModule = constructsOnlyPublicDeclarations ? nil : query.mockEmittingModule
 				var mockScopes: MockScopes
-				let validationInputs: MockScopeValidationInputs
 				var receivedPropertiesCache: ReceivedPropertiesCache
 				if let built {
-					(mockScopes, validationInputs, receivedPropertiesCache, _) = built
+					(mockScopes, receivedPropertiesCache, _) = built
 					try validateListedMockRoot(
 						named: query.typeName,
 						mockScopes: mockScopes,
-						validationInputs: validationInputs,
 						receivedPropertiesCache: &receivedPropertiesCache,
 					)
 					// Which flat parameters default is decided by the module that emits this type's mock.
@@ -83,7 +81,7 @@ extension DependencyTreeGenerator {
 					receivedPropertiesCache = ReceivedPropertiesCache()
 					// The plans of other modules' public mocks are needed only while the map is built.
 					var foreignPublicMockPlans = PublicMockPlans()
-					(mockScopes, validationInputs) = try await mockScopesWithValidationInputs(
+					mockScopes = try await self.mockScopes(
 						additionalMocksToGenerate: [query.typeName],
 						mockEmittingModule: mockEmittingModule,
 						receivedPropertiesCache: &receivedPropertiesCache,
@@ -97,7 +95,7 @@ extension DependencyTreeGenerator {
 					receivedPropertiesCache: &receivedPropertiesCache,
 				)
 				// Only complete results outlive a walk, so the cache serves every later type.
-				built = (mockScopes, validationInputs, receivedPropertiesCache, mockEmittingModule != nil)
+				built = (mockScopes, receivedPropertiesCache, mockEmittingModule != nil)
 				results.append(.success(requirements))
 			} catch {
 				results += Array(repeating: .failure(error), count: queries.count - index)
@@ -127,6 +125,7 @@ extension DependencyTreeGenerator {
 		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
+		var constructionMemo = ConstructionMemo()
 		let mockRoot = try await createMockRoot(
 			for: instantiable,
 			scope: scope,
@@ -142,6 +141,7 @@ extension DependencyTreeGenerator {
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
+			constructionMemo: &constructionMemo,
 		)
 		// Whether a public mock can be generated is decided for one root and needs no emitting module, as
 		// `generateMockCode` decides it, so the query reports it too.
