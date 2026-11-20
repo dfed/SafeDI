@@ -237,16 +237,37 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keysPlacesOnCycle_whenTypeBuildsBuilderOfTypeAboveIt() async throws {
-		// `B` builds a builder of `A`, which builds `B`: `A` is built beneath `Root` and again beneath `B`, and `B` beneath
-		// each `A`, while `C` is built at one place.
+	mutating func generate_keysEveryPlace_whenTypeBuildsBuilderOfTypeAboveIt() async throws {
+		// `B` builds a builder of `A`, which builds `B`: the tree closes a cycle, so it may take a later pass, which reuses
+		// what the pass before built only through its keys, so `C`, built at one place, is keyed too.
 		let keyedTypes = try await typesKeyedInMemo(of: [
 			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let a: A", "@Instantiated let c: C"]),
 			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let b: B"]),
 			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
 			seamFixtureType(named: "C", isFinalClass: true, declarations: []),
 		])
-		#expect(keyedTypes == ["A", "B"])
+		#expect(keyedTypes == ["A", "B", "C"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsPlacesBeneathSettledPlaceOncePerTree_whenLazyCycleTakesSecondPass() async throws {
+		// `B` receives `token`, which `A`, between the cycle `bBuilder` closes and the function it closes on, declares again:
+		// the function takes `token`, which the first pass finds, so the tree takes a second pass. The chain `D0` to `D3`,
+		// each built at one place, is keyed in the first pass, and the second reuses `D0`'s generator, settled, without
+		// building `D1` to `D3` again: each place is counted where a pass keys it. The places of the cycle and of `Token`,
+		// built at several places, are keyed at each place in each pass.
+		let keyedPlaceCounts = try await keyedPlaceCountsInMemo(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let token: Token", "@Instantiated let a: A", "@Instantiated let d0: D0"]),
+			seamFixtureType(named: "Token", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let token: Token", "@Instantiated let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Received let token: Token", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "D0", isFinalClass: true, declarations: ["@Instantiated let d1: D1"]),
+			seamFixtureType(named: "D1", isFinalClass: true, declarations: ["@Instantiated let d2: D2"]),
+			seamFixtureType(named: "D2", isFinalClass: true, declarations: ["@Instantiated let d3: D3"]),
+			seamFixtureType(named: "D3", isFinalClass: true, declarations: []),
+		])
+		#expect(keyedPlaceCounts == ["A": 4, "B": 4, "D0": 2, "D1": 1, "D2": 1, "D3": 1, "Token": 6])
 	}
 
 	@Test
@@ -339,6 +360,22 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 			keyedTypes.insert(keyedType)
 		}
 		return keyedTypes
+	}
+
+	/// Generates `fixture` and returns how many times a pass of a tree keyed a place of each concrete type in its
+	/// construction memo.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func keyedPlaceCountsInMemo(of fixture: [String]) async throws -> [String: Int] {
+		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
+		_ = try await ConstructionMemoOracle.$keyedPlaceObserver.withValue({ continuation.yield($0) }) { [fixture] in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var keyedPlaceCounts = [String: Int]()
+		for await keyedType in stream {
+			keyedPlaceCounts[keyedType, default: 0] += 1
+		}
+		return keyedPlaceCounts
 	}
 
 	/// Generates `fixture` with the memo and without it, expects the same generated files, and returns them.

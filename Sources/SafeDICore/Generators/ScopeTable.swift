@@ -263,10 +263,21 @@ struct FrozenScopeMap {
 	) -> FrozenScopeMap {
 		var frozenScopeMap = self
 		frozenScopeMap.table.reachableKeys = Set(passScopeMap.keys)
-		for (key, scope) in passScopeMap {
-			if let id = table.storage.idByKey[key] {
-				frozenScopeMap.addedIDByScope[ObjectIdentifier(scope)] = id
+		var passEntries = Array(passScopeMap)
+		if let entryOrder = ScopeTableObservation.entryOrder {
+			passEntries = entryOrder(passEntries.count).map { passEntries[$0] }
+		}
+		// A scope the pass's map holds under several keys names the base's position of the first of them in
+		// `precedesInScopeOrder`, as a freeze orders a scope by its first key, so no order the entries arrive in decides it.
+		var firstKeyByScope = [ObjectIdentifier: TypeDescription]()
+		for (key, scope) in passEntries {
+			guard let id = table.storage.idByKey[key] else { continue }
+			let identifier = ObjectIdentifier(scope)
+			if let firstKey = firstKeyByScope[identifier], !TypeDescription.precedesInScopeOrder(key, firstKey) {
+				continue
 			}
+			firstKeyByScope[identifier] = key
+			frozenScopeMap.addedIDByScope[identifier] = id
 		}
 		var callScopeByID = [ScopeID: Scope]()
 		for scope in Self.scopesReached(from: rootScopes, passScopeMap: passScopeMap, fulfillingKey: fulfillingKey) where scope.seamCall != nil {
@@ -290,6 +301,9 @@ struct FrozenScopeMap {
 			overlaidCallRecords(callScopeByID.values.map(\.instantiable.concreteInstantiable.asSource).sorted())
 		}
 		frozenScopeMap.freezePendingScopes()
+		if let observer = ScopeTableObservation.observer {
+			observer(frozenScopeMap.table.projection)
+		}
 		return frozenScopeMap
 	}
 
@@ -484,10 +498,12 @@ extension ScopeTable {
 
 /// What the tests read of each freeze, and how they order its entries: set by the tests, never by the tool.
 public enum ScopeTableObservation {
-	/// When set, each freeze takes its map's entries in the order this returns, a permutation of the positions of as many
-	/// entries as it is passed, so that a test can show the table does not depend on the order entries arrive in.
+	/// When set, each freeze takes its map's entries, and each signature pass's overlay its pass map's, in the order this
+	/// returns, a permutation of the positions of as many entries as it is passed, so that a test can show a table does not
+	/// depend on the order entries arrive in.
 	@TaskLocal public static var entryOrder: (@Sendable (_ entryCount: Int) -> [Int])?
-	/// Called with each table a map freezes, as text (`ScopeTable.projection`).
+	/// Called with each table a map freezes, and each table a signature pass assembles (`FrozenScopeMap.overlaying`), as text
+	/// (`ScopeTable.projection`).
 	@TaskLocal public static var observer: (@Sendable (_ projection: String) -> Void)?
 	/// When set, called once per seam signature pass with each key whose record in the pass's table, assembled from the base
 	/// and the pass's overlay, differs from the record frozen from the pass's own map (by `ScopeTable.projectionByKey`), and

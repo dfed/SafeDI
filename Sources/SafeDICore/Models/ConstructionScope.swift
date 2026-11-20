@@ -141,25 +141,40 @@ struct ConstructionScope: Sendable {
 /// scope, so its place's generator is never reused there (see `ConstructionMemo`). A place a pass does not build (inside a
 /// cycle it closes, say) only leaves a scope out where it could be in. Records are shared by every table of one frozen
 /// map, and so by every tree built from it, so this is decided once per tree, from the tree's root.
+///
+/// A tree that may take a later pass keys every place: a later pass reuses a place's generator from the pass before only
+/// through its entry (`ConstructionMemo.settledReuse`), and without one builds the place's whole subtree again, every pass.
 struct ScopesBuiltAtOnePlace: Sendable {
-	init(treeRootedAt root: ConstructionScope) {
+	/// The scopes `root`'s tree builds at one place, or `nil` where the tree may take more than one pass: where a scope it
+	/// reaches reaches itself again, through the scopes it builds or the fills of its calls (a cycle the tree closes, whose
+	/// builder function can take parameters, or a call of a seam inside one of its own fills), or where a type it reaches
+	/// receives an instantiator, which a loop of builders can rebind (`Scope.createScopeGenerator` builds a tree again while
+	/// its cycle parameters, loops of builders or fills' labels change). Deciding a tree that takes one pass may take more
+	/// only keys places the pass looks up in vain; it changes no generated code.
+	init?(treeRootedAt root: ConstructionScope) {
 		// The records the root reaches through the scopes it builds and the fills of its calls, each appended when it is
 		// first referenced, after the record that references it, so the record that references a record referenced once
-		// precedes it, and one pass in that order decides every record. A record on a cycle is referenced by the cycle as
-		// well as from outside it, or descends from such a record, so no record on a cycle is at one place.
+		// precedes it, and one pass in that order decides every record.
 		var records = [root.record]
 		var indexByRecord = [ObjectIdentifier(root.record): 0]
 		var referenceCounts = [1]
 		var lastReferrers = [0]
+		var referencedIndices = [[Int]]()
 		var referrer = 0
 		while referrer < records.count {
+			for dependency in records[referrer].instantiable.dependencies where dependency.receivesInstantiator {
+				return nil
+			}
+			referencedIndices.append([])
 			func reference(_ id: ScopeID) {
 				let record = root.table[id]
 				if let index = indexByRecord[ObjectIdentifier(record)] {
 					referenceCounts[index] += 1
 					lastReferrers[index] = referrer
+					referencedIndices[referrer].append(index)
 				} else {
 					indexByRecord[ObjectIdentifier(record)] = records.count
+					referencedIndices[referrer].append(records.count)
 					records.append(record)
 					referenceCounts.append(1)
 					lastReferrers.append(referrer)
@@ -175,6 +190,22 @@ struct ScopesBuiltAtOnePlace: Sendable {
 			}
 			referrer += 1
 		}
+		// The records leave in topological order, each once every reference to it has: a record that never leaves is on a
+		// cycle, or beneath one.
+		var unremovedReferenceCounts = referenceCounts
+		unremovedReferenceCounts[0] -= 1
+		var recordsLeft = unremovedReferenceCounts[0] == 0 ? [0] : []
+		var leftCount = 0
+		while let index = recordsLeft.popLast() {
+			leftCount += 1
+			for referenced in referencedIndices[index] {
+				unremovedReferenceCounts[referenced] -= 1
+				if unremovedReferenceCounts[referenced] == 0 {
+					recordsLeft.append(referenced)
+				}
+			}
+		}
+		guard leftCount == records.count else { return nil }
 		var isAtOnePlace = [Bool]()
 		isAtOnePlace.reserveCapacity(records.count)
 		var recordsAtOnePlace = Set<ObjectIdentifier>()
