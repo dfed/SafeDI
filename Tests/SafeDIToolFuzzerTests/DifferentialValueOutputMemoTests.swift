@@ -194,6 +194,41 @@ struct DifferentialValueOutputMemoTests: ~Copyable {
 		#expect(second.tallyLine == "Value comparison programs: 1 compiled and run, 1 read from an earlier run, 1 compiled and run without being looked up or recorded because what they depend on could not be described (\(memoDirectory.path)).")
 	}
 
+	@Test
+	func record_listsTheKeyAsWrittenAndUsedInThisRun_whenTheProcessIsPartOfARun() throws {
+		let memo = DifferentialValueOutputMemo(directory: directory.appendingPathComponent("value-outputs"), run: "4242")
+		memo.record("probe a\n", for: "first")
+		memo.record("probe b\n", for: "second")
+		#expect(try lines(of: "value-outputs-written-in-run-4242.txt") == ["first", "second"])
+		#expect(try lines(of: "value-outputs-used-in-run-4242.txt") == ["first", "second"])
+	}
+
+	@Test
+	func output_listsTheKeyAsUsedAndNotAsWrittenInThisRun_whenAnEarlierRunRecordedIt() throws {
+		let memoDirectory = directory.appendingPathComponent("value-outputs")
+		DifferentialValueOutputMemo(directory: memoDirectory, run: "1").record("probe a\n", for: "restored")
+		let memo = DifferentialValueOutputMemo(directory: memoDirectory, run: "2")
+		#expect(memo.output(for: "restored") == "probe a\n")
+		#expect(memo.output(for: "never recorded") == nil)
+		#expect(try lines(of: "value-outputs-used-in-run-2.txt") == ["restored"])
+		#expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("value-outputs-written-in-run-2.txt").path))
+	}
+
+	@Test
+	func record_listsNothingInThisRun_whenTheOutputIsNotKept() {
+		let memo = DifferentialValueOutputMemo(directory: directory.appendingPathComponent("value-outputs"), run: "4242")
+		memo.record("probe a\n  file: /run-root/Root.swift\n", for: "key", fixtureRoots: ["/run-root"])
+		#expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("value-outputs-written-in-run-4242.txt").path))
+		#expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("value-outputs-used-in-run-4242.txt").path))
+	}
+
+	@Test(arguments: [nil, "", "../elsewhere"] as [String?])
+	func init_namesNoFilesOfTheRun_whenTheRunCannotNameAFile(run: String?) {
+		let memo = DifferentialValueOutputMemo(directory: directory.appendingPathComponent("value-outputs"), run: run)
+		#expect(memo.fileOfKeysWrittenInThisRun == nil)
+		#expect(memo.fileOfKeysUsedInThisRun == nil)
+	}
+
 	@Test(arguments: ["a fixture root", "a UUID"])
 	func record_keepsNothing_whenTheOutputSpellsWhatTheKeyRewrites(spelled: String) {
 		// The key is the same under another fixture root and other UUIDs, so an output that spells this run's would be
@@ -268,6 +303,11 @@ struct DifferentialValueOutputMemoTests: ~Copyable {
 	"""
 
 	private static let main = "print(1)\n"
+
+	/// The lines of the file `name` beside the memo's directory.
+	private func lines(of name: String) throws -> [String] {
+		try String(contentsOf: directory.appendingPathComponent(name), encoding: .utf8).split(separator: "\n").map(String.init)
+	}
 
 	private func key() throws -> String {
 		try DifferentialValueOutputMemo.key(

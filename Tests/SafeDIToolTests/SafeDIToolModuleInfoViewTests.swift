@@ -375,7 +375,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> AppFeature {
 				        _ = FeedService.__safeDI_FeedService_mock_51799E6AA5E7B634.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				        let feedService = FeedService.mock(safeDIOverrides: safeDIOverrides.feedService)
+				        let feedService = FeedService.__safeDI_mock(safeDIOverrides: safeDIOverrides.feedService)
 				        return AppFeature(feedService: feedService)
 				    }
 				}
@@ -429,7 +429,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> AppFeature {
 				        _ = FeedService.__safeDI_FeedService_mock_51799E6AA5E7B634.self // If this line does not compile, add the SafeDI plugin to the target that declares FeedService.
-				        let feedService = FeedService.mock(safeDIOverrides: safeDIOverrides.feedService)
+				        let feedService = FeedService.__safeDI_mock(safeDIOverrides: safeDIOverrides.feedService)
 				        return AppFeature(feedService: feedService)
 				    }
 				}
@@ -813,7 +813,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> AppFeature {
 			        _ = FeedService.__safeDI_FeedService_mock_51799E6AA5E7B634.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			        let feedService = FeedService.mock(safeDIOverrides: safeDIOverrides.feedService)
+			        let feedService = FeedService.__safeDI_mock(safeDIOverrides: safeDIOverrides.feedService)
 			        return AppFeature(feedService: feedService)
 			    }
 			}
@@ -862,7 +862,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> AppFeature {
 			        _ = FeedService.__safeDI_FeedService_mock_51799E6AA5E7B634.self // If this line does not compile, add the SafeDI plugin to the target that declares FeedService.
-			        let feedService = FeedService.mock(safeDIOverrides: safeDIOverrides.feedService)
+			        let feedService = FeedService.__safeDI_mock(safeDIOverrides: safeDIOverrides.feedService)
 			        return AppFeature(feedService: feedService)
 			    }
 			}
@@ -1043,6 +1043,51 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		#expect(try Self.withoutFixtureRoot(viewBytes(of: base, "App"), base) != Self.withoutFixtureRoot(viewBytes(of: received, "App"), received))
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesSameSeamSignatures_whenOnlyPositionsTheSignatureReadsChange() async throws {
+		// `FeedScreen`'s signature reads where `Session` receives `token`, and carries no position, so moving `Session`
+		// down changes neither `Feed.safedi`'s signatures nor `App.safedi`'s view.
+		let base = try await executeSafeDIToolMultiModuleTest(modules: Self.seamChain(appDependencies: ["Feed"]), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		let moved = try await executeSafeDIToolMultiModuleTest(modules: Self.seamChain(appDependencies: ["Feed"], sessionLeadingLines: 3), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		func viewBytes(of output: MultiModuleTestOutput, _ moduleName: String) throws -> [UInt8] {
+			var writer = BinaryWriter()
+			try writer.write(#require(output.modules[moduleName]?.moduleInfoFile?.view))
+			return writer.encoded
+		}
+		func ownSignatureBytes(of output: MultiModuleTestOutput, _ moduleName: String) throws -> [UInt8] {
+			var writer = BinaryWriter()
+			try writer.write(#require(output.modules[moduleName]?.moduleInfoFile?.seamSignatures))
+			return writer.encoded
+		}
+		func ownDeclarationBytes(of output: MultiModuleTestOutput, _ moduleName: String) throws -> [UInt8] {
+			var writer = BinaryWriter()
+			try writer.write(#require(output.modules[moduleName]?.moduleInfoFile?.instantiables))
+			return writer.encoded
+		}
+
+		#expect(try #require(base.modules["Feed"]?.moduleInfoFile?.seamSignatures).count == 1)
+		#expect(try ownDeclarationBytes(of: base, "Session") != ownDeclarationBytes(of: moved, "Session"))
+		#expect(try Self.withoutFixtureRoot(ownSignatureBytes(of: base, "Feed"), base) == Self.withoutFixtureRoot(ownSignatureBytes(of: moved, "Feed"), moved))
+		#expect(try Self.withoutFixtureRoot(viewBytes(of: base, "App"), base) == Self.withoutFixtureRoot(viewBytes(of: moved, "App"), moved))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesSameSeamSignatures_whenSeamsModuleGeneratesPlainInitializersOrNot() async throws {
+		// Only the seam's own module reads whether it generates plain initializers, so its callers read the same signature.
+		let withoutPlainInitializers = try await executeSafeDIToolMultiModuleTest(modules: Self.seamChain(appDependencies: ["Feed"]), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		let withPlainInitializers = try await executeSafeDIToolMultiModuleTest(modules: Self.seamChain(appDependencies: ["Feed"], feedGeneratesPlainInitializers: true), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		func ownSignatureBytes(of output: MultiModuleTestOutput) throws -> [UInt8] {
+			var writer = BinaryWriter()
+			try writer.write(#require(output.modules["Feed"]?.moduleInfoFile?.seamSignatures))
+			return writer.encoded
+		}
+
+		#expect(try withoutPlainInitializers.modules["Feed"]?.generatedFiles != withPlainInitializers.modules["Feed"]?.generatedFiles)
+		#expect(try Self.withoutFixtureRoot(ownSignatureBytes(of: withoutPlainInitializers), withoutPlainInitializers) == Self.withoutFixtureRoot(ownSignatureBytes(of: withPlainInitializers), withPlainInitializers))
+	}
+
 	// MARK: Tests – A view seam named like this module's type
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -1111,6 +1156,8 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		rootAlsoBuildsSession: Bool = false,
 		clockLeadingLines: Int = 0,
 		clockReceivesDate: Bool = false,
+		sessionLeadingLines: Int = 0,
+		feedGeneratesPlainInitializers: Bool = false,
 	) -> [ModuleFixture] {
 		let clock = String(repeating: "\n", count: clockLeadingLines) + (clockReceivesDate
 			? """
@@ -1129,7 +1176,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		return [
 			ModuleFixture(name: "Core", packageName: "Base", swiftFileContent: [clock]),
 			ModuleFixture(name: "Session", packageName: "Base", swiftFileContent: [
-				"""
+				String(repeating: "\n", count: sessionLeadingLines) + """
 				import Core
 
 				public struct Token {
@@ -1149,7 +1196,8 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 				""",
 			], dependencies: ["Core"], runsSafeDI: sessionRunsSafeDI),
 			ModuleFixture(name: "Feed", packageName: "Base", swiftFileContent: [
-				"import Session\n\n" + seamFixtureType(named: "FeedScreen", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let session: Session"]),
+				"import Session\n\n" + seamFixtureType(named: "FeedScreen", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let session: Session"])
+					+ (feedGeneratesPlainInitializers ? "\n\n#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)\n" : ""),
 			], dependencies: sessionIsSeam ? ["Session"] : ["Core", "Session"]),
 			ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
 				"import Feed\n" + (rootAlsoBuildsClock ? "import Core\n" : "") + (rootAlsoBuildsSession ? "import Session\n" : "") + "\n" + seamFixtureType(

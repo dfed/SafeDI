@@ -976,6 +976,14 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			        retries: (() -> Int)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Service {
+			        Service.__safeDI_mock(retries: retries, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        retries: (() -> Int)? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Service {
 			        let retries = retries ?? ({ 3 })
 			        func __safeDI_child() -> Child {
 			            return Child.__safeDI_init(capacity: safeDIOverrides.child.capacity, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
@@ -1257,6 +1265,13 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Service {
+			        Service.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Service {
 			        let __safeDI_childBuilder__childBuilder_limit = safeDIOverrides.childBuilder.limit
 			        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder
 			        @Sendable func __safeDI_childBuilder() -> Child {
@@ -1329,6 +1344,14 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			        retries: (() -> Int)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Service {
+			        Service.__safeDI_mock(retries: retries, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        retries: (() -> Int)? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Service {
 			        let retries = retries ?? ({ 3 })
 			        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
 			        return Service(session: session, retries: retries())
@@ -1379,7 +1402,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        _ = Service.__safeDI_Service_mock_88F7917B74D30085.self\(pluginComment)
-			        let service = Service.mock(safeDIOverrides: safeDIOverrides.service)
+			        let service = Service.__safeDI_mock(safeDIOverrides: safeDIOverrides.service)
 			        return Screen(service: service)
 			    }
 			}
@@ -1426,6 +1449,14 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        retries: (() -> Int)? = nil,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Service {
+				        Service.__safeDI_mock(retries: retries, safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        retries: (() -> Int)? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Service {
@@ -1490,6 +1521,14 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 				        retries: (() -> Int)? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Service {
+				        Service.__safeDI_mock(retries: retries, safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        retries: (() -> Int)? = nil,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Service {
 				        let retries = retries ?? ({ 3 })
 				        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
 				        return Service(session: session, retries: retries())
@@ -1542,7 +1581,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Screen {
 				        _ = Service.__safeDI_Service_mock_88F7917B74D30085.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				        let service = Service.mock(safeDIOverrides: safeDIOverrides.service)
+				        let service = Service.__safeDI_mock(safeDIOverrides: safeDIOverrides.service)
 				        return Screen(service: service)
 				    }
 				}
@@ -1598,7 +1637,7 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Screen {
 				        _ = Service.__safeDI_Service_mock_88F7917B74D30085.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
-				        let service = Service.mock(safeDIOverrides: safeDIOverrides.service)
+				        let service = Service.__safeDI_mock(safeDIOverrides: safeDIOverrides.service)
 				        return Screen(service: service)
 				    }
 				}
@@ -2206,6 +2245,14 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        retries: (() -> Int)? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Service {
+			        Service.__safeDI_mock(retries: retries, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        retries: (() -> Int)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Service {

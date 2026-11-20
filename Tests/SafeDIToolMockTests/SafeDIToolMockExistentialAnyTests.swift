@@ -800,6 +800,14 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 		        shared: (any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Lone {
+		        Lone.__safeDI_mock(shared: shared, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        shared: (any Service)? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Lone {
 		        let shared: any Service = if let shared { shared } else if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { DefaultService() }
 		        let grand = if let safeDIBuilder = safeDIOverrides.grand { safeDIBuilder(shared) } else { GrandChild(shared: shared) }
 		        return Lone(shared: shared, grand: grand)
@@ -923,6 +931,14 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        shared: \(spellings.mockedType),
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Lone {
+			        Lone.__safeDI_mock(shared: shared, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        shared: \(spellings.mockedType),
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
@@ -1218,6 +1234,14 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        shared: \(spellings.mockedTypeOptional) = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Lone {
+			        Lone.__safeDI_mock(shared: shared, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        shared: \(spellings.mockedTypeOptional) = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
@@ -1743,6 +1767,14 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			        shared: \(directReceive.spelling(aliasType: aliasType)),
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
+			        Lone.__safeDI_mock(shared: shared, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        shared: \(directReceive.spelling(aliasType: aliasType)),
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Lone {
 			        #sourceLocation(file: "\(output.fixtures["Lone.swift"])", line: \(directReceive.aliasLine))
 			        let other: \(aliasType) = shared
 			        #sourceLocation()
@@ -1812,6 +1844,14 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        shared: \(spelling.hasPrefix("any ") ? "(\(spelling))?" : "\(spelling)?") = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Lone {
+			        Lone.__safeDI_mock(shared: shared, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        shared: \(spelling.hasPrefix("any ") ? "(\(spelling))?" : "\(spelling)?") = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
@@ -2927,6 +2967,14 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        shared: any Service,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Lone {
+			        Lone.__safeDI_mock(shared: shared, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        shared: any Service,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Lone {
