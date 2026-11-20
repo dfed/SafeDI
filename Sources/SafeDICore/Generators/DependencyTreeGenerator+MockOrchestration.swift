@@ -503,18 +503,6 @@ extension DependencyTreeGenerator {
 		let declaration: TypeRequirements.Erasure.Declaration
 	}
 
-	/// What `mockScopes` validates a listed type's tree against, which `validateListedMockRoot` reads to validate the tree
-	/// of a type listed after the map is built.
-	struct MockScopeValidationInputs {
-		/// The calls of other modules' public mocks the mock trees make.
-		let publicMockCalls: [TypeDescription: PublicMockCall]
-		/// The mock scope map built with no call, with this module's fills.
-		let inlineTypeDescriptionToScopeMap: [TypeDescription: Scope]
-		/// The types each called type's fills instantiate that no declaration can fulfill, when the module compiles its
-		/// generated mocks.
-		let typesNoDeclarationCanFulfillByCalledType: [TypeDescription: Set<TypeDescription>]
-	}
-
 	/// Builds the mock scope map and validates it, and collects what every mock root is built with.
 	/// - Parameters:
 	///   - additionalMocksToGenerate: The names of the types whose mocks are generated because they are listed.
@@ -527,22 +515,6 @@ extension DependencyTreeGenerator {
 		receivedPropertiesCache: inout ReceivedPropertiesCache,
 		foreignPublicMockPlans: inout PublicMockPlans,
 	) async throws -> MockScopes {
-		try await mockScopesWithValidationInputs(
-			additionalMocksToGenerate: additionalMocksToGenerate,
-			mockEmittingModule: mockEmittingModule,
-			receivedPropertiesCache: &receivedPropertiesCache,
-			foreignPublicMockPlans: &foreignPublicMockPlans,
-		).mockScopes
-	}
-
-	/// `mockScopes(additionalMocksToGenerate:mockEmittingModule:receivedPropertiesCache:foreignPublicMockPlans:)`, with what
-	/// it validated the listed types' trees against.
-	func mockScopesWithValidationInputs(
-		additionalMocksToGenerate: Set<String>,
-		mockEmittingModule: EmittingModule?,
-		receivedPropertiesCache: inout ReceivedPropertiesCache,
-		foreignPublicMockPlans: inout PublicMockPlans,
-	) async throws -> (mockScopes: MockScopes, validationInputs: MockScopeValidationInputs) {
 		GenerationLayerObservation.record(.mockScopes(ofModule: seams.currentModule.moduleName), inRunOf: seams.currentModule.moduleName)
 		// Build a map of erased wrapper types → concrete fulfilling types.
 		// This lets mocks construct types like AnyUserService(DefaultUserService())
@@ -585,7 +557,6 @@ extension DependencyTreeGenerator {
 		// Every type built inline, the types whose public mocks the trees call among them, with this module's fills.
 		let inlineTypeDescriptionToScopeMap = typeDescriptionToScopeMap
 		var publicMockCalls = try await publicMockCalls(in: typeDescriptionToScopeMap, foreignPublicMockPlans: &foreignPublicMockPlans)
-		var typesNoDeclarationCanFulfillByCalledType = [TypeDescription: Set<TypeDescription>]()
 		let generatesPublicMock = typeDescriptionToFulfillingInstantiableMap.values.contains(where: { $0.generateMock == .public })
 		// Each kind of mock fills the same places and takes a builder for what a fill instantiates that nothing fulfills: a
 		// public mock through a hole of its own tree, an internal mock as a seam's internal mock does
@@ -598,8 +569,7 @@ extension DependencyTreeGenerator {
 			// module's mock condition, so a build that leaves it inactive never compiles the place the mock cannot fill, as
 			// `validateHandWrittenMocksTakeOnlyFulfilledParameters` is checked only there.
 			if compilesGeneratedMocks {
-				typesNoDeclarationCanFulfillByCalledType = fills.typesNoDeclarationCanFulfillByCalledType
-				try validateFillsInstantiateOnlyWhatCanBeFulfilled(typesNoDeclarationCanFulfillByCalledType, additionalMocksToGenerate: additionalMocksToGenerate)
+				try validateFillsInstantiateOnlyWhatCanBeFulfilled(fills.typesNoDeclarationCanFulfillByCalledType, additionalMocksToGenerate: additionalMocksToGenerate)
 			}
 			// A call that fills a builder declares no dependency for it, so the map is built again with the fills.
 			if !fills.filledHoles.isEmpty {
@@ -658,7 +628,7 @@ extension DependencyTreeGenerator {
 		let publicMockTypeDescriptionToScopeMap = generatesPublicMock
 			? createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCalls, buildsHoles: true)
 			: nil
-		let mockScopes = MockScopes(
+		return MockScopes(
 			erasureDeclarations: erasureDeclarations,
 			erasedToConcreteTypeMap: erasedToConcreteTypeMap,
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
@@ -667,14 +637,6 @@ extension DependencyTreeGenerator {
 			frozenPublicMockScopeMap: publicMockTypeDescriptionToScopeMap.map { map in FrozenScopeMap(freezing: map.lazy.map { (key: $0.key, scope: $0.value) }) },
 			flatParameterMockDefaults: flatParameterMockDefaults(in: typeDescriptionToScopeMap, emittingModule: mockEmittingModule),
 			handWrittenMockLocationsByConcreteType: handWrittenMockLocationsByConcreteType,
-		)
-		return (
-			mockScopes,
-			MockScopeValidationInputs(
-				publicMockCalls: publicMockCalls,
-				inlineTypeDescriptionToScopeMap: inlineTypeDescriptionToScopeMap,
-				typesNoDeclarationCanFulfillByCalledType: typesNoDeclarationCanFulfillByCalledType,
-			),
 		)
 	}
 
@@ -691,24 +653,16 @@ extension DependencyTreeGenerator {
 
 	/// Validates the tree of the type named `typeName` as `mockScopes` validates a listed type's, once `mockScopes` has
 	/// built and validated the map for another listed type: only what listing `typeName` adds is checked, in the order
-	/// `mockScopes` checks it – the fills its tree reaches, its renames, the calls with places its tree makes, and its
-	/// tree's cycles – since every other tree has passed. The checks of fills and of calls with places walk the trees of
-	/// the types that generate a mock again, which have passed; they do work only where the mocks call another module's
-	/// public mock.
+	/// `mockScopes` checks it – its renames, then its tree's cycles – since every other tree has passed. The query builds
+	/// its generators with no seams, so no mock tree calls another module's public mock, and the checks `mockScopes` runs
+	/// on such calls have nothing to check.
 	func validateListedMockRoot(
 		named typeName: String,
 		mockScopes: MockScopes,
-		validationInputs: MockScopeValidationInputs,
 		receivedPropertiesCache: inout ReceivedPropertiesCache,
 	) throws {
-		try validateFillsInstantiateOnlyWhatCanBeFulfilled(validationInputs.typesNoDeclarationCanFulfillByCalledType, additionalMocksToGenerate: [typeName])
 		let listedScopes = scopes(ofTypesNamed: [typeName], in: mockScopes.typeDescriptionToScopeMap)
 		try Self.validateRenamesAreSpelledAsTheMacroAccepts(inTreesRootedAt: Array(listedScopes), typeDescriptionToScopeMap: mockScopes.typeDescriptionToScopeMap)
-		try validateCyclesOfCallsWithPlaces(
-			publicMockCalls: validationInputs.publicMockCalls,
-			inlineTypeDescriptionToScopeMap: validationInputs.inlineTypeDescriptionToScopeMap,
-			additionalMocksToGenerate: [typeName],
-		)
 		try validatePropertiesAreFulfillable(
 			onRootScopes: [],
 			additionalMockRootScopes: listedScopes
