@@ -586,7 +586,7 @@ extension Instantiable {
 		dependencyLabelsInsideConditionalBlocks = try container.decode([String].self, forKey: .dependencyLabelsInsideConditionalBlocks)
 		sourceFilePath = try container.decodeIfPresent(String.self, forKey: .sourceFilePath)
 		declarationLocation = try container.decodeIfPresent(Dependency.DeclarationLocation.self, forKey: .declarationLocation)
-		rarelySetFields = try RarelySetFieldsBox(holding: RarelySetFields(
+		rarelySetFields = RarelySetFieldsBox(holding: RarelySetFields(
 			enclosingExtensionAccess: try container.decodeIfPresent(AccessDeclaration.self, forKey: .enclosingExtensionAccess),
 			mockGenerationArgumentRange: try container.decodeIfPresent(Dependency.SourceRange.self, forKey: .mockGenerationArgumentRange),
 			mockInitializer: try container.decodeIfPresent(Initializer.self, forKey: .mockInitializer),
