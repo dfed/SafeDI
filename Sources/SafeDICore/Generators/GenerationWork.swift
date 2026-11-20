@@ -115,7 +115,7 @@ public struct GenerationWork: Sendable {
 ///
 /// A set handed here shares its storage with the collection it came from, so the holder releases this value before it
 /// inserts into that collection: inserting while both hold the storage copies it.
-struct NamesConsultedInTurn {
+struct NamesConsultedInTurn: Sendable {
 	/// Names in `sets`, each asked in turn, apart from `exception`, which the last set does not hold for this asker.
 	init(_ sets: [Set<String>], exceptFromTheLast exception: String? = nil) {
 		self.sets = sets

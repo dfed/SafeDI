@@ -18,15 +18,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// A scope of a dependency tree whose code starts generating as soon as the tree exists, rather than when the scope
-/// above it asks for it. A running task holds its code’s async frames, so starting every scope’s code at once ran the
-/// frames of most of a tree together; the tests count the starts to check that only scopes of large subtrees, and the
-/// small subtrees directly beneath them, start early. Handed to `observer`, which the tests set, never the tool.
+/// A task on which the code of a dependency tree’s scopes starts generating as soon as the tree exists, rather than when
+/// the scope above each asks for it. A running task holds its code’s async frames, so starting every scope’s code at
+/// once ran the frames of most of a tree together; the tests count the tasks to check that only scopes of large
+/// subtrees start early, each on a task of its own, and the small subtrees directly beneath them in groups, one task
+/// each. Handed to `observer`, which the tests set, never the tool.
 public enum CodeTaskStart {
-	/// Called once for each scope whose code starts early, when set: by the tests, never by the tool.
+	/// Called once for each task that starts scopes’ code early, when set: by the tests, never by the tool.
 	@TaskLocal public static var observer: (@Sendable () -> Void)?
 
-	/// Tells `observer`, when set, that a scope’s code started early.
+	/// Tells `observer`, when set, that a task started scopes’ code early.
 	static func record() {
 		if let observer {
 			observer()
