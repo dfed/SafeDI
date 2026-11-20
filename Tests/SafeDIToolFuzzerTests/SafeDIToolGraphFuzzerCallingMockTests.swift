@@ -1628,6 +1628,40 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.comparedValues == compileVerificationIsEnabled)
 	}
 
+	/// The control's graphs call a second public mock that holds the hole in another form (`callsMixedFormMock`) in the
+	/// pinned number of its sixty graphs, at least ten of each place, so the cell test, which requires each control graph's
+	/// mock to pass up exactly the twin's one builder, judges both forms of each.
+	@Test
+	func noVisibleImplementationDraw_callsMixedFormMock_inPinnedNumberOfGraphs() {
+		let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .noVisibleImplementation }
+		let counts = [
+			"graphs": draws.count,
+			"plain": draws.count { $0.callsMixedFormMock && $0.cell.place == .plain },
+			"deferred": draws.count { $0.callsMixedFormMock && $0.cell.place == .deferred },
+		]
+		let firstSeed = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).first { GraphFuzzerCallingMockDraw(seed: $0).callsMixedFormMock }
+		print("calling-mock control mixed forms counts=\(counts.sorted { $0.key < $1.key }) firstSeed=\(firstSeed.map(String.init) ?? "none")")
+
+		#expect(counts == ["graphs": 60, "plain": 12, "deferred": 15])
+		#expect(firstSeed == 20)
+	}
+
+	/// Seed 20 draws the first control graph that also calls `Echo`, a public mock holding the hole in another form: the
+	/// calling mock takes one builder for both calls' places, as its twin does, where it took one per form before.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_takesTwinsOneBuilder_whenDrawnControlCallsMockHoldingHoleInAnotherForm() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 20)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 20)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .noVisibleImplementation, caller: .internal, place: .plain))
+		#expect(draw.callsMixedFormMock)
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.passUps.map(\.label) == [draw.holeBuilderLabel])
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
 	/// The seam caller's graphs share a builder between the caller's own places and the fill's, a fill that instantiates
 	/// its places as plain values outside every `@Sendable` function, in the pinned number of its twenty graphs.
 	@Test
