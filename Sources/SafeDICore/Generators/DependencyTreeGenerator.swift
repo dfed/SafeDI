@@ -3875,9 +3875,8 @@ public actor DependencyTreeGenerator {
 			}
 			rootScopesToGenerate.append(rootScope)
 		}
-		// A calling mock whose fill of a called public mock's place makes such a construction passes the place up and is
-		// accepted instead, a deliberate gap accepted for now that the calling-mock mirror work in 2.3.1 closes
-		// (`holesFilled(byCallsOf:in:)`, `seam-and-mock-contract.md`, rule 7).
+		// A calling mock whose fill of a called public mock's place makes such a construction reports the same declarations
+		// (`holesFilled(byCallsOf:in:)`).
 		guard inaccessibleConstructions.isEmpty else {
 			throw DependencyTreeGeneratorError.inaccessibleConstructions(inaccessibleConstructions)
 		}
@@ -4103,13 +4102,15 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// The constructions the code generated for the tree rooted at `rootScope` emits: the root's own, and each scope
-	/// the tree instantiates, transitively – the trees of the fills of each seam call it makes included – once each, in
-	/// no particular order.
+	/// the tree instantiates, transitively – the trees of the fills of each seam call it makes included, and of each call of
+	/// another module's public mock a mock root's tree makes – once each, in no particular order.
 	/// - Parameters:
 	///   - rootIsConstructedWithMockMethod: Whether the root is constructed with its hand-written mock method.
 	///   - rootReferenceLocation: Where this module refers to the root.
 	///   - isMock: Whether the tree is a mock's, which constructs each type it builds with its hand-written mock method
 	///     where that method returns a type the property accepts, as `ScopeGenerator` builds it.
+	///   - walksFillsOfPublicMockCalls: Whether a mock's tree is walked into the fills of the public mock calls it makes:
+	///     a mock root's tree, whose fills `holesFilled(byCallsOf:in:)` made without checking their constructions.
 	///   - emittingModule: The module the generated code compiles in, whose own files hold the dependencies that refer
 	///     to a construction.
 	///   - extendedTypes: The declarations the module reads, among which the declaration of a type an extension
@@ -4122,6 +4123,7 @@ public actor DependencyTreeGenerator {
 		emittingModule: EmittingModule,
 		extendedTypes: ExtendedTypeDeclarations,
 		leavingOut typesLeftOut: Set<TypeDescription> = [],
+		walksFillsOfPublicMockCalls: Bool = false,
 	) -> [Construction] {
 		var constructionsByKey = [ConstructionKey: Construction]()
 		// A scope can be reached along several paths, and the first reference location in source order is kept,
@@ -4183,8 +4185,8 @@ public actor DependencyTreeGenerator {
 			}
 		}
 		// The root is the module's own, or a mock's, so it is neither a seam candidate nor a seam built inline.
-		var scopesToWalk = [(scope: rootScope, usesMockMethod: rootIsConstructedWithMockMethod, referenceLocation: rootReferenceLocation, seamCandidateOnPaths: SeamCandidateOnPaths.agreed(nil), inlineSeamOnPath: DependencyTreeGeneratorError.InaccessibleConstruction.InlineSeam?.none, publicMockCandidate: candidate(of: rootScope.instantiable))]
-		while let (scope, usesMockMethod, referenceLocation, seamCandidateOnPaths, inlineSeamOnPath, publicMockCandidate) = scopesToWalk.popLast() {
+		var scopesToWalk = [(scope: rootScope, usesMockMethod: rootIsConstructedWithMockMethod, referenceLocation: rootReferenceLocation, seamCandidateOnPaths: SeamCandidateOnPaths.agreed(nil), inlineSeamOnPath: DependencyTreeGeneratorError.InaccessibleConstruction.InlineSeam?.none, publicMockCandidate: candidate(of: rootScope.instantiable), isInMockFill: false)]
+		while let (scope, usesMockMethod, referenceLocation, seamCandidateOnPaths, inlineSeamOnPath, publicMockCandidate, isInMockFill) = scopesToWalk.popLast() {
 			let key = ConstructionKey(scope: ObjectIdentifier(scope), usesMockMethod: usesMockMethod)
 			let walkedConstruction = constructionsByKey[key]
 			let isEarliestPath = walkedConstruction.map { Dependency.DeclarationLocation.precedesInSourceOrder(referenceLocation, $0.referenceLocation) } ?? true
@@ -4217,27 +4219,32 @@ public actor DependencyTreeGenerator {
 					// Every path to the child through this scope extends a path to this scope.
 					seamCandidateOnPaths: mergedSeamCandidateOnPaths.extended(to: childScope.instantiable, childIsCandidate: isSeamCandidate(childScope.instantiable), candidatesModuleReads: candidatesModuleReads),
 					inlineSeamOnPath: inlineSeamOnPath ?? inlineSeam(builtBy: childScope, referencedAt: childReferenceLocation),
-					publicMockCandidate: publicMockCandidate ?? candidate(of: childScope.instantiable),
+					// A mock's fill offers only the remedy its production twin's error offers: widening the declaration.
+					publicMockCandidate: isInMockFill ? nil : publicMockCandidate ?? candidate(of: childScope.instantiable),
+					isInMockFill: isInMockFill,
 				))
 			}
 			// A seam call's fills are constructions of this module's code: the fulfilling type and its tree, built with
-			// their initializers as the type's own module builds them, reached where the call is. A mock's tree calls no
-			// seam's generated initializer, and fills another module's public mock's builder only where every construction
-			// of the fill is one this module can reach (`holesFilled(byCallsOf:in:)`), so only a production tree's fills
-			// are walked. A fill starts a path of its own, whose candidate is the fill's type when another module SafeDI
-			// knows declares it: declared a seam, that module builds the type's tree and the fill calls the initializer
-			// generated for it. No candidate above the seam reaches the fill: a type above the seam declared a seam would
-			// pass the builder up to this module whenever its own module cannot see the fulfilling type, so it would keep
-			// the fill out of this module for no path.
-			if !isMock {
-				for case let .fill(_, fillScope) in scope.holeArguments {
+			// their initializers as the type's own module builds them, reached where the call is. A fill starts a path of its
+			// own, whose candidate is the fill's type when another module SafeDI knows declares it: declared a seam, that
+			// module builds the type's tree and the fill calls the initializer generated for it. No candidate above the seam
+			// reaches the fill: a type above the seam declared a seam would pass the builder up to this module whenever its
+			// own module cannot see the fulfilling type, so it would keep the fill out of this module for no path. A mock's
+			// tree calls no seam's generated initializer, but a mock root's tree fills the places of the public mocks of other
+			// modules it calls as its production twin fills them, so its fills are walked too, built as the inline mock
+			// builds them (`holesFilled(byCallsOf:in:)`). A mock builds every seam's tree inline and the twin calls no public
+			// mock, so neither remedy reaches a mock's fill: its error offers what the twin's offers in every case, widening
+			// the declaration.
+			if !isMock || walksFillsOfPublicMockCalls {
+				for case let .fill(hole, fillScope) in scope.holeArguments {
 					scopesToWalk.append((
 						scope: fillScope,
-						usesMockMethod: false,
+						usesMockMethod: isMock && fillScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: hole.property.typeDescription.asInstantiatedType),
 						referenceLocation: referenceLocation,
 						seamCandidateOnPaths: SeamCandidateOnPaths.agreed(nil).extended(to: fillScope.instantiable, childIsCandidate: isSeamCandidate(fillScope.instantiable), candidatesModuleReads: candidatesModuleReads),
 						inlineSeamOnPath: inlineSeamOnPath ?? inlineSeam(builtBy: fillScope, referencedAt: referenceLocation),
 						publicMockCandidate: nil,
+						isInMockFill: isMock,
 					))
 				}
 			}
@@ -6968,7 +6975,9 @@ public actor DependencyTreeGenerator {
 			let rootReferenceLocation = instantiable.sourceFilePath.map(emittingModule.isOwnFile) ?? false
 				? instantiable.declarationLocation
 				: emittingModule.additionalMocksToGenerateLocation
-			// A mock constructs its root with the root's hand-written mock whenever it has one.
+			// A mock constructs its root with the root's hand-written mock whenever it has one. The fills of the calls its tree
+			// makes are constructions of its code too, which `holesFilled(byCallsOf:in:)` left to this check in a build that
+			// compiles the generated mocks; elsewhere it made only fills whose every construction this module can reach.
 			let constructions = Self.constructions(
 				inTreeRootedAt: mockRootScope,
 				rootIsConstructedWithMockMethod: instantiable.mockInitializer != nil,
@@ -6976,6 +6985,7 @@ public actor DependencyTreeGenerator {
 				isMock: true,
 				emittingModule: emittingModule,
 				extendedTypes: extendedTypeDeclarations,
+				walksFillsOfPublicMockCalls: compilesGeneratedMocks,
 			)
 			let inaccessibleConstructions = Self.inaccessibleConstructions(
 				constructions,
@@ -9451,8 +9461,9 @@ public actor DependencyTreeGenerator {
 	/// `typeDescriptionToScopeMap`, in which every call passes every builder up. A module fills a place where the same tree
 	/// built for production fills it: where a declaration it sees fulfills the place, as the mock's tree built inline would
 	/// build it (`fulfillingMockScope(of:in:)`: a hand-written mock or a `mockOnly` fake included), and the fill builds that
-	/// tree as the inline mock would, every construction in it one this module can reach, hand-written mock methods
-	/// included. What the fill receives beside the values the place's scope struct carries is received from the calling
+	/// tree as the inline mock would, hand-written mock methods included. A construction in it this module cannot reach is
+	/// the access error production reports, which the mock root whose tree reaches the call reports too, in a build that
+	/// compiles the generated mocks; a build that does not passes such a place up. What the fill receives beside the values the place's scope struct carries is received from the calling
 	/// mock's tree, as production's fill receives it from the caller's: a value the tree provides is handed to the fill, one
 	/// nothing provides is a parameter of `mock()`, and one the called mock's tree binds where the fill cannot read it is the
 	/// error production reports (`validateFills`). Every other place is passed up: the calling mock takes it, through a case
@@ -9482,25 +9493,26 @@ public actor DependencyTreeGenerator {
 		for calledType in publicMockCalls.keys.sorted() {
 			guard let publicMockCall = publicMockCalls[calledType] else { continue }
 			for hole in publicMockCall.holes {
-				// A deliberate gap, accepted for now: where the fill's tree constructs a type this module cannot reach, such as
-				// an `internal` type of another package, the calling mock passes the place up and is accepted, while its
-				// production twin reports that construction's access error (`rootScopesThisModuleGenerates(from:checkingSeamTrees:)`).
-				// The calling-mock mirror work in 2.3.1 has the calling mock report it too (`seam-and-mock-contract.md`, rule 7).
-				guard let fulfillingScope = Self.fulfillingMockScope(of: hole, in: typeDescriptionToScopeMap),
-				      Self.inaccessibleConstructions(
-				      	Self.constructions(
-				      		inTreeRootedAt: fulfillingScope,
-				      		rootIsConstructedWithMockMethod: fulfillingScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: hole.property.typeDescription.asInstantiatedType),
-				      		rootReferenceLocation: nil,
-				      		isMock: true,
-				      		emittingModule: emittingModule,
-				      		extendedTypes: extendedTypeDeclarations,
-				      		leavingOut: Set(publicMockCalls.keys),
-				      	),
-				      	from: emittingModule,
-				      	extendedTypes: extendedTypeDeclarations,
-				      ).isEmpty
-				else { continue }
+				guard let fulfillingScope = Self.fulfillingMockScope(of: hole, in: typeDescriptionToScopeMap) else { continue }
+				// A fill whose tree constructs a type this module cannot reach, such as an `internal` type of another module, is
+				// filled, as its production twin fills it, and the mock root whose tree reaches the call reports the twin's
+				// access error (`createMockRootScopeGenerator`, which walks the fills of the calls in its tree). The generated
+				// mocks are under the module's mock condition, so a build that leaves it inactive, which never compiles the fill,
+				// passes the place up and reports nothing, as `validateFillsInstantiateOnlyWhatCanBeFulfilled` is checked only
+				// where the mocks compile.
+				guard compilesGeneratedMocks || Self.inaccessibleConstructions(
+					Self.constructions(
+						inTreeRootedAt: fulfillingScope,
+						rootIsConstructedWithMockMethod: fulfillingScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: hole.property.typeDescription.asInstantiatedType),
+						rootReferenceLocation: nil,
+						isMock: true,
+						emittingModule: emittingModule,
+						extendedTypes: extendedTypeDeclarations,
+						leavingOut: Set(publicMockCalls.keys),
+					),
+					from: emittingModule,
+					extendedTypes: extendedTypeDeclarations,
+				).isEmpty else { continue }
 				let typesNoDeclarationCanFulfill = Self.typesThatCannotBeHoles(inTreeRootedAt: fulfillingScope)
 				guard typesNoDeclarationCanFulfill.isEmpty else {
 					typesNoDeclarationCanFulfillByCalledType[calledType, default: []].formUnion(typesNoDeclarationCanFulfill)
