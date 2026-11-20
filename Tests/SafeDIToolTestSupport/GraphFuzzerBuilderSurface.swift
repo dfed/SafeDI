@@ -1299,10 +1299,15 @@ extension GraphFuzzerBuilderSurface {
 	}
 
 	/// Whether every error of `diagnostics` is the tool's rejection of a value that is not `Sendable` received inside a
-	/// `@Sendable` function, the right outcome of moving a place whose tree receives one into the `@Sendable` family.
+	/// `@Sendable` function, or of a fill that reads a value declared outside the `@Sendable` function that builds its place,
+	/// whose builder is handed only what that function binds (public mock corpus seed 2486): the right outcomes of moving a
+	/// place whose tree receives one into the `@Sendable` family.
 	static func rejectsOnlyValuesNotSendable(_ diagnostics: String) -> Bool {
 		let errors = diagnostics.split(separator: "\n").filter { $0.contains(": error: ") }
-		return !errors.isEmpty && errors.allSatisfy { $0.contains("cannot be received inside a `@Sendable` function") }
+		return !errors.isEmpty && errors.allSatisfy { error in
+			error.contains("cannot be received inside a `@Sendable` function")
+				|| (error.contains(" declares outside the `@Sendable` function that builds ") && error.contains(GraphFuzzerOracle.publicMockSendableFunctionCarryErrorMarker))
+		}
 	}
 
 	/// Whether every error of `diagnostics` is the tool's rejection of a fill that reads a value a seam binds where it calls
