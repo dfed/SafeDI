@@ -1711,7 +1711,6 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			validatesForwardedProperties: validatesForwardedProperties,
 			buildsWithHandWrittenMocks: buildsWithHandWrittenMocks,
 			mayPassNil: nearestDeclarations(ofChildBuilding: property).mayPassNil,
-			judgesPlacesPinnedFromAbove: nearestDeclarations(ofChildBuilding: property).judgesPlacesPinnedFromAbove,
 			lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 			reboundProperties: childReboundProperties,
 			spellings: Property.spellingsForConstructionMemo(of: property, childLazilyInstantiatedInstanceProperties, childReboundProperties),
