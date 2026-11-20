@@ -6576,14 +6576,13 @@ public actor DependencyTreeGenerator {
 				worklist.append(property)
 			}
 		} while !worklist.isEmpty
-		// A public mock takes what the calls of other modules' public mocks in its tree pass and nothing else in its tree
-		// receives, as a parameter that defaults to `nil`, which it passes on.
-		if instantiable.generateMock == .public {
-			// A wrapper promoted for them stands for its instance too.
-			let surfacedByPublicMockCalls = passedByPublicMockCalls.subtracting(allReceived).subtracting(allReceived.compactMap(\.asLazilyInstantiatedInstanceProperty))
-			allReceived.formUnion(surfacedByPublicMockCalls)
-			allOnlyIfAvailable.formUnion(surfacedByPublicMockCalls)
-		}
+		// A mock takes what the calls of other modules' public mocks in its tree pass and nothing else in its tree receives,
+		// as a receive only if available, which it passes on: a public mock as a parameter that defaults to `nil`, and an
+		// internal one as an override that does, as it takes its own tree's receive only if available.
+		// A wrapper promoted for them stands for its instance too.
+		let surfacedByPublicMockCalls = passedByPublicMockCalls.subtracting(allReceived).subtracting(allReceived.compactMap(\.asLazilyInstantiatedInstanceProperty))
+		allReceived.formUnion(surfacedByPublicMockCalls)
+		allOnlyIfAvailable.formUnion(surfacedByPublicMockCalls)
 		allOnlyIfAvailable.subtract(allRequired)
 
 		// Promote all received properties that have scopes.
