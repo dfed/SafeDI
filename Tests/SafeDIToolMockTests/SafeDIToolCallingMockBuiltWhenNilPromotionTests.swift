@@ -28,7 +28,7 @@ import Testing
 /// dependency’s whole tree, the fills of the public mock calls in that tree included, in a build that compiles the
 /// generated mocks. `Screen`, in `App`, calls `Cache`’s public mock, which receives `widget`; `Widget` calls `Panel`’s public
 /// mock, whose place `App` fills with `MidService`, which instantiates `any Clock`, which only `Meter`, `package` in another
-/// package, fulfills. So `App` passes `nil` and `Cache`’s mock builds `widget` in `Mid`, which can construct `Meter`.
+/// package, fulfills. So `App` passes its override, `nil` by default, and `Cache`’s mock builds `widget` in `Mid`, which can construct `Meter`.
 struct SafeDIToolCallingMockBuiltWhenNilPromotionTests: ~Copyable {
 	// MARK: Initialization
 
@@ -138,14 +138,17 @@ struct SafeDIToolCallingMockBuiltWhenNilPromotionTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            cache: Cache.SafeDIOverrides = .init()
+		            cache: Cache.SafeDIOverrides = .init(),
+		            widget: Widget? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                cache: cache
 		            )
+		            self.widget = widget
 		        }
 
 		        var cache: Cache.SafeDIOverrides { __safeDI_storage.cache }
+		        let widget: Widget?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -163,8 +166,9 @@ struct SafeDIToolCallingMockBuiltWhenNilPromotionTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let widget: Widget? = safeDIOverrides.widget
 		        _ = Cache.__safeDI_Cache_mock_C2F35604B39B78BB.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let cache = Cache.__safeDI_mock(widget: nil, safeDIOverrides: safeDIOverrides.cache)
+		        let cache = Cache.__safeDI_mock(widget: widget, safeDIOverrides: safeDIOverrides.cache)
 		        return Screen(cache: cache)
 		    }
 		}
