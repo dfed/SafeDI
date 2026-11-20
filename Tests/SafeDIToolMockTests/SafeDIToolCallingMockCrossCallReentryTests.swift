@@ -196,6 +196,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        func __safeDI_page() -> Page {
@@ -205,7 +206,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                        func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
 		                        }
-		                        return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book())
+		                        return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 		                    }
 		                    let book: Book = __safeDI_book()
 		                    return DefaultService(book: book)
@@ -217,7 +218,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 		            }
 		            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
+		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Page_service() } }) } else { Page.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page()) }
 		        }
 		        let page: Page = __safeDI_page()
 		        return Screen(page: page)
@@ -378,13 +379,15 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    }
 
 		    public static func mock(
+		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        Screen.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+		        Screen.__safeDI_mock(serviceBuilder: serviceBuilder, safeDIOverrides: safeDIOverrides)
 		    }
 
 		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 		    public static func __safeDI_mock(
+		        serviceBuilder __safeDI_serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        func __safeDI_page() -> Page {
@@ -394,7 +397,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                        func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
 		                        }
-		                        return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book())
+		                        return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 		                    }
 		                    let book: Book = __safeDI_book()
 		                    return DefaultService(book: book)
@@ -406,7 +409,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 		            }
 		            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
+		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ if let __safeDI_serviceBuilder { __safeDI_serviceBuilder() } else { __safeDI_serviceBuilder_Page_service() } }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page()) }
 		        }
 		        let page: Page = __safeDI_page()
 		        return Screen(page: page)
@@ -414,7 +417,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_mock_51799E6AA5E7B634 {}
+		    public enum __safeDI_Screen_mock_E1553F902C7FFA09 {}
 		}
 		#endif
 		"""])
@@ -571,6 +574,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        func __safeDI_page() -> Page {
@@ -580,7 +584,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                        func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
 		                        }
-		                        return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book())
+		                        return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 		                    }
 		                    let book: Book = __safeDI_book()
 		                    return DefaultService(book: book)
@@ -592,7 +596,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 		            }
 		            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
+		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Page_service() } }) } else { Page.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page()) }
 		        }
 		        let page: Page = __safeDI_page()
 		        return Screen(page: page)
@@ -753,6 +757,8 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        serviceBuilder: (() -> any Service)? = nil,
+		        serviceSendableBuilder: (@Sendable () -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        func __safeDI_page() -> Page {
@@ -762,7 +768,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book() -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
 		                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
 		                        }
-		                        return Book.__safeDI_mock(serviceSendableBuilder: __safeDI_serviceSendableBuilder_Book())
+		                        return Book.__safeDI_mock(serviceSendableBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book())
 		                    }
 		                    let book: Book = __safeDI_book()
 		                    return DefaultService(book: book)
@@ -774,7 +780,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 		            }
 		            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
+		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Page_service() } }) } else { Page.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page()) }
 		        }
 		        let page: Page = __safeDI_page()
 		        return Screen(page: page)
@@ -936,6 +942,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        defaultService_ServiceBuilder: ErasedInstantiator<Int, any Service>.Builder? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        func __safeDI_page() -> Page {
@@ -945,7 +952,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                        func __safeDI_defaultService_ServiceBuilder_Book() -> Book.SafeDIMockScope_DefaultService_Service.__safeDI_Builder<any Service> {
 		                            .init(pageBuilder: { _ in __safeDI_defaultService_ServiceBuilder_Page() })
 		                        }
-		                        return Book.__safeDI_mock(defaultService_ServiceBuilder: __safeDI_defaultService_ServiceBuilder_Book())
+		                        return Book.__safeDI_mock(defaultService_ServiceBuilder: defaultService_ServiceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_defaultService_ServiceBuilder_Book())
 		                    }
 		                    let book: Book = __safeDI_book()
 		                    return DefaultService(id: id, book: book)
@@ -956,7 +963,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                .init(serviceBuilder: { _ in __safeDI_defaultService_ServiceBuilder_Page_serviceBuilder() })
 		            }
 		            _ = Page.__safeDI_Page_mock_D15A253F853DBCB8.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder(__safeDI_defaultService_ServiceBuilder_Page_serviceBuilder()) } else { Page.__safeDI_mock(defaultService_ServiceBuilder: __safeDI_defaultService_ServiceBuilder_Page()) }
+		            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder(__safeDI_defaultService_ServiceBuilder_Page_serviceBuilder()) } else { Page.__safeDI_mock(defaultService_ServiceBuilder: defaultService_ServiceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_defaultService_ServiceBuilder_Page()) }
 		        }
 		        let page: Page = __safeDI_page()
 		        return Screen(page: page)
@@ -1119,6 +1126,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
@@ -1129,7 +1137,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                        func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page(token: token) })
 		                        }
-		                        return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book())
+		                        return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 		                    }
 		                    let book: Book = __safeDI_book()
 		                    return DefaultService(token: token, book: book)
@@ -1141,7 +1149,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, token: token) })
 		            }
 		            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-		            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(token: token))
+		            return Page.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page(token: token))
 		        }
 		        let page: Page = __safeDI_page()
 		        return Screen(token: token, page: page)
@@ -2943,6 +2951,8 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			    }
 
 			    static func mock(
+			        serviceBuilder: (() -> any Service)? = nil,
+			        storeBuilder: (() -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
@@ -2957,7 +2967,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			                                    func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                                        .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
 			                                    }
-			                                    return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book())
+			                                    return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 			                                }
 			                                let book: Book = __safeDI_book()
 			                                return DefaultStore(token: token, book: book)
@@ -2968,7 +2978,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			                        func __safeDI_storeBuilder_Chapter(token: Token) -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
 			                            .init(store: { scope in __safeDI_storeBuilder_Chapter_store(scope, token: token) })
 			                        }
-			                        return Chapter.__safeDI_mock(storeBuilder: __safeDI_storeBuilder_Chapter(token: token))
+			                        return Chapter.__safeDI_mock(storeBuilder: storeBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter(token: token))
 			                    }
 			                    let chapter: Chapter = __safeDI_chapter()
 			                    return DefaultService(chapter: chapter)
@@ -2980,7 +2990,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope) })
 			            }
 			            _ = Page.__safeDI_Page_mock_C5813F6661CC087D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(), token: token, safeDIOverrides: safeDIOverrides.page)
+			            return Page.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page(), token: token, safeDIOverrides: safeDIOverrides.page)
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(token: token, page: page)
@@ -3034,13 +3044,17 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        serviceBuilder: (() -> any Service)? = nil,
+			        storeBuilder: (() -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        Screen.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			        Screen.__safeDI_mock(serviceBuilder: serviceBuilder, storeBuilder: storeBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
+			        serviceBuilder __safeDI_serviceBuilder: (() -> any Service)? = nil,
+			        storeBuilder __safeDI_storeBuilder: (() -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
@@ -3055,7 +3069,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			                                    func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                                        .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
 			                                    }
-			                                    return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book())
+			                                    return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 			                                }
 			                                let book: Book = __safeDI_book()
 			                                return DefaultStore(token: token, book: book)
@@ -3066,7 +3080,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			                        func __safeDI_storeBuilder_Chapter(token: Token) -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
 			                            .init(store: { scope in __safeDI_storeBuilder_Chapter_store(scope, token: token) })
 			                        }
-			                        return Chapter.__safeDI_mock(storeBuilder: __safeDI_storeBuilder_Chapter(token: token))
+			                        return Chapter.__safeDI_mock(storeBuilder: __safeDI_storeBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter(token: token))
 			                    }
 			                    let chapter: Chapter = __safeDI_chapter()
 			                    return DefaultService(chapter: chapter)
@@ -3078,7 +3092,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope) })
 			            }
 			            _ = Page.__safeDI_Page_mock_C5813F6661CC087D.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(), token: token, safeDIOverrides: safeDIOverrides.page)
+			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page(), token: token, safeDIOverrides: safeDIOverrides.page)
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(token: token, page: page)
@@ -3086,7 +3100,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_mock_51799E6AA5E7B634 {}
+			    public enum __safeDI_Screen_mock_09E8DCF90ED408D2 {}
 			}
 			#endif
 			"""
@@ -3366,6 +3380,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			    }
 
 			    static func mock(
+			        apiBuilder: (() -> any Api)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let log = if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
@@ -3378,7 +3393,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			                })
 			            }
 			            _ = F.__safeDI_F_mock_1D31C9B170A3800B.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "F", declaringModule: "Feat"))
-			            return F.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_F(), safeDIOverrides: safeDIOverrides.f)
+			            return F.__safeDI_mock(apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_F(), safeDIOverrides: safeDIOverrides.f)
 			        }
 			        let f: F = __safeDI_f()
 			        return Root(log: log, f: f)
@@ -3429,6 +3444,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			    }
 
 			    static func mock(
+			        apiBuilder: (() -> any Api)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let log = if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
@@ -3444,7 +3460,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			                })
 			            }
 			            _ = F.__safeDI_F_mock_015C3EAC9CDA7248.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "F", declaringModule: "Feat"))
-			            return F.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_F(), safeDIOverrides: safeDIOverrides.f)
+			            return F.__safeDI_mock(apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_F(), safeDIOverrides: safeDIOverrides.f)
 			        }
 			        let f: F = __safeDI_f()
 			        return Root(log: log, f: f)
@@ -3495,13 +3511,15 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        apiBuilder: (() -> any Api)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			        Root.__safeDI_mock(apiBuilder: apiBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
+			        apiBuilder __safeDI_apiBuilder: (() -> any Api)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let log = if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
@@ -3514,7 +3532,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			                })
 			            }
 			            _ = F.__safeDI_F_mock_1D31C9B170A3800B.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "F", declaringModule: "Feat"))
-			            return F.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_F(), safeDIOverrides: safeDIOverrides.f)
+			            return F.__safeDI_mock(apiBuilder: __safeDI_apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_F(), safeDIOverrides: safeDIOverrides.f)
 			        }
 			        let f: F = __safeDI_f()
 			        return Root(log: log, f: f)
@@ -3522,7 +3540,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			}
 
 			extension Root {
-			    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+			    public enum __safeDI_Root_mock_BEDDA3C65C73F485 {}
 			}
 			#endif
 			"""
@@ -3569,13 +3587,15 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        apiBuilder: (() -> any Api)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			        Root.__safeDI_mock(apiBuilder: apiBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
+			        apiBuilder __safeDI_apiBuilder: (() -> any Api)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let log = if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
@@ -3591,7 +3611,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			                })
 			            }
 			            _ = F.__safeDI_F_mock_015C3EAC9CDA7248.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "F", declaringModule: "Feat"))
-			            return F.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_F(), safeDIOverrides: safeDIOverrides.f)
+			            return F.__safeDI_mock(apiBuilder: __safeDI_apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_F(), safeDIOverrides: safeDIOverrides.f)
 			        }
 			        let f: F = __safeDI_f()
 			        return Root(log: log, f: f)
@@ -3599,7 +3619,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 			}
 
 			extension Root {
-			    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+			    public enum __safeDI_Root_mock_BEDDA3C65C73F485 {}
 			}
 			#endif
 			"""

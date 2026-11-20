@@ -707,9 +707,22 @@ struct PublicMockParameter: Sendable {
 	var builder: SeamSignature.Builder?
 	/// For a builder, the first place it reaches, whose property's type the builder returns.
 	var hole: SeamSignature.Hole?
+	/// For an optional builder (`Role.optionalBuilder`), the name `__safeDI_mock` takes it under, apart from every name the
+	/// mock's tree and its fills declare, and the builders of the calls whose places it builds.
+	var internalName: String?
+	var filledCallBuilders = [ScopeGenerator.MockRootParameters.SeamMockBuilder.FilledCallBuilder]()
 	/// The lines that document the parameter above each tier that takes it
 	/// (`MockRootParameters.UncoveredParameter.sharedValueDocumentation`).
 	var sharedValueDocumentation = [String]()
+
+	/// For an optional builder joined to a required one, the required builder's enum (`Role.optionalBuilder`).
+	var joinedBuilder: SeamSignature.ScopeEnum.Key? {
+		if case let .optionalBuilder(joinedBuilder) = role {
+			joinedBuilder
+		} else {
+			nil
+		}
+	}
 
 	/// The name the tier at `tier` takes the parameter under.
 	func name(inTier tier: AccessLevel) -> String {
@@ -740,6 +753,12 @@ struct PublicMockParameter: Sendable {
 		case received(Property, isRequired: Bool)
 		/// The `SafeDIOverrides` of the mock's tree.
 		case overrides
+		/// A builder the mock takes optional, `= nil`, for the places of one hole type and family its calls of other modules'
+		/// public mocks fill (`ScopeGenerator.FilledCall`), which replaces those fills where it is passed. Where the mock also
+		/// takes a builder of the family for places it passes up (`joinedBuilder`, that builder's enum), `mock()` passes that
+		/// builder on to it and takes no parameter of its own for it, so that one builder a person writes serves every place.
+		/// A generated caller never passes it: the called mock's own fills build the places.
+		case optionalBuilder(joinedBuilder: SeamSignature.ScopeEnum.Key?)
 	}
 }
 
@@ -1043,7 +1062,16 @@ extension ScopeGenerator {
 		}
 		optionalReceivedParameters.sort { ($0.name, $0.typeSource) < ($1.name, $1.typeSource) }
 
-		var parameters = leadingParameters + optionalReceivedParameters
+		// The optional builders follow the required ones, so that no required builder's position moves.
+		let optionalBuilders = publicMockOptionalBuilders(
+			parameterTree: parameterTree,
+			requiredBuilders: builders,
+			otherParameters: (leadingParameters + optionalReceivedParameters).map { (label: $0.name, access: $0.access) }
+				+ (hasOverrides ? [(label: ReservedName.mockOverridesParameterName, access: AccessLevel.public)] : []),
+			widestTier: .public,
+			access: { access(of: $0, receivedAs: nil) },
+		)
+		var parameters = leadingParameters + optionalBuilders + optionalReceivedParameters
 		if hasOverrides {
 			let overridesType = TypeDescription.simple(name: ReservedName.mockOverridesTypeName)
 			parameters.append(PublicMockParameter(name: ReservedName.mockOverridesParameterName, type: overridesType, typeSource: overridesType.asSource, defaultSource: ".init()", defaultKind: .expression, access: .public, role: .overrides))
@@ -1074,6 +1102,71 @@ extension ScopeGenerator {
 		plan.builders = builders
 		plan.scopeEnums = shapedBuilders?.scopeEnums ?? []
 		return plan
+	}
+
+	/// The builders a public mock whose tree is `parameterTree` takes optional (`PublicMockParameter.Role.optionalBuilder`), one
+	/// per hole type and family its calls of other modules' public mocks fill, in the sorted order of the properties a call
+	/// would receive each as (`ScopeGenerator.filledFamilies(of:)`). Each tier labels one as it would label a builder of its
+	/// hole type it took required (`TierNames.label(ofStem:isSendable:)`), from the stems of every hole type of the mock's
+	/// builders, unless those would rename a required builder's stem, when the optional builders' hole types are named apart
+	/// among themselves; a label a parameter of the tier has takes `_`. Each is as visible as the type it builds.
+	static func publicMockOptionalBuilders(
+		parameterTree: [MockTreeItem],
+		requiredBuilders: [SeamSignature.Builder],
+		otherParameters: [(label: String, access: AccessLevel)],
+		widestTier: AccessLevel,
+		access: (TypeDescription) -> AccessLevel,
+	) -> [PublicMockParameter] {
+		let fillPlaces = fillPlaces(in: parameterTree.propertyNodes)
+		let filledFamilies = filledFamilies(of: fillPlaces.calls)
+		guard !filledFamilies.isEmpty else { return [] }
+		let requiredHoleTypes = requiredBuilders.map(\.enumKey.holeType).uniqued().sorted { ($0.instantiatedType.asSource, $0.builtType.asSource) < ($1.instantiatedType.asSource, $1.builtType.asSource) }
+		let requiredStems = DependencyTreeGenerator.stems(of: requiredHoleTypes)
+		let optionalStems = stemsOfOptionalBuilders(
+			of: filledFamilies.map { ($0.family.holeType, $0.receivedProperty) },
+			besideOwnHoleTypes: requiredHoleTypes,
+			passedUpHoleTypes: [],
+			requiredStems: requiredStems,
+		)
+		// The names the narrowest tier's function takes the builders under, apart from every name its body declares.
+		var namesInBody = Set(otherParameters.map(\.label)).union(requiredBuilders.map(\.internalName)).union(fillPlaces.declaredLabels)
+		var nodesToVisit = parameterTree.propertyNodes
+		while let node = nodesToVisit.popLast() {
+			namesInBody.insert(functionName(toBuildPropertyNamed: node.propertyLabel))
+			namesInBody.formUnion(node.dependencies.map(\.property.label))
+			nodesToVisit += node.propertyChildren
+		}
+		var internalNames = GeneratedNameAllocator(reserving: namesInBody)
+		var claimedLabels = [(label: String, access: AccessLevel)]()
+		var parameters = [PublicMockParameter]()
+		for filled in filledFamilies {
+			let type = TypeDescription.optional(MockRootParameters.SeamMockBuilder.parameterType(ofPlaceProperties: filled.placeProperties, in: filled.family).strippingEscaping)
+			let parameterAccess = access(type)
+			let stem = optionalStems[filled.family.holeType, default: ""]
+			let tiers = [widestTier] + Set((otherParameters + claimedLabels).map(\.access) + [parameterAccess]).filter { $0 < widestTier }.sorted(by: >)
+			let labels = tiers.filter { $0 <= parameterAccess }.map { tier in
+				(tier: tier, label: DependencyTreeGenerator.TierNames(tier: tier, parameterLabels: Set((otherParameters + claimedLabels).filter { $0.access >= tier }.map(\.label))).label(ofStem: stem, isSendable: filled.family.isSendable))
+			}
+			let label = labels.first?.label ?? stem
+			claimedLabels.append((label, parameterAccess))
+			let joinedBuilder = requiredBuilders.first { $0.enumKey.holeType == filled.family.holeType && $0.enumKey.isSendable == filled.family.isSendable }?.enumKey
+			var parameter = PublicMockParameter(
+				name: label,
+				type: type,
+				typeSource: type.asSource,
+				defaultSource: "nil",
+				defaultKind: .nilValue,
+				access: parameterAccess,
+				role: .optionalBuilder(joinedBuilder: joinedBuilder),
+			)
+			for (tier, tierLabel) in labels.dropFirst() where tierLabel != label {
+				parameter.narrowerTierNames[tier] = tierLabel
+			}
+			parameter.internalName = internalNames.claim(functionName(toBuildPropertyNamed: label))
+			parameter.filledCallBuilders = filled.callBuilders
+			parameters.append(parameter)
+		}
+		return parameters
 	}
 
 	/// How visible a public mock's parameter of `type` is: as visible as the narrowest type it names, as the declarations of
@@ -1156,8 +1249,10 @@ extension ScopeGenerator {
 			// such builder as a closure that takes nothing and wraps it in the struct.
 			let takesBuilderStruct = parameters.contains { $0.builder?.takesBuilderStruct == true }
 			/// The lines that declare the tier's function named `functionName`, each parameter spelled by `spelling`.
-			func appendSignature(functionName: String, spelling: (PublicMockParameter) -> String) {
+			func appendSignature(functionName: String, omittingJoinedBuilders: Bool = false, spelling: (PublicMockParameter) -> String) {
 				let declarationPrefix = "\(accessPrefix)static func \(functionName)("
+				// `mock()` takes no parameter of its own for an optional builder joined to a required one, which it passes on.
+				let parameters = omittingJoinedBuilders ? parameters.filter { $0.joinedBuilder == nil } : parameters
 				// Only the `public` tier can take nothing, when every parameter is narrower: each narrower tier takes a parameter
 				// of its own level.
 				if parameters.isEmpty {
@@ -1170,7 +1265,7 @@ extension ScopeGenerator {
 					lines.append("\(indent)) -> \(returnType) {")
 				}
 			}
-			appendSignature(functionName: InstantiableVisitor.mockMethodName) { parameter in
+			appendSignature(functionName: InstantiableVisitor.mockMethodName, omittingJoinedBuilders: true) { parameter in
 				if let builder = parameter.builder, builder.takesBuilderStruct {
 					"\(parameter.name.spelledAsArgumentLabel): \(builder.readableParameterType.asSource)"
 				} else {
@@ -1180,6 +1275,8 @@ extension ScopeGenerator {
 			let arguments = parameters.map { parameter in
 				let value = if parameter.builder?.takesBuilderStruct == true {
 					".init(\(ReservedName.noScopeArgumentLabel): \(parameter.name))"
+				} else if let joinedBuilder = parameter.joinedBuilder, let required = parameters.first(where: { $0.builder?.enumKey == joinedBuilder }) {
+					required.name
 				} else {
 					parameter.name
 				}
@@ -1192,6 +1289,8 @@ extension ScopeGenerator {
 			appendSignature(functionName: ReservedName.publicMockFunctionName) { parameter in
 				if let builder = parameter.builder, builder.takesBuilderStruct {
 					"\(parameter.name.spelledAsArgumentLabel) \(builder.internalName): \(parameter.typeSource)"
+				} else if let internalName = parameter.internalName {
+					"\(parameter.name.spelledAsArgumentLabel) \(internalName): \(parameter.typeSource)"
 				} else {
 					"\(parameter.name.spelledAsArgumentLabel): \(parameter.typeSource)"
 				}
@@ -1206,6 +1305,8 @@ extension ScopeGenerator {
 				let arguments = plan.parameters.filter { $0.access >= narrowerTier }.map { parameter in
 					let value = if parameter.access >= tier, takesBuilderStruct, let builder = parameter.builder, builder.takesBuilderStruct {
 						builder.internalName
+					} else if parameter.access >= tier, let internalName = parameter.internalName {
+						internalName
 					} else if parameter.access >= tier {
 						parameter.name(inTier: tier)
 					} else if parameter.defaultKind == .provider, let defaultSource = parameter.defaultSource {

@@ -403,6 +403,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			    }
 
 			    static func mock(
+			        fill_AnyHoleBuilder: ErasedInstantiator<Int, AnyHole>.Builder? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        func __safeDI_session() -> Session {
@@ -424,7 +425,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			                .init(holeBuilder: { values in __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: values.session) })
 			            }
 			            _ = Screen.__safeDI_Screen_mock_8C12403263F5CE07.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Screen", declaringModule: "Feed"))
-			            return if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(__safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: session), session) } else { Screen.__safeDI_mock(fill_AnyHoleBuilder: __safeDI_fill_AnyHoleBuilder_Screen(), session: session) }
+			            return if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(__safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: session), session) } else { Screen.__safeDI_mock(fill_AnyHoleBuilder: fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session) }
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        return Root(screen: screen, session: session)
@@ -475,13 +476,15 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        fill_AnyHoleBuilder: ErasedInstantiator<Int, AnyHole>.Builder? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			        Root.__safeDI_mock(fill_AnyHoleBuilder: fill_AnyHoleBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
+			        fill_AnyHoleBuilder __safeDI_fill_AnyHoleBuilder: ErasedInstantiator<Int, AnyHole>.Builder? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        func __safeDI_session() -> Session {
@@ -503,7 +506,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			                .init(holeBuilder: { values in __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: values.session) })
 			            }
 			            _ = Screen.__safeDI_Screen_mock_8C12403263F5CE07.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Screen", declaringModule: "Feed"))
-			            return if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(__safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: session), session) } else { Screen.__safeDI_mock(fill_AnyHoleBuilder: __safeDI_fill_AnyHoleBuilder_Screen(), session: session) }
+			            return if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(__safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: session), session) } else { Screen.__safeDI_mock(fill_AnyHoleBuilder: __safeDI_fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session) }
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        return Root(screen: screen, session: session)
@@ -511,7 +514,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			}
 
 			extension Root {
-			    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+			    public enum __safeDI_Root_mock_E88E2171F0BB9CD0 {}
 			}
 			#endif
 			"""
@@ -558,6 +561,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			    }
 
 			    static func mock(
+			        fill_AnyHoleBuilder: ErasedInstantiator<Int, AnyHole>.Builder? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let __safeDI_session__safeDIBuilder = safeDIOverrides.session
@@ -580,7 +584,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			                .init(holeBuilder: { values in __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: values.session) })
 			            }
 			            _ = Screen.__safeDI_Screen_mock_995A5C40716021DB.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Screen", declaringModule: "Feed"))
-			            return if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(__safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: session), session) } else { Screen.__safeDI_mock(fill_AnyHoleBuilder: __safeDI_fill_AnyHoleBuilder_Screen(), session: session) }
+			            return if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(__safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: session), session) } else { Screen.__safeDI_mock(fill_AnyHoleBuilder: fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session) }
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        return Root(screen: screen, session: session)
@@ -631,13 +635,15 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        fill_AnyHoleBuilder: ErasedInstantiator<Int, AnyHole>.Builder? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			        Root.__safeDI_mock(fill_AnyHoleBuilder: fill_AnyHoleBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
+			        fill_AnyHoleBuilder __safeDI_fill_AnyHoleBuilder: ErasedInstantiator<Int, AnyHole>.Builder? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let __safeDI_session__safeDIBuilder = safeDIOverrides.session
@@ -660,7 +666,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			                .init(holeBuilder: { values in __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: values.session) })
 			            }
 			            _ = Screen.__safeDI_Screen_mock_995A5C40716021DB.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Screen", declaringModule: "Feed"))
-			            return if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(__safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: session), session) } else { Screen.__safeDI_mock(fill_AnyHoleBuilder: __safeDI_fill_AnyHoleBuilder_Screen(), session: session) }
+			            return if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(__safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: session), session) } else { Screen.__safeDI_mock(fill_AnyHoleBuilder: __safeDI_fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session) }
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        return Root(screen: screen, session: session)
@@ -668,7 +674,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			}
 
 			extension Root {
-			    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+			    public enum __safeDI_Root_mock_E88E2171F0BB9CD0 {}
 			}
 			#endif
 			"""
@@ -715,6 +721,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			    }
 
 			    static func mock(
+			        fill_AnyHoleBuilder: ErasedInstantiator<Int, AnyHole>.Builder? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
@@ -733,7 +740,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			                .init(holeBuilder: { values in __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: values.session) })
 			            }
 			            _ = Screen.__safeDI_Screen_mock_FD6673438122BD73.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Screen", declaringModule: "Feed"))
-			            return if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(__safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: session), session) } else { Screen.__safeDI_mock(fill_AnyHoleBuilder: __safeDI_fill_AnyHoleBuilder_Screen(), session: session) }
+			            return if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(__safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: session), session) } else { Screen.__safeDI_mock(fill_AnyHoleBuilder: fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session) }
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        return Root(screen: screen, session: session)
@@ -784,13 +791,15 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        fill_AnyHoleBuilder: ErasedInstantiator<Int, AnyHole>.Builder? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			        Root.__safeDI_mock(fill_AnyHoleBuilder: fill_AnyHoleBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
+			        fill_AnyHoleBuilder __safeDI_fill_AnyHoleBuilder: ErasedInstantiator<Int, AnyHole>.Builder? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
@@ -809,7 +818,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			                .init(holeBuilder: { values in __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: values.session) })
 			            }
 			            _ = Screen.__safeDI_Screen_mock_FD6673438122BD73.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Screen", declaringModule: "Feed"))
-			            return if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(__safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: session), session) } else { Screen.__safeDI_mock(fill_AnyHoleBuilder: __safeDI_fill_AnyHoleBuilder_Screen(), session: session) }
+			            return if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(__safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: session), session) } else { Screen.__safeDI_mock(fill_AnyHoleBuilder: __safeDI_fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session) }
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        return Root(screen: screen, session: session)
@@ -817,7 +826,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			}
 
 			extension Root {
-			    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+			    public enum __safeDI_Root_mock_E88E2171F0BB9CD0 {}
 			}
 			#endif
 			"""

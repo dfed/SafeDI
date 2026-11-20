@@ -2641,8 +2641,9 @@ enum GraphFuzzerCallingMockCheck {
 		}
 	}
 
-	/// Each parameter of the caller's `mock()` that is neither `safeDIOverrides` nor one of the graph's flat parameters: a
-	/// place the mock passes up. It is classified only when the graph lists it among the places its module sees no type
+	/// Each parameter of the caller's `mock()` that is neither `safeDIOverrides`, one of the graph's flat parameters, nor an
+	/// optional builder for places the mock's calls fill (`optionalBuilderLabels(ofType:inGeneratedFile:)`): a place the mock
+	/// passes up. It is classified only when the graph lists it among the places its module sees no type
 	/// that fulfills, the tool skips the twin's error for, or the gate for a re-entered called type passes up
 	/// (`fillGatePassesUp`); every other pass-up is unclassified. Throws when `generatedFile` declares no `mock()` in an extension of
 	/// the caller, which a generated mock always has, so that a mock the parser misses is never read as one that passes
@@ -2651,8 +2652,9 @@ enum GraphFuzzerCallingMockCheck {
 		guard let labels = mockParameterLabels(ofType: graph.callerTypeName, inGeneratedFile: generatedFile) else {
 			throw HarnessError(description: "The calling mock of \(graph.name) is accepted, and its generated file declares no `mock()` in an extension of \(graph.callerTypeName)")
 		}
+		let optionalBuilderLabels = optionalBuilderLabels(ofType: graph.callerTypeName, inGeneratedFile: generatedFile)
 		return labels
-			.filter { $0 != "safeDIOverrides" && !graph.flatParameterLabels.contains($0) }
+			.filter { $0 != "safeDIOverrides" && !graph.flatParameterLabels.contains($0) && !optionalBuilderLabels.contains($0) }
 			.map { label in
 				let reason: GraphFuzzerCallingMockPassUpReason? = if !graph.expectedPassUpLabels.contains(label) {
 					nil
@@ -2673,6 +2675,15 @@ enum GraphFuzzerCallingMockCheck {
 	/// order, or `nil` when it declares none.
 	static func mockParameterLabels(ofType typeName: String, inGeneratedFile generatedFile: String) -> [String]? {
 		parameterLabels(of: .mockFunction, ofType: typeName, inGeneratedFile: generatedFile)
+	}
+
+	/// The labels of the optional builders every `mock(…)` an extension of `typeName` declares in `generatedFile` takes for the
+	/// places its calls of other modules' public mocks fill: each parameter of an optional function type that defaults to
+	/// `nil`.
+	static func optionalBuilderLabels(ofType typeName: String, inGeneratedFile generatedFile: String) -> Set<String> {
+		let visitor = ParameterLabelVisitor(declarationKind: .mockFunction, typeName: typeName)
+		visitor.walk(Parser.parse(source: generatedFile))
+		return visitor.optionalBuilderLabels
 	}
 
 	/// The labels of the parameters of every initializer an extension of `typeName` declares in `generatedFile`, without
@@ -2708,6 +2719,8 @@ enum GraphFuzzerCallingMockCheck {
 		let declarationKind: DeclarationKind
 		let typeName: String
 		var labels = [String]()
+		/// The labels of the parameters of an optional function type that default to `nil`.
+		var optionalBuilderLabels = Set<String>()
 		/// Whether a declaration of the kind was found, so that one without parameters is told from none.
 		var matchedDeclaration = false
 
@@ -2715,6 +2728,14 @@ enum GraphFuzzerCallingMockCheck {
 			guard declarationKind == .mockFunction, node.name.text == "mock", isInExtensionOfType(node) else { return .skipChildren }
 			matchedDeclaration = true
 			labels += node.signature.parameterClause.parameters.map(\.firstName.text)
+			for parameter in node.signature.parameterClause.parameters {
+				guard parameter.defaultValue?.value.trimmedDescription == "nil",
+				      let optional = parameter.type.as(OptionalTypeSyntax.self),
+				      optional.wrappedType.as(TupleTypeSyntax.self)?.elements.first?.type.is(FunctionTypeSyntax.self) == true
+				      || optional.wrappedType.as(TupleTypeSyntax.self)?.elements.first?.type.as(AttributedTypeSyntax.self)?.baseType.is(FunctionTypeSyntax.self) == true
+				else { continue }
+				optionalBuilderLabels.insert(parameter.firstName.text)
+			}
 			return .skipChildren
 		}
 

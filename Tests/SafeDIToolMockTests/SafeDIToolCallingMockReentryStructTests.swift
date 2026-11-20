@@ -1061,6 +1061,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    static func mock(
 			        analyticsBuilder: @escaping () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
@@ -1071,7 +1072,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
 			                        }
-			                        return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book())
+			                        return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 			                    }
 			                    let book: Book = __safeDI_book()
 			                    return DefaultService(analytics: analytics, book: book)
@@ -1083,7 +1084,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
+			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Page_service() } }) } else { Page.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page()) }
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -1132,6 +1133,8 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    static func mock(
 			        analyticsBuilder: @escaping () -> any Analytics,
+			        loggerBuilder: (() -> any Logger)? = nil,
+			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
@@ -1152,7 +1155,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
 			                        }
-			                        return Book.__safeDI_mock(loggerBuilder: __safeDI_loggerBuilder_Book(), serviceBuilder: __safeDI_serviceBuilder_Book())
+			                        return Book.__safeDI_mock(loggerBuilder: loggerBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_loggerBuilder_Book(), serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 			                    }
 			                    let book: Book = __safeDI_book()
 			                    return DefaultService(book: book)
@@ -1167,7 +1170,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 			            }
 			            _ = Page.__safeDI_Page_mock_D554EC7204DBF437.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_loggerBuilder_Page_logger() }, { __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(loggerBuilder: __safeDI_loggerBuilder_Page(), serviceBuilder: __safeDI_serviceBuilder_Page()) }
+			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ if let loggerBuilder { loggerBuilder() } else { __safeDI_loggerBuilder_Page_logger() } }, { if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Page_service() } }) } else { Page.__safeDI_mock(loggerBuilder: loggerBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_loggerBuilder_Page(), serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page()) }
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -1216,6 +1219,8 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    static func mock(
 			        analyticsBuilder: @escaping () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
+			        storeBuilder: (() -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
@@ -1236,7 +1241,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        func __safeDI_storeBuilder_Book() -> Book.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
 			                            .init(store: { scope in __safeDI_storeBuilder_Book_store(scope) })
 			                        }
-			                        return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book(), storeBuilder: __safeDI_storeBuilder_Book())
+			                        return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book(), storeBuilder: storeBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Book())
 			                    }
 			                    let book: Book = __safeDI_book()
 			                    return DefaultService(book: book)
@@ -1248,7 +1253,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
+			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Page_service() } }) } else { Page.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page()) }
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -1297,6 +1302,8 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    static func mock(
 			        analyticsBuilder: @escaping () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
+			        storeBuilder: (() -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
@@ -1310,7 +1317,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                                    func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                                        .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
 			                                    }
-			                                    return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book())
+			                                    return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 			                                }
 			                                let book: Book = __safeDI_book()
 			                                return DefaultStore(analytics: analytics, book: book)
@@ -1321,7 +1328,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        func __safeDI_storeBuilder_Chapter() -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
 			                            .init(store: { _ in __safeDI_storeBuilder_Chapter_store() })
 			                        }
-			                        return Chapter.__safeDI_mock(storeBuilder: __safeDI_storeBuilder_Chapter())
+			                        return Chapter.__safeDI_mock(storeBuilder: storeBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter())
 			                    }
 			                    let chapter: Chapter = __safeDI_chapter()
 			                    return DefaultService(chapter: chapter)
@@ -1333,7 +1340,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
+			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Page_service() } }) } else { Page.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page()) }
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -1382,6 +1389,8 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    static func mock(
 			        analyticsBuilder: @escaping () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
+			        storeBuilder: (() -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
@@ -1395,7 +1404,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                                    func __safeDI_serviceBuilder_Book() -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                                        .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
 			                                    }
-			                                    return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book())
+			                                    return Book.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book())
 			                                }
 			                                let book: Book = __safeDI_book()
 			                                return DefaultStore(book: book)
@@ -1406,7 +1415,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        func __safeDI_storeBuilder_Chapter() -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
 			                            .init(store: { _ in __safeDI_storeBuilder_Chapter_store() })
 			                        }
-			                        return Chapter.__safeDI_mock(storeBuilder: __safeDI_storeBuilder_Chapter())
+			                        return Chapter.__safeDI_mock(storeBuilder: storeBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter())
 			                    }
 			                    let chapter: Chapter = __safeDI_chapter()
 			                    return DefaultService(analytics: analytics, chapter: chapter)
@@ -1418,7 +1427,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
+			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Page_service() } }) } else { Page.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page()) }
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -1467,6 +1476,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    static func mock(
 			        analyticsBuilder: @escaping () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
@@ -1486,7 +1496,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
+			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Page_service() } }) } else { Page.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page()) }
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -1562,14 +1572,16 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    public static func mock(
 			        analyticsBuilder: @escaping () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        Screen.__safeDI_mock(analyticsBuilder: .init(__safeDI_noScope: analyticsBuilder), safeDIOverrides: safeDIOverrides)
+			        Screen.__safeDI_mock(analyticsBuilder: .init(__safeDI_noScope: analyticsBuilder), serviceBuilder: serviceBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
 			        analyticsBuilder __safeDI_analyticsBuilder: Screen.SafeDIMockScope_Analytics.__safeDI_Builder<any Analytics>,
+			        serviceBuilder __safeDI_serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let __safeDI_analyticsBuilder_page_serviceBuilder = __safeDI_analyticsBuilder.page_serviceBuilder(SafeDIMockScope_Analytics.page_serviceBuilder_Values())
@@ -1581,7 +1593,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        func __safeDI_serviceBuilder_Book(up: Book.SafeDIMockScope_Service.__safeDI_Builder<SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>>) -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                            .init(pageBuilder: { values in __safeDI_serviceBuilder_Page(up: up.pageBuilder(values)) })
 			                        }
-			                        return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book(up: __safeDI_analyticsBuilder_book_serviceBuilder))
+			                        return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book(up: __safeDI_analyticsBuilder_book_serviceBuilder))
 			                    }
 			                    let book: Book = __safeDI_book()
 			                    let analytics: any Analytics = __safeDI_page_serviceBuilder.analytics(SafeDIMockScope_Analytics.DefaultService_Scope.analytics_Values(book: book))
@@ -1594,7 +1606,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, __safeDI_page_serviceBuilder: up.service(scope)) })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(up: __safeDI_analyticsBuilder_page_serviceBuilder))
+			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page(up: __safeDI_analyticsBuilder_page_serviceBuilder))
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -1602,7 +1614,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_mock_64890299A9B14571 {}
+			    public enum __safeDI_Screen_mock_CAB1C39683F7E072 {}
 			}
 			#endif
 			"""
@@ -1688,14 +1700,18 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    public static func mock(
 			        analyticsBuilder: @escaping () -> any Analytics,
+			        loggerBuilder: (() -> any Logger)? = nil,
+			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        Screen.__safeDI_mock(analyticsBuilder: .init(__safeDI_noScope: analyticsBuilder), safeDIOverrides: safeDIOverrides)
+			        Screen.__safeDI_mock(analyticsBuilder: .init(__safeDI_noScope: analyticsBuilder), loggerBuilder: loggerBuilder, serviceBuilder: serviceBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
 			        analyticsBuilder __safeDI_analyticsBuilder: Screen.SafeDIMockScope_Analytics.__safeDI_Builder<any Analytics>,
+			        loggerBuilder __safeDI_loggerBuilder: (() -> any Logger)? = nil,
+			        serviceBuilder __safeDI_serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let __safeDI_analyticsBuilder_page_loggerBuilder = __safeDI_analyticsBuilder.page_loggerBuilder(SafeDIMockScope_Analytics.page_loggerBuilder_Values())
@@ -1712,7 +1728,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        func __safeDI_serviceBuilder_Book(up: Book.SafeDIMockScope_Service.__safeDI_Builder<SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>>) -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                            .init(pageBuilder: { values in __safeDI_serviceBuilder_Page(up: up.pageBuilder(values)) })
 			                        }
-			                        return Book.__safeDI_mock(loggerBuilder: __safeDI_loggerBuilder_Book(up: __safeDI_analyticsBuilder_book_loggerBuilder), serviceBuilder: __safeDI_serviceBuilder_Book(up: __safeDI_analyticsBuilder_book_serviceBuilder))
+			                        return Book.__safeDI_mock(loggerBuilder: __safeDI_loggerBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_loggerBuilder_Book(up: __safeDI_analyticsBuilder_book_loggerBuilder), serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book(up: __safeDI_analyticsBuilder_book_serviceBuilder))
 			                    }
 			                    let book: Book = __safeDI_book()
 			                    return DefaultService(book: book)
@@ -1735,7 +1751,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, __safeDI_page_serviceBuilder: up.service(scope)) })
 			            }
 			            _ = Page.__safeDI_Page_mock_D554EC7204DBF437.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return Page.__safeDI_mock(loggerBuilder: __safeDI_loggerBuilder_Page(up: __safeDI_analyticsBuilder_page_loggerBuilder), serviceBuilder: __safeDI_serviceBuilder_Page(up: __safeDI_analyticsBuilder_page_serviceBuilder))
+			            return Page.__safeDI_mock(loggerBuilder: __safeDI_loggerBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_loggerBuilder_Page(up: __safeDI_analyticsBuilder_page_loggerBuilder), serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page(up: __safeDI_analyticsBuilder_page_serviceBuilder))
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -1743,7 +1759,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_mock_9CDE5A06EFA78564 {}
+			    public enum __safeDI_Screen_mock_ACC62E339A62491E {}
 			}
 			#endif
 			"""
@@ -1822,16 +1838,21 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			        public init() {}
 			    }
 
+			    // SafeDI counts `Store` as `public`: no module it reads declares it narrower. If `Store` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 			    public static func mock(
 			        analyticsBuilder: @escaping () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
+			        storeBuilder: (() -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        Screen.__safeDI_mock(analyticsBuilder: .init(__safeDI_noScope: analyticsBuilder), safeDIOverrides: safeDIOverrides)
+			        Screen.__safeDI_mock(analyticsBuilder: .init(__safeDI_noScope: analyticsBuilder), serviceBuilder: serviceBuilder, storeBuilder: storeBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
 			        analyticsBuilder __safeDI_analyticsBuilder: Screen.SafeDIMockScope_Analytics.__safeDI_Builder<any Analytics>,
+			        serviceBuilder __safeDI_serviceBuilder: (() -> any Service)? = nil,
+			        storeBuilder __safeDI_storeBuilder: (() -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let __safeDI_analyticsBuilder_page_serviceBuilder = __safeDI_analyticsBuilder.page_serviceBuilder(SafeDIMockScope_Analytics.page_serviceBuilder_Values())
@@ -1855,7 +1876,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        func __safeDI_storeBuilder_Book(up: Book.SafeDIMockScope_Store.__safeDI_Builder<SafeDIMockScope_Analytics.DefaultStore_Scope.__safeDI_Builder<any Analytics>>) -> Book.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
 			                            .init(store: { scope in __safeDI_storeBuilder_Book_store(scope, __safeDI_book_storeBuilder: up.store(scope)) })
 			                        }
-			                        return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book(up: __safeDI_analyticsBuilder_book_serviceBuilder), storeBuilder: __safeDI_storeBuilder_Book(up: __safeDI_analyticsBuilder_book_storeBuilder))
+			                        return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book(up: __safeDI_analyticsBuilder_book_serviceBuilder), storeBuilder: __safeDI_storeBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Book(up: __safeDI_analyticsBuilder_book_storeBuilder))
 			                    }
 			                    let book: Book = __safeDI_book()
 			                    return DefaultService(book: book)
@@ -1867,7 +1888,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, __safeDI_page_serviceBuilder: up.service(scope)) })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(up: __safeDI_analyticsBuilder_page_serviceBuilder))
+			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page(up: __safeDI_analyticsBuilder_page_serviceBuilder))
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -1875,7 +1896,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_mock_A3AD0C822EF7E3C6 {}
+			    public enum __safeDI_Screen_mock_968BC200719A49F8 {}
 			}
 			#endif
 			"""
@@ -1958,14 +1979,18 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    public static func mock(
 			        analyticsBuilder: @escaping () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
+			        storeBuilder: (() -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        Screen.__safeDI_mock(analyticsBuilder: .init(__safeDI_noScope: analyticsBuilder), safeDIOverrides: safeDIOverrides)
+			        Screen.__safeDI_mock(analyticsBuilder: .init(__safeDI_noScope: analyticsBuilder), serviceBuilder: serviceBuilder, storeBuilder: storeBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
 			        analyticsBuilder __safeDI_analyticsBuilder: Screen.SafeDIMockScope_Analytics.__safeDI_Builder<any Analytics>,
+			        serviceBuilder __safeDI_serviceBuilder: (() -> any Service)? = nil,
+			        storeBuilder __safeDI_storeBuilder: (() -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let __safeDI_analyticsBuilder_page_serviceBuilder = __safeDI_analyticsBuilder.page_serviceBuilder(SafeDIMockScope_Analytics.page_serviceBuilder_Values())
@@ -1981,7 +2006,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                                    func __safeDI_serviceBuilder_Book(up: Book.SafeDIMockScope_Service.__safeDI_Builder<SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>>) -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                                        .init(pageBuilder: { values in __safeDI_serviceBuilder_Page(up: up.pageBuilder(values)) })
 			                                    }
-			                                    return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book(up: __safeDI_analyticsBuilder_book_serviceBuilder))
+			                                    return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book(up: __safeDI_analyticsBuilder_book_serviceBuilder))
 			                                }
 			                                let book: Book = __safeDI_book()
 			                                let analytics: any Analytics = __safeDI_chapter_storeBuilder.analytics(SafeDIMockScope_Analytics.DefaultStore_Scope.analytics_Values(book: book))
@@ -1993,7 +2018,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        func __safeDI_storeBuilder_Chapter(up: Chapter.SafeDIMockScope_Store.__safeDI_Builder<SafeDIMockScope_Analytics.DefaultStore_Scope.__safeDI_Builder<any Analytics>>) -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
 			                            .init(store: { scope in __safeDI_storeBuilder_Chapter_store(scope, __safeDI_chapter_storeBuilder: up.store(scope)) })
 			                        }
-			                        return Chapter.__safeDI_mock(storeBuilder: __safeDI_storeBuilder_Chapter(up: __safeDI_analyticsBuilder_chapter_storeBuilder))
+			                        return Chapter.__safeDI_mock(storeBuilder: __safeDI_storeBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter(up: __safeDI_analyticsBuilder_chapter_storeBuilder))
 			                    }
 			                    let chapter: Chapter = __safeDI_chapter()
 			                    return DefaultService(chapter: chapter)
@@ -2005,7 +2030,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, __safeDI_page_serviceBuilder: up.service(scope)) })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(up: __safeDI_analyticsBuilder_page_serviceBuilder))
+			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page(up: __safeDI_analyticsBuilder_page_serviceBuilder))
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -2013,7 +2038,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_mock_BDE7D63D7B55B6F5 {}
+			    public enum __safeDI_Screen_mock_BA8AF8AA6D481ADB {}
 			}
 			#endif
 			"""
@@ -2096,14 +2121,18 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    public static func mock(
 			        analyticsBuilder: @escaping () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
+			        storeBuilder: (() -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        Screen.__safeDI_mock(analyticsBuilder: .init(__safeDI_noScope: analyticsBuilder), safeDIOverrides: safeDIOverrides)
+			        Screen.__safeDI_mock(analyticsBuilder: .init(__safeDI_noScope: analyticsBuilder), serviceBuilder: serviceBuilder, storeBuilder: storeBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
 			        analyticsBuilder __safeDI_analyticsBuilder: Screen.SafeDIMockScope_Analytics.__safeDI_Builder<any Analytics>,
+			        serviceBuilder __safeDI_serviceBuilder: (() -> any Service)? = nil,
+			        storeBuilder __safeDI_storeBuilder: (() -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let __safeDI_analyticsBuilder_page_serviceBuilder = __safeDI_analyticsBuilder.page_serviceBuilder(SafeDIMockScope_Analytics.page_serviceBuilder_Values())
@@ -2119,7 +2148,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                                    func __safeDI_serviceBuilder_Book(up: Book.SafeDIMockScope_Service.__safeDI_Builder<SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>>) -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                                        .init(pageBuilder: { values in __safeDI_serviceBuilder_Page(up: up.pageBuilder(values)) })
 			                                    }
-			                                    return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Book(up: __safeDI_analyticsBuilder_book_serviceBuilder))
+			                                    return Book.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book(up: __safeDI_analyticsBuilder_book_serviceBuilder))
 			                                }
 			                                let book: Book = __safeDI_book()
 			                                return DefaultStore(book: book)
@@ -2130,7 +2159,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        func __safeDI_storeBuilder_Chapter(up: Chapter.SafeDIMockScope_Store.__safeDI_Builder<SafeDIMockScope_Analytics.DefaultStore_Scope.__safeDI_Builder<any Analytics>>) -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
 			                            .init(store: { scope in __safeDI_storeBuilder_Chapter_store(scope, __safeDI_chapter_storeBuilder: up.store(scope)) })
 			                        }
-			                        return Chapter.__safeDI_mock(storeBuilder: __safeDI_storeBuilder_Chapter(up: __safeDI_analyticsBuilder_chapter_storeBuilder))
+			                        return Chapter.__safeDI_mock(storeBuilder: __safeDI_storeBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter(up: __safeDI_analyticsBuilder_chapter_storeBuilder))
 			                    }
 			                    let chapter: Chapter = __safeDI_chapter()
 			                    let analytics: any Analytics = __safeDI_page_serviceBuilder.analytics(SafeDIMockScope_Analytics.DefaultService_Scope.analytics_Values(chapter: chapter))
@@ -2143,7 +2172,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, __safeDI_page_serviceBuilder: up.service(scope)) })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(up: __safeDI_analyticsBuilder_page_serviceBuilder))
+			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page(up: __safeDI_analyticsBuilder_page_serviceBuilder))
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -2151,7 +2180,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_mock_C09703A125165123 {}
+			    public enum __safeDI_Screen_mock_353A1427036388A9 {}
 			}
 			#endif
 			"""
@@ -2217,14 +2246,16 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    public static func mock(
 			        analyticsBuilder: @escaping () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        Screen.__safeDI_mock(analyticsBuilder: .init(__safeDI_noScope: analyticsBuilder), safeDIOverrides: safeDIOverrides)
+			        Screen.__safeDI_mock(analyticsBuilder: .init(__safeDI_noScope: analyticsBuilder), serviceBuilder: serviceBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
 			        analyticsBuilder __safeDI_analyticsBuilder: Screen.SafeDIMockScope_Analytics.__safeDI_Builder<any Analytics>,
+			        serviceBuilder __safeDI_serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        let __safeDI_analyticsBuilder_page_serviceBuilder = __safeDI_analyticsBuilder.page_serviceBuilder(SafeDIMockScope_Analytics.page_serviceBuilder_Values())
@@ -2246,7 +2277,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, __safeDI_page_serviceBuilder: up.service(scope)) })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(up: __safeDI_analyticsBuilder_page_serviceBuilder))
+			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page(up: __safeDI_analyticsBuilder_page_serviceBuilder))
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -2254,7 +2285,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_mock_EACBA9A75E14B133 {}
+			    public enum __safeDI_Screen_mock_D9B3B0F71CB6CE6A {}
 			}
 			#endif
 			"""
@@ -2532,6 +2563,8 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    static func mock(
 			        analyticsSendableBuilder: @escaping @Sendable () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
+			        serviceSendableBuilder: (@Sendable () -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
@@ -2542,7 +2575,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book() -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
 			                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
 			                        }
-			                        return Book.__safeDI_mock(serviceSendableBuilder: __safeDI_serviceSendableBuilder_Book())
+			                        return Book.__safeDI_mock(serviceSendableBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book())
 			                    }
 			                    let book: Book = __safeDI_book()
 			                    return DefaultService(analytics: analytics, book: book)
@@ -2554,7 +2587,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
+			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Page_service() } }) } else { Page.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page()) }
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -2603,6 +2636,10 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    static func mock(
 			        analyticsSendableBuilder: @escaping @Sendable () -> any Analytics,
+			        loggerBuilder: (() -> any Logger)? = nil,
+			        loggerSendableBuilder: (@Sendable () -> any Logger)? = nil,
+			        serviceBuilder: (() -> any Service)? = nil,
+			        serviceSendableBuilder: (@Sendable () -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
@@ -2623,7 +2660,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book() -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
 			                            .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
 			                        }
-			                        return Book.__safeDI_mock(loggerSendableBuilder: __safeDI_loggerSendableBuilder_Book(), serviceSendableBuilder: __safeDI_serviceSendableBuilder_Book())
+			                        return Book.__safeDI_mock(loggerSendableBuilder: loggerSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_loggerSendableBuilder_Book(), serviceSendableBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book())
 			                    }
 			                    let book: Book = __safeDI_book()
 			                    return DefaultService(book: book)
@@ -2638,7 +2675,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 			            }
 			            _ = Page.__safeDI_Page_mock_D554EC7204DBF437.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_loggerBuilder_Page_logger() }, { __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(loggerBuilder: __safeDI_loggerBuilder_Page(), serviceBuilder: __safeDI_serviceBuilder_Page()) }
+			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ if let loggerBuilder { loggerBuilder() } else { __safeDI_loggerBuilder_Page_logger() } }, { if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Page_service() } }) } else { Page.__safeDI_mock(loggerBuilder: loggerBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_loggerBuilder_Page(), serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page()) }
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -2687,6 +2724,9 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    static func mock(
 			        analyticsSendableBuilder: @escaping @Sendable () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
+			        serviceSendableBuilder: (@Sendable () -> any Service)? = nil,
+			        storeSendableBuilder: (@Sendable () -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
@@ -2707,7 +2747,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        func __safeDI_storeBuilder_Book() -> Book.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
 			                            .init(store: { scope in __safeDI_storeBuilder_Book_store(scope) })
 			                        }
-			                        return Book.__safeDI_mock(serviceSendableBuilder: __safeDI_serviceSendableBuilder_Book(), storeBuilder: __safeDI_storeBuilder_Book())
+			                        return Book.__safeDI_mock(serviceSendableBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book(), storeBuilder: storeSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Book())
 			                    }
 			                    let book: Book = __safeDI_book()
 			                    return DefaultService(book: book)
@@ -2719,7 +2759,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
+			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Page_service() } }) } else { Page.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page()) }
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -2768,6 +2808,9 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    static func mock(
 			        analyticsSendableBuilder: @escaping @Sendable () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
+			        serviceSendableBuilder: (@Sendable () -> any Service)? = nil,
+			        storeSendableBuilder: (@Sendable () -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
@@ -2781,7 +2824,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                                    @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book() -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
 			                                        .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
 			                                    }
-			                                    return Book.__safeDI_mock(serviceSendableBuilder: __safeDI_serviceSendableBuilder_Book())
+			                                    return Book.__safeDI_mock(serviceSendableBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book())
 			                                }
 			                                let book: Book = __safeDI_book()
 			                                return DefaultStore(analytics: analytics, book: book)
@@ -2792,7 +2835,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        func __safeDI_storeBuilder_Chapter() -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
 			                            .init(store: { _ in __safeDI_storeBuilder_Chapter_store() })
 			                        }
-			                        return Chapter.__safeDI_mock(storeBuilder: __safeDI_storeBuilder_Chapter())
+			                        return Chapter.__safeDI_mock(storeBuilder: storeSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter())
 			                    }
 			                    let chapter: Chapter = __safeDI_chapter()
 			                    return DefaultService(chapter: chapter)
@@ -2804,7 +2847,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
+			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Page_service() } }) } else { Page.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page()) }
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -2853,6 +2896,9 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    static func mock(
 			        analyticsSendableBuilder: @escaping @Sendable () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
+			        serviceSendableBuilder: (@Sendable () -> any Service)? = nil,
+			        storeSendableBuilder: (@Sendable () -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
@@ -2866,7 +2912,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                                    @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book() -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
 			                                        .init(pageBuilder: { _ in __safeDI_serviceBuilder_Page() })
 			                                    }
-			                                    return Book.__safeDI_mock(serviceSendableBuilder: __safeDI_serviceSendableBuilder_Book())
+			                                    return Book.__safeDI_mock(serviceSendableBuilder: serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book())
 			                                }
 			                                let book: Book = __safeDI_book()
 			                                return DefaultStore(book: book)
@@ -2877,7 +2923,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        func __safeDI_storeBuilder_Chapter() -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
 			                            .init(store: { _ in __safeDI_storeBuilder_Chapter_store() })
 			                        }
-			                        return Chapter.__safeDI_mock(storeBuilder: __safeDI_storeBuilder_Chapter())
+			                        return Chapter.__safeDI_mock(storeBuilder: storeSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter())
 			                    }
 			                    let chapter: Chapter = __safeDI_chapter()
 			                    return DefaultService(analytics: analytics, chapter: chapter)
@@ -2889,7 +2935,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
+			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Page_service() } }) } else { Page.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page()) }
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -2938,6 +2984,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    static func mock(
 			        analyticsSendableBuilder: @escaping @Sendable () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
@@ -2957,7 +3004,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { _ in __safeDI_serviceBuilder_Page_service() })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ __safeDI_serviceBuilder_Page_service() }) } else { Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page()) }
+			            return if let safeDIBuilder = safeDIOverrides.page { safeDIBuilder({ if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Page_service() } }) } else { Page.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page()) }
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -3036,14 +3083,18 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    public static func mock(
 			        analyticsSendableBuilder: @escaping @Sendable () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
+			        serviceSendableBuilder: (@Sendable () -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        Screen.__safeDI_mock(analyticsSendableBuilder: .init(__safeDI_noScope: analyticsSendableBuilder), safeDIOverrides: safeDIOverrides)
+			        Screen.__safeDI_mock(analyticsSendableBuilder: .init(__safeDI_noScope: analyticsSendableBuilder), serviceBuilder: serviceBuilder, serviceSendableBuilder: serviceSendableBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
 			        analyticsSendableBuilder __safeDI_analyticsSendableBuilder: Screen.SafeDISendableMockScope_Analytics.__safeDI_Builder<any Analytics>,
+			        serviceBuilder __safeDI_serviceBuilder: (() -> any Service)? = nil,
+			        serviceSendableBuilder __safeDI_serviceSendableBuilder: (@Sendable () -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
@@ -3055,7 +3106,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book(up: Book.SafeDISendableMockScope_Service.__safeDI_Builder<SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>>) -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
 			                            .init(pageBuilder: { values in __safeDI_serviceBuilder_Page(up: up.pageBuilder(values)) })
 			                        }
-			                        return Book.__safeDI_mock(serviceSendableBuilder: __safeDI_serviceSendableBuilder_Book(up: __safeDI_analyticsSendableBuilder_book_serviceSendableBuilder))
+			                        return Book.__safeDI_mock(serviceSendableBuilder: __safeDI_serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book(up: __safeDI_analyticsSendableBuilder_book_serviceSendableBuilder))
 			                    }
 			                    let book: Book = __safeDI_book()
 			                    let analytics: any Analytics = __safeDI_page_serviceBuilder.analytics(SafeDIMockScope_Analytics.DefaultService_Scope.analytics_Values(book: book))
@@ -3068,7 +3119,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, __safeDI_page_serviceBuilder: up.service(scope)) })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(up: __safeDI_analyticsSendableBuilder_page_serviceBuilder))
+			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page(up: __safeDI_analyticsSendableBuilder_page_serviceBuilder))
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -3076,7 +3127,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_mock_FE430726777F1555 {}
+			    public enum __safeDI_Screen_mock_CB666FC47FA17223 {}
 			}
 			#endif
 			"""
@@ -3164,14 +3215,22 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    public static func mock(
 			        analyticsSendableBuilder: @escaping @Sendable () -> any Analytics,
+			        loggerBuilder: (() -> any Logger)? = nil,
+			        loggerSendableBuilder: (@Sendable () -> any Logger)? = nil,
+			        serviceBuilder: (() -> any Service)? = nil,
+			        serviceSendableBuilder: (@Sendable () -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        Screen.__safeDI_mock(analyticsSendableBuilder: .init(__safeDI_noScope: analyticsSendableBuilder), safeDIOverrides: safeDIOverrides)
+			        Screen.__safeDI_mock(analyticsSendableBuilder: .init(__safeDI_noScope: analyticsSendableBuilder), loggerBuilder: loggerBuilder, loggerSendableBuilder: loggerSendableBuilder, serviceBuilder: serviceBuilder, serviceSendableBuilder: serviceSendableBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
 			        analyticsSendableBuilder __safeDI_analyticsSendableBuilder: Screen.SafeDISendableMockScope_Analytics.__safeDI_Builder<any Analytics>,
+			        loggerBuilder __safeDI_loggerBuilder: (() -> any Logger)? = nil,
+			        loggerSendableBuilder __safeDI_loggerSendableBuilder: (@Sendable () -> any Logger)? = nil,
+			        serviceBuilder __safeDI_serviceBuilder: (() -> any Service)? = nil,
+			        serviceSendableBuilder __safeDI_serviceSendableBuilder: (@Sendable () -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
@@ -3188,7 +3247,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book(up: Book.SafeDISendableMockScope_Service.__safeDI_Builder<SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>>) -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
 			                            .init(pageBuilder: { values in __safeDI_serviceBuilder_Page(up: up.pageBuilder(values)) })
 			                        }
-			                        return Book.__safeDI_mock(loggerSendableBuilder: __safeDI_loggerSendableBuilder_Book(up: __safeDI_analyticsSendableBuilder_book_loggerSendableBuilder), serviceSendableBuilder: __safeDI_serviceSendableBuilder_Book(up: __safeDI_analyticsSendableBuilder_book_serviceSendableBuilder))
+			                        return Book.__safeDI_mock(loggerSendableBuilder: __safeDI_loggerSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_loggerSendableBuilder_Book(up: __safeDI_analyticsSendableBuilder_book_loggerSendableBuilder), serviceSendableBuilder: __safeDI_serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book(up: __safeDI_analyticsSendableBuilder_book_serviceSendableBuilder))
 			                    }
 			                    let book: Book = __safeDI_book()
 			                    return DefaultService(book: book)
@@ -3211,7 +3270,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, __safeDI_page_serviceBuilder: up.service(scope)) })
 			            }
 			            _ = Page.__safeDI_Page_mock_D554EC7204DBF437.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return Page.__safeDI_mock(loggerBuilder: __safeDI_loggerBuilder_Page(up: __safeDI_analyticsSendableBuilder_page_loggerBuilder), serviceBuilder: __safeDI_serviceBuilder_Page(up: __safeDI_analyticsSendableBuilder_page_serviceBuilder))
+			            return Page.__safeDI_mock(loggerBuilder: __safeDI_loggerBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_loggerBuilder_Page(up: __safeDI_analyticsSendableBuilder_page_loggerBuilder), serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page(up: __safeDI_analyticsSendableBuilder_page_serviceBuilder))
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -3219,7 +3278,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_mock_39B299A9AEE45E4A {}
+			    public enum __safeDI_Screen_mock_50D1F62B5AABFF76 {}
 			}
 			#endif
 			"""
@@ -3300,16 +3359,23 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			        public init() {}
 			    }
 
+			    // SafeDI counts `Store` as `public`: no module it reads declares it narrower. If `Store` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 			    public static func mock(
 			        analyticsSendableBuilder: @escaping @Sendable () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
+			        serviceSendableBuilder: (@Sendable () -> any Service)? = nil,
+			        storeSendableBuilder: (@Sendable () -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        Screen.__safeDI_mock(analyticsSendableBuilder: .init(__safeDI_noScope: analyticsSendableBuilder), safeDIOverrides: safeDIOverrides)
+			        Screen.__safeDI_mock(analyticsSendableBuilder: .init(__safeDI_noScope: analyticsSendableBuilder), serviceBuilder: serviceBuilder, serviceSendableBuilder: serviceSendableBuilder, storeSendableBuilder: storeSendableBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
 			        analyticsSendableBuilder __safeDI_analyticsSendableBuilder: Screen.SafeDISendableMockScope_Analytics.__safeDI_Builder<any Analytics>,
+			        serviceBuilder __safeDI_serviceBuilder: (() -> any Service)? = nil,
+			        serviceSendableBuilder __safeDI_serviceSendableBuilder: (@Sendable () -> any Service)? = nil,
+			        storeSendableBuilder __safeDI_storeSendableBuilder: (@Sendable () -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
@@ -3333,7 +3399,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        func __safeDI_storeBuilder_Book(up: Book.SafeDIMockScope_Store.__safeDI_Builder<SafeDIMockScope_Analytics.DefaultStore_Scope.__safeDI_Builder<any Analytics>>) -> Book.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
 			                            .init(store: { scope in __safeDI_storeBuilder_Book_store(scope, __safeDI_book_storeBuilder: up.store(scope)) })
 			                        }
-			                        return Book.__safeDI_mock(serviceSendableBuilder: __safeDI_serviceSendableBuilder_Book(up: __safeDI_analyticsSendableBuilder_book_serviceSendableBuilder), storeBuilder: __safeDI_storeBuilder_Book(up: __safeDI_analyticsSendableBuilder_book_storeBuilder))
+			                        return Book.__safeDI_mock(serviceSendableBuilder: __safeDI_serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book(up: __safeDI_analyticsSendableBuilder_book_serviceSendableBuilder), storeBuilder: __safeDI_storeSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Book(up: __safeDI_analyticsSendableBuilder_book_storeBuilder))
 			                    }
 			                    let book: Book = __safeDI_book()
 			                    return DefaultService(book: book)
@@ -3345,7 +3411,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, __safeDI_page_serviceBuilder: up.service(scope)) })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(up: __safeDI_analyticsSendableBuilder_page_serviceBuilder))
+			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page(up: __safeDI_analyticsSendableBuilder_page_serviceBuilder))
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -3353,7 +3419,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_mock_47D7278DDA70ED7C {}
+			    public enum __safeDI_Screen_mock_2232634E9DD7D517 {}
 			}
 			#endif
 			"""
@@ -3438,14 +3504,20 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    public static func mock(
 			        analyticsSendableBuilder: @escaping @Sendable () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
+			        serviceSendableBuilder: (@Sendable () -> any Service)? = nil,
+			        storeSendableBuilder: (@Sendable () -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        Screen.__safeDI_mock(analyticsSendableBuilder: .init(__safeDI_noScope: analyticsSendableBuilder), safeDIOverrides: safeDIOverrides)
+			        Screen.__safeDI_mock(analyticsSendableBuilder: .init(__safeDI_noScope: analyticsSendableBuilder), serviceBuilder: serviceBuilder, serviceSendableBuilder: serviceSendableBuilder, storeSendableBuilder: storeSendableBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
 			        analyticsSendableBuilder __safeDI_analyticsSendableBuilder: Screen.SafeDISendableMockScope_Analytics.__safeDI_Builder<any Analytics>,
+			        serviceBuilder __safeDI_serviceBuilder: (() -> any Service)? = nil,
+			        serviceSendableBuilder __safeDI_serviceSendableBuilder: (@Sendable () -> any Service)? = nil,
+			        storeSendableBuilder __safeDI_storeSendableBuilder: (@Sendable () -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
@@ -3461,7 +3533,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                                    @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book(up: Book.SafeDISendableMockScope_Service.__safeDI_Builder<SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>>) -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
 			                                        .init(pageBuilder: { values in __safeDI_serviceBuilder_Page(up: up.pageBuilder(values)) })
 			                                    }
-			                                    return Book.__safeDI_mock(serviceSendableBuilder: __safeDI_serviceSendableBuilder_Book(up: __safeDI_analyticsSendableBuilder_book_serviceSendableBuilder))
+			                                    return Book.__safeDI_mock(serviceSendableBuilder: __safeDI_serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book(up: __safeDI_analyticsSendableBuilder_book_serviceSendableBuilder))
 			                                }
 			                                let book: Book = __safeDI_book()
 			                                let analytics: any Analytics = __safeDI_chapter_storeBuilder.analytics(SafeDIMockScope_Analytics.DefaultStore_Scope.analytics_Values(book: book))
@@ -3473,7 +3545,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        func __safeDI_storeBuilder_Chapter(up: Chapter.SafeDIMockScope_Store.__safeDI_Builder<SafeDIMockScope_Analytics.DefaultStore_Scope.__safeDI_Builder<any Analytics>>) -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
 			                            .init(store: { scope in __safeDI_storeBuilder_Chapter_store(scope, __safeDI_chapter_storeBuilder: up.store(scope)) })
 			                        }
-			                        return Chapter.__safeDI_mock(storeBuilder: __safeDI_storeBuilder_Chapter(up: __safeDI_analyticsSendableBuilder_chapter_storeBuilder))
+			                        return Chapter.__safeDI_mock(storeBuilder: __safeDI_storeSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter(up: __safeDI_analyticsSendableBuilder_chapter_storeBuilder))
 			                    }
 			                    let chapter: Chapter = __safeDI_chapter()
 			                    return DefaultService(chapter: chapter)
@@ -3485,7 +3557,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, __safeDI_page_serviceBuilder: up.service(scope)) })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(up: __safeDI_analyticsSendableBuilder_page_serviceBuilder))
+			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page(up: __safeDI_analyticsSendableBuilder_page_serviceBuilder))
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -3493,7 +3565,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_mock_7ED43227EEC02901 {}
+			    public enum __safeDI_Screen_mock_46550D63692D553C {}
 			}
 			#endif
 			"""
@@ -3578,14 +3650,20 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    public static func mock(
 			        analyticsSendableBuilder: @escaping @Sendable () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
+			        serviceSendableBuilder: (@Sendable () -> any Service)? = nil,
+			        storeSendableBuilder: (@Sendable () -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        Screen.__safeDI_mock(analyticsSendableBuilder: .init(__safeDI_noScope: analyticsSendableBuilder), safeDIOverrides: safeDIOverrides)
+			        Screen.__safeDI_mock(analyticsSendableBuilder: .init(__safeDI_noScope: analyticsSendableBuilder), serviceBuilder: serviceBuilder, serviceSendableBuilder: serviceSendableBuilder, storeSendableBuilder: storeSendableBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
 			        analyticsSendableBuilder __safeDI_analyticsSendableBuilder: Screen.SafeDISendableMockScope_Analytics.__safeDI_Builder<any Analytics>,
+			        serviceBuilder __safeDI_serviceBuilder: (() -> any Service)? = nil,
+			        serviceSendableBuilder __safeDI_serviceSendableBuilder: (@Sendable () -> any Service)? = nil,
+			        storeSendableBuilder __safeDI_storeSendableBuilder: (@Sendable () -> any Store)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
@@ -3601,7 +3679,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                                    @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book(up: Book.SafeDISendableMockScope_Service.__safeDI_Builder<SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>>) -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {
 			                                        .init(pageBuilder: { values in __safeDI_serviceBuilder_Page(up: up.pageBuilder(values)) })
 			                                    }
-			                                    return Book.__safeDI_mock(serviceSendableBuilder: __safeDI_serviceSendableBuilder_Book(up: __safeDI_analyticsSendableBuilder_book_serviceSendableBuilder))
+			                                    return Book.__safeDI_mock(serviceSendableBuilder: __safeDI_serviceSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceSendableBuilder_Book(up: __safeDI_analyticsSendableBuilder_book_serviceSendableBuilder))
 			                                }
 			                                let book: Book = __safeDI_book()
 			                                return DefaultStore(book: book)
@@ -3612,7 +3690,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                        func __safeDI_storeBuilder_Chapter(up: Chapter.SafeDIMockScope_Store.__safeDI_Builder<SafeDIMockScope_Analytics.DefaultStore_Scope.__safeDI_Builder<any Analytics>>) -> Chapter.SafeDIMockScope_Store.__safeDI_Builder<any Store> {
 			                            .init(store: { scope in __safeDI_storeBuilder_Chapter_store(scope, __safeDI_chapter_storeBuilder: up.store(scope)) })
 			                        }
-			                        return Chapter.__safeDI_mock(storeBuilder: __safeDI_storeBuilder_Chapter(up: __safeDI_analyticsSendableBuilder_chapter_storeBuilder))
+			                        return Chapter.__safeDI_mock(storeBuilder: __safeDI_storeSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_storeBuilder_Chapter(up: __safeDI_analyticsSendableBuilder_chapter_storeBuilder))
 			                    }
 			                    let chapter: Chapter = __safeDI_chapter()
 			                    let analytics: any Analytics = __safeDI_page_serviceBuilder.analytics(SafeDIMockScope_Analytics.DefaultService_Scope.analytics_Values(chapter: chapter))
@@ -3625,7 +3703,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, __safeDI_page_serviceBuilder: up.service(scope)) })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(up: __safeDI_analyticsSendableBuilder_page_serviceBuilder))
+			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page(up: __safeDI_analyticsSendableBuilder_page_serviceBuilder))
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -3633,7 +3711,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_mock_5F5C127834C39357 {}
+			    public enum __safeDI_Screen_mock_8A1B9670770BE4CA {}
 			}
 			#endif
 			"""
@@ -3723,14 +3801,16 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 			    public static func mock(
 			        analyticsSendableBuilder: @escaping @Sendable () -> any Analytics,
+			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        Screen.__safeDI_mock(analyticsSendableBuilder: .init(__safeDI_noScope: analyticsSendableBuilder), safeDIOverrides: safeDIOverrides)
+			        Screen.__safeDI_mock(analyticsSendableBuilder: .init(__safeDI_noScope: analyticsSendableBuilder), serviceBuilder: serviceBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
 			        analyticsSendableBuilder __safeDI_analyticsSendableBuilder: Screen.SafeDISendableMockScope_Analytics.__safeDI_Builder<any Analytics>,
+			        serviceBuilder __safeDI_serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_page() -> Page {
@@ -3753,7 +3833,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, __safeDI_page_serviceBuilder: up.service(scope)) })
 			            }
 			            _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Page(up: __safeDI_analyticsSendableBuilder_page_serviceBuilder))
+			            return Page.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page(up: __safeDI_analyticsSendableBuilder_page_serviceBuilder))
 			        }
 			        let page: Page = __safeDI_page()
 			        return Screen(page: page)
@@ -3761,7 +3841,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_mock_01C1DE6285EB3C43 {}
+			    public enum __safeDI_Screen_mock_BA2F8671E197400E {}
 			}
 			#endif
 			"""
@@ -3994,14 +4074,18 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 
 		    public static func mock(
 		        analyticsBuilder: @escaping () -> any Analytics,
+		        loggerBuilder: (() -> any Logger)? = nil,
+		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        Screen.__safeDI_mock(analyticsBuilder: .init(__safeDI_noScope: analyticsBuilder), safeDIOverrides: safeDIOverrides)
+		        Screen.__safeDI_mock(analyticsBuilder: .init(__safeDI_noScope: analyticsBuilder), loggerBuilder: loggerBuilder, serviceBuilder: serviceBuilder, safeDIOverrides: safeDIOverrides)
 		    }
 
 		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 		    public static func __safeDI_mock(
 		        analyticsBuilder __safeDI_analyticsBuilder: Screen.SafeDIMockScope_Analytics.__safeDI_Builder<any Analytics>,
+		        loggerBuilder __safeDI_loggerBuilder: (() -> any Logger)? = nil,
+		        serviceBuilder __safeDI_serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let __safeDI_analyticsBuilder_page_loggerBuilder = __safeDI_analyticsBuilder.page_loggerBuilder(SafeDIMockScope_Analytics.page_loggerBuilder_Values())
@@ -4018,7 +4102,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 		                        func __safeDI_serviceBuilder_Book(up: Book.SafeDIMockScope_Service.__safeDI_Builder<SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>>) -> Book.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 		                            .init(pageBuilder: { values in __safeDI_serviceBuilder_Page(up: up.pageBuilder(values)) })
 		                        }
-		                        return Book.__safeDI_mock(loggerBuilder: __safeDI_loggerBuilder_Book(up: __safeDI_analyticsBuilder_book_loggerBuilder), serviceBuilder: __safeDI_serviceBuilder_Book(up: __safeDI_analyticsBuilder_book_serviceBuilder))
+		                        return Book.__safeDI_mock(loggerBuilder: __safeDI_loggerBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_loggerBuilder_Book(up: __safeDI_analyticsBuilder_book_loggerBuilder), serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Book(up: __safeDI_analyticsBuilder_book_serviceBuilder))
 		                    }
 		                    let book: Book = __safeDI_book()
 		                    return DefaultService(book: book)
@@ -4041,7 +4125,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 		                .init(service: { scope in __safeDI_serviceBuilder_Page_service(scope, __safeDI_page_serviceBuilder: up.service(scope)) })
 		            }
 		            _ = Page.__safeDI_Page_mock_D554EC7204DBF437.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-		            return Page.__safeDI_mock(loggerBuilder: __safeDI_loggerBuilder_Page(up: __safeDI_analyticsBuilder_page_loggerBuilder), serviceBuilder: __safeDI_serviceBuilder_Page(up: __safeDI_analyticsBuilder_page_serviceBuilder))
+		            return Page.__safeDI_mock(loggerBuilder: __safeDI_loggerBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_loggerBuilder_Page(up: __safeDI_analyticsBuilder_page_loggerBuilder), serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Page(up: __safeDI_analyticsBuilder_page_serviceBuilder))
 		        }
 		        let page: Page = __safeDI_page()
 		        return Screen(page: page)
@@ -4049,7 +4133,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_mock_9CDE5A06EFA78564 {}
+		    public enum __safeDI_Screen_mock_ACC62E339A62491E {}
 		}
 		#endif
 		""",
@@ -4095,6 +4179,7 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        analyticsBuilder: (() -> any Analytics)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_screen() -> Screen {
@@ -4122,8 +4207,8 @@ struct SafeDIToolCallingMockReentryStructTests: ~Copyable {
 		            func __safeDI_analyticsBuilder_Screen_Book_SafeDIMockScope_Service() -> Book.SafeDIMockScope_Service.__safeDI_Builder<Screen.SafeDIMockScope_Analytics.DefaultService_Scope.__safeDI_Builder<any Analytics>> {
 		                .init(pageBuilder: { _ in __safeDI_analyticsBuilder_Screen_Page_SafeDIMockScope_Service() })
 		            }
-		            _ = Screen.__safeDI_Screen_mock_9CDE5A06EFA78564.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Screen", declaringModule: "App"))
-		            return Screen.__safeDI_mock(analyticsBuilder: __safeDI_analyticsBuilder_Screen(), safeDIOverrides: safeDIOverrides.screen)
+		            _ = Screen.__safeDI_Screen_mock_ACC62E339A62491E.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Screen", declaringModule: "App"))
+		            return Screen.__safeDI_mock(analyticsBuilder: analyticsBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_analyticsBuilder_Screen(), safeDIOverrides: safeDIOverrides.screen)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        return Root(screen: screen)

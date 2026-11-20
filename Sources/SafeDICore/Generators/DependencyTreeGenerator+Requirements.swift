@@ -282,8 +282,9 @@ extension DependencyTreeGenerator {
 				reason: .noInstantiableFulfillsType(uncoveredParameter.instantiatedType),
 			))
 		}
-		// The builders the internal mock of a type that generates its dependency tree takes in place of its places' parameters.
-		for builder in parameters.seamMockBuilders {
+		// The builders the internal mock of a type that generates its dependency tree takes in place of its places' parameters;
+		// a builder it takes optional, for places its calls fill, is no requirement.
+		for builder in parameters.seamMockBuilders where !builder.isOptional {
 			requiredParameters.append(TypeRequirements.RequiredParameter(
 				label: builder.label,
 				typeSource: builder.parameterType.strippingEscaping.asSource,

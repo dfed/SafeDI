@@ -571,6 +571,7 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 			    }
 
 			    static func mock(
+			        apiSendableBuilder: (@Sendable () -> any Api)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let db = if let safeDIBuilder = safeDIOverrides.db { safeDIBuilder() } else { Db() }
@@ -585,7 +586,7 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 			                })
 			            }
 			            _ = F.__safeDI_F_mock_FB934F1CC08C8BFE.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "F", declaringModule: "Feat"))
-			            return F.__safeDI_mock(apiSendableBuilder: __safeDI_apiSendableBuilder_F(), db: db, safeDIOverrides: safeDIOverrides.f)
+			            return F.__safeDI_mock(apiSendableBuilder: apiSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiSendableBuilder_F(), db: db, safeDIOverrides: safeDIOverrides.f)
 			        }
 			        let f: F = __safeDI_f()
 			        return Root(db: db, f: f)
@@ -636,13 +637,15 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        apiSendableBuilder: (@Sendable () -> any Api)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			        Root.__safeDI_mock(apiSendableBuilder: apiSendableBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
+			        apiSendableBuilder __safeDI_apiSendableBuilder: (@Sendable () -> any Api)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let db = if let safeDIBuilder = safeDIOverrides.db { safeDIBuilder() } else { Db() }
@@ -657,7 +660,7 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 			                })
 			            }
 			            _ = F.__safeDI_F_mock_FB934F1CC08C8BFE.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "F", declaringModule: "Feat"))
-			            return F.__safeDI_mock(apiSendableBuilder: __safeDI_apiSendableBuilder_F(), db: db, safeDIOverrides: safeDIOverrides.f)
+			            return F.__safeDI_mock(apiSendableBuilder: __safeDI_apiSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiSendableBuilder_F(), db: db, safeDIOverrides: safeDIOverrides.f)
 			        }
 			        let f: F = __safeDI_f()
 			        return Root(db: db, f: f)
@@ -665,7 +668,7 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 			}
 
 			extension Root {
-			    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+			    public enum __safeDI_Root_mock_18EB56F91E633979 {}
 			}
 			#endif
 			"""]
