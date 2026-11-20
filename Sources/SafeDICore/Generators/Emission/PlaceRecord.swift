@@ -73,6 +73,8 @@ struct BuiltPlaceRecord: Sendable {
 	let hasFunction: Bool
 	/// The code of the places the function's body builds, in order.
 	let children: [GeneratedCode]
+	/// The generator that wrote the place, which the construction memo shares between the places it finds alike.
+	let generator: ObjectIdentifier
 }
 
 /// A place that closes a cycle on the function the path key names `closedOnFunctionName`.
@@ -107,4 +109,28 @@ public enum ProductionBodyKey: Sendable {
 
 	/// The key the current task lays production bodies out with.
 	@TaskLocal public static var current = ProductionBodyKey.type
+}
+
+/// The classes the type key lays a root's body out by, beside the classes the construction memo's sharing implies, for
+/// a test that compares them (R1b §2a): `observer`, when set, is handed both for each root the type key lays out.
+public enum TypeKeyClassObservation {
+	/// Each body's class under the type key, and under the memo, for one root; body 0, the root's, is class 0 in both.
+	public struct Classes: Sendable, Equatable {
+		public let typeKey: [Int]
+		public let memo: [Int]
+
+		/// Whether every memo class lies inside one type-key class: the type key may merge memo classes, which differ in
+		/// what a read is answered (a value or none, one form or another), but never splits one.
+		public var memoRefinesTypeKey: Bool {
+			guard typeKey.count == memo.count else { return false }
+			var typeKeyClassByMemoClass = [Int: Int]()
+			for (typeKeyClass, memoClass) in zip(typeKey, memo) {
+				guard typeKeyClassByMemoClass[memoClass, default: typeKeyClass] == typeKeyClass else { return false }
+				typeKeyClassByMemoClass[memoClass] = typeKeyClass
+			}
+			return true
+		}
+	}
+
+	@TaskLocal public static var observer: (@Sendable (Classes) -> Void)?
 }
