@@ -8225,6 +8225,11 @@ struct SafeDIToolGraphFuzzerTests {
 		.overrideClosureCallInternalCallerPassesPlaceUp: 86,
 		.overrideClosureCallPlaceIsErasedInstantiator: 91,
 		.overrideClosureCallPublicCallerPassesPlaceUp: 87,
+		// pins: derive on CI
+		.carrierBeforeSibling: 0,
+		.carrierBeforeSiblingBetweenSiblings: 0,
+		.carrierBeforeSiblingThroughSameModuleSeam: 0,
+		.carrierBeforeSiblingBeneathConfiguredChild: 0,
 	]
 
 	/// The least share of the public mock corpus's accepted graphs, whether or not they fail, whose generated code shows
@@ -8652,6 +8657,10 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeLabelReceivedByPromotedSiblingHeldInInstantiator: 2,
 		.holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated: 3,
 		.holeLabelReceivedByPromotedSiblingEqualsGeneratedName: 2,
+		.carrierBeforeSibling: 143,
+		.carrierBeforeSiblingBetweenSiblings: 55,
+		.carrierBeforeSiblingThroughSameModuleSeam: 76,
+		.carrierBeforeSiblingBeneathConfiguredChild: 65,
 		.instantiableParameterType: 235,
 		.internalInitializer: 520,
 		.lazilyInstantiatedOmittedValueProvider: 58,

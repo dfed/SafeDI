@@ -4868,24 +4868,24 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        public init(
 				            session: (() -> Session)? = nil,
 				            alpha: ((Session) -> Alpha)? = nil,
+				            screenD: D.SafeDIOverrides = .init(),
 				            zed: (() -> Zed)? = nil,
-				            omega: ((Zed) -> Omega)? = nil,
-				            screenD: D.SafeDIOverrides = .init()
+				            omega: ((Zed) -> Omega)? = nil
 				        ) {
 				            __safeDI_storage = __safeDI_Storage(
 				                session: session,
 				                alpha: alpha,
+				                screenD: screenD,
 				                zed: zed,
-				                omega: omega,
-				                screenD: screenD
+				                omega: omega
 				            )
 				        }
 
 				        public var session: (() -> Session)? { __safeDI_storage.session }
 				        public var alpha: ((Session) -> Alpha)? { __safeDI_storage.alpha }
+				        public var screenD: D.SafeDIOverrides { __safeDI_storage.screenD }
 				        public var zed: (() -> Zed)? { __safeDI_storage.zed }
 				        public var omega: ((Zed) -> Omega)? { __safeDI_storage.omega }
-				        public var screenD: D.SafeDIOverrides { __safeDI_storage.screenD }
 
 				        private let __safeDI_storage: __safeDI_Storage
 
@@ -4893,22 +4893,22 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				            init(
 				                session: (() -> Session)?,
 				                alpha: ((Session) -> Alpha)?,
+				                screenD: D.SafeDIOverrides,
 				                zed: (() -> Zed)?,
-				                omega: ((Zed) -> Omega)?,
-				                screenD: D.SafeDIOverrides
+				                omega: ((Zed) -> Omega)?
 				            ) {
 				                self.session = session
 				                self.alpha = alpha
+				                self.screenD = screenD
 				                self.zed = zed
 				                self.omega = omega
-				                self.screenD = screenD
 				            }
 
 				            let session: (() -> Session)?
 				            let alpha: ((Session) -> Alpha)?
+				            let screenD: D.SafeDIOverrides
 				            let zed: (() -> Zed)?
 				            let omega: ((Zed) -> Omega)?
-				            let screenD: D.SafeDIOverrides
 				        }
 				    }
 
