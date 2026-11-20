@@ -106,6 +106,8 @@ extension DependencyTreeGenerator {
 	///   - namesApartAtRoot: For a public mock, what its root binds only under names apart, which no level declares.
 	///   - reenteredFillsByKey: The fills a call inside a fill of the same call can re-enter
 	///     (`emittingFillsByKey(inTreeRootedAt:)`), found once for the tree.
+	///   - levels: What every hole type of the tree reads alike, found once for the tree, and each type's level
+	///     declarations, kept as the hole types first compute them.
 	static func scopeEnumsByType(
 		of seam: Instantiable,
 		holeType: SeamSignature.HoleType,
@@ -122,14 +124,11 @@ extension DependencyTreeGenerator {
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
 		reachedEnum: (SeamSignature.ScopeEnum.Key) -> SeamSignature.ScopeEnum?,
+		levels: inout LevelsOfEveryHoleType,
 	) -> ScopeEnumsByType {
 		let seamType = seam.concreteInstantiable
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
-		// The hole type of each place, by its owner and property: every site of one declaration builds one hole type.
-		var holeTypeByOwnedProperty = [SeamDeclarationGraph.TypeAndProperty: SeamSignature.HoleType]()
-		for hole in holesBySite.values where hole.innerSeamType == nil {
-			holeTypeByOwnedProperty[SeamDeclarationGraph.TypeAndProperty(type: hole.ownerType, property: hole.property)] = hole.holeType
-		}
+		let holeTypeByOwnedProperty = levels.holeTypeByOwnedProperty
 		// The inner enum of the hole type, of the family `isSendable` says, a call hands up, by the call's generator.
 		func innerKey(handedUpBy call: ScopeGenerator, isSendable: Bool) -> SeamSignature.ScopeEnum.Key? {
 			guard let calledBuilders = call.calledBuilders else { return nil }
@@ -196,13 +195,6 @@ extension DependencyTreeGenerator {
 		})
 		// The type the builder of the hole type returns, which the struct of a fill's own level is over.
 		let builtTypeOfHoleType = holesBySite.values.builtType(of: holeType)
-		let cycleParametersOfAnyBuild = Self.cycleParametersOfAnyBuild(inTreeRootedAt: generator)
-		let reboundPropertiesOfAnyBuild = Self.reboundPropertiesOfAnyBuild(inTreeRootedAt: generator)
-		let receivesBoundAgainOfAnyBuild = bindsReceivesAgain
-			? Self.receivesBoundAgainOfAnyBuild(inTreeRootedAt: generator, rootFields: parameters.map(\.property), namesApartAtRoot: namesApartAtRoot)
-			: [:]
-		// A mock's root declares no child of a label its root level's fields hold, or one that only names apart bind.
-		let labelsNoRootChildDeclares = bindsReceivesAgain ? namesApartAtRoot.labels.union(parameters.map(\.property.label)) : []
 
 		// What each type with an enum binds, in its order, and the cases each family's enum has.
 		struct DraftCase {
@@ -261,21 +253,17 @@ extension DependencyTreeGenerator {
 			let plainFills = placeHolding.plainFillCasesByType[type, default: []]
 			let sendableOwnFills = placeHolding.sendableOwnFillCasesByType[type, default: []]
 			let sendableBeneathFills = placeHolding.sendableBeneathFillCasesByType[type, default: []]
-			let declarations = plainProperties.isEmpty && plainFills.isEmpty ? [] : levelDeclarations(
+			let declarations = plainProperties.isEmpty && plainFills.isEmpty ? [] : levels.declarations(
 				of: build,
-				isSeamRoot: type == seamType,
-				bindsReceivesAgain: bindsReceivesAgain,
-				labelsNamedApart: type == seamType ? labelsNoRootChildDeclares : [],
-				cycleParameters: cycleParametersOfAnyBuild[type, default: []],
-				reboundProperties: reboundPropertiesOfAnyBuild[type, default: []],
-				receivesBoundAgain: receivesBoundAgainOfAnyBuild[type, default: []],
+				as: type,
 				seam: seam,
 				parameters: parameters,
+				bindsReceivesAgain: bindsReceivesAgain,
 				seamTypeAccess: seamTypeAccess,
 				proof: proof,
 				instantiables: instantiables,
 			)
-			let childrenByProperty = Dictionary(build.children.compactMap { child in child.property.map { ($0, child) } }, uniquingKeysWith: { first, _ in first })
+			let childrenByProperty = levels.childrenByProperty(of: build)
 			var plainCases = [DraftCase]()
 			var sendableCases = [DraftCase]()
 			func builtType(of property: Property) -> TypeDescription? {
@@ -902,6 +890,97 @@ extension DependencyTreeGenerator {
 			generatorsToVisit.append(contentsOf: generator.children.map { (generator: $0, nearestDeclarations: nearestDeclarations) })
 		}
 		return propertiesByType
+	}
+
+	/// What `scopeEnumsByType` reads alike for every hole type of one tree: the hole type of each place by its owner and
+	/// property, and what any build of each type binds again (cycle parameters, rebound properties, receives a mock binds
+	/// again), each found by a walk of the whole tree; and each type's level declarations and children by property, which
+	/// depend only on the build and the tree. `shapedBuilders` makes one for its tree and hands it to each hole type in turn,
+	/// so the walks run once and each level is declared once, not once per hole type: computed per hole type, they grew with
+	/// the hole types times the tree, which is the hole types squared for a public mock whose type declares every hole.
+	/// It holds no reference type but the generators its memos are keyed by, and is used in one synchronous loop.
+	struct LevelsOfEveryHoleType {
+		init(
+			generator: ScopeGenerator,
+			holes: some Sequence<SeamSignature.Hole>,
+			parameters: [SeamSignature.Parameter],
+			bindsReceivesAgain: Bool,
+			namesApartAtRoot: PublicMockRootLevel.NamesApart,
+		) {
+			var holeTypeByOwnedProperty = [SeamDeclarationGraph.TypeAndProperty: SeamSignature.HoleType]()
+			// Every site of one declaration builds one hole type.
+			for hole in holes where hole.innerSeamType == nil {
+				holeTypeByOwnedProperty[SeamDeclarationGraph.TypeAndProperty(type: hole.ownerType, property: hole.property)] = hole.holeType
+			}
+			self.holeTypeByOwnedProperty = holeTypeByOwnedProperty
+			cycleParametersOfAnyBuild = DependencyTreeGenerator.cycleParametersOfAnyBuild(inTreeRootedAt: generator)
+			reboundPropertiesOfAnyBuild = DependencyTreeGenerator.reboundPropertiesOfAnyBuild(inTreeRootedAt: generator)
+			receivesBoundAgainOfAnyBuild = bindsReceivesAgain
+				? DependencyTreeGenerator.receivesBoundAgainOfAnyBuild(inTreeRootedAt: generator, rootFields: parameters.map(\.property), namesApartAtRoot: namesApartAtRoot)
+				: [:]
+			// A mock's root declares no child of a label its root level's fields hold, or one that only names apart bind.
+			labelsNoRootChildDeclares = bindsReceivesAgain ? namesApartAtRoot.labels.union(parameters.map(\.property.label)) : []
+		}
+
+		/// The hole type of each place, by its owner and property.
+		let holeTypeByOwnedProperty: [SeamDeclarationGraph.TypeAndProperty: SeamSignature.HoleType]
+
+		/// What `type`, built by `build`, binds before each of its properties (`levelDeclarations`), computed once per build.
+		mutating func declarations(
+			of build: ScopeGenerator,
+			as type: TypeDescription,
+			seam: Instantiable,
+			parameters: [SeamSignature.Parameter],
+			bindsReceivesAgain: Bool,
+			seamTypeAccess: AccessLevel,
+			proof: TypeAccessProof,
+			instantiables: [TypeDescription: Instantiable],
+		) -> [SeamSignature.Hole.Field] {
+			let key = BuildOfType(build: ObjectIdentifier(build), type: type)
+			if let declarations = declarationsByBuild[key] {
+				return declarations
+			}
+			let isSeamRoot = type == seam.concreteInstantiable
+			let declarations = DependencyTreeGenerator.levelDeclarations(
+				of: build,
+				isSeamRoot: isSeamRoot,
+				bindsReceivesAgain: bindsReceivesAgain,
+				labelsNamedApart: isSeamRoot ? labelsNoRootChildDeclares : [],
+				cycleParameters: cycleParametersOfAnyBuild[type, default: []],
+				reboundProperties: reboundPropertiesOfAnyBuild[type, default: []],
+				receivesBoundAgain: receivesBoundAgainOfAnyBuild[type, default: []],
+				seam: seam,
+				parameters: parameters,
+				seamTypeAccess: seamTypeAccess,
+				proof: proof,
+				instantiables: instantiables,
+			)
+			declarationsByBuild[key] = declarations
+			return declarations
+		}
+
+		/// `build`'s children by their properties, the first of each, computed once per build.
+		mutating func childrenByProperty(of build: ScopeGenerator) -> [Property: ScopeGenerator] {
+			let key = ObjectIdentifier(build)
+			if let children = childrenByPropertyByBuild[key] {
+				return children
+			}
+			let children = Dictionary(build.children.compactMap { child in child.property.map { ($0, child) } }, uniquingKeysWith: { first, _ in first })
+			childrenByPropertyByBuild[key] = children
+			return children
+		}
+
+		private let cycleParametersOfAnyBuild: [TypeDescription: [LevelCycleParameter]]
+		private let reboundPropertiesOfAnyBuild: [TypeDescription: [Property]]
+		private let receivesBoundAgainOfAnyBuild: [TypeDescription: [Property]]
+		private let labelsNoRootChildDeclares: Set<String>
+		private var declarationsByBuild = [BuildOfType: [SeamSignature.Hole.Field]]()
+		private var childrenByPropertyByBuild = [ObjectIdentifier: [Property: ScopeGenerator]]()
+
+		private struct BuildOfType: Hashable {
+			let build: ObjectIdentifier
+			let type: TypeDescription
+		}
 	}
 
 	/// What the scope `build` builds declares, in the order it binds the declarations, each as a field of a payload struct:

@@ -246,6 +246,13 @@ extension DependencyTreeGenerator {
 		var memberBindingKeysByLabel = [String: Set<ValuesBindingKey>]()
 		var builders = [SeamSignature.Builder]()
 		var internalNameByFamily = [SeamSignature.ScopeEnum.Key: String]()
+		var levels = LevelsOfEveryHoleType(
+			generator: generator,
+			holes: flatHoles,
+			parameters: parameters,
+			bindsReceivesAgain: bindsReceivesAgain,
+			namesApartAtRoot: namesApartAtRoot,
+		)
 		for holeType in orderedHoleTypes {
 			let stem = stemByHoleType[holeType, default: ""]
 			let rootTypeNames = (plain: "\(scopeTypeNames.plain)\(stem)".spelledAsIdentifier, sendable: "\(scopeTypeNames.sendable)\(stem)".spelledAsIdentifier)
@@ -269,6 +276,7 @@ extension DependencyTreeGenerator {
 					proof: proof,
 					instantiables: instantiables,
 					reachedEnum: reachedEnum,
+					levels: &levels,
 				)
 				// Every hole type of a seam and of a public mock takes a builder struct, whatever places it reaches: the seam's tree
 				// calls a member per level, bound under names of their own, and binds no payload. A seam's own internal mock takes
