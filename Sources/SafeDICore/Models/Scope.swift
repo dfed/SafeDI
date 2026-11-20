@@ -429,6 +429,7 @@ extension ScopeRecord {
 		declaredTypeNames: DeclaredTypeNames,
 		constructionMemo: inout ConstructionMemo,
 	) throws -> ScopeGenerator {
+		let spikeTreeStart = SpikeTrace.now()
 		let scopeGenerator = try createdTree(
 			in: table,
 			for: property,
@@ -443,6 +444,7 @@ extension ScopeRecord {
 			declaredTypeNames: declaredTypeNames,
 			constructionMemo: &constructionMemo,
 		)
+		SpikeTrace.writeTree("\(instantiable.concreteInstantiable.asSource)|\(property?.label ?? "-")", nanoseconds: SpikeTrace.now() - spikeTreeStart)
 		if let observer = ConstructionMemoOracle.observer {
 			// The oracle's two builds start no code, so nothing changes either while it is read. The build with the memo
 			// shares it across every tree created with this memo, whatever the memo's own sharing, so that the oracle judges
@@ -674,11 +676,15 @@ extension ScopeRecord {
 		// Every generator this pass started or collected, in order: what each place's build started is the part of it from
 		// the place's `startLogIndex` on, which a later pass that reuses the place's generator collects again.
 		var startLog = [ScopeGenerator]()
+		let spikePass: SpikeTrace.Pass? = SpikeTrace.path == nil ? nil : SpikeTrace.Pass(tree: "\(instantiable.concreteInstantiable.asSource)|\(property?.label ?? "-")|\(previousPassGenerator == nil ? 1 : 2)")
+		var spikeIds = [0]
+		spikePass?.events.append(.init(id: 0, parent: -1, kind: "R", start: SpikeTrace.now()))
 		while true {
 			let index = scopeGeneratorsUnderConstruction.count - 1
 			if let propertyToGenerate = scopeGeneratorsUnderConstruction[index].nextPropertyToGenerate() {
 				switch propertyToGenerate {
 				case let .instantiated(property, scope, erasedToConcreteExistential):
+					let spikeStart = spikePass == nil ? 0 : SpikeTrace.now()
 					try scopeGeneratorsUnderConstruction[index].validateForwardedProperties(ofChildBuilding: scope, as: property)
 					let key = reusesGenerators && scopesBuiltAtOnePlace?.contains(scope) != true
 						? scopeGeneratorsUnderConstruction[index].memoKey(ofChildBuilding: scope, as: property, erasedToConcreteExistential: erasedToConcreteExistential)
@@ -689,6 +695,9 @@ extension ScopeRecord {
 					let draw = key == nil ? nil : sharingSchedule?.draw(atLookup: &lookupCount)
 					if let key, let reuse = memo.reuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property), drawing: draw) {
 						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
+						if let spikePass {
+							spikePass.events.append(.init(id: spikePass.events.count, parent: spikeIds[spikeIds.count - 1], kind: "H", start: spikeStart, end: SpikeTrace.now(), size: reuse.entry.subtreeScopeCount, keyed: true, source: spikePass.placeByGenerator[ObjectIdentifier(reuse.entry.generator)] ?? -1))
+						}
 					} else if let key, let reuse = settledPassMemo?.settledReuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property)) {
 						// The pass before built this place's generator settled: building the place again would build it again.
 						// Its code starts as the build would have started it, and the memo holds it for the places after it.
@@ -698,6 +707,9 @@ extension ScopeRecord {
 						}
 						memo.store(reuse.entry, for: key, keepingAlive: scope.identity)
 						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
+						if let spikePass {
+							spikePass.events.append(.init(id: spikePass.events.count, parent: spikeIds[spikeIds.count - 1], kind: "S", start: spikeStart, end: SpikeTrace.now(), size: reuse.entry.subtreeScopeCount, keyed: true, source: -1))
+						}
 					} else {
 						var child = scopeGeneratorsUnderConstruction[index].childUnderConstruction(
 							scope: scope,
@@ -708,6 +720,10 @@ extension ScopeRecord {
 						child.memoKey = key
 						child.startLogIndex = startLog.count
 						scopeGeneratorsUnderConstruction.append(child)
+						if let spikePass {
+							spikePass.events.append(.init(id: spikePass.events.count, parent: spikeIds[spikeIds.count - 1], kind: "B", start: spikeStart, keyed: key != nil))
+							spikeIds.append(spikePass.events.count - 1)
+						}
 					}
 				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
 					scopeGeneratorsUnderConstruction[index].addAliasGenerator(
@@ -724,6 +740,10 @@ extension ScopeRecord {
 					)
 				}
 			} else if let fill = scopeGeneratorsUnderConstruction[index].nextFill() {
+				if let spikePass {
+					spikePass.events.append(.init(id: spikePass.events.count, parent: spikeIds[spikeIds.count - 1], kind: "F", start: SpikeTrace.now()))
+					spikeIds.append(spikePass.events.count - 1)
+				}
 				try scopeGeneratorsUnderConstruction.append(scopeGeneratorsUnderConstruction[index].fillUnderConstruction(
 					fill: fill.fill,
 					scope: fill.scope,
@@ -731,7 +751,14 @@ extension ScopeRecord {
 			} else {
 				var createdScope = scopeGeneratorsUnderConstruction.removeLast()
 				let scopeGenerator = createdScope.scopeGenerator(collectingGeneratorsToStartInto: &generatorsToStart, startedGenerators: &startedGenerators, startLog: &startLog)
+				if let spikePass {
+					let id = spikeIds.removeLast()
+					spikePass.events[id].end = SpikeTrace.now()
+					spikePass.events[id].size = createdScope.subtreeScopeCount
+					spikePass.placeByGenerator[ObjectIdentifier(scopeGenerator)] = id
+				}
 				if scopeGeneratorsUnderConstruction.isEmpty {
+					spikePass?.write()
 					return scopeGenerator
 				} else {
 					// Filtered once, for the memo and the parent alike.
