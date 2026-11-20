@@ -95,7 +95,7 @@ struct BoundedConcurrencyTests {
 			return cost
 		}
 
-		#expect((2...4).contains(await gauge.largestRunningCost))
+		#expect(await (2...4).contains(gauge.largestRunningCost))
 	}
 
 	@Test
@@ -141,7 +141,7 @@ struct BoundedConcurrencyTests {
 					await gate.open()
 					throw JobError(index: element)
 				} else {
-					return element
+					element
 				}
 			}
 		}
