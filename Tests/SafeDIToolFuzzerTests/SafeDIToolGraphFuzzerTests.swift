@@ -7131,6 +7131,8 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeNestedSameLabelFill: 18,
 		.holeSecondHoleType: 33,
 		.holeSecondHoleTypeCollidingStem: 48,
+		.holeFillReadsForwardedValueOutsideSendableFunction: 0,
+		.holeFillReadsDeclaredValueOutsideSendableFunction: 0,
 		.holeForwardingPlace: 126,
 		.holeInnerSeamPlainAndSendableRoutes: 36,
 		.holeInnerSeamWithBothEnums: 17,
@@ -7373,7 +7375,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(lazyCycleConfigurationFieldReason)",
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
-			seeds: [338, 567, 595, 617, 854, 940, 948],
+			seeds: [567, 595, 617, 854, 940, 948],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "\(seamBuilderOrderReason); and \(mockParameterAndFieldOrderReason)",
@@ -7396,6 +7398,17 @@ struct SafeDIToolGraphFuzzerTests {
 				.remedyLeavesErrorAtSite(.declareProvidingFormOnSeam, containing: "Dependency cycle: "),
 			],
 			seeds: [171, 392, 647, 686, 731, 871, 898, 911, 957],
+		),
+		// The remedy oracle's seam fill shapes whose advice names a wrapper that a `@Sendable` function cannot capture.
+		GraphFuzzerKnownIssue(
+			reason: remedySeamFillInstantiatedOutsideNotSendableReason,
+			signatures: [.remedyLeavesErrorAtSite(.instantiateOutsideSeam, containing: "cannot be received inside a `@Sendable` function")],
+			seeds: [1_401],
+		),
+		GraphFuzzerKnownIssue(
+			reason: remedySeamFillCycleReceiveNotSendableReason,
+			signatures: [.remedyLeavesErrorAtSite(.receiveOnTypeTheCycleBuilds, containing: "cannot be received inside a `@Sendable` function")],
+			seeds: [1_916],
 		),
 	]
 
@@ -8016,10 +8029,13 @@ struct SafeDIToolGraphFuzzerTests {
 	/// at all, since the seam's draw changed their graphs, or the base corpus's mock vocabulary draw, which the seam
 	/// corpus does not draw, changed them there (154, 527, 657); the inherited lists leave them out. Observed, not
 	/// derived: a seed here that a run finds failing its inherited shape again is a new failure, and goes back. Seeds
-	/// 281, 300, 338, 548, 567, 595, 617, 940 and 948 fail it beside the builder order, and are listed with it;
+	/// 281, 300, 548, 567, 595, 617, 940 and 948 fail it beside the builder order, and are listed with it;
 	/// 593, 751 and 886 no longer fail it. The remedy oracle's `@Sendable` builder shape fails 167 and 614 in the base
-	/// corpus only.
-	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 116, 154, 157, 167, 281, 300, 309, 338, 364, 371, 381, 383, 431, 434, 476, 525, 527, 545, 548, 567, 593, 595, 614, 617, 632, 657, 714, 728, 735, 751, 768, 774, 786, 808, 836, 840, 847, 886, 903, 912, 940, 948]
+	/// corpus only. Seed 1329 failed the remedy oracle's seam fill shape that forwards a value into a lazy wrapper's type
+	/// instead, which the fill error's advice to declare that wrapper as an instantiator fixed. The hole draw's value outside a `@Sendable` function lands
+	/// in 338, 1042, 1072 and 1492, which the tool rejects, 338 and 1072 with that draw's error: 338 failed its inherited
+	/// shape before the draw, and 1042, 1072 and 1492 failed theirs no longer.
+	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 116, 154, 157, 167, 281, 300, 309, 338, 364, 371, 381, 383, 431, 434, 476, 525, 527, 545, 548, 567, 593, 595, 614, 617, 632, 657, 714, 728, 735, 751, 768, 774, 786, 808, 836, 840, 847, 886, 903, 912, 940, 948, 1_042, 1_072, 1_329, 1_492]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
@@ -8677,6 +8693,8 @@ struct SafeDIToolGraphFuzzerTests {
 	static let compileTimeAssertionsDifferBetweenIntegrationsReason = "The two multi-module integrations emit other compile-time assertions for a module whose declarations sit inside `#if` blocks, in a build that reports its conditions (the graphs `addingGuardedMockParameterShapes` draws, the first the fuzzer runs with conditions): a module that generates nothing else gets its assertions from the module-info flow and no generate run from the SwiftPM plugin flow (seed 4880: Alpha holds `Guarded` alone, and only the module-info flow emits `#if !(!FUZZ_GUARD)` `#error`), and a condition two blocks of one declaration test is asserted twice by the plugin flow and once by the module-info flow (seed 2915: `FUZZ_OTHER`). Left as it is: the flows differ in assertions only, never in code that does not compile or in a value; the first loses a check only in a module that generates nothing depending on it, and the second states one check twice. Revisit if an adopter reports a condition SwiftPM missed"
 
 	static let remedyHiddenByEachDeclarationAlongTheChainReason = "An error for a receive that a declaration of its label hides names only the closest such declaration, so relabeling it leaves the receive hidden by the next one up the chain (remedyRuns_leaveNoErrorAtTheReceive_whenTwoTypesAlongTheChainDeclareTheReceivedLabelWithOtherTypes: Root declares `t3: S1_T3` and builds S1_T1, which declares `t3: S1_T4` and builds S1_T2, which declares `t3: S1_T5` and builds S1_T0, which receives `t3: S1_T3`, and the error names only S1_T2’s declaration). Plan row I7 owns the fix: name every hiding declaration along the chain"
+	static let remedySeamFillInstantiatedOutsideNotSendableReason = "A fill's error for a value inside a `@Sendable` function advises instantiating it outside the seam as declared, a wrapper that is not `Sendable`, which the fill, inside that function, cannot capture from the builder's caller (a neighbour of adopter shape W8; seed 1401; remedyRuns_leaveNoErrorAtTheReceive_whenTheValueInstantiatedOutsideTheSeamIsALazyWrapperTheSendableFillCannotCapture: S1_Outer declares `logger: LazilyInstantiated<S1_Logger>` and calls S1_Inner, which builds the place in a `SendableInstantiator`, and the error says to instantiate `logger` outside S1_Outer). Its fix names the `Sendable` wrapper in the advice, `SendableLazilyInstantiated<S1_Logger>`"
+	static let remedySeamFillCycleReceiveNotSendableReason = "A fill's error for a value a cycle in the seam's tree declares again advises receiving it on the type the cycle builds again, which a `@Sendable` function builds, as the wrapper the cycle declares, which is not `Sendable`, so that type cannot receive it there (seed 1916; remedyRuns_leaveNoErrorAtTheReceive_whenTheTypeTheCycleBuildsAgainIsInsideASendableFunctionAndTheValueIsNotSendable: S1_Home declares `cache: Instantiator<S1_Cache>` and builds S1_Screen in a `SendableInstantiator`, S1_Screen builds S1_Step in another, and S1_Step declares `cache` again and builds S1_Screen again, and the error says to declare `@Received(onlyIfAvailable: true) let cache: Instantiator<S1_Cache>?` on S1_Screen). Its fix names the `Sendable` wrapper in the advice, `SendableInstantiator<S1_Cache>`"
 	static let remedySeamProvidingWrapperUndeclaredReason = "A seam's error for one label its tree receives in two forms advises declaring on the seam the wrapper that provides the others, which no type that builds the seam declares, so the seam's receive is then unfulfilled, or a dependency cycle through the wrapper's type (seed 871: `FormsUser` -> `FormsScreen` -> `FormsUser`; remedyRuns_leaveNoErrorAtTheSeam_whenTheProvidingFormIsAWrapperTheSeamsCallerDoesNotDeclare: Root declares `user: S1_User` and builds S1_Seam, which receives `user: LazilyInstantiated<S1_User>?` only if available and builds S1_Child, which requires `user: S1_User`, and the error says to declare `@Received let user: LazilyInstantiated<S1_User>` on S1_Seam). Plan row I8 owns the fix"
 	static let remedySendableWrapperNamesOneDeclarationReason = "An error at a receive inside a `@Sendable` function advises declaring the captured property as its `Sendable` wrapper on the one root its chain starts at, and at the receive, where another root declares the property, or another type receives it, as the wrapper that is not `Sendable`: the receive is then unfulfilled beneath the other root, or hidden beneath the other receiver (remedyRuns_leaveNoErrorAtTheReceive_whenAnotherRootDeclaresThePropertyTheSendableBuilderCannotCapture: Root0 builds T1 through `SendableInstantiator<T1>` and Root1 as a constant, each declares `t2Builder: Instantiator<T2>`, and T1 receives it). The fix, on the branch claude/sendable-remedy-names-all, names every declaration; its roll is seed 1436"
 
