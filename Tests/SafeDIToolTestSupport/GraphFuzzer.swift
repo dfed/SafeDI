@@ -11951,7 +11951,8 @@ struct GraphFuzzerFailure: Equatable {
 		/// trades it for another there.
 		case remedyLeavesErrorAtSite = "a remedy an error states leaves an error at the declaration the error is at"
 		/// A calling mock (`GraphFuzzerCallingMockCheck`) is accepted where its production twin, the same sources with the
-		/// caller declared `generateDependencyTree: true`, reports one of the four shape errors.
+		/// caller declared `generateDependencyTree: true`, reports one of the four shape errors, other than the outcome rule 7
+		/// lists, a seam built again that passes its builder on unchanged, which a graph that states probes judges by values.
 		case callingMockAcceptedWhereTwinReportsShapeError = "a calling mock is accepted where its production twin reports a shape error"
 		/// A calling mock reports an error at other sites than its production twin's shape error.
 		case callingMockReportsOtherErrorThanTwin = "a calling mock reports another error than its production twin"
@@ -11962,15 +11963,20 @@ struct GraphFuzzerFailure: Equatable {
 		/// A calling mock takes no parameter for a value its graph says the mock's tree cannot build, which its production
 		/// twin takes.
 		case callingMockLacksFlatParameter = "a calling mock takes no parameter for a value its tree cannot build"
-		/// A calling mock that mirrors its accepted production twin, passing up no place without a reason, does not compile
-		/// (`GraphFuzzerCallingMockCheck.valueFailure`).
-		case callingMockDoesNotCompile = "a calling mock does not compile where its production twin is accepted"
+		/// A calling mock that mirrors its production twin, passing up no place without a reason, does not compile
+		/// (`GraphFuzzerCallingMockCheck.valueFailure`): where the twin is accepted, or where it reports that a seam built
+		/// again passes its builder on unchanged.
+		case callingMockDoesNotCompile = "a calling mock does not compile where it mirrors its production twin"
 		/// A calling mock that mirrors its accepted production twin builds other values than the twin
 		/// (`GraphFuzzerCallingMockCheck.valueFailure`).
 		case callingMockBuildsOtherValuesThanTwin = "a calling mock builds other values than its production twin"
-		/// A calling mock that mirrors its accepted production twin compiles, and its probe traps or does not finish
+		/// A calling mock accepted where its production twin reports that a seam built again passes its builder on unchanged
+		/// builds other values than the same types built inline (`GraphFuzzerCallingMockCheck.valueFailure`), the only way
+		/// rule 7 lets that outcome agree.
+		case callingMockBuildsOtherValuesThanInline = "a calling mock whose production twin reports a seam built again builds other values than inline"
+		/// A calling mock that mirrors its production twin compiles, and its probe traps or does not finish
 		/// (`GraphFuzzerCallingMockCheck.valueFailure`).
-		case callingMockFailsWhenRun = "a calling mock traps or does not finish where its production twin is accepted"
+		case callingMockFailsWhenRun = "a calling mock traps or does not finish where it mirrors its production twin"
 		/// A generated `SafeDIOverrides`, `SafeDIMockConfiguration` or public mock's module-level configuration stores
 		/// another configuration by value (`GraphFuzzerToolRuns.configurationStorageFailure`), which every builder function
 		/// that captures it copies whole.

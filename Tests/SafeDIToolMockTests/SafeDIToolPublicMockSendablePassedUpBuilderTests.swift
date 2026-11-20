@@ -169,7 +169,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        holeFill_AnyHoleBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder,
+		        holeFill_AnyHoleSendableBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder = safeDIOverrides.screenBuilder.panel
@@ -177,9 +177,17 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		        let __safeDI_screenBuilder__safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder
 		        @Sendable func __safeDI_screenBuilder() -> Screen {
 		            _ = Panel.__safeDI_Panel_mock_E9531DCA567FCD91.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let panel = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+		            func __safeDI_panel() -> Panel {
+		                let holeFill_AnyHoleBuilder: ErasedInstantiator<(), AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+		            }
+		            let panel: Panel = __safeDI_panel()
 		            _ = PanelTwin.__safeDI_PanelTwin_mock_EF93364769284E49.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let panelTwin = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+		            func __safeDI_panelTwin() -> PanelTwin {
+		                let holeFill_AnyHoleBuilder: ErasedInstantiator<(), AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+		            }
+		            let panelTwin: PanelTwin = __safeDI_panelTwin()
 		            return if let safeDIBuilder = __safeDI_screenBuilder__safeDIBuilder { safeDIBuilder(panel, panelTwin) } else { Screen(panel: panel, panelTwin: panelTwin) }
 		        }
 		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
@@ -360,7 +368,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        holeBuilder: @escaping SendableInstantiator<Hole>.Builder,
+		        holeSendableBuilder: @escaping SendableInstantiator<Hole>.Builder,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder = safeDIOverrides.screenBuilder.panel
@@ -368,9 +376,17 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		        let __safeDI_screenBuilder__safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder
 		        @Sendable func __safeDI_screenBuilder() -> Screen {
 		            _ = Panel.__safeDI_Panel_mock_F0F10F2194E82F9F.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let panel = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeBuilder) } else { Panel.__safeDI_mock(holeBuilder: .init(__safeDI_noScope: holeBuilder)) }
+		            func __safeDI_panel() -> Panel {
+		                let holeBuilder: Instantiator<Hole>.Builder = holeSendableBuilder
+		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeBuilder) } else { Panel.__safeDI_mock(holeBuilder: .init(__safeDI_noScope: holeBuilder)) }
+		            }
+		            let panel: Panel = __safeDI_panel()
 		            _ = PanelTwin.__safeDI_PanelTwin_mock_7B9FDEC77160773F.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let panelTwin = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeBuilder) } else { PanelTwin.__safeDI_mock(holeBuilder: .init(__safeDI_noScope: holeBuilder)) }
+		            func __safeDI_panelTwin() -> PanelTwin {
+		                let holeBuilder: Instantiator<Hole>.Builder = holeSendableBuilder
+		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeBuilder) } else { PanelTwin.__safeDI_mock(holeBuilder: .init(__safeDI_noScope: holeBuilder)) }
+		            }
+		            let panelTwin: PanelTwin = __safeDI_panelTwin()
 		            return if let safeDIBuilder = __safeDI_screenBuilder__safeDIBuilder { safeDIBuilder(panel, panelTwin) } else { Screen(panel: panel, panelTwin: panelTwin) }
 		        }
 		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
@@ -551,14 +567,18 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        holeFill_AnyHoleBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder,
+		        holeFill_AnyHoleSendableBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder = safeDIOverrides.screenBuilder.panel
 		        let __safeDI_screenBuilder__safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder
 		        @Sendable func __safeDI_screenBuilder() -> Screen {
 		            _ = Panel.__safeDI_Panel_mock_E9531DCA567FCD91.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let panel = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+		            func __safeDI_panel() -> Panel {
+		                let holeFill_AnyHoleBuilder: ErasedInstantiator<(), AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+		            }
+		            let panel: Panel = __safeDI_panel()
 		            return if let safeDIBuilder = __safeDI_screenBuilder__safeDIBuilder { safeDIBuilder(panel) } else { Screen(panel: panel) }
 		        }
 		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
@@ -733,7 +753,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        holeFill_AnyHoleBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder,
+		        holeFill_AnyHoleSendableBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder = safeDIOverrides.screenBuilder.panel
@@ -741,9 +761,17 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		        let __safeDI_screenBuilder__safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder
 		        @Sendable func __safeDI_screenBuilder() -> Screen {
 		            _ = Panel.__safeDI_Panel_mock_E9531DCA567FCD91.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let panel = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+		            func __safeDI_panel() -> Panel {
+		                let holeFill_AnyHoleBuilder: ErasedInstantiator<(), AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+		            }
+		            let panel: Panel = __safeDI_panel()
 		            _ = PanelTwin.__safeDI_PanelTwin_mock_EF93364769284E49.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let panelTwin = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+		            func __safeDI_panelTwin() -> PanelTwin {
+		                let holeFill_AnyHoleBuilder: ErasedInstantiator<(), AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+		            }
+		            let panelTwin: PanelTwin = __safeDI_panelTwin()
 		            return if let safeDIBuilder = __safeDI_screenBuilder__safeDIBuilder { safeDIBuilder(panel, panelTwin) } else { Screen(panel: panel, panelTwin: panelTwin) }
 		        }
 		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
@@ -1172,7 +1200,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        holeFill_AnyHoleBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder,
+		        holeFill_AnyHoleSendableBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder = safeDIOverrides.screenBuilder.panel
@@ -1180,9 +1208,17 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		        let __safeDI_screenBuilder__safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder
 		        @Sendable func __safeDI_screenBuilder() -> Screen {
 		            _ = Panel.__safeDI_Panel_mock_E9531DCA567FCD91.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let panel = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+		            func __safeDI_panel() -> Panel {
+		                let holeFill_AnyHoleBuilder: ErasedInstantiator<(), AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+		            }
+		            let panel: Panel = __safeDI_panel()
 		            _ = PanelTwin.__safeDI_PanelTwin_mock_EF93364769284E49.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let panelTwin = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+		            func __safeDI_panelTwin() -> PanelTwin {
+		                let holeFill_AnyHoleBuilder: ErasedInstantiator<(), AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+		            }
+		            let panelTwin: PanelTwin = __safeDI_panelTwin()
 		            return if let safeDIBuilder = __safeDI_screenBuilder__safeDIBuilder { safeDIBuilder(panel, panelTwin) } else { Screen(panel: panel, panelTwin: panelTwin) }
 		        }
 		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
@@ -1367,14 +1403,23 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		        holeFill_AnyHoleSendableBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        let __safeDI_holeFill_AnyHoleSendableBuilder = holeFill_AnyHoleSendableBuilder
 		        let __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder = safeDIOverrides.screenBuilder.panel
 		        let __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder = safeDIOverrides.screenBuilder.panelTwin
 		        let __safeDI_screenBuilder__safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder
 		        @Sendable func __safeDI_screenBuilder() -> Screen {
 		            _ = Panel.__safeDI_Panel_mock_C648B5018F5B0366.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let panel = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleSendableBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleSendableBuilder: .init(__safeDI_noScope: holeFill_AnyHoleSendableBuilder)) }
+		            func __safeDI_panel() -> Panel {
+		                let holeFill_AnyHoleSendableBuilder: SendableErasedInstantiator<(), AnyHole>.Builder = __safeDI_holeFill_AnyHoleSendableBuilder
+		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleSendableBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleSendableBuilder: .init(__safeDI_noScope: holeFill_AnyHoleSendableBuilder)) }
+		            }
+		            let panel: Panel = __safeDI_panel()
 		            _ = PanelTwin.__safeDI_PanelTwin_mock_DC6B7BFF7D8BDEBA.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let panelTwin = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleSendableBuilder) } else { PanelTwin.__safeDI_mock(holeFill_AnyHoleSendableBuilder: .init(__safeDI_noScope: holeFill_AnyHoleSendableBuilder)) }
+		            func __safeDI_panelTwin() -> PanelTwin {
+		                let holeFill_AnyHoleSendableBuilder: SendableErasedInstantiator<(), AnyHole>.Builder = __safeDI_holeFill_AnyHoleSendableBuilder
+		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleSendableBuilder) } else { PanelTwin.__safeDI_mock(holeFill_AnyHoleSendableBuilder: .init(__safeDI_noScope: holeFill_AnyHoleSendableBuilder)) }
+		            }
+		            let panelTwin: PanelTwin = __safeDI_panelTwin()
 		            return if let safeDIBuilder = __safeDI_screenBuilder__safeDIBuilder { safeDIBuilder(panel, panelTwin) } else { Screen(panel: panel, panelTwin: panelTwin) }
 		        }
 		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
@@ -1559,14 +1604,23 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		        holeSendableBuilder: @escaping SendableInstantiator<Hole>.Builder,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        let __safeDI_holeSendableBuilder = holeSendableBuilder
 		        let __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder = safeDIOverrides.screenBuilder.panel
 		        let __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder = safeDIOverrides.screenBuilder.panelTwin
 		        let __safeDI_screenBuilder__safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder
 		        @Sendable func __safeDI_screenBuilder() -> Screen {
 		            _ = Panel.__safeDI_Panel_mock_72E86CA99351B8EC.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let panel = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeSendableBuilder) } else { Panel.__safeDI_mock(holeSendableBuilder: .init(__safeDI_noScope: holeSendableBuilder)) }
+		            func __safeDI_panel() -> Panel {
+		                let holeSendableBuilder: SendableInstantiator<Hole>.Builder = __safeDI_holeSendableBuilder
+		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeSendableBuilder) } else { Panel.__safeDI_mock(holeSendableBuilder: .init(__safeDI_noScope: holeSendableBuilder)) }
+		            }
+		            let panel: Panel = __safeDI_panel()
 		            _ = PanelTwin.__safeDI_PanelTwin_mock_954835BF964120E0.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let panelTwin = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeSendableBuilder) } else { PanelTwin.__safeDI_mock(holeSendableBuilder: .init(__safeDI_noScope: holeSendableBuilder)) }
+		            func __safeDI_panelTwin() -> PanelTwin {
+		                let holeSendableBuilder: SendableInstantiator<Hole>.Builder = __safeDI_holeSendableBuilder
+		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeSendableBuilder) } else { PanelTwin.__safeDI_mock(holeSendableBuilder: .init(__safeDI_noScope: holeSendableBuilder)) }
+		            }
+		            let panelTwin: PanelTwin = __safeDI_panelTwin()
 		            return if let safeDIBuilder = __safeDI_screenBuilder__safeDIBuilder { safeDIBuilder(panel, panelTwin) } else { Screen(panel: panel, panelTwin: panelTwin) }
 		        }
 		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
@@ -1747,7 +1801,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        holeFill_AnyHoleBuilder: @escaping SendableErasedInstantiator<HoleArguments, AnyHole>.Builder,
+		        holeFill_AnyHoleSendableBuilder: @escaping SendableErasedInstantiator<HoleArguments, AnyHole>.Builder,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder = safeDIOverrides.screenBuilder.panel
@@ -1755,9 +1809,17 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		        let __safeDI_screenBuilder__safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder
 		        @Sendable func __safeDI_screenBuilder() -> Screen {
 		            _ = Panel.__safeDI_Panel_mock_16C4F78E528D62FF.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let panel = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+		            func __safeDI_panel() -> Panel {
+		                let holeFill_AnyHoleBuilder: ErasedInstantiator<HoleArguments, AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+		            }
+		            let panel: Panel = __safeDI_panel()
 		            _ = PanelTwin.__safeDI_PanelTwin_mock_72CCDC4E577CFDB7.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let panelTwin = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+		            func __safeDI_panelTwin() -> PanelTwin {
+		                let holeFill_AnyHoleBuilder: ErasedInstantiator<HoleArguments, AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+		            }
+		            let panelTwin: PanelTwin = __safeDI_panelTwin()
 		            return if let safeDIBuilder = __safeDI_screenBuilder__safeDIBuilder { safeDIBuilder(panel, panelTwin) } else { Screen(panel: panel, panelTwin: panelTwin) }
 		        }
 		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
@@ -1953,7 +2015,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 			    }
 
 			    static func mock(
-			        holeFill_AnyHoleBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder,
+			        holeFill_AnyHoleSendableBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder = safeDIOverrides.screenBuilder.panel
@@ -1961,9 +2023,17 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 			        let __safeDI_screenBuilder__safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder
 			        @Sendable func __safeDI_screenBuilder() -> Screen {
 			            _ = Panel.__safeDI_Panel_mock_E9531DCA567FCD91.self // If this line does not compile, add the SafeDI plugin to the target that declares Panel.
-			            let panel = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+			            func __safeDI_panel() -> Panel {
+			                let holeFill_AnyHoleBuilder: ErasedInstantiator<(), AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+			                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+			            }
+			            let panel: Panel = __safeDI_panel()
 			            _ = PanelTwin.__safeDI_PanelTwin_mock_EF93364769284E49.self // If this line does not compile, add the SafeDI plugin to the target that declares PanelTwin.
-			            let panelTwin = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+			            func __safeDI_panelTwin() -> PanelTwin {
+			                let holeFill_AnyHoleBuilder: ErasedInstantiator<(), AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+			                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
+			            }
+			            let panelTwin: PanelTwin = __safeDI_panelTwin()
 			            return if let safeDIBuilder = __safeDI_screenBuilder__safeDIBuilder { safeDIBuilder(panel, panelTwin) } else { Screen(panel: panel, panelTwin: panelTwin) }
 			        }
 			        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder)
