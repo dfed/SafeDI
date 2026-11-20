@@ -35,7 +35,7 @@ name: Graph Fuzzer
 # tests a commit and fuzzes it; the build job below is then skipped.
 #
 # With `release_acceptance`, the run instead checks that every base corpus
-# graph SafeDI 2.2.0 accepts still builds the same values, by calling
+# graph SafeDI 2.3.0 accepts still builds the same values, by calling
 # release-acceptance.yml, which ci.yml also calls on every pull request and
 # push to main; see .claude/rules/fuzzer-release-acceptance.md.
 #
@@ -75,7 +75,7 @@ on:
         required: false
         default: ''
       release_acceptance:
-        description: Instead of the fuzzing above, check that every base corpus graph SafeDI 2.2.0 accepts still compiles and builds the same values. The inputs above are ignored.
+        description: Instead of the fuzzing above, check that every base corpus graph SafeDI 2.3.0 accepts still compiles and builds the same values. The inputs above are ignored.
         type: boolean
         default: false
   # From verify.yml, in whose run the jobs below then run: they read the
