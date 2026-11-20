@@ -32,12 +32,23 @@ jobs:
     # empty one. When in doubt (a scheduled run, or a diff that can't
     # be computed) the answer is "everything changed", and the gates
     # below treat a missing answer the same way.
+    #
+    # `integrations` is false when every changed file is Markdown or
+    # under `Tests/` or `.claude/`. The two macOS jobs that build SafeDI
+    # for Apple platforms and build the examples compile only products
+    # and the examples, never a test target or an agent skill, so such a
+    # change cannot alter what they build, and they skip. Together they
+    # took 49 of a run's 80 to 88 macOS runner minutes (runs 44672257156
+    # and 44678862998), and a run waits on the account's five macOS
+    # slots longer than on anything else. Any other path, a workflow
+    # among them, counts as feeding them.
     runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
       source: ${{ steps.classify.outputs.source }}
       docc: ${{ steps.classify.outputs.docc }}
+      integrations: ${{ steps.classify.outputs.integrations }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
@@ -54,6 +65,7 @@ jobs:
         run: |
           source=false
           docc=false
+          integrations=false
           # A stacked pull request's base is the branch below it, and CI
           # runs on the top pull request only, so a Markdown-only top
           # would skip the tests of every change beneath it. A pull
@@ -66,10 +78,12 @@ jobs:
             echo "Event '$EVENT_NAME' has no diff to classify; treating everything as changed."
             source=true
             docc=true
+            integrations=true
           elif ! changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA"); then
             echo "Could not diff $BASE_SHA...$HEAD_SHA; treating everything as changed."
             source=true
             docc=true
+            integrations=true
           else
             echo "Changed files:"
             echo "$changed"
@@ -82,11 +96,16 @@ jobs:
                 *.md) ;;
                 *) source=true ;;
               esac
+              case "$file" in
+                *.md | Tests/* | .claude/*) ;;
+                *) integrations=true ;;
+              esac
             done <<< "$changed"
           fi
           echo "source=$source" >> "$GITHUB_OUTPUT"
           echo "docc=$docc" >> "$GITHUB_OUTPUT"
-          echo "source=$source docc=$docc"
+          echo "integrations=$integrations" >> "$GITHUB_OUTPUT"
+          echo "source=$source docc=$docc integrations=$integrations"
 
   version-consistency-check:
     name: Version Consistency Check
@@ -269,6 +288,86 @@ jobs:
             exit 1
           fi
 
+  passed-on-this-tree:
+    # Main's run after a merge builds the tree a pull request's run has usually just built: a pull request is
+    # merged when its head holds main's tip, so the commit its checks ran on and the commit the merge leaves on
+    # main have the same tree. The two macOS jobs below that only build (SafeDI for the Apple platforms, DocC,
+    # and the examples) took 49 of a run's 80 to 88 macOS runner minutes (runs 44672257156 and 44678862998), and
+    # the account's five macOS slots are what every run queues on. So each of the two, when it passes in a pull
+    # request's run with its caches current, uploads a record named for the tree it built ("Record That This
+    # Tree Passed" at its end), and this job tells a push to main whether such a record exists for the pushed
+    # commit's tree. When one does, main skips that job. "Build and Test on Xcode 26" always runs on main: it
+    # makes the coverage report behind the README badge.
+    #
+    # Only a record that a pull request's run of this workflow in this repository uploaded, whose job of that
+    # name concluded in success, counts: a pull request from a fork can upload an artifact of any name. A record
+    # is uploaded only when every cache the job restores was an exact hit, so a run whose caches were stale
+    # leaves no record, main's job then runs, and it saves the caches as before. The job names below are the two
+    # jobs' `name:`; when one is renamed and this is not, no record is found and main runs the job.
+    #
+    # Nothing here fails a run: whatever goes wrong, the outputs are empty and both jobs run. It runs on every
+    # event, in seconds, so that a pull request exercises it; only a push to main reads its answers. No
+    # container, since it only reads, as "Check Line Coverage on Linux" does.
+    name: Find Builds a Pull Request Passed on This Tree
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # To list the records and the runs that uploaded them.
+      actions: read
+    outputs:
+      tree: ${{ steps.tree.outputs.tree }}
+      apple-platforms: ${{ steps.find.outputs.apple-platforms }}
+      example-integrations: ${{ steps.find.outputs.example-integrations }}
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Read This Commit's Tree
+        id: tree
+        continue-on-error: true
+        run: |
+          tree=$(git rev-parse 'HEAD^{tree}')
+          test "${#tree}" -eq 40
+          echo "tree=$tree" >> "$GITHUB_OUTPUT"
+      # Twice the longest it should take, and then some: the same two kinds of call took 1 second in Verify's
+      # "Find an Earlier Verify Run's Build" (runs 44672166443 and 44677598332).
+      - name: Find the Records
+        id: find
+        if: ${{ steps.tree.outputs.tree != '' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/github-script@v8
+        env:
+          TREE: ${{ steps.tree.outputs.tree }}
+        with:
+          script: |
+            const jobNames = {
+              'apple-platforms': 'Build for Apple Platforms, DocC and Xcode Projects on Xcode 26',
+              'example-integrations': 'Build Package, Tuist and Bazel Integrations on Xcode 26',
+            }
+            for (const [key, jobName] of Object.entries(jobNames)) {
+              const name = `passed-${key}-${process.env.TREE}`
+              const { data } = await github.rest.actions.listArtifactsForRepo({ ...context.repo, name, per_page: 20 })
+              let passed = false
+              for (const artifact of data.artifacts) {
+                if (artifact.expired || !artifact.workflow_run) { continue }
+                const { data: run } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: artifact.workflow_run.id })
+                if (run.path !== '.github/workflows/ci.yml' || run.event !== 'pull_request' || !run.head_repository || run.head_repository.id !== run.repository.id) {
+                  core.info(`${name}: run ${run.id} is not a pull request's run of this workflow in this repository.`)
+                  continue
+                }
+                const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, { ...context.repo, run_id: run.id, filter: 'latest', per_page: 100 })
+                if (!jobs.some(job => job.name === jobName && job.conclusion === 'success')) {
+                  core.info(`${name}: "${jobName}" did not conclude in success in run ${run.id}.`)
+                  continue
+                }
+                core.info(`${name}: passed in run ${run.id}.`)
+                passed = true
+                break
+              }
+              if (!passed) { core.info(`${name}: no record.`) }
+              core.setOutput(key, String(passed))
+            }
+
   apple-platforms:
     # One job builds SafeDI for the five Apple platforms, builds its DocC and builds the two Xcode project
     # examples, where eight jobs did: a pull request waits for a macOS runner once instead of eight times, and
@@ -293,10 +392,13 @@ jobs:
     name: Build for Apple Platforms, DocC and Xcode Projects on Xcode 26
     # Every macOS job but "Build and Test on Xcode 26" also waits for a Linux job that takes seconds, so that the
     # run's longest job queues for the few macOS runners first and the run ends when it does, not 30 minutes later.
-    needs: &after-the-long-macos-job-queues [changes, bazel-source-archive-check]
+    needs: &after-the-long-macos-job-queues [changes, bazel-source-archive-check, passed-on-this-tree]
     # DocC articles under `*.docc/` are Markdown, so this job also runs
-    # when only those changed, and then only its DocC steps do.
-    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || needs.changes.outputs.docc == 'true') }}
+    # when only those changed, and then only its DocC steps do. It skips
+    # when the change feeds nothing it builds ("Detect Changed Files"), and
+    # on main when a pull request's run passed it on the same tree ("Find
+    # Builds a Pull Request Passed on This Tree").
+    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.apple-platforms == 'true') && ((needs.changes.outputs.source != 'false' && needs.changes.outputs.integrations != 'false') || needs.changes.outputs.docc == 'true') }}
     runs-on: macos-26
     permissions:
       contents: read
@@ -525,6 +627,28 @@ jobs:
         id: multi-project-2
         if: ${{ !cancelled() && steps.multi-project-1.outcome == 'success' }}
         run: pushd Examples/ExampleMultiProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleMultiProjectIntegration; popd
+      # For main's run after the merge, which skips this job when it finds the record ("Find Builds a Pull Request
+      # Passed on This Tree"). Only when every step passed and every cache restored was an exact hit, so that a
+      # run with a stale cache leaves main to run the job and save it. A one-line file: uploads of files this
+      # small took 1 and 2 seconds in run 44678862998, a minute is the shortest limit, and neither step can
+      # fail the job.
+      - name: Record That This Tree Passed
+        id: passed-record
+        if: ${{ success() && github.event_name == 'pull_request' && needs.passed-on-this-tree.outputs.tree != '' && needs.changes.outputs.source != 'false' && steps.docc-cache.outputs.cache-hit == 'true' && steps.packages-cache.outputs.cache-hit == 'true' }}
+        continue-on-error: true
+        env:
+          TREE: ${{ needs.passed-on-this-tree.outputs.tree }}
+        run: printf '%s\n' "$TREE" > "$RUNNER_TEMP/passed-tree.txt"
+      - name: Upload the Record That This Tree Passed
+        if: ${{ success() && steps.passed-record.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/upload-artifact@v7
+        with:
+          name: passed-apple-platforms-${{ needs.passed-on-this-tree.outputs.tree }}
+          path: ${{ runner.temp }}/passed-tree.txt
+          retention-days: 3
+          overwrite: true
 
   example-integrations:
     # One job builds the Package, Tuist and Bazel examples, where three jobs did, for the reason "Build for Apple
@@ -547,7 +671,9 @@ jobs:
     # minutes, where its own job took 5 to 21.
     name: Build Package, Tuist and Bazel Integrations on Xcode 26
     needs: *after-the-long-macos-job-queues
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    # Skips when the change feeds nothing it builds ("Detect Changed Files"), and on main when a pull request's
+    # run passed it on the same tree ("Find Builds a Pull Request Passed on This Tree").
+    if: ${{ !cancelled() && !(github.event_name == 'push' && needs.passed-on-this-tree.outputs.example-integrations == 'true') && needs.changes.outputs.source != 'false' && needs.changes.outputs.integrations != 'false' }}
     runs-on: macos-26
     permissions:
       contents: read
@@ -1020,6 +1146,28 @@ jobs:
         id: bazel-7
         if: ${{ !cancelled() && steps.bazel-6.outcome == 'success' }}
         run: grep -q "DisabledEventLogger()" Examples/ExampleBazelIntegration/bazel-bin/ExampleBazelIntegration/ExampleBazelIntegration_safedi.swift
+      # For main's run after the merge, which skips this job when it finds the record ("Find Builds a Pull Request
+      # Passed on This Tree"). Only when every step passed and every cache restored was an exact hit, so that a
+      # run with a stale cache leaves main to run the job and save it. A one-line file: uploads of files this
+      # small took 1 and 2 seconds in run 44678862998, a minute is the shortest limit, and neither step can
+      # fail the job.
+      - name: Record That This Tree Passed
+        id: passed-record
+        if: ${{ success() && github.event_name == 'pull_request' && needs.passed-on-this-tree.outputs.tree != '' && needs.changes.outputs.source != 'false' && steps.bazel-1.outputs.cache-hit == 'true' }}
+        continue-on-error: true
+        env:
+          TREE: ${{ needs.passed-on-this-tree.outputs.tree }}
+        run: printf '%s\n' "$TREE" > "$RUNNER_TEMP/passed-tree.txt"
+      - name: Upload the Record That This Tree Passed
+        if: ${{ success() && steps.passed-record.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 1
+        uses: actions/upload-artifact@v7
+        with:
+          name: passed-example-integrations-${{ needs.passed-on-this-tree.outputs.tree }}
+          path: ${{ runner.temp }}/passed-tree.txt
+          retention-days: 3
+          overwrite: true
 
   spm:
     name: Build and Test on Xcode 26
@@ -2020,9 +2168,10 @@ jobs:
       # this container (44630955284), whose medians summed to 19.4 seconds a
       # tool: 4.7 and 5.2 for the public mock and fill shapes, 2.4 to 2.5 for
       # the other E24 shapes, 1.3 for E32-inline, under 1 for the rest. The
-      # limit is more than twice that because a slower generator is what this
-      # step exists to report: with the head five times as slow on every
-      # shape, its six runs of each and the base's take 11.7 minutes.
+      # I800-seam shape takes about 13 seconds more (probe run 44359835414).
+      # The limit is more than twice that because a slower generator is what
+      # this step exists to report: with the head five times as slow on every
+      # shape, its six runs of each and the base's take about 13 minutes.
       - name: Compare Generate Time
         timeout-minutes: 15
         run: |
