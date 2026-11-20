@@ -87,8 +87,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		enclosingLevelCalls: [String: PublicMockLevelFunctions.EnclosingLevelCall] = [:],
 		namesBoundBySeam: Set<String> = [],
 		placeHoldingProperties: Set<Property>? = nil,
+		generatesChildrenConcurrently: Bool = false,
 	) {
 		self.placeHoldingProperties = placeHoldingProperties
+		self.generatesChildrenConcurrently = generatesChildrenConcurrently
 		self.builtInlineSeamComment = builtInlineSeamComment
 		self.namesBoundBySeam = namesBoundBySeam
 		self.constructsWithHandWrittenMock = constructsWithHandWrittenMock
@@ -1139,6 +1141,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fulfillingExpression: String? = nil,
 		declarationReference: AliasDeclarationReferences.Reference?,
 	) {
+		generatesChildrenConcurrently = false
 		self.fulfillingExpression = fulfillingExpression
 		scopeData = .alias(
 			property: property,
@@ -1264,6 +1267,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		ownerLazilyInstantiatedInstanceProperties: Set<Property> = [],
 		sendableFunctionsAreNonisolated: Bool,
 	) {
+		generatesChildrenConcurrently = false
 		scopeData = .hole(property: holeProperty, erasedToConcreteExistential: erasedToConcreteExistential, site: site)
 		self.ownerPropertyStack = ownerPropertyStack
 		self.ownerConcreteTypeStack = ownerConcreteTypeStack
@@ -2940,7 +2944,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// The code tasks the generators of this scope's tree still hold (see `HeldCodeTasks`). Once the tree's code is
-	/// generated, each is a finished task, or one a scope started early for a context nothing asked for, still running.
+	/// generated, each is a finished task the generator failed to release.
 	/// The tree is walked with a stack, since it can be as deep as the module has types.
 	func codeTasksHeldInTree() async -> Int {
 		var generators = [self]
@@ -4529,6 +4533,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// with the filled seam's stack, and for every scope that is no type's.
 	private let placeHoldingProperties: Set<Property>?
 
+	/// Whether this scope generates its children's code in a task group of its own rather than one child after another: a
+	/// scope whose subtree is large (`ScopeGeneratorUnderConstruction.scopeCountOfLargeSubtree`) of a dependency tree that
+	/// generates code. Each child is asked for the code of the context this scope generates it in, so no child generates
+	/// code for a context nothing asks for, and the group ends before this scope's code does.
+	private let generatesChildrenConcurrently: Bool
+
 	/// Whether `child`, a child of this scope, starts after its siblings that hold no place: it holds one by
 	/// `placeHoldingProperties`, or, where this scope has none or the child declares no property (a fill), its subtree
 	/// holds a site on this path (`containsBuildSite`).
@@ -5760,19 +5770,99 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Only each child's code is awaited here: what the body decides around it is decided by the synchronous functions
 		// below, as a property's scope is (`generatePropertyCode`).
 		var body = bodyChildren(propertiesGeneratedLater: propertiesGeneratedLater, enclosingFunctionNames: enclosingFunctionNames)
-		for index in body.orderedChildren.indices where body.orderedChildren[index].generator.fillEmitsCode {
-			let code = try await body.orderedChildren[index].generator.generateCode(
-				codeGeneration: codeGeneration,
+		if generatesChildrenConcurrently, case .dependencyTree = codeGeneration {
+			let codeByIndex = try await Self.concurrentlyGeneratedCode(of: childCodeRequests(of: body, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings))
+			for (index, code) in codeByIndex {
+				append(code, ofChildAt: index, to: &body, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
+			}
+		} else {
+			for index in body.orderedChildren.indices where body.orderedChildren[index].generator.fillEmitsCode {
+				let code = try await body.orderedChildren[index].generator.generateCode(
+					codeGeneration: codeGeneration,
+					unavailableProperties: body.orderedChildren[index].unavailableProperties,
+					propertiesGeneratedLater: body.orderedChildren[index].propertiesGeneratedLater,
+					builderFunctionNames: builderFunctionNamesOfChild(at: index, in: body),
+					leadingWhitespace: leadingMemberWhitespace,
+					fillPlaceBindings: fillPlaceBindings,
+				)
+				append(code, ofChildAt: index, to: &body, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
+			}
+		}
+		return statements(of: consume body, leadingMemberWhitespace: leadingMemberWhitespace)
+	}
+
+	/// What a scope that generates its children concurrently asks one child for: the child's dependency tree code in the
+	/// context the scope generates it in. A value, so a task of the scope's group holds nothing of the scope.
+	private struct ChildCodeRequest: Sendable {
+		let index: Int
+		let generator: ScopeGenerator
+		let unavailableProperties: Set<Property>
+		let propertiesGeneratedLater: Set<Property>
+		let builderFunctionNames: BuilderFunctionNames
+		let leadingWhitespace: String
+		let fillPlaceBindings: FillPlaceBindings
+	}
+
+	/// The requests for the code of each child of `body` that emits code, in order.
+	private func childCodeRequests(of body: BodyChildren, leadingMemberWhitespace: String, fillPlaceBindings: FillPlaceBindings) -> [ChildCodeRequest] {
+		body.orderedChildren.indices.compactMap { index in
+			guard body.orderedChildren[index].generator.fillEmitsCode else { return nil }
+			return ChildCodeRequest(
+				index: index,
+				generator: body.orderedChildren[index].generator,
 				unavailableProperties: body.orderedChildren[index].unavailableProperties,
 				propertiesGeneratedLater: body.orderedChildren[index].propertiesGeneratedLater,
 				builderFunctionNames: builderFunctionNamesOfChild(at: index, in: body),
 				leadingWhitespace: leadingMemberWhitespace,
 				fillPlaceBindings: fillPlaceBindings,
 			)
-			append(code, ofChildAt: index, to: &body, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
 		}
-		return statements(of: consume body, leadingMemberWhitespace: leadingMemberWhitespace)
 	}
+
+	/// The code of each of `requests`, by its index among the body's children, in the order of `requests`: generated in a task
+	/// group that runs at most as many children at once as the machine has processors, each child on an actor of its own.
+	/// Every child's code is awaited, and where more than one child throws, the error thrown is that of the first in the
+	/// body's order, as one child after another would report it, whichever finished first.
+	private static func concurrentlyGeneratedCode(of requests: [ChildCodeRequest]) async throws -> [(index: Int, code: GeneratedCode)] {
+		var results = [(position: Int, result: Result<GeneratedCode, Error>)]()
+		results.reserveCapacity(requests.count)
+		await withTaskGroup(of: (position: Int, result: Result<GeneratedCode, Error>).self) { group in
+			var nextPosition = 0
+			func addNextTask() {
+				guard nextPosition < requests.count else { return }
+				let position = nextPosition
+				let request = requests[position]
+				nextPosition += 1
+				CodeTaskStart.record()
+				// A child task inherits the task-locals of the scope's task, the work observer among them.
+				group.addTask {
+					await (position, Result.of {
+						try await request.generator.generateCode(
+							codeGeneration: .dependencyTree,
+							unavailableProperties: request.unavailableProperties,
+							propertiesGeneratedLater: request.propertiesGeneratedLater,
+							builderFunctionNames: request.builderFunctionNames,
+							leadingWhitespace: request.leadingWhitespace,
+							fillPlaceBindings: request.fillPlaceBindings,
+						)
+					})
+				}
+			}
+			while nextPosition < min(concurrentChildLimit, requests.count) {
+				addNextTask()
+			}
+			while let result = await group.next() {
+				results.append(result)
+				addNextTask()
+			}
+		}
+		// In the body's order, so the error thrown is the first child's in that order, whichever child finished first.
+		return try results.sorted { $0.position < $1.position }.map { (requests[$0.position].index, try $0.result.get()) }
+	}
+
+	/// The most children a scope's task group generates at once: as many as the machine has processors, so a wide scope
+	/// holds the frames of no more children than can run.
+	private static let concurrentChildLimit = max(1, ProcessInfo.processInfo.activeProcessorCount)
 
 	/// What a body decides of its children before it awaits their code, and what it has written of them since: the
 	/// statements of the children it does not inline, and the bodies of the fills it does.

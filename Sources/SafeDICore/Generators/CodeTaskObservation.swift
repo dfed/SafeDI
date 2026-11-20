@@ -18,15 +18,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// A scope of a dependency tree whose code starts generating as soon as the tree exists, rather than when the scope
-/// above it asks for it. A running task holds its code’s async frames, so starting every scope’s code at once ran the
-/// frames of most of a tree together; the tests count the starts to check that only scopes of large subtrees, and the
-/// small subtrees directly beneath them, start early. Handed to `observer`, which the tests set, never the tool.
+/// A child task of the task group in which a scope of a large subtree generates its children’s code concurrently
+/// (`ScopeGenerator.concurrentlyGeneratedCode(of:)`). A running task holds its code’s async frames, so generating every
+/// scope’s children at once ran the frames of most of a tree together; the tests count the child tasks to check that only
+/// scopes of large subtrees generate their children concurrently. Handed to `observer`, which the tests set, never the
+/// tool.
 public enum CodeTaskStart {
-	/// Called once for each scope whose code starts early, when set: by the tests, never by the tool.
+	/// Called once for each child task of a scope that generates its children concurrently, when set: by the tests, never
+	/// by the tool.
 	@TaskLocal public static var observer: (@Sendable () -> Void)?
 
-	/// Tells `observer`, when set, that a scope’s code started early.
+	/// Tells `observer`, when set, that a child task started.
 	static func record() {
 		if let observer {
 			observer()
@@ -36,9 +38,7 @@ public enum CodeTaskStart {
 
 /// The code tasks the generators of a root’s dependency tree still hold once its code is generated. A task keeps the
 /// memory its async frames took until it is released, so a generator that kept each finished task held that memory for
-/// every scope of the tree until the tree’s code was done. A scope that starts its code early starts it for the context
-/// of a root; where the scope above asks for another, the early task finishes on its own and releases itself, and the
-/// count includes it while it runs. Handed to `observer`, which the tests set, never the tool.
+/// every scope of the tree until the tree’s code was done. Handed to `observer`, which the tests set, never the tool.
 public enum HeldCodeTasks {
 	/// Called with the count for each root’s tree, in the order of the roots, once every root’s code is generated, when
 	/// set: by the tests, never by the tool.
