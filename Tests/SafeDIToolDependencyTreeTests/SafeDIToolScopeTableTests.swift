@@ -44,13 +44,12 @@ struct SafeDIToolScopeTableTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_freezesTheSameTables_whenMapEntriesArriveInAnyOrder() async throws {
-		// Two concrete types are each held by two scopes of the mock map. `SystemClock` is built by `init` under `SystemClock`
-		// and by its hand-written mock, which leaves out the dependency the mock is not passed, under `Clock`, which the mock
-		// returns. `SystemTimer` is built by `init` under `SystemTimer` and by the `mockOnly` mock merged into it, under
-		// `Ticker`, which that mock returns. A third scope of one type would need a second hand-written mock of it, which
-		// `generate` rejects ("Found multiple hand-written mocks"). Each run builds every scope afresh, at new addresses, and
-		// takes the map's entries in another order; every run freezes the same tables. The first table is the production
-		// map's, which holds no root.
+		// Two concrete types are each held by two scopes of the mock map: each is built by `init` under its own type and by
+		// the hand-written mock of the `mockOnly` extension merged into it, which leaves out the dependency the mock is not
+		// passed, under the protocol that mock returns. A third scope of one type would need a second hand-written mock of it,
+		// which `generate` rejects ("Found multiple hand-written mocks"). Each run builds every scope afresh, at new
+		// addresses, and takes the map's entries in another order; every run freezes the same tables. The first table is the
+		// production map's, which holds no root.
 		var projectionsBySeed = [UInt64: [String]]()
 		for seed in UInt64(1)...20 {
 			let (stream, continuation) = AsyncStream.makeStream(of: String.self)
@@ -109,21 +108,24 @@ struct SafeDIToolScopeTableTests: ~Copyable {
 	public protocol Clock {}
 	public protocol Ticker {}
 
-	@Instantiable(fulfillingAdditionalTypes: [Clock.self], customMockName: "customMock")
+	@Instantiable
 	public final class SystemClock: Clock, Instantiable {
 		public init(zone: Zone) {
 			self.zone = zone
 		}
 
-		public static func customMock() -> Clock {
-			SystemClock(zone: Zone())
-		}
-
 		@Instantiated let zone: Zone
 	}
 
+	@Instantiable(fulfillingAdditionalTypes: [Clock.self], mockOnly: true, customMockName: "fakeClock")
+	extension SystemClock {
+		public static func fakeClock() -> any Clock {
+			SystemClock(zone: Zone())
+		}
+	}
+
 	@Instantiable
-	public final class SystemTimer: Clock, Ticker, Instantiable {
+	public final class SystemTimer: Ticker, Instantiable {
 		public init(zone: Zone) {
 			self.zone = zone
 		}
@@ -133,7 +135,7 @@ struct SafeDIToolScopeTableTests: ~Copyable {
 
 	@Instantiable(fulfillingAdditionalTypes: [Ticker.self], mockOnly: true, customMockName: "fakeTicker")
 	extension SystemTimer {
-		public static func fakeTicker() -> Ticker {
+		public static func fakeTicker() -> any Ticker {
 			SystemTimer(zone: Zone())
 		}
 	}
@@ -147,17 +149,17 @@ struct SafeDIToolScopeTableTests: ~Copyable {
 	private static let root = """
 	@Instantiable(generateMock: true)
 	public final class Root: Instantiable {
-		public init(clock: Clock, systemClock: SystemClock, systemTimer: SystemTimer, ticker: Ticker) {
+		public init(clock: any Clock, systemClock: SystemClock, systemTimer: SystemTimer, ticker: any Ticker) {
 			self.clock = clock
 			self.systemClock = systemClock
 			self.systemTimer = systemTimer
 			self.ticker = ticker
 		}
 
-		@Instantiated let clock: Clock
+		@Instantiated let clock: any Clock
 		@Instantiated let systemClock: SystemClock
 		@Instantiated let systemTimer: SystemTimer
-		@Instantiated let ticker: Ticker
+		@Instantiated let ticker: any Ticker
 	}
 	"""
 }
