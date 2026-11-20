@@ -3874,6 +3874,20 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(Self.renamedGraphDifferences(betweenCode: "\(PublicConfiguration.firstStruct)\n\n\(PublicConfiguration.secondStruct)\n", and: "\(PublicConfiguration.secondStruct)\n\n\(PublicConfiguration.firstStruct)\n") == [])
 	}
 
+	@Test
+	func renamedGraphFailures_isEmpty_whenStructsOfPublicConfigurationsWithoutTheirExtensionsDifferOnlyInTheirOrderAndOneHasForwarders() {
+		// Decomposing a module's combined output files the forwarders of a configuration's defaults after its struct,
+		// each a block of its own, so they move with the struct (public mock corpus seeds 2291 and 2877).
+		let forwarder = "@usableFromInline nonisolated func __safeDI_FuzzFeature_S12_T1_mockDefault_name() -> String? { S12_T1.__safeDI_mockDefault_name() }"
+		#expect(Self.renamedGraphDifferences(betweenCode: "\(PublicConfiguration.firstStruct)\n\n\(PublicConfiguration.secondStruct)\n\n\(forwarder)\n", and: "\(PublicConfiguration.secondStruct)\n\n\(forwarder)\n\n\(PublicConfiguration.firstStruct)\n") == [])
+	}
+
+	@Test
+	func renamedGraphFailures_reportFile_whenForwarderMovesToAnotherStructOfPublicConfigurationWithoutItsExtension() {
+		let forwarder = "@usableFromInline nonisolated func __safeDI_FuzzFeature_S12_T1_mockDefault_name() -> String? { S12_T1.__safeDI_mockDefault_name() }"
+		#expect(Self.renamedGraphDifferences(betweenCode: "\(PublicConfiguration.firstStruct)\n\n\(PublicConfiguration.secondStruct)\n\n\(forwarder)\n", and: "\(PublicConfiguration.firstStruct)\n\n\(forwarder)\n\n\(PublicConfiguration.secondStruct)\n") == [.mockConfigurationCode])
+	}
+
 	@Test(arguments: [
 		// A configuration's struct that takes the place of an extension.
 		("\(PublicConfiguration.firstStruct)\n\n\(GeneratedExtension.first)", "\(GeneratedExtension.first)\n\(PublicConfiguration.firstStruct)\n"),
