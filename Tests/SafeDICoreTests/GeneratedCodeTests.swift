@@ -50,7 +50,7 @@ struct GeneratedCodeTests {
 
 	@Test
 	func spelled_writesPlaceCodeAsItIs_whenPlanHoldsPlace() {
-		let place = PlacePlan(kind: .builtByFunction, functionNames: ["__safeDI_a"], closedOnFunctionName: nil, code: .text("x\ny"))
+		let place = PlacePlan(code: .text("x\ny"))
 		#expect(GeneratedCode.indented(.place(place), by: "\t").spelled() == "\tx\n\ty")
 	}
 
@@ -84,8 +84,6 @@ struct GeneratedCodeTests {
 				: GeneratedCodeText.indentingNonEmptyLines(of: reindentingEveryLevel(code), by: indentation)
 		case let .place(plan):
 			reindentingEveryLevel(plan.code)
-		case let .laidOut(spelled, _):
-			reindentingEveryLevel(spelled)
 		}
 	}
 
@@ -103,7 +101,7 @@ struct GeneratedCodeTests {
 			let indentations = ["", "\t", "    ", "\r"]
 			return .indented(randomCode(depth: depth - 1, using: &generator), by: indentations[Int(generator.next() % UInt64(indentations.count))])
 		default:
-			return .place(PlacePlan(kind: .alias, functionNames: [], closedOnFunctionName: nil, code: randomCode(depth: depth - 1, using: &generator)))
+			return .place(PlacePlan(code: randomCode(depth: depth - 1, using: &generator)))
 		}
 	}
 }

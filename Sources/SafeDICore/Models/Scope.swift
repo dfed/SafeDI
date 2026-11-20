@@ -434,7 +434,7 @@ extension ScopeRecord {
 		// which the root asks for once its tree exists; an early start generates each large subtree's code at the context of
 		// a root, which on graphs with lazy cycles that layout never reads, and on every graph runs beside it. Seams, mocks
 		// and trees built only to read their sets keep their starts.
-		let startsCodeGeneration = startsCodeGeneration && !(property == nil && seamRoot == nil && mockBuilders == nil && !forMockGeneration && ProductionBodyKey.current == .type)
+		let startsCodeGeneration = startsCodeGeneration && !(property == nil && seamRoot == nil && mockBuilders == nil && !forMockGeneration)
 		let scopeGenerator = try createdTree(
 			in: table,
 			for: property,
@@ -2349,23 +2349,17 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// Kicks off the generation of `scopeGenerator`'s code, which a later request for the code reads from its cache.
 	static func startCodeGeneration(of scopeGenerator: ScopeGenerator) {
 		CodeTaskStart.record()
-		// A detached task inherits no task-local, so the key the starting task lays bodies out by is handed on, since the
-		// code is planned by it, and so is the work observer of the task that starts the code: the code a later request
-		// reads from the cache then counts its work whichever task asks for it first.
-		let productionBodyKey = ProductionBodyKey.current
+		// A detached task inherits no task-local, so the work observer of the task that starts the code is handed on: the
+		// code a later request reads from the cache then counts its work whichever task asks for it first.
 		if let observer = GenerationWork.observer {
 			_ = Task.detached {
-				try await ProductionBodyKey.$current.withValue(productionBodyKey) {
-					try await GenerationWork.$observer.withValue(observer) {
-						try await scopeGenerator.generateCode()
-					}
+				try await GenerationWork.$observer.withValue(observer) {
+					try await scopeGenerator.generateCode()
 				}
 			}
 		} else {
 			_ = Task.detached {
-				try await ProductionBodyKey.$current.withValue(productionBodyKey) {
-					try await scopeGenerator.generateCode()
-				}
+				try await scopeGenerator.generateCode()
 			}
 		}
 	}
