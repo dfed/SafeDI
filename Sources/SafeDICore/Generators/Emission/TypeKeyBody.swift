@@ -544,7 +544,7 @@ private struct TypeKeyLayout {
 			}()
 		}
 		if let observer = TypeKeyClassObservation.observer {
-			observer(TypeKeyClassObservation.Classes(typeKey: refine(classesWithForms) ?? [], memo: memoClasses(families: families)))
+			observer(TypeKeyClassObservation.Classes(typeKey: refine(classesWithForms) ?? [], memo: memoClasses(families: families), views: views(families: families)))
 		}
 		guard let final = refine(classesWithForms) else { return false }
 		refined = final
@@ -604,6 +604,76 @@ private struct TypeKeyLayout {
 			}()
 		}
 		return classes
+	}
+
+	/// A declaration of the path key's body, named by the view of the body that declares it rather than by the body.
+	private enum ViewValue: Hashable {
+		case none
+		case statement(view: Int, index: Int)
+		case forwarded(view: Int, label: String)
+		case cycleParameter(view: Int, label: String)
+	}
+
+	/// Each body's view (R1b §2a): the plan node it lays out, its family, what each label it reads outside itself resolves
+	/// to and what its cycle parameters are passed, each named by the view that declares it, and the views of the functions
+	/// its closers call outside it. Places of one view lay out alike in every step. Bodies are numbered in walk order, each
+	/// after its parent, so a view is interned after the views it names.
+	private func views(families: [Bool]) -> [Int] {
+		struct ViewKey: Hashable {
+			let node: PlanNode?
+			let body: Int?
+			let isInSendableFamily: Bool
+			let outerView: [String: ViewValue]
+			let cycleArguments: [ViewValue]
+			let closerTargets: Set<Int>
+		}
+		var closerTargetsByBody = [Set<Int>](repeating: [], count: bodies.count)
+		for (target, closers) in closersByTarget {
+			for closer in closers {
+				var body = closer.body
+				while body != target, body != 0 {
+					closerTargetsByBody[body].insert(target)
+					body = bodies[body].parent
+				}
+			}
+		}
+		var viewByBody = [Int](repeating: 0, count: bodies.count)
+		var viewsByKey = [ViewKey: Int]()
+		func viewValue(_ value: PathValue) -> ViewValue {
+			switch value {
+			case .none:
+				.none
+			case let .statement(body, index):
+				.statement(view: viewByBody[body], index: index)
+			case let .forwarded(body, label):
+				.forwarded(view: viewByBody[body], label: label)
+			case let .cycleParameter(body, label):
+				.cycleParameter(view: viewByBody[body], label: label)
+			}
+		}
+		for body in bodies.indices.dropFirst() {
+			let parent = bodies[body].parent
+			let position = bodies[body].position
+			let record = bodies[body].record
+			var outerView = [String: ViewValue]()
+			for label in escapingReads[body].keys {
+				outerView[label] = viewValue(lookUp(label, inBody: parent, before: position))
+			}
+			let key = ViewKey(
+				node: record?.node,
+				body: record == nil ? body : nil,
+				isInSendableFamily: families[body],
+				outerView: outerView,
+				cycleArguments: (record?.callCycleArguments ?? []).map { viewValue(pathValue(of: $0, inBody: parent, before: position)) },
+				closerTargets: Set(closerTargetsByBody[body].map { viewByBody[$0] }),
+			)
+			viewByBody[body] = viewsByKey[key] ?? {
+				let view = viewsByKey.count + 1
+				viewsByKey[key] = view
+				return view
+			}()
+		}
+		return viewByBody
 	}
 
 	private func structuralKey(of body: Int, isInSendableFamily: Bool) -> [String] {

@@ -943,8 +943,8 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 	mutating func generate_laysOutEachTypeOnce_whenTreeReachesEachTypeOnManyPaths() async throws {
 		// Four layers of three types, each instantiating the three of the layer beneath. The 81 places of the last layer build
 		// constants in place, so 3 + 9 + 27 = 39 places have a builder function. The construction memo builds them with one
-		// generator per type, 9, and the type key lays them out as one class per type, 9. R1b §2a lays the body out over the
-		// generators, so the work it counts falls from 39 to 9.
+		// generator per type, 9, each in one view, 9, and the type key lays them out as one class per type, 9. R1b §2a lays
+		// the body out over the views, so the work it counts falls from 39 to 9.
 		let letters = ["A", "B", "C"]
 		var fixture = [Self.type("Root", isRoot: true, "@Instantiated let l1a: L1A", "@Instantiated let l1b: L1B", "@Instantiated let l1c: L1C")]
 		for layer in 1...4 {
@@ -960,9 +960,9 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 		continuation.finish()
 		var counts = [[Int]]()
 		for await classes in stream {
-			counts.append([classes.typeKey.count - 1, Set(classes.memo.dropFirst()).count, Set(classes.typeKey.dropFirst()).count])
+			counts.append([classes.typeKey.count - 1, Set(classes.memo.dropFirst()).count, Set(classes.views.dropFirst()).count, Set(classes.typeKey.dropFirst()).count])
 		}
-		#expect(counts == [[39, 9, 9]])
+		#expect(counts == [[39, 9, 9, 9]])
 	}
 
 	// MARK: Tests of merge order (R1b §2a)
@@ -1873,6 +1873,7 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 		// classes can be computed over the memo's generators rather than over every place.
 		for await classes in stream {
 			#expect(classes.memoRefinesTypeKey, "type key \(classes.typeKey), memo \(classes.memo)", sourceLocation: sourceLocation)
+			#expect(classes.viewsRefineTypeKey, "type key \(classes.typeKey), views \(classes.views)", sourceLocation: sourceLocation)
 		}
 		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: output.generatedFiles ?? [:]),

@@ -75,6 +75,20 @@ struct BuiltPlaceRecord: Sendable {
 	let children: [GeneratedCode]
 	/// The generator that wrote the place, which the construction memo shares between the places it finds alike.
 	let generator: ObjectIdentifier
+	/// The place's code as one node of the plan: made once each time a generator writes its code for a context, and
+	/// shared by every place that reads that code from the generator's cache.
+	let node = PlanNode()
+}
+
+/// The identity of one node of a root's plan (`BuiltPlaceRecord.node`), compared by identity.
+final class PlanNode: Hashable, Sendable {
+	static func == (lhs: PlanNode, rhs: PlanNode) -> Bool {
+		lhs === rhs
+	}
+
+	func hash(into hasher: inout Hasher) {
+		hasher.combine(ObjectIdentifier(self))
+	}
 }
 
 /// A place that closes a cycle on the function the path key names `closedOnFunctionName`.
@@ -118,15 +132,27 @@ public enum TypeKeyClassObservation {
 	public struct Classes: Sendable, Equatable {
 		public let typeKey: [Int]
 		public let memo: [Int]
+		/// Each body's view (R1b §2a): places of one plan node, in one family, whose reads outside it resolve to the
+		/// declarations of one view each, and whose closers call the functions of one view each.
+		public let views: [Int]
 
 		/// Whether every memo class lies inside one type-key class: the type key may merge memo classes, which differ in
 		/// what a read is answered (a value or none, one form or another), but never splits one.
 		public var memoRefinesTypeKey: Bool {
-			guard typeKey.count == memo.count else { return false }
-			var typeKeyClassByMemoClass = [Int: Int]()
-			for (typeKeyClass, memoClass) in zip(typeKey, memo) {
-				guard typeKeyClassByMemoClass[memoClass, default: typeKeyClass] == typeKeyClass else { return false }
-				typeKeyClassByMemoClass[memoClass] = typeKeyClass
+			Self.refines(memo, typeKey)
+		}
+
+		/// Whether every view lies inside one type-key class.
+		public var viewsRefineTypeKey: Bool {
+			Self.refines(views, typeKey)
+		}
+
+		private static func refines(_ finer: [Int], _ coarser: [Int]) -> Bool {
+			guard finer.count == coarser.count else { return false }
+			var coarserClassByFinerClass = [Int: Int]()
+			for (coarserClass, finerClass) in zip(coarser, finer) {
+				guard coarserClassByFinerClass[finerClass, default: coarserClass] == coarserClass else { return false }
+				coarserClassByFinerClass[finerClass] = coarserClass
 			}
 			return true
 		}
