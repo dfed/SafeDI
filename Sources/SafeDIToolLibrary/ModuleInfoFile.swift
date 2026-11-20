@@ -187,6 +187,7 @@ public struct ModuleInfoFile: Codable, Sendable {
 	public var withoutSeamSignatures: ModuleInfoFile {
 		ModuleInfoFile(
 			moduleName: moduleName,
+			ownEntryChecksum: ownEntryChecksum,
 			packageName: packageName,
 			dependencyModuleNames: dependencyModuleNames,
 			imports: imports,
@@ -201,6 +202,7 @@ public struct ModuleInfoFile: Codable, Sendable {
 			view: ModuleInfoView(
 				moduleGraph: view.moduleGraph,
 				declarations: view.declarations.map { ViewedModule(moduleName: $0.moduleName, imports: $0.imports, mockImports: $0.mockImports, instantiables: $0.instantiables, plainTypeDeclarations: $0.plainTypeDeclarations, seamSignatures: []) },
+				references: view.references,
 			),
 		)
 	}
@@ -236,9 +238,14 @@ public struct ModuleInfoView: Codable, Sendable {
 }
 
 extension ViewedModule {
-	/// The checksum of the bytes this entry is written as, which a reference to its module holds.
+	/// The checksum a reference to this entry's module holds: of the bytes the entry is written as without its seam
+	/// signatures. Each signature follows from the declarations of the module and of the modules its run read, which a view
+	/// that refers to this module refers to as well, so a change that changes a signature changes some reference's
+	/// checksum; and a file whose signatures are taken out (`ModuleInfoFile.withoutSeamSignatures`) keeps its references.
 	var checksum: UInt64 {
-		MergedModuleInfoView.encoded(self).withUnsafeBytes(BinaryFile.checksum(of:))
+		MergedModuleInfoView.encoded(
+			ViewedModule(moduleName: moduleName, imports: imports, mockImports: mockImports, instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, seamSignatures: []),
+		).withUnsafeBytes(BinaryFile.checksum(of:))
 	}
 }
 
@@ -396,7 +403,7 @@ struct MergedModuleInfoView {
 				moduleGraph: moduleGraph,
 				declarations: [],
 				references: writtenNames.compactMap { name in
-					declarations[name].map { ViewedModuleReference(moduleName: name, checksum: $0.bytes.withUnsafeBytes(BinaryFile.checksum(of:))) }
+					declarations[name].map { ViewedModuleReference(moduleName: name, checksum: $0.entry.checksum) }
 				},
 			)
 		} else {
