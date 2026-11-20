@@ -318,24 +318,23 @@ public actor DependencyTreeGenerator {
 			nil
 		}
 		let trees = try buildsDependencyTrees ? dependencyTrees(unreadTypeComment: publicMockContext?.unreadTypeComment) : nil
-		// The roots' plans generate in a child task while the warnings, the DOT graph and the mocks are made, since none of
-		// them reads them. Its error is still the one reported before theirs: their results are kept until it is awaited.
-		// The child holds the roots' generators only while it runs, so once the plans are done this function holds the
-		// last references to the trees.
 		// The checks run in this task, not the one that plans the code: their walks are as deep as the trees, and a task
 		// frees the memory its frames took when it ends, which on a deep module took as long as releasing the trees.
 		if request.generatesDependencyTrees, let trees {
 			try await validateBeforeGeneratingCode(of: trees.roots)
 		}
+		// The roots' plans generate in a child task while the warnings and the DOT graph are made from the same trees.
+		// The mocks are made only once the trees are released, so a module's root trees and its mock trees are never held
+		// at once: making them beside the plans raised a mock-heavy module's peak memory by a fifth.
 		let plannedRoots: Result<[PlannedRoot], any Error>
 		let warnings: [SourceDiagnostic]
-		let dotTreeAndMocks: Result<(String?, MockGenerationResult?), any Error>
+		let dotTree: Result<String?, any Error>
 		do {
 			// The trees as the work below reads them, released at the end of this block.
 			let trees = trees
-			(plannedRoots, warnings, dotTreeAndMocks) = await withTaskGroup(
+			(plannedRoots, warnings, dotTree) = await withTaskGroup(
 				of: Result<[PlannedRoot], any Error>.self,
-				returning: (Result<[PlannedRoot], any Error>, [SourceDiagnostic], Result<(String?, MockGenerationResult?), any Error>).self,
+				returning: (Result<[PlannedRoot], any Error>, [SourceDiagnostic], Result<String?, any Error>).self,
 			) { taskGroup in
 				if request.generatesDependencyTrees, let trees {
 					taskGroup.addTask { [roots = trees.roots, rootsOfOtherModules = trees.rootsOfOtherModules] in
@@ -351,40 +350,39 @@ public actor DependencyTreeGenerator {
 				} else {
 					[SourceDiagnostic]()
 				}
-				let dotTreeAndMocks: Result<(String?, MockGenerationResult?), any Error>
+				// Drawn from the trees the code is generated from, before any mock is built. Its error is kept until the
+				// plans' is reported.
+				let dotTree: Result<String?, any Error>
 				do {
-					var dotTree: String?
-					if let trees, request.generatesDOTTree {
-						// Drawn from the trees the code was generated from, before any mock is built, so that no tree outlives
-						// its use. Drawing a tree throws nothing, so an error in a mock is still the one reported after the
-						// trees'.
-						dotTree = try await generateDOTTree(of: trees.roots)
+					dotTree = if let trees, request.generatesDOTTree {
+						try await .success(generateDOTTree(of: trees.roots))
+					} else {
+						.success(nil)
 					}
-					var mocks: MockGenerationResult?
-					if let mockRequest = request.mocks {
-						mocks = try await generateMockCode(
-							mockConditionalCompilation: mockRequest.mockConditionalCompilation,
-							currentModuleSourceFilePaths: mockRequest.currentModuleSourceFilePaths,
-							additionalMocksToGenerate: mockRequest.additionalMocksToGenerate,
-							publicMockContext: declaresPublicMock ? publicMockContext : nil,
-						)
-					}
-					dotTreeAndMocks = .success((dotTree, mocks))
 				} catch {
-					dotTreeAndMocks = .failure(error)
+					dotTree = .failure(error)
 				}
 				let plannedRoots = await taskGroup.next() ?? .success([])
-				return (plannedRoots, warnings, dotTreeAndMocks)
+				return (plannedRoots, warnings, dotTree)
 			}
 		}
-		let plans = try plannedRoots.get()
-		// The roots' plans are spelled in a child task while this one releases the trees, which takes about as long on a
-		// large module: releasing them after the text, or before it, made `generate` wait for both.
-		async let roots = Self.spelled(plans)
-		// A read, not an assignment, so the optimizer cannot release the trees before the spelling starts.
+		// A read, not an assignment, so the optimizer cannot keep the trees past this point.
 		_ = consume trees
-		let (dotTree, mocks) = try dotTreeAndMocks.get()
-		return await GenerationResults(generatedRoots: roots, warnings: warnings, mocks: mocks, dotTree: dotTree)
+		// An error in the roots' and seams' code is reported before any mock is built.
+		let plans = try plannedRoots.get()
+		let drawnTree = try dotTree.get()
+		// The roots' plans are spelled in a child task while the mocks are made.
+		async let roots = Self.spelled(plans)
+		var mocks: MockGenerationResult?
+		if let mockRequest = request.mocks {
+			mocks = try await generateMockCode(
+				mockConditionalCompilation: mockRequest.mockConditionalCompilation,
+				currentModuleSourceFilePaths: mockRequest.currentModuleSourceFilePaths,
+				additionalMocksToGenerate: mockRequest.additionalMocksToGenerate,
+				publicMockContext: declaresPublicMock ? publicMockContext : nil,
+			)
+		}
+		return await GenerationResults(generatedRoots: roots, warnings: warnings, mocks: mocks, dotTree: drawnTree)
 	}
 
 	/// Runs every whole-module check of `roots`, the trees this module generates, which their code needs to pass.
