@@ -4,6 +4,6 @@
 # in the change that brings its function under the limit; never add one for new code.
 
 # The initializer #819 split into functions of its own: from 172 s to 198 s before the split to 11.3 s on main at
-# 00da8b5 (Swift 6.2, four cores, 2026-11-20), still over the limit of 10 s. Moving another block out of it removes
-# this line.
-sil 15 SafeDICore.ScopeGenerator.init(instantiable:
+# 00da8b5 and 12.4 s at 76fcb483 (Swift 6.2, four cores, 2026-11-20), still over the limit of 10 s. Moving another
+# block out of it removes this line.
+sil 16 SafeDICore.ScopeGenerator.init(instantiable:
