@@ -324,7 +324,7 @@ public actor DependencyTreeGenerator {
 			let trees = try dependencyTrees(unreadTypeComment: publicMockContext?.unreadTypeComment)
 			if request.generatesDependencyTrees {
 				generatedRoots = try await generatedCode(of: trees)
-				warnings = generateWarnings(validatedScopes: trees.validatedScopes)
+				warnings = trees.warnings
 			}
 			if request.generatesDOTTree {
 				// Drawn from the trees the code was generated from, before any mock is built, so that no tree outlives its
@@ -505,8 +505,9 @@ public actor DependencyTreeGenerator {
 		/// The generators of the trees this module generates: the roots of the dependency tree, then the seams this module
 		/// generates.
 		let roots: [RootScopeInfo]
-		/// The scopes of the validated dependency tree, which `generateWarnings(validatedScopes:)` analyzes.
-		let validatedScopes: Set<Scope>
+		/// The warnings about the validated dependency tree (`generateWarnings(validatedScopes:)`), found while its scopes
+		/// are built so that no scope outlives the trees into code generation, whose peak memory it would raise.
+		let warnings: [SourceDiagnostic]
 		/// The roots another module declares, in type order, whose `init()` that module generates rather than this one.
 		let rootsOfOtherModules: [Instantiable]
 	}
@@ -605,7 +606,7 @@ public actor DependencyTreeGenerator {
 		for root in rootScopeGenerators {
 			GenerationLayerObservation.record(.dependencyTree(of: root.typeDescription), inRunOf: seams.currentModule.moduleName)
 		}
-		return DependencyTrees(roots: rootScopeGenerators, validatedScopes: validatedScopes, rootsOfOtherModules: rootsOfOtherModules)
+		return DependencyTrees(roots: rootScopeGenerators, warnings: generateWarnings(validatedScopes: validatedScopes), rootsOfOtherModules: rootsOfOtherModules)
 	}
 
 	/// Rejects each label that a type a dependency cycle builds again, in the trees `generators` root, receives in forms
