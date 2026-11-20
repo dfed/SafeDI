@@ -205,10 +205,11 @@ struct BinaryWriter {
 		if let index = sharedValueIndices[key] {
 			writeUnsigned(index + 1)
 		} else {
-			sharedValueIndices[key] = sharedValueCount
-			sharedValueCount += 1
 			writeUnsigned(0)
 			write(value)
+			// After the value, as the reader appends it after reading it: a shared value the value holds takes its index first.
+			sharedValueIndices[key] = sharedValueCount
+			sharedValueCount += 1
 		}
 	}
 
