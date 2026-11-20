@@ -117,6 +117,13 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 				    public static func mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Screen {
+				        Screen.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Screen {
 				        func __safeDI_service() -> Service {
 				            return Service.__safeDI_init(name: safeDIOverrides.service.name, safeDIBuilder: safeDIOverrides.service.safeDIBuilder)
 				        }
@@ -266,6 +273,13 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 				    public static func mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Screen {
+				        Screen.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Screen {
 				        func __safeDI_service() -> Service {
 				            return Service.__safeDI_init(name: safeDIOverrides.service.name, safeDIBuilder: safeDIOverrides.service.safeDIBuilder)
 				        }
@@ -345,6 +359,14 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        title: String? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Home {
+			        Home.__safeDI_mock(title: title, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        title: String? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Home {
@@ -517,6 +539,14 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 			        title: String? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Card {
+			        Card.__safeDI_mock(title: title, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        title: String? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Card {
 			        let title = title ?? ("card")
 			        let theme = if let safeDIBuilder = safeDIOverrides.theme { safeDIBuilder() } else { Theme() }
 			        return Card(theme: theme, title: title)
@@ -568,9 +598,16 @@ struct SafeDIToolPublicMockDefaultIsolationTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Page {
+			        Page.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Page {
 			        func __safeDI_panel() -> Panel {
 			            _ = Card.__safeDI_Card_mock_546AE63BE69A02EC.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            let card = Card.mock(safeDIOverrides: safeDIOverrides.panel.card)
+			            let card = Card.__safeDI_mock(safeDIOverrides: safeDIOverrides.panel.card)
 			            return Panel.__safeDI_init(card: card, name: safeDIOverrides.panel.name, safeDIBuilder: safeDIOverrides.panel.safeDIBuilder)
 			        }
 			        let panel: Panel = __safeDI_panel()

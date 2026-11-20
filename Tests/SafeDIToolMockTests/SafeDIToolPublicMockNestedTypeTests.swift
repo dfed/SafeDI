@@ -94,6 +94,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
 			        func __safeDI_child() -> Child {
 			            return Child.__safeDI_init(theme: safeDIOverrides.child.theme, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
 			        }
@@ -225,6 +232,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
 			        func __safeDI_child() -> Child {
 			            return Child.__safeDI_init(theme: safeDIOverrides.child.theme, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
 			        }
@@ -343,6 +357,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        func __safeDI_child() -> Child {
@@ -490,6 +511,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
 			        func __safeDI_child() -> AnyChild {
 			            return AnyChild(Child.__safeDI_init(theme: safeDIOverrides.child.theme, safeDIBuilder: safeDIOverrides.child.safeDIBuilder))
 			        }
@@ -617,6 +645,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        func __safeDI_child() -> Child {
@@ -757,6 +792,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
 			        func __safeDI_gadget() -> Gadget {
 			            return Gadget.__safeDI_init(mode: safeDIOverrides.gadget.mode, safeDIBuilder: safeDIOverrides.gadget.safeDIBuilder)
 			        }
@@ -881,6 +923,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        func __safeDI_child() -> Child {
@@ -1035,6 +1084,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        func __safeDI_child() -> Outer.Child {
@@ -1217,10 +1273,27 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			        label: Root.Label? = Root.__safeDI_publicMockDefault_label(),
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        Root.mock(theme: nil, label: label, safeDIOverrides: safeDIOverrides)
+			        Root.__safeDI_mock(label: label, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        label: Root.Label? = Root.__safeDI_publicMockDefault_label(),
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        Root.__safeDI_mock(theme: nil, label: label, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    static func mock(
+			        theme: Root.Theme? = nil,
+			        label: Root.Label? = Root.__safeDI_publicMockDefault_label(),
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        Root.__safeDI_mock(theme: theme, label: label, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    static func __safeDI_mock(
 			        theme: Root.Theme? = nil,
 			        label: Root.Label? = Root.__safeDI_publicMockDefault_label(),
 			        safeDIOverrides: SafeDIOverrides = .init()
@@ -1265,6 +1338,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Shell {
+			        Shell.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Shell {
 			        func __safeDI_root() -> Root {
@@ -1422,10 +1502,25 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 		    public static func mock(
 		        theme: Root.Theme? = nil
 		    ) -> Root {
-		        Root.mock(theme: theme, label: Root.__safeDI_publicMockDefault_label())
+		        Root.__safeDI_mock(theme: theme)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        theme: Root.Theme? = nil
+		    ) -> Root {
+		        Root.__safeDI_mock(theme: theme, label: Root.__safeDI_publicMockDefault_label())
 		    }
 
 		    static func mock(
+		        theme: Root.Theme? = nil,
+		        label: Root.Label? = Root.__safeDI_publicMockDefault_label()
+		    ) -> Root {
+		        Root.__safeDI_mock(theme: theme, label: label)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    static func __safeDI_mock(
 		        theme: Root.Theme? = nil,
 		        label: Root.Label? = Root.__safeDI_publicMockDefault_label()
 		    ) -> Root {
@@ -1553,6 +1648,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        func __safeDI_badge() -> Badge {
@@ -1747,6 +1849,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
 			        func __safeDI_child() -> Child {
 			            return Child.__safeDI_init(box: safeDIOverrides.child.box, themes: safeDIOverrides.child.themes, themesByName: safeDIOverrides.child.themesByName, kind: safeDIOverrides.child.kind, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
 			        }
@@ -1894,6 +2003,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
 			        let __safeDI_childBuilder__childBuilder_theme = safeDIOverrides.childBuilder.theme
 			        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder
 			        @Sendable func __safeDI_childBuilder() -> Child {
@@ -2034,6 +2150,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        func __safeDI_child() -> Child {
@@ -2220,6 +2343,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
 			        func __safeDI_child() -> Child {
 			            return Child.__safeDI_init(theme: safeDIOverrides.child.theme, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
 			        }
@@ -2385,6 +2515,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 		    public static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
 		        func __safeDI_child() -> Child {
 		            return Child.__safeDI_init(theme: safeDIOverrides.child.theme, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
 		        }
@@ -2437,6 +2574,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Root {
+				        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Root {
 				        func __safeDI_child() -> Child {
@@ -2532,6 +2676,13 @@ struct SafeDIToolPublicMockNestedTypeTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Root {
+				        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Root {
 				        func __safeDI_child() -> Child {

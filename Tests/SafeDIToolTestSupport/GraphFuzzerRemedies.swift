@@ -228,7 +228,11 @@ enum GraphFuzzerRemedies {
 
 	/// The remedy an error states, read from its message, before it is applied.
 	enum StatedRemedy: Equatable {
-		case instantiateOnRoot(property: GraphFuzzerRemedyProperty, root: String, receivingOnlyIfAvailable: Bool)
+		/// `relabeling` lists the declarations a mock's tree would hide the declared property behind, which the advice relabels.
+		case instantiateOnRoot(property: GraphFuzzerRemedyProperty, root: String, receivingOnlyIfAvailable: Bool, relabeling: [HidingDeclaration] = [])
+		/// "Did you mean `@Received(onlyIfAvailable: true) let y: Y?`? Received as required, …", a suggestion whose required
+		/// receive closes a cycle in a mock.
+		case receiveSuggestedPropertyOnlyIfAvailable(label: String, suggestion: GraphFuzzerRemedyProperty)
 		case receiveOnlyIfAvailable(label: String)
 		case receiveSuggestedProperty(label: String, suggestions: [GraphFuzzerRemedyProperty])
 		case instantiateAsInstantiator(hopLabels: [String])
@@ -446,12 +450,20 @@ enum GraphFuzzerRemedies {
 				let hint = message[hintStart.upperBound...]
 				let instantiatePrefix = "Declare `@Instantiated let "
 				let instantiateRootMarker = "` on `"
-				let instantiateSuffix = "` or on another type in the chain to fix."
-				let instantiateReceivingOnlyIfAvailableSuffix = "` or on another type in the chain, and add `onlyIfAvailable: true` to this property’s `@Received`, which then accepts the non-optional form, to fix."
+				let instantiateChainMarker = "` or on another type in the chain"
+				let onlyIfAvailableClause = "add `onlyIfAvailable: true` to this property’s `@Received`, which then accepts the non-optional form, to fix."
+				let suggestedOnlyIfAvailablePrefix = "Did you mean `@Received(onlyIfAvailable: true) let "
+				let suggestedOnlyIfAvailableMarker = "`? Received as required, `"
 				if hint.hasPrefix("Declaring `@Instantiated let "), hint.hasSuffix(onlyIfAvailableRemedy.dropFirst()) {
 					self = .removeOrReceiveOptionallyIfAvailable
 				} else if hint.hasPrefix("The non-optional `"), hint.hasSuffix("Did you mean to decorate this property with `@Received(onlyIfAvailable: true)`?") {
 					self = .receiveOnlyIfAvailable(label: receivedLabel)
+				} else if hint.hasPrefix(suggestedOnlyIfAvailablePrefix), let markerRange = hint.range(of: suggestedOnlyIfAvailableMarker) {
+					// "Did you mean `@Received(onlyIfAvailable: true) let y: Y?`? Received as required, `y: Y?` is still being built
+					// when the mock of `T` builds `T`."
+					let spelledSuggestion = hint[hint.index(hint.startIndex, offsetBy: suggestedOnlyIfAvailablePrefix.count)..<markerRange.lowerBound]
+					guard let suggestion = Self.property(spelled: spelledSuggestion, attribute: "@Received(onlyIfAvailable: true)") else { return nil }
+					self = .receiveSuggestedPropertyOnlyIfAvailable(label: receivedLabel, suggestion: suggestion)
 				} else if hint.hasPrefix("Did you mean "), hint.hasSuffix("`?") {
 					let list = hint.dropFirst("Did you mean ".count).dropLast("?".count)
 					let items = list.hasPrefix("one of ") ? Self.backtickedItems(in: list.dropFirst("one of ".count)) : Self.backtickedItems(in: list)
@@ -459,13 +471,37 @@ enum GraphFuzzerRemedies {
 					guard !suggestions.isEmpty, suggestions.count == items.count else { return nil }
 					self = .receiveSuggestedProperty(label: receivedLabel, suggestions: suggestions)
 				} else if hint.hasPrefix(instantiatePrefix),
-				          let suffix = [instantiateSuffix, instantiateReceivingOnlyIfAvailableSuffix].first(where: { hint.hasSuffix($0) }),
-				          let rootMarker = hint.range(of: instantiateRootMarker, options: .backwards, range: hint.startIndex..<hint.index(hint.endIndex, offsetBy: -suffix.count))
+				          let chainMarker = hint.range(of: instantiateChainMarker),
+				          let rootMarker = hint.range(of: instantiateRootMarker, options: .backwards, range: hint.startIndex..<chainMarker.lowerBound)
 				{
+					// "… on `Root` or on another type in the chain" ends " to fix.", ", and add `onlyIfAvailable: true` …", ", and
+					// give `x: Y` on `T` a different label, to fix.", or ", give `x: Y` on `T` a different label, and add …", one
+					// or more declarations ("`a` on `T`, `b` on `U` and `c` on `V` different labels").
 					let spelledProperty = hint[hint.index(hint.startIndex, offsetBy: instantiatePrefix.count)..<rootMarker.lowerBound]
-					let root = hint[rootMarker.upperBound..<hint.index(hint.endIndex, offsetBy: -suffix.count)]
+					let root = hint[rootMarker.upperBound..<chainMarker.lowerBound]
 					guard let property = Self.property(spelled: spelledProperty, attribute: "@Instantiated"), !root.contains("`") else { return nil }
-					self = .instantiateOnRoot(property: property, root: String(root), receivingOnlyIfAvailable: suffix == instantiateReceivingOnlyIfAvailableSuffix)
+					let ending = hint[chainMarker.upperBound...]
+					let receivingOnlyIfAvailable: Bool
+					var relabeling = [HidingDeclaration]()
+					if ending == " to fix." {
+						receivingOnlyIfAvailable = false
+					} else if ending == ", and \(onlyIfAvailableClause)" {
+						receivingOnlyIfAvailable = true
+					} else {
+						let givePrefix = ending.hasPrefix(", and give ") ? ", and give " : ", give "
+						receivingOnlyIfAvailable = givePrefix == ", give "
+						let tail = receivingOnlyIfAvailable ? ", and \(onlyIfAvailableClause)" : ", to fix."
+						guard ending.hasPrefix(givePrefix), ending.hasSuffix(tail) else { return nil }
+						let list = ending.dropFirst(givePrefix.count).dropLast(tail.count)
+						let namesSeveral = list.hasSuffix(" different labels")
+						let declarationList = list.dropLast(namesSeveral ? " different labels".count : " a different label".count)
+						guard namesSeveral || list.hasSuffix(" a different label"),
+						      let declarations = Self.hidingDeclarations(listedIn: declarationList, label: property.label),
+						      namesSeveral == (declarations.count > 1)
+						else { return nil }
+						relabeling = declarations
+					}
+					self = .instantiateOnRoot(property: property, root: String(root), receivingOnlyIfAvailable: receivingOnlyIfAvailable, relabeling: relabeling)
 				} else if hint.contains(" Declare `@Forwarded let \(spelledReceivedProperty)` on a type below `") || hint.contains(" Or declare `@Forwarded let \(spelledReceivedProperty)` on a type below `") {
 					// "… SafeDI builds it only through an `Instantiator` …", followed by "Declare `@Forwarded let x: X` on a type
 					// below `Root` in the chain, and pass the value to the `Instantiator` that builds that type", or "No
@@ -478,9 +514,12 @@ enum GraphFuzzerRemedies {
 				}
 			} else if let collision = SeamLabelCollision(message: message) {
 				// "SafeDI cannot generate the dependency tree of `S`: its tree receives `x` as … Receive `x` the same way in
-				// every type of the tree, or declare it on `S` as the form that provides the others: `@Received let x: X`."
-				let remedyPrefix = "Receive `\(collision.label)` the same way in every type of the tree, or declare it on `\(collision.seam)` as the form that provides the others: `@Received let \(collision.label): "
-				guard collision.remedy.hasPrefix(remedyPrefix), collision.remedy.hasSuffix("`.") else { return nil }
+				// every type of the tree, or declare it on `S` as the form that provides the others: `@Received let x: X`.", or,
+				// where the providing form would be a wrapper only the seam receives, "… as the form its tree requires: …".
+				let remedyPrefixes = ["the form that provides the others", "the form its tree requires"].map { form in
+					"Receive `\(collision.label)` the same way in every type of the tree, or declare it on `\(collision.seam)` as \(form): `@Received let \(collision.label): "
+				}
+				guard let remedyPrefix = remedyPrefixes.first(where: collision.remedy.hasPrefix), collision.remedy.hasSuffix("`.") else { return nil }
 				let type = collision.remedy.dropFirst(remedyPrefix.count).dropLast("`.".count)
 				guard !type.isEmpty, !type.contains("`") else { return nil }
 				self = .declareProvidingFormOnSeam(collision: collision, property: GraphFuzzerRemedyProperty(attribute: "@Received", label: collision.label, type: String(type)))
@@ -496,19 +535,9 @@ enum GraphFuzzerRemedies {
 				else { return nil }
 				let advice = message[message.index(before: giveRange.upperBound)..<message.index(message.endIndex, offsetBy: -Self.hiddenSuffix.count)]
 				let namesSeveral = advice.hasSuffix(Self.hiddenEachMarker)
-				// "`x: Y` on `T`", each separated from the next by ", ", " and " or ", and ", split at the backticks.
-				let parts = advice.dropLast(namesSeveral ? Self.hiddenEachMarker.count : 0).split(separator: "`", omittingEmptySubsequences: false)
-				guard parts.count % 4 == 1, parts.first == "", parts.last == "" else { return nil }
-				var declarations = [HidingDeclaration]()
-				for index in stride(from: 1, to: parts.count - 1, by: 4) {
-					guard parts[index + 1] == " on ",
-					      index + 3 == parts.count - 1 || [", ", " and ", ", and "].contains(String(parts[index + 3])),
-					      let hidingProperty = Self.property(spelled: parts[index], attribute: ""),
-					      hidingProperty.label == hiddenLabel
-					else { return nil }
-					declarations.append(HidingDeclaration(property: hidingProperty, declaringType: String(parts[index + 2])))
-				}
-				guard !declarations.isEmpty, namesSeveral == (declarations.count > 1) else { return nil }
+				guard let declarations = Self.hidingDeclarations(listedIn: advice.dropLast(namesSeveral ? Self.hiddenEachMarker.count : 0), label: hiddenLabel),
+				      namesSeveral == (declarations.count > 1)
+				else { return nil }
 				self = .relabelHidingDeclarations(hiddenLabel: hiddenLabel, declarations: declarations)
 			} else if message.hasPrefix(Self.multipleFulfillersPrefix) {
 				// "Found multiple @Instantiable types or extensions that fulfill `P`. … If it names one type, keep one, and
@@ -626,6 +655,23 @@ enum GraphFuzzerRemedies {
 		private static func backtickedItems(in list: Substring) -> [Substring] {
 			guard list.hasPrefix("`"), list.hasSuffix("`"), list.count > 1 else { return [] }
 			return list.dropFirst().dropLast().components(separatedBy: "`, `").map { Substring($0) }
+		}
+
+		/// The declarations "`x: Y` on `T`" lists, each separated from the next by ", ", " and " or ", and ", each of
+		/// `label`, or `nil` where the list is not of that form.
+		static func hidingDeclarations(listedIn list: Substring, label: String) -> [HidingDeclaration]? {
+			let parts = list.split(separator: "`", omittingEmptySubsequences: false)
+			guard parts.count % 4 == 1, parts.count > 1, parts.first == "", parts.last == "" else { return nil }
+			var declarations = [HidingDeclaration]()
+			for index in stride(from: 1, to: parts.count - 1, by: 4) {
+				guard parts[index + 1] == " on ",
+				      index + 3 == parts.count - 1 || [", ", " and ", ", and "].contains(String(parts[index + 3])),
+				      let hidingProperty = property(spelled: parts[index], attribute: ""),
+				      hidingProperty.label == label
+				else { return nil }
+				declarations.append(HidingDeclaration(property: hidingProperty, declaringType: String(parts[index + 2])))
+			}
+			return declarations
 		}
 
 		/// The property `label: Type` spells, with `attribute`, or `nil` when it spells no plain label, such as a label in
@@ -987,13 +1033,14 @@ enum GraphFuzzerRemedies {
 				files.moveMock(named: mockName, ofTypeNamed: typeName, intoClauseAtLine: clauseLine)
 			}
 			return [defaulted, moved].compactMap(\.self)
-		case let .instantiateOnRoot(property, _, receivingOnlyIfAvailable):
+		case let .instantiateOnRoot(property, _, receivingOnlyIfAvailable, relabeling):
 			// Each error at the site may name another root, whose own walk reached the receive.
 			var roots = [String]()
 			for statedRemedy in statedRemedies {
-				guard case let .instantiateOnRoot(otherProperty, root, otherReceivingOnlyIfAvailable)? = statedRemedy,
+				guard case let .instantiateOnRoot(otherProperty, root, otherReceivingOnlyIfAvailable, otherRelabeling)? = statedRemedy,
 				      otherProperty == property,
-				      otherReceivingOnlyIfAvailable == receivingOnlyIfAvailable
+				      otherReceivingOnlyIfAvailable == receivingOnlyIfAvailable,
+				      otherRelabeling == relabeling
 				else { return [] }
 				if !roots.contains(root) {
 					roots.append(root)
@@ -1003,6 +1050,18 @@ enum GraphFuzzerRemedies {
 			var description = "declares `\(property.attribute) let \(property.label): \(property.type)` on \(roots.map { "`\($0)`" }.joined(separator: " and "))"
 			var edits: [(typeName: String, edit: ([GraphFuzzerRemedyProperty]) -> [GraphFuzzerRemedyProperty]?)] = roots.map { root in
 				(root, { properties in properties.contains { $0.label == property.label } ? nil : properties + [property] })
+			}
+			// "… and give `x: Y` on `T` a different label": each declaration a mock's tree would hide the declared property
+			// behind takes the label `xRelabeled`, which no type of the graph receives.
+			let newLabel = "\(property.label)Relabeled"
+			for declaration in relabeling {
+				description += " and gives `\(declaration.property.label): \(declaration.property.type)` on `\(declaration.declaringType)` the label `\(newLabel)`"
+				edits.append((declaration.declaringType, { properties in
+					guard properties.contains(where: { $0.label == property.label && $0.type == declaration.property.type }),
+					      !properties.contains(where: { $0.label == newLabel })
+					else { return nil }
+					return properties.map { $0.label == property.label ? GraphFuzzerRemedyProperty(attribute: $0.attribute, label: newLabel, type: $0.type) : $0 }
+				}))
 			}
 			guard receivingOnlyIfAvailable else {
 				return [remedy(.instantiateOnRoot, description, editing: edits)].compactMap(\.self)
@@ -1047,6 +1106,9 @@ enum GraphFuzzerRemedies {
 			// Each error at the site, one per root whose walk reached the fill, states the same remedies.
 			guard statedRemedies.allSatisfy({ $0 == firstStatedRemedy }) else { return [] }
 			return fillRemedies.compactMap { seamFillRemedy($0, at: site, siteProperty: siteProperty, answering: answeredErrors, in: files, of: fixture) }
+		case let .receiveSuggestedPropertyOnlyIfAvailable(label, suggestion):
+			guard statedRemedies.allSatisfy({ $0 == firstStatedRemedy }), label == site.label, siteProperty.attribute == "@Received" else { return [] }
+			return [remedy(.receiveSuggestedProperty, "receives `\(suggestion.attribute) let \(suggestion.label): \(suggestion.type)` in place of \(site)", label: suggestion.label, editing: [(site.typeName, replacingSiteProperty(with: suggestion))])].compactMap(\.self)
 		case let .receiveSuggestedProperty(label, suggestions):
 			guard statedRemedies.allSatisfy({ $0 == firstStatedRemedy }), label == site.label, siteProperty.attribute == "@Received" else { return [] }
 			return suggestions.compactMap { suggestion in

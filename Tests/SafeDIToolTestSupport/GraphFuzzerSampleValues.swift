@@ -120,10 +120,17 @@ struct GraphFuzzerSampleValues {
 
 	/// An expression of `properties`' values as an instantiator takes them: the one property's value, or a tuple of
 	/// them in label order, or `nil` when one of them has no sample.
-	func forwardedPropertiesExpression(of properties: [GraphFuzzerMirrorProperty]) -> String? {
+	/// - Parameter wrappersBuiltAroundInstances: Lazily instantiated properties whose sample wraps an instance built up
+	///   front, as a mock that takes the instance and wraps it builds it before the wrapper reads it.
+	func forwardedPropertiesExpression(of properties: [GraphFuzzerMirrorProperty], wrappersBuiltAroundInstances: Set<GraphFuzzerMirrorProperty> = []) -> String? {
 		guard isAvailable else { return nil }
 		let values = properties.sorted().map { property in
-			expression(ofType: property.type).map { (label: property.label, value: $0) }
+			let value: String? = if wrappersBuiltAroundInstances.contains(property), let instance = property.lazilyInstantiatedInstance {
+				expression(ofType: instance.type).map { "\(property.type)({ let instance = \($0); return { instance } }())" }
+			} else {
+				expression(ofType: property.type)
+			}
+			return value.map { (label: property.label, value: $0) }
 		}
 		guard values.allSatisfy({ $0 != nil }) else { return nil }
 		let labeledValues = values.compactMap(\.self)

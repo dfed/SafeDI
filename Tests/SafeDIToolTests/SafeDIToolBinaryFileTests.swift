@@ -67,6 +67,42 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func writingStringsInline_writesSameBytesForTwoValues_exactlyWhenWriterWithTableDoes() {
+		// Merging module infos compares two entries for one module by the bytes a writer that writes each string in
+		// place writes, which must tell the entries apart exactly when the bytes of the file do: the order in which
+		// strings first appear, a string's own bytes, and every value besides strings.
+		let values: [[String]] = [
+			["Clock", "Calendar", "Clock"],
+			["Calendar", "Clock", "Calendar"],
+			["Clock", "Calendar", "Calendar"],
+			["Clock", "Calendar"],
+			[Self.precomposedCafe, Self.decomposedCafe],
+			[Self.decomposedCafe, Self.precomposedCafe],
+			[Self.precomposedCafe, Self.precomposedCafe],
+			["ab", "c"],
+			["a", "bc"],
+			[],
+		]
+		func tableBytes(of value: [String]) -> [UInt8] {
+			var writer = BinaryWriter()
+			writer.write(value)
+			return writer.encoded
+		}
+		func inlineBytes(of value: [String]) -> [UInt8] {
+			var writer = BinaryWriter.writingStringsInline()
+			writer.write(value)
+			return writer.bytes
+		}
+
+		for first in values {
+			for second in values {
+				#expect((inlineBytes(of: first) == inlineBytes(of: second)) == (tableBytes(of: first) == tableBytes(of: second)))
+				#expect((inlineBytes(of: first) == inlineBytes(of: second)) == (first.map { Array($0.utf8) } == second.map { Array($0.utf8) }))
+			}
+		}
+	}
+
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_writesEachSpellingOfLabel_whenLabelsAreCanonicallyEquivalentAndGenerateReadsScanCache() async throws {
 		let output = try await executeSafeDIToolTest(

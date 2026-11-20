@@ -2897,6 +2897,13 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 				    public static func mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Feature {
+				        Feature.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Feature {
 				        func __safeDI_thing() -> AnyThing {
 				            let clock = if let safeDIBuilder = safeDIOverrides.thing.clock { safeDIBuilder() } else { Clock() }
 				            return AnyThing(DefaultThing.__safeDI_init(clock: clock, safeDIBuilder: safeDIOverrides.thing.safeDIBuilder))
@@ -2991,6 +2998,13 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Feature {
+				        Feature.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Feature {
 				        func __safeDI_thing() -> AnyThing {

@@ -808,6 +808,16 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 			        settingsBuilder: SendableInstantiator<Settings>? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
+			        Screen.__safeDI_mock(gizmo: gizmo, gizmo_SendableInstantiator__Widget: gizmo_SendableInstantiator__Widget, settingsBuilder: settingsBuilder, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        gizmo: Gizmo,
+			        gizmo_SendableInstantiator__Widget: SendableInstantiator<Widget>,
+			        settingsBuilder: SendableInstantiator<Settings>? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
 			        let __safeDI_settingsBuilder__safeDIBuilder = safeDIOverrides.settingsBuilder
 			        @Sendable func __safeDI_settingsBuilder() -> Settings {
 			            let gizmo: SendableInstantiator<Widget> = gizmo_SendableInstantiator__Widget
@@ -951,6 +961,16 @@ struct SafeDIToolMockSendableBuilderCaptureTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        gizmo: Gizmo,
+			        gizmo_SendableInstantiator__Widget: SendableInstantiator<Widget>? = nil,
+			        settingsBuilder: SendableInstantiator<Settings>? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        Screen.__safeDI_mock(gizmo: gizmo, gizmo_SendableInstantiator__Widget: gizmo_SendableInstantiator__Widget, settingsBuilder: settingsBuilder, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        gizmo: Gizmo,
 			        gizmo_SendableInstantiator__Widget: SendableInstantiator<Widget>? = nil,
 			        settingsBuilder: SendableInstantiator<Settings>? = nil,
