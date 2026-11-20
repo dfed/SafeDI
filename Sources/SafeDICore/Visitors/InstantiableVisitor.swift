@@ -568,16 +568,11 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		initializers.first(where: { $0.isValid(forFulfilling: dependencies) })
 	}
 
-	/// The declaration's initializers other than `canonicalConstructionInitializer`, in the order of
+	/// The declaration's initializers other than the given canonical construction initializer, in the order of
 	/// `initializersInEveryClause`, which SafeDI never constructs the type with, from every clause of every member
 	/// `#if` block: the generated initializer
 	/// of a seam is unconditional, so one it would redeclare in any clause is a redeclaration, and what this reports
 	/// does not depend on the clauses the evaluator selects, which keeps scan's cache of it sound.
-	public var otherConstructionInitializers: [Initializer] {
-		otherConstructionInitializers(besides: canonicalConstructionInitializer)
-	}
-
-	/// `otherConstructionInitializers`, given `canonicalConstructionInitializer`.
 	private func otherConstructionInitializers(besides canonicalConstructionInitializer: Initializer?) -> [Initializer] {
 		guard let canonicalConstructionInitializer else { return initializersInEveryClause }
 		var skippedCanonical = false
