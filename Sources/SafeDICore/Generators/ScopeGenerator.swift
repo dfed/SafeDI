@@ -2841,7 +2841,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	func generateCode(
 		codeGeneration: CodeGeneration = .dependencyTree,
 	) async throws -> String {
-		try await generateCode(
+		try await GeneratedCode(scopeCodeAsRoot(codeGeneration: codeGeneration), indentedBy: "").written
+	}
+
+	/// Generates this scope's code as the root of what is generated, into its cache, without writing it out: a later
+	/// request reads it from the cache.
+	func startGeneratingCode() async throws {
+		_ = try await scopeCodeAsRoot(codeGeneration: .dependencyTree)
+	}
+
+	private func scopeCodeAsRoot(codeGeneration: CodeGeneration) async throws -> ScopeCode {
+		try await scopeCode(
 			codeGeneration: codeGeneration,
 			unavailableProperties: unavailableProperties(
 				isGeneratedBefore: { _ in false },
@@ -2849,7 +2859,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			),
 			propertiesGeneratedLater: [],
 			builderFunctionNames: BuilderFunctionNames(),
-			leadingWhitespace: "",
 			// The root of what is generated is inside no fill an internal mock declares.
 			fillPlaceBindings: .none,
 		)
@@ -2875,8 +2884,30 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		builderFunctionNames: BuilderFunctionNames,
 		leadingWhitespace: String,
 		fillPlaceBindings: FillPlaceBindings,
-	) async throws -> String {
-		let generatedCode: String
+	) async throws -> GeneratedCode {
+		// Indenting adds to what each piece of the code is owed, so the subtree's text is indented once, where it is
+		// written out, rather than once for each level above each line (`GeneratedCode`).
+		try await GeneratedCode(
+			scopeCode(
+				codeGeneration: codeGeneration,
+				unavailableProperties: unavailableProperties,
+				propertiesGeneratedLater: propertiesGeneratedLater,
+				builderFunctionNames: builderFunctionNames,
+				fillPlaceBindings: fillPlaceBindings,
+			),
+			indentedBy: leadingWhitespace,
+		)
+	}
+
+	/// This scope's code, before a scope above it indents it.
+	private func scopeCode(
+		codeGeneration: CodeGeneration,
+		unavailableProperties: Set<Property>,
+		propertiesGeneratedLater: Set<Property>,
+		builderFunctionNames: BuilderFunctionNames,
+		fillPlaceBindings: FillPlaceBindings,
+	) async throws -> ScopeCode {
+		let generatedCode: ScopeCode
 		// Mock code is not cached — the context varies per call site.
 		// Dependency tree code is cached by the properties that are unavailable.
 		switch codeGeneration {
@@ -2920,12 +2951,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				fillPlaceBindings: fillPlaceBindings,
 			)
 		}
-		if leadingWhitespace.isEmpty {
-			return generatedCode
-		} else {
-			// Every level of the tree indents its whole subtree again, so this runs over each line once per level above it.
-			return GeneratedCodeText.indentingNonEmptyLines(of: generatedCode, by: leadingWhitespace)
-		}
+		return generatedCode
 	}
 
 	/// The code tasks the generators of this scope's tree still hold (see `HeldCodeTasks`). Once the tree's code is
@@ -4701,9 +4727,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// The tasks generating this scope's dependency tree code for each context, until each finishes.
-	private var unavailablePropertiesToGenerateCodeTask = [UnavailablePropertiesCacheKey: Task<String, Error>]()
+	private var unavailablePropertiesToGenerateCodeTask = [UnavailablePropertiesCacheKey: Task<ScopeCode, Error>]()
 	/// This scope's finished dependency tree code for each context.
-	private var unavailablePropertiesToGeneratedCode = [UnavailablePropertiesCacheKey: String]()
+	private var unavailablePropertiesToGeneratedCode = [UnavailablePropertiesCacheKey: ScopeCode]()
 	/// The task that builds a mock root's parameter tree. Collecting configuration types, collecting
 	/// sendable configuration type names, and generating the mock each read the same tree.
 	private var rootMockParameterTreeTask: Task<[MockTreeItem], Never>?
@@ -5745,9 +5771,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		leadingMemberWhitespace: String,
 		fillPlaceBindings: FillPlaceBindings,
 	) async throws -> [String] {
+		try await generateBody(
+			codeGeneration: codeGeneration,
+			propertiesGeneratedLater: propertiesGeneratedLater,
+			enclosingFunctionNames: enclosingFunctionNames,
+			leadingMemberWhitespace: leadingMemberWhitespace,
+			fillPlaceBindings: fillPlaceBindings,
+			holdsChildCodeApart: false,
+		).statements
+	}
+
+	/// The statements of this scope's body, and, where `holdsChildCodeApart`, the code of each child that is no fill,
+	/// which its statement stands for as a placeholder (`ScopeCode.placeholder(ofChildAt:)`), so that the scope's text holds
+	/// none of its subtree's text (`GeneratedCode`). A fill's code is written into its statement, which a dispatcher can
+	/// read as its case's body.
+	private func generateBody(
+		codeGeneration: CodeGeneration,
+		propertiesGeneratedLater: Set<Property>,
+		enclosingFunctionNames: [BuiltDeclaration: String],
+		leadingMemberWhitespace: String,
+		fillPlaceBindings: FillPlaceBindings,
+		holdsChildCodeApart: Bool,
+	) async throws -> (statements: [String], children: [GeneratedCode]) {
 		// Only each child's code is awaited here: what the body decides around it is decided by the synchronous functions
 		// below, as a property's scope is (`generatePropertyCode`).
 		var body = bodyChildren(propertiesGeneratedLater: propertiesGeneratedLater, enclosingFunctionNames: enclosingFunctionNames)
+		var children = [GeneratedCode]()
 		for index in body.orderedChildren.indices where body.orderedChildren[index].generator.fillEmitsCode {
 			let code = try await body.orderedChildren[index].generator.generateCode(
 				codeGeneration: codeGeneration,
@@ -5757,9 +5806,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				leadingWhitespace: leadingMemberWhitespace,
 				fillPlaceBindings: fillPlaceBindings,
 			)
-			append(code, ofChildAt: index, to: &body, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
+			if holdsChildCodeApart, body.orderedChildren[index].generator.fillKey == nil, code.writesALineWhenIndented {
+				body.generatedProperties.append(ScopeCode.placeholder(ofChildAt: children.count))
+				children.append(code)
+			} else {
+				append(code.written, ofChildAt: index, to: &body, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
+			}
 		}
-		return statements(of: consume body, leadingMemberWhitespace: leadingMemberWhitespace)
+		return (statements(of: consume body, leadingMemberWhitespace: leadingMemberWhitespace), children)
 	}
 
 	/// What a body decides of its children before it awaits their code, and what it has written of them since: the
@@ -6479,34 +6533,36 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		propertiesGeneratedLater: Set<Property>,
 		builderFunctionNames: BuilderFunctionNames,
 		fillPlaceBindings: FillPlaceBindings,
-	) async throws -> String {
+	) async throws -> ScopeCode {
 		switch scopeData {
 		case let .root(instantiable, seamRoot):
 			switch codeGeneration {
 			case .dependencyTree:
 				if let seamRoot {
-					return try await generateSeamRootCode(
+					return try await ScopeCode(text: generateSeamRootCode(
 						instantiable: instantiable,
 						seamRoot: seamRoot,
 						unavailableProperties: unavailableProperties,
 						propertiesGeneratedLater: propertiesGeneratedLater,
 						builderFunctionNames: builderFunctionNames,
 						fillPlaceBindings: fillPlaceBindings,
-					)
+					))
 				}
-				guard let rootInitializer = try Self.rootInitializer(of: instantiable) else { return "" }
-				let childCode = try await generateProperties(
+				guard let rootInitializer = try Self.rootInitializer(of: instantiable) else { return ScopeCode(text: "") }
+				let body = try await generateBody(
+					codeGeneration: .dependencyTree,
 					propertiesGeneratedLater: propertiesGeneratedLater,
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 					leadingMemberWhitespace: "        ",
 					fillPlaceBindings: fillPlaceBindings,
+					holdsChildCodeApart: true,
 				)
-				return Self.rootCode(of: rootInitializer, writing: consume childCode)
+				return ScopeCode(text: Self.rootCode(of: rootInitializer, writing: body.statements), children: body.children)
 			case let .mock(context):
-				return try await generateMockRootCode(
+				return try await ScopeCode(text: generateMockRootCode(
 					instantiable: instantiable,
 					context: context,
-				)
+				))
 			}
 		case let .property(
 			instantiable,
@@ -6525,17 +6581,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				unavailableProperties: unavailableProperties,
 				builderFunctionNames: builderFunctionNames,
 			) {
-				return closingCode
+				return ScopeCode(text: closingCode)
 			}
-			let childCode = try await generateProperties(
+			let body = try await generateBody(
 				codeGeneration: codeGeneration,
 				propertiesGeneratedLater: bodyPropertiesGeneratedLater(propertiesGeneratedLater),
 				enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 				leadingMemberWhitespace: Self.standardIndent,
 				fillPlaceBindings: fillPlaceBindings,
+				holdsChildCodeApart: true,
 			)
-			return propertyCode(
-				around: childCode,
+			return ScopeCode(text: propertyCode(
+				around: body.statements,
 				instantiable: instantiable,
 				property: property,
 				forwardedProperties: forwardedProperties,
@@ -6546,13 +6603,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				unavailableProperties: unavailableProperties,
 				builderFunctionNames: builderFunctionNames,
 				fillPlaceBindings: fillPlaceBindings,
-			)
+			), children: body.children)
 		case let .hole(property, _, site):
 			// A tree built only to compute the seam's signature has no site, and generates nothing.
-			guard let site else { return "" }
-			return Self.buildSiteCode(of: property, at: site, functionName: builderFunctionNames.functionName, readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties, isNonisolated: sendableFunctionsAreNonisolated)
+			guard let site else { return ScopeCode(text: "") }
+			return ScopeCode(text: Self.buildSiteCode(of: property, at: site, functionName: builderFunctionNames.functionName, readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties, isNonisolated: sendableFunctionsAreNonisolated))
 		case let .fill(hole, functionName):
-			return try await generateFillCode(
+			return try await ScopeCode(text: generateFillCode(
 				of: hole,
 				functionName: functionName,
 				isSendable: builderFunctionNames.fillIsSendable,
@@ -6561,16 +6618,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				propertiesGeneratedLater: propertiesGeneratedLater,
 				enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 				fillPlaceBindings: fillPlaceBindings,
-			)
+			))
 		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
-			return aliasCode(
+			return ScopeCode(text: aliasCode(
 				of: property,
 				fulfilledBy: fulfillingProperty,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				onlyIfAvailable: onlyIfAvailable,
 				declarationReference: declarationReference,
 				unavailableProperties: unavailableProperties,
-			)
+			))
 		}
 	}
 
