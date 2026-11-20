@@ -187,6 +187,8 @@ enum GraphFuzzerRemedies {
 		case receiveSuggestedProperty(label: String, suggestions: [GraphFuzzerRemedyProperty])
 		case instantiateAsInstantiator(hopLabels: [String])
 		case removeOrReceiveOptionallyIfAvailable
+		/// A cycle a receive inside a fill of another module's seam closes, which states only the removal.
+		case removeReceive
 		case defaultMockParameterOrMoveMock(typeName: String, mockName: String, parameter: GraphFuzzerRemedyProperty, offersMove: Bool)
 		case keepOneFulfiller(fulfilledType: String)
 		case decorateType(typeName: String)
@@ -231,10 +233,12 @@ enum GraphFuzzerRemedies {
 					let root = hint[rootMarker.upperBound..<hint.index(hint.endIndex, offsetBy: -suffix.count)]
 					guard let property = Self.property(spelled: spelledProperty, attribute: "@Instantiated"), !root.contains("`") else { return nil }
 					self = .instantiateOnRoot(property: property, root: String(root), receivingOnlyIfAvailable: suffix == instantiateReceivingOnlyIfAvailableSuffix)
-				} else if hint.contains(" Declare `@Forwarded let \(spelledReceivedProperty)` on a type below `") {
-					// "… SafeDI builds it only through an `Instantiator` …" or "No @Instantiable declaration fulfills …", each
-					// followed by "Declare `@Forwarded let x: X` on a type below `Root` in the chain, and pass the value to the
-					// `Instantiator` that builds that type".
+				} else if hint.contains(" Declare `@Forwarded let \(spelledReceivedProperty)` on a type below `") || hint.contains(" Or declare `@Forwarded let \(spelledReceivedProperty)` on a type below `") {
+					// "… SafeDI builds it only through an `Instantiator` …", followed by "Declare `@Forwarded let x: X` on a type
+					// below `Root` in the chain, and pass the value to the `Instantiator` that builds that type", or "No
+					// @Instantiable declaration fulfills …", whose declaration that fulfills the type leads, and which ends "Or
+					// declare `@Forwarded let x: X` …". The oracle applies the forwarding; the declaration, which needs a new
+					// conforming type, is applied by `SafeDIToolCodeGenerationErrorTests`' unfulfilled-receive remedy cells.
 					self = .forwardReceive(label: receivedLabel)
 				} else {
 					return nil
@@ -338,6 +342,8 @@ enum GraphFuzzerRemedies {
 			} else if message.hasPrefix("Dependency cycle: ") {
 				if message.contains(onlyIfAvailableRemedy) {
 					self = .removeOrReceiveOptionallyIfAvailable
+				} else if message.contains(" is received while it is still being instantiated. Remove this @Received property.") {
+					self = .removeReceive
 				} else if let changeStart = message.range(of: " Change ", options: .backwards), let changeEnd = message.range(of: " to an instantiator.", range: changeStart.upperBound..<message.endIndex) {
 					var hops = message[changeStart.upperBound..<changeEnd.lowerBound]
 					if hops.hasPrefix("one of ") {
@@ -775,6 +781,9 @@ enum GraphFuzzerRemedies {
 			let property = GraphFuzzerRemedyProperty(attribute: attribute, label: site.label, type: GraphFuzzerSpelling.optionalForm(of: siteProperty.type))
 			let optionalReceive = remedy(.receiveOptionallyIfAvailable, "declares \(site) as `\(property.attribute) let \(property.label): \(property.type)`", editing: [(site.typeName, replacingSiteProperty(with: property))])
 			return [removal, optionalReceive].compactMap(\.self)
+		case .removeReceive:
+			guard statedRemedies.allSatisfy({ $0 == firstStatedRemedy }), siteProperty.attribute.hasPrefix("@Received") else { return [] }
+			return [remedy(.removeReceive, "removes \(site)", editing: [(site.typeName, { properties in properties.filter { $0.label != site.label } })])].compactMap(\.self)
 		}
 	}
 
