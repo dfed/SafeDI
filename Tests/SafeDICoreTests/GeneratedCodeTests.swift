@@ -84,6 +84,8 @@ struct GeneratedCodeTests {
 				: GeneratedCodeText.indentingNonEmptyLines(of: reindentingEveryLevel(code), by: indentation)
 		case let .place(plan):
 			reindentingEveryLevel(plan.code)
+		case let .laidOut(spelled, _):
+			reindentingEveryLevel(spelled)
 		}
 	}
 
