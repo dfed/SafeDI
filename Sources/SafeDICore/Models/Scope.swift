@@ -1919,7 +1919,8 @@ private struct ScopeGeneratorUnderConstruction {
 		return scopeGenerator
 	}
 
-	/// Kicks off the generation of `scopeGenerator`'s code, which a later request for the code reads from its cache.
+	/// Kicks off the generation of `scopeGenerator`'s plan, which a later request for the code reads from its cache. The plan
+	/// is never spelled here: only the root's plan is spelled, once (`ScopeGenerator.generateCode(codeGeneration:)`).
 	static func startCodeGeneration(of scopeGenerator: ScopeGenerator) {
 		CodeTaskStart.record()
 		// A detached task inherits no task-local, so the work observer of the task that starts the code is handed on: the
@@ -1927,12 +1928,12 @@ private struct ScopeGeneratorUnderConstruction {
 		if let observer = GenerationWork.observer {
 			_ = Task.detached {
 				try await GenerationWork.$observer.withValue(observer) {
-					try await scopeGenerator.generateCode()
+					try await scopeGenerator.generatePlan()
 				}
 			}
 		} else {
 			_ = Task.detached {
-				try await scopeGenerator.generateCode()
+				try await scopeGenerator.generatePlan()
 			}
 		}
 	}
