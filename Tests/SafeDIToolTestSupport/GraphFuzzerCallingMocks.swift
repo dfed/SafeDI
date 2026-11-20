@@ -345,8 +345,10 @@ struct GraphFuzzerCallingMockDraw {
 		// Drawn after everything else, and only where the second place's fill calls the called type again and the fill that
 		// reads the caller's wrapper does not, so no other graph changes.
 		joinsFilledCall = callerLazyValue.map { $0.secondPlaceCallsAgain && $0.reentersCalledType && $0.call != .fillCallsAgain } == true && random.element(of: [false, true])
-		// Drawn after everything else, and only where a plain place joins a filled call, so no other graph changes.
-		buildsDockInline = joinsFilledCall && cell.place == .plain && random.element(of: [false, true])
+		// Drawn after everything else, and only where a graph joins a filled call, so no other graph changes. Not for a `.public`
+		// caller, whose required builder is a struct with no member for a place it builds inline, a gap the comment at
+		// `ScopeGenerator.holeBuildersByInlinePlace` states.
+		buildsDockInline = joinsFilledCall && cell.caller != .public && random.element(of: [false, true])
 	}
 
 	static let callingMockRandomSeedMask: UInt64 = 0x63616C6C6D6F636B
@@ -619,10 +621,10 @@ struct GraphFuzzerCallingMockDraw {
 	/// probe hands that builder a stub and reads whether `Dock`'s place holds it (`joinedCallProbes`).
 	let joinsFilledCall: Bool
 
-	/// Where the graph `joinsFilledCall` with a plain place, whether `Dock` is a plain public mock whose initializer is
-	/// public, so the calling mock builds it inline rather than calling its mock, and `Dock`'s place, a hole of its module,
-	/// reads the required builder at its construction (`ScopeGenerator.holeBuildersByInlinePlace`). The same probe judges
-	/// it (`joinedCallProbes`).
+	/// Where the graph `joinsFilledCall`, whether `Dock` is a plain public mock whose initializer is public, so the calling
+	/// mock builds it inline rather than calling its mock, and `Dock`'s place, a hole of its module, reads the required
+	/// builder where it is built, by value, or wrapped in the `ErasedInstantiator` of a deferred place
+	/// (`ScopeGenerator.holeBuildersByInlinePlace`). The same probe judges it (`joinedCallProbes`).
 	let buildsDockInline: Bool
 
 	/// The name and label of the second called type of `joinsFilledCall`.

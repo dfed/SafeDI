@@ -101,9 +101,272 @@ struct SafeDIToolCallingMockInlineHoleBuilderTests: ~Copyable {
 		}
 	}
 
+	/// The form of the place `F` and `G` hold, which only `App`'s `Live` fulfills, and how a probe reads and replaces it.
+	enum WrappedPlace: String, CaseIterable, CustomTestStringConvertible {
+		case erasedInstantiator
+		case sendableErasedInstantiator
+		case lazilyInstantiated
+
+		var testDescription: String {
+			rawValue
+		}
+
+		var declaration: String {
+			switch self {
+			case .erasedInstantiator:
+				#"@Instantiated(fulfilledByType: "Live") public let api: ErasedInstantiator<Int, any Api>"#
+			case .sendableErasedInstantiator:
+				#"@Instantiated(fulfilledByType: "Live") public let api: SendableErasedInstantiator<Int, any Api>"#
+			case .lazilyInstantiated:
+				#"@Instantiated(fulfilledByType: "Live", erasedToConcreteExistential: false) public let api: LazilyInstantiated<any Api>"#
+			}
+		}
+
+		var parameter: String {
+			switch self {
+			case .erasedInstantiator:
+				"api: ErasedInstantiator<Int, any Api>"
+			case .sendableErasedInstantiator:
+				"api: SendableErasedInstantiator<Int, any Api>"
+			case .lazilyInstantiated:
+				"api: LazilyInstantiated<any Api>"
+			}
+		}
+
+		/// The label of the builder `mock()` takes for the hole type, `Live` building `any Api`.
+		var builderLabel: String {
+			switch self {
+			case .erasedInstantiator, .lazilyInstantiated:
+				"live_ApiBuilder"
+			case .sendableErasedInstantiator:
+				"live_ApiSendableBuilder"
+			}
+		}
+
+		/// The value the place holds, read from `G` or `F`.
+		func read(from owner: String) -> String {
+			switch self {
+			case .erasedInstantiator, .sendableErasedInstantiator:
+				"\(owner).api.instantiate(7)"
+			case .lazilyInstantiated:
+				"\(owner).api.instance"
+			}
+		}
+
+		/// A closure that builds `type`, as the builder and the place's override take it.
+		func closure(building type: String) -> String {
+			switch self {
+			case .erasedInstantiator, .sendableErasedInstantiator:
+				"{ App.\(type)(id: $0) }"
+			case .lazilyInstantiated:
+				"{ App.\(type)(id: 7) }"
+			}
+		}
+
+		/// `Live`, which forwards the instantiators' value.
+		var live: String {
+			switch self {
+			case .erasedInstantiator, .sendableErasedInstantiator:
+				"""
+				@Instantiable
+				public final class Live: Api, Instantiable, Sendable {
+				    public init(id: Int) { self.id = id }
+				    @Forwarded public let id: Int
+				}
+				"""
+			case .lazilyInstantiated:
+				"""
+				@Instantiable
+				public final class Live: Api, Instantiable, Sendable {
+				    public init() {}
+				}
+				"""
+			}
+		}
+	}
+
+	@Test(arguments: ["@Instantiable(generateMock: true)", "@Instantiable(generateMock: .public)"], WrappedPlace.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsInlineBuiltPublicMocksWrappedPlaceWithBuilder_whenBuilderIsPassed(rootAttribute: String, place: WrappedPlace) async throws {
+		let modules = Self.wrappedPlaceModules(rootAttribute: rootAttribute, place: place)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+
+		let builder = "\(place.builderLabel): \(place.closure(building: "Fake"))"
+		try await expectValues(of: output, modules: modules, pairs: [
+			("\(place.read(from: "App.Root.mock().g")) is App.Live", "true"),
+			("\(place.read(from: "App.Root.mock(\(builder)).g")) is App.Fake", "true"),
+			("\(place.read(from: "App.Root.mock(\(builder)).f")) is App.Fake", "true"),
+			("\(place.read(from: "App.Root.mock(\(builder), safeDIOverrides: .init(g: .init(api: \(place.closure(building: "Other"))))).g")) is App.Other", "true"),
+		])
+	}
+
+	@Test(arguments: ["@Instantiable(generateMock: true)", "@Instantiable(generateMock: .public)"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsPlaceOfPublicMockBuiltInlineInsideFillWithBuilder_whenBuilderIsPassed(rootAttribute: String) async throws {
+		let modules = Self.insideFillModules(rootAttribute: rootAttribute)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+
+		try await expectValues(of: output, modules: modules, pairs: [
+			("(App.Root.mock().f.api as! App.Live).g.store is App.LiveStore", "true"),
+			("(App.Root.mock(storeBuilder: { App.FakeStore() }).f.api as! App.Live).g.store is App.FakeStore", "true"),
+			("App.Root.mock(storeBuilder: { App.FakeStore() }).h.store is App.FakeStore", "true"),
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// Compares what each probe's first expression evaluates to in the generated mocks with its second.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func expectValues(of output: MultiModuleTestOutput, modules: [ModuleFixture], pairs: [(String, String)]) async throws {
+		guard compileVerificationIsEnabled else { return }
+		let compilation = try #require(output.compilation)
+		#expect(compilation.failure == nil, "\(compilation.failure.map { "\($0)" } ?? "")")
+		guard compilation.failure == nil else { return }
+		let graph = DifferentialValueGraph(
+			name: "",
+			path: try DifferentialValuePath(output: output, modules: modules),
+			probePairs: pairs.map { DifferentialValueProbePair(name: $0.0, featureExpression: $0.0, knownRightExpression: $0.1) },
+		)
+		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: [graph], filesToDelete: &filesToDelete))
+		for comparison in comparisons {
+			let result = try comparison.result.get()
+			for difference in result.differences {
+				Issue.record("The mock builds another value than expected for \(difference)\n\(result.report)")
+			}
+		}
+	}
+
+	/// `Root`, in module `App`, instantiates `F` and `G` of module `Feat`, each holding `api` in `place`'s form, which only
+	/// `App`'s `Live` fulfills. `F`'s initializer is internal, so `Root`'s mock calls `F`'s mock and fills `api`, taking
+	/// the builder of its hole type; `G`'s is public, so the mock builds `G` inline.
+	private static func wrappedPlaceModules(rootAttribute: String, place: WrappedPlace) -> [ModuleFixture] {
+		let types = [("F", ""), ("G", "public ")].map { name, access in
+			"""
+			@Instantiable(generateMock: .public)
+			public final class \(name): Instantiable {
+			    \(access)init(\(place.parameter)) {
+			        self.api = api
+			    }
+
+			    \(place.declaration)
+			}
+			"""
+		}
+		return [
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: [
+				"FeatTypes.swift": (["import SafeDI\n\npublic protocol Api {}"] + types).joined(separator: "\n\n"),
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
+				"AppTypes.swift": """
+				import Feat
+				import SafeDI
+
+				\(place.live)
+
+				public final class Fake: Api, Sendable {
+				    public init(id: Int) {}
+				}
+
+				public final class Other: Api, Sendable {
+				    public init(id: Int) {}
+				}
+
+				\(rootAttribute)
+				public final class Root: Instantiable {
+				    public init(f: F, g: G) {
+				        self.f = f
+				        self.g = g
+				    }
+
+				    @Instantiated public let f: F
+				    @Instantiated public let g: G
+				}
+				""",
+			], dependencies: ["Feat"]),
+		]
+	}
+
+	/// `Root`, in module `App`, calls the public mocks of `F` and `H` of module `Feat`. `F`'s place of `any Api` is filled
+	/// with `App`'s `Live`, which instantiates `G`, whose public initializer lets the fill build it inline, and `G` and
+	/// `H` each hold a place of `any Store`, which only `App`'s `LiveStore` fulfills: `H`'s call fills it, so `mock()` takes
+	/// `storeBuilder`, which `G`'s place inside the fill reads too.
+	private static func insideFillModules(rootAttribute: String) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: [
+				"FeatTypes.swift": """
+				import SafeDI
+
+				public protocol Api {}
+
+				public protocol Store {}
+
+				@Instantiable(generateMock: .public)
+				public final class F: Instantiable {
+				    init(api: any Api) {
+				        self.api = api
+				    }
+
+				    @Instantiated public let api: any Api
+				}
+
+				@Instantiable(generateMock: .public)
+				public final class G: Instantiable {
+				    public init(store: any Store) {
+				        self.store = store
+				    }
+
+				    @Instantiated public let store: any Store
+				}
+
+				@Instantiable(generateMock: .public)
+				public final class H: Instantiable {
+				    init(store: any Store) {
+				        self.store = store
+				    }
+
+				    @Instantiated public let store: any Store
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
+				"AppTypes.swift": """
+				import Feat
+				import SafeDI
+
+				@Instantiable(fulfillingAdditionalTypes: [Api.self])
+				public final class Live: Api, Instantiable {
+				    public init(g: G) {
+				        self.g = g
+				    }
+
+				    @Instantiated public let g: G
+				}
+
+				@Instantiable(fulfillingAdditionalTypes: [Store.self])
+				public final class LiveStore: Store, Instantiable {
+				    public init() {}
+				}
+
+				public final class FakeStore: Store {
+				    public init() {}
+				}
+
+				\(rootAttribute)
+				public final class Root: Instantiable {
+				    public init(f: F, h: H) {
+				        self.f = f
+				        self.h = h
+				    }
+
+				    @Instantiated public let f: F
+				    @Instantiated public let h: H
+				}
+				""",
+			], dependencies: ["Feat"]),
+		]
+	}
 
 	/// `Root`, in module `App`, instantiates `F` and `G`, whose public mocks module `Feat` generates, and each instantiates
 	/// `api`, which only `App`'s `Live` fulfills. `F`'s initializer is internal, so `Root`'s mock calls `F`'s mock and

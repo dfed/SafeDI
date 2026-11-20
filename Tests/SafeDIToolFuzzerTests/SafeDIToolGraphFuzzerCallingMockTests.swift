@@ -1815,8 +1815,8 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	/// The graphs of the fill that receives the caller's lazy value below the called type's root whose second place's fill
 	/// calls the called type again, passing its hole type up whole, also call `Dock`, whose place of that hole type the mock
 	/// fills, in the pinned number of graphs (`joinsFilledCall`), so the probes judge the join: the call reads the required
-	/// builder. Of the graphs with a plain place, the pinned number build `Dock` inline (`buildsDockInline`), so the probe
-	/// judges the inline-built place's read of the required builder.
+	/// builder. Of them, the pinned number build `Dock` inline (`buildsDockInline`), so the probe judges the inline-built
+	/// place's read of the required builder, by value or in an `ErasedInstantiator`.
 	@Test
 	func fillReceivesCallersLazyValueBelowCalledRootDraw_joinsFilledCall_inPinnedNumberOfGraphs() {
 		let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .fillReceivesCallersLazyValueBelowCalledRoot }
@@ -1827,47 +1827,54 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			"joinsPlain": draws.count { $0.joinsFilledCall && $0.cell.place == .plain },
 			"joinsDeferred": draws.count { $0.joinsFilledCall && $0.cell.place == .deferred },
 			"buildsDockInline": draws.count(where: \.buildsDockInline),
+			"buildsDockInlinePlain": draws.count { $0.buildsDockInline && $0.cell.place == .plain },
 		]
 		let firstSeed = draws.first(where: \.joinsFilledCall)?.seed
 		let firstInlineSeed = draws.first(where: \.buildsDockInline)?.seed
-		print("calling-mock joined call counts=\(counts.sorted { $0.key < $1.key }) firstSeed=\(firstSeed.map(String.init) ?? "none") firstInlineSeed=\(firstInlineSeed.map(String.init) ?? "none")")
+		let firstCalledSeed = draws.first { $0.joinsFilledCall && !$0.buildsDockInline }?.seed
+		print("calling-mock joined call counts=\(counts.sorted { $0.key < $1.key }) firstSeed=\(firstSeed.map(String.init) ?? "none") firstInlineSeed=\(firstInlineSeed.map(String.init) ?? "none") firstCalledSeed=\(firstCalledSeed.map(String.init) ?? "none")")
 
-		#expect(counts == ["graphs": 60, "eligible": 17, "joins": 11, "joinsPlain": 4, "joinsDeferred": 7, "buildsDockInline": 1])
+		#expect(counts == ["graphs": 60, "eligible": 17, "joins": 11, "joinsPlain": 4, "joinsDeferred": 7, "buildsDockInline": 5, "buildsDockInlinePlain": 1])
 		#expect(firstSeed == 737)
-		#expect(firstInlineSeed == 766)
+		#expect(firstInlineSeed == 737)
+		#expect(firstCalledSeed == 751)
 	}
 
-	/// Seed 737 draws the first graph that joins a filled call (`joinsFilledCall`): its mock passes the hole type of the
-	/// called type up whole, and its call of `Dock`, which fills a place of that hole type, reads the required builder,
-	/// so `Dock`'s place holds what that builder builds. It fails with the joined call reading the fill
+	/// Seed 751 draws the first graph that joins a filled call (`joinsFilledCall`) and calls `Dock`'s mock: its mock passes
+	/// the hole type of the called type up whole, and its call of `Dock`, which fills a place of that hole type, reads the
+	/// required builder, so `Dock`'s place holds what that builder builds. It fails with the joined call reading the fill
 	/// (`FillPlaceBindings.HoleBuilder.structValue`).
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func callingMock_handsRequiredBuilderToFilledCall_whenDrawnGraphJoinsFilledCall() async throws {
-		let draw = GraphFuzzerCallingMockDraw(seed: 737)
+		let draw = GraphFuzzerCallingMockDraw(seed: 751)
 
-		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 737)
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 751)
 
 		#expect(draw.joinsFilledCall)
+		#expect(!draw.buildsDockInline)
+		#expect(Self.comparesValues(ofSeed: 751))
 		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
 		#expect(result.passUps.map(\.label) == draw.expectedPassUpLabels)
 		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
 		#expect(result.comparedValues == compileVerificationIsEnabled)
 	}
 
-	/// Seed 766 draws the first graph that builds `Dock` inline (`buildsDockInline`), the first of its cell to join a filled
-	/// call, so it is compared: the calling mock builds `Dock` inline, and its place, a hole of `Dock`'s module, reads the
-	/// required builder of its hole type, so it holds what that builder builds. It fails with the inline place reading no
-	/// builder (`ScopeGenerator.holeBuildersByInlinePlace`).
-	@Test
+	/// Seeds 737 and 766 draw the first graphs that build `Dock` inline (`buildsDockInline`), with a deferred place and a
+	/// plain one, each the first of its cell to join a filled call, so compared: the calling mock builds `Dock` inline, and
+	/// its place, a hole of `Dock`'s module, reads the required builder of its hole type, wrapped in the place's
+	/// `ErasedInstantiator` or by value, so it holds what that builder builds. Seed 766 fails with the inline place reading
+	/// no builder (`ScopeGenerator.holeBuildersByInlinePlace`), and seed 737 with the wrapper made without it
+	/// (`generateInstantiatorBinding`).
+	@Test(arguments: [UInt64(737), 766])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func callingMock_handsRequiredBuilderToInlineBuiltPlace_whenDrawnGraphBuildsDockInline() async throws {
-		let draw = GraphFuzzerCallingMockDraw(seed: 766)
+	func callingMock_handsRequiredBuilderToInlineBuiltPlace_whenDrawnGraphBuildsDockInline(seed: UInt64) async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: seed)
 
-		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 766)
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: seed)
 
 		#expect(draw.buildsDockInline)
-		#expect(Self.comparesValues(ofSeed: 766))
+		#expect(Self.comparesValues(ofSeed: seed))
 		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
 		#expect(result.passUps.map(\.label) == draw.expectedPassUpLabels)
 		#expect(result.failure == nil, "\(result.failure?.details ?? "")")

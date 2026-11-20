@@ -42,7 +42,7 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 
 	// MARK: Tests – labels
 
-	@Test(arguments: Caller.allCases)
+	@Test(arguments: [Caller.internal, .public])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_takesOptionalBuilderUnderLabelOfBuilderItTakesWhenPlaceIsPassedUp_whenCallFillsPlace(caller: Caller) async throws {
 		// `Root` calls `F`, whose place of `any Api` only `App` fulfills: `Root`'s mock fills it and takes an optional
@@ -476,7 +476,7 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 		])
 	}
 
-	@Test(arguments: Caller.allCases)
+	@Test(arguments: [Caller.internal, .public])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_handsRequiredBuilderToFillingCall_whenAnotherCallPassesSameHoleTypeUp(caller: Caller) async throws {
 		// `F` holds `any Api` twice, beneath levels whose `log` differs, and `Live` reads `log` lazily, so a pass-up gate
@@ -644,8 +644,11 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 		    @Instantiated public let h: H\(buildsGInline ? "\n    @Instantiated public let g: G" : "")
 		}
 		"""
+		let featForCaller = caller == .seamPublic ? feat
+			.replacingOccurrences(of: "@Instantiable(generateMock: .public)\npublic final class F", with: "@Instantiable(generateDependencyTree: true, generateMock: .public)\npublic final class F")
+			.replacingOccurrences(of: "@Instantiable(generateMock: .public)\npublic final class H", with: "@Instantiable(generateDependencyTree: true, generateMock: .public)\npublic final class H") : feat
 		return [
-			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": feat]),
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": featForCaller]),
 			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": app], dependencies: ["Feat"]),
 		]
 	}
@@ -672,11 +675,14 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 	enum Caller: CaseIterable, CustomTestStringConvertible {
 		case `internal`
 		case `public`
+		/// A seam whose mock is public, which calls `F` and `H` as seams too.
+		case seamPublic
 
 		var testDescription: String {
 			switch self {
 			case .internal: "internal"
 			case .public: "public"
+			case .seamPublic: "seamPublic"
 			}
 		}
 
@@ -684,6 +690,7 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 			switch self {
 			case .internal: "@Instantiable(generateMock: true)"
 			case .public: "@Instantiable(generateMock: .public)"
+			case .seamPublic: "@Instantiable(generateDependencyTree: true, generateMock: .public)"
 			}
 		}
 
@@ -691,14 +698,14 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 		var tokenAccess: String {
 			switch self {
 			case .internal: ""
-			case .public: "package "
+			case .public, .seamPublic: "package "
 			}
 		}
 
 		var initializerAccess: String {
 			switch self {
 			case .internal: ""
-			case .public: "package "
+			case .public, .seamPublic: "package "
 			}
 		}
 
