@@ -1679,6 +1679,39 @@ struct SafeDIToolMockAutoclosureDefaultTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_takesThrowingAutoclosureParameterAsAutoclosureThatDoesNotThrow_whenMockedTypesDefaultTriesOnlyInsideAClosure() async throws {
+		// A `try` inside a closure the default declares throws out of that closure, never out of the default, so the default does not throw and `mock()` takes the parameter.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public func compute() throws -> Int { 3 }
+				@Instantiable(generateMock: true)
+				public final class Service: Instantiable {
+				    public init(retries: @autoclosure () throws -> Int = { do { return try compute() } catch { return 1 } }()) {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+			"Service+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Service {
+			    static func mock(
+			        retries: @escaping @autoclosure () -> Int = { do { return try compute() } catch { return 1 } }()
+			    ) -> Service {
+			        return Service(retries: retries())
+			    }
+			}
+			#endif
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_leavesThrowingAutoclosureParameterToItsDefault_whenMockedTypesDefaultThrows() async throws {
 		// An autoclosure that does not throw cannot hold a default that throws, so `mock()` takes no parameter for it and the initializer evaluates its default, as in production.
 		let output = try await executeSafeDIToolTest(
