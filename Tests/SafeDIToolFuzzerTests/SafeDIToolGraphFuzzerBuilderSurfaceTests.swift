@@ -533,6 +533,17 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func sameSupplyEditRejectedFailure_reportsNothing_whenToolRejectsSendableFamilyForValueBoundOutsideSendableFunction() {
+		// Public mock corpus seed 2486's rejection: the fill reads `holeContext`, which `T6` declares outside the function that
+		// builds the place, so making the place's `Instantiator` a `SendableInstantiator` puts the place in a `@Sendable`
+		// function whose builder is handed only what that function binds. The tool rightly rejects it, and the twins pass.
+		let runs = Self.sendableTwinRuns(base: .rejected(diagnostics: "<fixture-directory>/other/Sources/FuzzOther/S2486_HoleFill.swift:7:33: error: `S2486_Hole` receives `holeContext: S2486_HoleContext`, which `S2486_T6` declares outside the `@Sendable` function that builds `holeBuilder: SendableInstantiator<S2486_Hole>`, and SafeDI hands the builder for `S2486_HoleHost`’s `holeBuilder: SendableInstantiator<S2486_Hole>` (`holeBuilder` of `s2486_HoleSendableBuilder`) only what that function binds. Instantiate `holeContext` outside `S2486_T6` and declare `@Received let holeContext: S2486_HoleContext` on `S2486_T6`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `S2486_Hole` in module `FuzzFeature` or a module it lists among its SafeDI dependencies.\n<fixture-directory>/shop/Sources/FuzzFeature/S2486_T6.swift:12:2: note: `S2486_T6` declares `holeContext: S2486_HoleContext` here."))
+		#expect(runs.sameSupplyEditRejectedFailure == nil)
+		#expect(runs.builderSurfaceJudgments.map(\.judgment) == [.init(isJudged: false, problems: [])])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func sameSupplyEditRejectedFailure_reportsRejection_whenToolRejectsSendableFamilyOtherwise() throws {
 		let runs = Self.sendableTwinRuns(base: .rejected(diagnostics: "<fixture-directory>/FuzzApp/S333_HoleFill.swift:7:33: error: Cycle"))
 		let failure = try #require(runs.sameSupplyEditRejectedFailure)
