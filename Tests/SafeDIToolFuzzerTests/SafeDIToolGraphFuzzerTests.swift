@@ -3874,6 +3874,20 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(Self.renamedGraphDifferences(betweenCode: "\(PublicConfiguration.firstStruct)\n\n\(PublicConfiguration.secondStruct)\n", and: "\(PublicConfiguration.secondStruct)\n\n\(PublicConfiguration.firstStruct)\n") == [])
 	}
 
+	@Test
+	func renamedGraphFailures_isEmpty_whenStructsOfPublicConfigurationsWithoutTheirExtensionsDifferOnlyInTheirOrderAndOneHasForwarders() {
+		// Decomposing a module's combined output files the forwarders of a configuration's defaults after its struct,
+		// each a block of its own, so they move with the struct (public mock corpus seeds 2291 and 2877).
+		let forwarder = "@usableFromInline nonisolated func __safeDI_FuzzFeature_S12_T1_mockDefault_name() -> String? { S12_T1.__safeDI_mockDefault_name() }"
+		#expect(Self.renamedGraphDifferences(betweenCode: "\(PublicConfiguration.firstStruct)\n\n\(PublicConfiguration.secondStruct)\n\n\(forwarder)\n", and: "\(PublicConfiguration.secondStruct)\n\n\(forwarder)\n\n\(PublicConfiguration.firstStruct)\n") == [])
+	}
+
+	@Test
+	func renamedGraphFailures_reportFile_whenForwarderMovesToAnotherStructOfPublicConfigurationWithoutItsExtension() {
+		let forwarder = "@usableFromInline nonisolated func __safeDI_FuzzFeature_S12_T1_mockDefault_name() -> String? { S12_T1.__safeDI_mockDefault_name() }"
+		#expect(Self.renamedGraphDifferences(betweenCode: "\(PublicConfiguration.firstStruct)\n\n\(PublicConfiguration.secondStruct)\n\n\(forwarder)\n", and: "\(PublicConfiguration.firstStruct)\n\n\(forwarder)\n\n\(PublicConfiguration.secondStruct)\n") == [.mockConfigurationCode])
+	}
+
 	@Test(arguments: [
 		// A configuration's struct that takes the place of an extension.
 		("\(PublicConfiguration.firstStruct)\n\n\(GeneratedExtension.first)", "\(GeneratedExtension.first)\n\(PublicConfiguration.firstStruct)\n"),
@@ -7241,9 +7255,13 @@ struct SafeDIToolGraphFuzzerTests {
 	/// seed 945, whose `S945_HoleOtherRoot()` spends a batch's traversals through `HoleOuter`, `HoleRelay` and `HoleImpl`
 	/// re-entering `HoleSeam`, whose place inside a plain fill `HoleNestScreen` holds, on both of its builds alike; and seed
 	/// 1311, whose `S1311_Root0()` spends even a graph's own traversals through `HoleRelay`, `HoleLoop`, `HolePing` and
-	/// `HoleDeep` re-entering `HoleSeam`, on both of its builds alike, as `seamKnownIssues` lists; and the smoke batch's
-	/// seeds 277 and 1890, below the corpus's size (`seamSmokeSeedsTraversingPastTheBatchBudget`).
-	static let seamCorpusSeedsTraversingPastTheBatchBudget: Set<UInt64> = [277, 391, 883, 945, 1_311, 1_890]
+	/// `HoleDeep` re-entering `HoleSeam`, on both of its builds alike, as `seamKnownIssues` lists; the smoke batch's
+	/// seeds 277 and 1890, below the corpus's size (`seamSmokeSeedsTraversingPastTheBatchBudget`); and seeds 4429 and
+	/// 5059, past the corpus's size, which a run of the seam draw beyond the corpus spent a batch's traversals on through
+	/// holes that re-enter `HoleSeam`, as seed 391 does, and which a graph's own traversals describe; and seeds 5043 and
+	/// 5609, past the corpus's size too, which spend even a graph's own traversals through holes that re-enter `HoleSeam`,
+	/// as seed 1311 does, in the comparator's probe alone: `generate` takes no longer on them than on another graph.
+	static let seamCorpusSeedsTraversingPastTheBatchBudget: Set<UInt64> = [277, 391, 883, 945, 1_311, 1_890, 4_429, 5_043, 5_059, 5_609]
 
 	/// The seam smoke batch's seeds whose probes traverse more wrappers than a batch allows, compared on their own as
 	/// `seamCorpusSeedsTraversingPastTheBatchBudget`'s are: seed 1890, whose `S1890_HoleOtherRoot()` spends a batch's
