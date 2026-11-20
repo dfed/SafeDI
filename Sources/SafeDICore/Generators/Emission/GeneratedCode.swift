@@ -293,13 +293,15 @@ private struct GeneratedCodeWriter {
 		while let piece = pending.popLast() {
 			switch piece {
 			case let .bytes(run, level):
-				if level < 0 {
+				// Where the level's line has begun, so has every line around it, so the run is written as it is: walking
+				// it out through every level made a chain of levels write each byte once per level around it.
+				if level < 0 || levels[level].lineHasBegun {
 					bytes.append(contentsOf: run)
 				} else {
 					write(.bytes(run, level: level - 1), beginningLineAt: level)
 				}
 			case let .indentation(levelIndex, level):
-				if level < 0 {
+				if level < 0 || levels[level].lineHasBegun {
 					bytes.append(contentsOf: levels[levelIndex].indentation)
 				} else {
 					write(.indentation(ofLevelAt: levelIndex, level: level - 1), beginningLineAt: level)
@@ -318,19 +320,17 @@ private struct GeneratedCodeWriter {
 		}
 	}
 
-	/// Writes `run`, a run of bytes of the level at `level` that holds no line feed and is not empty, as the run of the
-	/// level around it that it is, after the line feed and indentation that begin the level's line where it has not begun.
+	/// Writes `run`, a run of bytes of the level at `level`, whose line has not begun, that holds no line feed and is not
+	/// empty, as the run of the level around it that it is, after the line feed and indentation that begin the level's line.
 	private mutating func write(_ run: Piece, beginningLineAt level: Int) {
 		let outer = level - 1
 		// Pushed last first, so they are written in order.
 		pending.append(run)
-		if !levels[level].lineHasBegun {
-			levels[level].lineHasBegun = true
-			pending.append(.indentation(ofLevelAt: level, level: outer))
-			if levels[level].hasWrittenALine {
-				pending.append(.lineFeed(level: outer))
-			}
-			levels[level].hasWrittenALine = true
+		levels[level].lineHasBegun = true
+		pending.append(.indentation(ofLevelAt: level, level: outer))
+		if levels[level].hasWrittenALine {
+			pending.append(.lineFeed(level: outer))
 		}
+		levels[level].hasWrittenALine = true
 	}
 }
