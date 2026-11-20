@@ -743,7 +743,7 @@ extension DependencyTreeGenerator {
 
 	/// The stem each of `holeTypes` is named by, from what it builds alone: its instantiated type as an identifier where
 	/// the type it returns is the same, else the instantiated type's followed by `_` and the returned type's. Only a stem
-	/// that equals another's, or gives a label another gives, is named apart, by its types; no rung names an owner, a
+	/// that equals another's, or whose plain label equals another's plain or `@Sendable` label, is named apart, by its types; no rung names an owner, a
 	/// path or a parameter, so adding a place of a hole type already built never renames one, and adding a hole type renames
 	/// another only when their stems or labels coincide.
 	static func stems(of holeTypes: [SeamSignature.HoleType]) -> [SeamSignature.HoleType: String] {
@@ -755,10 +755,12 @@ extension DependencyTreeGenerator {
 				? stem(of: holeType.instantiatedType)
 				: "\(stem(of: holeType.instantiatedType))_\(stem(of: holeType.builtType))"
 		}
-		// Two stems collide where they are equal or give one label, and equal stems give equal labels, so a stem collides
-		// exactly where another stem gives one of its labels. Each stem's two labels differ, so counting the stems that
-		// give each label finds every collision with one pass over the stems: comparing every pair of stems, and lowering
-		// both stems' capitals for each pair, grew with the square of the hole types.
+		// A stem collides where another stem equals it, or gives its plain label as its own plain or `@Sendable` label: a
+		// stem's plain label equal to another's `@Sendable` label names apart only the stem whose plain label it is
+		// (`ServiceSendable` beside `Service`), so a hole type's own labels never follow another type's name. Equal stems give
+		// equal plain labels, so counting the stems that give each label in each family finds every collision with one pass
+		// over the stems: comparing every pair of stems, and lowering both stems' capitals for each pair, grew with the
+		// square of the hole types.
 		var labelCounts = BuilderLabelCounts(stems: stems)
 		let colliding = holeTypes.indices.filter { labelCounts.collides(stems[$0]) }
 		if !colliding.isEmpty {
@@ -783,7 +785,7 @@ extension DependencyTreeGenerator {
 		return Dictionary(zip(holeTypes, stems), uniquingKeysWith: { first, _ in first })
 	}
 
-	/// How many of a set of stems give each builder label, both families' (`stems(of:)`).
+	/// How many of a set of stems give each builder label, in each family (`stems(of:)`).
 	private struct BuilderLabelCounts {
 		init(stems: [String]) {
 			for stem in stems {
@@ -791,29 +793,26 @@ extension DependencyTreeGenerator {
 			}
 		}
 
-		/// Whether another stem than one `stem` stands for gives one of `stem`'s labels.
+		/// Whether another stem than one `stem` stands for gives `stem`'s plain label, as its plain or its `@Sendable` label. A
+		/// stem's own two labels differ, so its own `@Sendable` label is never counted against it.
 		func collides(_ stem: String) -> Bool {
-			Self.labels(of: stem).contains { countByLabel[$0, default: 0] > 1 }
+			let plainLabel = plainBuilderLabel(ofStem: stem)
+			return plainCountByLabel[plainLabel, default: 0] > 1 || sendableCountByLabel[plainLabel, default: 0] > 0
 		}
 
 		/// Counts `newStem` in the place of one `oldStem`.
 		mutating func replace(_ oldStem: String, with newStem: String) {
-			for label in Self.labels(of: oldStem) {
-				countByLabel[label, default: 0] -= 1
-			}
+			plainCountByLabel[plainBuilderLabel(ofStem: oldStem), default: 0] -= 1
+			sendableCountByLabel[sendableBuilderLabel(ofStem: oldStem), default: 0] -= 1
 			add(newStem)
 		}
 
-		private var countByLabel = [String: Int]()
+		private var plainCountByLabel = [String: Int]()
+		private var sendableCountByLabel = [String: Int]()
 
 		private mutating func add(_ stem: String) {
-			for label in Self.labels(of: stem) {
-				countByLabel[label, default: 0] += 1
-			}
-		}
-
-		private static func labels(of stem: String) -> [String] {
-			[plainBuilderLabel(ofStem: stem), sendableBuilderLabel(ofStem: stem)]
+			plainCountByLabel[plainBuilderLabel(ofStem: stem), default: 0] += 1
+			sendableCountByLabel[sendableBuilderLabel(ofStem: stem), default: 0] += 1
 		}
 	}
 

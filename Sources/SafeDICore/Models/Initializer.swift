@@ -108,10 +108,28 @@ public struct Initializer: Codable, Hashable, Sendable {
 		if modifiers.contains(where: { $0.name.tokenKind == .keyword(.nonisolated) }) {
 			return "nonisolated"
 		}
-		return attributes.lazy
-			.compactMap { AttributeSyntax($0) }
-			.first { $0.arguments == nil && $0.attributeName.trimmedDescription.hasSuffix("Actor") }
-			.map { "@\($0.attributeName.trimmedDescription)" }
+		// A loop rather than a lazy sequence, whose generic iterators cost more than reading the attributes: nearly every
+		// declaration SafeDI reads has attributes and an initializer.
+		for case let .attribute(attribute) in attributes where attribute.arguments == nil && spelledName(of: attribute.attributeName).hasSuffix("Actor") {
+			return "@\(spelledName(of: attribute.attributeName))"
+		}
+		return nil
+	}
+
+	/// The text of `attributeName` without its leading and trailing trivia. A plain name, which nearly every attribute's
+	/// is, is its token's text: building the trimmed text of any other name copies its syntax tree, which costs a scan
+	/// more than the rest of reading the declaration does.
+	private static func spelledName(of attributeName: TypeSyntax) -> String {
+		if let identifierType = IdentifierTypeSyntax(attributeName),
+		   identifierType.genericArgumentClause == nil,
+		   identifierType.unexpectedBeforeName == nil,
+		   identifierType.unexpectedBetweenNameAndGenericArgumentClause == nil,
+		   identifierType.unexpectedAfterGenericArgumentClause == nil
+		{
+			identifierType.name.text
+		} else {
+			attributeName.trimmedDescription
+		}
 	}
 
 	public func isValid(forFulfilling dependencies: [Dependency]) -> Bool {
@@ -244,9 +262,15 @@ public struct Initializer: Codable, Hashable, Sendable {
 	}
 
 	func createDependencyAndArgumentBinding(given dependencies: [Dependency]) throws(GenerationError) -> [(dependency: Dependency, argument: Argument)] {
+		// Only a dependency of an argument's label can fulfill it, so the dependencies are looked up by label, keeping their
+		// order: searching every dependency for each argument makes a type of many dependencies quadratic.
+		var dependenciesByLabel = [String: [Dependency]]()
+		for dependency in dependencies {
+			dependenciesByLabel[dependency.property.label, default: []].append(dependency)
+		}
 		var bindings = [(dependency: Dependency, argument: Argument)]()
 		for argument in arguments {
-			guard let dependency = dependencies.first(where: argument.isFulfilled(by:)) else {
+			guard let dependency = dependenciesByLabel[argument.innerLabel]?.first(where: argument.isFulfilled(by:)) else {
 				guard argument.hasDefaultValue else {
 					throw GenerationError.unexpectedArgument(argument.asProperty.asSource)
 				}
@@ -264,42 +288,6 @@ public struct Initializer: Codable, Hashable, Sendable {
 		arguments.enumerated()
 			.filter { !$0.element.hasDefaultValue && !dependencies.contains(where: $0.element.isFulfilled(by:)) }
 			.map { (position: $0.offset, argument: $0.element) }
-	}
-
-	/// - Parameter lazilyInstantiatedInstanceProperties: The received properties that are in scope only as the
-	///   instance of a `LazilyInstantiated` property. Their arguments read that instance.
-	func createInitializerArgumentList(
-		given dependencies: [Dependency],
-		unavailableProperties: Set<Property>? = nil,
-		lazilyInstantiatedInstanceProperties: Set<Property> = [],
-	) throws(GenerationError) -> String {
-		try createDependencyAndArgumentBinding(given: dependencies)
-			.map {
-				Self.argument($0.argument, passing: $0.dependency, unavailableProperties: unavailableProperties, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties)
-			}
-			.joined(separator: ", ")
-	}
-
-	/// The argument list of a generated call of this hand-written mock that a fill makes: each argument one of `dependencies`
-	/// is passed to, as `createInitializerArgumentList` spells it, and each argument without a default value that none of
-	/// them is passed to, passed the value of its own name, in declaration order. Such an argument takes a dependency only
-	/// an `#if` clause the build does not select declares, in a build that compiles no generated mock, since
-	/// `DependencyTreeGenerator.validateHandWrittenMocksTakeOnlyFulfilledParameters` reports it in every other build: the
-	/// call is never compiled, as the same call outside a fill is not.
-	func createHandWrittenMockArgumentList(
-		given dependencies: [Dependency],
-		unavailableProperties: Set<Property>?,
-		lazilyInstantiatedInstanceProperties: Set<Property>,
-	) -> String {
-		var parts = [String]()
-		for argument in arguments {
-			if let dependency = dependencies.first(where: argument.isFulfilled(by:)) {
-				parts.append(Self.argument(argument, passing: dependency, unavailableProperties: unavailableProperties, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties))
-			} else if !argument.hasDefaultValue {
-				parts.append("\(argument.label.spelledAsArgumentLabel): \(argument.innerLabel)")
-			}
-		}
-		return parts.joined(separator: ", ")
 	}
 
 	/// Creates an argument list that includes ALL arguments — both dependency-matching
@@ -329,26 +317,6 @@ public struct Initializer: Codable, Hashable, Sendable {
 	}
 
 	// MARK: - Private
-
-	/// `argument` of a generated call, passed `dependency`: `nil` where it is unavailable, the instance of a received
-	/// property held as a `LazilyInstantiated` property's instance, and the property of its label otherwise.
-	private static func argument(
-		_ argument: Argument,
-		passing dependency: Dependency,
-		unavailableProperties: Set<Property>?,
-		lazilyInstantiatedInstanceProperties: Set<Property>,
-	) -> String {
-		if let unavailableProperties, unavailableProperties.contains(dependency.property) {
-			"\(argument.label.spelledAsArgumentLabel): nil"
-		} else if !lazilyInstantiatedInstanceProperties.isEmpty,
-		          dependency.source.isReceived,
-		          let instanceRead = lazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceRead(of: dependency.property)
-		{
-			"\(argument.label.spelledAsArgumentLabel): \(argument.innerLabel)\(instanceRead)"
-		} else {
-			"\(argument.label.spelledAsArgumentLabel): \(argument.innerLabel)"
-		}
-	}
 
 	/// The reasons this initializer cannot construct its type, whatever dependencies the type has. Generated code is
 	/// always in a file of its own, so it cannot call a `private` or `fileprivate` initializer. Any other access can
@@ -475,7 +443,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 		static let dependenciesArgumentName: TokenSyntax = .identifier("buildSafeDIDependencies")
 
 		/// Whether `dependency` is passed to this argument.
-		fileprivate func isFulfilled(by dependency: Dependency) -> Bool {
+		func isFulfilled(by dependency: Dependency) -> Bool {
 			dependency.property.label == innerLabel
 				&& dependency.property.typeDescription.isEqualToFunctionArgument(typeDescription)
 		}
@@ -546,22 +514,6 @@ extension TypeDescription {
 		     .variadic,
 		     .void:
 			self
-		}
-	}
-}
-
-extension Set<Property> {
-	/// How a receive of `property` reads it, where this set holds the by-value properties in scope only as the instance of
-	/// a `LazilyInstantiated`: through the wrapper's instance, `.instance`; through an optional wrapper, `?.instance`, for a
-	/// receive of the optional form where the set holds that form, which only a fill that takes the wrapper optionally adds
-	/// (`Scope.Fill.optionalLazilyInstantiatedLabels`); or `nil` where it reads no instance.
-	func lazilyInstantiatedInstanceRead(of property: Property) -> String? {
-		if contains(property.asUnwrappedProperty) {
-			".\(Dependency.lazilyInstantiatedInstancePropertyName)"
-		} else if property.typeDescription.isOptional, contains(property) {
-			"?.\(Dependency.lazilyInstantiatedInstancePropertyName)"
-		} else {
-			nil
 		}
 	}
 }
