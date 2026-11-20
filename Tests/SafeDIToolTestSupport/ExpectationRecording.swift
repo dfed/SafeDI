@@ -50,6 +50,12 @@ enum ExpectationRecording {
 	/// The file every recording call writes `generatedFileHeader` to, so the script can strip it from a record's content
 	/// as a test's `generatedFileHeader + """…"""` does.
 	static let headerFileName = "generated-file-header.txt"
+	/// The file every recording call writes when compile verification is off (`SAFEDI_SKIP_COMPILE_CHECK`). A test
+	/// that reads `compileVerificationIsEnabled` then skips part or all of itself and records nothing for it, so the
+	/// script refuses records from a directory that holds this file unless it is told to apply them anyway.
+	static let compileVerificationSkippedFileName = "compile-verification-skipped.txt"
+	/// What `compileVerificationSkippedFileName` holds, for a person who opens it.
+	static let compileVerificationSkippedNotice = "These records were made with SAFEDI_SKIP_COMPILE_CHECK set, so a test that reads compileVerificationIsEnabled recorded nothing for what that guards.\n"
 	/// The output name of a combined output (`--combined-output`).
 	static let combinedOutputName = "combined output"
 	/// The output name of a DOT tree (`--dot-file-output`).
@@ -397,6 +403,9 @@ enum ExpectationRecording {
 			return false
 		}
 		write(Data(generatedFileHeader.utf8), toFileNamed: headerFileName, in: recordDirectory, sourceLocation: sourceLocation)
+		if !compileVerificationIsEnabled {
+			write(Data(compileVerificationSkippedNotice.utf8), toFileNamed: compileVerificationSkippedFileName, in: recordDirectory, sourceLocation: sourceLocation)
+		}
 		return true
 	}
 
