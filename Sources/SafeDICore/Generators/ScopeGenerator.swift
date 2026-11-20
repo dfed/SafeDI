@@ -2666,7 +2666,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	let passedByPublicMockCalls: Set<Property>
 
 	/// The generators of this scope's children, in declaration order, for a walk of a seam's tree that reads what
-	/// its generators found. Every generator but the root's is a child of exactly one other.
+	/// its generators found. A generator the construction memo shares is a child of each place that reuses it, so a walk
+	/// that keys by a generator's identity reads one subtree at every such place (see `construction-memo.md`).
 	nonisolated var children: [ScopeGenerator] {
 		propertiesToGenerate
 	}
