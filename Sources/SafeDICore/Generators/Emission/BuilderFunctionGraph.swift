@@ -83,7 +83,7 @@ struct BuilderNode: Hashable, Sendable {
 	/// One interpolation writes the whole text, the code around the block included: the block holds the text of its scope's
 	/// whole subtree, so adding a line or a prefix to the block afterwards would copy that subtree once more at every level.
 	func spelled(after prefix: String = "", followedBy suffix: String = "") -> String {
-		let parameterList = parameters.isEmpty ? "" : parameters.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
+		let parameterList = parameters.isEmpty ? "" : parameters.initializerFunctionParametersSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 		return """
 		\(prefix)\(ScopeGenerator.localFunctionPrefix(isSendable: isSendable, isNonisolated: isNonisolated))func \(name)(\(parameterList)) -> \(returnType.asSource) {
 		\(body.statements.joined(separator: "\n"))

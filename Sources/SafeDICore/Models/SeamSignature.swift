@@ -201,7 +201,7 @@ public struct SeamSignature: Sendable {
 		func plainSpelling(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> String {
 			// The closure of the initializer only generated code calls captures a deferred parameter, so a function type is
 			// `@escaping` here even though that initializer takes it behind an `@autoclosure`.
-			property.asFunctionParameterSyntax(amongTypesDeclaredEscaping: typesDeclaredEscaping).description
+			property.functionParameterSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 		}
 
 		/// The parameter as the initializer only generated code calls declares it: under `generatedOnlyArgumentLabel`, a
@@ -210,7 +210,7 @@ public struct SeamSignature: Sendable {
 		func generatedOnlySpelling(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> String {
 			switch deferral {
 			case .none:
-				"\(generatedOnlyArgumentLabel) \(property.asFunctionParameterSyntax(amongTypesDeclaredEscaping: typesDeclaredEscaping).description)"
+				"\(generatedOnlyArgumentLabel) \(property.functionParameterSource(amongTypesDeclaredEscaping: typesDeclaredEscaping))"
 			case let .deferred(isSendable):
 				"\(internalName == generatedOnlyArgumentLabel ? internalName : "\(generatedOnlyArgumentLabel) \(internalName)"): @autoclosure @escaping\(isSendable ? " @Sendable" : "") () -> \(property.typeDescription.asSource)"
 			}
@@ -1778,6 +1778,24 @@ extension SeamSignature: Codable {
 
 /// A seam's signature as the run of `generate` of the module that declares it computed it, which the module's module
 /// info file carries so that a module calling the seam reads the signature rather than computes it again.
+// A synthesized `Codable` conformance writes a set's elements, and a dictionary whose keys are not strings, in hash order,
+// which changes between runs. The conformances in this module call these overloads instead, so that `SafeDITool dump` prints
+// a seam signature the same on every run. Each writes what the synthesized conformance reads back.
+extension KeyedEncodingContainer {
+	mutating func encode(_ labels: Set<String>, forKey key: Key) throws {
+		try encode(labels.sorted(), forKey: key)
+	}
+
+	/// Writes the labels widest tier first, each tier followed by its label, as a dictionary writes its pairs.
+	mutating func encode(_ labelsByTier: [AccessLevel: String], forKey key: Key) throws {
+		var container = nestedUnkeyedContainer(forKey: key)
+		for (tier, label) in labelsByTier.sorted(by: { $0.key > $1.key }) {
+			try container.encode(tier)
+			try container.encode(label)
+		}
+	}
+}
+
 public struct StoredSeamSignature: Codable, Sendable {
 	public init(seamType: TypeDescription, signature: SeamSignature?) {
 		self.seamType = seamType

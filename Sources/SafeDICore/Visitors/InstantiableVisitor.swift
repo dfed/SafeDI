@@ -568,12 +568,12 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		initializers.first(where: { $0.isValid(forFulfilling: dependencies) })
 	}
 
-	/// The declaration's initializers other than `canonicalConstructionInitializer`, in the order of
+	/// The declaration's initializers other than the given canonical construction initializer, in the order of
 	/// `initializersInEveryClause`, which SafeDI never constructs the type with, from every clause of every member
 	/// `#if` block: the generated initializer
 	/// of a seam is unconditional, so one it would redeclare in any clause is a redeclaration, and what this reports
 	/// does not depend on the clauses the evaluator selects, which keeps scan's cache of it sound.
-	public var otherConstructionInitializers: [Initializer] {
+	private func otherConstructionInitializers(besides canonicalConstructionInitializer: Initializer?) -> [Initializer] {
 		guard let canonicalConstructionInitializer else { return initializersInEveryClause }
 		var skippedCanonical = false
 		return initializersInEveryClause.filter { initializer in
@@ -592,10 +592,13 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// The names SafeDI matches by name that the declaration has spelled so far, each once, without the backticks they
 	/// were written with. Two names have one `spelledAsIdentifier` spelling exactly when they have the same bytes here.
 	private var matchedNamesWithoutBackticks = [String]()
-	/// The `spelledAsIdentifier` spelling of each of `matchedNamesWithoutBackticks`, at the same position, once one of
-	/// them holds a byte outside ASCII; `nil` before. Two names of ASCII bytes alone are equal as `String`s only when
+	/// The bytes of each of `matchedNamesWithoutBackticks`, which a name is looked up by: a declaration can match
+	/// thousands of names, and comparing a name with each earlier one makes reading the declaration quadratic.
+	private var bytesOfMatchedNames = Set<[UInt8]>()
+	/// The first `spelledAsIdentifier` spelling of `matchedNamesWithoutBackticks` equal to each, by the spelling, once one
+	/// of them holds a byte outside ASCII; `nil` before. Two names of ASCII bytes alone are equal as `String`s only when
 	/// their bytes are, so until then no name can be encoded differently from another, and no name is spelled.
-	private var spellingsOfMatchedNames: [String]?
+	private var firstSpellingsOfMatchedNames: [String: String]?
 	/// Names the overrides of a generated mock cannot declare as they spell them: `Type` and `Protocol` are no member
 	/// names unescaped, and an initializer parameter named `self` hides the instance it assigns to.
 	private static let namesGeneratedMocksCannotDeclare: Set = ["self", "Type", "Protocol"]
@@ -636,25 +639,29 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	}
 
 	public var instantiables: [Instantiable] {
-		instantiablesWithoutUnselectedClauses.map { instantiable in
-			var instantiable = instantiable
-			instantiable.dependencyLabelsInUnselectedClauses = dependencyLabelsInUnselectedClauses
-			instantiable.dependencyLabelsInsideConditionalBlocks = dependencyLabelsInsideConditionalBlocks
-			return instantiable
+		// Set in place: an `Instantiable` is large, and copying each into another array costs a scan more than
+		// setting two of its fields does.
+		var instantiables = instantiablesWithoutUnselectedClauses
+		for index in instantiables.indices {
+			instantiables[index].dependencyLabelsInUnselectedClauses = dependencyLabelsInUnselectedClauses
+			instantiables[index].dependencyLabelsInsideConditionalBlocks = dependencyLabelsInsideConditionalBlocks
 		}
+		return instantiables
 	}
 
 	private var instantiablesWithoutUnselectedClauses: [Instantiable] {
 		switch declarationType {
 		case .concreteDecl:
 			if let instantiableType, let instantiableDeclarationType {
-				[
+				// Selecting the initializer validates each candidate against the dependencies, so it is selected once.
+				let canonicalConstructionInitializer = canonicalConstructionInitializer
+				return [
 					Instantiable(
 						instantiableType: instantiableType,
 						isRoot: isRoot,
 						generatesDependencyTree: generatesDependencyTree,
 						initializer: canonicalConstructionInitializer,
-						otherInitializers: otherConstructionInitializers,
+						otherInitializers: otherConstructionInitializers(besides: canonicalConstructionInitializer),
 						additionalInstantiables: additionalInstantiables,
 						dependencies: dependencies,
 						declarationType: instantiableDeclarationType.asDeclarationType,
@@ -676,7 +683,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 					),
 				]
 			} else {
-				[]
+				return []
 			}
 		case .extensionDecl:
 			if extensionInstantiables.isEmpty, mockOnly, let mockReturnType {
@@ -684,7 +691,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				// so the type is registered in the mock scope map. Use the extended
 				// type (instantiableType) as the concrete type — not mockReturnType,
 				// which may be a protocol from fulfillingAdditionalTypes.
-				[
+				return [
 					Instantiable(
 						instantiableType: instantiableType ?? mockReturnType,
 						isRoot: isRoot,
@@ -711,7 +718,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			} else {
 				// mockInitializer may be set after extensionInstantiables are built
 				// (visit order depends on source order). Patch it in here.
-				extensionInstantiables.map { instantiable in
+				return extensionInstantiables.map { instantiable in
 					guard instantiable.mockInitializer == nil, let mockInitializer else {
 						return instantiable
 					}
@@ -752,10 +759,21 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// See `Instantiable.declarationIsolation`.
 	private var declarationIsolation: String?
 
+	/// Whether the walk reports `diagnostics`, which only the macro reads: SafeDITool, which evaluates `#if` blocks, trusts
+	/// what the macro rejects, so its walk skips the checks whose only result is a diagnostic.
+	private var reportsDiagnostics: Bool {
+		switch conditionalCompilation {
+		case .scanAllClauses:
+			true
+		case .evaluate:
+			false
+		}
+	}
+
 	/// Diagnoses each of `parameters` whose name is encoded differently from a name SafeDI matches it by, as
 	/// `diagnoseNameEncodedDifferently(_:at:)` does. A parameter named `_` names nothing.
 	private func diagnoseNamesEncodedDifferently(amongParametersOf parameters: FunctionParameterListSyntax) {
-		for parameter in parameters {
+		for parameter in parameters where reportsDiagnostics {
 			let name = parameter.secondName ?? parameter.firstName
 			if name.tokenKind != .wildcard {
 				diagnoseNameEncodedDifferently(name.text, at: name)
@@ -772,26 +790,33 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	private func diagnoseNameEncodedDifferently(_ name: String, at node: some SyntaxProtocol) {
 		// Spelling a name lexes it, so names are compared without backticks, which needs no lexing, and spelled
 		// only once one holds a byte outside ASCII.
+		guard reportsDiagnostics else {
+			return
+		}
 		let nameWithoutBackticks = name.spelledWithoutBackticks
-		guard !matchedNamesWithoutBackticks.contains(where: { $0.utf8.elementsEqual(nameWithoutBackticks.utf8) }) else {
+		guard bytesOfMatchedNames.insert(Array(nameWithoutBackticks.utf8)).inserted else {
 			return
 		}
 		matchedNamesWithoutBackticks.append(nameWithoutBackticks)
-		if spellingsOfMatchedNames == nil, nameWithoutBackticks.utf8.contains(where: { $0 >= 0x80 }) {
-			spellingsOfMatchedNames = matchedNamesWithoutBackticks.dropLast().map(\.spelledAsIdentifier)
+		if firstSpellingsOfMatchedNames == nil, nameWithoutBackticks.utf8.contains(where: { $0 >= 0x80 }) {
+			firstSpellingsOfMatchedNames = Dictionary(
+				matchedNamesWithoutBackticks.dropLast().map { ($0.spelledAsIdentifier, $0.spelledAsIdentifier) },
+				uniquingKeysWith: { first, _ in first },
+			)
 		}
-		guard spellingsOfMatchedNames != nil else {
+		guard firstSpellingsOfMatchedNames != nil else {
 			return
 		}
 		let spelledName = nameWithoutBackticks.spelledAsIdentifier
-		if let earlierName = spellingsOfMatchedNames?.first(where: { $0 == spelledName }) {
+		if let earlierName = firstSpellingsOfMatchedNames?[spelledName] {
 			hasNamesEncodedDifferently = true
 			diagnostics.append(Diagnostic(
 				node: node,
 				message: FixableInstantiableError.namesEncodedDifferently(earlierName: earlierName, laterName: spelledName).diagnostic,
 			))
+		} else {
+			firstSpellingsOfMatchedNames?[spelledName] = spelledName
 		}
-		spellingsOfMatchedNames?.append(spelledName)
 	}
 
 	/// Diagnoses `parameter`, a dependency parameter of `instantiate(…)` named `_`, among `parameters`, the method's
@@ -945,7 +970,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// Reports a `private` or `fileprivate` type, which the code SafeDI generates in another file can never construct.
 	/// Any other access can suit the code that constructs the type; SafeDITool checks that code, which it generates.
 	private func processModifiers(on node: some ConcreteDeclSyntaxProtocol) {
-		if let (modifiedNode, accessLevel) = node.removingPrivateOrFilePrivateModifier(keyword: \.keyword) {
+		if reportsDiagnostics, let (modifiedNode, accessLevel) = node.removingPrivateOrFilePrivateModifier(keyword: \.keyword) {
 			diagnostics.append(Diagnostic(
 				node: node,
 				error: FixableInstantiableError.privateOrFilePrivateType(accessLevel),

@@ -19,6 +19,7 @@ filegroup(
             "Utilities/**",
             "Extensions/ImportDeclSyntaxExtensions.swift",
             "Models/AliasDeclarationReferences.swift",
+            "Models/ConstructionScope.swift",
             "Models/CycleParameter.swift",
             "Models/ImportStatement.swift",
             "Models/SafeDIToolManifest.swift",

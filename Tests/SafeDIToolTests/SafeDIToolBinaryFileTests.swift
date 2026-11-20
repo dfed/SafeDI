@@ -67,6 +67,42 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func writingStringsInline_writesSameBytesForTwoValues_exactlyWhenWriterWithTableDoes() {
+		// Merging module infos compares two entries for one module by the bytes a writer that writes each string in
+		// place writes, which must tell the entries apart exactly when the bytes of the file do: the order in which
+		// strings first appear, a string's own bytes, and every value besides strings.
+		let values: [[String]] = [
+			["Clock", "Calendar", "Clock"],
+			["Calendar", "Clock", "Calendar"],
+			["Clock", "Calendar", "Calendar"],
+			["Clock", "Calendar"],
+			[Self.precomposedCafe, Self.decomposedCafe],
+			[Self.decomposedCafe, Self.precomposedCafe],
+			[Self.precomposedCafe, Self.precomposedCafe],
+			["ab", "c"],
+			["a", "bc"],
+			[],
+		]
+		func tableBytes(of value: [String]) -> [UInt8] {
+			var writer = BinaryWriter()
+			writer.write(value)
+			return writer.encoded
+		}
+		func inlineBytes(of value: [String]) -> [UInt8] {
+			var writer = BinaryWriter.writingStringsInline()
+			writer.write(value)
+			return writer.bytes
+		}
+
+		for first in values {
+			for second in values {
+				#expect((inlineBytes(of: first) == inlineBytes(of: second)) == (tableBytes(of: first) == tableBytes(of: second)))
+				#expect((inlineBytes(of: first) == inlineBytes(of: second)) == (first.map { Array($0.utf8) } == second.map { Array($0.utf8) }))
+			}
+		}
+	}
+
+	@Test
 	func binaryWriter_writesSharedValueOnce_whenValueRepeats() throws {
 		var writer = BinaryWriter()
 		writer.write([BinaryShared(["a", "b"]), BinaryShared(["c"]), BinaryShared(["a", "b"])])
@@ -83,6 +119,25 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		// to the first.
 		#expect(encoded == [3, 1, 97, 1, 98, 1, 99] + [3, 0, 2, 0, 1, 0, 1, 2, 1])
 		#expect(values.map(\.value) == [["a", "b"], ["c"], ["a", "b"]])
+	}
+
+	@Test
+	func binaryWriter_writesEachSpellingOfPlaces_whenPlacesDifferOnlyInAny() throws {
+		// `==` calls `any Service` and `Service` equal, but each list of places reads back as written.
+		let places = [TypeDescription.any(.simple(name: "Service")), .simple(name: "Service"), .any(.simple(name: "Service"))].map { type in
+			BinaryShared([SeamSignature.Hole.Site(seamType: .simple(name: "Host"), path: [Property(label: "service", typeDescription: type)])])
+		}
+		var writer = BinaryWriter()
+		writer.write(places)
+
+		let readPlaces = try writer.encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let readPlaces: [BinaryShared<[SeamSignature.Hole.Site]>] = try reader.read()
+			try reader.finish()
+			return readPlaces
+		}
+
+		#expect(readPlaces.map { $0.value.map { $0.path.map(\.typeDescription.asSource) } } == [[["any Service"]], [["Service"]], [["any Service"]]])
 	}
 
 	@Test
@@ -276,7 +331,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			),
 		)
 		var foundTypeNames = Set<String>()
-		for value in reflectedStructuresAndEnumerations(in: project.scannedModuleInfo) + reflectedStructuresAndEnumerations(in: moduleInfoFileWithView) {
+		for value in Self.cachedStructuresAndEnumerations(in: project.scannedModuleInfo) + Self.cachedStructuresAndEnumerations(in: moduleInfoFileWithView) {
 			let typeName = String(reflecting: type(of: value))
 			foundTypeNames.insert(typeName)
 			guard let schemaMember = value as? any BinarySchemaMember else {
@@ -804,6 +859,86 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func dump_printsEverySeamSignatureModuleInfoFileHoldsAsJSON() async throws {
+		// `Badge`, `package`, receives `serviceBuilder` only if available, so `Host`'s `package` tier takes the builder of
+		// its hole `service` under another label than its `public` tier.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Service {}",
+				"package struct Thing {}",
+				"""
+				@Instantiable
+				package struct Badge: Instantiable {
+				    package init(serviceBuilder: Thing?) {
+				        self.serviceBuilder = serviceBuilder
+				    }
+
+				    @Received(onlyIfAvailable: true) let serviceBuilder: Thing?
+				}
+				""",
+				"""
+				@Instantiable(generateDependencyTree: true)
+				public struct Host: Instantiable {
+				    init(service: any Service, badge: Badge) {
+				        self.service = service
+				        self.badge = badge
+				    }
+
+				    @Instantiated let service: any Service
+				    @Instantiated let badge: Badge
+				}
+				""",
+			])],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		let seamModule = try #require(output.modules["Feature"])
+
+		let json = try Dump.parse([#require(seamModule.moduleInfoOutputPath)]).json()
+
+		let dumped = try JSONDecoder().decode(ModuleInfoFile.self, from: Data(json.utf8))
+		let written = try #require(seamModule.moduleInfoFile)
+		#expect(dumped.seamSignatures.first?.signature?.holes.map(\.narrowerTierBuilderLabels) == [[.package: "serviceBuilder_"]])
+		#expect(reflectedDescription(of: dumped.seamSignatures) == reflectedDescription(of: written.seamSignatures))
+	}
+
+	@Test
+	func encode_writesLabelsInSortedOrder_whenValuesBindLabelsLater() throws {
+		let labels = (0..<24).map { "label\($0)" }
+		let values = SeamSignature.ScopeEnum.Values(typeName: "Values", fields: [], labelsBoundLater: Set(labels))
+
+		let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(values)) as? [String: Any]
+
+		#expect(json?["labelsBoundLater"] as? [String] == labels.sorted())
+	}
+
+	@Test
+	func encode_writesNarrowerTierLabelsWidestTierFirst_whenBuilderTakesLabelOnEveryTier() throws {
+		let tiers: [AccessLevel] = [.open, .public, .package, .internal, .fileprivate, .private]
+		let builder = SeamSignature.Builder(
+			enumKey: .init(seamType: .simple(name: "Host"), holeType: .init(instantiatedType: .simple(name: "Service"), builtType: .simple(name: "Service")), isSendable: false),
+			label: "serviceBuilder",
+			internalName: "serviceBuilder",
+			parameterType: .simple(name: "Service"),
+			readableParameterType: .simple(name: "Service"),
+			takesBuilderStruct: false,
+			tierAccess: .open,
+			accessCause: nil,
+			narrowingInnerSeam: nil,
+			narrowerTierLabels: Dictionary(uniqueKeysWithValues: tiers.reversed().map { ($0, "serviceBuilder_\($0)") }),
+		)
+
+		let encoded = try JSONEncoder().encode(builder)
+
+		let decoded = try JSONDecoder().decode(SeamSignature.Builder.self, from: encoded)
+		let json = try JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+		let pairs = try #require(json?["narrowerTierLabels"] as? [Any])
+		#expect(pairs.enumerated().filter { $0.offset.isMultiple(of: 2) == false }.map { $0.element as? String } == tiers.map { "serviceBuilder_\($0)" })
+		#expect(decoded.narrowerTierLabels == builder.narrowerTierLabels)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func moduleInfo_readsBackEverythingGenerateWrote_whenModuleAndItsDependenciesAreNamed() async throws {
 		// Scan's cache never records a module, so only a module info file holds these fields with values: the module and
 		// its dependencies, and each declaration's module and package, and its hand-written mock's.
@@ -971,6 +1106,41 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	/// The number of cases an enum's layout lists.
+	/// The structs and enums `value` holds, as `reflectedStructuresAndEnumerations(in:)` finds them, except the storage
+	/// of a property its layout lists as unwritten: a type held there that is no schema member, such as the box
+	/// `Instantiable` keeps its rarely set fields in, holds fields written under their own names, so only the schema
+	/// members it holds are cached values.
+	private static func cachedStructuresAndEnumerations(in value: Any, isInsideUnwrittenProperty: Bool = false) -> [Any] {
+		let mirror = Mirror(reflecting: value)
+		let unwrittenProperties = unwrittenProperties(of: value)
+		let nested = mirror.children.flatMap { child in
+			cachedStructuresAndEnumerations(
+				in: child.value,
+				isInsideUnwrittenProperty: isInsideUnwrittenProperty || unwrittenProperties.contains(child.label ?? ""),
+			)
+		}
+		guard mirror.displayStyle == .struct || mirror.displayStyle == .enum,
+		      !isInsideUnwrittenProperty || value is any BinarySchemaMember
+		else {
+			return nested
+		}
+		return [value] + nested
+	}
+
+	/// The properties the layout of `value`'s type lists as unwritten, when it is a schema member's struct.
+	private static func unwrittenProperties(of value: Any) -> [String] {
+		func unwrittenProperties<Member: BinarySchemaMember>(ofMember _: Member) -> [String] {
+			guard case let .structure(_, unwrittenProperties) = Member.binaryLayout else {
+				return []
+			}
+			return unwrittenProperties
+		}
+		guard let member = value as? any BinarySchemaMember else {
+			return []
+		}
+		return unwrittenProperties(ofMember: member)
+	}
+
 	private static func caseCount<Member: BinarySchemaMember>(of _: Member.Type) -> Int {
 		switch Member.binaryLayout {
 		case .structure:
