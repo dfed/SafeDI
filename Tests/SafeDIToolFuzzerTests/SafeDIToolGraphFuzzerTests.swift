@@ -7992,13 +7992,13 @@ struct SafeDIToolGraphFuzzerTests {
 		return GraphFuzzerKnownIssue(reason: seamBuilderOrderReason, signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)], seeds: knownIssue.seeds)
 	}
 
-	private static let seamTraversalLimitReason = "A graph whose probes traverse more wrappers than a graph compared on its own may traverse, so the comparator describes none of its values beneath the point where its traversals run out"
+	private static let seamTraversalLimitReason = "A graph whose probes traverse more wrappers than a graph compared on its own may traverse, so the comparator describes none of its values beneath the point where its traversals run out (Intended: an oracle limit, not a SafeDI defect; raising the comparator's traversal bound for one graph would lengthen every graph's comparison)"
 
 	private static let fillReceivesSeamParameterInAnotherFormReason = "A type that fills a hole from a caller's module is outside the seam's check that its tree receives each label from outside it in forms one parameter takes, so a fill that receives the seam's parameter in another form is handed `nil` where the visible build reports the seam's error; fixed in a later PR"
 
-	private static let seamBuilderOrderReason = "A seam's builders are ordered by label, which its hole type's names spell, so moving type names across wrapper names reorders the builders of a seam with two hole types, its generated initializers and the calls of them"
+	private static let seamBuilderOrderReason = "A seam's builders are ordered by label, which its hole type's names spell, so moving type names across wrapper names reorders the builders of a seam with two hole types, its generated initializers and the calls of them (Intended: CLAUDE.md's \"What may follow names\" allows a label sort of equivalent parameters, so the rename oracle's reordering here is expected, not a defect)"
 
-	private static let labelSortedPassThroughReason = "A seam's pass-through parameters are sorted by label, so reversing the labels reorders its generated initializer and the calls of it"
+	private static let labelSortedPassThroughReason = "A seam's pass-through parameters are sorted by label, so reversing the labels reorders its generated initializer and the calls of it (Intended: CLAUDE.md's \"What may follow names\" allows a label sort of equivalent parameters, so the rename oracle's reordering here is expected, not a defect)"
 
 	private static let labelSortedPassThroughAndMockParametersReason = "\(labelSortedPassThroughReason), and a mock's parameters and fields are sorted by label, so reversing the labels reorders them too"
 
@@ -8234,7 +8234,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// before, a consumer held a holder the public tier omitted, which the tool rejected; now `Dock`'s own declaration
 		// proves the holder `public`, or, `package`, leaves a consumer in another package holding none.
 		GraphFuzzerKnownIssue(
-			reason: "Two public mocks a consumer in another package calls each build their own instance of a dependency it cannot name (M8.9b), first built in a leaf's child, which the stated divergence's exemption does not derive; and \(publicMockLeakReason)",
+			reason: "Two public mocks a consumer in another package calls each build their own instance of a dependency it cannot name (M8.9b), first built in a leaf's child, which the stated divergence's exemption does not derive (Intended: an oracle limit on a divergence the public mock contract states; one seed); and \(publicMockLeakReason)",
 			signatures: [.publicMockBuildsOtherValuesThanKnownRight(containing: "t1 > t4 > session")] + publicMockLeakSignatures,
 			seeds: [95],
 		),
@@ -8269,7 +8269,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// again the instance its consumer passes (M8.32), and its root level holds that wrapper, so the fill beneath a later
 		// leaf reads the wrapper that leaf made, first seen at the leaf, where the known-right path's reads the consumer's.
 		GraphFuzzerKnownIssue(
-			reason: "Each call of a public mock wraps again the instance a consumer passes for a value received lazily (M8.32), which the mock's root level holds, so a fill beneath a later leaf reads that leaf's wrapper again, a later sight of the re-made wrapper the stated divergence's exemption does not derive",
+			reason: "Each call of a public mock wraps again the instance a consumer passes for a value received lazily (M8.32), which the mock's root level holds, so a fill beneath a later leaf reads that leaf's wrapper again, a later sight of the re-made wrapper the stated divergence's exemption does not derive (Intended: an oracle limit on a divergence the public mock contract states; one seed)",
 			signatures: [.publicMockBuildsOtherValuesThanKnownRight(containing: "hole > value > holeSession")],
 			seeds: [162],
 		),
@@ -8494,15 +8494,15 @@ struct SafeDIToolGraphFuzzerTests {
 		"_Session alive holding t6.holeHost once the probe's value is released: 1 on the feature path, 0 on the known-right path",
 	].map { .publicMockRetainsWhatKnownRightFrees(containing: $0) }
 
-	private static let publicMockParametersSortedByLabelReason = "A public mock's parameters are sorted by label (decision 27), so reversing the labels reorders a `.public` consumer's `mock()` and the parameters it surfaces from its leaves"
+	private static let publicMockParametersSortedByLabelReason = "A public mock's parameters are sorted by label (decision 27), so reversing the labels reorders a `.public` consumer's `mock()` and the parameters it surfaces from its leaves (Intended: CLAUDE.md's \"What may follow names\" allows a label sort of equivalent parameters, so the rename oracle's reordering here is expected, not a defect)"
 
 	private static let publicMockLeakReason = "A public mock hands each place's case the values of every level on the way to it, which the builder function of an instantiator on that way captures, so holding the instantiator keeps them alive where the known-right path, which builds the tree inline, frees them, until the leak fix gives a public mock builders that keep only what their fill reads"
 
-	private static let publicMockBuilderOrderReason = "A mock's parameters are sorted by label, and a builder's label begins with its hole type's name, so moving type names across wrapper names moves a consumer's builder among its other parameters"
+	private static let publicMockBuilderOrderReason = "A mock's parameters are sorted by label, and a builder's label begins with its hole type's name, so moving type names across wrapper names moves a consumer's builder among its other parameters (Intended: CLAUDE.md's \"What may follow names\" allows a label sort of equivalent parameters, so the rename oracle's reordering here is expected, not a defect)"
 
-	private static let publicMockFormsNamedApartOrderReason = "A mock names the forms of a label its tree receives in two apart, after their types, and orders them by `Property.precedesInMockOrder` (label, kind, then type), so moving type names across wrapper names reorders a public mock's required parameters"
+	private static let publicMockFormsNamedApartOrderReason = "A mock names the forms of a label its tree receives in two apart, after their types, and orders them by `Property.precedesInMockOrder` (label, kind, then type), so moving type names across wrapper names reorders a public mock's required parameters (Intended: CLAUDE.md's \"What may follow names\" allows a label sort of equivalent parameters, so the rename oracle's reordering here is expected, not a defect)"
 
-	private static let passedUpBuildersNamedApartReason = "An internal consumer that passes up the places of two public mocks of one hole type names the builders it takes for them apart after each called type, so adding the second call renames the first's builder"
+	private static let passedUpBuildersNamedApartReason = "An internal consumer that passes up the places of two public mocks of one hole type names the builders it takes for them apart after each called type, so adding the second call renames the first's builder (Intended: CLAUDE.md's \"What may follow names\" allows a label sort of equivalent parameters, so the rename oracle's reordering here is expected, not a defect)"
 
 	/// How many of the public mock corpus's graphs each shape of `GraphFuzzerPublicMockDraw` lands in, exactly, so a draw
 	/// that stops landing, or a change in a shape's share, fails
@@ -8654,7 +8654,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.typeInExtensionOfInstantiable: 219,
 	]
 
-	private static let mockParameterAndFieldOrderReason = "A mock's parameters and fields are sorted by label, so a renaming that reorders labels reorders them"
+	private static let mockParameterAndFieldOrderReason = "A mock's parameters and fields are sorted by label, so a renaming that reorders labels reorders them (Intended: CLAUDE.md's \"What may follow names\" allows a label sort of equivalent parameters, so the rename oracle's reordering here is expected, not a defect)"
 
 	private static let lazyCycleConfigurationFieldReason = "Which back-edge of a lazy cycle loses its override follows the order of type names, so one field of a configuration struct, with the reads of it, is present under one naming and absent under another"
 

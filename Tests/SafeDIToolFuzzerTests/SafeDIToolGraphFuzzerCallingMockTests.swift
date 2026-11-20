@@ -750,7 +750,9 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func diagnosticSites_differ_whenTwinsOfTwoShapesReportTheirErrors() async throws {
 		var sitesByShape = [GraphFuzzerCallingMockShape: [[GraphFuzzerDiagnosticSite]?]]()
-		for seed in GraphFuzzerCallingMockCell.firstSeeds where GraphFuzzerCallingMockDraw(seed: seed).cell.shape.twinRejects {
+		// The shape whose mock condition is inactive has the twin of `fillInstantiatesTypeNoDeclarationCanFulfill`, so its
+		// twin reports that shape's error.
+		for seed in GraphFuzzerCallingMockCell.firstSeeds where GraphFuzzerCallingMockDraw(seed: seed).cell.shape.twinRejects && GraphFuzzerCallingMockDraw(seed: seed).cell.shape != .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive {
 			let shape = GraphFuzzerCallingMockDraw(seed: seed).cell.shape
 			await sitesByShape[shape, default: []].append(try GraphFuzzerCallingMockCheck.run(GraphFuzzerCallingMockDraw(seed: seed).graph, seed: seed).twinSites)
 		}
@@ -934,6 +936,36 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func check_reportsRejection_whenMockIsRejectedWhereMockConditionIsInactive() async throws {
+		// The fill receives the outer seam's `database`, which any tool reports in any build, so the mock is rejected in a
+		// release build, where the graph wrongly says its twin's error is one the tool checks only where the generated mocks
+		// compile.
+		let twinGraph = Self.innerSeamGraph(named: "a mock rejected in a release build", tests: Self.fillReadingOuterSeamsValue, expectedTwinErrorSite: ("Tests/TestsTypes.swift", "@Received let database: Database"))
+		let graph = GraphFuzzerCallingMockGraph(
+			name: "a mock rejected in a release build",
+			mockFiles: twinGraph.mockFiles,
+			twinFiles: twinGraph.twinFiles,
+			callerTypeName: "Host",
+			callerIsPublic: false,
+			flatParameterLabels: [],
+			implementationIsVisible: true,
+			expectedTwinInitializerLabels: nil,
+			expectedPassUpLabels: [],
+			expectedTwinErrorSite: ("Tests/TestsTypes.swift", "@Received let database: Database"),
+			mockBuild: .release,
+			twinErrorIsCheckedOnlyWhereMocksCompile: true,
+		)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(graph, seed: 0)
+
+		#expect(graph.mockSkipsTwinsError)
+		#expect(result.twinHasIntendedOutcome)
+		#expect(result.mockSites == result.twinSites)
+		#expect(result.failure?.kind == .callingMockRejectedWhereMockConditionIsInactive)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func check_reportsUnclassifiedPassUp_whenGraphSaysImplementationIsVisibleButNoneIs() async throws {
 		// No type in module `Tests` fulfills `Api`, so any tool's mock passes the place up; the graph wrongly says an
 		// implementation is visible, so no reason classifies the pass-up.
@@ -1096,6 +1128,64 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(counts == ["[String]": 11, "[String: Int]": 11, "() -> Int": 7, "(Int, Int)": 11, "internal": 20, "public": 20])
 	}
 
+	/// Seed 550 draws the first graph of `fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive/internal/
+	/// plain`, the first of its block: seed 490's shape, in a build that does not tell the tool the mock condition is
+	/// active. The tool checks the fill production rejects only where the generated mocks compile
+	/// (`DependencyTreeGenerator.validateFillsInstantiateOnlyWhatCanBeFulfilled`, under `compilesGeneratedMocks`), so the
+	/// mock passes the place up, where its twin reports the error; with the check run in every build, the mock reports it,
+	/// which the check reports as `callingMockRejectedWhereMockConditionIsInactive`.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_passesPlaceUp_whenDrawnFillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 550)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 550)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, caller: .internal, place: .plain))
+		#expect(draw.graph.mockSkipsTwinsError)
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.mockSites == nil)
+		#expect(result.passUps.map(\.label) == draw.expectedPassUpLabels)
+		#expect(result.passUps.map(\.reason) == [.mockConditionIsInactive])
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
+	/// The graphs of the shape whose fill instantiates a type no declaration can fulfill where the mock condition is
+	/// inactive draw each build that leaves it inactive, each spelling no hole can have, and each caller kind, in the
+	/// pinned number of graphs, and the tool skips the twin's error in the mock, which the cell test then requires to pass
+	/// the place up, in the pinned number, at least ten.
+	@Test
+	func fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactiveDraw_drawsEachBuild_inPinnedNumberOfGraphs() {
+		let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive }
+		var counts = [String: Int]()
+		for draw in draws {
+			counts["\(draw.mockBuild)", default: 0] += 1
+			if draw.graph.mockSkipsTwinsError {
+				counts["mockSkipsTwinsError", default: 0] += 1
+				counts["mockSkipsTwinsError \(draw.mockBuild)", default: 0] += 1
+			}
+			counts[draw.fillHoles?.spellingNoHoleCanHave?.type ?? "none", default: 0] += 1
+			counts[draw.cell.caller.rawValue, default: 0] += 1
+		}
+		print("calling-mock builds where the mock condition is inactive \(counts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
+
+		#expect(counts == [
+			"debugWithoutMockCondition": 33,
+			"release": 27,
+			"mockSkipsTwinsError": 30,
+			"mockSkipsTwinsError debugWithoutMockCondition": 14,
+			"mockSkipsTwinsError release": 16,
+			"[String]": 21,
+			"[String: Int]": 10,
+			"() -> Int": 19,
+			"(Int, Int)": 10,
+			"internal": 20,
+			"public": 20,
+			"listed": 20,
+		])
+		#expect(GraphFuzzerCallingMockDraw(seed: 0).mockBuild == .compilesGeneratedMocks)
+	}
+
 	/// Seed 530 draws the first graph of `seamCallerFillSharesBuilder/internal/plain`, the first of its block: a seam's own
 	/// internal mock whose fill instantiates what nothing in its module fulfills, beside places of its own of the same hole
 	/// types. It takes the twin's builders, one for a hole type and family its own places and the fill's share.
@@ -1203,7 +1293,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	@Test
 	func drawnCells_coverEveryCell_whenCorpusDrawsTenGraphsPerCell() {
-		#expect(GraphFuzzerCallingMockCell.all.count == 55)
+		#expect(GraphFuzzerCallingMockCell.all.count == 61)
 		#expect(GraphFuzzerCallingMockCell.drawnCells == GraphFuzzerCallingMockCell.all)
 		#expect(Self.callingMockCorpusSeedCount == GraphFuzzerCallingMockCell.drawnCells.count * 10)
 		#expect(GraphFuzzerCallingMockCell.firstSeeds.map(GraphFuzzerCallingMockCell.cell(ofSeed:)) == GraphFuzzerCallingMockCell.all)

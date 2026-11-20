@@ -12327,6 +12327,9 @@ struct GraphFuzzerFailure: Equatable {
 		case callingMockReportsOtherErrorThanTwin = "a calling mock reports another error than its production twin"
 		/// A calling mock is rejected where its production twin is accepted.
 		case callingMockRejectsWhereTwinAccepts = "a calling mock is rejected where its production twin is accepted"
+		/// A calling mock is rejected in a build that leaves the mock condition inactive, where its graph's twin error is one
+		/// the tool checks only where the generated mocks compile (`GraphFuzzerCallingMockGraph.MockBuild`).
+		case callingMockRejectedWhereMockConditionIsInactive = "a calling mock is rejected in a build that leaves the mock condition inactive"
 		/// A calling mock passes a place up that none of contract rule 7's permanent reasons explains.
 		case callingMockPassesUpUnclassifiedPlace = "a calling mock passes up a place no permanent reason explains"
 		/// A calling mock takes no parameter for a value its graph says the mock's tree cannot build, which its production
