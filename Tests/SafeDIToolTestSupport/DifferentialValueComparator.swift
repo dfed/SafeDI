@@ -613,7 +613,7 @@ enum DifferentialValueOracle {
 	) async throws -> DifferentialValueComparison? {
 		guard compileVerificationIsEnabled else { return nil }
 		let graph = DifferentialValueGraph(name: "", feature: feature, knownRight: knownRight, probes: probes, samples: samples, exemptions: exemptions)
-		return try await results(of: [graph], limits: limits, filesToDelete: &filesToDelete)[0].get()
+		return try await results(of: [graph], limits: limits, memo: .current, filesToDelete: &filesToDelete)[0].get()
 	}
 
 	/// Compares each of `graphs`, exempting its exemptions, compiling the graphs whose paths have one layout into one
@@ -622,10 +622,13 @@ enum DifferentialValueOracle {
 	/// own: numbering and every `(seen …)` mark start afresh at each graph. When a batch does not compile or run, each
 	/// of its graphs is compared on its own, so that a failure is its graph's, at the cost of comparing each alone; a
 	/// graph whose probe spent its traversals fails alone, without the batch being compared again.
+	/// - Parameter memo: Where what each executable printed is read from and kept, by default the one the environment
+	///   names. A test that counts the executables a comparison compiles passes `nil`.
 	/// - Returns: Each graph's comparison, in the order of `graphs`, or `nil` when compile verification is disabled.
 	static func compare(
 		graphs: [DifferentialValueGraph],
 		limits: DifferentialValueLimits = DifferentialValueLimits(),
+		memo: DifferentialValueOutputMemo? = .current,
 		filesToDelete: inout [URL],
 	) async throws -> [DifferentialValueGraphComparison]? {
 		guard compileVerificationIsEnabled else { return nil }
@@ -637,7 +640,7 @@ enum DifferentialValueOracle {
 			for (batchIndex, batch) in batches.enumerated() {
 				let batchGraphs = batch.map { graphs[$0] }
 				group.addTask {
-					await (batchIndex, collectingFilesToDelete { try await results(of: batchGraphs, limits: limits, filesToDelete: &$0) })
+					await (batchIndex, collectingFilesToDelete { try await results(of: batchGraphs, limits: limits, memo: memo, filesToDelete: &$0) })
 				}
 			}
 			var batchWork = [(batchIndex: Int, work: FileLeavingWork<[Result<DifferentialValueComparison, DifferentialValueOracleError>]>)]()
@@ -672,7 +675,7 @@ enum DifferentialValueOracle {
 		filesToDelete: inout [URL],
 	) async throws -> String? {
 		guard compileVerificationIsEnabled else { return nil }
-		return try await describe(path, role: nil, probeGroups: [ProbeGroup(probes: probes, samples: samples)], limits: limits, filesToDelete: &filesToDelete)
+		return try await describe(path, role: nil, probeGroups: [ProbeGroup(probes: probes, samples: samples)], limits: limits, memo: .current, filesToDelete: &filesToDelete)
 	}
 
 	// MARK: Private
@@ -864,6 +867,7 @@ enum DifferentialValueOracle {
 	private static func results(
 		of graphs: [DifferentialValueGraph],
 		limits: DifferentialValueLimits,
+		memo: DifferentialValueOutputMemo?,
 		filesToDelete: inout [URL],
 	) async throws -> [Result<DifferentialValueComparison, DifferentialValueOracleError>] {
 		do {
@@ -875,7 +879,7 @@ enum DifferentialValueOracle {
 				let probeGroups = graphs.map { graph in
 					ProbeGroup(probes: zip(graph.probes, graph.knownRightProbes ?? []).flatMap { [$0, $1] }, samples: graph.samples)
 				}
-				let pairedProbes = try await describedProbes(of: merging(graphs.map(\.feature)), role: .feature, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
+				let pairedProbes = try await describedProbes(of: merging(graphs.map(\.feature)), role: .feature, probeGroups: probeGroups, limits: limits, memo: memo, filesToDelete: &filesToDelete)
 				featureProbes = pairedProbes.enumerated().filter { $0.offset.isMultiple(of: 2) }.map(\.element)
 				knownRightProbes = pairedProbes.enumerated().filter { !$0.offset.isMultiple(of: 2) }.map(\.element)
 			} else {
@@ -884,8 +888,8 @@ enum DifferentialValueOracle {
 				// as when the known-right path was described only after it.
 				let featurePath = merging(graphs.map(\.feature))
 				let knownRightPath = merging(graphs.map(\.knownRight))
-				async let featureWork = collectingFilesToDelete { try await describedProbes(of: featurePath, role: .feature, probeGroups: probeGroups, limits: limits, filesToDelete: &$0) }
-				async let knownRightWork = collectingFilesToDelete { try await describedProbes(of: knownRightPath, role: .knownRight, probeGroups: probeGroups, limits: limits, filesToDelete: &$0) }
+				async let featureWork = collectingFilesToDelete { try await describedProbes(of: featurePath, role: .feature, probeGroups: probeGroups, limits: limits, memo: memo, filesToDelete: &$0) }
+				async let knownRightWork = collectingFilesToDelete { try await describedProbes(of: knownRightPath, role: .knownRight, probeGroups: probeGroups, limits: limits, memo: memo, filesToDelete: &$0) }
 				let (describedFeature, describedKnownRight) = await (featureWork, knownRightWork)
 				filesToDelete.append(contentsOf: describedFeature.filesToDelete + describedKnownRight.filesToDelete)
 				featureProbes = try describedFeature.result.get()
@@ -919,7 +923,7 @@ enum DifferentialValueOracle {
 			guard graphs.count > 1 else { return [.failure(error)] }
 			var resultsOfEachGraph = [Result<DifferentialValueComparison, DifferentialValueOracleError>]()
 			for graph in graphs {
-				resultsOfEachGraph += try await results(of: [graph], limits: limits, filesToDelete: &filesToDelete)
+				resultsOfEachGraph += try await results(of: [graph], limits: limits, memo: memo, filesToDelete: &filesToDelete)
 			}
 			return resultsOfEachGraph
 		}
@@ -983,10 +987,11 @@ enum DifferentialValueOracle {
 		role: DifferentialValuePathRole,
 		probeGroups: [ProbeGroup],
 		limits: DifferentialValueLimits,
+		memo: DifferentialValueOutputMemo?,
 		filesToDelete: inout [URL],
 	) async throws -> [DescribedProbe] {
 		let probes = probeGroups.flatMap(\.probes)
-		let description = try await describe(path, role: role, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
+		let description = try await describe(path, role: role, probeGroups: probeGroups, limits: limits, memo: memo, filesToDelete: &filesToDelete)
 		let sections = DescribedProbe.sections(of: description)
 		guard sections.count == probes.count else {
 			throw DifferentialValueOracleError(
@@ -1007,6 +1012,7 @@ enum DifferentialValueOracle {
 		role: DifferentialValuePathRole?,
 		probeGroups: [ProbeGroup],
 		limits: DifferentialValueLimits,
+		memo: DifferentialValueOutputMemo?,
 		filesToDelete: inout [URL],
 	) async throws -> String {
 		let pathName = role.map { "\($0.name) path" } ?? "path"
@@ -1016,6 +1022,7 @@ enum DifferentialValueOracle {
 			role: role,
 			main: probesSource(moduleNames: path.modules.map(\.name), role: role, probeGroups: probeGroups, limits: limits),
 			executableModuleName: "DifferentialValueProbes",
+			memo: memo,
 			filesToDelete: &filesToDelete,
 		)
 		guard run.exitCode == 0 else {
@@ -1038,15 +1045,17 @@ enum DifferentialValueOracle {
 	/// Compiles each module of `path` as the comparator does, links it with `main`, the body of a `main.swift` that every
 	/// module of the path is `@testable import`ed into, runs the program, and returns what it printed, for a test that
 	/// judges what generated code does at run time beyond the values it builds, such as which instances are still alive.
+	/// - Parameter memo: Where what the program printed is read from and kept, by default the one the environment names.
 	/// - Returns: What the program printed, or `nil` when compile verification is disabled.
 	static func output(
 		of path: DifferentialValuePath,
 		running main: String,
+		memo: DifferentialValueOutputMemo? = .current,
 		filesToDelete: inout [URL],
 	) async throws -> String? {
 		guard compileVerificationIsEnabled else { return nil }
 		let imports = (["import SafeDI"] + path.modules.map { "@testable import \($0.name)" }).joined(separator: "\n")
-		let run = try await compileAndRun(path, pathName: "path", role: nil, main: imports + "\n\n" + main, executableModuleName: "DifferentialValueProgram", filesToDelete: &filesToDelete)
+		let run = try await compileAndRun(path, pathName: "path", role: nil, main: imports + "\n\n" + main, executableModuleName: "DifferentialValueProgram", memo: memo, filesToDelete: &filesToDelete)
 		guard run.exitCode == 0 else {
 			throw DifferentialValueOracleError(
 				path: nil,
@@ -1065,8 +1074,22 @@ enum DifferentialValueOracle {
 		role: DifferentialValuePathRole?,
 		main: String,
 		executableModuleName: String,
+		memo: DifferentialValueOutputMemo?,
 		filesToDelete: inout [URL],
 	) async throws -> SwiftCompileResult {
+		// What the program printed in an earlier run, when a memo holds it: then nothing is compiled, the runtime
+		// included, and nothing run (`DifferentialValueOutputMemo`).
+		var memoKey: String?
+		if let memo {
+			memoKey = await outputMemoKey(of: path, main: main, executableModuleName: executableModuleName)
+			if let memoKey {
+				if let output = memo.output(for: memoKey) {
+					return SwiftCompileResult(exitCode: 0, stdout: output, stderr: "")
+				}
+			} else {
+				memo.countRunWithoutAKey()
+			}
+		}
 		let runtime = try await runtime(for: path.runtimeSource)
 		let directory = TestTemporaryDirectory.root.appendingPathComponent("safedi-differential-\(role?.rawValue ?? "path")-\(UUID().uuidString)")
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -1136,7 +1159,43 @@ enum DifferentialValueOracle {
 			)
 		}
 
-		return try await runProcess(executable, arguments: [])
+		let run = try await runProcess(executable, arguments: [])
+		if run.exitCode == 0, let memo, let memoKey {
+			memo.record(run.stdout, for: memoKey)
+		}
+		return run
+	}
+
+	/// The key `DifferentialValueOutputMemo` keeps the program's output under, or `nil` when what the program depends
+	/// on cannot be described: the compiler, or a source of the harness or of the runtime that cannot be read.
+	private static func outputMemoKey(of path: DifferentialValuePath, main: String, executableModuleName: String) async -> String? {
+		guard let build = await CompileCheckBuild.description,
+		      let harness = try? await outputMemoHarnessDescriptions.work(for: path.runtimeSource).value
+		else { return nil }
+		return try? DifferentialValueOutputMemo.key(of: path, main: main, executableModuleName: executableModuleName, harness: harness, build: build)
+	}
+
+	/// The harness description of each runtime's programs, read once per process.
+	private static let outputMemoHarnessDescriptions = OutputMemoHarnessDescriptions()
+
+	private actor OutputMemoHarnessDescriptions {
+		func work(for source: DifferentialValueRuntimeSource?) -> SharedTestWork<String> {
+			if let work = workBySource[source] {
+				return work
+			} else {
+				let work = SharedTestWork {
+					try DifferentialValueOutputMemo.harnessDescription(
+						runtimeSourcesDirectory: source?.runtimeSourcesDirectory ?? DifferentialValueOracle.checkoutRuntimeSourcesDirectory,
+						macrosTool: source?.macrosToolPath,
+						describerSource: DifferentialValueOracle.describerSource,
+					)
+				}
+				workBySource[source] = work
+				return work
+			}
+		}
+
+		private var workBySource = [DifferentialValueRuntimeSource?: SharedTestWork<String>]()
 	}
 
 	/// The last hundred lines of `output`, which a probe that never finishes can make enormous.
