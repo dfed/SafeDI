@@ -196,6 +196,21 @@ struct BinaryWriter {
 		}
 	}
 
+	/// Writes `value` once per writer: its first write writes 0 and then the value, and each later write of an equal
+	/// value writes only one more than the order in which the value was first written among shared values. A value a
+	/// signature repeats at many places, such as the places of a tree that every declaration beside the tree lists,
+	/// is then written, and read back, once.
+	mutating func writeShared<Value: BinaryCodable & BidirectionalCollection & Equatable>(_ value: Value) where Value.Element: Hashable {
+		let key = AnyHashable(SharedValueKey(value: value))
+		if let index = sharedValueIndices[key] {
+			writeUnsigned(index + 1)
+		} else {
+			sharedValueIndices[key] = UInt64(sharedValueIndices.count)
+			writeUnsigned(0)
+			write(value)
+		}
+	}
+
 	/// Writes a value that may contain itself, such as a type description. A ``BinaryReader`` does not read a
 	/// value nested more deeply than ``BinaryReader/maximumNestingDepth``, so the writer notes one that is, and
 	/// the value around it written through ``writeDescribed(as:_:)`` names it in ``valueNestedTooDeeply``.
@@ -254,8 +269,22 @@ struct BinaryWriter {
 		}
 	}
 
+	/// A value written through ``writeShared(_:)``, hashed by its count and its first and last elements alone: hashing
+	/// every element of each of many long arrays costs what writing them did, while an array equal to one already
+	/// written shares its storage, which `==` compares first.
+	private struct SharedValueKey<Value: BidirectionalCollection & Equatable>: Hashable where Value.Element: Hashable {
+		let value: Value
+
+		func hash(into hasher: inout Hasher) {
+			hasher.combine(value.count)
+			hasher.combine(value.first)
+			hasher.combine(value.last)
+		}
+	}
+
 	private var strings = [String]()
 	private var stringIndices = [StringTableKey: UInt64]()
+	private var sharedValueIndices = [AnyHashable: UInt64]()
 	private var nestingDepth = 0
 	private var isNestedTooDeeply = false
 }
@@ -358,6 +387,23 @@ struct BinaryReader {
 			: String(decoding: UnsafeRawBufferPointer(rebasing: bytes[stringRanges[Int(index)]]), as: UTF8.self)
 	}
 
+	/// Reads a value that ``BinaryWriter/writeShared(_:)`` wrote: the value itself where it was first written, and
+	/// otherwise the value read there, whose storage every later read shares.
+	mutating func readShared<Value: BinaryCodable>() throws(BinaryDecodingError) -> Value {
+		let referenceOffset = offset
+		let reference = try readUnsigned()
+		if reference == 0 {
+			let value: Value = try read()
+			sharedValues.append(value)
+			return value
+		} else {
+			guard reference <= UInt64(sharedValues.count), let value = sharedValues[Int(reference - 1)] as? Value else {
+				throw .sharedValueReferenceOutOfRange(reference: reference, offset: referenceOffset)
+			}
+			return value
+		}
+	}
+
 	/// Reads a value that may contain itself, such as a type description, throwing rather than recursing
 	/// without bound when the bytes nest more deeply than ``maximumNestingDepth``, which no SafeDITool writes.
 	mutating func readNested<Value>(_ read: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryDecodingError) -> Value {
@@ -377,6 +423,7 @@ struct BinaryReader {
 	/// Where each string of the table lies, for a reader that decodes a string only when a value names it.
 	private var stringRanges = [Range<Int>]()
 	private var decodesStringsUpFront = true
+	private var sharedValues = [Any]()
 	private var nestingDepth = 0
 
 	private mutating func readByte() throws(BinaryDecodingError) -> UInt8 {
@@ -395,6 +442,7 @@ enum BinaryDecodingError: Error, Equatable {
 	case integerTooLong(offset: Int)
 	case countExceedsRemainingBytes(count: UInt64, offset: Int)
 	case stringIndexOutOfRange(index: UInt64, offset: Int)
+	case sharedValueReferenceOutOfRange(reference: UInt64, offset: Int)
 	case invalidTag(UInt8, tagType: String, offset: Int)
 	case nestedTooDeeply(offset: Int)
 	case trailingBytes(offset: Int)
@@ -488,6 +536,23 @@ extension Array: BinaryCodable where Element: BinaryCodable {
 		for element in self {
 			writer.write(element)
 		}
+	}
+}
+
+/// A value written once however often a file holds it (``BinaryWriter/writeShared(_:)``).
+struct BinaryShared<Value: BinaryCodable & BidirectionalCollection & Equatable>: BinaryCodable where Value.Element: Hashable {
+	init(_ value: Value) {
+		self.value = value
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		value = try reader.readShared()
+	}
+
+	let value: Value
+
+	func write(to writer: inout BinaryWriter) {
+		writer.writeShared(value)
 	}
 }
 
