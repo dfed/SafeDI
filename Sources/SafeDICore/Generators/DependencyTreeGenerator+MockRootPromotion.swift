@@ -180,14 +180,13 @@ extension DependencyTreeGenerator {
 				worklist.append(property)
 			}
 		} while !worklist.isEmpty
-		// A public mock takes what the calls of other modules' public mocks in its tree pass and nothing else in its tree
-		// receives, as a parameter that defaults to `nil`, which it passes on.
-		if instantiable.generateMock == .public {
-			// A wrapper promoted for them stands for its instance too.
-			let surfacedByPublicMockCalls = passedByPublicMockCalls.subtracting(allReceived).subtracting(allReceived.compactMap(\.asLazilyInstantiatedInstanceProperty))
-			allReceived.formUnion(surfacedByPublicMockCalls)
-			allOnlyIfAvailable.formUnion(surfacedByPublicMockCalls)
-		}
+		// A mock takes what the calls of other modules' public mocks in its tree pass and nothing else in its tree receives,
+		// as a receive only if available, which it passes on: a public mock as a parameter that defaults to `nil`, and an
+		// internal one as an override that does, as it takes its own tree's receive only if available.
+		// A wrapper promoted for them stands for its instance too.
+		let surfacedByPublicMockCalls = passedByPublicMockCalls.subtracting(allReceived).subtracting(allReceived.compactMap(\.asLazilyInstantiatedInstanceProperty))
+		allReceived.formUnion(surfacedByPublicMockCalls)
+		allOnlyIfAvailable.formUnion(surfacedByPublicMockCalls)
 		allOnlyIfAvailable.subtract(allRequired)
 
 		// Promote all received properties that have scopes.
@@ -476,6 +475,19 @@ extension DependencyTreeGenerator {
 			return try mockRootGenerator(builders: builders, constructionMemo: &memoOfTreeWithHoles)
 		}
 		var generator = try mockRootGenerator(builders: nil, constructionMemo: &constructionMemo)
+		// An internal mock binds no override for a value only the calls of other modules' public mocks receive where a call
+		// reads it inside a `@Sendable` function (`ScopeGenerator.passedByPublicMockCallLabelsReadInsideSendableFunctions(of:)`,
+		// a deliberate gap): which calls read it there is decided by the tree the generator holds, so a tree with one is built
+		// again without binding the value, and its calls pass `nil`.
+		if !surfacedByPublicMockCalls.isEmpty {
+			let labelsReadInsideSendableFunctions = generator.passedByPublicMockCallLabelsReadInsideSendableFunctions(of: instantiable)
+			if !labelsReadInsideSendableFunctions.isEmpty {
+				for property in surfacedByPublicMockCalls where labelsReadInsideSendableFunctions.contains(property.label) {
+					allReceived.remove(property)
+				}
+				generator = try mockRootGenerator(builders: nil, constructionMemo: &constructionMemo)
+			}
+		}
 		if instantiable.generateMock == .public, allReceived.contains(where: \.propertyType.isLazilyInstantiated) {
 			// A public mock takes a value its tree receives lazily as the wrapper (`ScopeGenerator.publicMockWrapperParameters`),
 			// which a type of the tree that receives the value by value reads the instance of. Which values it takes so is

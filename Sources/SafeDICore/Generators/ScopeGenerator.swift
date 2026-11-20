@@ -2678,7 +2678,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// generation to surface dependencies the tree does not itself provide.
 	let receivedProperties: Set<Property>
 	/// The properties among `receivedProperties` that only leaves calling another module's public mock receive, each
-	/// only if available (see `Scope.publicMockCall`): a mock takes no parameter or override for them.
+	/// only if available (see `Scope.publicMockCall`): a mock takes a parameter or override only for those a call passes
+	/// (`receivedOnlyByPublicMockCallsLeftOut`).
 	let receivedOnlyByPublicMockCalls: Set<Property>
 	/// The properties among `receivedOnlyByPublicMockCalls` that some call passes, since the tier it reaches takes them.
 	let passedByPublicMockCalls: Set<Property>
@@ -4461,11 +4462,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// generator.
 	private let fillFieldSelection: FillFieldSelection?
 
-	/// For a fill, the labels among `labels` its tree reads inside a `@Sendable` function, or hands to a nested seam that
-	/// takes them `@Sendable`, where no declaration inside the tree hides them, as
+	/// For a fill or a mock root, the labels among `labels` its tree reads inside a `@Sendable` function, or hands to a
+	/// nested seam that takes them `@Sendable`, where no declaration inside the tree hides them, as
 	/// `DependencyTreeGenerator.receivers(in:of:instantiables:)` finds a seam's tree reading its parameters
-	/// (`ParameterReads`): the fill's bound fields stand where the seam's parameters do. The fill's own function is not one
-	/// of those functions: what it binds is a local of that function. A scope that closes a lazy cycle reads no label from
+	/// (`ParameterReads`): the fill's bound fields, or the mock root's overrides, stand where the seam's parameters do. The
+	/// fill's or mock's own function is not one of those functions: what it binds is a local of that function. A scope
+	/// that closes a lazy cycle reads no label from
 	/// above the function it closes on, which takes each label the closer passes as a parameter (`CycleParameter`), so a
 	/// closer adds no read here.
 	nonisolated func labelsReadInsideSendableFunction(among labels: Set<String>) -> Set<String> {
@@ -8010,6 +8012,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let flatReceivedParameterMockDefaults: [Property: FlatParameterMockDefault]
 		/// The received properties every receiver receives only if available and nothing in the mock provides.
 		let onlyIfAvailableReceivedProperties: [Property]
+		/// For an internal mock, those of `onlyIfAvailableReceivedProperties` that only the calls of other modules' public mocks
+		/// in its tree receive, whose overrides are named apart from the builders and the flat received parameters. Empty for a
+		/// public mock, which takes them as parameters that the others are named apart from.
+		let onlyIfAvailableReceivedPropertiesOnlyPublicMockCallsReceive: Set<Property>
 		/// The `@Instantiated` dependencies, of the mocked type and of the types in its tree, that no node builds, but those a
 		/// builder of `seamMockBuilders` builds.
 		let flatUncoveredParameters: [UncoveredParameter]
@@ -8257,13 +8263,42 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let onlyIfAvailableOverrides: [OnlyIfAvailableOverride]
 	}
 
+	/// Those of `onlyIfAvailableReceivedProperties` that are among `receivedOnlyByPublicMockCalls`, each matched by the value
+	/// it stands for, since a mock spells each as the most explicit of its receivers' spellings and takes a lazily received
+	/// one as its instance.
+	static func onlyIfAvailableReceivedProperties(_ onlyIfAvailableReceivedProperties: [Property], receivedOnlyBy receivedOnlyByPublicMockCalls: Set<Property>) -> Set<Property> {
+		let receivedOnlyByPublicMockCallsByValue = Set(receivedOnlyByPublicMockCalls.map(\.asValidatedForDependencyCycles.asUnwrappedProperty))
+		var properties = Set<Property>()
+		for property in onlyIfAvailableReceivedProperties where receivedOnlyByPublicMockCallsByValue.contains(property.asValidatedForDependencyCycles.asUnwrappedProperty) {
+			properties.insert(property)
+		}
+		return properties
+	}
+
 	/// The properties only the calls of other modules' public mocks in a mock's tree receive that the mock takes no
-	/// parameter or override for: every one of them, unless the mocked type's mock is public, which takes those a call
-	/// passes and leaves out only those every call omits.
-	static func receivedOnlyByPublicMockCallsLeftOut(receivedOnlyByPublicMockCalls: Set<Property>, passedByPublicMockCalls: Set<Property>, mockedType: Instantiable) -> Set<Property> {
-		mockedType.generateMock == .public
-			? receivedOnlyByPublicMockCalls.subtracting(passedByPublicMockCalls)
-			: receivedOnlyByPublicMockCalls
+	/// parameter or override for: those every call omits. A mock takes each a call passes, a public mock as a parameter
+	/// and an internal one as an override, but an internal mock leaves out one whose label `labelsReadInsideSendableFunctions`
+	/// holds.
+	static func receivedOnlyByPublicMockCallsLeftOut(receivedOnlyByPublicMockCalls: Set<Property>, passedByPublicMockCalls: Set<Property>, labelsReadInsideSendableFunctions: Set<String>) -> Set<Property> {
+		var leftOut = receivedOnlyByPublicMockCalls.subtracting(passedByPublicMockCalls)
+		for property in passedByPublicMockCalls where labelsReadInsideSendableFunctions.contains(property.label) {
+			leftOut.insert(property)
+		}
+		return leftOut
+	}
+
+	/// For an internal mock, the labels among `passedByPublicMockCalls` that a receiver in its tree reads inside a `@Sendable`
+	/// function (`labelsReadInsideSendableFunction(among:)`), such as a call of another module's public mock, where the
+	/// override a mock binds above it would be captured, which compiles only for a `Sendable` value: the mock takes no
+	/// override for such a value, and the calls pass `nil`, as production passes `nil` where nothing provides it. Empty for a
+	/// public mock, which takes each as a parameter.
+	///
+	/// A deliberate gap from the inline mock and the public mock, which take such a value, as an override or a parameter
+	/// that does not compile where the value is not `Sendable`. The other site of the gap is the mock root's walk in
+	/// `DependencyTreeGenerator.createMockRootScopeGenerator`.
+	nonisolated func passedByPublicMockCallLabelsReadInsideSendableFunctions(of instantiable: Instantiable) -> Set<String> {
+		guard instantiable.generateMock != .public, !passedByPublicMockCalls.isEmpty else { return [] }
+		return labelsReadInsideSendableFunction(among: Set(passedByPublicMockCalls.map(\.label)))
 	}
 
 	/// The names of the flat parameters of a mock root with `parameters`.
@@ -8283,7 +8318,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			+ parameters.rootDefaultParameters.map(\.label)
 		otherFlatLabels += uncoveredDependencyNames
 			+ parameters.seamMockBuilders.map(\.label)
-			+ parameters.onlyIfAvailableReceivedProperties.map(\.label)
+			+ parameters.onlyIfAvailableReceivedProperties.filter { !parameters.onlyIfAvailableReceivedPropertiesOnlyPublicMockCallsReceive.contains($0) }.map(\.label)
 		// Map of (label → (type → disambiguatedLabel)) for flat received
 		// parameters whose label collided with another flat parameter. Builder calls
 		// for child nodes that would reference the original label must substitute
@@ -8310,12 +8345,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			[]
 		} else {
 			Self.onlyIfAvailableOverrides(
-				for: parameters.onlyIfAvailableReceivedProperties,
-				namedAfter: parameters.lazilyInstantiatedPropertyByInstanceBesideForwardedProperty,
+				of: parameters,
 				namesInMockScope: Set(parameters.forwardedDependencies.map(\.property.label))
 					.union(parameters.rootDefaultParameters.map(\.label))
 					.union(uncoveredDependencyNames)
 					.union(treeBindingNames),
+				flatReceivedNames: flatReceivedNames,
 				reservedNames: Set(flatReceivedNames).union(namesDeclaredInBuilderFunctions),
 			)
 		}
@@ -8530,12 +8565,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// 1. Build the parameter tree.
 		let parameterTree = await rootMockParameterTree
 		// A public mock another module generated builds what its call does not pass, so `mock()` takes no parameter or
-		// override for what only such calls receive, unless it is itself a public mock, which takes what the calls pass
-		// as parameters that default to `nil`, so that its own callers can hand one instance down the chain.
+		// override for what every such call omits. It takes what the calls pass, as a receive only if available that
+		// defaults to `nil`: a public mock as a parameter, so that its own callers can hand one instance down the chain, and
+		// an internal mock as an override, as it takes its own tree's.
 		let receivedOnlyByPublicMockCallsLeftOut = Self.receivedOnlyByPublicMockCallsLeftOut(
 			receivedOnlyByPublicMockCalls: receivedOnlyByPublicMockCalls,
 			passedByPublicMockCalls: passedByPublicMockCalls,
-			mockedType: instantiable,
+			labelsReadInsideSendableFunctions: passedByPublicMockCallLabelsReadInsideSendableFunctions(of: instantiable),
 		)
 		// Each in the mocked type's own spelling where it receives the dependency, and otherwise in the most explicit of its
 		// receivers' spellings in the tree, which the flat parameters and the `onlyIfAvailable` overrides and parameters declare.
@@ -8815,6 +8851,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// its own tree passes one value per name. Inside a fill it takes a builder, as its twin does. The other site of the
 		// gap is `fillPlaces(insideSendableFunction:)`.
 		let fillPlaces = instantiable.generateMock != .public ? Self.fillPlaces(in: treePropertyNodes) : (places: [], declaredLabels: [])
+		// An internal mock's override of a receive only if available that only the calls of other modules' public mocks in its
+		// tree make is named apart from the builders and the flat received parameters, which keep their labels beside it
+		// (`mockRootParameterNames(of:)`), so that taking the override renames no parameter of `mock()`.
+		let onlyIfAvailableReceivedPropertiesOnlyPublicMockCallsReceive: Set<Property> = if instantiable.generateMock == .public || receivedOnlyByPublicMockCalls.isEmpty {
+			[]
+		} else {
+			Self.onlyIfAvailableReceivedProperties(onlyIfAvailableReceivedProperties, receivedOnlyBy: receivedOnlyByPublicMockCalls)
+		}
+		let onlyIfAvailableLabelsBuildersYieldTo = onlyIfAvailableReceivedProperties.lazy
+			.filter { !onlyIfAvailableReceivedPropertiesOnlyPublicMockCallsReceive.contains($0) }
+			.map(\.label)
 		let seamMockBuilders = instantiable.generateMock != .public
 			? Self.seamMockBuilders(
 				of: instantiable.generatesDependencyTree ? uncoveredParameters : [],
@@ -8826,7 +8873,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				),
 				otherParameterLabels: Set(forwardedDependencies.map(\.property.label))
 					.union(rootDefaultParameters.map(\.label))
-					.union(onlyIfAvailableReceivedProperties.map(\.label))
+					.union(onlyIfAvailableLabelsBuildersYieldTo)
 					.union(instantiable.generatesDependencyTree ? [] : uncoveredParameters.map(\.label))
 					.union([ReservedName.mockOverridesParameterName]),
 				flatReceivedProperties: flatReceivedProperties,
@@ -8852,6 +8899,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			flatReceivedProperties: flatReceivedProperties,
 			flatReceivedParameterMockDefaults: flatReceivedParameterMockDefaults,
 			onlyIfAvailableReceivedProperties: onlyIfAvailableReceivedProperties,
+			onlyIfAvailableReceivedPropertiesOnlyPublicMockCallsReceive: onlyIfAvailableReceivedPropertiesOnlyPublicMockCallsReceive,
 			flatUncoveredParameters: flatUncoveredParameters,
 			seamMockBuilders: seamMockBuilders,
 			lazilyInstantiatedReceivedProperties: lazilyInstantiatedReceivedProperties,
@@ -11459,6 +11507,49 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			nodesToVisit.append(contentsOf: node.propertyChildren)
 		}
 		return names
+	}
+
+	/// The overrides of the `onlyIfAvailableReceivedProperties` of a mock root with `parameters`, in their order, named by
+	/// `onlyIfAvailableOverrides(for:namedAfter:namesInMockScope:reservedNames:)`.
+	///
+	/// Those in `onlyIfAvailableReceivedPropertiesOnlyPublicMockCallsReceive` are named after the others, and apart from them,
+	/// from the builders and from `flatReceivedNames`, which keep the names they have without them: taking an override for
+	/// what only a call of another module's public mock receives renames nothing a caller of `mock()` spells.
+	private static func onlyIfAvailableOverrides(
+		of parameters: MockRootParameters,
+		namesInMockScope: Set<String>,
+		flatReceivedNames: [String],
+		reservedNames: Set<String>,
+	) -> [OnlyIfAvailableOverride] {
+		let onlyPublicMockCallsReceive = parameters.onlyIfAvailableReceivedPropertiesOnlyPublicMockCallsReceive
+		guard !onlyPublicMockCallsReceive.isEmpty else {
+			return onlyIfAvailableOverrides(
+				for: parameters.onlyIfAvailableReceivedProperties,
+				namedAfter: parameters.lazilyInstantiatedPropertyByInstanceBesideForwardedProperty,
+				namesInMockScope: namesInMockScope,
+				reservedNames: reservedNames,
+			)
+		}
+		let ownOverrides = onlyIfAvailableOverrides(
+			for: parameters.onlyIfAvailableReceivedProperties.filter { !onlyPublicMockCallsReceive.contains($0) },
+			namedAfter: parameters.lazilyInstantiatedPropertyByInstanceBesideForwardedProperty,
+			namesInMockScope: namesInMockScope,
+			reservedNames: reservedNames,
+		)
+		let overridesOnlyPublicMockCallsReceive = onlyIfAvailableOverrides(
+			for: parameters.onlyIfAvailableReceivedProperties.filter { onlyPublicMockCallsReceive.contains($0) },
+			namedAfter: parameters.lazilyInstantiatedPropertyByInstanceBesideForwardedProperty,
+			namesInMockScope: namesInMockScope
+				.union(parameters.seamMockBuilders.map(\.label))
+				.union(flatReceivedNames)
+				.union(ownOverrides.map(\.name)),
+			reservedNames: reservedNames,
+		)
+		var ownOverridesInOrder = ownOverrides.makeIterator()
+		var overridesOnlyPublicMockCallsReceiveInOrder = overridesOnlyPublicMockCallsReceive.makeIterator()
+		return parameters.onlyIfAvailableReceivedProperties.compactMap { property in
+			onlyPublicMockCallsReceive.contains(property) ? overridesOnlyPublicMockCallsReceiveInOrder.next() : ownOverridesInOrder.next()
+		}
 	}
 
 	/// The overrides of a mock root's `onlyIfAvailable` received properties, one per property, in the
