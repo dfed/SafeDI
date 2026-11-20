@@ -1,0 +1,32 @@
+name: RT1 spec v3 Apple-silicon check (scratch)
+
+# Scratch branch only; never merged and never opened as a pull request. ci.yml runs only on pull
+# requests and main, so this branch carries one job of its own instead of folding a step into
+# ci.yml's macOS jobs, which would start every CI job for this push.
+on:
+  push:
+    branches:
+    - claude/project-thread-34l0mf
+
+jobs:
+  rt1-v3:
+    name: RT1 spec v3 on Xcode 26
+    # macOS because the check is Apple's Swift 6.2 (Xcode 26.0) on Apple silicon; Linux 6.2 numbers
+    # are already in the spec.
+    runs-on: macos-26
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Select Xcode Version
+        run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
+      - name: Isolation probes
+        # Not measured on macOS yet; the same probes compile in under a minute on Linux.
+        timeout-minutes: 5
+        run: Scratch/rt1-v3/mac-check/iso.sh
+      - name: Runtime cells (chain, E24, E32, N1-40, N1-200; inline, cls, ccl)
+        # Not measured on macOS yet; the builds and interleaved runs took about 15 minutes on a
+        # 4-vCPU Linux runner, so about twice that.
+        timeout-minutes: 30
+        run: Scratch/rt1-v3/mac-check/run.sh
