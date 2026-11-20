@@ -3141,7 +3141,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			propertiesGeneratedLater: [],
 			declarationsByLabel: declarationsByLabel,
 			enclosingCycleFunctions: [:],
-			referenceLocation: instantiable.declarationLocation,
+			referenceLocation: { instantiable.declarationLocation },
 			isOwnFile: isOwnFile,
 		).judged()
 		guard case let .root(_, seamRoot?) = scopeData else { return omissions }
@@ -3163,7 +3163,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		propertiesGeneratedLater: Set<Property>,
 		declarationsByLabel: [String: [VisibleDeclaration]],
 		enclosingCycleFunctions: [BuiltDeclaration: ObjectIdentifier],
-		referenceLocation: Dependency.DeclarationLocation?,
+		referenceLocation: @escaping @Sendable () -> Dependency.DeclarationLocation?,
 		isOwnFile: @escaping @Sendable (String) -> Bool,
 	) async -> OmissionFindings<SeamTierOmission> {
 		let declaringType = instantiable.concreteInstantiable
@@ -3172,11 +3172,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			declarationLocationByProperty[dependency.property] = dependency.declarationLocation
 		}
 		// A child's construction is referred to by this type's dependency that builds it when this type is declared in
-		// one of the module's own files, and otherwise where this type's construction is.
-		let isDeclaredInOwnFile = instantiable.sourceFilePath.map(isOwnFile) ?? false
-		func childReferenceLocation(of property: Property?) -> Dependency.DeclarationLocation? {
-			guard isDeclaredInOwnFile, let property else { return referenceLocation }
-			return declarationLocationByProperty[property].flatMap(\.self) ?? referenceLocation
+		// one of the module's own files, and otherwise where this type's construction is. Found only for an omission:
+		// spelling the file of every type the walk passes cost a root that calls many seams more than the walk did.
+		func childReferenceLocation(of property: Property?) -> @Sendable () -> Dependency.DeclarationLocation? {
+			{ [declarationLocationByProperty] in
+				guard let property, instantiable.sourceFilePath.map(isOwnFile) ?? false else { return referenceLocation() }
+				return declarationLocationByProperty[property].flatMap(\.self) ?? referenceLocation()
+			}
 		}
 		func visibleDeclaration(of property: Property, instanceProperty: Property?) -> VisibleDeclaration {
 			VisibleDeclaration(
@@ -3227,7 +3229,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// A function a lazy cycle closes on and every type between it and a scope closing the cycle on it lie in one
 					// module, since each builds the next and the last builds the first: the module refers to the call where it
 					// refers to the function, whichever call of the function passes the value.
-					let referenceLocation = childReferenceLocation(of: child.generator.property)
+					let referenceLocation = childReferenceLocation(of: child.generator.property)()
 					findings.append(reading: unwrappedProperty, from: provider) { provider in
 						SeamTierOmission(
 							seam: childInstantiable,
