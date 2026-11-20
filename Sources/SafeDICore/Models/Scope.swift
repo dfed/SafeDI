@@ -206,21 +206,7 @@ final class Scope: Hashable {
 			.flatMap(\.receivableProperties),
 	)
 
-	/// The property this scope's type creates – instantiates, is forwarded, or declares by an alias – that a dependency
-	/// of the type reads for `property`, which it receives only if available: the first form of `property` (see
-	/// `Property.formsReadByOnlyIfAvailableReceive`) that a created property provides (see
-	/// `CycleParameter.forms(providedBy:)`). `nil` when the type creates none, and the dependency reads the nearest
-	/// declaration above the scope.
-	func createdBinding(of property: Property) -> Property? {
-		for form in property.formsReadByOnlyIfAvailableReceive {
-			if let binding = createdBindings[form] {
-				return binding
-			}
-		}
-		return nil
-	}
-
-	/// The created property that provides each form, for `createdBinding(of:)`. A type's labels are distinct, so no two
+	/// The created property that provides each form, for `ScopeRecord.createdBinding(of:)`. A type's labels are distinct, so no two
 	/// of its created properties provide one form.
 	private(set) lazy var createdBindings: [Property: Property] = {
 		var createdBindings = [Property: Property]()
