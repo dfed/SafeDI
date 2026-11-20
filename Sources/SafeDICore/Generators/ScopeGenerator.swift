@@ -5742,6 +5742,80 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
+	/// What `cycleParameterArguments(unavailableProperties:)` passes, each with the parameter it passes, for the type key.
+	nonisolated private func cycleParameterReads(unavailableProperties: Set<Property>) -> [PlaceRead] {
+		cycleParameters.map { parameter in
+			let label = parameter.property.label
+			let source: ArgumentSource = if unavailableProperties.contains(parameter.property) {
+				.nil
+			} else if let instanceSource = callSiteLazilyInstantiatedInstanceProperties.lazilyInstantiatedInstanceSource(of: parameter.property, boundAs: label) {
+				instanceSource
+			} else {
+				.binding(label: label)
+			}
+			return PlaceRead(argumentLabel: label, label: label, property: parameter.property, source: source)
+		}
+	}
+
+	/// What the construction of `instantiable` in this scope's builder function reads, for the type key, or `nil` where it is
+	/// constructed with anything but its initializer's arguments.
+	nonisolated private func constructionReads(of instantiable: Instantiable, unavailableProperties: Set<Property>) -> [PlaceRead]? {
+		guard publicMockCall == nil, !constructsWithHandWrittenMock, builderCallArguments.isEmpty, let initializer = instantiable.initializer else { return nil }
+		let arguments: [(argument: CallArgument, dependency: Dependency)]
+		do {
+			arguments = try initializer.createInitializerArguments(
+				given: instantiable.dependencies,
+				unavailableProperties: bodyUnavailableProperties(unavailableProperties),
+				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+			)
+		} catch {
+			// The path key's construction reports the error.
+			return nil
+		}
+		return arguments.map {
+			PlaceRead(argumentLabel: $0.argument.label, label: $0.dependency.property.label, property: $0.dependency.property, source: $0.argument.source)
+		}
+	}
+
+	/// The record of this scope's place where it closes a cycle on the function named `closedOnFunctionName`, or `nil` where
+	/// the type key does not plan it.
+	nonisolated private func closingRecord(
+		of property: Property,
+		instantiable: Instantiable,
+		forwardedProperties: [Property],
+		erasedToConcreteExistential: Bool,
+		closedOnFunctionName: String,
+		unavailableProperties: Set<Property>,
+		builderFunctionNames: BuilderFunctionNames,
+		fillPlaceBindings: FillPlaceBindings,
+	) -> PlaceRecord? {
+		guard isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings) else { return nil }
+		return .closer(ClosingPlaceRecord(
+			property: property,
+			isErased: erasedToConcreteExistential,
+			isExtension: instantiable.declarationType.isExtension,
+			closedOnFunctionName: closedOnFunctionName,
+			forwardedProperties: forwardedProperties,
+			cycleArguments: cycleParameterReads(unavailableProperties: unavailableProperties),
+		))
+	}
+
+	/// Whether this scope's place is written with nothing the type key does not plan: no payload, loop or fill binding, no
+	/// seam call, and no member call.
+	nonisolated private func isPlannedByTypeKey(builderFunctionNames: BuilderFunctionNames, fillPlaceBindings: FillPlaceBindings) -> Bool {
+		ProductionBodyKey.current == .type
+			&& valuesBindingLines.isEmpty
+			&& builderFunctionNames.loopValuesBindingLines == nil
+			&& builderFunctionNames.loopLevelsName == nil
+			&& builderFunctionNames.receivedFunctionName == nil
+			&& builderFunctionNames.loopMemberDeclarations.isEmpty
+			&& reboundProperties.isEmpty
+			&& memberCallLines.isEmpty
+			&& !isBuiltByFill
+			&& !fillReturnsWrapperBuilder
+			&& fillPlaceBindings.bindingsByGenerator[ObjectIdentifier(self), default: []].isEmpty
+	}
+
 	/// The properties of this scope's `onlyIfAvailableDependencies` that are unavailable because an
 	/// ancestor generates the properties fulfilling them after this scope.
 	nonisolated private func onlyIfAvailableDependencies(
@@ -6280,7 +6354,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// with `forwardedArguments`: the function itself when it takes no arguments and erases nothing, and otherwise a
 	/// closure that calls it. Empty for a scope that builds no instantiator, which no caller asks.
 	nonisolated private func instantiatorDeclaration(handing functionName: String, forwardedArguments: String) -> String {
-		guard case let .property(instantiable, property, _, _, _, _) = scopeData else { return "" }
+		guard case let .property(instantiable, property, _, erasedToConcreteExistential, _, _) = scopeData else { return "" }
+		return Self.instantiatorDeclaration(
+			of: property,
+			isExtension: instantiable.declarationType.isExtension,
+			isErased: erasedToConcreteExistential,
+			handing: functionName,
+			forwardedArguments: forwardedArguments,
+		)
+	}
+
+	/// The declaration of the instantiator `property`, which hands its wrapper the function named `functionName`, called
+	/// with `forwardedArguments`, of a type declared through an extension where `isExtension` is set, erased where
+	/// `isErased` is set.
+	static func instantiatorDeclaration(of property: Property, isExtension: Bool, isErased: Bool, handing functionName: String, forwardedArguments: String) -> String {
 		// A type constructed by annotation spells its generic arguments only in the declaration.
 		let unwrappedTypeDescription = property
 			.typeDescription
@@ -6288,14 +6375,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.spelledForConstruction
 		let propertyDeclaration = BindingDeclaration(
 			property: property,
-			rule: .instantiator(isExtension: instantiable.declarationType.isExtension, constructionSpellsPropertyType: property.typeDescription.asSource == unwrappedTypeDescription),
+			rule: .instantiator(isExtension: isExtension, constructionSpellsPropertyType: property.typeDescription.asSource == unwrappedTypeDescription),
 		)
-		return "\(propertyDeclaration.spelled) = \(instantiatorExpression(handing: functionName, forwardedArguments: forwardedArguments))"
+		return "\(propertyDeclaration.spelled) = \(instantiatorExpression(of: property, isErased: isErased, handing: functionName, forwardedArguments: forwardedArguments))"
 	}
 
-	/// The wrapper `instantiatorDeclaration(handing:forwardedArguments:)` declares.
-	nonisolated private func instantiatorExpression(handing functionName: String, forwardedArguments: String) -> String {
-		guard case let .property(_, property, _, erasedToConcreteExistential, _, _) = scopeData else { return "" }
+	/// The wrapper `instantiatorDeclaration(of:isExtension:isErased:handing:forwardedArguments:)` declares.
+	private static func instantiatorExpression(of property: Property, isErased erasedToConcreteExistential: Bool, handing functionName: String, forwardedArguments: String) -> String {
 		let unwrappedTypeDescription = property
 			.typeDescription
 			.unwrapped
@@ -6333,11 +6419,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// function. `nil` for any other scope.
 	nonisolated private func loopRebindingDeclaration(ofRenameOf fulfillingDeclaration: (property: Property, generator: ScopeGenerator, functionName: String)) -> String? {
 		guard case let .alias(property, _, _, _, _) = scopeData,
-		      case let .property(_, _, forwardedProperties, _, _, _) = fulfillingDeclaration.generator.scopeData
+		      case let .property(_, fulfillingProperty, forwardedProperties, fulfillingIsErased, _, _) = fulfillingDeclaration.generator.scopeData
 		else { return nil }
 		return Self.aliasDeclaration(
 			of: property,
-			fulfilledBy: fulfillingDeclaration.generator.instantiatorExpression(
+			fulfilledBy: Self.instantiatorExpression(
+				of: fulfillingProperty,
+				isErased: fulfillingIsErased,
 				handing: fulfillingDeclaration.functionName,
 				forwardedArguments: Self.forwardedArguments(of: forwardedProperties.sorted(), spreading: "$0").joined(separator: ", "),
 			),
@@ -6628,11 +6716,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				unavailableProperties: unavailableProperties,
 				builderFunctionNames: builderFunctionNames,
 			) {
+				let closedOnFunctionName = closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames)
 				return .place(PlacePlan(
 					kind: .closesCycle,
 					functionNames: [],
-					closedOnFunctionName: closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames),
+					closedOnFunctionName: closedOnFunctionName,
 					code: .text(closingCode),
+					record: closingRecord(
+						of: property,
+						instantiable: instantiable,
+						forwardedProperties: [],
+						erasedToConcreteExistential: erasedToConcreteExistential,
+						closedOnFunctionName: closedOnFunctionName,
+						unavailableProperties: unavailableProperties,
+						builderFunctionNames: builderFunctionNames,
+						fillPlaceBindings: fillPlaceBindings,
+					),
 				))
 			}
 			let childCode = try await generateProperties(
@@ -6686,7 +6785,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				declarationReference: declarationReference,
 				unavailableProperties: unavailableProperties,
 			)
-			return .place(PlacePlan(kind: .alias, functionNames: [], closedOnFunctionName: nil, code: .text(aliasCode)))
+			let record: PlaceRecord? = if fulfillingExpression == nil, ProductionBodyKey.current == .type {
+				.alias(AliasPlaceRecord(
+					property: property,
+					fulfillingProperty: Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: unavailableProperties) ? nil : fulfillingProperty,
+					text: aliasCode,
+				))
+			} else {
+				nil
+			}
+			return .place(PlacePlan(kind: .alias, functionNames: [], closedOnFunctionName: nil, code: .text(aliasCode), record: record))
 		}
 	}
 
@@ -6700,7 +6808,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The extension `rootInitializer` declares, writing `childCode`, the code of the root's children.
 	@inline(never)
 	private static func rootCode(of rootInitializer: RootInitializer, writing childCode: consuming [GeneratedCode]) -> GeneratedCode {
-		rootInitializer.spelled(writing: BuilderFunctionGraph(body: childCode.map(Statement.verbatim)))
+		let pathCode = rootInitializer.spelled(writing: BuilderFunctionGraph(body: childCode.map(Statement.verbatim)))
+		// The type key lays the body out again from the path key's plan, which the place oracle keeps reading.
+		guard ProductionBodyKey.current == .type, let statements = TypeKeyBody.statements(ofRootBody: childCode) else { return pathCode }
+		return .laidOut(
+			spelled: rootInitializer.spelled(writing: BuilderFunctionGraph(body: statements.map(Statement.verbatim))),
+			places: pathCode,
+		)
 	}
 
 	/// The declaration of the alias `property`, which `fulfillingProperty` fulfills.
@@ -6835,7 +6949,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// with `cycleArguments` the first time its instance is requested. The wrapper is always spelled with its generic
 	/// argument, so the declaration needs no type annotation: an optional property receives the wrapper through optional
 	/// promotion.
-	private static func lazilyInstantiatedInstantiation(
+	static func lazilyInstantiatedInstantiation(
 		of property: Property,
 		callingFunctionNamed functionName: String,
 		cycleArguments: String,
@@ -6919,6 +7033,30 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// takes for the place (`FillPlace`), once per build, before its children, which receive the place's value.
 		let fillPlaceBindingLines = fillPlaceBindings.bindingsByGenerator[ObjectIdentifier(self), default: []].map { GeneratedCode.text("\(Self.standardIndent)\($0.binding)") }
 		let memberCallCode = memberCallLines.map(GeneratedCode.text)
+		// What the type key reads of the place, where it plans it: a place built by its own construction, with nothing but
+		// its children in its function's body.
+		let isPlannedByTypeKey = seamCall == nil && isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings)
+		func builtRecord(functionName: String, isNonisolated: Bool, hasFunction: Bool) -> PlaceRecord? {
+			guard isPlannedByTypeKey, let arguments = constructionReads(of: instantiable, unavailableProperties: unavailableProperties) else { return nil }
+			return .built(BuiltPlaceRecord(
+				property: property,
+				isErased: erasedToConcreteExistential,
+				concreteType: instantiable.concreteInstantiable,
+				isExtension: instantiable.declarationType.isExtension,
+				target: constructionTarget,
+				arguments: arguments,
+				forwardedProperties: forwardedProperties.sorted(),
+				cycleParameters: cycleParameters.map(\.property),
+				callCycleArguments: cycleParameterReads(unavailableProperties: unavailableProperties),
+				functionName: functionName,
+				isSendable: buildsInSendableFunction,
+				isNonisolated: isNonisolated,
+				typesDeclaredEscaping: typesDeclaredEscaping,
+				lineEnd: constructionLineEnd,
+				hasFunction: hasFunction,
+				children: childCode,
+			))
+		}
 
 		let propertyType = property.propertyType
 		switch propertyType {
@@ -7069,7 +7207,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					)),
 				]))
 			}
-			return place(code: .sequence([.text(valuesBindingLines), functionDeclaration, .text(instantiatorDeclaration(handing: functionName, forwardedArguments: forwardedArguments))]))
+			let record: PlaceRecord? = if isPropertyCycle {
+				isPlannedByTypeKey ? closingRecord(
+					of: property,
+					instantiable: instantiable,
+					forwardedProperties: forwardedProperties,
+					erasedToConcreteExistential: erasedToConcreteExistential,
+					closedOnFunctionName: functionName,
+					unavailableProperties: unavailableProperties,
+					builderFunctionNames: builderFunctionNames,
+					fillPlaceBindings: fillPlaceBindings,
+				) : nil
+			} else {
+				builtRecord(functionName: functionName, isNonisolated: sendableFunctionsAreNonisolated, hasFunction: true)
+			}
+			return place(code: .sequence([.text(valuesBindingLines), functionDeclaration, .text(instantiatorDeclaration(handing: functionName, forwardedArguments: forwardedArguments))])).with(record: record)
 		case .lazilyInstantiated,
 		     .sendableLazilyInstantiated:
 			// The builder function is the one a constant with children declares. A constant calls it
@@ -7097,7 +7249,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				"\(BindingDeclaration(property: property, rule: .lazilyInstantiated).spelled) = \(Self.lazilyInstantiatedInstantiation(of: property, callingFunctionNamed: functionName, cycleArguments: cycleArguments, erasedToConcreteExistential: erasedToConcreteExistential))"
 			}
 
-			return PlacePlan(kind: .builtByFunction, functionNames: [functionName], closedOnFunctionName: nil, code: function.spelled(after: valuesBindingLines, followedBy: lastLine))
+			return PlacePlan(
+				kind: .builtByFunction,
+				functionNames: [functionName],
+				closedOnFunctionName: nil,
+				code: function.spelled(after: valuesBindingLines, followedBy: lastLine),
+				record: builtRecord(functionName: functionName, isNonisolated: sendableFunctionsAreNonisolated, hasFunction: true),
+			)
 		case .constant:
 			let callArguments = cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", ")
 			let generatedProperties = memberCallCode + seamGuardLines + fillPlaceBindingLines + childCode
@@ -7144,6 +7302,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				functionNames: hasGeneratedContent ? [functionName] : [],
 				closedOnFunctionName: nil,
 				code: .sequence([.text(valuesBindingLines), functionDeclaration, binding.spelled, .text("\n")]),
+				record: builtRecord(functionName: functionName, isNonisolated: sendableFunctionsAreNonisolated, hasFunction: hasGeneratedContent),
 			)
 		}
 	}

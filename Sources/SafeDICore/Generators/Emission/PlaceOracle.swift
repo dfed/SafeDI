@@ -57,6 +57,8 @@ extension GeneratedCode {
 					}
 				case let .indented(code, _):
 					work.append(.code(code))
+				case let .laidOut(_, places):
+					work.append(.code(places))
 				case let .place(plan):
 					work.append(.leavePlace(index: places.count, functionCount: plan.functionNames.count))
 					work.append(.code(plan.code))
