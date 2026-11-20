@@ -476,6 +476,120 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 		])
 	}
 
+	@Test(arguments: Caller.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_handsRequiredBuilderToFillingCall_whenAnotherCallPassesSameHoleTypeUp(caller: Caller) async throws {
+		// `F` holds `any Api` twice, beneath levels whose `log` differs, and `Live` reads `log` lazily, so a pass-up gate
+		// passes `F`'s places up whole and `Root`'s mock takes `apiBuilder` required. `H`'s one place is filled; its call
+		// takes the required builder, so no optional one is added, and an override of `H` is handed it too.
+		let feat = """
+		import SafeDI
+
+		public protocol Api {}
+
+		@Instantiable
+		public final class Log: Instantiable, Sendable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public final class A: Instantiable {
+		    init(api: any Api) {
+		        self.api = api
+		    }
+
+		    @Instantiated public let api: any Api
+		}
+
+		@Instantiable
+		public final class Z: Instantiable {
+		    init(log: Log) {
+		        self.log = log
+		    }
+
+		    @Received public let log: Log
+		}
+
+		@Instantiable
+		public final class B: Instantiable {
+		    init(log: LazilyInstantiated<Log>, a: A) {
+		        self.log = log
+		        self.a = a
+		    }
+
+		    @Instantiated public let log: LazilyInstantiated<Log>
+		    @Instantiated public let a: A
+		}
+
+		@Instantiable(generateMock: .public)
+		public final class F: Instantiable {
+		    public init(a: A, b: B, z: Z) {
+		        self.a = a
+		        self.b = b
+		        self.z = z
+		    }
+
+		    @Instantiated public let a: A
+		    @Instantiated public let b: B
+		    @Instantiated public let z: Z
+		}
+
+		@Instantiable(generateMock: .public)
+		public final class H: Instantiable {
+		    init(api: any Api) {
+		        self.api = api
+		    }
+
+		    @Instantiated public let api: any Api
+		}
+		"""
+		let app = """
+		import Feat
+		import SafeDI
+
+		@Instantiable(fulfillingAdditionalTypes: [Api.self])
+		public final class Live: Api, Instantiable {
+		    public init(log: LazilyInstantiated<Log>) {
+		        self.log = log
+		    }
+
+		    @Received public let log: LazilyInstantiated<Log>
+		}
+
+		public final class Fake: Api {
+		    public init() {}
+		}
+
+		\(caller.attribute)
+		public final class Root: Instantiable {
+		    public init(log: LazilyInstantiated<Log>, f: F, h: H) {
+		        self.log = log
+		        self.f = f
+		        self.h = h
+		    }
+
+		    @Instantiated public let log: LazilyInstantiated<Log>
+		    @Instantiated public let f: F
+		    @Instantiated public let h: H
+		}
+		"""
+		let modules = [
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": feat]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": app], dependencies: ["Feat"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+
+		#expect(Self.mockParameterLines(of: output) == [
+			"apiBuilder: @escaping () -> any Api,",
+			"safeDIOverrides: SafeDIOverrides = .init()",
+		])
+		try await expectValues(of: output, modules: modules, pairs: [
+			("Root.mock(apiBuilder: { App.Fake() }).h.api is App.Fake", "true"),
+			("Root.mock(apiBuilder: { App.Fake() }).f.a.api is App.Fake", "true"),
+			("Root.mock(apiBuilder: { App.Fake() }, safeDIOverrides: .init(h: { apiBuilder in H.mock(apiBuilder: apiBuilder) })).h.api is App.Fake", "true"),
+		])
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsWithCallersFills_whenThirdModuleCallsPublicCallingMockFromItsSafeDIFile() async throws {
