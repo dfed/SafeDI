@@ -103,7 +103,7 @@ extension Initializer {
 		lazilyInstantiatedInstanceProperties: Set<Property> = [],
 	) throws(GenerationError) -> String {
 		try createInitializerArguments(given: dependencies, unavailableProperties: unavailableProperties, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties)
-			.map { $0.argument.spelled }
+			.map(\.argument.spelled)
 			.joined(separator: ", ")
 	}
 
