@@ -1778,6 +1778,24 @@ extension SeamSignature: Codable {
 
 /// A seam's signature as the run of `generate` of the module that declares it computed it, which the module's module
 /// info file carries so that a module calling the seam reads the signature rather than computes it again.
+// A synthesized `Codable` conformance writes a set's elements, and a dictionary whose keys are not strings, in hash order,
+// which changes between runs. The conformances in this module call these overloads instead, so that `SafeDITool dump` prints
+// a seam signature the same on every run. Each writes what the synthesized conformance reads back.
+extension KeyedEncodingContainer {
+	mutating func encode(_ labels: Set<String>, forKey key: Key) throws {
+		try encode(labels.sorted(), forKey: key)
+	}
+
+	/// Writes the labels widest tier first, each tier followed by its label, as a dictionary writes its pairs.
+	mutating func encode(_ labelsByTier: [AccessLevel: String], forKey key: Key) throws {
+		var container = nestedUnkeyedContainer(forKey: key)
+		for (tier, label) in labelsByTier.sorted(by: { $0.key > $1.key }) {
+			try container.encode(tier)
+			try container.encode(label)
+		}
+	}
+}
+
 public struct StoredSeamSignature: Codable, Sendable {
 	public init(seamType: TypeDescription, signature: SeamSignature?) {
 		self.seamType = seamType

@@ -378,13 +378,29 @@ struct BinaryWriter {
 	/// A value written through ``writeShared(_:)``, hashed by its count and its first and last elements alone: hashing
 	/// every element of each of many long arrays costs what writing them did, while an array equal to one already
 	/// written shares its storage, which `==` compares first.
-	private struct SharedValueKey<Value: BidirectionalCollection & Equatable>: Hashable where Value.Element: Hashable {
+	private struct SharedValueKey<Value: BinaryCodable & BidirectionalCollection & Equatable>: Hashable where Value.Element: Hashable {
 		let value: Value
+
+		/// Whether the two values read back the same. A value's `==` can ignore what its bytes keep, as a type description's
+		/// does for `any`, so two values that `==` calls equal are compared by their bytes unless they share their storage.
+		static func == (lhs: Self, rhs: Self) -> Bool {
+			guard lhs.value == rhs.value else { return false }
+			let sharesStorage = lhs.value.withContiguousStorageIfAvailable { lhsElements in
+				rhs.value.withContiguousStorageIfAvailable { lhsElements.baseAddress == $0.baseAddress }
+			}
+			return sharesStorage == true || bytes(of: lhs.value) == bytes(of: rhs.value)
+		}
 
 		func hash(into hasher: inout Hasher) {
 			hasher.combine(value.count)
 			hasher.combine(value.first)
 			hasher.combine(value.last)
+		}
+
+		private static func bytes(of value: Value) -> [UInt8] {
+			var writer = BinaryWriter()
+			writer.write(value)
+			return writer.encoded
 		}
 	}
 
