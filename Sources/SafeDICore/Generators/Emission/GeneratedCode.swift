@@ -117,6 +117,8 @@ private struct GeneratedCodeWriter {
 
 	private var bytes = [UInt8]()
 	private var levels = [Level]()
+	/// The pieces a line's beginning still has to write, last first.
+	private var pending = [Piece]()
 
 	var text: String {
 		String(decoding: bytes, as: UTF8.self)
@@ -153,7 +155,7 @@ private struct GeneratedCodeWriter {
 					work.append(.code(plan.code))
 				}
 			case .lineFeed:
-				write(Self.lineFeed, atLevel: levels.count - 1)
+				write(.lineFeed(level: levels.count - 1))
 			case .endOfLevel:
 				levels.removeLast()
 			}
@@ -164,56 +166,86 @@ private struct GeneratedCodeWriter {
 		var text = text
 		text.withUTF8 { textBytes in
 			let level = levels.count - 1
-			for byte in textBytes {
-				// Nearly every byte continues a line every level has begun.
-				if byte != Self.lineFeed, level < 0 || levels[level].lineHasBegun {
-					bytes.append(byte)
-				} else {
-					write(byte, atLevel: level)
+			var start = 0
+			while start <= textBytes.count {
+				var end = start
+				while end < textBytes.count, textBytes[end] != Self.lineFeed {
+					end += 1
 				}
+				if end > start {
+					write(.bytes(UnsafeBufferPointer(rebasing: textBytes[start..<end]), level: level))
+				}
+				if end < textBytes.count {
+					write(.lineFeed(level: level))
+				}
+				start = end + 1
 			}
 		}
 	}
 
-	/// Writes `byte` as a byte of the text of the level at `level`, or of the plan's text where `level` is negative.
+	/// A run of bytes to write as part of the text of the level at `level`, or of the plan's text where `level` is negative.
+	private enum Piece {
+		/// Bytes that hold no line feed.
+		case bytes(UnsafeBufferPointer<UInt8>, level: Int)
+		/// The indentation of the level at `levelIndex`.
+		case indentation(ofLevelAt: Int, level: Int)
+		case lineFeed(level: Int)
+	}
+
+	/// Writes `piece`.
 	///
 	/// A level splits its text into lines at each line feed that does not follow a carriage return, since `"\r\n"` is one
 	/// `Character`, which `GeneratedCodeText.indentingNonEmptyLines(of:by:)` does not split at, and writes each line that is
 	/// not empty after its indentation, with a line feed before every line but its first, into the text of the level around
 	/// it. While a level's line has begun, so has the line of every level around it, which holds it, so the last byte of
 	/// each such level's text is the last byte written.
-	private mutating func write(_ byte: UInt8, atLevel level: Int) {
-		var level = level
-		var byte = byte
+	private mutating func write(_ piece: Piece) {
 		// A line that begins writes its line feed and indentation into the level around it, which can begin a line there
-		// too, so the levels are walked outward, each byte written at the level it belongs to.
-		var pending = [(byte: UInt8, level: Int)]()
-		while true {
-			if level < 0 {
-				bytes.append(byte)
-			} else if byte == Self.lineFeed, !(levels[level].lineHasBegun && bytes.last == Self.carriageReturn) {
-				// A line ends. An empty one is left out.
-				levels[level].lineHasBegun = false
-			} else if levels[level].lineHasBegun {
-				pending.append((byte, level - 1))
-			} else {
-				// The line begins: after a line feed where the level wrote a line before, and after the level's indentation, each
-				// written at the level around it, then the byte itself.
-				levels[level].lineHasBegun = true
-				var opening = [UInt8]()
-				if levels[level].hasWrittenALine {
-					opening.append(Self.lineFeed)
+		// too, so the levels are walked outward, each run written at the level it belongs to. The stack is the writer's, so
+		// a line's beginning allocates nothing.
+		pending.removeAll(keepingCapacity: true)
+		pending.append(piece)
+		while let piece = pending.popLast() {
+			switch piece {
+			case let .bytes(run, level):
+				if level < 0 {
+					bytes.append(contentsOf: run)
+				} else {
+					write(.bytes(run, level: level - 1), beginningLineAt: level)
 				}
-				levels[level].hasWrittenALine = true
-				opening += levels[level].indentation
-				opening.append(byte)
-				// Written in order: each byte of the opening goes to the level around, but the byte itself to that level too.
-				for openingByte in opening.reversed() {
-					pending.append((openingByte, level - 1))
+			case let .indentation(levelIndex, level):
+				if level < 0 {
+					bytes.append(contentsOf: levels[levelIndex].indentation)
+				} else {
+					write(.indentation(ofLevelAt: levelIndex, level: level - 1), beginningLineAt: level)
+				}
+			case let .lineFeed(level):
+				if level < 0 {
+					bytes.append(Self.lineFeed)
+				} else if levels[level].lineHasBegun, bytes.last == Self.carriageReturn {
+					// A line feed after a carriage return continues the line.
+					pending.append(.lineFeed(level: level - 1))
+				} else {
+					// A line ends. An empty one is left out.
+					levels[level].lineHasBegun = false
 				}
 			}
-			guard let next = pending.popLast() else { return }
-			(byte, level) = next
+		}
+	}
+
+	/// Writes `run`, a run of bytes of the level at `level` that holds no line feed and is not empty, as the run of the
+	/// level around it that it is, after the line feed and indentation that begin the level's line where it has not begun.
+	private mutating func write(_ run: Piece, beginningLineAt level: Int) {
+		let outer = level - 1
+		// Pushed last first, so they are written in order.
+		pending.append(run)
+		if !levels[level].lineHasBegun {
+			levels[level].lineHasBegun = true
+			pending.append(.indentation(ofLevelAt: level, level: outer))
+			if levels[level].hasWrittenALine {
+				pending.append(.lineFeed(level: outer))
+			}
+			levels[level].hasWrittenALine = true
 		}
 	}
 }
