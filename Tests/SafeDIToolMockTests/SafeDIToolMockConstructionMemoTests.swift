@@ -552,21 +552,21 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 			    struct SafeDIOverrides {
 			        init(
 			            token_LazilyInstantiated__Token: (() -> Token)? = nil,
-			            pinner: Pinner.SafeDIMockConfiguration = .init(),
 			            token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)? = nil,
+			            pinner: Pinner.SafeDIMockConfiguration = .init(),
 			            leaf: ((SendableLazilyInstantiated<Token>?) -> Leaf)? = nil
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
 			                token_LazilyInstantiated__Token: token_LazilyInstantiated__Token,
-			                pinner: pinner,
 			                token_SendableLazilyInstantiated__Token: token_SendableLazilyInstantiated__Token,
+			                pinner: pinner,
 			                leaf: leaf
 			            )
 			        }
 
 			        var token_LazilyInstantiated__Token: (() -> Token)? { __safeDI_storage.token_LazilyInstantiated__Token }
-			        var pinner: Pinner.SafeDIMockConfiguration { __safeDI_storage.pinner }
 			        var token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)? { __safeDI_storage.token_SendableLazilyInstantiated__Token }
+			        var pinner: Pinner.SafeDIMockConfiguration { __safeDI_storage.pinner }
 			        var leaf: ((SendableLazilyInstantiated<Token>?) -> Leaf)? { __safeDI_storage.leaf }
 
 			        private let __safeDI_storage: __safeDI_Storage
@@ -574,19 +574,19 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 			        private final class __safeDI_Storage {
 			            init(
 			                token_LazilyInstantiated__Token: (() -> Token)?,
-			                pinner: Pinner.SafeDIMockConfiguration,
 			                token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)?,
+			                pinner: Pinner.SafeDIMockConfiguration,
 			                leaf: ((SendableLazilyInstantiated<Token>?) -> Leaf)?
 			            ) {
 			                self.token_LazilyInstantiated__Token = token_LazilyInstantiated__Token
-			                self.pinner = pinner
 			                self.token_SendableLazilyInstantiated__Token = token_SendableLazilyInstantiated__Token
+			                self.pinner = pinner
 			                self.leaf = leaf
 			            }
 
 			            let token_LazilyInstantiated__Token: (() -> Token)?
-			            let pinner: Pinner.SafeDIMockConfiguration
 			            let token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)?
+			            let pinner: Pinner.SafeDIMockConfiguration
 			            let leaf: ((SendableLazilyInstantiated<Token>?) -> Leaf)?
 			        }
 			    }
@@ -598,6 +598,11 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 			            if let safeDIBuilder = safeDIOverrides.token_LazilyInstantiated__Token { safeDIBuilder() } else { Token() }
 			        }
 			        let token_LazilyInstantiated__Token = LazilyInstantiated<Token>(__safeDI_token_LazilyInstantiated__Token)
+			        let __safeDI_token_SendableLazilyInstantiated__Token__safeDIBuilder = safeDIOverrides.token_SendableLazilyInstantiated__Token
+			        @Sendable func __safeDI_token_SendableLazilyInstantiated__Token() -> Token {
+			            if let safeDIBuilder = __safeDI_token_SendableLazilyInstantiated__Token__safeDIBuilder { safeDIBuilder() } else { Token() }
+			        }
+			        let token_SendableLazilyInstantiated__Token = SendableLazilyInstantiated<Token>(__safeDI_token_SendableLazilyInstantiated__Token)
 			        func __safeDI_pinner() -> Pinner {
 			            let token: LazilyInstantiated<Token> = token_LazilyInstantiated__Token
 			            func __safeDI_source() -> Source {
@@ -609,11 +614,6 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 			            return if let safeDIBuilder = safeDIOverrides.pinner.safeDIBuilder { safeDIBuilder(token, source) } else { Pinner(token: token, source: source) }
 			        }
 			        let pinner: Pinner = __safeDI_pinner()
-			        let __safeDI_token_SendableLazilyInstantiated__Token__safeDIBuilder = safeDIOverrides.token_SendableLazilyInstantiated__Token
-			        @Sendable func __safeDI_token_SendableLazilyInstantiated__Token() -> Token {
-			            if let safeDIBuilder = __safeDI_token_SendableLazilyInstantiated__Token__safeDIBuilder { safeDIBuilder() } else { Token() }
-			        }
-			        let token_SendableLazilyInstantiated__Token = SendableLazilyInstantiated<Token>(__safeDI_token_SendableLazilyInstantiated__Token)
 			        func __safeDI_leaf() -> Leaf {
 			            let token: SendableLazilyInstantiated<Token>? = token_SendableLazilyInstantiated__Token
 			            return if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder(token) } else { Leaf(token: token) }
@@ -758,21 +758,21 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 			    struct SafeDIOverrides {
 			        init(
 			            token_LazilyInstantiated__Token: (() -> Token)? = nil,
-			            pinner: Pinner.SafeDIMockConfiguration = .init(),
 			            token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)? = nil,
+			            pinner: Pinner.SafeDIMockConfiguration = .init(),
 			            source: Source.SafeDIMockConfiguration = .init()
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
 			                token_LazilyInstantiated__Token: token_LazilyInstantiated__Token,
-			                pinner: pinner,
 			                token_SendableLazilyInstantiated__Token: token_SendableLazilyInstantiated__Token,
+			                pinner: pinner,
 			                source: source
 			            )
 			        }
 
 			        var token_LazilyInstantiated__Token: (() -> Token)? { __safeDI_storage.token_LazilyInstantiated__Token }
-			        var pinner: Pinner.SafeDIMockConfiguration { __safeDI_storage.pinner }
 			        var token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)? { __safeDI_storage.token_SendableLazilyInstantiated__Token }
+			        var pinner: Pinner.SafeDIMockConfiguration { __safeDI_storage.pinner }
 			        var source: Source.SafeDIMockConfiguration { __safeDI_storage.source }
 
 			        private let __safeDI_storage: __safeDI_Storage
@@ -780,19 +780,19 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 			        private final class __safeDI_Storage {
 			            init(
 			                token_LazilyInstantiated__Token: (() -> Token)?,
-			                pinner: Pinner.SafeDIMockConfiguration,
 			                token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)?,
+			                pinner: Pinner.SafeDIMockConfiguration,
 			                source: Source.SafeDIMockConfiguration
 			            ) {
 			                self.token_LazilyInstantiated__Token = token_LazilyInstantiated__Token
-			                self.pinner = pinner
 			                self.token_SendableLazilyInstantiated__Token = token_SendableLazilyInstantiated__Token
+			                self.pinner = pinner
 			                self.source = source
 			            }
 
 			            let token_LazilyInstantiated__Token: (() -> Token)?
-			            let pinner: Pinner.SafeDIMockConfiguration
 			            let token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)?
+			            let pinner: Pinner.SafeDIMockConfiguration
 			            let source: Source.SafeDIMockConfiguration
 			        }
 			    }
@@ -804,6 +804,11 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 			            if let safeDIBuilder = safeDIOverrides.token_LazilyInstantiated__Token { safeDIBuilder() } else { Token() }
 			        }
 			        let token_LazilyInstantiated__Token = LazilyInstantiated<Token>(__safeDI_token_LazilyInstantiated__Token)
+			        let __safeDI_token_SendableLazilyInstantiated__Token__safeDIBuilder = safeDIOverrides.token_SendableLazilyInstantiated__Token
+			        @Sendable func __safeDI_token_SendableLazilyInstantiated__Token() -> Token {
+			            if let safeDIBuilder = __safeDI_token_SendableLazilyInstantiated__Token__safeDIBuilder { safeDIBuilder() } else { Token() }
+			        }
+			        let token_SendableLazilyInstantiated__Token = SendableLazilyInstantiated<Token>(__safeDI_token_SendableLazilyInstantiated__Token)
 			        func __safeDI_pinner() -> Pinner {
 			            let token: LazilyInstantiated<Token> = token_LazilyInstantiated__Token
 			            func __safeDI_source() -> Source {
@@ -815,11 +820,6 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 			            return if let safeDIBuilder = safeDIOverrides.pinner.safeDIBuilder { safeDIBuilder(token, source) } else { Pinner(token: token, source: source) }
 			        }
 			        let pinner: Pinner = __safeDI_pinner()
-			        let __safeDI_token_SendableLazilyInstantiated__Token__safeDIBuilder = safeDIOverrides.token_SendableLazilyInstantiated__Token
-			        @Sendable func __safeDI_token_SendableLazilyInstantiated__Token() -> Token {
-			            if let safeDIBuilder = __safeDI_token_SendableLazilyInstantiated__Token__safeDIBuilder { safeDIBuilder() } else { Token() }
-			        }
-			        let token_SendableLazilyInstantiated__Token = SendableLazilyInstantiated<Token>(__safeDI_token_SendableLazilyInstantiated__Token)
 			        func __safeDI_source() -> Source {
 			            let token: LazilyInstantiated<Token> = token_LazilyInstantiated__Token
 			            func __safeDI_leaf() -> Leaf {
