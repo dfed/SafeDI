@@ -1828,9 +1828,10 @@ jobs:
       # this container (44630955284), whose medians summed to 19.4 seconds a
       # tool: 4.7 and 5.2 for the public mock and fill shapes, 2.4 to 2.5 for
       # the other E24 shapes, 1.3 for E32-inline, under 1 for the rest. The
-      # limit is more than twice that because a slower generator is what this
-      # step exists to report: with the head five times as slow on every
-      # shape, its six runs of each and the base's take 11.7 minutes.
+      # I800-seam shape takes about 13 seconds more (probe run 44359835414).
+      # The limit is more than twice that because a slower generator is what
+      # this step exists to report: with the head five times as slow on every
+      # shape, its six runs of each and the base's take about 13 minutes.
       - name: Compare Generate Time
         timeout-minutes: 15
         run: |
