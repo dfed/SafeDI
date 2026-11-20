@@ -1340,13 +1340,15 @@ extension DependencyTreeGenerator {
 	/// `typeDescriptionToScopeMap`, in which every call passes every builder up. A module fills a place where the same tree
 	/// built for production fills it: where a declaration it sees fulfills the place, as the mock's tree built inline would
 	/// build it (`fulfillingMockScope(of:in:)`: a hand-written mock or a `mockOnly` fake included), and the fill builds that
-	/// tree as the inline mock would, every construction in it one this module can reach, hand-written mock methods
-	/// included. What the fill receives beside the values the place's scope struct carries is received from the calling
-	/// mock's tree, as production's fill receives it from the caller's: a value the tree provides is handed to the fill, one
-	/// nothing provides is a parameter of `mock()`, and one the called mock's tree binds where the fill cannot read it is the
-	/// error production reports (`validateFills`). Every other place is passed up: the calling mock takes it, through a case
-	/// of its own enum or as a parameter its caller passes. A place a route reaches without a value its fill reads is filled
-	/// there with the caller's, as on every other route.
+	/// tree as the inline mock would, hand-written mock methods included. A construction in it this module cannot reach is
+	/// an access error, which the mock root whose tree reaches the call reports, in a build that compiles the generated
+	/// mocks: production's, but where the fill calls a hand-written mock method that production does not call; a build
+	/// that does not compile them passes such a place up. What the fill receives beside the values the place's scope
+	/// struct carries is received from the calling mock's tree, as production's fill receives it from the caller's: a
+	/// value the tree provides is handed to the fill, one nothing provides is a parameter of `mock()`, and one the called
+	/// mock's tree binds where the fill cannot read it is the error production reports (`validateFills`). Every other
+	/// place is passed up: the calling mock takes it, through a case of its own enum or as a parameter its caller passes.
+	/// A place a route reaches without a value its fill reads is filled there with the caller's, as on every other route.
 	///
 	/// A type a fill's tree instantiates that no declaration the module sees fulfills is a place of a public mock's own tree,
 	/// which is built with holes, and an internal mock's fill binds it from a builder `mock()` takes
@@ -1371,25 +1373,34 @@ extension DependencyTreeGenerator {
 		for calledType in publicMockCalls.keys.sorted() {
 			guard let publicMockCall = publicMockCalls[calledType] else { continue }
 			for hole in publicMockCall.holes {
-				// A deliberate gap, accepted for now: where the fill's tree constructs a type this module cannot reach, such as
-				// an `internal` type of another package, the calling mock passes the place up and is accepted, while its
-				// production twin reports that construction's access error (`rootScopesThisModuleGenerates(from:checkingSeamTrees:)`).
-				// The calling-mock mirror work in 2.3.1 has the calling mock report it too (`seam-and-mock-contract.md`, rule 7).
-				guard let fulfillingScope = Self.fulfillingMockScope(of: hole, in: typeDescriptionToScopeMap),
-				      Self.inaccessibleConstructions(
-				      	Self.constructions(
-				      		inTreeRootedAt: fulfillingScope,
-				      		rootIsConstructedWithMockMethod: fulfillingScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: hole.property.typeDescription.asInstantiatedType),
-				      		rootReferenceLocation: nil,
-				      		isMock: true,
-				      		emittingModule: emittingModule,
-				      		extendedTypes: extendedTypeDeclarations,
-				      		leavingOut: Set(publicMockCalls.keys),
-				      	),
-				      	from: emittingModule,
-				      	extendedTypes: extendedTypeDeclarations,
-				      ).isEmpty
-				else { continue }
+				guard let fulfillingScope = Self.fulfillingMockScope(of: hole, in: typeDescriptionToScopeMap) else { continue }
+				// A fill whose tree constructs a type this module cannot reach, such as an `internal` type of another module, is
+				// filled, as its production twin fills it, and the mock root whose tree reaches the call reports the access error
+				// of each construction the fill makes (`createMockRootScopeGenerator`, which walks the fills of the calls in its
+				// tree): the twin's, but for a hand-written mock method the fill calls where the twin calls the initializer
+				// (`constructions(inTreeRootedAt:…)`). The generated mocks are under the module's mock condition, so a build that
+				// leaves it inactive, which never compiles the fill, passes the place up and reports nothing, as
+				// `validateFillsInstantiateOnlyWhatCanBeFulfilled` is checked only where the mocks compile. An `if` rather than
+				// `||`, whose autoclosure Swift 6.2 rejects for capturing the scope ("sending 'fulfillingScope' risks causing data
+				// races").
+				let isFilled = if compilesGeneratedMocks {
+					true
+				} else {
+					Self.inaccessibleConstructions(
+						Self.constructions(
+							inTreeRootedAt: fulfillingScope,
+							rootIsConstructedWithMockMethod: fulfillingScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: hole.property.typeDescription.asInstantiatedType),
+							rootReferenceLocation: nil,
+							isMock: true,
+							emittingModule: emittingModule,
+							extendedTypes: extendedTypeDeclarations,
+							leavingOut: Set(publicMockCalls.keys),
+						),
+						from: emittingModule,
+						extendedTypes: extendedTypeDeclarations,
+					).isEmpty
+				}
+				guard isFilled else { continue }
 				let typesNoDeclarationCanFulfill = Self.typesThatCannotBeHoles(inTreeRootedAt: fulfillingScope)
 				guard typesNoDeclarationCanFulfill.isEmpty else {
 					typesNoDeclarationCanFulfillByCalledType[calledType, default: []].formUnion(typesNoDeclarationCanFulfill)
