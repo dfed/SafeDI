@@ -806,7 +806,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		// a place is handed only what that function binds.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultWidget.swift"]):9:5: error: `DefaultWidget` receives `part: Part`, which `Shell` declares outside the `@Sendable` function that builds `panelBuilder: SendableInstantiator<Panel>`, and the values struct SafeDI hands the builder for `Panel`’s `widget: any Widget` (`widget` of `widgetSendableBuilder`) carries only what that function binds. Instantiate `part` outside `Host` and declare `@Received let part: Part` on `Host`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Widget` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultWidget.swift"]):9:5: error: `DefaultWidget` receives `part: Part`, which `Shell` declares outside the `@Sendable` function that builds `panelBuilder: SendableInstantiator<Panel>`, and the values struct SafeDI hands the builder for `Panel`’s `widget: any Widget` (`widget` of `widgetSendableBuilder`) carries only what that function binds. Declare an @Instantiable type that fulfills `Widget` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Shell.swift"]):8:5: note: `Shell` declares `part: Part` here.
 			"""
 		}) {
@@ -1244,7 +1244,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		// `C`'s `mark` inline, which `C` declares outside the `@Sendable` function that builds that `T`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `mark: Mark?`, which `C` declares outside the `@Sendable` function that builds `tBuilder: SendableInstantiator<T>`, and the values struct SafeDI hands the builder for `T`’s `api: any Api` (`api` of `apiSendableBuilder`) carries only what that function binds. Instantiate `mark` outside `Hub` and declare `@Received let mark: Mark` on `Hub`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["LiveApi.swift"]):9:5: error: `LiveApi` receives `mark: Mark?`, which `C` declares outside the `@Sendable` function that builds `tBuilder: SendableInstantiator<T>`, and the values struct SafeDI hands the builder for `T`’s `api: any Api` (`api` of `apiSendableBuilder`) carries only what that function binds. Declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["C.swift"]):8:5: note: `C` declares `mark: Mark` here.
 			"""
 		}) {
@@ -1468,7 +1468,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		// `Host` receives it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultWidget.swift"]):11:5: error: `DefaultWidget` receives `part: Part`, which `Shell` declares outside the `@Sendable` function that builds `widgetBuilder: SendableErasedInstantiator<Int, any Widget>`, and the values struct SafeDI hands the builder for `Shell`’s `widgetBuilder: SendableErasedInstantiator<Int, any Widget>` (`widgetBuilder` of `defaultWidget_WidgetSendableBuilder`) carries only what that function binds. Instantiate `part` outside `Host` and declare `@Received let part: Part` on `Host`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `DefaultWidget` in module `Feature` or a module it lists among its SafeDI dependencies.
+			\(fixtures["App"]!["DefaultWidget.swift"]):11:5: error: `DefaultWidget` receives `part: Part`, which `Shell` declares outside the `@Sendable` function that builds `widgetBuilder: SendableErasedInstantiator<Int, any Widget>`, and the values struct SafeDI hands the builder for `Shell`’s `widgetBuilder: SendableErasedInstantiator<Int, any Widget>` (`widgetBuilder` of `defaultWidget_WidgetSendableBuilder`) carries only what that function binds. Declare an @Instantiable type that fulfills `DefaultWidget` in module `Feature` or a module it lists among its SafeDI dependencies.
 			\(fixtures["Feature"]!["Shell.swift"]):8:5: note: `Shell` declares `part: Part` here.
 			"""
 		}) {
