@@ -174,7 +174,7 @@ enum BinaryFile {
 	/// because describing the schema reflects on every member's type, and reflection scans the runtime's
 	/// protocol conformance tables: computing it took most of a small module's `generate`. A test computes it
 	/// and fails, giving the new value, when a stored type's layout changes.
-	static let schemaFingerprint: UInt64 = 0x4DE74C577CA38A91
+	static let schemaFingerprint: UInt64 = 0x50F89214E07A17A9
 
 	/// The format version and every schema member's layout, one member per line: the name and type of each
 	/// field a struct writes, and the name and payload types of each case an enum writes, in the order written.
@@ -341,6 +341,8 @@ public struct BinaryFileReadError: Error, Equatable, CustomStringConvertible {
 			"The \(name)’s body records a count of \(count) at byte \(offset), more than the bytes that remain."
 		case let .malformedBody(.stringIndexOutOfRange(index, offset)):
 			"The \(name)’s body refers to string \(index) at byte \(offset), which its string table does not hold."
+		case let .malformedBody(.sharedValueReferenceOutOfRange(reference, offset)):
+			"The \(name)’s body refers to shared value \(reference) at byte \(offset), which no value before it holds."
 		case let .malformedBody(.invalidTag(tag, tagType, offset)):
 			"The \(name)’s body holds \(tag) at byte \(offset), which is not a tag of \(tagType)."
 		case let .malformedBody(.nestedTooDeeply(offset)):

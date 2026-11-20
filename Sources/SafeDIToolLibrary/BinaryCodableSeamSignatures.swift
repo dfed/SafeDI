@@ -319,7 +319,8 @@ extension SeamSignature.Hole.UncarriedDeclaration: BinarySchemaMember {
 				BinaryLayoutField("isBoundFromCallersArgument", \.isBoundFromCallersArgument),
 				BinaryLayoutField("isBuildableAboveSeam", \.isBuildableAboveSeam),
 				BinaryLayoutField("labelsHeldAboveSeam", \.labelsHeldAboveSeam),
-				BinaryLayoutField("placesInTree", \.placesInTree),
+				// Every declaration beside one tree lists the same places, as many as the tree's paths.
+				BinaryLayoutField("placesInTree", \.sharedPlacesInTree),
 				BinaryLayoutField("holdsPlaceFilledElsewhere", \.holdsPlaceFilledElsewhere),
 			],
 			unwrittenProperties: [],
@@ -337,7 +338,7 @@ extension SeamSignature.Hole.UncarriedDeclaration: BinarySchemaMember {
 			isBoundFromCallersArgument: reader.read(),
 			isBuildableAboveSeam: reader.read(),
 			labelsHeldAboveSeam: reader.read(),
-			placesInTree: reader.read(),
+			placesInTree: (reader.read() as BinaryShared<[SeamSignature.Hole.Site]>).value,
 			holdsPlaceFilledElsewhere: reader.read(),
 		)
 	}
@@ -352,8 +353,12 @@ extension SeamSignature.Hole.UncarriedDeclaration: BinarySchemaMember {
 		writer.write(isBoundFromCallersArgument)
 		writer.write(isBuildableAboveSeam)
 		writer.write(labelsHeldAboveSeam)
-		writer.write(placesInTree)
+		writer.write(sharedPlacesInTree)
 		writer.write(holdsPlaceFilledElsewhere)
+	}
+
+	private var sharedPlacesInTree: BinaryShared<[SeamSignature.Hole.Site]> {
+		BinaryShared(placesInTree)
 	}
 }
 

@@ -67,6 +67,45 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func binaryWriter_writesSharedValueOnce_whenValueRepeats() throws {
+		var writer = BinaryWriter()
+		writer.write([BinaryShared(["a", "b"]), BinaryShared(["c"]), BinaryShared(["a", "b"])])
+		let encoded = writer.encoded
+
+		let values = try encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let values: [BinaryShared<[String]>] = try reader.read()
+			try reader.finish()
+			return values
+		}
+
+		// The string table (three strings), then three elements: the first two written in full, the third a reference
+		// to the first.
+		#expect(encoded == [3, 1, 97, 1, 98, 1, 99] + [3, 0, 2, 0, 1, 0, 1, 2, 1])
+		#expect(values.map(\.value) == [["a", "b"], ["c"], ["a", "b"]])
+	}
+
+	@Test
+	func binaryReader_throws_whenSharedValueReferenceComesBeforeTheValue() {
+		// An empty string table, then a reference to the first shared value, which no value before it holds.
+		let bytes: [UInt8] = [0, 1]
+
+		#expect(throws: BinaryDecodingError.sharedValueReferenceOutOfRange(reference: 1, offset: 1)) {
+			try bytes.withUnsafeBytes { bytes in
+				var reader = try BinaryReader(bytes: bytes)
+				let _: BinaryShared<[String]> = try reader.read()
+			}
+		}
+	}
+
+	@Test
+	func binaryFileReadError_explains_whenBodyRefersToSharedValueNotYetRead() {
+		let error = BinaryFileReadError(kind: .moduleInfo, reason: .malformedBody(.sharedValueReferenceOutOfRange(reference: 3, offset: 12)))
+
+		#expect(error.description == "The module info file’s body refers to shared value 3 at byte 12, which no value before it holds.")
+	}
+
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_writesEachSpellingOfLabel_whenLabelsAreCanonicallyEquivalentAndGenerateReadsScanCache() async throws {
 		let output = try await executeSafeDIToolTest(
@@ -1365,6 +1404,12 @@ extension Bool: BinarySample {
 extension Optional: BinarySample where Wrapped: BinarySample {
 	fileprivate static func sample(isDistinct: Bool) throws -> Wrapped? {
 		isDistinct ? try Wrapped.sample(isDistinct: false) : nil
+	}
+}
+
+extension BinaryShared: BinarySample where Value: BinarySample {
+	fileprivate static func sample(isDistinct: Bool) throws -> BinaryShared<Value> {
+		try BinaryShared(Value.sample(isDistinct: isDistinct))
 	}
 }
 
