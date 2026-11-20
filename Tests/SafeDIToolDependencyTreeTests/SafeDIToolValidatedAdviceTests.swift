@@ -187,11 +187,12 @@ struct SafeDIToolValidatedAdviceTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_suggestsReceivingOnlyIfAvailable_whenSuggestedRequiredReceiveClosesCycleInMock() async {
 		// Received as required, `t0: T1?` is still being built when `T1`’s mock builds `T1`, and so is `t0: T1` declared on
-		// `Root`. Only a receive only if available passes every check, and it takes two edits, so no fix-it.
+		// `Root`. Only a receive only if available passes every check. It edits the attribute and the type, which one fix-it
+		// cannot span without rewriting what lies between them, so there is no fix-it.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["T1.swift"]):7:5: error: @Received property `t0: T1` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<T2> -> T1. Did you mean `t0: T1?`, received with `onlyIfAvailable: true`? Received as required, it is still being built when the mock of `T1` builds `T1`.
+				\(fixtures["T1.swift"]):7:5: error: @Received property `t0: T1` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<T2> -> T1. Did you mean `@Received(onlyIfAvailable: true) let t0: T1?`? Received as required, `t0: T1?` is still being built when the mock of `T1` builds `T1`.
 				"""
 			},
 		) {
@@ -291,7 +292,7 @@ struct SafeDIToolValidatedAdviceTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["T1.swift"]):7:5: error: @Received property `t2Builder: Instantiator<T2>` is not @Instantiated or @Forwarded in chain: Root -> T1. `t1Builder: SendableInstantiator<T1>` on `Root` builds `T1` in a `@Sendable` function, which cannot capture an `Instantiator<T2>` declared outside it. Declare `@Instantiated let t2Builder: Instantiator<T2>` on `T1`, or declare `@Instantiated let t2Builder: SendableInstantiator<T2>` on `Root` and receive this property as `SendableInstantiator<T2>`, to fix.
+				\(fixtures["T1.swift"]):7:5: error: @Received property `t2Builder: Instantiator<T2>` is not @Instantiated or @Forwarded in chain: Root -> T1. `t1Builder: SendableInstantiator<T1>` on `Root` builds `T1` in a `@Sendable` function, which cannot capture an `Instantiator<T2>` declared outside it. Declare `@Instantiated let t2Builder: SendableInstantiator<T2>` on `Root` and receive this property as `SendableInstantiator<T2>`, or declare `@Instantiated let t2Builder: Instantiator<T2>` on `T1`, to fix.
 				"""
 			},
 		) {
@@ -306,7 +307,7 @@ struct SafeDIToolValidatedAdviceTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_generatesTree_whenTypeInsideSendableFunctionDeclaresAdvisedProperty() async throws {
-		// The first repair above, applied as written.
+		// The second repair above, applied as written.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: Self.sendableBoundaryFiles(boundary: "t1Builder: SendableInstantiator<T1>", receiver: "T1", receiverAttribute: "@Instantiated"),
 			buildSwiftOutputDirectory: true,
@@ -337,7 +338,7 @@ struct SafeDIToolValidatedAdviceTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_generatesTree_whenRootDeclaresAdvisedSendableFormAndReceiverReceivesIt() async throws {
-		// The second repair above, applied as written.
+		// The first repair above, applied as written.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: Self.sendableBoundaryFiles(boundary: "t1Builder: SendableInstantiator<T1>", receiver: "T1", rootDeclaresSendableT2Builder: true),
 			buildSwiftOutputDirectory: true,
@@ -371,7 +372,7 @@ struct SafeDIToolValidatedAdviceTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["T3.swift"]):7:5: error: @Received property `t2Builder: Instantiator<T2>` is not @Instantiated or @Forwarded in chain: Root -> SendableInstantiator<T1> -> T3. `t1Builder: SendableInstantiator<T1>` on `Root` builds `T1` in a `@Sendable` function, which cannot capture an `Instantiator<T2>` declared outside it. Declare `@Instantiated let t2Builder: Instantiator<T2>` on `T1` or on `T3`, or declare `@Instantiated let t2Builder: SendableInstantiator<T2>` on `Root` and receive this property as `SendableInstantiator<T2>`, to fix.
+				\(fixtures["T3.swift"]):7:5: error: @Received property `t2Builder: Instantiator<T2>` is not @Instantiated or @Forwarded in chain: Root -> SendableInstantiator<T1> -> T3. `t1Builder: SendableInstantiator<T1>` on `Root` builds `T1` in a `@Sendable` function, which cannot capture an `Instantiator<T2>` declared outside it. Declare `@Instantiated let t2Builder: SendableInstantiator<T2>` on `Root` and receive this property as `SendableInstantiator<T2>`, or declare `@Instantiated let t2Builder: Instantiator<T2>` on `T1` or on `T3`, to fix.
 				"""
 			},
 		) {
@@ -389,12 +390,32 @@ struct SafeDIToolValidatedAdviceTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["T1.swift"]):7:5: error: @Received property `t2Builder: Instantiator<T2>` is not @Instantiated or @Forwarded in chain: Root -> T1. `t1: SendableLazilyInstantiated<T1>` on `Root` builds `T1` in a `@Sendable` function, which cannot capture an `Instantiator<T2>` declared outside it. Declare `@Instantiated let t2Builder: Instantiator<T2>` on `T1`, or declare `@Instantiated let t2Builder: SendableInstantiator<T2>` on `Root` and receive this property as `SendableInstantiator<T2>`, to fix.
+				\(fixtures["T1.swift"]):7:5: error: @Received property `t2Builder: Instantiator<T2>` is not @Instantiated or @Forwarded in chain: Root -> T1. `t1: SendableLazilyInstantiated<T1>` on `Root` builds `T1` in a `@Sendable` function, which cannot capture an `Instantiator<T2>` declared outside it. Declare `@Instantiated let t2Builder: SendableInstantiator<T2>` on `Root` and receive this property as `SendableInstantiator<T2>`, or declare `@Instantiated let t2Builder: Instantiator<T2>` on `T1`, to fix.
 				"""
 			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: Self.sendableBoundaryFiles(boundary: "t1: SendableLazilyInstantiated<T1>", receiver: "T1"),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_advisesOnlyDeclarationInsideSendableFunction_whenAdvisedTypesTreeReceivesInstantiatorFromInsideIt() async {
+		// `T2` receives `t4Builder: Instantiator<T4>`, which `T1` declares: built in a `@Sendable` function on `Root`, `T2`
+		// could reach no such declaration it may capture, so only the declaration inside the function is advised.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["T1.swift"]):8:5: error: @Received property `t2Builder: Instantiator<T2>` is not @Instantiated or @Forwarded in chain: Root -> T1. `t1Builder: SendableInstantiator<T1>` on `Root` builds `T1` in a `@Sendable` function, which cannot capture an `Instantiator<T2>` declared outside it. Declare `@Instantiated let t2Builder: Instantiator<T2>` on `T1` to fix.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.sendableBoundaryFiles(boundary: "t1Builder: SendableInstantiator<T1>", receiver: "T1", t2ReceivesT4BuilderFromT1: true),
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
@@ -424,13 +445,13 @@ struct SafeDIToolValidatedAdviceTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_advisesReceivingRequirerOnlyIfAvailable_whenAdvisedDeclarationsTreeRequiresItsReceiver() async {
-		// `T0`, which `t0Builder` builds, requires `t2`, which requires `t0Builder`, so the declaration alone would close a
-		// cycle. The advice adds the receive only if available that breaks it.
+	mutating func run_statesDeclarationClosesCycle_whenAdvisedDeclarationsTreeRequiresItsReceiver() async {
+		// `T0`, which `t0Builder` builds, requires `t2`, which requires `t0Builder`, so the declaration would close a cycle
+		// on `Root` and on `T2` alike. The error states that, with the cycle error’s two remedies, and has no fix-it.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["T2.swift"]):7:5: error: @Received property `t0Builder: Instantiator<T0>` is not @Instantiated or @Forwarded in chain: Root -> T2. Declare `@Instantiated let t0Builder: Instantiator<T0>` on `Root` or on another type in the chain, and receive `t2` on `T0` as `@Received(onlyIfAvailable: true) let t2: T2?`, to fix: `T0` receives `t2: T2`, which receives `t0Builder`.
+				\(fixtures["T2.swift"]):7:5: error: @Received property `t0Builder: Instantiator<T0>` is not @Instantiated or @Forwarded in chain: Root -> T2. Declaring `@Instantiated let t0Builder: Instantiator<T0>` would close a dependency cycle wherever it is declared, because the tree of `T0` receives `t2: T2`, which requires `t0Builder`. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -444,10 +465,10 @@ struct SafeDIToolValidatedAdviceTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_generatesTree_whenRootDeclaresAdvisedPropertyAndRequirerReceivesOnlyIfAvailable() async throws {
-		// The advice above, applied as written.
+	mutating func run_generatesTree_whenRequirerNoLongerReceivesAdvisedProperty() async throws {
+		// The first remedy above, applied as written.
 		let output = try await executeSafeDIToolTest(
-			swiftFileContent: Self.coordinatorFiles(rootDeclaresT0Builder: true, t0Receive: "@Received(onlyIfAvailable: true) let t2: T2?"),
+			swiftFileContent: Self.coordinatorFiles(t2Receive: nil, t0Receive: "@Received let t2: T2"),
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 		)
@@ -459,12 +480,32 @@ struct SafeDIToolValidatedAdviceTests: ~Copyable {
 
 		extension Root {
 		    public init() {
-		        func __safeDI_t0Builder() -> T0 {
-		            T0(t2: nil)
-		        }
-		        let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
-		        let t2 = T2(t0Builder: t0Builder)
-		        self.init(t2: t2, t0Builder: t0Builder)
+		        let t2 = T2()
+		        self.init(t2: t2)
+		    }
+		}
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_generatesTree_whenRequirerReceivesAdvisedPropertyOnlyIfAvailable() async throws {
+		// The second remedy above, applied as written.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.coordinatorFiles(t2Receive: "@Received(onlyIfAvailable: true) let t0Builder: Instantiator<T0>?", t0Receive: "@Received let t2: T2"),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		extension Root {
+		    public init() {
+		        let t2 = T2(t0Builder: nil)
+		        self.init(t2: t2)
 		    }
 		}
 		"""])
@@ -493,13 +534,13 @@ struct SafeDIToolValidatedAdviceTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_advisesFormCallerProvides_whenSeamsOwnOptionalWrapperIsBesideRequiredValueAndCallerHoldsValue() async {
-		// `Root` holds `user: User`, so the wrapper the error advises today would be unfulfilled; the value is what the
-		// caller provides.
+	mutating func generate_advisesFormTreeRequires_whenSeamsOwnOptionalWrapperIsBesideRequiredValueAndCallerHoldsValue() async {
+		// `Root` holds `user: User`, so the wrapper the error advises today would be unfulfilled. `Child` requires the value,
+		// so the advice names the form the seam’s tree requires.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Seam.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `user` as `user: LazilyInstantiated<User>?` on `Seam` and `user: User` on `Child`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `user` the same way in every type of the tree, or declare it on `Seam` as the form its callers provide: `@Received let user: User`.
+				\(fixtures["Seam.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `user` as `user: LazilyInstantiated<User>?` on `Seam` and `user: User` on `Child`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `user` the same way in every type of the tree, or declare it on `Seam` as the form its tree requires: `@Received let user: User`.
 				\(fixtures["Seam.swift"]):8:5: note: `Seam` receives `user: LazilyInstantiated<User>?` here.
 				\(fixtures["Child.swift"]):7:5: note: `Child` receives `user: User` here.
 				"""
@@ -515,7 +556,7 @@ struct SafeDIToolValidatedAdviceTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_generatesSeam_whenSeamReceivesFormCallerProvides() async throws {
+	mutating func generate_generatesSeam_whenSeamReceivesFormTreeRequires() async throws {
 		// The advice above, applied as written.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: Self.seamFormsFiles(rootDeclaration: "@Instantiated let user: User", seamDeclaration: "@Received let user: User"),
@@ -586,8 +627,8 @@ struct SafeDIToolValidatedAdviceTests: ~Copyable {
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_advisesValue_whenSeamsCallersAreInAnotherModule(integration: MultiModuleIntegration) async {
-		// The seam’s module sees none of its callers, which here hold the wrapper. The value is the form every caller can
-		// provide, by value or through either wrapper, so the advice names it.
+		// The seam’s module sees none of its callers, which here hold the wrapper. `Child` requires the value, so the advice
+		// names the form the seam’s tree requires, which a caller provides by value or through either wrapper.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let path = { (file: String) in
 				switch integration {
@@ -598,7 +639,7 @@ struct SafeDIToolValidatedAdviceTests: ~Copyable {
 				}
 			}
 			return """
-			\(path("Seam.swift")):1:1: error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `user` as `user: LazilyInstantiated<User>?` on `Seam` and `user: User` on `Child`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `user` the same way in every type of the tree, or declare it on `Seam` as the form its callers provide: `@Received let user: User`.
+			\(path("Seam.swift")):1:1: error: SafeDI cannot generate the dependency tree of `Seam`: its tree receives `user` as `user: LazilyInstantiated<User>?` on `Seam` and `user: User` on `Child`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `user` the same way in every type of the tree, or declare it on `Seam` as the form its tree requires: `@Received let user: User`.
 			\(path("Seam.swift")):8:5: note: `Seam` receives `user: LazilyInstantiated<User>?` here.
 			\(path("Child.swift")):7:5: note: `Child` receives `user: User` here.
 			"""
@@ -780,29 +821,32 @@ struct SafeDIToolValidatedAdviceTests: ~Copyable {
 
 	/// `Root` instantiates `boundary`, a `Sendable` wrapper of `T1` or a plain one; `T1` instantiates `T3`; `receiver`
 	/// declares `t2Builder: Instantiator<T2>` with `receiverAttribute`. With `rootDeclaresSendableT2Builder`, `Root`
-	/// declares `t2Builder: SendableInstantiator<T2>` and the receiver receives that form.
+	/// declares `t2Builder: SendableInstantiator<T2>` and the receiver receives that form. With
+	/// `t2ReceivesT4BuilderFromT1`, `T1` instantiates `t4Builder: Instantiator<T4>` and `T2` receives it.
 	private static func sendableBoundaryFiles(
 		boundary: String,
 		receiver: String,
 		receiverAttribute: String = "@Received",
 		rootDeclaresSendableT2Builder: Bool = false,
+		t2ReceivesT4BuilderFromT1: Bool = false,
 	) -> [String] {
 		let t2Builder = rootDeclaresSendableT2Builder ? "t2Builder: SendableInstantiator<T2>" : "t2Builder: Instantiator<T2>"
 		let receiverDeclaration = "\(receiverAttribute) let \(t2Builder)"
+		let t1Declarations = (receiver == "T1" ? [receiverDeclaration] : ["@Instantiated let t3: T3"])
+			+ (t2ReceivesT4BuilderFromT1 ? ["@Instantiated let t4Builder: Instantiator<T4>"] : [])
 		return [
 			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let \(boundary)"] + (rootDeclaresSendableT2Builder ? ["@Instantiated let \(t2Builder)"] : [])),
-			seamFixtureType(named: "T1", declarations: receiver == "T1" ? [receiverDeclaration] : ["@Instantiated let t3: T3"]),
+			seamFixtureType(named: "T1", declarations: t1Declarations),
 			seamFixtureType(named: "T3", declarations: receiver == "T3" ? [receiverDeclaration] : []),
-			seamFixtureType(named: "T2", declarations: []),
-		]
+			seamFixtureType(named: "T2", declarations: t2ReceivesT4BuilderFromT1 ? ["@Received let t4Builder: Instantiator<T4>"] : []),
+		] + (t2ReceivesT4BuilderFromT1 ? [seamFixtureType(named: "T4", declarations: [])] : [])
 	}
 
-	/// `Root` instantiates `t2: T2`, which receives `t0Builder: Instantiator<T0>`; `T0` declares `t0Receive`. With
-	/// `rootDeclaresT0Builder`, `Root` instantiates `t0Builder` too.
-	private static func coordinatorFiles(rootDeclaresT0Builder: Bool = false, t0Receive: String?) -> [String] {
+	/// `Root` instantiates `t2: T2`, which declares `t2Receive`; `T0` declares `t0Receive`.
+	private static func coordinatorFiles(t2Receive: String? = "@Received let t0Builder: Instantiator<T0>", t0Receive: String?) -> [String] {
 		[
-			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let t2: T2"] + (rootDeclaresT0Builder ? ["@Instantiated let t0Builder: Instantiator<T0>"] : [])),
-			seamFixtureType(named: "T2", declarations: ["@Received let t0Builder: Instantiator<T0>"]),
+			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let t2: T2"]),
+			seamFixtureType(named: "T2", declarations: t2Receive.map { [$0] } ?? []),
 			seamFixtureType(named: "T0", declarations: t0Receive.map { [$0] } ?? []),
 		]
 	}
