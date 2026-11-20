@@ -743,37 +743,71 @@ extension DependencyTreeGenerator {
 		func stem(of type: TypeDescription) -> String {
 			type.simplified.asIdentifier.spelledWithoutBackticks
 		}
-		func labels(of stem: String) -> Set<String> {
-			[plainBuilderLabel(ofStem: stem), sendableBuilderLabel(ofStem: stem)]
-		}
-		func collides(_ index: Int, among stems: [String]) -> Bool {
-			stems.indices.contains { other in
-				other != index && (stems[other] == stems[index] || !labels(of: stems[other]).isDisjoint(with: labels(of: stems[index])))
-			}
-		}
 		var stems = holeTypes.map { holeType in
 			holeType.instantiatedType == holeType.builtType
 				? stem(of: holeType.instantiatedType)
 				: "\(stem(of: holeType.instantiatedType))_\(stem(of: holeType.builtType))"
 		}
-		let colliding = holeTypes.indices.filter { collides($0, among: stems) }
+		// Two stems collide where they are equal or give one label, and equal stems give equal labels, so a stem collides
+		// exactly where another stem gives one of its labels. Each stem's two labels differ, so counting the stems that
+		// give each label finds every collision with one pass over the stems: comparing every pair of stems, and lowering
+		// both stems' capitals for each pair, grew with the square of the hole types.
+		var labelCounts = BuilderLabelCounts(stems: stems)
+		let colliding = holeTypes.indices.filter { labelCounts.collides(stems[$0]) }
 		if !colliding.isEmpty {
+			let collidingIndices = Set(colliding)
 			let renamed = ScopeGenerator.identifierSafeNames(
 				for: colliding.map { (label: stems[$0], suffixTypes: [holeTypes[$0].instantiatedType, holeTypes[$0].builtType]) },
-				reservedNames: Set(holeTypes.indices.filter { !colliding.contains($0) }.map { stems[$0] }),
+				reservedNames: Set(holeTypes.indices.filter { !collidingIndices.contains($0) }.map { stems[$0] }),
 				countingWorkAs: .namingEntriesApart,
 			)
 			for (index, name) in zip(colliding, renamed) {
+				labelCounts.replace(stems[index], with: name.spelledWithoutBackticks)
 				stems[index] = name.spelledWithoutBackticks
 			}
 			// Two stems may still give one label: each that does takes a trailing underscore until none does.
 			for index in stems.indices {
-				while collides(index, among: stems) {
+				while labelCounts.collides(stems[index]) {
+					labelCounts.replace(stems[index], with: stems[index] + "_")
 					stems[index] += "_"
 				}
 			}
 		}
 		return Dictionary(zip(holeTypes, stems), uniquingKeysWith: { first, _ in first })
+	}
+
+	/// How many of a set of stems give each builder label, both families' (`stems(of:)`).
+	private struct BuilderLabelCounts {
+		init(stems: [String]) {
+			for stem in stems {
+				add(stem)
+			}
+		}
+
+		/// Whether another stem than one `stem` stands for gives one of `stem`'s labels.
+		func collides(_ stem: String) -> Bool {
+			Self.labels(of: stem).contains { countByLabel[$0, default: 0] > 1 }
+		}
+
+		/// Counts `newStem` in the place of one `oldStem`.
+		mutating func replace(_ oldStem: String, with newStem: String) {
+			for label in Self.labels(of: oldStem) {
+				countByLabel[label, default: 0] -= 1
+			}
+			add(newStem)
+		}
+
+		private var countByLabel = [String: Int]()
+
+		private mutating func add(_ stem: String) {
+			for label in Self.labels(of: stem) {
+				countByLabel[label, default: 0] += 1
+			}
+		}
+
+		private static func labels(of stem: String) -> [String] {
+			[plainBuilderLabel(ofStem: stem), sendableBuilderLabel(ofStem: stem)]
+		}
 	}
 
 	/// The stem with its leading capitals lowered, keeping the last when a lowercase letter follows it, then `Builder`.
