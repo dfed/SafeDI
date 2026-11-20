@@ -9257,20 +9257,26 @@ public actor DependencyTreeGenerator {
 				// access error (`createMockRootScopeGenerator`, which walks the fills of the calls in its tree). The generated
 				// mocks are under the module's mock condition, so a build that leaves it inactive, which never compiles the fill,
 				// passes the place up and reports nothing, as `validateFillsInstantiateOnlyWhatCanBeFulfilled` is checked only
-				// where the mocks compile.
-				guard compilesGeneratedMocks || Self.inaccessibleConstructions(
-					Self.constructions(
-						inTreeRootedAt: fulfillingScope,
-						rootIsConstructedWithMockMethod: fulfillingScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: hole.property.typeDescription.asInstantiatedType),
-						rootReferenceLocation: nil,
-						isMock: true,
-						emittingModule: emittingModule,
+				// where the mocks compile. An `if` rather than `||`, whose autoclosure Swift 6.2 rejects for capturing the scope
+				// ("sending 'fulfillingScope' risks causing data races").
+				let isFilled = if compilesGeneratedMocks {
+					true
+				} else {
+					Self.inaccessibleConstructions(
+						Self.constructions(
+							inTreeRootedAt: fulfillingScope,
+							rootIsConstructedWithMockMethod: fulfillingScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: hole.property.typeDescription.asInstantiatedType),
+							rootReferenceLocation: nil,
+							isMock: true,
+							emittingModule: emittingModule,
+							extendedTypes: extendedTypeDeclarations,
+							leavingOut: Set(publicMockCalls.keys),
+						),
+						from: emittingModule,
 						extendedTypes: extendedTypeDeclarations,
-						leavingOut: Set(publicMockCalls.keys),
-					),
-					from: emittingModule,
-					extendedTypes: extendedTypeDeclarations,
-				).isEmpty else { continue }
+					).isEmpty
+				}
+				guard isFilled else { continue }
 				let typesNoDeclarationCanFulfill = Self.typesThatCannotBeHoles(inTreeRootedAt: fulfillingScope)
 				guard typesNoDeclarationCanFulfill.isEmpty else {
 					typesNoDeclarationCanFulfillByCalledType[calledType, default: []].formUnion(typesNoDeclarationCanFulfill)
