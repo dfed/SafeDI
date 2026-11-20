@@ -1192,7 +1192,6 @@ extension SeamSignature.Builder: BinarySchemaMember {
 				BinaryLayoutField("label", \.label),
 				BinaryLayoutField("internalName", \.internalName),
 				BinaryLayoutField("parameterType", \.parameterType),
-				BinaryLayoutField("parameterTypeWithoutAny", \.parameterTypeWithoutAny),
 				BinaryLayoutField("readableParameterType", \.readableParameterType),
 				BinaryLayoutField("takesBuilderStruct", \.takesBuilderStruct),
 				BinaryLayoutField("tierAccess", \.tierAccess),
@@ -1200,7 +1199,8 @@ extension SeamSignature.Builder: BinarySchemaMember {
 				BinaryLayoutField("narrowingInnerSeam", \.narrowingInnerSeam),
 				BinaryLayoutField("narrowerTierLabels", \.narrowerTierLabels),
 			],
-			unwrittenProperties: [],
+			// The initializer derives it from `parameterType`.
+			unwrittenProperties: ["parameterTypeWithoutAny"],
 		)
 	}
 
@@ -1210,7 +1210,6 @@ extension SeamSignature.Builder: BinarySchemaMember {
 			label: reader.read(),
 			internalName: reader.read(),
 			parameterType: reader.read(),
-			parameterTypeWithoutAny: reader.read(),
 			readableParameterType: reader.read(),
 			takesBuilderStruct: reader.read(),
 			tierAccess: reader.read(),
@@ -1225,7 +1224,6 @@ extension SeamSignature.Builder: BinarySchemaMember {
 		writer.write(label)
 		writer.write(internalName)
 		writer.write(parameterType)
-		writer.write(parameterTypeWithoutAny)
 		writer.write(readableParameterType)
 		writer.write(takesBuilderStruct)
 		writer.write(tierAccess)

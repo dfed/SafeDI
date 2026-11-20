@@ -344,7 +344,6 @@ extension DependencyTreeGenerator {
 					label: builderLabel,
 					internalName: internalName,
 					parameterType: parameterType,
-					parameterTypeWithoutAny: parameterType.withoutAny,
 					readableParameterType: Self.readableBuilderType(of: Self.builderForm(ofPlaces: placesOfReadableType), returning: builtType, isSendable: isSendable),
 					takesBuilderStruct: true,
 					tierAccess: narrowest.level,
