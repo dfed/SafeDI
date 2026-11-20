@@ -319,37 +319,65 @@ private struct TypeKeyLayout {
 	/// The labels each place's function reads and does not bind, and where its reads escape it; `false` where they do not
 	/// settle.
 	mutating func computeReads() -> Bool {
+		// Each pass recomputes, in reverse order, only a body one of whose children or closed-on targets changed since the
+		// body was last computed: recomputing any other gives what it holds, so every pass ends as a pass over every body
+		// would, at a cost that follows what changes.
+		let dependents = dependentsOfBodies()
 		reads = Array(repeating: [], count: bodies.count)
-		var changed = true
-		var passes = 0
-		while changed {
-			changed = false
-			passes += 1
-			guard passes <= bodies.count + 2 else { return false }
-			for body in bodies.indices.dropFirst().reversed() {
-				let bodyReads = readsOfBody(body)
-				if bodyReads != reads[body] {
-					reads[body] = bodyReads
-					changed = true
-				}
-			}
-		}
+		guard settle(dependents: dependents, recompute: { layout, body in
+			let bodyReads = layout.readsOfBody(body)
+			guard bodyReads != layout.reads[body] else { return false }
+			layout.reads[body] = bodyReads
+			return true
+		}) else { return false }
 		escapingReads = Array(repeating: [:], count: bodies.count)
 		for body in bodies.indices.dropFirst().reversed() {
 			escapingReads[body] = escapingReadsOfBody(body)
 		}
 		requiredReads = Array(repeating: [], count: bodies.count)
-		changed = true
-		passes = 0
-		while changed {
-			changed = false
+		return settle(dependents: dependents, recompute: { layout, body in
+			let required = layout.requiredReadsOfBody(body)
+			guard required != layout.requiredReads[body] else { return false }
+			layout.requiredReads[body] = required
+			return true
+		})
+	}
+
+	/// The bodies whose reads read each body's: the body holding it as a child, and each body holding a closer on it.
+	private func dependentsOfBodies() -> [[Int]] {
+		var dependents = [[Int]](repeating: [], count: bodies.count)
+		for body in bodies.indices.dropFirst() {
+			for statement in bodies[body].statements {
+				switch statement {
+				case let .built(child):
+					dependents[child].append(body)
+				case let .closer(_, target):
+					dependents[target].append(body)
+				case .inline, .alias:
+					break
+				}
+			}
+		}
+		return dependents
+	}
+
+	/// Runs passes over the bodies in reverse order until no body changes, recomputing a body only where it is dirty: never
+	/// computed, or a body it reads changed since. `recompute` returns whether the body changed. `false` where the passes
+	/// do not settle.
+	private mutating func settle(dependents: [[Int]], recompute: (inout TypeKeyLayout, Int) -> Bool) -> Bool {
+		var dirty = [Bool](repeating: true, count: bodies.count)
+		var anyDirty = true
+		var passes = 0
+		while anyDirty {
+			anyDirty = false
 			passes += 1
 			guard passes <= bodies.count + 2 else { return false }
-			for body in bodies.indices.dropFirst().reversed() {
-				let required = requiredReadsOfBody(body)
-				if required != requiredReads[body] {
-					requiredReads[body] = required
-					changed = true
+			for body in bodies.indices.dropFirst().reversed() where dirty[body] {
+				dirty[body] = false
+				guard recompute(&self, body) else { continue }
+				for dependent in dependents[body] {
+					dirty[dependent] = true
+					anyDirty = true
 				}
 			}
 		}
