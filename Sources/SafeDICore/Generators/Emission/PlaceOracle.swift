@@ -55,7 +55,7 @@ extension GeneratedCode {
 					for piece in pieces.reversed() {
 						work.append(.code(piece))
 					}
-				case let .indented(code, _):
+				case let .indented(code, _), let .spelled(_, code):
 					work.append(.code(code))
 				case let .place(plan):
 					work.append(.leavePlace(index: places.count, functionCount: plan.functionNames.count))

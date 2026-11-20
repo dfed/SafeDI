@@ -2861,15 +2861,37 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) async throws -> GeneratedCode {
 		try await generateCode(
 			codeGeneration: codeGeneration,
-			unavailableProperties: unavailableProperties(
-				isGeneratedBefore: { _ in false },
-				propertiesGeneratedLater: [],
-			),
+			unavailableProperties: rootUnavailableProperties,
 			propertiesGeneratedLater: [],
 			builderFunctionNames: BuilderFunctionNames(),
 			leadingWhitespace: "",
 			// The root of what is generated is inside no fill an internal mock declares.
 			fillPlaceBindings: .none,
+		)
+	}
+
+	/// Generates the plan `generatePlan()` returns and caches it with its text (`GeneratedCode.spelled(_:)`), so that a
+	/// tree that holds this scope copies the text when it is spelled rather than walking the plan again. A scope that
+	/// starts its code early (`Scope.startCodeGeneration(of:spellsPlan:)`) spells it while the rest of the tree is still
+	/// being generated. A tree that read the plan before its text was cached writes the same bytes from the plan.
+	func generateSpelledPlan() async throws {
+		let code = try await generatePlan()
+		// A generator a construction memo shares between trees can be started by each.
+		if case .spelled = code.node { return }
+		let cacheKey = UnavailablePropertiesCacheKey(
+			unavailableProperties: rootUnavailableProperties,
+			propertiesGeneratedLater: [],
+			builderFunctionNames: BuilderFunctionNames(),
+			fillPlaceBindings: .none,
+		)
+		unavailablePropertiesToGeneratedCode[cacheKey] = .spelled(code)
+	}
+
+	/// This scope's unavailable properties as the root of what is generated, with nothing generated before it.
+	private var rootUnavailableProperties: Set<Property> {
+		unavailableProperties(
+			isGeneratedBefore: { _ in false },
+			propertiesGeneratedLater: [],
 		)
 	}
 

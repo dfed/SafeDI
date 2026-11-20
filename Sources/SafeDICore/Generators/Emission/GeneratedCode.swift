@@ -25,7 +25,8 @@ import Foundation
 ///
 /// Each level of a tree used to indent its whole subtree's text again, so a place's text was copied once per level above
 /// it, and every scope's cache held its subtree's text. A level now holds its children's plans, and the root's plan is
-/// spelled once (`spelled()`), each line written with the indentation of every level around it. The bytes are the ones
+/// spelled once (`spelled()`), each line written with the indentation of every level around it. A small subtree started
+/// early is spelled while the rest of the tree is generated (`Node.spelled`), and the root's spelling copies its text. The bytes are the ones
 /// re-indenting at every level wrote (`GeneratedCodeText.indentingNonEmptyLines`), which `GeneratedCodeTests` checks.
 ///
 /// A plan can be as deep as the module has types, so everything that reads one walks it with a stack of its own, and
@@ -48,6 +49,8 @@ struct GeneratedCode: Sendable {
 		case indented(GeneratedCode, by: String)
 		/// A place of the body's walk (`PlacePlan`), whose code is written as it is.
 		case place(PlacePlan)
+		/// `code`, written as `text`, its spelling, which was spelled while the rest of the tree was being generated.
+		case spelled(String, of: GeneratedCode)
 	}
 
 	/// Text, written as it is.
@@ -75,6 +78,11 @@ struct GeneratedCode: Sendable {
 		GeneratedCode(storage: .children(Children(.place(kind: plan.kind, functionNames: plan.functionNames, closedOnFunctionName: plan.closedOnFunctionName), [plan.code])))
 	}
 
+	/// `code` with its text, which a writer writes in its place instead of walking `code` again (`Node.spelled`).
+	static func spelled(_ code: GeneratedCode) -> GeneratedCode {
+		GeneratedCode(storage: .children(Children(.spelled(code.spelled()), [code])))
+	}
+
 	/// The empty code.
 	static let empty = GeneratedCode.sequence([])
 
@@ -93,6 +101,8 @@ struct GeneratedCode: Sendable {
 				.indented(children.codes[0], by: indentation)
 			case let .place(kind, functionNames, closedOnFunctionName):
 				.place(PlacePlan(kind: kind, functionNames: functionNames, closedOnFunctionName: closedOnFunctionName, code: children.codes[0]))
+			case let .spelled(text):
+				.spelled(text, of: children.codes[0])
 			}
 		}
 	}
@@ -117,6 +127,7 @@ struct GeneratedCode: Sendable {
 			case lines
 			case indented(String)
 			case place(kind: PlaceKind, functionNames: [String], closedOnFunctionName: String?)
+			case spelled(String)
 		}
 
 		init(_ kind: Kind, _ codes: [GeneratedCode]) {
@@ -218,7 +229,7 @@ private struct GeneratedCodeWriter {
 			switch next {
 			case let .code(code):
 				switch code.node {
-				case let .text(text):
+				case let .text(text), let .spelled(text, _):
 					write(text)
 				case let .sequence(pieces):
 					for piece in pieces.reversed() {

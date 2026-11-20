@@ -2332,17 +2332,26 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 				if generatorsToStart != nil {
 					generatorsToStart?.append(generator)
 				} else {
-					Self.startCodeGeneration(of: generator)
+					Self.startCodeGeneration(of: generator, spellsPlan: generator !== scopeGenerator)
 				}
 			}
 		}
 		return scopeGenerator
 	}
 
-	/// Kicks off the generation of `scopeGenerator`'s plan, which a later request for the code reads from its cache. The plan
-	/// is never spelled here: only the root's plan is spelled, once (`ScopeGenerator.generateCode(codeGeneration:)`).
-	static func startCodeGeneration(of scopeGenerator: ScopeGenerator) {
+	/// Kicks off the generation of `scopeGenerator`'s plan, which a later request for the code reads from its cache. Where
+	/// `spellsPlan`, the plan is spelled too, while the rest of the tree is still being generated, and the cache keeps it with
+	/// its text (`ScopeGenerator.generateSpelledPlan()`): a large subtree passes it for each small subtree directly beneath
+	/// it, whose text the root's spelling then copies, and never for itself, since a large subtree can hold another, whose
+	/// text it would copy again. A later pass of a tree's construction starts its generators without spelling them: nearly
+	/// every tree takes one pass.
+	static func startCodeGeneration(of scopeGenerator: ScopeGenerator, spellsPlan: Bool = false) {
 		CodeTaskStart.record()
+		let generate: @Sendable () async throws -> Void = if spellsPlan {
+			{ try await scopeGenerator.generateSpelledPlan() }
+		} else {
+			{ _ = try await scopeGenerator.generatePlan() }
+		}
 		// A detached task inherits no task-local, so the work observer of the task that starts the code is handed on: the
 		// code a later request reads from the cache then counts its work whichever task asks for it first.
 		if let ordering = CodeTaskStart.ordering {
@@ -2350,18 +2359,18 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			ordering.registerStart()
 			_ = Task.detached {
 				let turn = await ordering.waitForTurn()
-				_ = try? await scopeGenerator.generatePlan()
+				try? await generate()
 				await ordering.finish(turn)
 			}
 		} else if let observer = GenerationWork.observer {
 			_ = Task.detached {
 				try await GenerationWork.$observer.withValue(observer) {
-					try await scopeGenerator.generatePlan()
+					try await generate()
 				}
 			}
 		} else {
 			_ = Task.detached {
-				try await scopeGenerator.generatePlan()
+				try await generate()
 			}
 		}
 	}
