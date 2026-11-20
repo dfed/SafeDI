@@ -801,7 +801,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			await sitesByShape[shape, default: []].append(try GraphFuzzerCallingMockCheck.run(GraphFuzzerCallingMockDraw(seed: seed).graph, seed: seed).twinSites)
 		}
 
-		#expect(sitesByShape.keys.sorted() == [.outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillRequiresValueCalledTypeReceivesInOptionalWrapper])
+		#expect(sitesByShape.keys.sorted() == [.outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillRequiresValueCalledTypeReceivesInOptionalWrapper, .fillConstructsTypeCallerModuleCannotReach])
 		#expect(sitesByShape.values.allSatisfy { $0.allSatisfy { $0 != nil } })
 		for (shape, sites) in sitesByShape {
 			for (otherShape, otherSites) in sitesByShape where otherShape != shape {
@@ -1283,6 +1283,85 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		])
 		#expect(counts.values.allSatisfy { $0 >= 10 })
 		#expect(GraphFuzzerCallingMockDraw(seed: 0).guardedValueCondition == nil)
+	}
+
+	/// Seed 970 draws the first graph of `fillConstructsTypeCallerModuleCannotReach/internal/plain`, the first of its block:
+	/// an internal calling mock whose fill instantiates a protocol only a type of the outer module fulfills, which the
+	/// caller's module cannot reach, in a build that compiles the generated mocks. Its twin reports the access error, and
+	/// so does the mock, at the same declarations, where it passed the place up before
+	/// (`DependencyTreeGenerator.holesFilled(byCallsOf:in:)`), which the check reports as acceptance where the twin is rejected.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_reportsTwinsAccessErrors_whenDrawnFillConstructsTypeCallerModuleCannotReach() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 970)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 970)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillConstructsTypeCallerModuleCannotReach, caller: .internal, place: .plain))
+		#expect(draw.mockBuild == .compilesGeneratedMocks)
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.mockSites != nil && result.mockSites == result.twinSites)
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
+	/// Seed 971 draws the first graph of the shape whose fill constructs a type the caller's module cannot reach in a build
+	/// that leaves the mock condition inactive, `fillConstructsTypeCallerModuleCannotReach/internal/deferred` in a release
+	/// build, which compiles no generated mock: the mock is accepted and passes the place up, where its twin reports the
+	/// access error. With the fill made in every build, the mock reports the error, which the check reports as
+	/// `callingMockRejectedWhereMockConditionIsInactive`.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_passesPlaceUp_whenDrawnFillConstructsTypeCallerModuleCannotReachWhereMockConditionIsInactive() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 971)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 971)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillConstructsTypeCallerModuleCannotReach, caller: .internal, place: .deferred))
+		#expect(draw.graph.mockSkipsTwinsError)
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.mockSites == nil)
+		#expect(result.passUps.map(\.label) == draw.expectedPassUpLabels)
+		#expect(result.passUps.map(\.reason) == [.mockConditionIsInactive])
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
+	/// The graphs of the shape whose fill constructs a type the caller's module cannot reach draw each declaration of the
+	/// type, each place of it in the fill's tree, each build, each caller kind and each place, in the pinned number of
+	/// graphs, each at least ten, and the tool skips the twin's error in the mock, which the cell test then requires to pass
+	/// the place up, in the pinned number, at least ten.
+	@Test
+	func fillConstructsTypeCallerModuleCannotReachDraw_drawsEachVariation_inPinnedNumberOfGraphs() {
+		let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .fillConstructsTypeCallerModuleCannotReach }
+		var counts = [String: Int]()
+		for draw in draws {
+			counts["\(draw.mockBuild)", default: 0] += 1
+			if draw.graph.mockSkipsTwinsError {
+				counts["mockSkipsTwinsError", default: 0] += 1
+			}
+			counts[draw.unreachableConstruction?.access.rawValue ?? "none", default: 0] += 1
+			counts[draw.unreachableConstruction?.isBeneathFill == true ? "beneathFill" : "inFill", default: 0] += 1
+			counts[draw.cell.caller.rawValue, default: 0] += 1
+			counts[draw.cell.place.rawValue, default: 0] += 1
+		}
+		print("calling-mock fills constructing a type the caller's module cannot reach \(counts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
+
+		#expect(counts == [
+			"compilesGeneratedMocks": 28,
+			"debugWithoutMockCondition": 18,
+			"release": 14,
+			"mockSkipsTwinsError": 32,
+			"internalInCallersPackage": 29,
+			"packageInAnotherPackage": 31,
+			"inFill": 34,
+			"beneathFill": 26,
+			"internal": 20,
+			"public": 20,
+			"listed": 20,
+			"plain": 30,
+			"deferred": 30,
+		])
+		#expect(counts.values.allSatisfy { $0 >= 10 })
+		#expect(GraphFuzzerCallingMockDraw(seed: 0).unreachableConstruction == nil)
 	}
 
 	/// Seed 730 draws the first graph of `fillReceivesCallersLazyValueBelowCalledRoot/internal/plain`, the first of its
@@ -1956,7 +2035,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	@Test
 	func drawnCells_coverEveryCell_whenCorpusDrawsTenGraphsPerCell() {
-		#expect(GraphFuzzerCallingMockCell.all.count == 97)
+		#expect(GraphFuzzerCallingMockCell.all.count == 103)
 		#expect(GraphFuzzerCallingMockCell.drawnCells == GraphFuzzerCallingMockCell.all)
 		#expect(Self.callingMockCorpusSeedCount == GraphFuzzerCallingMockCell.drawnCells.count * 10)
 		#expect(GraphFuzzerCallingMockCell.firstSeeds.map(GraphFuzzerCallingMockCell.cell(ofSeed:)) == GraphFuzzerCallingMockCell.all)
