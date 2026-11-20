@@ -587,6 +587,20 @@ extension DependencyTreeGenerator {
 		guard !seamInstantiables.isEmpty else { return SeamSignatureComputation(seamRoots: [:], errors: [], failedSeams: [], proof: proof) }
 		let ownSeamTypes = Set(seamInstantiables.map(\.concreteInstantiable))
 		let declaredTypeNames = namesOfTypesDeclaredAtFileScope(instantiables: Array(instantiables.values), plainTypeDeclarations: plainTypeDeclarations)
+		// The base of every pass's table: the seam world of every declaration, in which every seam is built and none is
+		// called. A record of a type that is no seam depends on the declarations alone, so every pass reads it from here; a
+		// pass overlays the records of the seams it calls (`FrozenScopeMap.overlaying`).
+		let baseScopeMap = Self.createSeamScopeMapping(
+			in: instantiables,
+			reachableTypeDescriptions: Set(instantiables.keys),
+			seamRoots: [:],
+			ownSeamTypes: ownSeamTypes,
+			callerModule: callerModule,
+			seams: seams,
+			aliasDeclarationReferences: aliasDeclarationReferences,
+			checkingModule: checkingModule,
+		)
+		let baseFrozenScopeMap = FrozenScopeMap(freezing: baseScopeMap.lazy.map { (key: $0.key, scope: $0.value) })
 		func initialSeamRoot(of seam: Instantiable) -> ScopeGenerator.SeamRoot {
 			let parameters = Self.ownParameters(of: seam, proof: proof)
 			return ScopeGenerator.SeamRoot(
@@ -653,7 +667,25 @@ extension DependencyTreeGenerator {
 					checkingModule: checkingModule,
 				)
 				let scopeInstantiables = scopeMap.mapValues(\.instantiable)
-				let frozenScopeMap = FrozenScopeMap(freezing: scopeMap.lazy.map { (key: $0.key, scope: $0.value) })
+				let frozenScopeMap = baseFrozenScopeMap.overlaying(passScopeMap: scopeMap) { hole in
+					Self.fulfillingInstantiable(of: hole, in: instantiables)?.concreteInstantiable
+				}
+				if let overlayOracle = ScopeTableObservation.overlayOracle {
+					// The table every pass's map would freeze to, compared by key: what the pass's map holds, the same
+					// record; what it does not, no record.
+					let passTable = FrozenScopeMap(freezing: scopeMap.lazy.map { (key: $0.key, scope: $0.value) }).table
+					let passKeys = Array(scopeMap.keys)
+					let expected = passTable.projectionByKey(passKeys)
+					let assembled = frozenScopeMap.table.projectionByKey(passKeys)
+					var mismatches = [String]()
+					for key in passKeys.sorted() where assembled[key] != expected[key] {
+						mismatches.append("\(key.asSource): \(assembled[key] ?? "absent") instead of \(expected[key] ?? "absent")")
+					}
+					for key in instantiables.keys.sorted() where scopeMap[key] == nil && frozenScopeMap.table.id(forKey: key) != nil {
+						mismatches.append("\(key.asSource): present outside the pass")
+					}
+					overlayOracle(mismatches)
+				}
 				var changed = false
 				var passErrors = [DependencyTreeGeneratorError]()
 				var passFailedSeams = Set<TypeDescription>()
