@@ -3408,14 +3408,19 @@ extension GraphFuzzerOracle {
 	}
 
 	/// Each call of a `.public` type's mock – `<prefix>T0` to `<prefix>T2` and `<prefix>T6`, held under `t0` to `t2` and
-	/// `t6`, or under `anyT<i>` through an eraser, and `<prefix>PromoteNode`, held under `promoteNode`, whose mock a consumer
-	/// that can build the `PromoteOther` it promotes hands that instance (`drawPromotedHolePublicMock`) – in the generated
-	/// mock of `typeName`, in any module: of its `mock(`, or of the function only generated code calls, `__safeDI_mock(`,
-	/// which a call of a mock that takes builders makes. A consumer holds each leaf it reaches under one label, so a mock
-	/// wraps either every call of a leaf in the leaf's eraser or none.
+	/// `t6`, or under `anyT<i>` through an eraser, `<prefix>T6Twin`, held under `t6Twin`, and `<prefix>PromoteNode`, held
+	/// under `promoteNode`, whose mock a consumer that can build the `PromoteOther` it promotes hands that instance
+	/// (`drawPromotedHolePublicMock`) – in the generated mock of `typeName`, in any module: of its `mock(`, or of the
+	/// function only generated code calls, `__safeDI_mock(`, which a call of a mock that takes builders makes. A consumer
+	/// holds each leaf it reaches under one label, so a mock wraps either every call of a leaf in the leaf's eraser or none,
+	/// but for `T6`'s second label, `t6Second` (D530-1): a call of `T6`'s mock inside the builder function the mock declares
+	/// for that label, `__safeDI_t6Second()`, is the leaf held under it.
 	static func leafCalls(ofMockedType typeName: String, in generatedFiles: [String: String], prefix: String) -> [PublicMockLeafCall] {
 		let leaves = [0, 1, 2, 6].map { PublicMockLeaf(typeName: "\(prefix)T\($0)", label: "t\($0)", eraser: (typeName: "\(prefix)AnyT\($0)", label: "anyT\($0)")) }
-			+ [PublicMockLeaf(typeName: "\(prefix)PromoteNode", label: "promoteNode", eraser: nil)]
+			+ [
+				PublicMockLeaf(typeName: "\(prefix)T6Twin", label: "t6Twin", eraser: nil),
+				PublicMockLeaf(typeName: "\(prefix)PromoteNode", label: "promoteNode", eraser: nil),
+			]
 		var calls = [PublicMockLeafCall]()
 		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName == "\(typeName)+SafeDIMock.swift" || fileName.hasSuffix("/\(typeName)+SafeDIMock.swift") {
 			// The calling mock's own parameters that default to `nil`, which the parameterless probe leaves `nil`, unless a
@@ -3429,19 +3434,51 @@ extension GraphFuzzerOracle {
 				let erasedLabel = leaf.eraser.flatMap { eraser in
 					mockFunctionNames.contains { contents.contains("\(eraser.typeName)(\(leaf.typeName).\($0)(") } ? eraser.label : nil
 				}
-				for mockFunctionName in mockFunctionNames {
-					for call in initializerCalls(of: "\(leaf.typeName).\(mockFunctionName)", in: contents) {
-						let arguments = call.filter { $0.label != "safeDIOverrides" }
-						calls.append(PublicMockLeafCall(
-							leafLabel: erasedLabel ?? leaf.label,
-							passedLabels: Set(arguments.filter { $0.value != "nil" && !unpassedParameters.contains($0.value) }.map(\.label)),
-							instanceLabels: Set(arguments.filter { $0.value.hasSuffix(".instance") }.map(\.label)),
-						))
+				// `T6` held under its second label is built in a builder function of its own, whose calls are that leaf's.
+				let secondLabelBodies = leaf.label == "t6" ? functionBodies(named: "__safeDI_t6Second", in: contents) : (bodies: [], remainder: contents)
+				let regions = [(label: erasedLabel ?? leaf.label, contents: secondLabelBodies.remainder)]
+					+ secondLabelBodies.bodies.map { (label: "t6Second", contents: $0) }
+				for region in regions {
+					for mockFunctionName in mockFunctionNames {
+						for call in initializerCalls(of: "\(leaf.typeName).\(mockFunctionName)", in: region.contents) {
+							let arguments = call.filter { $0.label != "safeDIOverrides" }
+							calls.append(PublicMockLeafCall(
+								leafLabel: region.label,
+								passedLabels: Set(arguments.filter { $0.value != "nil" && !unpassedParameters.contains($0.value) }.map(\.label)),
+								instanceLabels: Set(arguments.filter { $0.value.hasSuffix(".instance") }.map(\.label)),
+							))
+						}
 					}
 				}
 			}
 		}
 		return calls
+	}
+
+	/// The bodies of every function named `name` that `contents` declares, braces matched, and `contents` without them.
+	private static func functionBodies(named name: String, in contents: String) -> (bodies: [String], remainder: String) {
+		var bodies = [String]()
+		var remainder = ""
+		var searchStart = contents.startIndex
+		while let declaration = contents.range(of: "func \(name)(", range: searchStart..<contents.endIndex),
+		      let open = contents[declaration.upperBound...].firstIndex(of: "{")
+		{
+			var depth = 1
+			var end = contents.index(after: open)
+			while depth > 0, end < contents.endIndex {
+				switch contents[end] {
+				case "{": depth += 1
+				case "}": depth -= 1
+				default: break
+				}
+				end = contents.index(after: end)
+			}
+			remainder += contents[searchStart..<declaration.lowerBound]
+			bodies.append(String(contents[open..<end]))
+			searchStart = end
+		}
+		remainder += contents[searchStart...]
+		return (bodies, remainder)
 	}
 
 	/// A `.public` type whose mock's calls are leaf calls: its name, the label a consumer holds it under, and, where the draw
