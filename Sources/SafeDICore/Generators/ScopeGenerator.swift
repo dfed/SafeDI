@@ -4362,11 +4362,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		} + fillParameterFields
 	}
 
-	/// For a fill, the labels among `labels` its tree reads inside a `@Sendable` function, or hands to a nested seam that
-	/// takes them `@Sendable`, where no declaration inside the tree hides them, as
+	/// For a fill or a mock root, the labels among `labels` its tree reads inside a `@Sendable` function, or hands to a
+	/// nested seam that takes them `@Sendable`, where no declaration inside the tree hides them, as
 	/// `DependencyTreeGenerator.receivers(in:of:instantiables:)` finds a seam's tree reading its parameters
-	/// (`ParameterReads`): the fill's bound fields stand where the seam's parameters do. The fill's own function is not one
-	/// of those functions: what it binds is a local of that function. A scope that closes a lazy cycle reads no label from
+	/// (`ParameterReads`): the fill's bound fields, or the mock root's overrides, stand where the seam's parameters do. The
+	/// fill's or mock's own function is not one of those functions: what it binds is a local of that function. A scope
+	/// that closes a lazy cycle reads no label from
 	/// above the function it closes on, which takes each label the closer passes as a parameter (`CycleParameter`), so a
 	/// closer adds no read here.
 	nonisolated func labelsReadInsideSendableFunction(among labels: Set<String>) -> Set<String> {
@@ -8063,17 +8064,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			[]
 		} else {
 			Self.onlyIfAvailableOverrides(
-				for: parameters.onlyIfAvailableReceivedProperties,
-				namedAfter: parameters.lazilyInstantiatedPropertyByInstanceBesideForwardedProperty,
-				// The builders and the flat received parameters are named apart from every other override's label, and keep
-				// theirs beside an override in `onlyIfAvailableReceivedPropertiesOnlyPublicMockCallsReceive`, which is named
-				// apart from them instead.
+				of: parameters,
 				namesInMockScope: Set(parameters.forwardedDependencies.map(\.property.label))
 					.union(parameters.rootDefaultParameters.map(\.label))
 					.union(uncoveredDependencyNames)
-					.union(parameters.seamMockBuilders.map(\.label))
-					.union(parameters.onlyIfAvailableReceivedPropertiesOnlyPublicMockCallsReceive.isEmpty ? [] : flatReceivedNames)
 					.union(treeBindingNames),
+				flatReceivedNames: flatReceivedNames,
 				reservedNames: Set(flatReceivedNames).union(namesDeclaredInBuilderFunctions),
 			)
 		}
@@ -11237,6 +11233,49 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			nodesToVisit.append(contentsOf: node.propertyChildren)
 		}
 		return names
+	}
+
+	/// The overrides of the `onlyIfAvailableReceivedProperties` of a mock root with `parameters`, in their order, named by
+	/// `onlyIfAvailableOverrides(for:namedAfter:namesInMockScope:reservedNames:)`.
+	///
+	/// Those in `onlyIfAvailableReceivedPropertiesOnlyPublicMockCallsReceive` are named after the others, and apart from them,
+	/// from the builders and from `flatReceivedNames`, which keep the names they have without them: taking an override for
+	/// what only a call of another module's public mock receives renames nothing a caller of `mock()` spells.
+	private static func onlyIfAvailableOverrides(
+		of parameters: MockRootParameters,
+		namesInMockScope: Set<String>,
+		flatReceivedNames: [String],
+		reservedNames: Set<String>,
+	) -> [OnlyIfAvailableOverride] {
+		let onlyPublicMockCallsReceive = parameters.onlyIfAvailableReceivedPropertiesOnlyPublicMockCallsReceive
+		guard !onlyPublicMockCallsReceive.isEmpty else {
+			return onlyIfAvailableOverrides(
+				for: parameters.onlyIfAvailableReceivedProperties,
+				namedAfter: parameters.lazilyInstantiatedPropertyByInstanceBesideForwardedProperty,
+				namesInMockScope: namesInMockScope,
+				reservedNames: reservedNames,
+			)
+		}
+		let ownOverrides = onlyIfAvailableOverrides(
+			for: parameters.onlyIfAvailableReceivedProperties.filter { !onlyPublicMockCallsReceive.contains($0) },
+			namedAfter: parameters.lazilyInstantiatedPropertyByInstanceBesideForwardedProperty,
+			namesInMockScope: namesInMockScope,
+			reservedNames: reservedNames,
+		)
+		let overridesOnlyPublicMockCallsReceive = onlyIfAvailableOverrides(
+			for: parameters.onlyIfAvailableReceivedProperties.filter { onlyPublicMockCallsReceive.contains($0) },
+			namedAfter: parameters.lazilyInstantiatedPropertyByInstanceBesideForwardedProperty,
+			namesInMockScope: namesInMockScope
+				.union(parameters.seamMockBuilders.map(\.label))
+				.union(flatReceivedNames)
+				.union(ownOverrides.map(\.name)),
+			reservedNames: reservedNames,
+		)
+		var ownOverridesInOrder = ownOverrides.makeIterator()
+		var overridesOnlyPublicMockCallsReceiveInOrder = overridesOnlyPublicMockCallsReceive.makeIterator()
+		return parameters.onlyIfAvailableReceivedProperties.compactMap { property in
+			onlyPublicMockCallsReceive.contains(property) ? overridesOnlyPublicMockCallsReceiveInOrder.next() : ownOverridesInOrder.next()
+		}
 	}
 
 	/// The overrides of a mock root's `onlyIfAvailable` received properties, one per property, in the
