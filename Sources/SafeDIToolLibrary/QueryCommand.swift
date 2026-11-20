@@ -28,7 +28,7 @@ import SafeDICore
 struct Query: AsyncParsableCommand {
 	static let configuration = CommandConfiguration(
 		abstract: "Answer a question about the `@Instantiable` types in a set of modules (beta).",
-		subcommands: [QueryNeeds.self],
+		subcommands: [QueryNeeds.self, QueryGraph.self],
 	)
 }
 
@@ -77,22 +77,7 @@ public struct QueryNeeds: AsyncParsableCommand {
 	/// Throws errors as-is so tests can inspect them; `run()` formats them.
 	public func query() async throws -> QueryReport {
 		let parsedModules = try await readIncludedModules()
-
-		// Every declaration the query reports was read from one of these files, under this spelling.
-		var attributionsByFilePath = [String: FileAttribution]()
-		for parsedModule in parsedModules {
-			for (filePath, attribution) in parsedModule.fileAttributions {
-				if let otherModuleName = attributionsByFilePath[filePath]?.moduleName {
-					throw QueryError.fileInTwoModules(filePath: filePath, moduleNames: [otherModuleName, parsedModule.includedModule.name])
-				} else {
-					attributionsByFilePath[filePath] = attribution
-				}
-			}
-		}
-		let filesWithUnexpectedNodes = parsedModules.flatMap { $0.moduleInfo.filesWithUnexpectedNodes ?? [] }
-		guard filesWithUnexpectedNodes.isEmpty else {
-			throw QueryError.filesWithUnexpectedNodes(filesWithUnexpectedNodes)
-		}
+		let attributionsByFilePath = try Self.attributionsByFilePath(of: parsedModules)
 
 		let typeDescriptionToFulfillingInstantiableMap = try resolveSafeDIFulfilledTypes(
 			instantiables: normalizingInstantiableTypes(
@@ -244,7 +229,13 @@ public struct QueryNeeds: AsyncParsableCommand {
 	/// configuration, and a module info file as a dependent module's. Ordered by name, whatever order their reads
 	/// finished in, which is the order their declarations are combined in.
 	func readIncludedModules() async throws -> [ParsedQueryModule] {
-		let moduleInfoFiles = try await Self.readModuleInfoFiles(at: moduleInfo)
+		try await Self.readIncludedModules(including: include, moduleInfo: moduleInfo, activeCompilationConditions: activeCompilationConditions)
+	}
+
+	/// The modules the `--include` directories and `--module-info` files name, each read as `generate` reads it, ordered by
+	/// name. `query graph` reads its modules through this too.
+	static func readIncludedModules(including include: [String], moduleInfo: [String], activeCompilationConditions: [String]) async throws -> [ParsedQueryModule] {
+		let moduleInfoFiles = try await readModuleInfoFiles(at: moduleInfo)
 		let includedModules = try IncludedModule.modules(including: include, moduleInfo: moduleInfoFiles)
 		guard !includedModules.isEmpty else {
 			throw QueryError.noModuleIncluded
@@ -265,6 +256,27 @@ public struct QueryNeeds: AsyncParsableCommand {
 			}
 			return parsedModules.sorted { $0.includedModule.name < $1.includedModule.name }
 		}
+	}
+
+	/// How the report attributes each file the modules hold, keyed by the file's path as read.
+	/// - Throws: When a file belongs to two modules, or a file holds a declaration SafeDI cannot read.
+	static func attributionsByFilePath(of parsedModules: [ParsedQueryModule]) throws -> [String: FileAttribution] {
+		// Every declaration the query reports was read from one of these files, under this spelling.
+		var attributionsByFilePath = [String: FileAttribution]()
+		for parsedModule in parsedModules {
+			for (filePath, attribution) in parsedModule.fileAttributions {
+				if let otherModuleName = attributionsByFilePath[filePath]?.moduleName {
+					throw QueryError.fileInTwoModules(filePath: filePath, moduleNames: [otherModuleName, parsedModule.includedModule.name])
+				} else {
+					attributionsByFilePath[filePath] = attribution
+				}
+			}
+		}
+		let filesWithUnexpectedNodes = parsedModules.flatMap { $0.moduleInfo.filesWithUnexpectedNodes ?? [] }
+		guard filesWithUnexpectedNodes.isEmpty else {
+			throw QueryError.filesWithUnexpectedNodes(filesWithUnexpectedNodes)
+		}
+		return attributionsByFilePath
 	}
 
 	/// The module info file each of `paths` names, in the order of `paths`. Each file is read once, however many

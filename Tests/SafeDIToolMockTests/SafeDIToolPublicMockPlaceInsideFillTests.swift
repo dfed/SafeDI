@@ -2326,16 +2326,19 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			    struct SafeDIOverrides {
 			        init(
 			            user: (() -> Draft)? = nil,
-			            outer: Outer.SafeDIOverrides = .init()
+			            outer: Outer.SafeDIOverrides = .init(),
+			            b: B? = nil
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
 			                user: user,
 			                outer: outer
 			            )
+			            self.b = b
 			        }
 
 			        var user: (() -> Draft)? { __safeDI_storage.user }
 			        var outer: Outer.SafeDIOverrides { __safeDI_storage.outer }
+			        let b: B?
 
 			        private let __safeDI_storage: __safeDI_Storage
 
@@ -2356,6 +2359,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
+			        let b: B? = safeDIOverrides.b
 			        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { Draft() }
 			        func __safeDI_outer() -> Outer {
 			            func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget> {
@@ -2377,7 +2381,7 @@ struct SafeDIToolPublicMockPlaceInsideFillTests: ~Copyable {
 			                })
 			            }
 			            _ = Outer.__safeDI_Outer_mock_2EF335B9F25BB5E8.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return Outer.__safeDI_mock(gadgetBuilder: __safeDI_gadgetBuilder_Outer(), b: nil, user_Draft: user, safeDIOverrides: safeDIOverrides.outer)
+			            return Outer.__safeDI_mock(gadgetBuilder: __safeDI_gadgetBuilder_Outer(), b: b, user_Draft: user, safeDIOverrides: safeDIOverrides.outer)
 			        }
 			        let outer: Outer = __safeDI_outer()
 			        return Root(outer: outer)

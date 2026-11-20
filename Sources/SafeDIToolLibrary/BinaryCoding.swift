@@ -375,6 +375,8 @@ struct BinaryWriter {
 		}
 	}
 
+	private let writesStringsInline: Bool
+
 	/// A value written through ``writeShared(_:)``, hashed by its count and its first and last elements alone: hashing
 	/// every element of each of many long arrays costs what writing them did, while an array equal to one already
 	/// written shares its storage, which `==` compares first.
@@ -404,7 +406,6 @@ struct BinaryWriter {
 		}
 	}
 
-	private let writesStringsInline: Bool
 	private var strings = [String]()
 	private var stringIndices = [StringTableKey: UInt64]()
 	private var sharedValueIndices = [AnyHashable: UInt64]()
