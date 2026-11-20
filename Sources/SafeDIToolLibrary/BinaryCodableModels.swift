@@ -490,8 +490,9 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("dependencyLabelsInUnselectedClauses", \.dependencyLabelsInUnselectedClauses),
 				BinaryLayoutField("dependencyLabelsInsideConditionalBlocks", \.dependencyLabelsInsideConditionalBlocks),
 			],
-			// `declaredName` is what one run makes of the declaration, so no file records it.
-			unwrittenProperties: ["instantiableTypes", "declaredName"],
+			// `rarelySetFields` holds fields written under their own names above, and `declaredName`, what one run makes
+			// of the declaration, which no file records.
+			unwrittenProperties: ["instantiableTypes", "rarelySetFields"],
 		)
 	}
 
