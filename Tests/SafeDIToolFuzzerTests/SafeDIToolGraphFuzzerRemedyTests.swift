@@ -613,7 +613,7 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func remedyRuns_leaveNoErrorAtTheReceive_whenTwoTypesAlongTheChainDeclareTheReceivedLabelWithOtherTypes() async throws {
+	func remedyRuns_relabelEachHidingDeclarationAndLeaveNoErrorAtTheReceive_whenTwoTypesAlongTheChainDeclareTheReceivedLabelWithOtherTypes() async throws {
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
 			"""
 			@Instantiable(isRoot: true)
@@ -669,7 +669,260 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 		let runs = try await Self.remedyRuns(of: fixture)
 
 		#expect(runs.map(\.remedy.kind) == [.relabelHidingDeclaration])
-		withKnownIssue("\(SafeDIToolGraphFuzzerTests.remedyHiddenByEachDeclarationAlongTheChainReason)") {
+		#expect(runs.map(\.remedy.description) == ["gives `t3: S1_T5` on `S1_T2` and `t3: S1_T4` on `S1_T1` the label `t3Relabeled`"])
+		#expect(runs.first?.remedy.fixture.swiftFileContent[1] == """
+		@Instantiable
+		public final class S1_T1: Instantiable {
+			public init(t3Relabeled: S1_T4, t2: S1_T2) {
+				self.t3Relabeled = t3Relabeled
+				self.t2 = t2
+			}
+
+			@Instantiated let t3Relabeled: S1_T4
+			@Instantiated let t2: S1_T2
+		}
+		""")
+		#expect(runs.first?.remedy.fixture.swiftFileContent[2] == """
+		@Instantiable
+		public final class S1_T2: Instantiable {
+			public init(t3Relabeled: S1_T5, t0: S1_T0) {
+				self.t3Relabeled = t3Relabeled
+				self.t0 = t0
+			}
+
+			@Instantiated let t3Relabeled: S1_T5
+			@Instantiated let t0: S1_T0
+		}
+		""")
+		#expect(runs.map(\.errorsAtSite) == [[]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_relabelEveryDeclarationAnyChainNamesAndLeaveNoErrorAtTheReceive_whenTwoPathsToTheReceiveNameDifferentHidingDeclarations() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t3: S1_T3, t1: S1_T1, secondT2: S1_T2) {
+					self.t3 = t3
+					self.t1 = t1
+					self.secondT2 = secondT2
+				}
+
+				@Instantiated let t3: S1_T3
+				@Instantiated let t1: S1_T1
+				@Instantiated let secondT2: S1_T2
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t3: S1_T4, t2: S1_T2) {
+					self.t3 = t3
+					self.t2 = t2
+				}
+
+				@Instantiated let t3: S1_T4
+				@Instantiated let t2: S1_T2
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T2: Instantiable {
+				public init(t3: S1_T5, t0: S1_T0) {
+					self.t3 = t3
+					self.t0 = t0
+				}
+
+				@Instantiated let t3: S1_T5
+				@Instantiated let t0: S1_T0
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T0: Instantiable {
+				public init(t3: S1_T3) {
+					self.t3 = t3
+				}
+
+				@Received let t3: S1_T3
+			}
+			""",
+			Self.leaf("S1_T3"),
+			Self.leaf("S1_T4"),
+			Self.leaf("S1_T5"),
+		])
+		let outcome = try await GraphFuzzerOracle.toolOutcome(of: fixture)
+		guard case let .rejected(diagnostics) = outcome else {
+			Issue.record("The tool accepts the graph:\n\(outcome.description)")
+			return
+		}
+
+		let runs = try await GraphFuzzerOracle.remedyRuns(of: fixture, outcome: outcome)
+
+		#expect(GraphFuzzerRemedies.errors(at: GraphFuzzerRemedy.Site(fileName: "S1_T0.swift", typeName: "S1_T0", label: "t3"), in: outcome, of: fixture) == [
+			"@Received property `t3: S1_T3` is hidden in chain: S1_Root0 -> S1_T1 -> S1_T2 -> S1_T0. `S1_T2` declares `t3: S1_T5` with the same label, so the types below `S1_T2` receive `t3: S1_T5` instead, and above `S1_T2`, `S1_T1` declares `t3: S1_T4` with the same label too. Give `t3: S1_T5` on `S1_T2` and `t3: S1_T4` on `S1_T1` each a different label to fix.",
+			"@Received property `t3: S1_T3` is hidden in chain: S1_Root0 -> S1_T2 -> S1_T0. `S1_T2` declares `t3: S1_T5` with the same label, so the types below `S1_T2` receive `t3: S1_T5` instead. Give `t3: S1_T5` on `S1_T2` a different label to fix.",
+		])
+		#expect(runs.map(\.remedy.kind) == [.relabelHidingDeclaration])
+		#expect(runs.map(\.remedy.description) == ["gives `t3: S1_T5` on `S1_T2` and `t3: S1_T4` on `S1_T1` the label `t3Relabeled`"])
+		#expect(runs.first?.remedy.fixture.swiftFileContent[1] == """
+		@Instantiable
+		public final class S1_T1: Instantiable {
+			public init(t3Relabeled: S1_T4, t2: S1_T2) {
+				self.t3Relabeled = t3Relabeled
+				self.t2 = t2
+			}
+
+			@Instantiated let t3Relabeled: S1_T4
+			@Instantiated let t2: S1_T2
+		}
+		""")
+		#expect(runs.first?.remedy.fixture.swiftFileContent[2] == """
+		@Instantiable
+		public final class S1_T2: Instantiable {
+			public init(t3Relabeled: S1_T5, t0: S1_T0) {
+				self.t3Relabeled = t3Relabeled
+				self.t0 = t0
+			}
+
+			@Instantiated let t3Relabeled: S1_T5
+			@Instantiated let t0: S1_T0
+		}
+		""")
+		#expect(runs.map(\.errorsAtSite) == [[]])
+		#expect(GraphFuzzerRemedies.unremediedSiteCount(of: fixture, diagnostics: diagnostics) == 0)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_relabelEveryDeclarationAnyChainNamesAndLeaveNoErrorAtTheReceive_whenALapOfACycleNamesAnotherHidingDeclaration() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t3: S1_T3, t1: S1_T1) {
+					self.t3 = t3
+					self.t1 = t1
+				}
+
+				@Instantiated let t3: S1_T3
+				@Instantiated let t1: S1_T1
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t2: S1_T2, t4Builder: Instantiator<S1_T4>) {
+					self.t2 = t2
+					self.t4Builder = t4Builder
+				}
+
+				@Instantiated let t2: S1_T2
+				@Instantiated let t4Builder: Instantiator<S1_T4>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T2: Instantiable {
+				public init(t3: S1_T5, t0: S1_T0) {
+					self.t3 = t3
+					self.t0 = t0
+				}
+
+				@Instantiated let t3: S1_T5
+				@Instantiated let t0: S1_T0
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T4: Instantiable {
+				public init(t3: S1_T6, t1Builder: Instantiator<S1_T1>) {
+					self.t3 = t3
+					self.t1Builder = t1Builder
+				}
+
+				@Instantiated let t3: S1_T6
+				@Instantiated let t1Builder: Instantiator<S1_T1>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T0: Instantiable {
+				public init(t3: S1_T3) {
+					self.t3 = t3
+				}
+
+				@Received let t3: S1_T3
+			}
+			""",
+			Self.leaf("S1_T3"),
+			Self.leaf("S1_T5"),
+			Self.leaf("S1_T6"),
+		])
+		let outcome = try await GraphFuzzerOracle.toolOutcome(of: fixture)
+		guard case let .rejected(diagnostics) = outcome else {
+			Issue.record("The tool accepts the graph:\n\(outcome.description)")
+			return
+		}
+
+		let runs = try await GraphFuzzerOracle.remedyRuns(of: fixture, outcome: outcome)
+
+		#expect(runs.map(\.remedy.kind) == [.relabelHidingDeclaration])
+		#expect(runs.map(\.remedy.description) == ["gives `t3: S1_T5` on `S1_T2` and `t3: S1_T6` on `S1_T4` the label `t3Relabeled`"])
+		#expect(runs.map(\.errorsAtSite) == [[]])
+		#expect(GraphFuzzerRemedies.unremediedSiteCount(of: fixture, diagnostics: diagnostics) == 0)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func remedyRuns_relabelTheHidingDeclarationAndLeaveNoErrorAtTheReceive_whenAMockWhoseTreeACycleBuildsAgainReceivesTheLabelInTheHidingForm() async throws {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(generateMock: true)
+			public final class S1_T1: Instantiable {
+				public init(t3: S1_T4, t2Builder: Instantiator<S1_T2>) {
+					self.t3 = t3
+					self.t2Builder = t2Builder
+				}
+
+				@Instantiated let t3: S1_T4
+				@Instantiated let t2Builder: Instantiator<S1_T2>
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public final class S1_T2: Instantiable {
+				public init(t3: S1_T4, t0Builder: Instantiator<S1_T0>) {
+					self.t3 = t3
+					self.t0Builder = t0Builder
+				}
+
+				@Received let t3: S1_T4
+				@Instantiated let t0Builder: Instantiator<S1_T0>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T0: Instantiable {
+				public init(t3: S1_T3, t1Builder: Instantiator<S1_T1>) {
+					self.t3 = t3
+					self.t1Builder = t1Builder
+				}
+
+				@Received let t3: S1_T3
+				@Instantiated let t1Builder: Instantiator<S1_T1>
+			}
+			""",
+			Self.leaf("S1_T3"),
+			Self.leaf("S1_T4"),
+		])
+		let runs = try await Self.remedyRuns(of: fixture)
+
+		#expect(runs.map(\.remedy.kind) == [.relabelHidingDeclaration])
+		#expect(runs.map(\.remedy.description) == ["gives `t3: S1_T4` on `S1_T1` the label `t3Relabeled`"])
+		withKnownIssue("\(SafeDIToolGraphFuzzerTests.remedyHidingDeclarationMasksMockTreeReceiveReason)") {
 			#expect(runs.map(\.errorsAtSite) == [[]])
 		}
 	}
