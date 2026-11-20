@@ -351,10 +351,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			            Service()
 			        }
 			        let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
-			        func __safeDI_lazyService() -> Service {
-			            Service()
-			        }
-			        let lazyService = LazilyInstantiated<Service>(__safeDI_lazyService)
+			        let lazyService = LazilyInstantiated<Service>(__safeDI_serviceBuilder)
 			        self.init(engine: engine, serviceBuilder: serviceBuilder, lazyService: lazyService)
 			    }
 			}

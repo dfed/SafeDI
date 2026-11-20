@@ -2396,15 +2396,15 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_bBuilder() -> B {
-			            func __safeDI_aBuilder() -> A {
-			                let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-			                return A(bBuilder: bBuilder)
-			            }
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 9)
 			            let aBuilderAlias: Instantiator<A> = aBuilder
 			            #sourceLocation()
 			            return B(aBuilder: aBuilder, aBuilderAlias: aBuilderAlias)
+			        }
+			        func __safeDI_aBuilder() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return A(bBuilder: bBuilder)
 			        }
 			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			        self.init(bBuilder: bBuilder)
@@ -2427,15 +2427,15 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_bBuilder() -> B {
-			            func __safeDI_aBuilder() -> A {
-			                let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-			                return A(bBuilder: bBuilder)
-			            }
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 9)
 			            let aBuilderAlias: Instantiator<A>? = aBuilder
 			            #sourceLocation()
 			            return B(aBuilder: aBuilder, aBuilderAlias: aBuilderAlias)
+			        }
+			        func __safeDI_aBuilder() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return A(bBuilder: bBuilder)
 			        }
 			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			        self.init(bBuilder: bBuilder)
@@ -2569,19 +2569,21 @@ struct SafeDIToolReceivedBuilderCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_bBuilder() -> B {
-			            func __safeDI_c() -> C {
-			                let bBuilder = Instantiator<B>(__safeDI_bBuilder)
-			                return C(bBuilder: bBuilder)
-			            }
 			            let c: C = __safeDI_c()
-			            func __safeDI_aBuilder() -> A {
-			                A(c: c)
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(c: c)
 			            }
-			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 11)
 			            let aBuilderAlias: Instantiator<A> = aBuilder
 			            #sourceLocation()
 			            return B(c: c, aBuilder: aBuilder, aBuilderAlias: aBuilderAlias)
+			        }
+			        func __safeDI_c() -> C {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return C(bBuilder: bBuilder)
+			        }
+			        func __safeDI_aBuilder(c: C) -> A {
+			            A(c: c)
 			        }
 			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 			        self.init(bBuilder: bBuilder)
