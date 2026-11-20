@@ -246,7 +246,7 @@ jobs:
     if: ${{ !cancelled() && inputs.coverage && (needs.coverage-build.result == 'success' || inputs.bundle) }}
     runs-on: ubuntu-latest
     container: swift:6.2
-    timeout-minutes: 30
+    timeout-minutes: 55
     permissions:
       contents: read
     defaults:
@@ -267,7 +267,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/unit-suite-profiles" unit-suite
       - name: Run Unit Suite
         id: suite
-        timeout-minutes: 25
+        # About twice the measured duration. The step took 24m05s on the
+        # 2.3.1 trim (Verify run 44714429086, 2026-11-20), where the seam
+        # smoke seeds alone ran 1,442 s; an added oracle that runs the tool
+        # again on some graphs made every fuzzer test 8 to 12% slower and
+        # passed the old limit of 25 minutes (run 44738763289).
+        timeout-minutes: 50
         env:
           SAFEDI_SKIP_COMPILE_CHECK: 1
           LLVM_PROFILE_FILE: ${{ runner.temp }}/unit-suite-profiles/unit-suite-%p.profraw
