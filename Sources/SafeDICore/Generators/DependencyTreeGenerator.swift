@@ -316,37 +316,51 @@ public actor DependencyTreeGenerator {
 		} else {
 			nil
 		}
-		var generatedRoots = [GeneratedRoot]()
-		var warnings = [SourceDiagnostic]()
-		var dotTree: String?
-		if buildsDependencyTrees {
-			let trees = try dependencyTrees(unreadTypeComment: publicMockContext?.unreadTypeComment)
-			if request.generatesDependencyTrees {
-				generatedRoots = try await generatedCode(of: trees)
-				warnings = generateWarnings(validatedScopes: trees.validatedScopes)
-			}
-			if request.generatesDOTTree {
+		let trees = try buildsDependencyTrees ? dependencyTrees(unreadTypeComment: publicMockContext?.unreadTypeComment) : nil
+		// The roots' code generates in a child task while the warnings, the DOT graph and the mocks are made, since none
+		// of them reads it. Its error is still the one reported before theirs: their results are kept until it is awaited.
+		let rootsToGenerate = request.generatesDependencyTrees ? trees?.roots : nil
+		let rootsOfOtherModules = trees?.rootsOfOtherModules ?? []
+		async let generatedRoots: [GeneratedRoot] = if let rootsToGenerate {
+			generatedCode(of: rootsToGenerate, rootsOfOtherModules: rootsOfOtherModules)
+		} else {
+			[]
+		}
+		let warnings = if let trees, request.generatesDependencyTrees {
+			generateWarnings(validatedScopes: trees.validatedScopes)
+		} else {
+			[SourceDiagnostic]()
+		}
+		let dotTreeAndMocks: Result<(String?, MockGenerationResult?), any Error>
+		do {
+			var dotTree: String?
+			if let trees, request.generatesDOTTree {
 				// Drawn from the trees the code was generated from, before any mock is built, so that no tree outlives its
 				// use. Drawing a tree throws nothing, so an error in a mock is still the one reported after the trees'.
 				dotTree = try await generateDOTTree(of: trees.roots)
 			}
+			var mocks: MockGenerationResult?
+			if let mockRequest = request.mocks {
+				mocks = try await generateMockCode(
+					mockConditionalCompilation: mockRequest.mockConditionalCompilation,
+					currentModuleSourceFilePaths: mockRequest.currentModuleSourceFilePaths,
+					additionalMocksToGenerate: mockRequest.additionalMocksToGenerate,
+					publicMockContext: declaresPublicMock ? publicMockContext : nil,
+				)
+			}
+			dotTreeAndMocks = .success((dotTree, mocks))
+		} catch {
+			dotTreeAndMocks = .failure(error)
 		}
-		var mocks: MockGenerationResult?
-		if let mockRequest = request.mocks {
-			mocks = try await generateMockCode(
-				mockConditionalCompilation: mockRequest.mockConditionalCompilation,
-				currentModuleSourceFilePaths: mockRequest.currentModuleSourceFilePaths,
-				additionalMocksToGenerate: mockRequest.additionalMocksToGenerate,
-				publicMockContext: declaresPublicMock ? publicMockContext : nil,
-			)
-		}
-		return GenerationResults(generatedRoots: generatedRoots, warnings: warnings, mocks: mocks, dotTree: dotTree)
+		let roots = try await generatedRoots
+		let (dotTree, mocks) = try dotTreeAndMocks.get()
+		return GenerationResults(generatedRoots: roots, warnings: warnings, mocks: mocks, dotTree: dotTree)
 	}
 
-	/// The code of each root and seam among `trees` this module generates, then a file for each root another module
-	/// declares, once every whole-module check of the trees passes.
-	private func generatedCode(of trees: DependencyTrees) async throws -> [GeneratedRoot] {
-		let rootScopeGenerators = trees.roots
+	/// The code of each root and seam among `roots`, the trees this module generates, then a file for each of
+	/// `rootsOfOtherModules`, the roots another module declares, once every whole-module check of the trees passes.
+	private func generatedCode(of roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable]) async throws -> [GeneratedRoot] {
+		let rootScopeGenerators = roots
 		try Self.validateFills(
 			inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator),
 			callerModule: seams.currentModule,
@@ -386,7 +400,7 @@ public actor DependencyTreeGenerator {
 		// The file `scan` plans for a root another module declares holds no code: that module generates the root's
 		// `init()`, so the file says where, and what to do when that module does not run SafeDI. A root without
 		// dependencies gets no `init()` in its own module either, so its file says nothing.
-		return generatedRoots + trees.rootsOfOtherModules.map { root in
+		return generatedRoots + rootsOfOtherModules.map { root in
 			let rootType = root.concreteInstantiable.asSource
 			// Type and module names are written bare in generated comments, as the root's is.
 			let declaringModule = root.moduleName.map { "\($0), the module that declares \(rootType)" } ?? "the module that declares \(rootType)"
@@ -475,7 +489,7 @@ public actor DependencyTreeGenerator {
 	/// The declarations among which the declaration of a type an extension extends bounds the types declared in or by
 	/// that extension.
 	let extendedTypeDeclarations: ExtendedTypeDeclarations
-	struct RootScopeInfo {
+	struct RootScopeInfo: Sendable {
 		let typeDescription: TypeDescription
 		let instantiable: Instantiable
 		let sourceFilePath: String?
