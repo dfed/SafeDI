@@ -938,6 +938,57 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keysPlacesBuiltAtOnePlaceInMemo_whenMockRootsShareMemo() async throws {
+		// `P`'s mock builds `G`, which builds `H`, each at one place of its tree. The memo the mock roots share carries every
+		// place to the mock roots built after `P`, so each is keyed.
+		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
+		let fixture = [
+			Self.mockedType(named: "P", declarations: ["@Instantiated let g: G"]),
+			seamFixtureType(named: "G", isFinalClass: true, declarations: ["@Instantiated let h: H"]),
+			seamFixtureType(named: "H", isFinalClass: true, declarations: []),
+		]
+		_ = try await ConstructionMemoOracle.$keyedPlaceObserver.withValue({ continuation.yield($0) }) { [fixture] in
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
+		var keyedTypes = Set<String>()
+		for await keyedType in stream {
+			keyedTypes.insert(keyedType)
+		}
+		#expect(keyedTypes == ["G", "H"])
+	}
+
+	@Test(arguments: [ConstructionMemo.Sharing.acrossTrees, .perTree])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_keysPlacesBuiltOnceInTheirTree_onlyWhenMockRootsShareMemo(sharing: ConstructionMemo.Sharing) async throws {
+		// `M` builds `G`, which builds `H`, and builds each at one place. Shared between mock roots, a memo can hand a later
+		// mock root what this one stored, so every place is keyed; held per tree, a place built once is not.
+		let fixture = [
+			Self.mockedType(named: "M", declarations: ["@Instantiated let g: G"]),
+			seamFixtureType(named: "G", isFinalClass: true, declarations: ["@Instantiated let h: H"]),
+			seamFixtureType(named: "H", isFinalClass: true, declarations: []),
+		]
+		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
+		_ = try await ConstructionMemo.$sharingBetweenMockRoots.withValue(sharing) {
+			try await ConstructionMemoOracle.$keyedPlaceObserver.withValue({ continuation.yield($0) }) { [fixture] in
+				try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			}
+		}
+		continuation.finish()
+		var keyedTypes = Set<String>()
+		for await keyedType in stream {
+			keyedTypes.insert(keyedType)
+		}
+		switch sharing {
+		case .acrossTrees:
+			#expect(keyedTypes == ["G", "H"])
+		case .perTree:
+			#expect(keyedTypes == [])
+		}
+	}
+
 	// MARK: Private
 
 	/// How the module's mock roots share the construction memo.
