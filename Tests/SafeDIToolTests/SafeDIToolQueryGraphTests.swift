@@ -427,7 +427,7 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 
 		try await QueryGraph.parse(arguments).run()
 		let written = try String(contentsOf: output, encoding: .utf8)
-		#expect(written == (try await QueryGraph.parse(["--include", moduleDirectory.path]).graph().json()))
+		#expect(await written == (try QueryGraph.parse(["--include", moduleDirectory.path]).graph().json()))
 
 		// An unchanged graph leaves the file as it was.
 		let past = Date(timeIntervalSince1970: 1_000_000)
