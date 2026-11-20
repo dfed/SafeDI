@@ -6691,7 +6691,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x8ED1E510982417DE
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x4831C6A204F39937
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -6701,7 +6701,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xFEF5FF2EC2FEC857
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xD7690072261E3237
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -7303,7 +7303,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// rejects as it rejects the seam whose own tree receives both forms. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 705, 743, 850, 881, 892, 934, 969, 1_010, 1_020, 1_450, 1_815, 1_837, 1_890, 1_986, 2_006, 3_575, 4_668]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xE61A0C5D8F52B70B
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xFBD8DB850D7E8FE6
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -9156,7 +9156,7 @@ struct SafeDIToolGraphFuzzerTests {
 				.remedyLeavesErrorAtSite(.relabelHidingDeclaration, containing: "cannot be received inside a `@Sendable` function"),
 			],
 			seeds: [
-				167, 456, 1_724, 1_935, 2_310, 2_627, 2_715, 2_751, 3_145, 3_240, 3_619, 4_345,
+				167, 456, 1_724, 1_935, 2_715, 3_145, 3_240, 4_345,
 			],
 		),
 		GraphFuzzerKnownIssue(
@@ -9168,7 +9168,7 @@ struct SafeDIToolGraphFuzzerTests {
 				.remedyLeavesErrorAtSite(.receiveSuggestedProperty, containing: "is hidden in chain"),
 			],
 			seeds: [
-				492, 1_832, 2_322, 2_500, 2_605, 2_663, 2_982, 3_529, 3_778, 3_799, 4_142, 4_441, 4_940,
+				492, 1_832, 2_322, 2_500, 2_663, 2_982, 3_529, 3_778, 3_799, 4_142, 4_441, 4_940,
 			],
 		),
 		GraphFuzzerKnownIssue(
@@ -9179,7 +9179,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: remedySuggestionClosesCycleReason,
 			signatures: [.remedyLeavesErrorAtSite(.receiveSuggestedProperty, containing: "Dependency cycle: ")],
-			seeds: [1_132, 2_059, 2_560, 3_982, 3_995, 4_333],
+			seeds: [1_132, 2_059, 2_560, 3_995, 4_333],
 		),
 		GraphFuzzerKnownIssue(
 			reason: remedySuggestionsAlternateReason,
@@ -9189,7 +9189,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: remedyDeclarationClosesCycleThroughRootReason,
 			signatures: [.remedyLeavesErrorAtSite(.instantiateOnRoot, containing: "Dependency cycle: ")],
-			seeds: [984, 3_493, 4_375, 4_864],
+			seeds: [4_864],
 		),
 		GraphFuzzerKnownIssue(
 			reason: remedySendableWrapperNamesOneDeclarationReason,
