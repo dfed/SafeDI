@@ -114,6 +114,26 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 		#expect(starts == 0)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRootByPathKey_whenRootStartsItsCodeEarlyUnderThePathKey() async throws {
+		// The root's tree has 121 scopes, so under the path key the root starts its own code early, on a detached task. That
+		// task lays the body out by the key of the task that started it: one builder function for each of the 120 places
+		// beneath the root (3 + 9 + 27 + 81). Laid out by the type key, as a detached task that inherited no key did, it
+		// holds 12, one for each type.
+		let output = try await ProductionBodyKey.$current.withValue(.path) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.ternaryTree(depth: 4, beneath: ["Root"], rootDeclarations: [], instantiatesLayer: 3),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				// The tree's code is what every other test of its shapes compares; this one counts its builder functions.
+				skipCompileVerification: true,
+			)
+		}
+		let rootCode = try #require(output.dependencyTreeFiles["Root+SafeDI.swift"])
+		#expect(rootCode.components(separatedBy: "func __safeDI_").count - 1 == 120)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

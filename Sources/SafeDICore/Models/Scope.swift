@@ -2348,17 +2348,23 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// Kicks off the generation of `scopeGenerator`'s code, which a later request for the code reads from its cache.
 	static func startCodeGeneration(of scopeGenerator: ScopeGenerator) {
 		CodeTaskStart.record()
-		// A detached task inherits no task-local, so the work observer of the task that starts the code is handed on: the
-		// code a later request reads from the cache then counts its work whichever task asks for it first.
+		// A detached task inherits no task-local, so the key the starting task lays bodies out by is handed on, since the
+		// code is planned by it, and so is the work observer of the task that starts the code: the code a later request
+		// reads from the cache then counts its work whichever task asks for it first.
+		let productionBodyKey = ProductionBodyKey.current
 		if let observer = GenerationWork.observer {
 			_ = Task.detached {
-				try await GenerationWork.$observer.withValue(observer) {
-					try await scopeGenerator.generateCode()
+				try await ProductionBodyKey.$current.withValue(productionBodyKey) {
+					try await GenerationWork.$observer.withValue(observer) {
+						try await scopeGenerator.generateCode()
+					}
 				}
 			}
 		} else {
 			_ = Task.detached {
-				try await scopeGenerator.generateCode()
+				try await ProductionBodyKey.$current.withValue(productionBodyKey) {
+					try await scopeGenerator.generateCode()
+				}
 			}
 		}
 	}
