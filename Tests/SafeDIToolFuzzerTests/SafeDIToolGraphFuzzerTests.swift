@@ -7045,6 +7045,7 @@ struct SafeDIToolGraphFuzzerTests {
 			"holderMovedToInnerSeamOfAnotherModule",
 			"placeBehindLazilyInstantiated",
 			"placeOfNewBuilderInInnerSeamOfAnotherModule",
+			"placeOfHoleTypeNamedAfterSendableLabel",
 			"placeForwardingOtherValues",
 			"placeForwardingOtherValuesRemedied",
 			"placeForwardingOtherValuesInInnerSeamOfAnotherModule",
