@@ -231,6 +231,8 @@ struct ModulesBeneathSelection {
 		var holes = [Hole]()
 		/// Of `startingVisits`, how many the walk has started from.
 		var startingVisitCount = 0
+		/// Of `declarationsRead`, how many the walk has checked against `typesQualifyingFoundTypes`.
+		var checkedDeclarationCount = 0
 		/// Each dependency of a visit made that no declaration read yet fulfills, by the visit and the types that would
 		/// fulfill it, most qualified first.
 		var dependenciesFoundUndeclared = [(visit: Visit, types: [TypeDescription])]()
@@ -246,9 +248,13 @@ struct ModulesBeneathSelection {
 	///
 	/// Holes are settled when nothing is left to walk, since a fill's tree can reach another hole, or another route to one.
 	private func walk(resuming walkState: inout WalkState) -> (reachesTypeNothingReadDeclares: Bool, fileIndicesToRead: Set<Int>) {
-		if walkState.typesQualifyingFoundTypes.contains(where: { declarationIndicesByType[$0] != nil }) {
+		// A type recorded as more qualified was declared by nothing read when it was recorded, so only the declarations read
+		// since the last walk can declare one, and a round costs what it read.
+		let declarationsReadSinceLastWalk = declarationsRead[walkState.checkedDeclarationCount...]
+		if declarationsReadSinceLastWalk.contains(where: { $0.instantiable.instantiableTypes.contains(where: walkState.typesQualifyingFoundTypes.contains) }) {
 			walkState = WalkState()
 		}
+		walkState.checkedDeclarationCount = declarationsRead.count
 		walkState.visitsToMake += startingVisits[walkState.startingVisitCount...]
 		walkState.startingVisitCount = startingVisits.count
 		var reachesTypeNothingReadDeclares = false
