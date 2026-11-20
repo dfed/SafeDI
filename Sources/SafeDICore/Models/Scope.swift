@@ -39,6 +39,7 @@ final class Scope: Hashable {
 		publicMockCall: PublicMockCall? = nil,
 	) {
 		self.instantiable = instantiable
+		sharedInstantiable = SharedInstantiable(instantiable)
 		self.dependenciesLeftOut = dependenciesLeftOut
 		self.builtInlineSeamComment = builtInlineSeamComment
 		self.seamCall = seamCall
@@ -69,6 +70,9 @@ final class Scope: Hashable {
 	// MARK: Internal
 
 	let instantiable: Instantiable
+
+	/// `instantiable`, held once for every generator built for this scope.
+	let sharedInstantiable: SharedInstantiable
 
 	/// The dependencies of the type that this scope does not build or receive, because a mock builds the type
 	/// with a hand-written mock that is not passed them. Always empty in a scope of the dependency tree.
@@ -1807,6 +1811,7 @@ private struct ScopeGeneratorUnderConstruction {
 		let fillNames = holeArguments.isEmpty ? [:] : GenerationWork.taking(enclosingFillsOfThisCall, by: .gatheringFillsOfACall)
 		let builtGenerator = ScopeGenerator(
 			instantiable: scope.instantiable,
+			sharedInstantiable: scope.sharedInstantiable,
 			property: property,
 			propertiesToGenerate: childGenerators,
 			// A scope that closes a cycle creates no children.
