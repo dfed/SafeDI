@@ -8541,6 +8541,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.configurationStruct: 34,
 		.constructionFunction: 84,
 		.consumerCall: 82,
+		.consumerCallsTieredMockWithoutBuilderStruct: 43,
 		.consumerErasedCall: 19,
 		.consumerErasedInline: 3,
 		.consumerFillReentersPublicMock: 2,
