@@ -581,6 +581,24 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsDisagreementNamingBothFiles_whenTwoModulesBeneathNameTheReferencedModule() async throws {
+		var paths = [String]()
+		for checksum: UInt64 in [1, 2] {
+			let path = URL.temporaryFile.appendingPathExtension("safedi")
+			try Self.moduleInfoFile(named: "Deep", ownEntryChecksum: checksum).moduleInfoData.write(to: path)
+			filesToDelete.append(path)
+			paths.append(path.path)
+		}
+		let modulesBeneathCSV = URL.temporaryFile
+		try paths.joined(separator: ",").write(to: modulesBeneathCSV, atomically: true, encoding: .utf8)
+		filesToDelete.append(modulesBeneathCSV)
+		await assertThrowsError("SafeDI was given two module infos that describe module `Deep` differently: \(paths.sorted().map { "`\($0)`" }.joined(separator: " and ")) were written against two different builds of `Deep`. Build `Deep` and the modules that depend on it again, so that every module info is written against the current one.") {
+			try await ModuleReferenceResolver(transitiveModuleInfoListPath: modulesBeneathCSV.path).resolvingReferences(in: [(Self.fileReferringToDeep, "/App.safedi")])
+		}
+	}
+
 	// MARK: Tests – Mocks
 
 	@Test
@@ -2337,8 +2355,16 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 	private static let clock = seamFixtureType(named: "Clock", declarations: [])
 
 	/// The module info file of a module `App` whose view refers to a module `Deep`.
-	private static let fileReferringToDeep = ModuleInfoFile(
-		moduleName: "App",
+	private static let fileReferringToDeep = moduleInfoFile(
+		named: "App",
+		view: ModuleInfoView(moduleGraph: [], declarations: [], references: [ViewedModuleReference(moduleName: "Deep", checksum: 1)]),
+	)
+
+	/// The module info file of a module named `moduleName` that declares nothing.
+	private static func moduleInfoFile(named moduleName: String, ownEntryChecksum: UInt64? = nil, view: ModuleInfoView = .empty) -> ModuleInfoFile {
+		ModuleInfoFile(
+		moduleName: moduleName,
+		ownEntryChecksum: ownEntryChecksum,
 		packageName: nil,
 		dependencyModuleNames: [],
 		imports: [],
@@ -2350,8 +2376,9 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		instantiableTypeNamesInAnyClause: [],
 		plainTypeDeclarations: [],
 		seamSignatures: [],
-		view: ModuleInfoView(moduleGraph: [], declarations: [], references: [ViewedModuleReference(moduleName: "Deep", checksum: 1)]),
+		view: view,
 	)
+	}
 
 	/// `DefaultThing`, which fulfills `Thing` and builds nothing.
 	private static let leafThingImplementation = """

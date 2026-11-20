@@ -52,8 +52,20 @@ actor ModuleReferenceResolver {
 			}
 		}
 		if !referringPathsByUnresolvedName.isEmpty {
-			let pathsByModuleName = try await transitivePathsByModuleName()
-			let pathsToRead = referringPathsByUnresolvedName.keys.compactMap { pathsByModuleName[$0] }.sorted()
+			let headsByModuleName = try await transitiveHeadsByModuleName()
+			var pathsToRead = [String]()
+			for moduleName in referringPathsByUnresolvedName.keys.sorted(by: { Array($0.utf8).lexicographicallyPrecedes(Array($1.utf8)) }) {
+				guard let heads = headsByModuleName[moduleName] else {
+					continue
+				}
+				// Two files that name a referenced module and describe it differently are reported, as two given files of
+				// one module are, rather than one of them chosen.
+				if let differing = heads.first(where: { $0.ownEntryChecksum != heads[0].ownEntryChecksum }) {
+					throw ModuleInfoDisagreementError(moduleName: moduleName, filePaths: [heads[0].path, differing.path])
+				}
+				pathsToRead.append(heads[0].path)
+			}
+			pathsToRead.sort()
 			for (listedPath, (file, path)) in try await zip(pathsToRead, Generate.loadSafeDIModuleInfo(at: pathsToRead, readingViews: false)) {
 				openedPaths.insert(listedPath)
 				if ownEntries[file.moduleName] == nil {
@@ -103,15 +115,16 @@ actor ModuleReferenceResolver {
 
 	private let transitiveModuleInfoListPath: String?
 	private var ownEntries = [String: OwnEntry]()
-	private var cachedTransitivePathsByModuleName: [String: String]?
+	private var cachedTransitiveHeadsByModuleName: [String: [(path: String, ownEntryChecksum: UInt64?)]]?
 
-	/// The path of each module's file among those the transitive list names, read once: the first in path order where two
-	/// files describe one module, as a module given twice is read once.
-	private func transitivePathsByModuleName() async throws -> [String: String] {
-		if let cachedTransitivePathsByModuleName {
-			return cachedTransitivePathsByModuleName
+	/// The files the transitive list names, as it spells them, with each one's own-entry checksum, by the module each names,
+	/// in path order: read once, so which file a reference resolves to follows the module's name and the paths alone,
+	/// never the order the reads finished in.
+	private func transitiveHeadsByModuleName() async throws -> [String: [(path: String, ownEntryChecksum: UInt64?)]] {
+		if let cachedTransitiveHeadsByModuleName {
+			return cachedTransitiveHeadsByModuleName
 		}
-		var pathsByModuleName = [String: String]()
+		var headsByModuleName = [String: [(path: String, ownEntryChecksum: UInt64?)]]()
 		if let transitiveModuleInfoListPath {
 			let paths = try Set(String(contentsOfFile: transitiveModuleInfoListPath, encoding: .utf8).parsedPathListCSV()).sorted()
 			let heads = try await withThrowingTaskGroup(of: (index: Int, head: ModuleInfoFile.Head).self) { taskGroup in
@@ -130,12 +143,12 @@ actor ModuleReferenceResolver {
 				}
 				return heads.sorted { $0.index < $1.index }
 			}
-			for (index, head) in heads where pathsByModuleName[head.moduleName] == nil {
-				pathsByModuleName[head.moduleName] = paths[index]
+			for (index, head) in heads {
+				headsByModuleName[head.moduleName, default: []].append((path: paths[index], ownEntryChecksum: head.ownEntryChecksum))
 			}
 			headReadPaths = Set(paths)
 		}
-		cachedTransitivePathsByModuleName = pathsByModuleName
-		return pathsByModuleName
+		cachedTransitiveHeadsByModuleName = headsByModuleName
+		return headsByModuleName
 	}
 }
