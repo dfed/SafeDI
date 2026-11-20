@@ -460,7 +460,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		let seeds = GraphFuzzerCallingMockCell.all.compactMap { cell in
 			draws.first { $0.cell == cell && $0.valueProbes != nil }?.seed
 		}
-		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293, 450, 451, 452, 453, 530, 531, 610, 611, 612, 613, 614, 615, 670, 671, 672, 673, 674, 675, 730, 743, 738, 733, 734, 735, 790, 791, 792, 793, 794, 795])
+		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293, 450, 451, 452, 453, 530, 531, 610, 611, 612, 613, 614, 615, 670, 671, 672, 673, 674, 675, 730, 743, 738, 733, 734, 735, 790, 791, 792, 793, 794, 795, 1030, 1031, 1032, 1033, 1034, 1035])
 		for seed in seeds {
 			var filesToDelete = [URL]()
 			defer {
@@ -1285,6 +1285,51 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(GraphFuzzerCallingMockDraw(seed: 0).guardedValueCondition == nil)
 	}
 
+	/// Seed 1030 draws the first graph of `calledTypeReceivesValueOnlyIfAvailableNothingProvides/internal/plain`, the first
+	/// of its block: an internal calling mock whose called type's tree receives, only if available, a value nothing in the
+	/// calling tree provides. Its twin's seam takes the value as a parameter, and the mock takes an override for it, which the
+	/// probe hands a value the twin is handed too, so both build one tree. It fails with the override reverted
+	/// (`ScopeGenerator.receivedOnlyByPublicMockCallsLeftOut`), when the probe passes an override `mock()` does not take.
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_passesOverrideToCall_whenDrawnCalledTypeReceivesValueOnlyIfAvailableNothingProvides() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 1030)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 1030)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .calledTypeReceivesValueOnlyIfAvailableNothingProvides, caller: .internal, place: .plain))
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.passUps.isEmpty)
+		#expect(result.comparedValues)
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
+	/// The graphs of the shape whose called type receives only if available a value nothing in the calling tree provides
+	/// draw each receiver, each caller kind and each place, in the pinned number of graphs, each at least ten.
+	@Test
+	func calledTypeReceivesValueOnlyIfAvailableNothingProvidesDraw_drawsEachVariation_inPinnedNumberOfGraphs() {
+		let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .calledTypeReceivesValueOnlyIfAvailableNothingProvides }
+		var counts = [String: Int]()
+		for draw in draws {
+			counts[draw.valueNothingProvides?.receiverIsBeneathCalledType == true ? "beneathCalledType" : "calledType", default: 0] += 1
+			counts[draw.cell.caller.rawValue, default: 0] += 1
+			counts[draw.cell.place.rawValue, default: 0] += 1
+		}
+		print("calling-mock called types receiving a value nothing provides \(counts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
+
+		#expect(counts == [
+			"calledType": 21,
+			"beneathCalledType": 39,
+			"internal": 20,
+			"public": 20,
+			"listed": 20,
+			"plain": 30,
+			"deferred": 30,
+		])
+		#expect(counts.values.allSatisfy { $0 >= 10 })
+		#expect(GraphFuzzerCallingMockDraw(seed: 0).valueNothingProvides == nil)
+	}
+
 	/// Seed 970 draws the first graph of `fillConstructsTypeCallerModuleCannotReach/internal/plain`, the first of its block:
 	/// an internal calling mock whose fill instantiates a protocol only a type of the outer module fulfills, which the
 	/// caller's module cannot reach, in a build that compiles the generated mocks. Its twin reports the access error, and
@@ -2065,7 +2110,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	@Test
 	func drawnCells_coverEveryCell_whenCorpusDrawsTenGraphsPerCell() {
-		#expect(GraphFuzzerCallingMockCell.all.count == 103)
+		#expect(GraphFuzzerCallingMockCell.all.count == 109)
 		#expect(GraphFuzzerCallingMockCell.drawnCells == GraphFuzzerCallingMockCell.all)
 		#expect(Self.callingMockCorpusSeedCount == GraphFuzzerCallingMockCell.drawnCells.count * 10)
 		#expect(GraphFuzzerCallingMockCell.firstSeeds.map(GraphFuzzerCallingMockCell.cell(ofSeed:)) == GraphFuzzerCallingMockCell.all)
