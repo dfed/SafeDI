@@ -101,6 +101,59 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 		#expect(starts == 24)
 	}
 
+	@Test
+	@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
+	mutating func generate_writesSameCode_whenEarlyStartsFinishInAnyOrder() async throws {
+		// The tree created twice for its lazy cycle starts 84 scopes early, across both passes. Each run forces the order in
+		// which they finish, and the code must be what a run whose starts race writes.
+		let fixture = Self.ternaryTree(
+			depth: Self.depth,
+			beneath: ["Root"],
+			rootDeclarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"],
+		) + [
+			seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Received let session: Session", "@Instantiated let stepBuilder: Instantiator<Step>"]),
+			seamFixtureType(named: "Step", isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
+			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
+		]
+		let racing = try await executeSafeDIToolTest(
+			swiftFileContent: fixture,
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			// The tree's code is what every other test of its shapes compares; this one compares it across orders.
+			skipCompileVerification: true,
+		)
+		var orders: [@Sendable (Int) -> [Int]] = [{ Array(0..<$0) }, { Array((0..<$0).reversed()) }]
+		for seed in UInt64(1)...4 {
+			orders.append { count in
+				var state = seed
+				return (0..<count).map { position in
+					// SplitMix64.
+					state &+= 0x9E37_79B9_7F4A_7C15
+					var mixed = state
+					mixed = (mixed ^ (mixed >> 30)) &* 0xBF58_476D_1CE4_E5B9
+					mixed = (mixed ^ (mixed >> 27)) &* 0x94D0_49BB_1331_11EB
+					return (key: mixed ^ (mixed >> 31), position: position)
+				}
+				.sorted { $0.key < $1.key }
+				.map(\.position)
+			}
+		}
+		for order in orders {
+			let ordering = ForcedCodeTaskStartOrder(order: order)
+			let ordered = try await CodeTaskStart.$ordering.withValue(ordering) {
+				try await executeSafeDIToolTest(
+					swiftFileContent: fixture,
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+					skipCompileVerification: true,
+				)
+			}
+			// Every start took its turn in the order forced.
+			#expect(await ordering.turnsTaken() == order(84))
+			#expect(ordered.dependencyTreeFiles == racing.dependencyTreeFiles)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
