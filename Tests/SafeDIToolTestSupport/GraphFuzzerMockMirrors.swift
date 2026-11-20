@@ -1056,7 +1056,9 @@ extension GraphFuzzerMockMirrorModel {
 		guard mockedType.dependencies.allSatisfy({ $0.source != .forwarded || requiredParameters.contains($0.property) }) else {
 			return .failure(.skipped(.requiredParameter))
 		}
-		var declaredProperties = Set<GraphFuzzerMirrorProperty>()
+		// The mirror forwards each value the mocked type forwards, so an alias of one of them is fulfilled in the mirror as
+		// the mock and production bind it, to that value.
+		var declaredProperties = mockedType.forwardedReceivableProperties
 		for child in mockRoot.children {
 			if case .instantiated = child {
 				declaredProperties.formUnion(child.receivableProperties.map(\.unwrapped))
@@ -1083,7 +1085,7 @@ extension GraphFuzzerMockMirrorModel {
 		}
 		// What the mirror's declarations put in scope, as production reads them: each child it builds by its non-optional
 		// form, with the instance of a lazily instantiated one, and each alias it declares.
-		var mirrorDeclaredProperties = Set<GraphFuzzerMirrorProperty>()
+		var mirrorDeclaredProperties = mockedType.forwardedReceivableProperties
 		for child in mockRoot.children {
 			switch child {
 			case let .instantiated(property, _, _):
@@ -1098,8 +1100,14 @@ extension GraphFuzzerMockMirrorModel {
 		for case let .instantiated(property, _, _) in mockRoot.promotedChildren {
 			promotedDeclaredProperties.formUnion([property.unwrapped] + [property.unwrapped.lazilyInstantiatedInstance].compactMap(\.self))
 		}
-		// The mock's required parameters, which the mirror forwards, then what the mock builds beside the mocked type.
-		var declarations = requiredParameters.map { GraphFuzzerMockMirror.Declaration(attribute: "@Forwarded", property: $0) }
+		// The mock's required parameters, which the mirror forwards, then what the mock builds beside the mocked type. A
+		// value the mock takes by value and wraps for its tree's receives of one wrapper kind (`lazily-instantiated.md`)
+		// is forwarded as that wrapper, whose declaration provides its instance too, as a parent that declares the wrapper
+		// gives the tree the mock's value; a value the mocked type forwards stays as it is, since a forwarded value is
+		// never the source of another form of its label.
+		var declarations = requiredParameters.map { parameter in
+			GraphFuzzerMockMirror.Declaration(attribute: "@Forwarded", property: Self.forwardedForm(of: parameter, mockedType: mockedType, receivedInTree: mockRoot.received))
+		}
 		for child in mockRoot.children {
 			switch child {
 			case let .instantiated(property, scopeTypeName, isErased):
@@ -1187,6 +1195,17 @@ extension GraphFuzzerMockMirrorModel {
 			construction: construction,
 			shapes: shapes(of: mockRoot, mockedTypeName: typeName),
 		))
+	}
+
+	/// The form in which the mirror forwards the mock's required parameter `parameter`: the one wrapper kind the tree
+	/// receives it in, where the mock takes it by value and the mocked type does not forward it, else as it is.
+	private static func forwardedForm(of parameter: GraphFuzzerMirrorProperty, mockedType: TypeDeclaration, receivedInTree: Set<GraphFuzzerMirrorProperty>) -> GraphFuzzerMirrorProperty {
+		guard !parameter.isOptional, !mockedType.dependencies.contains(where: { $0.source == .forwarded && $0.property == parameter }) else {
+			return parameter
+		}
+		let wrappers = Set(receivedInTree.map(\.unwrapped).filter { $0.lazilyInstantiatedInstance == parameter })
+		guard wrappers.count == 1, let wrapper = wrappers.first else { return parameter }
+		return wrapper
 	}
 
 	/// What the mirror passes the mocked type for `property`: the declaration of it, the instance of a lazily
@@ -1624,7 +1643,11 @@ struct GraphFuzzerValueOraclePlan {
 			switch model.mirror(of: mockRoot, mockedTypeName: typeName, named: "\(fixture.typeNamePrefix)ZMirror\(mirrors.count)", forwarding: requiredParameters) {
 			case var .success(mirror):
 				mirror.mockArguments = mockArguments.compactMap(\.self)
-				mirror.forwardedPropertiesSample = requiredParameters.isEmpty ? nil : samples.forwardedPropertiesExpression(of: requiredParameters)
+				// A wrapper the mirror forwards in place of a value the mock takes wraps a sample built up front, as the mock
+				// builds the value it is handed before its wrapper reads it.
+				let forwardedProperties = mirror.declarations.filter { $0.attribute == "@Forwarded" }.map(\.property)
+				let wrappersOfValuesTheMockTakes = Set(forwardedProperties.filter { !requiredParameters.contains($0) })
+				mirror.forwardedPropertiesSample = forwardedProperties.isEmpty ? nil : samples.forwardedPropertiesExpression(of: forwardedProperties, wrappersBuiltAroundInstances: wrappersOfValuesTheMockTakes)
 				mirrors.append(mirror)
 			case let .failure(.skipped(skip)):
 				skips.append((typeName, skip))
