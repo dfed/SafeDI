@@ -53,7 +53,9 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 		)
 
 		let generateOutput = try #require(output.modules["App"]?.generateOutput)
-		#expect(Self.declaringModules(of: generateOutput.dependentModules.flatMap(\.instantiables) + generateOutput.module.instantiables) == [
+		// The declarations App's run read from each module info file it was given, as that module's run wrote them.
+		let dependentInstantiables = generateOutput.dependentModuleNames.compactMap(\.self).flatMap { output.modules[$0]?.moduleInfo?.instantiables ?? [] }
+		#expect(Self.declaringModules(of: dependentInstantiables + generateOutput.module.instantiables) == [
 			"App": DeclaringModule(moduleName: "App", packageName: "Application"),
 			"Engine": DeclaringModule(moduleName: "Core", packageName: "Foundations"),
 			"Pump": DeclaringModule(moduleName: "Middle", packageName: "Foundations"),
