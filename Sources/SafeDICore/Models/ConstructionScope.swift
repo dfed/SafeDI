@@ -168,6 +168,8 @@ struct ScopesBuiltAtOnePlace: Sendable {
 			for case let .instantiated(_, id, _) in records[referrer].propertiesToGenerate {
 				reference(id)
 			}
+			// A fill place has no key and stores nothing, so counting its reference only keys, with nothing to hit, a scope the
+			// tree otherwise builds at one place. The count is kept so that one place means one reference of any kind.
 			for case let .fill(_, id) in records[referrer].holeArguments {
 				reference(id)
 			}
