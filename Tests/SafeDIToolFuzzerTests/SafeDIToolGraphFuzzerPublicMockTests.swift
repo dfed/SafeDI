@@ -241,6 +241,42 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		#expect(runs(seed: 0, staleValue).publicMockAcceptanceFailure?.kind == .publicMockRejectsGraphKnownRightAccepts)
 	}
 
+	@Test
+	func publicMockAcceptanceFailure_allowsSendableFunctionCarryError_onlyWhereFillOfCalledMockReadsContextBoundOutsideSendableFunction() {
+		// Seed 157's fill, in a module that cannot build `T6` inline and so calls its public mock, reads `holeContext`, which
+		// `T6` instantiates outside the `@Sendable` function that builds `holeHost: SendableLazilyInstantiated<HoleHost>`: the
+		// error its production twin reports (contract rule 7). Seed 978's fill makes the same read beneath the same wrapper, in
+		// a module that builds `T6` inline, which reads it as the known-right path does; seed 370's fill reads `holeExtra`
+		// beneath the wrapper, seed 59 draws the wrapper with no fill, and seed 0 draws no wrapper. Only the first may report
+		// the error, and only about `holeContext`, `T6` and that function.
+		func error(seed: UInt64, label: String = "holeContext", declaringType: String = "T6", function: String = "holeHost: SendableLazilyInstantiated") -> GraphFuzzerToolOutcome {
+			.rejected(diagnostics: "/F/S\(seed)_HoleFill.swift:7:33: error: `S\(seed)_Hole` receives `\(label): S\(seed)_HoleContext`, which `S\(seed)_\(declaringType)` declares outside the `@Sendable` function that builds `\(function)<S\(seed)_HoleHost>`, and SafeDI hands the builder for `S\(seed)_HoleHost`’s `holeBuilder: Instantiator<S\(seed)_Hole>` (`holeBuilder` of `s\(seed)_HoleSendableBuilder`) only what that function binds. Instantiate `\(label)` outside `S\(seed)_\(declaringType)` and declare `@Received let \(label): S\(seed)_HoleContext` on `S\(seed)_\(declaringType)`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `S\(seed)_Hole` in module `FuzzFeature` or a module it lists among its SafeDI dependencies.\n/F/S\(seed)_T6.swift:15:2: note: `S\(seed)_\(declaringType)` declares `\(label): S\(seed)_HoleContext` here.")
+		}
+		let accepted = GraphFuzzerToolOutcome.accepted(generatedFiles: [:], warnings: [])
+		func runs(seed: UInt64, _ drawn: GraphFuzzerToolOutcome) -> GraphFuzzerToolRuns {
+			GraphFuzzerToolRuns(fixture: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]), firstOutcome: drawn, secondOutcome: drawn, knownRightOutcome: accepted)
+		}
+		func features(seed: UInt64) -> Set<GraphFuzzerPublicMockDrawFeature> {
+			GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
+		}
+		#expect(features(seed: 157).contains(.holeFillReadsContextBoundOutsideSendableFunction))
+		#expect(features(seed: 978).isSuperset(of: [.holeBeneathSendableWrapper, .holeFillReceivesField, .consumerReachesHoleTypeWithFill]))
+		#expect(features(seed: 370).isSuperset(of: [.holeBeneathSendableWrapper, .holeFillReceivesNonField, .consumerReachesHoleTypeWithFill]))
+		#expect(features(seed: 59).contains(.holeBeneathSendableWrapper))
+		#expect(!features(seed: 59).contains(.consumerReachesHoleTypeWithFill))
+		#expect(!features(seed: 0).contains(.holeBeneathSendableWrapper))
+		for seed: UInt64 in [978, 370, 59, 0] {
+			#expect(!features(seed: seed).contains(.holeFillReadsContextBoundOutsideSendableFunction), "seed \(seed)")
+		}
+		#expect(runs(seed: 157, error(seed: 157)).publicMockAcceptanceFailure == nil)
+		#expect(runs(seed: 157, error(seed: 157, label: "holeExtra")).publicMockAcceptanceFailure?.kind == .publicMockRejectsGraphKnownRightAccepts)
+		#expect(runs(seed: 157, error(seed: 157, declaringType: "HoleHost")).publicMockAcceptanceFailure?.kind == .publicMockRejectsGraphKnownRightAccepts)
+		#expect(runs(seed: 157, error(seed: 157, function: "holeHostBuilder: SendableInstantiator")).publicMockAcceptanceFailure?.kind == .publicMockRejectsGraphKnownRightAccepts)
+		for seed: UInt64 in [978, 370, 59, 0] {
+			#expect(runs(seed: seed, error(seed: seed)).publicMockAcceptanceFailure?.kind == .publicMockRejectsGraphKnownRightAccepts, "seed \(seed)")
+		}
+	}
+
 	// MARK: Ground-truth access oracle
 
 	@Test
@@ -382,6 +418,32 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: [])).publicMockOverrideClosureFailure?.kind == .publicMockDropsOverrideClosureItsCallCanHand)
 		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: ["public let overriddenDetail: ((@escaping () -> any S\(seed)_OverriddenPlace1Api) -> S\(seed)_OverriddenDetail)?"])).publicMockOverrideClosureFailure == nil)
 		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: ["let overriddenDetailBuilder: ((@escaping () -> any S\(seed)_OverriddenPlace1Api) -> S\(seed)_OverriddenDetail)?"])).publicMockOverrideClosureFailure == nil)
+	}
+
+	@Test
+	func publicMockOverrideClosureFailure_reportsDroppedClosure_whenFillReadsSessionConsumerBuilds() {
+		// Seed 55's `OverriddenLive` reads `overriddenSession`, which `OverriddenDetail` does not receive: its `.public` consumer
+		// fills the place with the session it builds, as its production twin does (contract rule 7), so its overrides keep the
+		// closure, handed a function over that fill.
+		let seed: UInt64 = 55
+		let features = GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
+		#expect(features.isSuperset(of: [.overrideClosureCallFillReadsConsumersValue, .overrideClosureCallCanHand]))
+		#expect(!features.contains(.overrideClosureCallPublicCallerPassesPlaceUp))
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: [])).publicMockOverrideClosureFailure?.kind == .publicMockDropsOverrideClosureItsCallCanHand)
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: ["public let overriddenDetailBuilder: ((@escaping () -> any S\(seed)_OverriddenPlace1Api) -> S\(seed)_OverriddenDetail)?"])).publicMockOverrideClosureFailure == nil)
+	}
+
+	@Test
+	func publicMockOverrideClosureFailure_reportsOfferedClosure_whenFillReadsOtherPlaceBesideSessionConsumerBuilds() {
+		// Seed 170's `OverriddenLive` reads `overriddenSession`, which `OverriddenDetail` does not receive, and the call's other
+		// place: its internal consumer fills the place, so the fill reads a value the called mock binds itself, and its
+		// overrides hold no closure.
+		let seed: UInt64 = 170
+		let features = GraphFuzzerPublicMockDraw.drawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateMockPublic]))
+		#expect(features.isSuperset(of: [.overrideClosureCallFillReadsConsumersValue, .overrideClosureCallFillReadsCalledMocksOtherPlace]))
+		#expect(!features.contains(.overrideClosureCallCanHand))
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: [])).publicMockOverrideClosureFailure == nil)
+		#expect(overrideClosureRuns(seed: seed, consumerMock: overriddenScreenMock(seed: seed, members: ["let overriddenDetail: ((@escaping () -> any S\(seed)_OverriddenPlace1Api, @escaping () -> any S\(seed)_OverriddenPlace1Store) -> S\(seed)_OverriddenDetail)?"])).publicMockOverrideClosureFailure?.kind == .publicMockOffersOverrideClosureItsCallCannotHand)
 	}
 
 	/// The first public mock corpus seed whose call of `OverriddenDetail` can hand its override closure a builder a person
