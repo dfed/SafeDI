@@ -4,8 +4,9 @@ load("@safedi//bazel:safedi.bzl", "safedi_swift_library")
 # `swift_library`, and `ExampleBazelIntegration_safedi`, which runs
 # SafeDITool over the same sources with the same `defines` and `copts`.
 # The generated `ExampleBazelIntegration_safedi.swift` holds the
-# dependency tree and every mock the module needs, in one declared
-# output regardless of source contents.
+# dependency tree, and `ExampleBazelIntegration_safedi_Mocks1.swift` and
+# `…_Mocks2.swift` hold the module's mocks, spread over two files: declared
+# outputs regardless of source contents.
 safedi_swift_library(
     name = "ExampleBazelIntegration",
     srcs = glob(["**/*.swift"]),
@@ -17,6 +18,8 @@ safedi_swift_library(
     # The package `Subproject` and `Models` belong to, so the code SafeDI
     # generates here may call `package` initializers it generates there.
     package_name = "ExampleBazelIntegration",
+    # Spreads the module's mocks over 32 files, so CI builds the split.
+    split_mocks = True,
     # This module lists the module it depends on directly. It declares the
     # root, so SafeDI also reads every module beneath `Subproject` that
     # declares a type the root's tree needs, `Models` among them, which the

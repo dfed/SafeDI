@@ -179,6 +179,16 @@ def _compilation_conditions_from_copts(copts):
 def _safedi_compile_impl(ctx):
     module_info = ctx.actions.declare_file(ctx.label.name + ".safedi")
     combined = ctx.actions.declare_file(ctx.label.name + ".swift")
+
+    # The files `--split-combined-output-mocks` spreads the mocks over,
+    # named as SafeDITool names them: the combined file's name with
+    # `_Mocks1` … `_Mocks32` before `.swift`. SafeDITool always writes 32
+    # (`MockFileDistribution.fileCount`), so the rule can declare them
+    # before it runs.
+    mock_files = [
+        ctx.actions.declare_file("%s_Mocks%d.swift" % (ctx.label.name, index))
+        for index in range(1, 33)
+    ] if ctx.attr.split_mocks else []
     input_csv = _write_csv(ctx, ctx.label.name + "_sources.csv", ctx.files.srcs)
 
     dependency_module_info_files = [
@@ -206,6 +216,8 @@ def _safedi_compile_impl(ctx):
         # directives can name them and stay free of machine-specific paths.
         "--compiler-receives-input-paths-unchanged",
     ]
+    if mock_files:
+        arguments.append("--split-combined-output-mocks")
 
     # rules_swift applies `copt` in the target configuration and
     # `exec_copt` in the exec configuration, telling them apart by the
@@ -264,7 +276,7 @@ def _safedi_compile_impl(ctx):
         executable = ctx.toolchains[_SAFEDITOOL_TOOLCHAIN_TYPE].safeditool,
         toolchain = _SAFEDITOOL_TOOLCHAIN_TYPE,
         inputs = depset(ctx.files.srcs + [input_csv] + extra_inputs, transitive = [module_infos_beneath]),
-        outputs = [combined, module_info],
+        outputs = [combined, module_info] + mock_files,
         arguments = arguments,
         mnemonic = "SafeDI",
         progress_message = "SafeDI compile for %{label}",
@@ -275,7 +287,7 @@ def _safedi_compile_impl(ctx):
         # downstream `swift_library.srcs` resolves to the generated
         # source. The `.safedi` rides through `SafeDIInfo` so other
         # `safedi_compile` rules can list this label in `deps`.
-        DefaultInfo(files = depset([combined])),
+        DefaultInfo(files = depset([combined] + mock_files)),
         SafeDIInfo(
             module_info = module_info,
             transitive_module_infos = depset([module_info], transitive = module_infos_of_dependencies),
@@ -338,6 +350,14 @@ name rules_swift derives from that library's label.
 which the compiler receives as `-package-name`. Leave it empty when
 the library has none.""",
         ),
+        "split_mocks": attr.bool(
+            default = False,
+            doc = """Whether to spread the generated mocks over 32 files,
+so that an edit recompiles only the files whose mocks it changed. When
+set, the generated file holds the dependency trees, and the mocks go to
+`<name>_Mocks1.swift` … `<name>_Mocks32.swift`, each whole into the file
+its type's name picks.""",
+        ),
         "_swift_copts": attr.label(
             default = Label("@build_bazel_rules_swift//swift:copt"),
             providers = [BuildSettingInfo],
@@ -357,6 +377,7 @@ def safedi_swift_library(
         defines = [],
         copts = [],
         package_name = None,
+        split_mocks = False,
         tags = None,
         testonly = None,
         visibility = None,
@@ -394,6 +415,10 @@ def safedi_swift_library(
         package_name: The package the `swift_library` belongs to, which
             the compiler receives as `-package-name` and which
             `package` declarations need. Passed to both targets.
+        split_mocks: Whether to spread the generated mocks over 32
+            files, so that an edit recompiles only the files whose mocks
+            it changed. False, the default, keeps them in the one
+            generated file.
         tags: Passed to both targets.
         testonly: Passed to both targets.
         visibility: Passed to both targets, because a module that
@@ -413,6 +438,7 @@ def safedi_swift_library(
         # rules_swift names it.
         module_name = kwargs.get("module_name") or derive_swift_module_name(native.package_name(), name),
         package_name = package_name,
+        split_mocks = split_mocks,
         tags = tags,
         testonly = testonly,
         visibility = visibility,
