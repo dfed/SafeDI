@@ -114,6 +114,11 @@ public struct ParsedModule: Sendable {
 	let conditionalCompilationEvaluator: ConditionalCompilationEvaluator
 	/// The entries of `configuration.additionalDirectoriesToInclude`, each with the path its files were found at.
 	let additionalDirectories: [AdditionalDirectory]
+	/// The declarations in the module's own files of the types whose names begin with a reserved prefix that the
+	/// `@Instantiable` macro does not see (`FileVisitor.reservedTypeNameDeclarations`), in source order: path, then line,
+	/// then column. A reserved name is reserved under every condition, so these depend on none. They are not part of
+	/// `moduleInfo`, so a module's `.safedi` does not carry them: only the module's own run reports them.
+	let reservedTypeNameDeclarations: [ReservedTypeNameDeclaration]
 }
 
 /// An entry of a `#SafeDIConfiguration(additionalDirectoriesToInclude:)`, and the absolute path SafeDI looked for
@@ -406,12 +411,20 @@ func parseModuleKeepingPlainTypeNames(
 	// behind a comment, which a `package` declaration other modules read can have.
 	let skippedFilePathsMentioningPackageAccessModifier = walkedFiles.skippedFilePathsMentioningPackageAccessModifier
 		.union(conventionalConfigurationFileReads.filter(\.read.mayDeclareTypeOtherModulesCanName).map(\.path))
-	let unkeptFileScans = try await finalFileScans + walkFilesDeclaringTypes(
-		among: Set(mayDeclareTypesNamedBySkippedFilePath.filter { !$0.value.isDisjoint(with: keptTypeNames.outermostTypeNames) }.map(\.key))
-			.union(skippedFilePathsMentioningPackageAccessModifier)
-			.sorted(),
+	let typeDeclaringSkippedFilePaths = Set(mayDeclareTypesNamedBySkippedFilePath.filter { !$0.value.isDisjoint(with: keptTypeNames.outermostTypeNames) }.map(\.key))
+		.union(skippedFilePathsMentioningPackageAccessModifier)
+	// A file of the module's own that may declare a type whose name begins with a reserved prefix is parsed too, so that
+	// its declarations of such types are reported, as a file that mentions SafeDI reports them. Such a file contributes
+	// nothing else that the search did not parse it for, so the module's declarations are those a parse that read no
+	// reserved name would find, and scan's cache, which walks no file again for a reserved name, finds the same.
+	let reservedTypeNameDeclaringSkippedFilePaths = Set(mayDeclareTypesNamedBySkippedFilePath.filter { file in
+		file.value.contains { ReservedName.reservedTypeNamePrefix(of: $0) != nil } && isReadingModuleFile(file.key)
+	}.map(\.key)).subtracting(typeDeclaringSkippedFilePaths)
+	let skippedFileScans = try await walkFilesDeclaringTypes(
+		among: typeDeclaringSkippedFilePaths.union(reservedTypeNameDeclaringSkippedFilePaths).sorted(),
 		conditionalCompilation: evaluator,
 	)
+	let unkeptFileScans = finalFileScans + skippedFileScans.filter { !reservedTypeNameDeclaringSkippedFilePaths.contains($0.path) }
 	// Each file's declarations are kept apart from every other's, so the files are kept concurrently.
 	let moduleFileScans = await unkeptFileScans
 		.map { (fileScan: $0, isInReadingModule: isReadingModuleFile($0.path)) }
@@ -428,6 +441,10 @@ func parseModuleKeepingPlainTypeNames(
 			configuration: configuration,
 			conditionalCompilationEvaluator: evaluator,
 			additionalDirectories: configuration?.additionalDirectoriesToInclude.map(AdditionalDirectory.init(entry:)) ?? [],
+			reservedTypeNameDeclarations: (finalFileScans + skippedFileScans)
+				.filter { isReadingModuleFile($0.path) }
+				.flatMap(\.reservedTypeNameDeclarations)
+				.sortedInSourceOrder(),
 		),
 		moduleFileScans,
 		keptTypeNames,
@@ -555,6 +572,10 @@ public struct FileScan: Codable, Sendable {
 	/// `generate` parses the module afresh when a mention of one appears or goes away, even of a name a top-level
 	/// `@Instantiable` type shares. Empty until the module keeps its plain declarations.
 	let keptGuardedPlainTypeNames: [String]
+	/// The file's declarations of types whose names begin with a reserved prefix that the `@Instantiable` macro does not
+	/// see (`FileVisitor.reservedTypeNameDeclarations`), in every clause of every `#if` block, which are the same whatever
+	/// the conditions.
+	let reservedTypeNameDeclarations: [ReservedTypeNameDeclaration]
 
 	/// Whether any compilation condition decided what the file contributed. A file whose scan consults
 	/// none contributes the same whatever conditions are supplied.
@@ -633,6 +654,7 @@ public struct FileScan: Codable, Sendable {
 			},
 			plainTypeDeclarationDecisions: [],
 			keptGuardedPlainTypeNames: keptGuardedTypeNames.sorted(),
+			reservedTypeNameDeclarations: reservedTypeNameDeclarations,
 		)
 	}
 
@@ -653,6 +675,7 @@ public struct FileScan: Codable, Sendable {
 			plainTypeDeclarations: plainTypeDeclarations,
 			plainTypeDeclarationDecisions: plainTypeDeclarationDecisions,
 			keptGuardedPlainTypeNames: keptGuardedPlainTypeNames,
+			reservedTypeNameDeclarations: reservedTypeNameDeclarations,
 		)
 	}
 
@@ -685,6 +708,7 @@ public struct FileScan: Codable, Sendable {
 			},
 			plainTypeDeclarationDecisions: plainTypeDeclarationDecisions,
 			keptGuardedPlainTypeNames: keptGuardedPlainTypeNames,
+			reservedTypeNameDeclarations: reservedTypeNameDeclarations,
 		)
 	}
 }
@@ -757,6 +781,13 @@ extension ModuleInfo {
 			instantiableTypeNamesInAnyClause: fileScans.flatMap(\.outputFileDeclarations.instantiableTypeNames),
 			plainTypeDeclarations: fileScans.flatMap(\.plainTypeDeclarations),
 		)
+	}
+}
+
+extension [ReservedTypeNameDeclaration] {
+	/// These declarations in source order: path, then line, then column, whatever order the files were parsed in.
+	func sortedInSourceOrder() -> [ReservedTypeNameDeclaration] {
+		sorted { Dependency.DeclarationLocation.precedesInSourceOrder($0.location, $1.location) }
 	}
 }
 
@@ -989,8 +1020,9 @@ private enum WalkedSwiftFile: Sendable {
 /// did not parse, since their text mentions no SafeDI marker, but whose text may declare a type whose plain declaration
 /// SafeDI reads.
 /// Each contributes its declarations of types that are not `@Instantiable` (`FileVisitor.plainTypeDeclarations`) in the
-/// clauses the conditions select, with the conditions and decisions that selected them. Nothing else is taken from such a
-/// file, not even its syntax errors, as SafeDI otherwise reads nothing of it.
+/// clauses the conditions select, with the conditions and decisions that selected them, and its declarations of types
+/// whose names begin with a reserved prefix (`FileVisitor.reservedTypeNameDeclarations`). Nothing else is taken from such
+/// a file, not even its syntax errors, as SafeDI otherwise reads nothing of it.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 private func walkFilesDeclaringTypes(
 	among filePaths: [String],
@@ -1026,6 +1058,7 @@ private func walkFilesDeclaringTypes(
 					plainTypeDeclarations: fileVisitor.plainTypeDeclarations,
 					plainTypeDeclarationDecisions: fileVisitor.plainTypeDeclarationDecisions,
 					keptGuardedPlainTypeNames: [],
+					reservedTypeNameDeclarations: fileVisitor.reservedTypeNameDeclarations,
 				)
 				.relocated(to: filePath)
 			}
@@ -1044,7 +1077,7 @@ private struct ReadSwiftFile {
 	/// The file's syntax tree, when its text mentions a SafeDI marker, so it was parsed.
 	let syntaxTree: SourceFileSyntax?
 	/// When its text mentions no SafeDI marker, so it was not parsed, the names of the types it may declare: each name
-	/// that follows `enum`, `struct`, `class`, `actor`, `protocol`, or `typealias` and whitespace in it
+	/// that follows `enum`, `struct`, `class`, `actor`, `protocol`, `typealias`, or `associatedtype` and whitespace in it
 	/// (`TypeDeclarationWords.namesFollowingKeywords`), a superset of the names of the types it declares, which a parse
 	/// decides exactly. A declaration with a comment between the keyword and the name is not found. Empty for a parsed
 	/// file.
@@ -1084,8 +1117,8 @@ private func readSwiftFile(atPath filePath: String, findingPackageAccessModifier
 
 /// What `UnsafeBufferPointer<UInt8>.typeDeclarationWords` found in a file's text.
 struct TypeDeclarationWords {
-	/// Each name that follows `enum`, `struct`, `class`, `actor`, `protocol`, or `typealias` and whitespace, the keyword a
-	/// whole word too: a word, or a name in backticks without them, as a mention of the type spells it
+	/// Each name that follows `enum`, `struct`, `class`, `actor`, `protocol`, `typealias`, or `associatedtype` and
+	/// whitespace, the keyword a whole word too: a word, or a name in backticks without them, as a mention of the type spells it
 	/// (`mentionedTypeNames(of:)`). A superset of the names of the types the text declares.
 	var namesFollowingKeywords = Set<String>()
 	/// Whether the text holds the word `package`, which every declaration only another module of the package can name
@@ -1161,9 +1194,10 @@ extension UnsafeBufferPointer<UInt8> {
 		return found
 	}
 
-	/// Whether these bytes, a word, are a keyword that introduces a declaration of a type whose access SafeDI reads:
-	/// `enum`, `struct`, `class`, `actor`, `protocol`, or `typealias`. A word's length rules out most words, and every
-	/// other keyword, before any byte is compared.
+	/// Whether these bytes, a word, are a keyword that introduces a declaration of a type whose access SafeDI reads –
+	/// `enum`, `struct`, `class`, `actor`, `protocol`, or `typealias` – or `associatedtype`, which introduces a type whose
+	/// name SafeDI reads only for a reserved prefix. A word's length rules out most words, and every other keyword, before
+	/// any byte is compared.
 	private var isTypeDeclarationKeyword: Bool {
 		switch count {
 		case 4:
@@ -1176,6 +1210,8 @@ extension UnsafeBufferPointer<UInt8> {
 			spells("protocol")
 		case 9:
 			spells("typealias")
+		case 14:
+			spells("associatedtype")
 		default:
 			false
 		}
@@ -1247,6 +1283,7 @@ private func walk(
 		plainTypeDeclarations: fileVisitor.plainTypeDeclarations,
 		plainTypeDeclarationDecisions: fileVisitor.plainTypeDeclarationDecisions,
 		keptGuardedPlainTypeNames: [],
+		reservedTypeNameDeclarations: fileVisitor.reservedTypeNameDeclarations,
 	)
 	.relocated(to: filePath)
 	return fileScan.declaresSafeDIContent ? fileScan : fileScan.replacingImports(with: [], mockImports: [])

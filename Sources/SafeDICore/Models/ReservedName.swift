@@ -18,6 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import SwiftSyntax
+
 /// A name that SafeDI’s generated code introduces into a scope where it also binds, or refers to, the names it is
 /// given: property labels, `fulfilledByDependencyNamed:` names, `instantiate(…)` parameter names, and the argument
 /// labels a generated `mock()` takes. A name SafeDI is given that is reserved would collide with the generated one,
@@ -78,7 +80,47 @@ public enum ReservedName: Hashable, Sendable {
 		String(String.UnicodeScalarView(name.unicodeScalars.dropFirst(builderFunctionNamePrefix.unicodeScalars.count)))
 	}
 
+	/// The prefix among `reservedTypeNamePrefixes` that `typeName`, spelled without backticks, begins with, or `nil` when
+	/// it begins with none. No prefix begins another, so a name begins with one at most.
+	public static func reservedTypeNamePrefix(of typeName: String) -> String? {
+		reservedTypeNamePrefixes.first { typeName.utf8.starts(with: $0.utf8) }
+	}
+
+	/// The error at a type named `typeName`, or at a spelling of it, which begins with `prefix`, one of
+	/// `reservedTypeNamePrefixes`. The `@Instantiable` macro and SafeDITool both report it, so its wording is spelled once.
+	public static func reservedTypeNameMessage(typeName: String, prefix: String) -> String {
+		"The type name `\(typeName)` begins with `\(prefix)`, a prefix SafeDI reserves for names in the code it generates. Rename the type so that its name does not begin with `\(prefix)`."
+	}
+
 	// MARK: Internal
+
+	/// The prefix of the name of a seam's plain root enum, `SafeDIScope_<Stem>`, which the seam's module declares in an
+	/// extension of the seam, and of the payload structs it declares there.
+	static let seamScopeTypeNamePrefix = "SafeDIScope_"
+
+	/// The prefix of the name of a seam's `@Sendable` root enum, `SafeDISendableScope_<Stem>`.
+	static let sendableSeamScopeTypeNamePrefix = "SafeDISendableScope_"
+
+	/// The prefix of the name of a public mock's plain root enum, `SafeDIMockScope_<Stem>`, which the mocked type's module
+	/// declares in an extension of the mocked type.
+	static let publicMockScopeTypeNamePrefix = "SafeDIMockScope_"
+
+	/// The prefix of the name of a public mock's `@Sendable` root enum, `SafeDISendableMockScope_<Stem>`.
+	static let sendablePublicMockScopeTypeNamePrefix = "SafeDISendableMockScope_"
+
+	/// The prefixes of the names of the types SafeDI's generated code declares beside the types a person declares, each
+	/// reserved whole so that no generated name can collide with a person's type: a seam's root enums and a public
+	/// mock's, and `builderFunctionNamePrefix`, the prefix of the builder struct `__safeDI_Builder` a seam's enums declare,
+	/// of the guard enums a seam's and a public mock's module declares, and of a public mock's module-level configuration.
+	/// Not every name with one of these prefixes collides with a name SafeDI generates, and which ones do changes with the
+	/// generator, so each prefix is reserved whole.
+	static let reservedTypeNamePrefixes = [
+		seamScopeTypeNamePrefix,
+		sendableSeamScopeTypeNamePrefix,
+		publicMockScopeTypeNamePrefix,
+		sendablePublicMockScopeTypeNamePrefix,
+		builderFunctionNamePrefix,
+	]
 
 	/// The argument label under which the initializer of a seam that only generated code calls takes the parameter or
 	/// builder labeled `label`, which is in `spelledAsIdentifier` spelling. A person's call uses the readable label on the
@@ -151,4 +193,61 @@ public enum ReservedName: Hashable, Sendable {
 	/// The names of the types generated code constructs by name: the wrapper of each kind of property that is not
 	/// a constant, which generated code builds with its builder function.
 	static let constructedTypeNames = Set(Property.PropertyType.allCases.compactMap(\.wrapperTypeName))
+}
+
+// MARK: - ReservedTypeNameDeclaration
+
+/// A declaration of a type whose name begins with one of `ReservedName.reservedTypeNamePrefixes` that the `@Instantiable`
+/// macro does not see: one that is neither `@Instantiable` itself nor declared inside an `@Instantiable` type or
+/// extension, at any depth. SafeDITool reports each one in the module's own files, as the macro reports those it sees.
+public struct ReservedTypeNameDeclaration: Codable, Hashable, Sendable {
+	public init(typeName: String, prefix: String, location: Dependency.DeclarationLocation?) {
+		self.typeName = typeName
+		self.prefix = prefix
+		self.location = location
+	}
+
+	/// The declared type's own name, spelled without backticks.
+	public let typeName: String
+	/// The reserved prefix `typeName` begins with.
+	public let prefix: String
+	/// Where the declaration's name is written.
+	public let location: Dependency.DeclarationLocation?
+
+	/// The record of the type `name` declares, when its name begins with a reserved prefix.
+	/// - Parameter sourceLocationConverter: A converter for the tree `name` is in, with which the record names where the
+	///   name is written.
+	static func declaredBy(_ name: TokenSyntax, sourceLocationConverter: SourceLocationConverter?) -> ReservedTypeNameDeclaration? {
+		let typeName = name.text.spelledWithoutBackticks
+		return ReservedName.reservedTypeNamePrefix(of: typeName).map { prefix in
+			ReservedTypeNameDeclaration(
+				typeName: typeName,
+				prefix: prefix,
+				location: sourceLocationConverter?.declarationLocation(for: name.positionAfterSkippingLeadingTrivia),
+			)
+		}
+	}
+
+	/// The records of the type aliases and associated types among the members of `protocolDeclaration`, in every clause of
+	/// each `#if` block among them, in source order: a protocol's body declares no other type.
+	static func declaredAmongMembers(of protocolDeclaration: ProtocolDeclSyntax, sourceLocationConverter: SourceLocationConverter?) -> [ReservedTypeNameDeclaration] {
+		func typeNames(in members: MemberBlockItemListSyntax) -> [TokenSyntax] {
+			members.flatMap { member -> [TokenSyntax] in
+				if let typeAlias = TypeAliasDeclSyntax(member.decl) {
+					[typeAlias.name]
+				} else if let associatedType = AssociatedTypeDeclSyntax(member.decl) {
+					[associatedType.name]
+				} else if let ifConfigDeclaration = IfConfigDeclSyntax(member.decl) {
+					ifConfigDeclaration.clauses.flatMap { clause in
+						MemberBlockItemListSyntax(clause.elements).map(typeNames(in:)) ?? []
+					}
+				} else {
+					[]
+				}
+			}
+		}
+		return typeNames(in: protocolDeclaration.memberBlock.members).compactMap {
+			declaredBy($0, sourceLocationConverter: sourceLocationConverter)
+		}
+	}
 }
