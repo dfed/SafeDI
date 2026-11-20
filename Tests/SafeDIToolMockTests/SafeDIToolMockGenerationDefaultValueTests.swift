@@ -2453,7 +2453,7 @@ struct SafeDIToolMockGenerationDefaultValueTests: ~Copyable {
 		        func __safeDI_widgetBuilder() -> Widget {
 		            if let safeDIBuilder = safeDIOverrides.widgetBuilder.safeDIBuilder { safeDIBuilder(safeDIOverrides.widgetBuilder.onTap) } else { Widget.instantiate(onTap: safeDIOverrides.widgetBuilder.onTap) }
 		        }
-		        let widgetBuilder = Instantiator<Widget>(__safeDI_widgetBuilder)
+		        let widgetBuilder: Instantiator<Widget> = Instantiator<Widget>(__safeDI_widgetBuilder)
 		        return Root(widgetBuilder: widgetBuilder)
 		    }
 		}

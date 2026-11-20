@@ -881,7 +881,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MyService.mock() }
+		        let service: MyService = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { MyService.mock() }
 		        return Root(service: service)
 		    }
 		}

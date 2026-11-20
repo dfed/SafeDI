@@ -12472,8 +12472,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// Both branches give the property's type, which the default construction may not without the annotation.
 					lines.append("\(indent)let \(outerBindingName)\(node.overriddenBindingTypeAnnotation) = \(passing(promotedParameterName, orBuilding: constructionExpression))")
 				} else {
-					// Leaf constant node — flat binding, no scoping needed.
-					let typeAnnotation = overrideExpression == nil ? "" : node.overriddenBindingTypeAnnotation
+					// Leaf constant node — flat binding, no scoping needed. A type declared in an extension is annotated
+					// with its property's type, as production annotates it (`BindingDeclaration`): `instantiate()` returns
+					// the concrete type, which may differ from the property's.
+					let typeAnnotation = if node.isExtensionBased, !node.erasedToConcreteExistential {
+						": \(node.instantiatedTypeSpelledAsDeclared.asSource)"
+					} else if overrideExpression == nil {
+						""
+					} else {
+						node.overriddenBindingTypeAnnotation
+					}
 					lines.append("\(indent)let \(outerBindingName)\(typeAnnotation) = \(constructionExpression)")
 				}
 			}
@@ -13266,7 +13274,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Emit the Instantiator/ErasedInstantiator construction.
 		let unwrappedType = node.typeDescription.unwrapped
-		let outerBinding = unwrappedType.isConstructedByAnnotation ? "\(outerBindingName): \(unwrappedType.asSource)" : outerBindingName
+		// An instantiator of a type declared in an extension is annotated, as production annotates it (`BindingDeclaration`);
+		// a lazily instantiated property never is.
+		let annotatesExtension = node.isExtensionBased && !node.property.propertyType.isLazilyInstantiated
+		let outerBinding = unwrappedType.isConstructedByAnnotation || annotatesExtension ? "\(outerBindingName): \(unwrappedType.asSource)" : outerBindingName
 
 		// The builder function now returns the property type directly (including
 		// wrapping for erasedToConcreteExistential), so no outer wrapping needed.
