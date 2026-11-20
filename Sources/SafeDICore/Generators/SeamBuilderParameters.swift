@@ -1651,8 +1651,18 @@ extension DependencyTreeGenerator {
 			// `nil`, which the fill's tree passes it too, unless the property is an instantiator, which is handed a wrapper of
 			// its own (see `instantiatorBuildingSite`).
 			guard !onlyIfAvailable || ScopeGenerator.isBuilder(hole.property) || !isHolesOwnProperty(property) else { return }
-			let reader = DependencyTreeGeneratorError.FillFinding.Reader(property: property, type: instantiable.concreteInstantiable, declarationLocation: declarationLocation, passingCall: passingCall)
+			let reader = DependencyTreeGeneratorError.FillFinding.Reader(property: property, type: instantiable.concreteInstantiable, declarationLocation: declarationLocation, passingCall: passingCall, isOnlyIfAvailable: onlyIfAvailable)
 			let sameLabelFields = fields.filter { $0.property.label == property.label }
+			// A declaration a called copy of a fill on the place's path leaves uncarried, which the place joins to its own
+			// (`unreadableInsideFills(_:placeFields:fillingModule:)`), is nearer the place than every field of its label: each
+			// field is a level's above that fill, since a label the fill's hole carries or a scope beneath its root declares is
+			// never one. So it is tested before the field branch, as the visible build tests it, where the fill's hole carries no
+			// field of the label. A declaration that presents the place itself, as every seam that passes the place up presents it,
+			// is not one: the place's own fields are nearer than what that seam binds.
+			let calledCopyDeclarations = hole.uncarriedDeclarations.filter { declaration in
+				guard declaration.property.label == property.label, case let .boundByPassingUpSeam(_, _, place) = declaration.reason else { return false }
+				return !place.isPresentation(of: hole)
+			}
 			// A value a cycle in the seam's tree hands the site's owner when it builds it again is wrong at every level but the
 			// first, whether a field carries the label or the fill reads it from the caller's scope.
 			// This rejection keeps a builder struct's re-entry of a reopened level safe, which carries nothing bound above it (the
@@ -1692,6 +1702,12 @@ extension DependencyTreeGenerator {
 				}
 				for (first, carried) in groups {
 					findings.append(.init(hole: hole, kind: .fieldOfReenteringPlace(reader: reader, isOnlyIfAvailable: onlyIfAvailable, carried: carried, reenteredPlace: first.reenteredPlace, fillingModule: first.fillingModule, seamModule: first.reenteredSeamModule)))
+				}
+			} else if !calledCopyDeclarations.isEmpty {
+				for declaration in calledCopyDeclarations {
+					if case let .boundByPassingUpSeam(_, passingUpSeamModule, _) = declaration.reason {
+						findings.append(.init(hole: hole, kind: .declarationBoundAfterSite(reader: reader, declaration: declaration, seamModule: passingUpSeamModule)))
+					}
 				}
 			} else if let field = sameLabelFields.first(where: { provides($0, property) }) {
 				if !field.access.satisfies(requirement) {
@@ -1961,6 +1977,8 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			/// For a receive of a seam's call, which passes it on to the seam's tree: the type that makes the call, the call's
 			/// property, and where that property is declared.
 			var passingCall: PassingCall?
+			/// Whether the type receives the value only if available, which a remedy that receives it again follows.
+			let isOnlyIfAvailable: Bool
 		}
 
 		/// A call of a seam, by `callingType`'s `property`, declared at `declarationLocation`.
@@ -2311,6 +2329,13 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 					"outside the `@Sendable` function that builds `\(functionProperty.asSource)`, and \(scope) \(scopeCarries) only what that function binds."
 				}
 				let capitalizedFulfillRemedy = "\(fulfillRemedy(seamModule).prefix(1).uppercased())\(fulfillRemedy(seamModule).dropFirst())."
+				// Receiving on the seam a value that a place built inside a `@Sendable` function reads reaches the place only where the
+				// seam declares the value itself: a type of its tree, or a seam it calls, that declares it still binds it outside the
+				// function, and a seam it calls carries its own receive of it in the struct its fill binds, so the place would get the
+				// same error. Only the fulfilling type is offered there.
+				let receiveOnSeamRemedy = declaration.declaringType == hole.scopeSeamType
+					? "Instantiate `\(declaration.property.label)` outside \(seamName) and declare `@\(Dependency.Source.receivedRawValue) let \(declaration.property.asSource)` on \(seamName), so the \(buildersPossessive) caller reads its own, or \(fulfillRemedy(seamModule))."
+					: capitalizedFulfillRemedy
 				/// The message of a declaration `seam` binds on a path to calls that present the places the finding names, whose
 				/// builders it passes up: each place itself, or the place a fill fills, when the reader is beneath a place inside
 				/// that fill. Every part a place decides – the seams whose calls present them, the builders, each remedy – comes
@@ -2342,7 +2367,10 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 						message += " Instantiate `\(declaration.property.label)` outside `\(seam.asSource)` and declare `@\(Dependency.Source.receivedRawValue) let \(declaration.property.asSource)` on `\(seam.asSource)`, so the \(buildersPossessive) caller reads its own, or \(fulfillRemedy(of: sendablePlaces))."
 					}
 					if !plainPlaces.isEmpty {
-						message += " Declare `@\(Dependency.Source.receivedRawValue) let \(reader.property.asSource)` on \(listed(seamsInPlaceOrder(plainPlaces))), so the \(namesSeveralBuilders ? "builders’ values structs carry" : "builder’s values struct carries") it, or \(fulfillRemedy(of: plainPlaces))."
+						// The receive follows the reader's, as the error about a declaration on the path to a seam built again does: a
+						// reader only if available is handed `nil` inline on a route that binds no value.
+						let receive = reader.isOnlyIfAvailable ? "@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)" : "@\(Dependency.Source.receivedRawValue)"
+						message += " Declare `\(receive) let \(reader.property.asSource)` on \(listed(seamsInPlaceOrder(plainPlaces))), so the \(namesSeveralBuilders ? "builders’ values structs carry" : "builder’s values struct carries") it, or \(fulfillRemedy(of: plainPlaces))."
 					}
 					return message
 				}
@@ -2384,7 +2412,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 						"`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which `\(declaration.declaringType.asSource)` \(isForwarded ? "forwards" : "declares") \(outside(functionProperty)) "
 							+ (isForwarded
 								? functionBuiltType.map { "Declare `@\(Dependency.Source.forwardedRawValue) let \(declaration.property.asSource)` on `\($0.asSource)` too, so that function binds it, or \(fulfillRemedy(seamModule))." } ?? capitalizedFulfillRemedy
-								: "Instantiate `\(declaration.property.label)` outside \(seamName) and declare `@\(Dependency.Source.receivedRawValue) let \(declaration.property.asSource)` on \(seamName), so the \(buildersPossessive) caller reads its own, or \(fulfillRemedy(seamModule)).")
+								: receiveOnSeamRemedy)
 					}
 				}
 				// A parameter of a builder function a cycle closes on is noted where the cycle declares the value it passes.

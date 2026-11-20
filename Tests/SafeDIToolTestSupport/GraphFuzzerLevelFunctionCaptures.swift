@@ -41,7 +41,8 @@ import SwiftSyntax
 /// 1. A closure or local function nested in a member closure's body refers to the member closure's parameter, by
 ///    member access or whole: reported once per member closure, at the first such reference. A reference counts only
 ///    when it resolves to that parameter, with no nearer declaration of the name between (a nested closure's or
-///    function's parameter, a local `let` or `var`, a pattern binding).
+///    function's parameter, a local `let` or `var`, a pattern binding). An expression of a nested closure's capture list
+///    is outside that closure, since it is evaluated where the closure is made.
 /// 2. A member closure uses its parameter in its own body other than as the base of a member access, as the one
 ///    argument of a direct call of a member of a parameter of its level function whose type is a builder struct
 ///    (`up.<member>(values)`, the caller's struct for the same level), or as the first argument of a direct call of a fill
@@ -309,6 +310,12 @@ private struct FileJudgment {
 		var child = Syntax(reference)
 		while let parent = child.parent, parent.id != judgedRoot.id {
 			if let closure = parent.as(ClosureExprSyntax.self) {
+				// An expression of a capture list is evaluated where the closure is made, outside it: the closure keeps what it
+				// evaluates to, never what it reads.
+				guard child.id != closure.signature?.id else {
+					child = parent
+					continue
+				}
 				if closureDeclares(closure, name) {
 					return nil
 				}
