@@ -59,4 +59,19 @@ struct UnreadTypeCommentTests {
 		let code = "\u{1}UnreadTypes\u{1}F\u{1}C\u{1}A\n\u{1}UnreadTypes\u{1}E\u{1}C\u{1}B\u{1}F\n\u{1}UnreadTypes\u{1}D\u{1}A\u{1}E\n"
 		#expect(UnreadTypeComment.resolvingMarkers(in: code) == "// SafeDI counts `A`, `B`, `C`, `D`, `E`, and `F` as `public`: no module it reads declares them narrower. If one is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.\n")
 	}
+
+	@Test(arguments: [
+		[],
+		[""],
+		["public struct S {}\n"],
+		["public struct S {}", "public struct T {}\n"],
+		["public enum E {\n\t\u{1}UnreadTypes\u{1}B\n\tpublic func b() {}\n}", "\u{1}UnreadTypes\u{1}A\npublic func a() {}"],
+		["\u{1}UnreadTypes\u{1}B\npublic func b() {}", "\t\u{1}UnreadTypes\u{1}A\u{1}C\n\tpublic func a() {}\n", "x\n\u{1}UnreadTypes\u{1}D"],
+		["public struct S {}", "\u{1}UnreadTypes\u{1}A\n\u{1}UnreadTypes\u{1}B\npublic func a() {}", "\u{1}UnreadTypes\u{1}C"],
+		["let a = \"\u{1}UnreadTypes\u{1}B\"", "\u{1}UnreadTypes\u{1}A\nx = 1\n", "\u{1}"],
+	])
+	func resolvingMarkersJoining_writesTheBytesOfThePrefixAndTheResolvedJoinedText_whenPiecesHoldMarkers(pieces: [String]) {
+		let prefix = "// Header\nimport A\n\n"
+		#expect(UnreadTypeComment.resolvingMarkers(joining: pieces, separator: "\n\n", after: prefix) == Array((prefix + UnreadTypeComment.resolvingMarkers(in: pieces.joined(separator: "\n\n"))).utf8))
+	}
 }
