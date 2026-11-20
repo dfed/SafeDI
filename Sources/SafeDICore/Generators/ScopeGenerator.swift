@@ -9541,7 +9541,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// A body every node of which the production emitter builds is planned (`mockBodyPlan`) and written by it, with
 			// the override hook and the body's naming policy; any other is written by the per-path walk, until every feature
 			// is routed and the walk is deleted.
-			let bodyBindings: [String]
 			if publicMock == nil,
 			   lazilyInstantiatedBindingNameMap.isEmpty,
 			   uncoveredDependencyNameMap.isEmpty,
@@ -9550,7 +9549,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			   let plan = await Self.mockBodyPlan(of: rootItems, labelMap: rootLabelMap, flatParameterDisambiguationMap: treeDisambiguationMap, context: context)
 			{
 				MockBodyRouting.record(routed: true)
-				bodyBindings = try await GeneratedCodeText.nonBlankLines(of: GeneratedCode.lines(generateProperties(
+				// The body is held as one string, its lines joined, rather than a string per line: a module's mocks can be tens
+				// of megabytes, which the strings of their lines would hold again beside the text they are joined into.
+				let body = try await GeneratedCodeText.nonBlankLinesJoined(of: GeneratedCode.lines(generateProperties(
 					codeGeneration: .overriding(plan),
 					propertiesGeneratedLater: [],
 					enclosingFunctionNames: [:],
@@ -9558,9 +9559,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					fillPlaceBindings: .none,
 				))
 				.spelled())
+				// A body whose items write nothing, such as one that binds only overrides of what it receives only if
+				// available, adds no line, as the lines it split into added none.
+				if !body.isEmpty {
+					lines.append(body)
+				}
 			} else {
 				MockBodyRouting.record(routed: false)
-				bodyBindings = await Self.generateMockBodyBindings(
+				let bodyBindings = await Self.generateMockBodyBindings(
 					items: rootItems,
 					propertyNodeLabelMap: rootLabelMap,
 					parentPath: ReservedName.mockOverridesParameterName,
@@ -9582,8 +9588,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						)
 					},
 				)
+				lines.append(contentsOf: bodyBindings)
 			}
-			lines.append(contentsOf: bodyBindings)
 		} else {
 			lines.append(contentsOf: lazilyInstantiatedBindings)
 			lines.append(contentsOf: rootReceiverBindings)
@@ -9622,8 +9628,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lines.append("}")
 		}
 
-		let code = lines.joined(separator: "\n")
-		return wrapInConditionalCompilation(code, mockConditionalCompilation: context.mockConditionalCompilation)
+		return GeneratedCodeText.joined(lines, wrappedInConditionalCompilation: context.mockConditionalCompilation)
 	}
 
 	/// Generates the labeled argument list for the return statement in the mock body.

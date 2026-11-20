@@ -65,13 +65,13 @@ struct GeneratedCodeTextTests {
 	}
 
 	@Test
-	func nonBlankLines_dropsLinesOfWhitespace_whenCodeHasBlankAndIndentedLines() {
+	func nonBlankLinesJoined_dropsLinesOfWhitespace_whenCodeHasBlankAndIndentedLines() {
 		let code = "\n\tlet a = A()\n  \t\n\u{0B}\nlet b = B()\n"
-		#expect(GeneratedCodeText.nonBlankLines(of: code) == ["\tlet a = A()", "let b = B()"])
+		#expect(GeneratedCodeText.nonBlankLinesJoined(of: code) == "\tlet a = A()\nlet b = B()")
 	}
 
 	@Test
-	func nonBlankLines_returnsWhatSplittingAndFilteringReturns_forEveryStringOfUpToSixTokens() {
+	func nonBlankLinesJoined_returnsWhatSplittingFilteringAndJoiningReturns_forEveryStringOfUpToSixTokens() {
 		// Every string of up to six of these tokens: a line feed, a carriage return that forms `"\r\n"` with a line feed
 		// beside it, a multi-byte character, a non-ASCII whitespace character, ASCII whitespace, and plain text.
 		let tokens = ["x", "\n", "\r", "\u{A0}", "\t", " "]
@@ -80,10 +80,23 @@ struct GeneratedCodeTextTests {
 			let expected = code
 				.components(separatedBy: "\n")
 				.filter { !$0.allSatisfy(\.isWhitespace) }
-			return GeneratedCodeText.nonBlankLines(of: code).map { Array($0.utf8) } != expected.map { Array($0.utf8) }
+				.joined(separator: "\n")
+			return Array(GeneratedCodeText.nonBlankLinesJoined(of: code).utf8) != Array(expected.utf8)
 		}
 		#expect(codes.count == 55_987)
 		#expect(mismatches.map { Array($0.unicodeScalars) } == [])
+	}
+
+	@Test
+	func joined_returnsWhatJoiningReturnsWrappedInCondition_whenGivenACondition() {
+		let lines = ["struct A {", "", "\tlet a = 1", "}"]
+		#expect(GeneratedCodeText.joined(lines, wrappedInConditionalCompilation: "DEBUG") == "#if DEBUG\n\(lines.joined(separator: "\n"))\n#endif")
+	}
+
+	@Test
+	func joined_returnsWhatJoiningReturns_whenGivenNoCondition() {
+		let lines = ["struct A {", "", "\tlet a = 1", "}"]
+		#expect(GeneratedCodeText.joined(lines, wrappedInConditionalCompilation: nil) == lines.joined(separator: "\n"))
 	}
 
 	@Test
