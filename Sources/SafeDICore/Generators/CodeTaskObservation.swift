@@ -78,3 +78,20 @@ public enum MockBodyRouting {
 		}
 	}
 }
+
+/// Each list of items a mock root’s parameter tree builds beneath a generator, which a tree shares among every place
+/// that reaches the generator in the same context (`ScopeGenerator.MockTreeBuild`). The tests count the builds of each
+/// generator and context, which a tree that built a list per path would repeat. Handed to `observer`, which the tests
+/// set, never the tool.
+public enum MockTreeBuildObservation {
+	/// Called each time a mock parameter tree builds the items beneath a generator, with the generator, whether it builds
+	/// inside a `@Sendable` scope, and the properties generated after it, when set: by the tests, never by the tool.
+	@TaskLocal public static var observer: (@Sendable (_ generator: ObjectIdentifier, _ insideSendableScope: Bool, _ propertiesGeneratedLater: Set<Property>) -> Void)?
+
+	/// Tells `observer`, when set, that the items beneath `generator` were built in `context`.
+	static func record(generator: ObjectIdentifier, context: ScopeGenerator.MockTreeContext) {
+		if let observer {
+			observer(generator, context.insideSendableScope, context.propertiesGeneratedLater)
+		}
+	}
+}

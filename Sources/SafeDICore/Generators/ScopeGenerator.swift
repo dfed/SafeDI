@@ -4868,7 +4868,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if let finishedRootMockParameterTree {
 				return finishedRootMockParameterTree
 			}
-			let rootMockParameterTreeTask = rootMockParameterTreeTask ?? Task { await collectMockParameterTree(constructions: MockConstructions()).items }
+			let rootMockParameterTreeTask = rootMockParameterTreeTask ?? Task {
+				var build = MockTreeBuild()
+				return await collectMockParameterTree(context: MockTreeContext(), build: &build)
+			}
 			self.rootMockParameterTreeTask = rootMockParameterTreeTask
 			let tree = await rootMockParameterTreeTask.value
 			// A reader that awaited the same task, or the release, may have run in the meantime.
@@ -10156,6 +10159,37 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
+	/// What the items beneath a generator in a mock parameter tree are built from besides the generator
+	/// (`collectMockParameterTree(context:build:)`). Every input of the build that is not the generator's own settled state
+	/// is a field here, so a key of a generator and its context names one list.
+	struct MockTreeContext: Hashable, Sendable {
+		/// Whether the generator, or a scope above it, builds in a `@Sendable` function.
+		var insideSendableScope = false
+		/// The properties generated after the generator's scope, as `generateCode` takes them.
+		var propertiesGeneratedLater = Set<Property>()
+	}
+
+	/// A generator in a context, which names the items beneath it in one mock root's tree.
+	struct MockTreeKey: Hashable, Sendable {
+		let generator: ObjectIdentifier
+		let context: MockTreeContext
+	}
+
+	/// What one mock root's tree has built so far: the constructions its nodes worked out, and the items beneath each
+	/// generator in each context, which every later place of that generator in that context shares.
+	///
+	/// A deliberate exception to keeping a memo of a generator's work with the generator (`.claude/rules/generator-design.md`,
+	/// "A mock parameter tree is shared per generator"): the items are kept for one mock root's build only, in a value the
+	/// build's call holds and drops when it returns, never shared across tasks. Kept with the generators, they would live
+	/// as long as the generators, which every mock root shares, and every root's tree would be alive at once. A key's
+	/// `ObjectIdentifier` names one generator for as long as this value exists: the root's generator tree holds every
+	/// generator the build reaches until the build returns, so no generator's identifier is reused while it is a key.
+	struct MockTreeBuild: Sendable {
+		var constructions = MockConstructions()
+		/// The items beneath each generator in each context, `nil` where it has none.
+		var itemsByKey = [MockTreeKey: MockTreeItems?]()
+	}
+
 	/// The constructions one mock root's tree has worked out so far, by concrete type and whether the hand-written mock
 	/// builds it, so that a node shares the construction of an earlier node of its type built the same way. A value,
 	/// handed down the tree's walk and back, so no task shares it.
@@ -11383,27 +11417,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// same holds for a receive of an ancestor that is still being built (see
 	/// `Scope.createScopeGenerator`).
 	///
-	/// Returns the mock parameter tree beneath this scope, and `constructions` with those its nodes worked out added, which the
-	/// walk hands on to the next sibling.
+	/// The items beneath this scope are a function of the scope's generator and `context` alone: every fact of a place is
+	/// worked out here, by the parent, and kept in the child's node, and nothing in a node comes from above its parent. So
+	/// a child reached again in the same context shares the items its first place built (`MockTreeBuild`), and the tree
+	/// is a graph with a list per generator and context rather than per path.
+	///
+	/// - Parameter build: What this mock root's walk has built so far, handed down the walk and back, so no task shares it.
 	private func collectMockParameterTree(
-		insideSendableScope: Bool = false,
-		propertiesGeneratedLater: Set<Property> = [],
-		constructions: MockConstructions,
-	) async -> (items: [MockTreeItem], constructions: MockConstructions) {
+		context: MockTreeContext,
+		build: inout MockTreeBuild,
+	) async -> [MockTreeItem] {
+		MockTreeBuildObservation.record(generator: ObjectIdentifier(self), context: context)
+		let insideSendableScope = context.insideSendableScope
+		let propertiesGeneratedLater = context.propertiesGeneratedLater
 		var items = [MockTreeItem]()
-		var constructions = constructions
-		// The loop of builders each child is on, and the members of loops on a mock root that nothing outside their loop
-		// reads (see `ReceivedBuilderLoops`). Nearly every scope holds no loop.
-		var loopByGenerator = [ObjectIdentifier: Int]()
-		var membersReadOnlyInsideTheirLoop = Set<ObjectIdentifier>()
-		if !receivedBuilderLoops.loopByChildIndex.isEmpty {
-			for (index, loop) in receivedBuilderLoops.loopByChildIndex {
-				loopByGenerator[ObjectIdentifier(propertiesToGenerate[index])] = loop
-			}
-			for index in loopMembersReadOnlyInsideTheirLoop() {
-				membersReadOnlyInsideTheirLoop.insert(ObjectIdentifier(propertiesToGenerate[index]))
-			}
-		}
+		// The members of loops on a mock root that nothing outside their loop reads (see `ReceivedBuilderLoops`), by index
+		// among `propertiesToGenerate`, as the loop of each child is. Nearly every scope holds no loop.
+		let membersReadOnlyInsideTheirLoop: Set<Int> = receivedBuilderLoops.loopByChildIndex.isEmpty ? [] : Set(loopMembersReadOnlyInsideTheirLoop())
 
 		// The position of each child in the inline build's order, by its index among `propertiesToGenerate`: the build's
 		// order without a child that holds a place starting after its siblings, which is the build's order itself where no
@@ -11444,7 +11474,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					declarationReference: declarationReference,
 					// An alias whose fulfilling property is unavailable is declared `nil`, as production declares it.
 					isBoundToNil: Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: childUnavailableProperties),
-					loop: loopByGenerator[ObjectIdentifier(childGenerator)],
+					loop: receivedBuilderLoops.loopByChildIndex[childIndex],
 					generatorIdentifier: ObjectIdentifier(childGenerator),
 				)))
 			} else if case let .property(childInstantiableReference, childProperty, _, erasedToConcreteExistential, isPropertyCycle, _) = childGenerator.scopeData {
@@ -11455,13 +11485,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// Recurse into children to build the subtree. The child's builder function's own parameters hide the
 				// declarations of their labels inside it.
 				let childBodyPropertiesGeneratedLater = childGenerator.bodyPropertiesGeneratedLater(childPropertiesGeneratedLater)
-				let childTree = await childGenerator.collectMockParameterTree(
-					insideSendableScope: childInsideSendable,
-					propertiesGeneratedLater: childBodyPropertiesGeneratedLater,
-					constructions: constructions,
-				)
-				let childItems = childTree.items
-				constructions = childTree.constructions
+				let childContext = MockTreeContext(insideSendableScope: childInsideSendable, propertiesGeneratedLater: childBodyPropertiesGeneratedLater)
+				let childKey = MockTreeKey(generator: ObjectIdentifier(childGenerator), context: childContext)
+				let childItems: MockTreeItems?
+				if let builtItems = build.itemsByKey[childKey] {
+					// The constructions the first build worked out are in `build` already.
+					childItems = builtItems
+				} else {
+					let items = await childGenerator.collectMockParameterTree(context: childContext, build: &build)
+					childItems = items.isEmpty ? nil : MockTreeItems(items)
+					build.itemsByKey.updateValue(childItems, forKey: childKey)
+				}
 				let childConstructionUnavailableProperties = childGenerator.bodyUnavailableProperties(childUnavailableProperties)
 
 				// The construction the child's compatible mock method decides when it has one: it fully controls the
@@ -11470,7 +11504,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// the return type of the builder closure — rather than the property's own type, so an
 				// `ErasedInstantiator<_, Protocol>` property, like a `Protocol` property, is built with a mock that returns
 				// `Protocol`.
-				let construction = constructions.construction(
+				let construction = build.constructions.construction(
 					of: childInstantiable,
 					useMockInitializer: childInstantiable.mockReturnTypeIsCompatible(withPropertyType: childProperty.typeDescription.asInstantiatedType),
 					builderTypesDeclaredEscaping: childGenerator.publicMockCall?.typesDeclaredEscaping ?? [],
@@ -11485,7 +11519,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					instantiatedTypeDescription: childProperty.typeDescription.asInstantiatedType,
 					isInstantiator: isInstantiator,
 					erasedToConcreteExistential: erasedToConcreteExistential,
-					childItems: childItems.isEmpty ? nil : MockTreeItems(childItems),
+					childItems: childItems,
 					lazilyInstantiatedInstanceProperties: childGenerator.lazilyInstantiatedInstanceProperties,
 					unavailableProperties: childConstructionUnavailableProperties,
 					publicMockCall: childGenerator.publicMockCall,
@@ -11507,14 +11541,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					callSiteLazilyInstantiatedInstanceProperties: childGenerator.callSiteLazilyInstantiatedInstanceProperties,
 					buildsInSendableFunction: childGenerator.buildsInSendableFunction,
 					requiresSendable: childInsideSendable,
-					loop: loopByGenerator[ObjectIdentifier(childGenerator)],
+					loop: receivedBuilderLoops.loopByChildIndex[childIndex],
 					reboundProperties: childGenerator.reboundProperties,
-					isReadOutsideItsLoop: !membersReadOnlyInsideTheirLoop.contains(ObjectIdentifier(childGenerator)),
+					isReadOutsideItsLoop: !membersReadOnlyInsideTheirLoop.contains(childIndex),
 				)))
 			}
 		}
 
-		return (items, constructions)
+		return items
 	}
 
 	/// The `@Instantiated` dependencies of a mock's types that the mock cannot build, which `mock()` takes as
