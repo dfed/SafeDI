@@ -9337,8 +9337,10 @@ enum GraphFuzzerGenerator {
 			let mixSeamB = seam("MixSeamB", module: .seamDependency, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "mixLeafBuilder", type: "SendableInstantiator<\(leaf.name)>"), holePlace])
 			// A reader built in a `@Sendable` function beside a root's plain wrapper is rejected with advice to receive the
 			// plain wrapper there, which that function cannot capture: a remedy shape `fuzzer-remedy-oracle.md` records, which
-			// this draw does not repeat.
-			let tokenWrapper = rootDeclaresSendableWrapper || (readsWrapper && (readerInSendableFunction || drawsOnlyAcceptedVariants)) ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			// this draw does not repeat. A root's plain wrapper is also rejected where `MixMid`'s tree reads the value in a
+			// `@Sendable` function, so a graph that draws only accepted variants declares the `Sendable` one (seeds 146,
+			// 670, 990, 1156 and 1849 lost their hole graphs to it).
+			let tokenWrapper = rootDeclaresSendableWrapper || drawsOnlyAcceptedVariants || (readsWrapper && readerInSendableFunction) ? "SendableLazilyInstantiated" : "LazilyInstantiated"
 			var outerProperties = [PropertyDeclaration]()
 			if declaresWrapperOnOuter {
 				outerProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "mixToken", type: "SendableLazilyInstantiated<\(token.name)>"))
