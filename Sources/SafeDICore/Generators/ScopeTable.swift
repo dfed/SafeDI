@@ -48,7 +48,8 @@ final class ScopeRecord: Sendable {
 	/// position.
 	enum HoleArgument: Sendable {
 		case fill(SeamSignature.Hole, ScopeID)
-		case passUp(SeamSignature.Hole)	}
+		case passUp(SeamSignature.Hole)
+	}
 
 	/// See `Scope.instantiable`.
 	let instantiable: Instantiable
