@@ -58,7 +58,7 @@ extension DependencyTreeGenerator {
 		else { return nil }
 		let instantiable = mockRootInstantiable(for: scope.instantiable, scope: scope)
 		// The context a public mock's root reads, made only for one.
-		let publicMockContext = instantiable.generateMock == .public ? makePublicMockContext() : nil
+		let publicMockContext = instantiable.generateMock == .public ? makePublicMockContext(proof: ownAccessProof().proof) : nil
 		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
