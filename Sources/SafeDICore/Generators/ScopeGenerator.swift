@@ -150,7 +150,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let declaration = property.map { BuiltDeclaration(property: $0, concreteType: instantiable.concreteInstantiable) }
 		self.declaration = declaration
 		self.propertiesToGenerate = propertiesToGenerate
+		fillFieldSelection = fill.flatMap { fill in
+			propertiesToGenerate.first.flatMap { child in
+				FillFieldSelection(hole: fill.hole, boundLabels: fill.boundLabels, fields: fill.fields, child: child)
+			}
+		}
 		// What the code generated for the call's dispatchers decides, from the fills its children generate.
+		let levelFunctions: PublicMockLevelFunctions?
 		if publicMockCall != nil, !fillDispatchers.isEmpty {
 			var fillParametersByKey = [String: [SeamSignature.Hole.Field]]()
 			var fillNames = Set<String>()
@@ -180,7 +186,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				else { continue }
 				callerReads[label] = form
 			}
-			publicMockLevelFunctions = PublicMockLevelFunctions(
+			levelFunctions = PublicMockLevelFunctions(
 				dispatchers: fillDispatchers,
 				fillParametersByKey: fillParametersByKey,
 				roots: builderCallArguments.compactMap { builderCallArgument in
@@ -193,8 +199,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				enclosingLevelCalls: enclosingLevelCalls,
 			)
 		} else {
-			publicMockLevelFunctions = nil
+			levelFunctions = nil
 		}
+		publicMockLevelFunctions = levelFunctions
+		publicMockOverrideBuilders = Self.publicMockOverrideBuilders(
+			publicMockCall: publicMockCall,
+			builderCallArguments: builderCallArguments,
+			builtInstantiable: fill == nil ? instantiable : nil,
+			publicMockLevelFunctions: levelFunctions,
+			children: propertiesToGenerate,
+		)
 		containsBuildSite = propertiesToGenerate.contains(where: \.containsBuildSite)
 		if containsBuildSite {
 			// A site's field of a label declared here reads this scope's declaration, or the site carries no field of it.
@@ -1218,6 +1232,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		builderCallArguments = []
 		fillDispatchers = []
 		publicMockLevelFunctions = nil
+		publicMockOverrideBuilders = nil
+		fillFieldSelection = nil
 		passedUpHoles = []
 		valuesBindings = []
 		memberCallsInsideFunction = []
@@ -1326,6 +1342,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		builderCallArguments = []
 		fillDispatchers = []
 		publicMockLevelFunctions = nil
+		publicMockOverrideBuilders = nil
+		fillFieldSelection = nil
 		passedUpHoles = []
 		valuesBindings = []
 		memberCallsInsideFunction = []
@@ -4340,12 +4358,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// A label the root dispatcher reads from the caller's scope on some route is a parameter of the form every route can
 	/// hand it (`fillCallerReads`).
 	nonisolated var fillParameterFields: [SeamSignature.Hole.Field] {
-		guard let enumPlace = fillHole?.enumPlace, let child = propertiesToGenerate.first else { return [] }
-		let carried = Set(enumPlace.values.map(\.property.label))
-		return fillBoundFields.compactMap { field in
-			guard !carried.contains(field.property.label), child.reads(field.property) || child.fieldsCarriedBySites.contains(field.property) else { return nil }
-			return fillCallerReads.parameterByLabel[field.property.label] ?? field
-		} + fillCallerReads.innerScopeParameters
+		guard let fillFieldSelection else { return [] }
+		var parameterFields = [SeamSignature.Hole.Field]()
+		appendParameterFields(of: fillFieldSelection, to: &parameterFields)
+		return parameterFields
 	}
 
 	/// What a level function's member hands a fill beside its case's payload (`fillParameterFields`), and, for a fill that
@@ -4358,17 +4374,69 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// What a level function's member hands a fill beside its case's payload (`fillParameterFields`), first, where
 	/// `takingPayloadFields`, the fields of the payload it binds, each by itself.
 	nonisolated func fillMemberParameterFields(takingPayloadFields: Bool) -> [SeamSignature.Hole.Field] {
-		guard takingPayloadFields, let enumPlace = fillHole?.enumPlace, let child = propertiesToGenerate.first else { return fillParameterFields }
-		// Each is the fill's own field of the payload's label, which says how the fill binds it, as its body reads it: a
-		// deferred parameter's memo where it `bindsMemo`, which the member hands it in place of the value.
-		let boundFields = fillBoundFields
-		return enumPlace.values.compactMap { value in
-			guard let field = boundFields.first(where: { $0.property.label == value.property.label }),
-			      child.reads(value.property) || child.fieldsCarriedBySites.contains(value.property)
-			else { return nil }
-			return field
-		} + fillParameterFields
+		guard let fillFieldSelection else { return [] }
+		var fields = [SeamSignature.Hole.Field]()
+		if takingPayloadFields {
+			// Each is the fill's own field of the payload's label, which says how the fill binds it, as its body reads it: a
+			// deferred parameter's memo where it `bindsMemo`, which the member hands it in place of the value.
+			fields.reserveCapacity(fillFieldSelection.payloadFieldIndices.count + fillFieldSelection.parameterFieldIndices.count)
+			for index in fillFieldSelection.payloadFieldIndices {
+				fields.append(fillFields[index])
+			}
+		}
+		appendParameterFields(of: fillFieldSelection, to: &fields)
+		return fields
 	}
+
+	/// Appends `fillParameterFields`: each field `selection` names, in the form the root dispatcher reads its label from the
+	/// caller's scope where it does (`fillCallerReads`), then the scopes the fill is handed.
+	nonisolated private func appendParameterFields(of selection: FillFieldSelection, to fields: inout [SeamSignature.Hole.Field]) {
+		for index in selection.parameterFieldIndices {
+			let field = fillFields[index]
+			fields.append(fillCallerReads.parameterByLabel[field.property.label] ?? field)
+		}
+		fields.append(contentsOf: fillCallerReads.innerScopeParameters)
+	}
+
+	/// For a fill of a place whose case is nested by type, which of its fields (by index into `fillFields`) it takes
+	/// (`fillParameterFields`, `fillMemberParameterFields(takingPayloadFields:)`), decided once, when the fill's generator is
+	/// built: whether the generator it builds its type with reads a field, which these decide, never changes, and a level
+	/// function's member asks for them once per call it makes. It holds indices, not fields, and no generator, so it keeps
+	/// alive nothing the fill's generator does not.
+	final class FillFieldSelection: Sendable {
+		init?(hole: SeamSignature.Hole, boundLabels: Set<String>, fields: [SeamSignature.Hole.Field], child: ScopeGenerator) {
+			guard let enumPlace = hole.enumPlace else { return nil }
+			let carried = Set(enumPlace.values.map(\.property.label))
+			var firstBoundIndexByLabel = [String: Int]()
+			var parameterFieldIndices = [Int]()
+			for (index, field) in fields.enumerated() where boundLabels.contains(field.property.label) {
+				if firstBoundIndexByLabel[field.property.label] == nil {
+					firstBoundIndexByLabel[field.property.label] = index
+				}
+				if !carried.contains(field.property.label), child.reads(field.property) || child.fieldsCarriedBySites.contains(field.property) {
+					parameterFieldIndices.append(index)
+				}
+			}
+			self.parameterFieldIndices = parameterFieldIndices
+			// A payload value's field is the first bound field of its label, as a search of the bound fields in order finds it.
+			payloadFieldIndices = enumPlace.values.compactMap { value in
+				guard let index = firstBoundIndexByLabel[value.property.label],
+				      child.reads(value.property) || child.fieldsCarriedBySites.contains(value.property)
+				else { return nil }
+				return index
+			}
+		}
+
+		/// The bound fields not carried by the case's payload that the fill's tree reads or a site inside it carries.
+		let parameterFieldIndices: [Int]
+		/// For each value of the case's payload the fill's tree reads or a site inside it carries, the fill's bound field of
+		/// its label.
+		let payloadFieldIndices: [Int]
+	}
+
+	/// For a fill of a place whose case is nested by type, the fields it takes (`FillFieldSelection`); `nil` for every other
+	/// generator.
+	private let fillFieldSelection: FillFieldSelection?
 
 	/// For a fill, the labels among `labels` its tree reads inside a `@Sendable` function, or hands to a nested seam that
 	/// takes them `@Sendable`, where no declaration inside the tree hides them, as
@@ -4604,7 +4672,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///
 	/// A deliberate gap, commented where the member is typed (`MockParameterNode.offersOverrideClosure`): the closure could be
 	/// offered there by unwrapping the called mock's struct in generated code, a later addition that breaks nothing.
-	nonisolated var publicMockOverrideBuilders: [String: PublicMockOverrideBuilder]? {
+	///
+	/// Computed once, when the generator is built, from values that never change.
+	let publicMockOverrideBuilders: [String: PublicMockOverrideBuilder]?
+
+	nonisolated private static func publicMockOverrideBuilders(
+		publicMockCall: PublicMockCall?,
+		builderCallArguments: [BuilderCallArgument],
+		builtInstantiable: Instantiable?,
+		publicMockLevelFunctions: PublicMockLevelFunctions?,
+		children propertiesToGenerate: [ScopeGenerator],
+	) -> [String: PublicMockOverrideBuilder]? {
 		guard let publicMockCall, !publicMockCall.takesOverrides else { return nil }
 		let builderLabels = Set(builderCallArguments.map(\.label))
 		let parameterTypesByLabel = Dictionary(
