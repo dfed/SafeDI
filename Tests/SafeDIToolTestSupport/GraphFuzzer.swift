@@ -2731,6 +2731,7 @@ enum GraphFuzzerGenerator {
 			unbuildableDependencySiblingReceiverRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unbuildableDependencySiblingReceiverRandomSeedMask)
 			aliasChainRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.aliasChainRandomSeedMask)
 			siblingAliasChainRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.siblingAliasChainRandomSeedMask)
+			passedLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.passedLabelRandomSeedMask)
 			erasedOptionalRenameRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.erasedOptionalRenameRandomSeedMask)
 			forwardedTupleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.forwardedTupleRandomSeedMask)
 			proofRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.proofRandomSeedMask)
@@ -2827,9 +2828,9 @@ enum GraphFuzzerGenerator {
 			// Decided last, so that the rest of a seed's graph does not depend on whether it has the extension.
 			let extensionSource = random.percentChance(25) ? extensionDeclarationSource(addingPropertyToOneOf: &declarations) : nil
 			let seamDeclarations = addingSeam(
-				to: addingForwardedTuples(to: addingErasedRenamesOfOptionalDependencies(to: addingReceiversOfDependenciesMocksCannotBuild(
+				to: addingMockPassedLabelAboveAliasCycle(to: addingForwardedTuples(to: addingErasedRenamesOfOptionalDependencies(to: addingReceiversOfDependenciesMocksCannotBuild(
 					to: addingSiblingAliasChains(to: addingAliasChains(to: addingDependenciesMocksCannotBuild(to: addingPropertiesLabeledAsGeneratedNames(to: declarations)))),
-				))),
+				)))),
 			)
 			let aliasDeclarations = addingUncreatedAliasExtensions(to: addingUncreatedAliasShapes(to: addingSpelledProperties(to: seamDeclarations)))
 			// The mock vocabulary is drawn after every other pass, from a stream of its own, so that every other draw of a
@@ -3151,6 +3152,8 @@ enum GraphFuzzerGenerator {
 		private var aliasChainRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingSiblingAliasChains`, as `generatedNameRandom` does for its pass.
 		private var siblingAliasChainRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only the choices of `addingMockPassedLabelAboveAliasCycle`, as `generatedNameRandom` does for its pass.
+		private var passedLabelRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingErasedRenamesOfOptionalDependencies`, as `generatedNameRandom` does for its pass.
 		private var erasedOptionalRenameRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingForwardedTuples`, as `generatedNameRandom` does for its pass.
@@ -4432,6 +4435,83 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let siblingAliasChainRandomSeedMask: UInt64 = 0x7369626C696E6741
+
+		/// In the base corpus, now and then adds a small tree that names nothing else of the graph, in which a mock is
+		/// passed a value under a label that a scope its tree builds declares again, above an `onlyIfAvailable` alias
+		/// of that label. `PassedLabelScope` instantiates `passedTracker: PassedLabelTracker` and `passedSibling:
+		/// PassedLabelSibling`, in either order; `PassedLabelSibling` declares an `onlyIfAvailable` alias of
+		/// `passedTracker`, mostly spelled with its optional form, and instantiates `PassedLabelLeaf`, which receives
+		/// the alias, mostly required; and in three graphs in ten, since it rejects the whole graph,
+		/// `PassedLabelTracker` receives `passedSibling`, so that the sibling must be built before the tracker while
+		/// the leaf needs the tracker first. A new `PassedLabelHost` with `generateMock: true` receives the scope,
+		/// which its mock promotes, or instantiates it, and it or a new `PassedLabelReader` it instantiates, before or
+		/// after the scope, receives `passedTracker: PassedLabelTracker?` only if available, which nothing above the
+		/// scope provides, so the mock takes it. Beneath the scope the alias must name the scope's `passedTracker` in
+		/// validation as in generation: the mock reports production's cycle where the tracker receives the sibling, and
+		/// otherwise binds the alias to the scope's tracker (`onlyIfAvailableAliasBeneathLabelAMockIsPassed`). No root
+		/// reaches the tree, so only the mock's validation can reject it, and the cycle with the alias's optional form is
+		/// the regression roll of 2.2.0's mock, which did not compile: it read the alias where nothing bound it (seed
+		/// 378), or built the tracker from the sibling before declaring the sibling.
+		/// `passedLabelRandom` draws only for this pass, so every other graph is drawn as before.
+		private mutating func addingMockPassedLabelAboveAliasCycle(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, passedLabelRandom.percentChance(5) else { return declarations }
+			var declarations = declarations
+			let trackerTypeName = "\(prefix)PassedLabelTracker"
+			let siblingTypeName = "\(prefix)PassedLabelSibling"
+			let scopeTypeName = "\(prefix)PassedLabelScope"
+			let tracker = PropertyDeclaration(attribute: "@Instantiated", label: "passedTracker", type: trackerTypeName)
+			let sibling = PropertyDeclaration(attribute: "@Instantiated", label: "passedSibling", type: siblingTypeName)
+			declarations.append(TypeDeclaration(
+				name: scopeTypeName,
+				instantiableArguments: [],
+				properties: passedLabelRandom.percentChance(50) ? [tracker, sibling] : [sibling, tracker],
+				declaresHelperTypes: false,
+			))
+			let receivesSibling = passedLabelRandom.percentChance(30)
+			declarations.append(TypeDeclaration(
+				name: trackerTypeName,
+				instantiableArguments: [],
+				properties: receivesSibling ? [PropertyDeclaration(attribute: "@Received", label: sibling.label, type: siblingTypeName)] : [],
+				declaresHelperTypes: false,
+			))
+			let alias = PropertyDeclaration(
+				attribute: "@Received(fulfilledByDependencyNamed: \"\(tracker.label)\", ofType: \(trackerTypeName)\(passedLabelRandom.percentChance(60) ? "?" : "").self, onlyIfAvailable: true)",
+				label: "passedTrackerAlias",
+				type: trackerTypeName + "?",
+			)
+			let leafTypeName = "\(prefix)PassedLabelLeaf"
+			declarations.append(TypeDeclaration(
+				name: siblingTypeName,
+				instantiableArguments: [],
+				properties: [alias, PropertyDeclaration(attribute: "@Instantiated", label: "passedLeaf", type: leafTypeName)],
+				declaresHelperTypes: false,
+			))
+			declarations.append(TypeDeclaration(
+				name: leafTypeName,
+				instantiableArguments: [],
+				properties: [PropertyDeclaration(attribute: passedLabelRandom.percentChance(80) ? "@Received" : "@Received(onlyIfAvailable: true)", label: alias.label, type: alias.type)],
+				declaresHelperTypes: false,
+			))
+			let scopeProperty = PropertyDeclaration(attribute: passedLabelRandom.percentChance(50) ? "@Received" : "@Instantiated", label: "passedLabelScope", type: scopeTypeName)
+			let passedReceive = PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: tracker.label, type: trackerTypeName + "?")
+			let readerProperty: PropertyDeclaration
+			if passedLabelRandom.percentChance(50) {
+				readerProperty = passedReceive
+			} else {
+				let readerTypeName = "\(prefix)PassedLabelReader"
+				readerProperty = PropertyDeclaration(attribute: "@Instantiated", label: "passedLabelReader", type: readerTypeName)
+				declarations.append(TypeDeclaration(name: readerTypeName, instantiableArguments: [], properties: [passedReceive], declaresHelperTypes: false))
+			}
+			declarations.append(TypeDeclaration(
+				name: "\(prefix)PassedLabelHost",
+				instantiableArguments: ["generateMock: true"],
+				properties: passedLabelRandom.percentChance(50) ? [scopeProperty, readerProperty] : [readerProperty, scopeProperty],
+				declaresHelperTypes: false,
+			))
+			return declarations
+		}
+
+		private static let passedLabelRandomSeedMask: UInt64 = 0x706173734C61626C
 
 		/// The name of the type `property` builds: its `fulfilledByType:`, the generic of its wrapper, or its type.
 		private static func builtTypeName(of property: PropertyDeclaration) -> String {
@@ -9480,6 +9560,11 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// An alias whose `ofType:` is the optional form of a property declared with the label it names (`ofType: X?.self`
 	/// of `x: X`), which validation resolves to that property by its unwrapped form.
 	case aliasOfOptionalFormOfProperty
+	/// A type with `generateMock: true`, or a type it instantiates, that receives `x: X?` only if available, beside a type
+	/// it receives or instantiates that declares `x: X` again, of which an `onlyIfAvailable` alias is declared: the mock
+	/// takes a value under a label that a scope its tree builds declares again, so an alias beneath that scope names the
+	/// scope's `x`, in validation as in generation (`addingMockPassedLabelAboveAliasCycle`).
+	case onlyIfAvailableAliasBeneathLabelAMockIsPassed
 	/// An alias with `erasedToConcreteExistential: true` whose `ofType:` is not optional.
 	case erasedAlias
 	/// An alias with `erasedToConcreteExistential: true` whose `ofType:` is optional (`ofType: X?.self`), which wraps the
@@ -9901,6 +9986,11 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		var onlyIfAvailableReceivedTypesByTypeName = [String: Set<String>]()
 		var onlyIfAvailableAliasLabels = Set<String>()
 		var aliasFulfillingLabels = Set<String>()
+		/// The labels an `onlyIfAvailable` alias is fulfilled by.
+		var onlyIfAvailableAliasFulfillingLabels = Set<String>()
+		/// The labels each type receives only if available as an optional, and those it instantiates as a constant.
+		var onlyIfAvailableOptionalReceiveLabelsByTypeName = [String: Set<String>]()
+		var constantLabelsByTypeName = [String: Set<String>]()
 		/// The non-optional types of the instantiated and forwarded properties under each label.
 		var nonOptionalTypesByLabel = [String: Set<String>]()
 		/// The types whose optional form an alias names as its `ofType:`, by the label the alias is fulfilled by.
@@ -9968,6 +10058,12 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					}
 					if attribute == "@Received(onlyIfAvailable: true)", let currentTypeName {
 						onlyIfAvailableReceivedTypesByTypeName[currentTypeName, default: []].insert(nonOptionalType)
+						if type.hasSuffix("?") {
+							onlyIfAvailableOptionalReceiveLabelsByTypeName[currentTypeName, default: []].insert(label)
+						}
+					}
+					if attribute == "@Instantiated", !type.hasSuffix("?"), let currentTypeName {
+						constantLabelsByTypeName[currentTypeName, default: []].insert(label)
 					}
 					if attribute.hasPrefix("@Instantiated") || attribute == "@Forwarded", !type.hasSuffix("?") {
 						nonOptionalTypesByLabel[label, default: []].insert(type)
@@ -9977,6 +10073,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 						aliasFulfillingLabels.insert(fulfillingLabel)
 						if attribute.contains("onlyIfAvailable: true") {
 							onlyIfAvailableAliasLabels.insert(label)
+							onlyIfAvailableAliasFulfillingLabels.insert(fulfillingLabel)
 						}
 						// The `ofType:` argument is spelled `Type.self`, and no type the generator emits contains a period.
 						if let fulfillingTypeRange = attribute.range(of: "ofType: ") {
@@ -10075,6 +10172,18 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			!types.isDisjoint(with: nonOptionalTypesByLabel[label] ?? [])
 		}) {
 			features.insert(.aliasOfOptionalFormOfProperty)
+		}
+		if mockedTypeNames.contains(where: { mockedTypeName in
+			let instantiatedTypeNames = instantiationEdges.filter { $0.source == mockedTypeName }.map(\.target)
+			let passedLabels = ([mockedTypeName] + instantiatedTypeNames).reduce(into: Set<String>()) { labels, typeName in
+				labels.formUnion(onlyIfAvailableOptionalReceiveLabelsByTypeName[typeName] ?? [])
+			}
+			let scopeTypeNames = receivedTypeNamesByTypeName[mockedTypeName, default: []].union(instantiatedTypeNames)
+			return scopeTypeNames.contains { scopeTypeName in
+				!(constantLabelsByTypeName[scopeTypeName] ?? []).intersection(passedLabels).isDisjoint(with: onlyIfAvailableAliasFulfillingLabels)
+			}
+		}) {
+			features.insert(.onlyIfAvailableAliasBeneathLabelAMockIsPassed)
 		}
 		if unbuildablePropertiesInstantiatedByTypeName.contains(where: { ownerName, instantiatedProperties in
 			unbuildablePropertiesReceivedByTypeName.contains { receiverName, receivedProperties in
