@@ -2877,7 +2877,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	func generateSpelledPlan() async throws {
 		let code = try await generatePlan()
 		// A generator a construction memo shares between trees can be started by each.
-		if case .spelled = code.node { return }
+		if case .spelled = code.node {
+			return
+		}
 		let cacheKey = UnavailablePropertiesCacheKey(
 			unavailableProperties: rootUnavailableProperties,
 			propertiesGeneratedLater: [],
