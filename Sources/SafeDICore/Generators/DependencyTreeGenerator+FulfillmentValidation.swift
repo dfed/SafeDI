@@ -225,6 +225,7 @@ extension DependencyTreeGenerator {
 	/// in a form no one parameter carries together with the forms the seam's tree receives is rejected as its inline build
 	/// is, with the same error. A hole this module does not fill has no scope, and its tree ends there.
 	func inlineTreesOfForeignSeamsWithHoles(in typeDescriptionToScopeMap: [TypeDescription: Scope], validatedWorld: ValidatedWorld, foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?]) throws -> [ScopeGenerator] {
+		var constructionMemo = ConstructionMemo()
 		var generators = [ScopeGenerator]()
 		for scope in foreignSeamTypesWithHoles(among: foreignSeamRoots).compactMap({ typeDescriptionToScopeMap[$0] }) {
 			let (table, record) = validatedWorld.frozenScopeMap.freezing(rootScope: scope)
@@ -236,6 +237,7 @@ extension DependencyTreeGenerator {
 				startsCodeGeneration: false,
 				validatesForwardedProperties: false,
 				declaredTypeNames: declaredTypeNames,
+				constructionMemo: &constructionMemo,
 			))
 		}
 		return generators

@@ -275,7 +275,8 @@ extension DependencyTreeGenerator {
 				proof: proof,
 				instantiables: instantiables,
 			)
-			let childrenByProperty = Dictionary(build.children.compactMap { child in child.property.map { ($0, child) } }, uniquingKeysWith: { first, _ in first })
+			// Each property's first child, with its index, which tells it apart from a sibling that holds the same generator.
+			let childrenByProperty = Dictionary(build.children.enumerated().compactMap { index, child in child.property.map { ($0, (index: index, generator: child)) } }, uniquingKeysWith: { first, _ in first })
 			var plainCases = [DraftCase]()
 			var sendableCases = [DraftCase]()
 			func builtType(of property: Property) -> TypeDescription? {
@@ -292,7 +293,7 @@ extension DependencyTreeGenerator {
 				caseProperties.append(property)
 			}
 			for property in caseProperties {
-				guard let child = childrenByProperty[property] else { continue }
+				guard let (childIndex, child) = childrenByProperty[property] else { continue }
 				let isCall = child.holeSite == nil && !child.passedUpHoles.isEmpty
 				// Where the type binds the property: a mock's root declares a child it promotes for an optional receive as the
 				// non-optional value it builds (`levelDeclarations`), so what it binds before that child is found by that binding.
@@ -308,7 +309,7 @@ extension DependencyTreeGenerator {
 					var fields = [SeamSignature.Hole.Field]()
 					var labelsBoundLater = Set(declarations[position...].map(\.property.label) + [property.label])
 					for field in declarations[..<position] {
-						if let fieldChild = childrenByProperty[field.property], build.areMembersOfOneLoop(fieldChild, child) {
+						if let fieldChild = childrenByProperty[field.property], build.areMembersOfOneLoop(childAt: fieldChild.index, childIndex) {
 							labelsBoundLater.insert(field.property.label)
 						} else {
 							fields.append(field)

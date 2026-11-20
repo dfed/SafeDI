@@ -50,6 +50,7 @@ extension DependencyTreeGenerator {
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
 		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
+		constructionMemo: inout ConstructionMemo,
 	) async throws -> ScopeGenerator {
 		// Recursively collect all transitive received properties from the scope tree
 		// and any promoted scopes' subtrees. Results are cached per Scope identity
@@ -448,7 +449,9 @@ extension DependencyTreeGenerator {
 		// `<label>.instance` when it builds the type that reads it, as production reads a received wrapper's instance.
 		var instancesReadThroughWrapperParameters = Set<Property>()
 		let (mockRootTable, mockRootRecord) = MockRootPlan(mockRootScope: mockRootScope, frozenScopeMap: frozenScopeMap).freezingRoot()
-		func mockRootGenerator(builders: ShapedBuilders?) throws -> ScopeGenerator {
+		// A public mock's tree built with builders has holes, whose places no memo holds, so only the tree built without
+		// them shares the mock roots' memo.
+		func mockRootGenerator(builders: ShapedBuilders?, constructionMemo: inout ConstructionMemo) throws -> ScopeGenerator {
 			try mockRootRecord.createScopeGenerator(
 				in: mockRootTable,
 				for: nil,
@@ -459,16 +462,22 @@ extension DependencyTreeGenerator {
 				erasedToConcreteExistential: false,
 				forMockGeneration: true,
 				declaredTypeNames: declaredTypeNames,
+				constructionMemo: &constructionMemo,
 			)
 		}
-		var generator = try mockRootGenerator(builders: nil)
+		func mockRootGeneratorWithHoles(builders: ShapedBuilders) throws -> ScopeGenerator {
+			var memoOfTreeWithHoles = ConstructionMemo()
+			return try mockRootGenerator(builders: builders, constructionMemo: &memoOfTreeWithHoles)
+		}
+		var generator = try mockRootGenerator(builders: nil, constructionMemo: &constructionMemo)
 		if instantiable.generateMock == .public, allReceived.contains(where: \.propertyType.isLazilyInstantiated) {
 			// A public mock takes a value its tree receives lazily as the wrapper (`ScopeGenerator.publicMockWrapperParameters`),
 			// which a type of the tree that receives the value by value reads the instance of. Which values it takes so is
-			// decided by the tree the generator holds, so a tree that reads one is built again.
+			// decided by the tree the generator holds, so a tree that reads one is built again. The memo keys each place by
+			// the instances it reads through a wrapper, so the second build shares only what it reads alike.
 			instancesReadThroughWrapperParameters = await generator.instancesReadThroughPublicMockWrapperParameters(of: instantiable, mockDefaults: flatParameterMockDefaults)
 			if !instancesReadThroughWrapperParameters.isEmpty {
-				generator = try mockRootGenerator(builders: nil)
+				generator = try mockRootGenerator(builders: nil, constructionMemo: &constructionMemo)
 			}
 		}
 		try Self.validateCycleLabelsArePassable(inTreesRootedAt: [generator])
@@ -535,7 +544,7 @@ extension DependencyTreeGenerator {
 			)
 		}
 		let builders = shapedBuilders(namedApartFrom: [])
-		let builtGenerator = try mockRootGenerator(builders: builders)
+		let builtGenerator = try mockRootGeneratorWithHoles(builders: builders)
 		// The builders follow every other parameter, and each tier's are named apart from the parameters it takes as a seam's
 		// are. A builder's name changes no other parameter's, so the tree is built again only when a builder takes another
 		// name in some tier.
@@ -557,7 +566,7 @@ extension DependencyTreeGenerator {
 			throw error
 		}
 		guard buildersNamedApart.builders.map(SeamSignature.CallShape.Builder.init) != builders.builders.map(SeamSignature.CallShape.Builder.init) else { return builtGenerator }
-		return try mockRootGenerator(builders: buildersNamedApart)
+		return try mockRootGeneratorWithHoles(builders: buildersNamedApart)
 	}
 
 	/// What a public mock's root level holds beside the root's children: the payload of every case of its root enums, and the
@@ -1133,7 +1142,7 @@ extension DependencyTreeGenerator {
 	/// The properties each required receive of the type of `scope` reads from above it, by label, as
 	/// `receivesPassedNilInMockTree` walks them: each pins the declaration of its label that every receive of it beneath
 	/// the type reads, back to a type that declares the label.
-	static func propertiesReadByRequiredReceivesFromAbove(of scope: ScopeRecord) -> [(label: String, propertiesRead: Set<Property>)] {
+	static func propertiesReadByRequiredReceivesFromAbove(of scope: ConstructionScope) -> [(label: String, propertiesRead: Set<Property>)] {
 		declaredLabelsAndReceivesFromAbove(of: scope.instantiable, publicMockCall: scope.publicMockCall).receives.compactMap { receive in
 			receive.isRequired ? (receive.property.label, receive.propertiesRead) : nil
 		}
