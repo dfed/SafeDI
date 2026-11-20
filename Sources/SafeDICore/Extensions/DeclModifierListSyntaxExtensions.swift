@@ -68,11 +68,13 @@ extension DeclModifierListSyntax {
 	/// - Parameter sourceLocationConverter: A converter for the tree that holds the declaration. When provided, the
 	///   access records where its modifier is and where the declaration begins after its attributes.
 	func access(introducedBy keyword: TokenSyntax, sourceLocationConverter: SourceLocationConverter?) -> AccessDeclaration {
-		let accessModifier = lazy
-			.compactMap { modifier in
-				AccessLevel(modifier.name.tokenKind).map { (level: $0, name: modifier.name) }
-			}
-			.first
+		// A loop rather than a lazy sequence, whose generic iterators cost more than reading the modifiers: every
+		// declaration SafeDI reads records its access.
+		var accessModifier: (level: AccessLevel, name: TokenSyntax)?
+		for modifier in self where accessModifier == nil {
+			let name = modifier.name
+			accessModifier = AccessLevel(name.tokenKind).map { (level: $0, name: name) }
+		}
 		return AccessDeclaration(
 			level: accessModifier?.level ?? .internal,
 			spellsAccessModifier: accessModifier != nil,
@@ -88,11 +90,15 @@ extension DeclModifierListSyntax {
 extension WithModifiersSyntax {
 	/// This declaration without the modifier that makes it `private` or `fileprivate`, which generated code, always in
 	/// a file of its own, can never use, together with the level that modifier set, or `nil` when no modifier does.
-	/// See `removingModifiers(setting:keyword:)`.
-	public func removingPrivateOrFilePrivateModifier(keyword: WritableKeyPath<Self, TokenSyntax>) -> (declaration: Self, accessLevel: AccessLevel)? {
-		modifiers.lazy.compactMap { AccessLevel($0.name.tokenKind) }.first(where: \.isPrivateOrFilePrivate).map { accessLevel in
-			(removingModifiers(setting: accessLevel, keyword: keyword), accessLevel)
+	/// See `removingModifiers(setting:keyword:)`. `keyword` is formed only when a modifier is removed: forming a key path
+	/// through a generic declaration type costs more than reading the modifiers, and nearly every declaration has no such
+	/// modifier.
+	public func removingPrivateOrFilePrivateModifier(keyword: @autoclosure () -> WritableKeyPath<Self, TokenSyntax>) -> (declaration: Self, accessLevel: AccessLevel)? {
+		for modifier in modifiers {
+			guard let accessLevel = AccessLevel(modifier.name.tokenKind), accessLevel.isPrivateOrFilePrivate else { continue }
+			return (removingModifiers(setting: accessLevel, keyword: keyword()), accessLevel)
 		}
+		return nil
 	}
 
 	/// This declaration without the modifiers that set `accessLevel`. The token that followed a removed modifier – the
