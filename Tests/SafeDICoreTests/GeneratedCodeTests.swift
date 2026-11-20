@@ -67,7 +67,7 @@ struct GeneratedCodeTests {
 	func spelledAsRoot_returnsWhatSpelledReturns_forTwentyThousandSeededPlansSplitIntoBlocksOfOneByte() async {
 		var generator = SeededGenerator(seed: 0x5AFED2)
 		var mismatches = [String]()
-		for _ in 0..<20000 {
+		for _ in 0..<20_000 {
 			let code = Self.randomCode(depth: 5, using: &generator)
 			let spelled = code.spelled()
 			let blockCount = 1 + Int(generator.next() % 8)
@@ -83,7 +83,7 @@ struct GeneratedCodeTests {
 	func spelledAsRoot_placesEachBlockByItsIndex_whenBlocksAreWrittenInReverseOrSeededOrder() async {
 		var generator = SeededGenerator(seed: 0x5AFED3)
 		var mismatches = [String]()
-		for iteration in 0..<5000 {
+		for iteration in 0..<5_000 {
 			let code = Self.randomCode(depth: 5, using: &generator)
 			let shuffleSeed = generator.next()
 			let order: @Sendable (Int) -> [Int] = if iteration.isMultiple(of: 2) {
@@ -112,7 +112,7 @@ struct GeneratedCodeTests {
 			by: "  ",
 		)
 		#expect(Self.blocks(of: code).count == 2)
-		#expect(await code.spelledAsRoot(minimumBlockSize: 1, blockCount: 1000, concurrency: 2, blockWritingOrder: nil) == "  let a = \tb\n  \tc\n  \td\n  \te")
+		#expect(await code.spelledAsRoot(minimumBlockSize: 1, blockCount: 1_000, concurrency: 2, blockWritingOrder: nil) == "  let a = \tb\n  \tc\n  \td\n  \te")
 	}
 
 	@Test
@@ -122,7 +122,7 @@ struct GeneratedCodeTests {
 			by: "  ",
 		)
 		#expect(Self.blocks(of: code).count == 2)
-		#expect(await code.spelledAsRoot(minimumBlockSize: 1, blockCount: 1000, concurrency: 2, blockWritingOrder: nil) == code.spelled())
+		#expect(await code.spelledAsRoot(minimumBlockSize: 1, blockCount: 1_000, concurrency: 2, blockWritingOrder: nil) == code.spelled())
 	}
 
 	@Test
@@ -132,20 +132,20 @@ struct GeneratedCodeTests {
 			by: "  ",
 		)
 		#expect(Self.blocks(of: code).count == 2)
-		#expect(await code.spelledAsRoot(minimumBlockSize: 1, blockCount: 1000, concurrency: 2, blockWritingOrder: nil) == code.spelled())
+		#expect(await code.spelledAsRoot(minimumBlockSize: 1, blockCount: 1_000, concurrency: 2, blockWritingOrder: nil) == code.spelled())
 	}
 
 	@Test
 	func spelledAsRoot_writesSerially_whenThePlanHoldsOneBlock() async {
 		let code = GeneratedCode.lines([.text("a"), .indented(.text("b\nc"), by: "\t")])
 		#expect(Self.blocks(of: code).count == 1)
-		#expect(await code.spelledAsRoot(minimumBlockSize: 1, blockCount: 1000, concurrency: 2, blockWritingOrder: nil) == "a\n\tb\n\tc")
+		#expect(await code.spelledAsRoot(minimumBlockSize: 1, blockCount: 1_000, concurrency: 2, blockWritingOrder: nil) == "a\n\tb\n\tc")
 	}
 
 	@Test
 	func spelledAsRoot_returnsWhatSpelledReturns_withTheDefaultBlockSizes() async {
 		let line = String(repeating: "x", count: 100)
-		let body = GeneratedCode.lines((0..<1000).map { _ in .text(line) })
+		let body = GeneratedCode.lines((0..<1_000).map { _ in .text(line) })
 		let code = GeneratedCode.lines((0..<8).map { index in
 			.sequence([.text("func f\(index)() {\n"), .indented(body, by: "\t"), .text("\n}")])
 		})
@@ -154,7 +154,7 @@ struct GeneratedCodeTests {
 	}
 
 	private static func blocks(of code: GeneratedCode) -> [GeneratedCode.Block] {
-		GeneratedCode.blocks(of: code, minimumBlockSize: 1, blockCount: 1000)
+		GeneratedCode.blocks(of: code, minimumBlockSize: 1, blockCount: 1_000)
 	}
 
 	/// The text the emitter wrote before plans: every level indents its whole code again.

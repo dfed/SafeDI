@@ -223,7 +223,11 @@ extension GeneratedCode {
 		while let step = steps.popLast() {
 			switch step {
 			case let .visit(code):
-				let isLevel = if case let .indented(_, indentation) = code { !indentation.isEmpty } else { false }
+				let isLevel = if case let .indented(_, indentation) = code {
+					!indentation.isEmpty
+				} else {
+					false
+				}
 				steps.append(.exit(measures.count, isLevel: isLevel, bytesBefore: bytes, candidatesBefore: candidates))
 				measures.append(Measure())
 				switch code {
