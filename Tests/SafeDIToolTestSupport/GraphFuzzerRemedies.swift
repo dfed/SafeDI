@@ -478,9 +478,12 @@ enum GraphFuzzerRemedies {
 				}
 			} else if let collision = SeamLabelCollision(message: message) {
 				// "SafeDI cannot generate the dependency tree of `S`: its tree receives `x` as … Receive `x` the same way in
-				// every type of the tree, or declare it on `S` as the form that provides the others: `@Received let x: X`."
-				let remedyPrefix = "Receive `\(collision.label)` the same way in every type of the tree, or declare it on `\(collision.seam)` as the form that provides the others: `@Received let \(collision.label): "
-				guard collision.remedy.hasPrefix(remedyPrefix), collision.remedy.hasSuffix("`.") else { return nil }
+				// every type of the tree, or declare it on `S` as the form that provides the others: `@Received let x: X`.", or,
+				// where the providing form would be a wrapper only the seam receives, "… as the form its tree requires: …".
+				let remedyPrefixes = ["the form that provides the others", "the form its tree requires"].map { form in
+					"Receive `\(collision.label)` the same way in every type of the tree, or declare it on `\(collision.seam)` as \(form): `@Received let \(collision.label): "
+				}
+				guard let remedyPrefix = remedyPrefixes.first(where: collision.remedy.hasPrefix), collision.remedy.hasSuffix("`.") else { return nil }
 				let type = collision.remedy.dropFirst(remedyPrefix.count).dropLast("`.".count)
 				guard !type.isEmpty, !type.contains("`") else { return nil }
 				self = .declareProvidingFormOnSeam(collision: collision, property: GraphFuzzerRemedyProperty(attribute: "@Received", label: collision.label, type: String(type)))
