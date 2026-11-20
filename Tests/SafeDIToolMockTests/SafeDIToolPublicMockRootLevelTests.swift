@@ -1596,9 +1596,10 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesPlaceUp_whenPlaceIsBuiltInsideSendableFunction() async throws {
+	mutating func generate_fillsPlaceWithCallersValue_whenPlaceIsBuiltInsideSendableFunction() async throws {
 		// `api` is built inside `panelBuilder`'s `@Sendable` function, whose case carries no value of the root level: `Root`
-		// passes the place up, and a builder that captures the value fills it.
+		// fills the place with the `id` it forwards to `Detail`, which its `@Sendable` builder function captures, as inline
+		// does.
 		try await expectPublicMock(
 			feature: [
 				"public protocol Api: Sendable {}",
@@ -1609,11 +1610,7 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 				Self.fulfillingType(named: "Live", declarations: ["@Received public let id: Int"]),
 				Self.mockedRoot(declarations: ["@Instantiated public let detailBuilder: Instantiator<Detail>"]),
 			],
-			probes: [DifferentialValueProbe(
-				name: "panel",
-				expression: "Root.mock(apiSendableBuilder: { Live(id: 7) }).detailBuilder.instantiate(7).panelBuilder.instantiate()",
-				knownRightExpression: "Root.mock().detailBuilder.instantiate(7).panelBuilder.instantiate()",
-			)],
+			probes: [DifferentialValueProbe(name: "panel", expression: "Root.mock().detailBuilder.instantiate(7).panelBuilder.instantiate()")],
 			expectedFeature: """
 			#if DEBUG
 			extension Detail {
@@ -1741,12 +1738,20 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			    }
 
 			    static func mock(
-			        apiSendableBuilder: @escaping @Sendable () -> any Api,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        _ = Detail.__safeDI_Detail_mock_77306242221AEE42.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			        func __safeDI_detailBuilder(id: Int) -> Detail {
-			            Detail.__safeDI_mock(id: id, apiSendableBuilder: .init(__safeDI_noScope: apiSendableBuilder), safeDIOverrides: safeDIOverrides.detailBuilder)
+			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Detail() -> Detail.SafeDISendableMockScope_Api.__safeDI_Builder<any Api> {
+			                .init(panelBuilder: { _ in __safeDI_apiBuilder_Detail_Panel_Scope() })
+			            }
+			            @Sendable nonisolated func __safeDI_apiBuilder_Detail_Panel_Scope() -> Detail.SafeDIMockScope_Api.Panel_Scope.__safeDI_Builder<any Api> {
+			                .init(api: { _ in
+			                    let api: any Api = Live(id: id)
+			                    return api
+			                })
+			            }
+			            _ = Detail.__safeDI_Detail_mock_77306242221AEE42.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Detail.__safeDI_mock(id: id, apiSendableBuilder: __safeDI_apiSendableBuilder_Detail(), safeDIOverrides: safeDIOverrides.detailBuilder)
 			        }
 			        let detailBuilder = Instantiator<Detail> {
 			            __safeDI_detailBuilder(id: $0)

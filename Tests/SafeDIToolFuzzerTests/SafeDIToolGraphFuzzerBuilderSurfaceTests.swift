@@ -805,11 +805,10 @@ struct SafeDIToolGraphFuzzerBuilderSurfaceTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func rejectionJudgment_reportsAcceptance_whenPublicMockCorpusPlacesForwardOtherValues() async throws {
-		// Public mocks still merge such places into one builder; the change that rejects them there changes this line to none.
-		#expect(try await Self.forwardingOtherValuesJudgment(feature: .generateMockPublic, seed: 3) == .init(isJudged: true, problems: [
-			"The tool accepts a builder whose places forward other values",
-		]))
+	func rejectionJudgment_reportsNoProblem_whenPublicMockCorpusPlacesForwardOtherValues() async throws {
+		// The tool rejects the public mock corpus's places of one builder that forward other values, as it rejects the seam
+		// corpus's: the judgment runs and finds nothing to report.
+		#expect(try await Self.forwardingOtherValuesJudgment(feature: .generateMockPublic, seed: 3) == .init(isJudged: true, problems: []))
 	}
 
 	// MARK: Known issues
