@@ -375,10 +375,17 @@ struct ConstructionLog {
 		}
 	}
 
+	/// - Parameter recording: Whether the log keeps what it is told: `false` for a place whose reads no memo entry can hold
+	///   (`ScopeGeneratorUnderConstruction.recordsReads`), which keeps nothing.
+	init(recording: Bool = true) {
+		isRecording = recording
+	}
+
 	/// Records that `read` was answered `answer` by the declaration of the scope at `depth`, -1 for one above the tree.
 	/// A read is kept once for each depth that answers it: a scope can read a label above itself and its child read it
 	/// again where the scope declares it, and only the first answer tells another place's context apart.
 	mutating func record(_ read: Read, answer: Answer, depth: Int) {
+		guard isRecording else { return }
 		let key = AnsweredRead(read: read, depth: depth)
 		if answersByRead[key] == nil {
 			answersByRead[key] = answer
@@ -396,6 +403,7 @@ struct ConstructionLog {
 
 	/// Adds `log`'s reads to this log's.
 	mutating func formUnion(_ log: Self) {
+		guard isRecording else { return }
 		if answersByRead.isEmpty {
 			answersByRead = log.answersByRead
 		} else {
@@ -432,6 +440,7 @@ struct ConstructionLog {
 	}
 
 	private var answersByRead = [AnsweredRead: Answer]()
+	private let isRecording: Bool
 }
 
 extension Property {
@@ -516,4 +525,8 @@ public enum ConstructionMemoOracle {
 	/// Whether `DependencyTreeGenerator` creates its mock roots in reverse type order, so that a memo shared between them
 	/// carries other trees' generators to each; what it generates must not change.
 	@TaskLocal public static var buildsMockRootsInReverseOrder = false
+
+	/// Called with the concrete type of each place `Scope.createScopeGenerator` keys and looks up in a construction memo,
+	/// when set: by the tests, never by the tool. The oracle's own builds are not reported.
+	@TaskLocal public static var keyedPlaceObserver: (@Sendable (_ concreteType: String) -> Void)?
 }

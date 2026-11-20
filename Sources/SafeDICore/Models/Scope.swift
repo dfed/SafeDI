@@ -446,22 +446,24 @@ extension ScopeRecord {
 		if let observer = ConstructionMemoOracle.observer {
 			// The oracle's two builds start no code, so nothing changes either while it is read. The build with the memo
 			// shares it across every tree created with this memo, whatever the memo's own sharing, so that the oracle judges
-			// every reuse either sharing makes.
+			// every reuse either sharing makes. The places it keys are the oracle's, not the tree's, so no test sees them.
 			var oracleMemo = constructionMemo.oracleMemo
-			let treeBuiltWithMemo = try createdTree(
-				in: table,
-				for: property,
-				nearestDeclarations: nearestDeclarations,
-				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
-				seamRoot: seamRoot,
-				mockBuilders: mockBuilders,
-				erasedToConcreteExistential: erasedToConcreteExistential,
-				forMockGeneration: forMockGeneration,
-				startsCodeGeneration: false,
-				validatesForwardedProperties: validatesForwardedProperties,
-				declaredTypeNames: declaredTypeNames,
-				constructionMemo: &oracleMemo,
-			)
+			let treeBuiltWithMemo = try ConstructionMemoOracle.$keyedPlaceObserver.withValue(nil) {
+				try createdTree(
+					in: table,
+					for: property,
+					nearestDeclarations: nearestDeclarations,
+					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+					seamRoot: seamRoot,
+					mockBuilders: mockBuilders,
+					erasedToConcreteExistential: erasedToConcreteExistential,
+					forMockGeneration: forMockGeneration,
+					startsCodeGeneration: false,
+					validatesForwardedProperties: validatesForwardedProperties,
+					declaredTypeNames: declaredTypeNames,
+					constructionMemo: &oracleMemo,
+				)
+			}
 			constructionMemo.oracleMemo = oracleMemo
 			let treeBuiltWithoutMemo = try ConstructionMemo.$isEnabled.withValue(false) {
 				var unusedMemo = ConstructionMemo()
@@ -519,6 +521,13 @@ extension ScopeRecord {
 		var startOrderChanged: Bool
 		// Every pass reads the scopes as they are now, which nothing changes while the tree is built.
 		let root = ConstructionScope(table: table, record: self)
+		// Within a pass, a memo that only this tree reads reuses a place's generator only at another place of the same scope,
+		// so no pass keys, looks up or stores a place of a scope the tree builds at one place only. A memo shared across trees
+		// keys every place, since a later tree can reach any of them, and so does the sharing oracle's build that offers each
+		// place what a place after it built, which a place at one place can reuse.
+		let keysPlacesAtOnePlace = sharesMemo && constructionMemo.sharing == .acrossTrees
+			|| ConstructionSharingSchedule.current?.offersLaterPlacesCandidates == true
+		let scopesBuiltAtOnePlace = keysPlacesAtOnePlace || !ConstructionMemo.isEnabled ? nil : ScopesBuiltAtOnePlace(treeRootedAt: root)
 		repeat {
 			if previousPassGenerator != nil {
 				generatorsToStart = []
@@ -548,6 +557,7 @@ extension ScopeRecord {
 					memo: &passMemo,
 					settledPassMemo: nil,
 					root: root,
+					scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
 				)
 			}
 			scopeGenerator = try createScopeGenerator(
@@ -567,6 +577,7 @@ extension ScopeRecord {
 				memo: &passMemo,
 				settledPassMemo: settledPassMemo,
 				root: root,
+				scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
 			)
 			if previousPassGenerator == nil {
 				firstPassMemo = passMemo
@@ -603,6 +614,11 @@ extension ScopeRecord {
 	///   generators whose code to start, in the order they are created.
 	/// - Parameter memo: The generators already finished, which a later place of the same key whose context answers their
 	///   reads alike reuses, and where this pass stores the generators it finishes (see `ConstructionMemo`).
+	/// - Parameter scopesBuiltAtOnePlace: The scopes the tree builds at one place only, whose places are not keyed, looked up
+	///   or stored, or `nil` where every place is keyed: where the memo carries generators to other trees, where the sharing
+	///   oracle's build offers each place what a later place built, and where the memo is off, which keys nothing. Otherwise no other place of the pass has its key, so a lookup can only miss,
+	///   and its entry could serve only the pass after (`ConstructionMemo.settledReuse`), which builds the place again
+	///   instead, reusing what the pass before stored of the places beneath it.
 	private func createScopeGenerator(
 		for property: Property?,
 		nearestDeclarations: NearestDeclarations,
@@ -620,6 +636,7 @@ extension ScopeRecord {
 		memo: inout ConstructionMemo,
 		settledPassMemo: ConstructionMemo?,
 		root: ConstructionScope,
+		scopesBuiltAtOnePlace: ScopesBuiltAtOnePlace?,
 	) throws -> ScopeGenerator {
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
 			scope: root,
@@ -644,11 +661,14 @@ extension ScopeRecord {
 			previousPassGenerator: previousPassGenerator,
 			cycleParameterContexts: [:],
 			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
+			// A root's place is never stored.
+			recordsReads: false,
 		)]
 		let reusesGenerators = ConstructionMemo.isEnabled
 		// The sharing oracle's schedule, test only, and how many lookups it has drawn for (`ConstructionSharingSchedule`).
 		let sharingSchedule = ConstructionSharingSchedule.current
 		var lookupCount = 0
+		let keyedPlaceObserver = ConstructionMemoOracle.keyedPlaceObserver
 		// The generators whose code this pass started or collected, each of which a place that reuses it does not start again.
 		var startedGenerators = Set<ObjectIdentifier>()
 		// Every generator this pass started or collected, in order: what each place's build started is the part of it from
@@ -660,9 +680,12 @@ extension ScopeRecord {
 				switch propertyToGenerate {
 				case let .instantiated(property, scope, erasedToConcreteExistential):
 					try scopeGeneratorsUnderConstruction[index].validateForwardedProperties(ofChildBuilding: scope, as: property)
-					let key = reusesGenerators
+					let key = reusesGenerators && scopesBuiltAtOnePlace?.contains(scope) != true
 						? scopeGeneratorsUnderConstruction[index].memoKey(ofChildBuilding: scope, as: property, erasedToConcreteExistential: erasedToConcreteExistential)
 						: nil
+					if key != nil, let keyedPlaceObserver {
+						keyedPlaceObserver(scope.instantiable.concreteInstantiable.asSource)
+					}
 					let draw = key == nil ? nil : sharingSchedule?.draw(atLookup: &lookupCount)
 					if let key, let reuse = memo.reuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property), drawing: draw) {
 						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
@@ -680,6 +703,7 @@ extension ScopeRecord {
 							scope: scope,
 							property: property,
 							erasedToConcreteExistential: erasedToConcreteExistential,
+							isKeyed: key != nil,
 						)
 						child.memoKey = key
 						child.startLogIndex = startLog.count
@@ -768,13 +792,15 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		cycleParameterContexts: [ScopeGenerator.BuiltDeclaration: CycleParameterContext],
 		reboundProperties: Set<Property> = [],
 		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]? = nil,
+		recordsReads: Bool,
 	) {
 		self.placeHoldingPropertiesByType = placeHoldingPropertiesByType
 		self.depth = depth
+		self.recordsReads = recordsReads
 		// Every read of the context this scope inherits goes through `context`, logged, so a construction memo can tell
 		// whether another place inherits a context that answers the reads of this scope's subtree alike (see
 		// `ConstructionMemo`).
-		var log = ConstructionLog()
+		var log = ConstructionLog(recording: recordsReads)
 		let context = ConstructionContext(
 			propertyStack: propertyStack,
 			concreteTypeStack: concreteTypeStack,
@@ -1277,8 +1303,11 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// This scope's depth in the tree (see `init`).
 	let depth: Int
 	/// What this scope and the scopes beneath it whose generators exist read of the context above them (see
-	/// `ConstructionMemo`).
+	/// `ConstructionMemo`), recorded only where `recordsReads`.
 	private(set) var log: ConstructionLog
+	/// Whether this scope records what its subtree reads: where it has a construction memo key, or is beneath a scope that
+	/// has one, whose stored entry holds those reads. Elsewhere the reads are never stored, and no scope above keeps them.
+	let recordsReads: Bool
 	/// Whether this scope's generator may be stored in a construction memo, or reuse one stored there: neither it nor a
 	/// scope beneath it is a fill, is inside one, or is in a tree with holes.
 	private(set) var isMemoizable: Bool
@@ -1627,6 +1656,9 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			cycleParameterContexts: [:],
 			// A place inside the fill is a place of the type the fill builds, whose builds start their children in its order.
 			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
+			// A fill is never stored, and leaves every scope above it unstored, so its reads are recorded only as its
+			// enclosing scope's are.
+			recordsReads: recordsReads,
 		)
 	}
 
@@ -1648,10 +1680,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	}
 
 	/// The scope under construction for a scope this one instantiates.
+	/// - Parameter isKeyed: Whether the child has a construction memo key, so that its reads are recorded for its entry.
 	func childUnderConstruction(
 		scope: ConstructionScope,
 		property: Property,
 		erasedToConcreteExistential: Bool,
+		isKeyed: Bool,
 	) -> ScopeGeneratorUnderConstruction {
 		ScopeGeneratorUnderConstruction(
 			scope: scope,
@@ -1681,6 +1715,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// The loops the pass before found among this scope's children.
 			reboundProperties: childReboundProperties,
 			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
+			recordsReads: recordsReads || isKeyed,
 		)
 	}
 
