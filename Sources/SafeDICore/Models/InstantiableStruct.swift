@@ -190,8 +190,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// The name of the user's custom mock method. With `generateMock`, the generated `mock()` calls
 	/// through to this method. With `mockOnly`, SafeDI uses this method as the mock provider.
 	public var customMockName: String? {
-		get { rarelySetFields?.fields.customMockName }
-		set { updateRarelySetFields { $0.customMockName = newValue } }
+		rarelySetFields?.fields.customMockName
 	}
 
 	/// Where the user-defined mock method begins in source: its first attribute or modifier. Travels with
@@ -586,7 +585,7 @@ extension Instantiable {
 		dependencyLabelsInsideConditionalBlocks = try container.decode([String].self, forKey: .dependencyLabelsInsideConditionalBlocks)
 		sourceFilePath = try container.decodeIfPresent(String.self, forKey: .sourceFilePath)
 		declarationLocation = try container.decodeIfPresent(Dependency.DeclarationLocation.self, forKey: .declarationLocation)
-		rarelySetFields = try RarelySetFieldsBox(holding: RarelySetFields(
+		rarelySetFields = RarelySetFieldsBox(holding: RarelySetFields(
 			enclosingExtensionAccess: try container.decodeIfPresent(AccessDeclaration.self, forKey: .enclosingExtensionAccess),
 			mockGenerationArgumentRange: try container.decodeIfPresent(Dependency.SourceRange.self, forKey: .mockGenerationArgumentRange),
 			mockInitializer: try container.decodeIfPresent(Initializer.self, forKey: .mockInitializer),

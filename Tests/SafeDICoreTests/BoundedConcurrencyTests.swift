@@ -166,6 +166,38 @@ struct BoundedConcurrencyTests {
 	}
 
 	@Test
+	func map_throwsTheFailedJobsError_whenLaterJobsAreNotAdmitted() async {
+		// No job ends its share of the gauge, so its largest running cost counts the jobs that started.
+		let gauge = RunningCostGauge()
+		await #expect(throws: JobError(index: 1)) {
+			try await BoundedConcurrency.map(Array(0..<4), width: 1) { element, grantedWidth in
+				await gauge.start(cost: grantedWidth)
+				guard element != 1 else { throw JobError(index: element) }
+				return element
+			}
+		}
+		#expect(await gauge.largestRunningCost == 2)
+	}
+
+	@Test
+	func outcomes_asksEachJobItsCostOnce_whenAJobWaitsForRoom() async {
+		let counter = CostQuestionCounter()
+		_ = await BoundedConcurrency.outcomes(
+			of: Array(0..<6),
+			width: 3,
+			cost: { counter.ask(about: $0) },
+			failurePolicy: .runAll,
+		) { element, _ in
+			for _ in 0..<(6 - element) {
+				await Task.yield()
+			}
+			return element
+		}
+
+		#expect(counter.questionCounts() == Array(repeating: 1, count: 6))
+	}
+
+	@Test
 	func map_returnsEachJobsValueInOrder_whenNoJobFails() async throws {
 		let values = try await BoundedConcurrency.map(Array(0..<12), width: 3) { element, _ in
 			element + 100
@@ -216,6 +248,21 @@ struct BoundedConcurrencyTests {
 
 		private(set) var largestRunningCost = 0
 		private var runningCost = 0
+	}
+
+	/// Counts how often each job is asked its cost. The cost closure runs only in the task that calls the helper, one
+	/// question at a time, so the counts need no lock.
+	private final class CostQuestionCounter {
+		func ask(about element: Int) -> Int {
+			counts[element, default: 0] += 1
+			return element % 2 + 2
+		}
+
+		func questionCounts() -> [Int] {
+			counts.keys.sorted().map { counts[$0, default: 0] }
+		}
+
+		private var counts = [Int: Int]()
 	}
 
 	private actor Gate {
