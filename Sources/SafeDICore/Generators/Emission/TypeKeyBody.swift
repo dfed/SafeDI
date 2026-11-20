@@ -21,8 +21,8 @@
 /// The production type key (R1): a root's body laid out so that the places that build one type alike share one builder
 /// function. Places are alike when they build one type in one way, in one family (plain or `@Sendable`), read the same
 /// labels they do not bind, write bodies of the same shape whose calls reach alike places, and resolve each read to a
-/// declaration of one form, or none. Each shared function is declared once, in the lowest body every call of it passes
-/// through, before the first statement that calls it there; the functions of a cycle are declared together. A read every
+/// declaration of one form, or none. Each shared function is declared once, in the root's body, never nested in another,
+/// before the first statement of the root's that reaches it; the functions of a cycle are declared together. A read every
 /// call resolves to the declaration visible where the function is declared is captured, a read no call provides is `nil`
 /// inside the function, and every other read is a parameter, which each call passes its own declaration, as a wrapper
 /// where any call holds one.
@@ -629,7 +629,7 @@ private struct TypeKeyLayout {
 		owner == 0 ? nil : bodies[membersByClass[owner][0]].record
 	}
 
-	/// Declares each class's function in the lowest body every call of it passes through, a cycle's functions together.
+	/// Declares each class's function in the root's body, a cycle's functions together.
 	mutating func computePlacement() -> Bool {
 		let classCount = membersByClass.count
 		calleesByClass = Array(repeating: [], count: classCount)
@@ -657,13 +657,10 @@ private struct TypeKeyLayout {
 			let memberSet = Set(members)
 			let allSites = members.flatMap { callSitesByClass[$0] }
 			let externalSites = Set(allSites.filter { !memberSet.contains($0.owner) })
-			guard let firstSite = externalSites.first,
-			      externalSites.allSatisfy({ placementOwner[$0.owner] >= 0 })
-			else { return false }
-			var owner = firstSite.owner
-			for site in externalSites {
-				owner = lowestCommonOwner(owner, site.owner)
-			}
+			// Every function is declared in the root's body, never nested in another: Swift 6.2's compile time doubles with
+			// each level of nested local functions past about twenty.
+			guard let firstSite = externalSites.first else { return false }
+			let owner = 0
 			let index: Int
 			let isAttached = members.count == 1 && externalSites.count == 1 && allSites.count == 1 && firstSite.owner == owner
 			if isAttached {
@@ -695,22 +692,6 @@ private struct TypeKeyLayout {
 			}
 		}
 		return true
-	}
-
-	private func lowestCommonOwner(_ lhs: Int, _ rhs: Int) -> Int {
-		var lhs = lhs
-		var rhs = rhs
-		while placementDepth[lhs] > placementDepth[rhs] {
-			lhs = placementOwner[lhs]
-		}
-		while placementDepth[rhs] > placementDepth[lhs] {
-			rhs = placementOwner[rhs]
-		}
-		while lhs != rhs {
-			lhs = placementOwner[lhs]
-			rhs = placementOwner[rhs]
-		}
-		return lhs
 	}
 
 	/// Whether the function of `owner` is declared in the body of `ancestor` or in a body beneath it.
