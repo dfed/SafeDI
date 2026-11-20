@@ -634,6 +634,253 @@ struct SafeDIToolCallingMockOnlyIfAvailableOverrideTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesNoOverrideAndPassesCallNil_whenCallInSendableFunctionReceivesValueOnlyIfAvailable() async throws {
+		// `Wrapper` is built inside the `@Sendable` builder function of a `SendableInstantiator`, where an override the mock
+		// bound above it would be captured, and `any FilterProtocol` is not `Sendable`: the mock takes no override, and the
+		// call passes `nil`, so the mock compiles. The same types built inline take an override that does not compile here.
+		let modules = Self.modules(screen: """
+		import Core
+		import SafeDI
+
+		@Instantiable
+		public struct Wrapper: Instantiable {
+		    public init(cache: Cache) {
+		        self.cache = cache
+		    }
+
+		    @Instantiated let cache: Cache
+		}
+
+		@Instantiable(generateMock: true)
+		public struct Screen: Instantiable {
+		    public init(wrapperBuilder: SendableInstantiator<Wrapper>) {
+		        self.wrapperBuilder = wrapperBuilder
+		    }
+
+		    @Instantiated let wrapperBuilder: SendableInstantiator<Wrapper>
+		}
+		""")
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            wrapperBuilder: Wrapper.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                wrapperBuilder: wrapperBuilder
+		            )
+		        }
+
+		        var wrapperBuilder: Wrapper.SafeDIMockConfiguration { __safeDI_storage.wrapperBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                wrapperBuilder: Wrapper.SafeDIMockConfiguration
+		            ) {
+		                self.wrapperBuilder = wrapperBuilder
+		            }
+
+		            let wrapperBuilder: Wrapper.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let __safeDI_wrapperBuilder__wrapperBuilder_cache_safeDIBuilder = safeDIOverrides.wrapperBuilder.cache
+		        let __safeDI_wrapperBuilder__safeDIBuilder = safeDIOverrides.wrapperBuilder.safeDIBuilder
+		        @Sendable func __safeDI_wrapperBuilder() -> Wrapper {
+		            _ = Cache.__safeDI_Cache_mock_215B449271BCAB93.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            let cache = Cache.__safeDI_mock(filter: nil, safeDIOverrides: __safeDI_wrapperBuilder__wrapperBuilder_cache_safeDIBuilder?() ?? .init())
+		            return if let safeDIBuilder = __safeDI_wrapperBuilder__safeDIBuilder { safeDIBuilder(cache) } else { Wrapper(cache: cache) }
+		        }
+		        let wrapperBuilder = SendableInstantiator<Wrapper>(__safeDI_wrapperBuilder)
+		        return Screen(wrapperBuilder: wrapperBuilder)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Wrapper {
+		    /// Configuration for how this type is constructed within a mock tree.
+		    struct SafeDIMockConfiguration {
+		        init(
+		            cache: (@Sendable () -> Cache.SafeDIOverrides)? = nil,
+		            _ safeDIBuilder: (@Sendable (Cache) -> Wrapper)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                cache: cache,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var cache: (@Sendable () -> Cache.SafeDIOverrides)? { __safeDI_storage.cache }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: (@Sendable (Cache) -> Wrapper)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                cache: (@Sendable () -> Cache.SafeDIOverrides)?,
+		                safeDIBuilder: (@Sendable (Cache) -> Wrapper)?
+		            ) {
+		                self.cache = cache
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let cache: (@Sendable () -> Cache.SafeDIOverrides)?
+		            let safeDIBuilder: (@Sendable (Cache) -> Wrapper)?
+		        }
+		    }
+		}
+		#endif
+		""" + "\n"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesNoOverrideAndPassesEveryCallNil_whenAnotherCallOutsideSendableFunctionReceivesValueToo() async throws {
+		// `Screen`’s own call of `Cache`’s mock reads `filter` outside every `@Sendable` function, but `Wrapper`’s reads it inside
+		// one: the mock takes no override for it, and both calls pass `nil`.
+		let modules = Self.modules(screen: """
+		import Core
+		import SafeDI
+
+		@Instantiable
+		public struct Wrapper: Instantiable {
+		    public init(cache: Cache) {
+		        self.cache = cache
+		    }
+
+		    @Instantiated let cache: Cache
+		}
+
+		@Instantiable(generateMock: true)
+		public struct Screen: Instantiable {
+		    public init(cache: Cache, wrapperBuilder: SendableInstantiator<Wrapper>) {
+		        self.cache = cache
+		        self.wrapperBuilder = wrapperBuilder
+		    }
+
+		    @Instantiated let cache: Cache
+		    @Instantiated let wrapperBuilder: SendableInstantiator<Wrapper>
+		}
+		""")
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            cache: Cache.SafeDIOverrides = .init(),
+		            wrapperBuilder: Wrapper.SafeDIMockConfiguration = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                cache: cache,
+		                wrapperBuilder: wrapperBuilder
+		            )
+		        }
+
+		        var cache: Cache.SafeDIOverrides { __safeDI_storage.cache }
+		        var wrapperBuilder: Wrapper.SafeDIMockConfiguration { __safeDI_storage.wrapperBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                cache: Cache.SafeDIOverrides,
+		                wrapperBuilder: Wrapper.SafeDIMockConfiguration
+		            ) {
+		                self.cache = cache
+		                self.wrapperBuilder = wrapperBuilder
+		            }
+
+		            let cache: Cache.SafeDIOverrides
+		            let wrapperBuilder: Wrapper.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        _ = Cache.__safeDI_Cache_mock_215B449271BCAB93.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let cache = Cache.__safeDI_mock(filter: nil, safeDIOverrides: safeDIOverrides.cache)
+		        let __safeDI_wrapperBuilder__wrapperBuilder_cache_safeDIBuilder = safeDIOverrides.wrapperBuilder.cache
+		        let __safeDI_wrapperBuilder__safeDIBuilder = safeDIOverrides.wrapperBuilder.safeDIBuilder
+		        @Sendable func __safeDI_wrapperBuilder() -> Wrapper {
+		            _ = Cache.__safeDI_Cache_mock_215B449271BCAB93.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            let cache = Cache.__safeDI_mock(filter: nil, safeDIOverrides: __safeDI_wrapperBuilder__wrapperBuilder_cache_safeDIBuilder?() ?? .init())
+		            return if let safeDIBuilder = __safeDI_wrapperBuilder__safeDIBuilder { safeDIBuilder(cache) } else { Wrapper(cache: cache) }
+		        }
+		        let wrapperBuilder = SendableInstantiator<Wrapper>(__safeDI_wrapperBuilder)
+		        return Screen(cache: cache, wrapperBuilder: wrapperBuilder)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Wrapper {
+		    /// Configuration for how this type is constructed within a mock tree.
+		    struct SafeDIMockConfiguration {
+		        init(
+		            cache: (@Sendable () -> Cache.SafeDIOverrides)? = nil,
+		            _ safeDIBuilder: (@Sendable (Cache) -> Wrapper)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                cache: cache,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var cache: (@Sendable () -> Cache.SafeDIOverrides)? { __safeDI_storage.cache }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: (@Sendable (Cache) -> Wrapper)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage: Sendable {
+		            init(
+		                cache: (@Sendable () -> Cache.SafeDIOverrides)?,
+		                safeDIBuilder: (@Sendable (Cache) -> Wrapper)?
+		            ) {
+		                self.cache = cache
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let cache: (@Sendable () -> Cache.SafeDIOverrides)?
+		            let safeDIBuilder: (@Sendable (Cache) -> Wrapper)?
+		        }
+		    }
+		}
+		#endif
+		""" + "\n"])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

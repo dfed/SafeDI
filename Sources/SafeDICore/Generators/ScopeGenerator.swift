@@ -8004,9 +8004,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// The properties only the calls of other modules' public mocks in a mock's tree receive that the mock takes no
 	/// parameter or override for: those every call omits. A mock takes each a call passes, a public mock as a parameter
-	/// and an internal one as an override.
-	static func receivedOnlyByPublicMockCallsLeftOut(receivedOnlyByPublicMockCalls: Set<Property>, passedByPublicMockCalls: Set<Property>) -> Set<Property> {
-		receivedOnlyByPublicMockCalls.subtracting(passedByPublicMockCalls)
+	/// and an internal one as an override, but an internal mock leaves out one whose label `labelsReadInsideSendableFunctions`
+	/// holds.
+	static func receivedOnlyByPublicMockCallsLeftOut(receivedOnlyByPublicMockCalls: Set<Property>, passedByPublicMockCalls: Set<Property>, labelsReadInsideSendableFunctions: Set<String>) -> Set<Property> {
+		var leftOut = receivedOnlyByPublicMockCalls.subtracting(passedByPublicMockCalls)
+		for property in passedByPublicMockCalls where labelsReadInsideSendableFunctions.contains(property.label) {
+			leftOut.insert(property)
+		}
+		return leftOut
+	}
+
+	/// For an internal mock, the labels among `passedByPublicMockCalls` that a receiver in its tree reads inside a `@Sendable`
+	/// function (`labelsReadInsideSendableFunction(among:)`), such as a call of another module's public mock, where the
+	/// override a mock binds above it would be captured, which compiles only for a `Sendable` value: the mock takes no
+	/// override for such a value, and the calls pass `nil`, as production passes `nil` where nothing provides it. Empty for a
+	/// public mock, which takes each as a parameter.
+	///
+	/// A deliberate gap from the inline mock and the public mock, which take such a value, as an override or a parameter
+	/// that does not compile where the value is not `Sendable`. The other site of the gap is the mock root's walk in
+	/// `DependencyTreeGenerator.createMockRootScopeGenerator`.
+	nonisolated func passedByPublicMockCallLabelsReadInsideSendableFunctions(of instantiable: Instantiable) -> Set<String> {
+		guard instantiable.generateMock != .public, !passedByPublicMockCalls.isEmpty else { return [] }
+		return labelsReadInsideSendableFunction(among: Set(passedByPublicMockCalls.map(\.label)))
 	}
 
 	/// The names of the flat parameters of a mock root with `parameters`.
@@ -8284,6 +8303,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let receivedOnlyByPublicMockCallsLeftOut = Self.receivedOnlyByPublicMockCallsLeftOut(
 			receivedOnlyByPublicMockCalls: receivedOnlyByPublicMockCalls,
 			passedByPublicMockCalls: passedByPublicMockCalls,
+			labelsReadInsideSendableFunctions: passedByPublicMockCallLabelsReadInsideSendableFunctions(of: instantiable),
 		)
 		// Each in the mocked type's own spelling where it receives the dependency, and otherwise in the most explicit of its
 		// receivers' spellings in the tree, which the flat parameters and the `onlyIfAvailable` overrides and parameters declare.
