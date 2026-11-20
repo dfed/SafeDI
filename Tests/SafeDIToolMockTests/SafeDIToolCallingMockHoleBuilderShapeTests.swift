@@ -644,11 +644,10 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 		    @Instantiated public let h: H\(buildsGInline ? "\n    @Instantiated public let g: G" : "")
 		}
 		"""
-		let modules = [
+		return [
 			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": feat]),
 			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": app], dependencies: ["Feat"]),
 		]
-		return modules
 	}
 
 	/// A public mock whose initializer is public, so a calling mock builds it inline, holding a place of `any Api`.
