@@ -543,6 +543,9 @@ private struct TypeKeyLayout {
 				return id
 			}()
 		}
+		if let observer = TypeKeyClassObservation.observer {
+			observer(TypeKeyClassObservation.Classes(typeKey: refine(classesWithForms) ?? [], memo: memoClasses(families: families)))
+		}
 		guard let final = refine(classesWithForms) else { return false }
 		refined = final
 		// Classes are numbered in the order the walk first reaches a member.
@@ -560,6 +563,47 @@ private struct TypeKeyLayout {
 			membersByClass[id].append(body)
 		}
 		return true
+	}
+
+	/// Each body's class as the construction memo's sharing implies it (R1b §2a): the generator that wrote the place, in its
+	/// family, with each read resolved to declarations of one form, or none, as `computeClasses` groups them.
+	private func memoClasses(families: [Bool]) -> [Int] {
+		struct BaseKey: Hashable {
+			/// The generator that wrote the place, or, for a place that records nothing, the place itself.
+			let generator: ObjectIdentifier?
+			let body: Int?
+			let isInSendableFamily: Bool
+		}
+		struct Key: Hashable {
+			let base: BaseKey
+			let group: Int
+		}
+		var groupsByKey = [BaseKey: [[String?]]]()
+		var classesByKey = [Key: Int]()
+		var classes = [Int](repeating: 0, count: bodies.count)
+		for body in bodies.indices.dropFirst() {
+			let generator = bodies[body].record?.generator
+			let baseKey = BaseKey(generator: generator, body: generator == nil ? body : nil, isInSendableFamily: families[body])
+			let forms: [String?] = reads[body].map { label in type(of: resolution(of: label, atPlace: body))?.unwrapped.asSource }
+			var groups = groupsByKey[baseKey, default: []]
+			var groupIndex = groups.firstIndex { group in
+				zip(group, forms).allSatisfy { $0 == nil || $1 == nil || $0 == $1 }
+			}
+			if let existing = groupIndex {
+				groups[existing] = zip(groups[existing], forms).map { $0 ?? $1 }
+			} else {
+				groupIndex = groups.count
+				groups.append(forms)
+			}
+			groupsByKey[baseKey] = groups
+			let key = Key(base: baseKey, group: groupIndex ?? 0)
+			classes[body] = classesByKey[key] ?? {
+				let id = classesByKey.count + 1
+				classesByKey[key] = id
+				return id
+			}()
+		}
+		return classes
 	}
 
 	private func structuralKey(of body: Int, isInSendableFamily: Bool) -> [String] {

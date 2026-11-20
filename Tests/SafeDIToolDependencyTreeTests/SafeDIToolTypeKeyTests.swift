@@ -949,8 +949,17 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 		probes: [DifferentialValueProbe] = [DifferentialValueProbe("Root()")],
 		sourceLocation: SourceLocation = #_sourceLocation,
 	) async throws {
-		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let (stream, continuation) = AsyncStream.makeStream(of: TypeKeyClassObservation.Classes.self)
+		let output = try await TypeKeyClassObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		continuation.finish()
 		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": generatedFileHeader + expectedTree], sourceLocation: sourceLocation)
+		// R1b §2a: each class the construction memo's sharing implies lies inside one of the type key's, so the type key's
+		// classes can be computed over the memo's generators rather than over every place.
+		for await classes in stream {
+			#expect(classes.memoRefinesTypeKey, "type key \(classes.typeKey), memo \(classes.memo)", sourceLocation: sourceLocation)
+		}
 		try await expectDifferentialValuesAgree(
 			feature: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: output.generatedFiles ?? [:]),
 			knownRight: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: ["Root+SafeDI.swift": generatedFileHeader + expectedTree]),
