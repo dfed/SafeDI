@@ -77,7 +77,9 @@ struct SafeDIToolSeamGenerationWorkTests: ~Copyable {
 				}
 			}
 		}
-		#expect(Set(GenerationWork.Step.allCases).subtracting(countedSteps).isEmpty, "No shape counts work for \(Set(GenerationWork.Step.allCases).subtracting(countedSteps).map(\.rawValue).sorted())")
+		// The type key lays out production roots, not seams: `SafeDIToolTypeKeyViewTests` counts its views.
+		let seamSteps = Set(GenerationWork.Step.allCases).subtracting([.layingOutTypeKeyViews])
+		#expect(seamSteps.subtracting(countedSteps).isEmpty, "No shape counts work for \(seamSteps.subtracting(countedSteps).map(\.rawValue).sorted())")
 	}
 
 	// MARK: Private
