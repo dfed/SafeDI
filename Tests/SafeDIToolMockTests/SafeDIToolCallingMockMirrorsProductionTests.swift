@@ -627,8 +627,8 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			mock: Self.mockRootBindingModules(shape: shape, caller: caller, wrapper: wrapper),
 			inline: Self.mockRootBindingInlineModules(shape: shape, caller: caller, wrapper: wrapper),
 			caller: caller.callingMockCaller,
-			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = \(shape.mockCall)\n}\n",
-			probes: Self.mockRootBindingProbes(shape: shape),
+			handWrittenCall: "import Feat\n\nfunc callMock() {\n    _ = \(shape.mockCall(caller: caller.callingMockCaller, wrapper: wrapper))\n}\n",
+			probes: Self.mockRootBindingProbes(shape: shape, mockCall: shape.mockCall(caller: caller.callingMockCaller, wrapper: wrapper)),
 		)
 	}
 
@@ -4534,7 +4534,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 
 	/// What `Mid`’s calling mock and its mock built inline build, whether `Live` holds the wrapper whose instance `F`’s `Z`
 	/// holds, and, as `shape` says, whether `Live` holds `Mid`’s wrapper and `LiveChild` the instance `Z` holds.
-	private static func mockRootBindingProbes(shape: MockRootBindingShape) -> [DifferentialValueProbe] {
+	private static func mockRootBindingProbes(shape: MockRootBindingShape, mockCall: String) -> [DifferentialValueProbe] {
 		let live = shape.placeIsOnCalledTypesRootLevel ? "(mid.f.api as! Live)" : "(mid.f.a.api as! Live)"
 		var probes = [DifferentialValueProbe]()
 		// Where `LiveChild` reads the instance, the calling mock’s fill reads it as its wrapper’s instance, so the wrapper `Mid`’s
@@ -4542,25 +4542,25 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		// instance, whose wrapper runs no builder of its own (`public-mock-builders.md`, “The caller’s own value”). The other
 		// probes compare which instance each holds.
 		if !shape.childReadsInstance {
-			probes.append(DifferentialValueProbe(name: "Mid", expression: shape.mockCall, knownRightExpression: shape.mockCall))
+			probes.append(DifferentialValueProbe(name: "Mid", expression: mockCall, knownRightExpression: mockCall))
 		}
 		probes.append(DifferentialValueProbe(
 			name: "Live’s log holds Z’s instance",
-			expression: "{ let mid = \(shape.mockCall); return \(live).log.instance === mid.f.z.log }()",
-			knownRightExpression: "{ let mid = \(shape.mockCall); return \(live).log.instance === mid.f.z.log }()",
+			expression: "{ let mid = \(mockCall); return \(live).log.instance === mid.f.z.log }()",
+			knownRightExpression: "{ let mid = \(mockCall); return \(live).log.instance === mid.f.z.log }()",
 		))
 		if !shape.logIsInstantiable {
 			probes.append(DifferentialValueProbe(
 				name: "Live’s log is Mid’s",
-				expression: "{ let mid = \(shape.mockCall); return \(live).log === mid.log }()",
-				knownRightExpression: "{ let mid = \(shape.mockCall); return \(live).log === mid.log }()",
+				expression: "{ let mid = \(mockCall); return \(live).log === mid.log }()",
+				knownRightExpression: "{ let mid = \(mockCall); return \(live).log === mid.log }()",
 			))
 		}
 		if shape.childReadsInstance {
 			probes.append(DifferentialValueProbe(
 				name: "LiveChild’s log is Z’s",
-				expression: "{ let mid = \(shape.mockCall); return \(live).child.log === mid.f.z.log }()",
-				knownRightExpression: "{ let mid = \(shape.mockCall); return \(live).child.log === mid.f.z.log }()",
+				expression: "{ let mid = \(mockCall); return \(live).child.log === mid.f.z.log }()",
+				knownRightExpression: "{ let mid = \(mockCall); return \(live).child.log === mid.f.z.log }()",
 			))
 		}
 		return probes
@@ -8496,9 +8496,16 @@ enum MockRootBindingShape: CaseIterable, CustomTestStringConvertible, Sendable {
 		}
 	}
 
-	/// The call of `Mid`’s mock.
-	var mockCall: String {
-		logIsInstantiable ? "Mid.mock()" : "Mid.mock(log: Log())"
+	/// The call of `Mid`’s mock, whose `caller` mock holds `log` in `wrapper`: a public mock takes the wrapper its tree
+	/// receives (“A lazy value a public mock takes” in `public-mock-builders.md`), and an internal mock the instance.
+	func mockCall(caller: CallingMockCaller, wrapper: CallerLazyWrapper) -> String {
+		if logIsInstantiable {
+			"Mid.mock()"
+		} else if caller == .public {
+			"Mid.mock(log: \(wrapper.name) { Log() })"
+		} else {
+			"Mid.mock(log: Log())"
+		}
 	}
 
 	var testDescription: String {

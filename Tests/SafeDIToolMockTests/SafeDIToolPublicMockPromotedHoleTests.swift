@@ -1997,7 +1997,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 
 				    public static func mock(
 				        apiBuilder: @escaping () -> any Api,
-				        other: Other? = nil,
+				        other: LazilyInstantiated<Other>? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> D {
 				        D.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), other: other, safeDIOverrides: safeDIOverrides)
@@ -2006,22 +2006,22 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 				    public static func __safeDI_mock(
 				        apiBuilder __safeDI_apiBuilder: D.SafeDIMockScope_Api.__safeDI_Builder<any Api>,
-				        other: Other? = nil,
+				        other: LazilyInstantiated<Other>? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> D {
 				        let __safeDI_apiBuilder_other = __safeDI_apiBuilder.other(SafeDIMockScope_Api.other_Values())
 				        func __safeDI_other() -> Other {
 				            let api: any Api = __safeDI_apiBuilder_other.api(SafeDIMockScope_Api.Other_Scope.api_Values())
-				            return if let other { other } else if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder(api) } else { Other(api: api) }
+				            return if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder(api) } else { Other(api: api) }
 				        }
-				        let other = LazilyInstantiated<Other>(__safeDI_other)
+				        let other = if let other { other } else { LazilyInstantiated<Other>(__safeDI_other) }
 				        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder(other) } else { Leaf(other: other) }
 				        return D(leaf: leaf)
 				    }
 				}
 
 				extension D {
-				    public enum __safeDI_D_mock_389F8635950AB28C {}
+				    public enum __safeDI_D_mock_83FFFF301188E543 {}
 				}
 				#endif
 				""",
@@ -2073,7 +2073,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				                    return api
 				                })
 				            }
-				            _ = D.__safeDI_D_mock_389F8635950AB28C.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				            _ = D.__safeDI_D_mock_83FFFF301188E543.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				            return D.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_D(), other: nil, safeDIOverrides: safeDIOverrides.screenD)
 				        }
 				        let screenD: D = __safeDI_screenD()
@@ -2169,7 +2169,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 
 				    public static func mock(
 				        apiSendableBuilder: @escaping @Sendable () -> any Api,
-				        other: Other? = nil,
+				        other: SendableLazilyInstantiated<Other>? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> D {
 				        D.__safeDI_mock(apiSendableBuilder: .init(__safeDI_noScope: apiSendableBuilder), other: other, safeDIOverrides: safeDIOverrides)
@@ -2178,23 +2178,23 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 				    public static func __safeDI_mock(
 				        apiSendableBuilder __safeDI_apiSendableBuilder: D.SafeDISendableMockScope_Api.__safeDI_Builder<any Api>,
-				        other: Other? = nil,
+				        other: SendableLazilyInstantiated<Other>? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> D {
 				        let __safeDI_other__safeDIBuilder = safeDIOverrides.other
 				        @Sendable func __safeDI_other() -> Other {
 				            let __safeDI_apiSendableBuilder_other = __safeDI_apiSendableBuilder.other(SafeDISendableMockScope_Api.other_Values())
 				            let api: any Api = __safeDI_apiSendableBuilder_other.api(SafeDIMockScope_Api.Other_Scope.api_Values())
-				            return if let other { other } else if let safeDIBuilder = __safeDI_other__safeDIBuilder { safeDIBuilder(api) } else { Other(api: api) }
+				            return if let safeDIBuilder = __safeDI_other__safeDIBuilder { safeDIBuilder(api) } else { Other(api: api) }
 				        }
-				        let other = SendableLazilyInstantiated<Other>(__safeDI_other)
+				        let other = if let other { other } else { SendableLazilyInstantiated<Other>(__safeDI_other) }
 				        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder(other) } else { Leaf(other: other) }
 				        return D(leaf: leaf)
 				    }
 				}
 
 				extension D {
-				    public enum __safeDI_D_mock_B192D2DD3E3AFEEA {}
+				    public enum __safeDI_D_mock_F62724C96807E5A9 {}
 				}
 				#endif
 				""",
@@ -2246,7 +2246,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				                    return api
 				                })
 				            }
-				            _ = D.__safeDI_D_mock_B192D2DD3E3AFEEA.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				            _ = D.__safeDI_D_mock_F62724C96807E5A9.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				            return D.__safeDI_mock(apiSendableBuilder: __safeDI_apiSendableBuilder_D(), other: nil, safeDIOverrides: safeDIOverrides.screenD)
 				        }
 				        let screenD: D = __safeDI_screenD()
@@ -3594,7 +3594,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 
 				    public static func mock(
 				        apiBuilder: @escaping () -> any Api,
-				        other: Other? = nil,
+				        other: LazilyInstantiated<Other>? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> D {
 				        D.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), other: other, safeDIOverrides: safeDIOverrides)
@@ -3603,22 +3603,22 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 				    public static func __safeDI_mock(
 				        apiBuilder __safeDI_apiBuilder: D.SafeDIMockScope_Api.__safeDI_Builder<any Api>,
-				        other: Other? = nil,
+				        other: LazilyInstantiated<Other>? = nil,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> D {
 				        let __safeDI_apiBuilder_other = __safeDI_apiBuilder.other(SafeDIMockScope_Api.other_Values())
 				        func __safeDI_other() -> Other {
 				            let api: any Api = __safeDI_apiBuilder_other.api(SafeDIMockScope_Api.Other_Scope.api_Values())
-				            return if let other { other } else if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder(api) } else { Other(api: api) }
+				            return if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder(api) } else { Other(api: api) }
 				        }
-				        let other = LazilyInstantiated<Other>(__safeDI_other)
+				        let other = if let other { other } else { LazilyInstantiated<Other>(__safeDI_other) }
 				        let leaf = if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder(other) } else { Leaf(other: other) }
 				        return D(other: other.instance, leaf: leaf)
 				    }
 				}
 
 				extension D {
-				    public enum __safeDI_D_mock_389F8635950AB28C {}
+				    public enum __safeDI_D_mock_83FFFF301188E543 {}
 				}
 				#endif
 				""",
@@ -3670,7 +3670,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				                    return api
 				                })
 				            }
-				            _ = D.__safeDI_D_mock_389F8635950AB28C.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				            _ = D.__safeDI_D_mock_83FFFF301188E543.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				            return D.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_D(), other: nil, safeDIOverrides: safeDIOverrides.screenD)
 				        }
 				        let screenD: D = __safeDI_screenD()

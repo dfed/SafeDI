@@ -516,14 +516,14 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		    public static func mock(
 		        log: String? = nil,
-		        log_Log: Log? = nil,
+		        log_Log: LazilyInstantiated<Log>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Mid {
 		        let log = log ?? ("")
 		        func __safeDI_log_Log() -> Log {
-		            if let log_Log { log_Log } else if let safeDIBuilder = safeDIOverrides.log_Log { safeDIBuilder() } else { Log() }
+		            if let safeDIBuilder = safeDIOverrides.log_Log { safeDIBuilder() } else { Log() }
 		        }
-		        let log_Log = LazilyInstantiated<Log>(__safeDI_log_Log)
+		        let log_Log = if let log_Log { log_Log } else { LazilyInstantiated<Log>(__safeDI_log_Log) }
 		        func __safeDI_x() -> X {
 		            let log: LazilyInstantiated<Log> = log_Log
 		            return if let safeDIBuilder = safeDIOverrides.x { safeDIBuilder(log) } else { X(log: log) }
@@ -534,7 +534,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_mock_9C661028C2A8E71E {}
+		    public enum __safeDI_Mid_mock_EE9231CBEAC0DDE9 {}
 		}
 		#endif
 		""", "Unexpected output \(output.generatedFiles?["Mid+SafeDIMock.swift"] ?? "")")
@@ -639,14 +639,14 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        log_LazilyInstantiated__Log: Log? = nil,
-		        log_SendableLazilyInstantiated__Log: Log? = nil,
+		        log_LazilyInstantiated__Log: LazilyInstantiated<Log>? = nil,
+		        log_SendableLazilyInstantiated__Log: SendableLazilyInstantiated<Log>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Mid {
 		        func __safeDI_log_LazilyInstantiated__Log() -> Log {
-		            if let log_LazilyInstantiated__Log { log_LazilyInstantiated__Log } else if let safeDIBuilder = safeDIOverrides.log_LazilyInstantiated__Log { safeDIBuilder() } else { Log() }
+		            if let safeDIBuilder = safeDIOverrides.log_LazilyInstantiated__Log { safeDIBuilder() } else { Log() }
 		        }
-		        let log_LazilyInstantiated__Log = LazilyInstantiated<Log>(__safeDI_log_LazilyInstantiated__Log)
+		        let log_LazilyInstantiated__Log = if let log_LazilyInstantiated__Log { log_LazilyInstantiated__Log } else { LazilyInstantiated<Log>(__safeDI_log_LazilyInstantiated__Log) }
 		        func __safeDI_x() -> X {
 		            let log: LazilyInstantiated<Log> = log_LazilyInstantiated__Log
 		            return if let safeDIBuilder = safeDIOverrides.x { safeDIBuilder(log) } else { X(log: log) }
@@ -654,9 +654,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        let x: X = __safeDI_x()
 		        let __safeDI_log_SendableLazilyInstantiated__Log__safeDIBuilder = safeDIOverrides.log_SendableLazilyInstantiated__Log
 		        @Sendable func __safeDI_log_SendableLazilyInstantiated__Log() -> Log {
-		            if let log_SendableLazilyInstantiated__Log { log_SendableLazilyInstantiated__Log } else if let safeDIBuilder = __safeDI_log_SendableLazilyInstantiated__Log__safeDIBuilder { safeDIBuilder() } else { Log() }
+		            if let safeDIBuilder = __safeDI_log_SendableLazilyInstantiated__Log__safeDIBuilder { safeDIBuilder() } else { Log() }
 		        }
-		        let log_SendableLazilyInstantiated__Log = SendableLazilyInstantiated<Log>(__safeDI_log_SendableLazilyInstantiated__Log)
+		        let log_SendableLazilyInstantiated__Log = if let log_SendableLazilyInstantiated__Log { log_SendableLazilyInstantiated__Log } else { SendableLazilyInstantiated<Log>(__safeDI_log_SendableLazilyInstantiated__Log) }
 		        func __safeDI_y() -> Y {
 		            let log: SendableLazilyInstantiated<Log> = log_SendableLazilyInstantiated__Log
 		            return if let safeDIBuilder = safeDIOverrides.y { safeDIBuilder(log) } else { Y(log: log) }
@@ -667,7 +667,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_mock_7B8CCEFA5305F556 {}
+		    public enum __safeDI_Mid_mock_3B6CA7F95F55CB74 {}
 		}
 		#endif
 		""", "Unexpected output \(output.generatedFiles?["Mid+SafeDIMock.swift"] ?? "")")
@@ -3034,7 +3034,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    }
 
 			    public static func mock(
-			        b: B? = nil,
+			        b: LazilyInstantiated<B>? = nil,
 			        session: Session? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
@@ -3050,15 +3050,15 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			            return B.__safeDI_init(session: session, cBuilder: cBuilder, safeDIBuilder: safeDIOverrides.b.safeDIBuilder)
 			        }
-			        let b = LazilyInstantiated<B> {
-			            if let b { b } else { __safeDI_b(session: session) }
-			        }
+			        let b = if let b { b } else { LazilyInstantiated<B> {
+			            __safeDI_b(session: session)
+			        } }
 			        return A(b: b)
 			    }
 			}
 
 			extension A {
-			    public enum __safeDI_A_mock_994335C3EC9B26A0 {}
+			    public enum __safeDI_A_mock_218523C6A81E44EF {}
 			}
 			#endif
 			""",
@@ -5148,7 +5148,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 			    public static func mock(
 			        retries: Int? = nil,
-			        analytics: Analytics? = nil,
+			        analytics: LazilyInstantiated<Analytics>? = nil,
 			        theme: Theme? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Service {
@@ -5157,7 +5157,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 			    package static func mock(
 			        retries: Int? = nil,
-			        analytics: Analytics? = nil,
+			        analytics: LazilyInstantiated<Analytics>? = nil,
 			        session: Session? = nil,
 			        theme: Theme? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
@@ -5168,9 +5168,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        }
 			        let logger: any Logger = __safeDI_logger()
 			        func __safeDI_analytics() -> Analytics {
-			            if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+			            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 			        }
-			        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+			        let analytics = if let analytics { analytics } else { LazilyInstantiated<Analytics>(__safeDI_analytics) }
 			        let session = if let session { session } else if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
 			        func __safeDI_tokenCache() -> TokenCache {
 			            return TokenCache.__safeDI_init(analytics: analytics.instance, session: session, theme: theme, capacity: safeDIOverrides.tokenCache.capacity, safeDIBuilder: safeDIOverrides.tokenCache.safeDIBuilder)
@@ -5181,7 +5181,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_mock_209346FEA041FD20 {}
+			    public enum __safeDI_Service_mock_816116B36B4B2B91 {}
 			}
 			#endif
 
@@ -9243,10 +9243,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesInstanceOfOneWrapperToPublicMockCallsInsideFills_whenCalledMockBuildsLazilyInstantiatedDependencyWhenPassedNil() async throws {
+	mutating func generate_passesOneWrapperToPublicMockCallsInsideFills_whenCalledMockBuildsLazilyInstantiatedDependencyWhenPassedNil() async throws {
 		// `TokenCache` requires `filter` as `LazilyInstantiated<any FilterProtocol>`, which `Cache`'s public mock builds from
 		// `CoreFilter` when passed `nil`. `Screen`'s public mock builds that wrapper once, as the inline mock does, and passes
-		// its instance to the calls inside the fills of `Service`'s builder and of `Board`'s.
+		// it to the calls inside the fills of `Service`'s builder and of `Board`'s.
 		let modules = Self.fillReceivingLabelModules(receivingFilter: .requiredLazilyInstantiated, app: Self.fillReceivingLabelScreen(generateMock: ".public", instantiatesBoard: true) + "\n\n" + """
 		@Instantiable
 		public final class DefaultUserService: UserService, Instantiable {
@@ -9320,19 +9320,19 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        filter: (any FilterProtocol)? = nil,
+		        filter: LazilyInstantiated<any FilterProtocol>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        func __safeDI_filter() -> any FilterProtocol {
-		            if let filter { filter } else if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder() } else { CoreFilter() }
+		            if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder() } else { CoreFilter() }
 		        }
-		        let filter = LazilyInstantiated<any FilterProtocol>(__safeDI_filter)
+		        let filter = if let filter { filter } else { LazilyInstantiated<any FilterProtocol>(__safeDI_filter) }
 		        func __safeDI_service() -> Service {
 		            func __safeDI_defaultUserService_AnyUserServiceBuilder_Service_userService(_ scope: Service.SafeDIMockScope_DefaultUserService_AnyUserService.userService_Values) -> AnyUserService {
 		                let analytics = scope.analytics
 		                func __safeDI_userService() -> DefaultUserService {
-		                    let cache = Cache.mock(filter: filter.instance)
+		                    let cache = Cache.mock(filter: filter)
 		                    return DefaultUserService(analytics: analytics, cache: cache)
 		                }
 		                let userService = AnyUserService(__safeDI_userService())
@@ -9348,7 +9348,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        func __safeDI_board() -> Board {
 		            func __safeDI_defaultWidget_AnyWidgetBuilder_Board_widget(_ scope: Board.SafeDIMockScope_DefaultWidget_AnyWidget.widget_Values) -> AnyWidget {
 		                func __safeDI_widget() -> DefaultWidget {
-		                    let cache = Cache.mock(filter: filter.instance)
+		                    let cache = Cache.mock(filter: filter)
 		                    return DefaultWidget(cache: cache)
 		                }
 		                let widget = AnyWidget(__safeDI_widget())
@@ -9366,16 +9366,15 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_mock_215B449271BCAB93 {}
+		    public enum __safeDI_Screen_mock_8045DFD2FB3769D2 {}
 		}
 		#endif
 		"""])
-		// Each call hands `Cache`'s mock the instance of the one wrapper, which the mock wraps again (M8.32): the value
-		// comparator compares a lazily instantiated wrapper by its instance, the one the inline mock shares.
+		// Each call hands `Cache`'s mock the one wrapper, which the mock passes on, as the inline mock shares it.
 		try await expectValuesAgreeWithInlineMocks(
 			of: modules,
 			output: output,
-			probes: [DifferentialValueProbe("Screen.mock()"), Self.screenMockPassingFilterToBuildInstead],
+			probes: [DifferentialValueProbe("Screen.mock()"), Self.screenMockPassingFilterWrapperToBuildInstead],
 		)
 	}
 
@@ -11370,8 +11369,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        }
 			        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 			        let theme = if let safeDIBuilder = safeDIOverrides.theme { safeDIBuilder() } else { Theme() }
-			        _ = Service.__safeDI_Service_mock_209346FEA041FD20.self\(pluginComment)
-			        let service = Service.mock(analytics: analytics.instance, theme: theme, safeDIOverrides: safeDIOverrides.service)
+			        _ = Service.__safeDI_Service_mock_816116B36B4B2B91.self\(pluginComment)
+			        let service = Service.mock(analytics: analytics, theme: theme, safeDIOverrides: safeDIOverrides.service)
 			        return Screen(analytics: analytics, theme: theme, service: service)
 			    }
 			}
@@ -11434,8 +11433,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				        }
 				        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 				        let theme = if let safeDIBuilder = safeDIOverrides.theme { safeDIBuilder() } else { Theme() }
-				        _ = Service.__safeDI_Service_mock_209346FEA041FD20.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				        let service = Service.mock(analytics: analytics.instance, theme: theme, safeDIOverrides: safeDIOverrides.service)
+				        _ = Service.__safeDI_Service_mock_816116B36B4B2B91.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				        let service = Service.mock(analytics: analytics, theme: theme, safeDIOverrides: safeDIOverrides.service)
 				        return Screen(analytics: analytics, theme: theme, service: service)
 				    }
 				}
@@ -11497,8 +11496,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				        }
 				        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 				        let theme = if let safeDIBuilder = safeDIOverrides.theme { safeDIBuilder() } else { Theme() }
-				        _ = Service.__safeDI_Service_mock_209346FEA041FD20.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
-				        let service = Service.mock(analytics: analytics.instance, theme: theme, safeDIOverrides: safeDIOverrides.service)
+				        _ = Service.__safeDI_Service_mock_816116B36B4B2B91.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
+				        let service = Service.mock(analytics: analytics, theme: theme, safeDIOverrides: safeDIOverrides.service)
 				        return Screen(analytics: analytics, theme: theme, service: service)
 				    }
 				}
@@ -11517,8 +11516,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			]))
 		}
 		guard integration == .moduleInfo else { return }
-		// M8.32: the call hands `Service`'s mock the instance of `Screen`'s `analytics`, which the mock wraps again, reading
-		// it as it does; the value comparator compares the wrapper by its instance, the one the inline mock shares.
+		// The call hands `Service`'s mock `Screen`'s `analytics` wrapper, which `Service` holds, as inline.
 		try await expectValuesAgreeWithInlineMocks(
 			of: Self.canonicalModules(appCaller: Self.canonicalScreen),
 			output: output,
@@ -11528,10 +11526,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test(arguments: [MultiModuleIntegration.moduleInfo, .swiftPackagePlugin])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesInstanceOfPromotedWrapper_whenConsumerAndPublicMockBothReceiveItLazily(integration: MultiModuleIntegration) async throws {
+	mutating func generate_passesPromotedWrapper_whenConsumerAndPublicMockBothReceiveItLazily(integration: MultiModuleIntegration) async throws {
 		// EOU-1: `Screen` and `Service` both receive `analytics` lazily. `Screen`'s mock builds the wrapper at its root and
-		// hands `Service`'s mock its instance, as it would hand the instance to `Service` inline, rather than `nil`, which
-		// would build a second `Analytics`.
+		// hands it to `Service`'s mock, as it would hand it to `Service` inline, rather than `nil`, which would build a second
+		// `Analytics`.
 		let modules = [
 			ModuleFixture(name: "Core", packageName: "corepkg", swiftFileContentByFilePath: ["Service.swift": """
 			import SafeDI
@@ -11623,8 +11621,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self\(pluginComment)
-		        let service = Service.mock(analytics: analytics.instance, safeDIOverrides: safeDIOverrides.service)
+		        _ = Service.__safeDI_Service_mock_E6F54C5E4AC4B0CA.self\(pluginComment)
+		        let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        return Screen(analytics: analytics, service: service)
 		    }
 		}
@@ -11681,8 +11679,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 				        }
 				        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-				        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				        let service = Service.mock(analytics: analytics.instance, safeDIOverrides: safeDIOverrides.service)
+				        _ = Service.__safeDI_Service_mock_E6F54C5E4AC4B0CA.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				        let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 				        return Screen(analytics: analytics, service: service)
 				    }
 				}
@@ -11747,8 +11745,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 				        }
 				        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-				        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
-				        let service = Service.mock(analytics: analytics.instance, safeDIOverrides: safeDIOverrides.service)
+				        _ = Service.__safeDI_Service_mock_E6F54C5E4AC4B0CA.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
+				        let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 				        return Screen(analytics: analytics, service: service)
 				    }
 				}
@@ -11759,20 +11757,11 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			#expect(output.modules["App"]?.generatedFiles["Screen+SafeDIMock.swift"] == generatedFileHeader + screenMock)
 		}
 		guard integration == .moduleInfo else { return }
-		// M8.32's stated divergence: the call reads the instance of `Screen`'s `analytics` when `Service`'s mock is built,
-		// and the mock wraps it again, which the value comparator compares by its instance, the one the inline mock shares.
+		// The call hands `Service`'s mock `Screen`'s wrapper, so nothing reads its instance before the probe does, as inline.
 		try await expectValuesAgreeWithInlineMocks(
 			of: modules,
 			output: output,
 			probes: [DifferentialValueProbe("Screen.mock()")],
-			exempting: [
-				DifferentialValueDifference(
-					probe: "Screen.mock()",
-					path: ["Screen", "analytics"],
-					feature: "analytics: <1> LazilyInstantiated<Analytics> (already instantiated, instance read last)",
-					knownRight: "analytics: <1> LazilyInstantiated<Analytics> (instance read last)",
-				),
-			],
 		)
 	}
 
@@ -11781,7 +11770,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	mutating func generate_buildsLazilyInstantiatedDependencyAsWrapperAtCallersRoot_whenCalledPublicMockBuildsItLazily() async throws {
 		// O3 (corpus seed 36's shape): `Service`'s mock builds the `analytics` it receives lazily when passed `nil`.
 		// `Screen`'s mock, which can build it, builds the wrapper once at its root, as the inline mock promotes it, and
-		// passes its instance – M8.32's early read, the stated divergence – rather than an `Analytics` built eagerly.
+		// passes it, rather than an `Analytics` built eagerly.
 		let modules = [
 			ModuleFixture(name: "Core", packageName: "corepkg", swiftFileContentByFilePath: ["Service.swift": """
 			import SafeDI
@@ -11870,8 +11859,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let service = Service.mock(analytics: analytics.instance, safeDIOverrides: safeDIOverrides.service)
+		        _ = Service.__safeDI_Service_mock_E6F54C5E4AC4B0CA.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        return Screen(service: service)
 		    }
 		}
@@ -11974,8 +11963,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let service = Service.mock(analytics: analytics.instance, safeDIOverrides: safeDIOverrides.service)
+		        _ = Service.__safeDI_Service_mock_E6F54C5E4AC4B0CA.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        return Screen(analytics: analytics, service: service)
 		    }
 		}
@@ -13065,8 +13054,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                if let safeDIBuilder = __safeDI_wrapperBuilder__wrapperBuilder_analytics_safeDIBuilder { safeDIBuilder() } else { Analytics() }
 		            }
 		            let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		            _ = Service.__safeDI_Service_mock_209346FEA041FD20.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let service = Service.mock(analytics: analytics.instance, theme: nil, safeDIOverrides: __safeDI_wrapperBuilder__wrapperBuilder_service_safeDIBuilder?() ?? .init())
+		            _ = Service.__safeDI_Service_mock_816116B36B4B2B91.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            let service = Service.mock(analytics: analytics, theme: nil, safeDIOverrides: __safeDI_wrapperBuilder__wrapperBuilder_service_safeDIBuilder?() ?? .init())
 		            return if let safeDIBuilder = __safeDI_wrapperBuilder__safeDIBuilder { safeDIBuilder(analytics, service) } else { Wrapper(analytics: analytics, service: service) }
 		        }
 		        let wrapperBuilder = SendableInstantiator<Wrapper>(__safeDI_wrapperBuilder)
@@ -13190,9 +13179,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        _ = Service.__safeDI_Service_mock_209346FEA041FD20.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        _ = Service.__safeDI_Service_mock_816116B36B4B2B91.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_serviceBuilder() -> Service {
-		            Service.mock(analytics: analytics.instance, theme: nil, safeDIOverrides: safeDIOverrides.serviceBuilder)
+		            Service.mock(analytics: analytics, theme: nil, safeDIOverrides: safeDIOverrides.serviceBuilder)
 		        }
 		        let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
 		        return Screen(analytics: analytics, serviceBuilder: serviceBuilder)
@@ -13420,8 +13409,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        _ = Service.__safeDI_Service_mock_209346FEA041FD20.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let service = Service.mock(analytics: analytics.instance, theme: theme, safeDIOverrides: safeDIOverrides.service)
+		        _ = Service.__safeDI_Service_mock_816116B36B4B2B91.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let service = Service.mock(analytics: analytics, theme: theme, safeDIOverrides: safeDIOverrides.service)
 		        return Screen(theme: theme, service: service)
 		    }
 		}
@@ -14248,8 +14237,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
-		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let service = Service.mock(analytics: analytics.instance, safeDIOverrides: safeDIOverrides.service)
+		        _ = Service.__safeDI_Service_mock_E6F54C5E4AC4B0CA.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        let filter: any FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
 		        return Screen(analytics: analytics, service: service, filter: filter)
 		    }
@@ -16036,6 +16025,15 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		knownRightExpression: "Screen.mock(safeDIOverrides: .init(filter: { ProbeFilter() }))",
 	)
 
+	/// The probe of a public mock that takes `filter` as the `LazilyInstantiated` its tree receives and builds it from
+	/// `CoreFilter` when passed `nil`, passed a wrapper of `ProbeFilter`, which the inline mock takes as the override of what
+	/// it builds.
+	private static let screenMockPassingFilterWrapperToBuildInstead = DifferentialValueProbe(
+		name: "Screen.mock() passed a filter",
+		expression: "Screen.mock(filter: LazilyInstantiated { ProbeFilter() })",
+		knownRightExpression: "Screen.mock(safeDIOverrides: .init(filter: { ProbeFilter() }))",
+	)
+
 	/// M8.27's modules: `Service`'s hole `routerBuilder`, an `ErasedInstantiator` of `AnyRouting`, which `Profile`'s
 	/// public initializer proves `public`, is fulfilled by `App`'s `Router`; the scope struct carries the `analytics`
 	/// `Service` receives, which a call inside the fill passes on. `Core` also declares `coreAddition`, and `Screen` has a
@@ -16469,8 +16467,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	#if DEBUG
 	func callPublicTiers() {
 	    _ = Service.mock()
-	    _ = Service.mock(retries: 9, analytics: Analytics(), theme: Theme(), safeDIOverrides: .init(logger: .init(verbose: true), analytics: { Analytics() }, tokenCache: .init(capacity: 5), name: nil))
-	    _ = Service.__safeDI_Service_mock_209346FEA041FD20.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+	    _ = Service.mock(retries: 9, analytics: LazilyInstantiated { Analytics() }, theme: Theme(), safeDIOverrides: .init(logger: .init(verbose: true), analytics: { Analytics() }, tokenCache: .init(capacity: 5), name: nil))
+	    _ = Service.__safeDI_Service_mock_816116B36B4B2B91.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 	}
 
 	@MainActor func callDashboard() {
