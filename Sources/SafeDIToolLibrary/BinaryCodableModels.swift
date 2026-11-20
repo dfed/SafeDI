@@ -1307,6 +1307,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 				BinaryLayoutField("conditionalCompilationDecisions", \.conditionalCompilationDecisions),
 				BinaryLayoutField("instantiableTypeNamesInAnyClause", \.instantiableTypeNamesInAnyClause),
 				BinaryLayoutField("plainTypeDeclarations", \.plainTypeDeclarations),
+				BinaryLayoutField("seamSignatures", \.seamSignatures),
 				BinaryLayoutField("view", \.view),
 			],
 			unwrittenProperties: [],
@@ -1327,6 +1328,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 			conditionalCompilationDecisions: fileWithoutView.conditionalCompilationDecisions,
 			instantiableTypeNamesInAnyClause: fileWithoutView.instantiableTypeNamesInAnyClause,
 			plainTypeDeclarations: fileWithoutView.plainTypeDeclarations,
+			seamSignatures: fileWithoutView.seamSignatures,
 			view: reader.read(),
 		)
 	}
@@ -1346,6 +1348,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 			conditionalCompilationDecisions: reader.read(),
 			instantiableTypeNamesInAnyClause: reader.read(),
 			plainTypeDeclarations: reader.read(),
+			seamSignatures: reader.read(),
 			view: .empty,
 		)
 	}
@@ -1362,6 +1365,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 		writer.write(conditionalCompilationDecisions)
 		writer.write(instantiableTypeNamesInAnyClause)
 		writer.write(plainTypeDeclarations)
+		writer.write(seamSignatures)
 		writer.write(view)
 	}
 }
@@ -1426,6 +1430,7 @@ extension ViewedModule: BinarySchemaMember {
 				BinaryLayoutField("mockImports", \.mockImports),
 				BinaryLayoutField("instantiables", \.instantiables),
 				BinaryLayoutField("plainTypeDeclarations", \.plainTypeDeclarations),
+				BinaryLayoutField("seamSignatures", \.seamSignatures),
 			],
 			unwrittenProperties: [],
 		)
@@ -1438,6 +1443,7 @@ extension ViewedModule: BinarySchemaMember {
 			mockImports: reader.read(),
 			instantiables: reader.read(),
 			plainTypeDeclarations: reader.read(),
+			seamSignatures: reader.read(),
 		)
 	}
 
@@ -1447,5 +1453,6 @@ extension ViewedModule: BinarySchemaMember {
 		writer.write(mockImports)
 		writer.write(instantiables)
 		writer.write(plainTypeDeclarations)
+		writer.write(seamSignatures)
 	}
 }

@@ -12751,6 +12751,9 @@ struct GraphFuzzerFailure: Equatable {
 		/// signature, tier and public mock from source, than when it runs as Bazel runs it, reading the dependencies'
 		/// `.safedi` files (`.moduleInfo`).
 		case integrationsDisagree = "the SwiftPM plugin flow and the module-info flow give other results"
+		/// The module-info flow gives a split graph other results when each module reads the signatures of the seams it
+		/// calls from their modules' `.safedi` files than when it computes them again from the declarations.
+		case storedSeamSignaturesDisagree = "reading the stored seam signatures and computing them again give other results"
 		case seamPassesNilWhereInlinePassesValue = "the generated code passes a literal nil more often with the seam than without it"
 		/// The tool rejects the alias draw's seam, with an error about that seam, where it accepts the graph with no seam.
 		case seamRejectedWhereInlineAccepts = "the tool rejects the alias draw's seam where it accepts the graph with no seam"
@@ -13043,6 +13046,7 @@ struct GraphFuzzerResult {
 		isInspectedByValueOracle: Bool = false,
 		isComparedByValueOracle: Bool = false,
 		isComparedAcrossIntegrations: Bool = false,
+		isComparedWithRecomputedSignatures: Bool = false,
 		isComparedWithReadTwin: Bool = false,
 		isComparedWithoutSecondHolePlace: Bool = false,
 		isComparedWithoutSecondPath: Bool = false,
@@ -13067,6 +13071,7 @@ struct GraphFuzzerResult {
 		self.isInspectedByValueOracle = isInspectedByValueOracle
 		self.isComparedByValueOracle = isComparedByValueOracle
 		self.isComparedAcrossIntegrations = isComparedAcrossIntegrations
+		self.isComparedWithRecomputedSignatures = isComparedWithRecomputedSignatures
 		self.isComparedWithReadTwin = isComparedWithReadTwin
 		self.valueOracle = valueOracle
 	}
@@ -13098,6 +13103,9 @@ struct GraphFuzzerResult {
 	/// (`GraphFuzzerToolRuns.integrationsDisagreeFailure`): the graph is split across modules, and no module of it is run
 	/// without its package's name.
 	let isComparedAcrossIntegrations: Bool
+	/// Whether the oracle ran the graph with every module info's seam signatures discarded and compared the two runs
+	/// (`GraphFuzzerToolRuns.storedSeamSignaturesDisagreeFailure`): the graph is split across modules and declares a seam.
+	let isComparedWithRecomputedSignatures: Bool
 	/// Whether the oracle ran the graph's read twin and compared it with the graph (`GraphFuzzerToolRuns.readTwinFailure`):
 	/// the graph names a type no declaration SafeDI reads declares.
 	let isComparedWithReadTwin: Bool
@@ -13666,6 +13674,8 @@ struct GraphFuzzerToolRuns {
 	///   - multiModuleRuns: What the two multi-module integrations produced for the graph split across modules.
 	///   - pluginOutcome: The outcome of a graph split across modules as the SwiftPM plugin runs the tool, when no module
 	///     of it is run without its package's name: `firstOutcome` is how Bazel runs it.
+	///   - recomputedSignaturesOutcome: The outcome of a graph split across modules that declares a seam, run as
+	///     `firstOutcome` was with every module info's seam signatures discarded.
 	///   - readTwinOutcome: The outcome of the graph's read twin (`GraphFuzzerFixture.readTwin`) as `firstOutcome` was
 	///     run, with its rename undone, when the graph names a type no declaration SafeDI reads declares.
 	///   - readTwinPluginOutcome: The outcome of the read twin as `pluginOutcome` was run, with its rename undone, when the
@@ -13694,6 +13704,7 @@ struct GraphFuzzerToolRuns {
 		knownRightOutcome: GraphFuzzerToolOutcome? = nil,
 		multiModuleRuns: [GraphFuzzerMultiModuleRuns] = [],
 		pluginOutcome: GraphFuzzerToolOutcome? = nil,
+		recomputedSignaturesOutcome: GraphFuzzerToolOutcome? = nil,
 		readTwinOutcome: GraphFuzzerToolOutcome? = nil,
 		readTwinPluginOutcome: GraphFuzzerToolOutcome? = nil,
 		valueOracle: GraphFuzzerValueOracleRun? = nil,
@@ -13721,6 +13732,7 @@ struct GraphFuzzerToolRuns {
 		self.knownRightOutcome = knownRightOutcome
 		self.multiModuleRuns = multiModuleRuns
 		self.pluginOutcome = pluginOutcome
+		self.recomputedSignaturesOutcome = recomputedSignaturesOutcome
 		self.readTwinOutcome = readTwinOutcome
 		self.readTwinPluginOutcome = readTwinPluginOutcome
 		self.valueOracle = valueOracle
@@ -13735,6 +13747,9 @@ struct GraphFuzzerToolRuns {
 	let knownRightOutcome: GraphFuzzerToolOutcome?
 	let multiModuleRuns: [GraphFuzzerMultiModuleRuns]
 	let pluginOutcome: GraphFuzzerToolOutcome?
+	/// The outcome of a graph split across modules that declares a seam, run as `firstOutcome` was with every `.safedi`
+	/// file's seam signatures discarded, so that each module computes the signatures of the seams it calls.
+	let recomputedSignaturesOutcome: GraphFuzzerToolOutcome?
 	let readTwinOutcome: GraphFuzzerToolOutcome?
 	let readTwinPluginOutcome: GraphFuzzerToolOutcome?
 	let valueOracle: GraphFuzzerValueOracleRun?
@@ -14011,6 +14026,18 @@ struct GraphFuzzerToolRuns {
 			seed: fixture.seed,
 			kind: .integrationsDisagree,
 			details: "\(difference)\nThe module-info flow:\n\(firstOutcome.description)\nThe SwiftPM plugin flow:\n\(pluginOutcome.description)",
+		)
+	}
+
+	/// The failure of a graph split across modules whose modules generate other code or report other diagnostics when each
+	/// reads the signatures of the seams it calls from their modules' `.safedi` files than when it computes them again from
+	/// the declarations those files carry, or `nil`: a module's stored signature must be the one each caller would compute.
+	var storedSeamSignaturesDisagreeFailure: GraphFuzzerFailure? {
+		guard let recomputedSignaturesOutcome, recomputedSignaturesOutcome != firstOutcome else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .storedSeamSignaturesDisagree,
+			details: "Reading the stored signatures:\n\(firstOutcome.description)\nComputing them again:\n\(recomputedSignaturesOutcome.description)",
 		)
 	}
 
@@ -14511,7 +14538,7 @@ enum GraphFuzzerOracle {
 		}
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
-			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.publicMockOverridesOrderFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
+			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.storedSeamSignaturesDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.publicMockOverridesOrderFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
 			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
@@ -14545,6 +14572,7 @@ enum GraphFuzzerOracle {
 				isInspectedByValueOracle: runs.isInspectedByValueOracle,
 				isComparedByValueOracle: compileVerificationIsEnabled && runs.isInspectedByValueOracle && runs.runsDifferFailure == nil && codeCompilationFailures[runs.fixture.seed] == nil && isValueOracleGraphCompared,
 				isComparedAcrossIntegrations: runs.pluginOutcome != nil,
+				isComparedWithRecomputedSignatures: runs.recomputedSignaturesOutcome != nil,
 				isComparedWithReadTwin: runs.readTwinOutcome != nil,
 				isComparedWithoutSecondHolePlace: runs.isComparedWithoutSecondHolePlace,
 				isComparedWithoutSecondPath: runs.isComparedWithoutSecondPath,
@@ -15239,6 +15267,12 @@ enum GraphFuzzerOracle {
 		let pluginOutcome: GraphFuzzerToolOutcome? = fixture.modules != nil && fixture.modulesOmittingPackageName.isEmpty
 			? try await toolOutcome(of: fixture, integration: .swiftPackagePlugin)
 			: nil
+		// A graph split across modules that declares a seam is run again with every `.safedi` file's seam signatures
+		// discarded, so each module computes the signatures of the seams it calls from the declarations: the two must
+		// agree byte for byte (`storedSeamSignaturesDisagreeFailure`).
+		let recomputedSignaturesOutcome: GraphFuzzerToolOutcome? = fixture.modules != nil && fixture.declaresSeam
+			? try await toolOutcome(of: fixture, discardingStoredSeamSignatures: true)
+			: nil
 		// A graph that names a type no declaration SafeDI reads declares is run again as its read twin, which declares that
 		// type `public` where SafeDI reads it, under each flow the graph is run under: SafeDI counts the type as `public`, so
 		// the two must agree but for the comment naming it (`readTwinFailure`).
@@ -15312,6 +15346,7 @@ enum GraphFuzzerOracle {
 			knownRightOutcome: knownRightOutcome,
 			multiModuleRuns: multiModuleRuns,
 			pluginOutcome: pluginOutcome,
+			recomputedSignaturesOutcome: recomputedSignaturesOutcome,
 			readTwinOutcome: readTwinOutcome,
 			readTwinPluginOutcome: readTwinPluginOutcome,
 			valueOracle: valueOracle,
@@ -15333,16 +15368,18 @@ enum GraphFuzzerOracle {
 	///   - listsTransitiveDependencies: Whether each module of a graph split across modules lists every module it depends
 	///     on rather than the modules it imports and those its mocks reach, for a build that constructs in a caller what a
 	///     seam or public mock would.
-	static func toolOutcome(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil, integration: MultiModuleIntegration = .moduleInfo, listsTransitiveDependencies: Bool = false) async throws -> GraphFuzzerToolOutcome {
-		try await toolRun(of: fixture, fileNames: fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies).outcome
+	///   - discardingStoredSeamSignatures: Whether each module of a graph split across modules computes the signatures of
+	///     the seams it calls from the declarations, rather than reading them from their modules' `.safedi` files.
+	static func toolOutcome(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil, integration: MultiModuleIntegration = .moduleInfo, listsTransitiveDependencies: Bool = false, discardingStoredSeamSignatures: Bool = false) async throws -> GraphFuzzerToolOutcome {
+		try await toolRun(of: fixture, fileNames: fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies, discardingStoredSeamSignatures: discardingStoredSeamSignatures).outcome
 	}
 
 	/// The tool's outcome for `fixture`, as `toolOutcome(of:fileNames:integration:listsTransitiveDependencies:)` gives it,
 	/// with the name of the module whose `generate` rejected a graph split across modules: `nil` where the tool accepts the
 	/// graph, or where the graph is in one module, which is then the module that rejects it.
-	static func toolRun(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil, integration: MultiModuleIntegration = .moduleInfo, listsTransitiveDependencies: Bool = false) async throws -> (outcome: GraphFuzzerToolOutcome, rejectingModuleName: String?) {
+	static func toolRun(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil, integration: MultiModuleIntegration = .moduleInfo, listsTransitiveDependencies: Bool = false, discardingStoredSeamSignatures: Bool = false) async throws -> (outcome: GraphFuzzerToolOutcome, rejectingModuleName: String?) {
 		if let modules = fixture.modules {
-			return try await splitToolRun(of: fixture, modules: modules, fileNames: fileNames ?? fixture.fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies)
+			return try await splitToolRun(of: fixture, modules: modules, fileNames: fileNames ?? fixture.fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies, discardingStoredSeamSignatures: discardingStoredSeamSignatures)
 		}
 		var filesToDelete = [URL]()
 		defer {
@@ -15389,7 +15426,7 @@ enum GraphFuzzerOracle {
 	/// reaches a place through a seam beneath the seam's module (`GraphFuzzerFixture.modulesListingEveryModuleBeneath`).
 	/// Each generated file is keyed by its module's name and its own (`FuzzFeature/Type+SafeDI.swift`), and the outcome is
 	/// the first module's error, if any, with that module's name.
-	private static func splitToolRun(of fixture: GraphFuzzerFixture, modules: [GraphFuzzerModule], fileNames: [String], integration: MultiModuleIntegration, listsTransitiveDependencies: Bool) async throws -> (outcome: GraphFuzzerToolOutcome, rejectingModuleName: String?) {
+	private static func splitToolRun(of fixture: GraphFuzzerFixture, modules: [GraphFuzzerModule], fileNames: [String], integration: MultiModuleIntegration, listsTransitiveDependencies: Bool, discardingStoredSeamSignatures: Bool) async throws -> (outcome: GraphFuzzerToolOutcome, rejectingModuleName: String?) {
 		var filesToDelete = [URL]()
 		defer {
 			for fileToDelete in filesToDelete {
@@ -15409,7 +15446,7 @@ enum GraphFuzzerOracle {
 		}
 		do {
 			// The fuzzer's graphs are no test's expectations, so a record run never writes them.
-			let output = try await executeSafeDIToolMultiModuleTest(modules: moduleFixtures, integration: integration, compileVerification: .skipped, filesToDelete: &filesToDelete, recordDirectory: nil)
+			let output = try await executeSafeDIToolMultiModuleTest(modules: moduleFixtures, integration: integration, compileVerification: .skipped, discardsStoredSeamSignatures: discardingStoredSeamSignatures, filesToDelete: &filesToDelete, recordDirectory: nil)
 			let normalize = normalizer(fixtureDirectory: output.fixtureRoot.path)
 			var generatedFiles = [String: String]()
 			var warnings = [String]()
