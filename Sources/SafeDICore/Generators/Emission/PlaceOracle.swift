@@ -48,7 +48,7 @@ extension GeneratedCode {
 		while let next = work.popLast() {
 			switch next {
 			case let .code(code):
-				switch code {
+				switch code.node {
 				case .text:
 					break
 				case let .sequence(pieces), let .lines(pieces):
