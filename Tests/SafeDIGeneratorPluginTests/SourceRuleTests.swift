@@ -90,6 +90,86 @@ struct SourceRuleTests {
 		#expect(ErrorReportingSite.problems(ofRegistry: ErrorReportingSite.byErrorType, errorTypes: errorTypes, files: files) == [])
 	}
 
+	// MARK: Actor state
+
+	@Test
+	func generatorActor_assignsNoStoredPropertyInAnAsyncFunction() throws {
+		let files = try Self.checkedFiles.get().map(\.file)
+		#expect(ActorStateRuleCheck.coveredActors(in: files).keys.sorted() == ["DependencyTreeGenerator"])
+		#expect(ActorStateRuleCheck.findings(in: files) == [])
+	}
+
+	@Test(arguments: [
+		"self.memo = value",
+		"memo = value",
+		"memo[key] = value",
+		"self.memo[key] = value",
+		"memo.field = value",
+		"memo += value",
+		"(memo, other) = (value, value)",
+	])
+	func actorStateRuleCheck_findsAssignment_whenAsyncFunctionAssignsStoredProperty(assignment: String) {
+		#expect(actorStateFindings(in: [Self.actorFixture, "extension Generator {\n    func compute() async {\n        \(assignment)\n    }\n}"]) == [
+			"Sources/SafeDICore/Fixture1.swift:3: an `async` function of actor `Generator` assigns its stored property `memo`",
+		])
+	}
+
+	@Test
+	func actorStateRuleCheck_findsAssignment_whenAsyncGetterAssignsStoredProperty() {
+		#expect(actorStateFindings(in: [Self.actorFixture, "extension Generator {\n    var computed: Int {\n        get async {\n            memo = 1\n            return 1\n        }\n    }\n}"]) == [
+			"Sources/SafeDICore/Fixture1.swift:4: an `async` function of actor `Generator` assigns its stored property `memo`",
+		])
+	}
+
+	@Test
+	func actorStateRuleCheck_findsAssignment_whenActorsOwnAsyncFunctionAssignsStoredProperty() {
+		#expect(actorStateFindings(in: ["actor Generator {\n    var memo: Int?\n    func compute() async {\n        memo = 1\n    }\n}"]) == [
+			"Sources/SafeDICore/Fixture0.swift:4: an `async` function of actor `Generator` assigns its stored property `memo`",
+		])
+	}
+
+	@Test
+	func actorStateRuleCheck_findsNothing_whenAsyncFunctionAssignsLocalOfPropertysName() {
+		#expect(actorStateFindings(in: [Self.actorFixture, "extension Generator {\n    func compute(other: inout Int?) async {\n        var memo: Int?\n        memo = 1\n        other = memo\n        _ = memo\n    }\n}"]) == [])
+	}
+
+	@Test
+	func actorStateRuleCheck_findsAssignment_whenOptionalBindingOfPropertysNameScopesOnlyTheOtherBranch() {
+		#expect(actorStateFindings(in: [Self.actorFixture, "extension Generator {\n    func compute() async {\n        if let memo {\n            _ = memo\n        } else {\n            memo = 1\n        }\n    }\n}"]) == [
+			"Sources/SafeDICore/Fixture1.swift:6: an `async` function of actor `Generator` assigns its stored property `memo`",
+		])
+	}
+
+	@Test(arguments: [
+		"guard var memo = Optional(1) else { return }\n        memo = 2",
+		"for var memo in [1] {\n            memo = 2\n        }",
+		"_ = { (memo: inout Int) in memo = 2 }",
+		"if var memo = Optional(1) {\n            memo = 2\n        }",
+	])
+	func actorStateRuleCheck_findsNothing_whenAsyncFunctionAssignsBindingOfPropertysName(statements: String) {
+		#expect(actorStateFindings(in: [Self.actorFixture, "extension Generator {\n    func compute() async {\n        \(statements)\n    }\n}"]) == [])
+	}
+
+	@Test
+	func actorStateRuleCheck_findsNothing_whenSynchronousFunctionAssignsStoredProperty() {
+		#expect(actorStateFindings(in: [Self.actorFixture, "extension Generator {\n    func compute() {\n        memo = 1\n    }\n}"]) == [])
+	}
+
+	@Test
+	func actorStateRuleCheck_findsNothing_whenAsyncFunctionComparesStoredProperty() {
+		#expect(actorStateFindings(in: [Self.actorFixture, "extension Generator {\n    func compute() async -> Bool {\n        memo == nil && computed <= 1\n    }\n}"]) == [])
+	}
+
+	@Test
+	func actorStateRuleCheck_findsNothing_whenAsyncFunctionOfAnotherTypeAssignsPropertyOfActorsName() {
+		#expect(actorStateFindings(in: [Self.actorFixture, "struct Other {\n    var memo: Int?\n    mutating func compute() async {\n        memo = 1\n    }\n}"]) == [])
+	}
+
+	@Test
+	func actorStateRuleCheck_findsNothing_whenActorIsNotYetCovered() {
+		#expect(actorStateFindings(in: ["actor ScopeGenerator {\n    var memo: Int?\n    func compute() async {\n        memo = 1\n    }\n}"]) == [])
+	}
+
 	// MARK: Traps
 
 	@Test(arguments: [
@@ -696,6 +776,16 @@ struct SourceRuleTests {
 	}
 
 	// MARK: Private
+
+	/// An actor named `Generator`, with a stored property `memo` and a computed one, `computed`.
+	private static let actorFixture = "actor Generator {\n    var memo: Int?\n    var computed: Int { 1 }\n}"
+
+	/// What `ActorStateRuleCheck` finds in `sources`, the files `Sources/SafeDICore/Fixture<index>.swift`.
+	private func actorStateFindings(in sources: [String]) -> [String] {
+		ActorStateRuleCheck.findings(in: sources.enumerated().map { index, source in
+			RepositorySwiftFile(path: "Sources/SafeDICore/Fixture\(index).swift", source: source)
+		})
+	}
 
 	private func findings(in source: String, at path: String = "Sources/SafeDICore/Models/Fixture.swift") -> [String] {
 		SourceRuleCheck.findings(in: source, at: path).map(\.description)
