@@ -1179,6 +1179,14 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func corpusAcceptedFeatureCounts_holdAtLeastTenGraphs_forMockPassedLabelAboveAlias() {
+		// A mock passed a label that a scope its tree builds declares again, above an `onlyIfAvailable` alias of it
+		// (`addingMockPassedLabelAboveAliasCycle`), stands in for unit tests of where that alias binds only while it lands
+		// in at least ten graphs the tool accepts, which the corpus runs pin exactly.
+		#expect(Self.corpusAcceptedFeatureCounts[.onlyIfAvailableAliasBeneathLabelAMockIsPassed, default: 0] >= Self.gatingDrawJudgedGraphFloor)
+	}
+
+	@Test
 	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forEachShapeReadThroughView() {
 		// The integrations' comparison (`integrationsDisagree`) checks what a caller computes from the seam's module's view
 		// – cell 5b's chain, and moved declarations – only in a graph whose caller lists the seam's module alone; it judges
@@ -3384,6 +3392,178 @@ struct SafeDIToolGraphFuzzerTests {
 		let result = try #require(try await smokeResults.value.first { $0.fixture.seed == 4_224 })
 		#expect(result.failure == nil)
 		#expect(Self.diagnostics(of: result.outcome) == "S4224_T2.swift:9:2: error: Dependency cycle: @Instantiated `t1: S4224_T1` -> @Received `t2: S4224_T2?` -> @Received `t1: S4224_T1`. `t1: S4224_T1` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.")
+	}
+
+	// MARK: Mock passed a label above an alias cycle
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func fixture_rejectsMockPassedLabelThatScopeDeclaresAgainAboveAliasCycle_forSeed466() async throws {
+		// No root reaches the tree. `PassedLabelHost`'s mock promotes `PassedLabelScope` and is passed `passedTracker:
+		// PassedLabelTracker?`, which `PassedLabelReader` receives only if available. The scope declares `passedTracker`
+		// again and builds `PassedLabelSibling`, whose alias of the tracker `PassedLabelLeaf` requires, so the tracker must
+		// be built before the sibling, while the tracker receives the sibling. Beneath the scope the alias names the
+		// scope's tracker, never the value the mock is passed, so the mock reports the cycle. The alias names the tracker's
+		// own type here; seed 378 spells it with its optional form.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 466)
+
+		#expect(Self.propertyDeclarations(of: "S466_PassedLabelHost", in: fixture) == [
+			"@Instantiated let passedLabelReader: S466_PassedLabelReader",
+			"@Received let passedLabelScope: S466_PassedLabelScope",
+		])
+		#expect(Self.propertyDeclarations(of: "S466_PassedLabelReader", in: fixture) == [
+			"@Received(onlyIfAvailable: true) let passedTracker: S466_PassedLabelTracker?",
+		])
+		#expect(Self.propertyDeclarations(of: "S466_PassedLabelScope", in: fixture) == [
+			"@Instantiated let passedSibling: S466_PassedLabelSibling",
+			"@Instantiated let passedTracker: S466_PassedLabelTracker",
+		])
+		#expect(Self.propertyDeclarations(of: "S466_PassedLabelTracker", in: fixture) == [
+			"@Received let passedSibling: S466_PassedLabelSibling",
+		])
+		#expect(Self.propertyDeclarations(of: "S466_PassedLabelSibling", in: fixture) == [
+			"@Received(fulfilledByDependencyNamed: \"passedTracker\", ofType: S466_PassedLabelTracker.self, onlyIfAvailable: true) let passedTrackerAlias: S466_PassedLabelTracker?",
+			"@Instantiated let passedLeaf: S466_PassedLabelLeaf",
+		])
+		#expect(Self.propertyDeclarations(of: "S466_PassedLabelLeaf", in: fixture) == [
+			"@Received let passedTrackerAlias: S466_PassedLabelTracker?",
+		])
+		#expect(GraphFuzzerFeature.features(of: fixture).contains(.onlyIfAvailableAliasBeneathLabelAMockIsPassed))
+		let result = try #require(try await smokeResults.value.first { $0.fixture.seed == 466 })
+		#expect(result.failure == nil)
+		#expect(Self.diagnostics(of: result.outcome) == "S466_PassedLabelTracker.swift:7:2: error: Dependency cycle: @Instantiated `passedSibling: S466_PassedLabelSibling` -> @Received `passedTracker: S466_PassedLabelTracker` -> @Received `passedSibling: S466_PassedLabelSibling`. `passedSibling: S466_PassedLabelSibling` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func fixture_rejectsMockPassedLabelThatScopeDeclaresAgainAboveAliasOfOptionalFormCycle_forSeed378() async throws {
+		// Seed 466's cycle, with the alias spelled with the tracker's optional form (`ofType: PassedLabelTracker?.self`).
+		// 2.2.0 accepted this graph and generated a mock whose leaf reads `passedTrackerAlias`, which nothing binds, so it
+		// did not compile ("cannot find 'passedTrackerAlias' in scope").
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 378)
+
+		#expect(Self.propertyDeclarations(of: "S378_PassedLabelHost", in: fixture) == [
+			"@Instantiated let passedLabelReader: S378_PassedLabelReader",
+			"@Received let passedLabelScope: S378_PassedLabelScope",
+		])
+		#expect(Self.propertyDeclarations(of: "S378_PassedLabelReader", in: fixture) == [
+			"@Received(onlyIfAvailable: true) let passedTracker: S378_PassedLabelTracker?",
+		])
+		#expect(Self.propertyDeclarations(of: "S378_PassedLabelScope", in: fixture) == [
+			"@Instantiated let passedTracker: S378_PassedLabelTracker",
+			"@Instantiated let passedSibling: S378_PassedLabelSibling",
+		])
+		#expect(Self.propertyDeclarations(of: "S378_PassedLabelTracker", in: fixture) == [
+			"@Received let passedSibling: S378_PassedLabelSibling",
+		])
+		#expect(Self.propertyDeclarations(of: "S378_PassedLabelSibling", in: fixture) == [
+			"@Received(fulfilledByDependencyNamed: \"passedTracker\", ofType: S378_PassedLabelTracker?.self, onlyIfAvailable: true) let passedTrackerAlias: S378_PassedLabelTracker?",
+			"@Instantiated let passedLeaf: S378_PassedLabelLeaf",
+		])
+		#expect(Self.propertyDeclarations(of: "S378_PassedLabelLeaf", in: fixture) == [
+			"@Received let passedTrackerAlias: S378_PassedLabelTracker?",
+		])
+		#expect(GraphFuzzerFeature.features(of: fixture).contains(.onlyIfAvailableAliasBeneathLabelAMockIsPassed))
+		let result = try #require(try await smokeResults.value.first { $0.fixture.seed == 378 })
+		#expect(result.failure == nil)
+		#expect(Self.diagnostics(of: result.outcome) == "S378_PassedLabelLeaf.swift:7:2: error: Dependency cycle: @Instantiated `passedTracker: S378_PassedLabelTracker` -> @Received `passedSibling: S378_PassedLabelSibling` -> @Received `passedTracker: S378_PassedLabelTracker?` -> @Received `passedTracker: S378_PassedLabelTracker`. `passedTracker: S378_PassedLabelTracker` is received while it is still being instantiated. `passedTrackerAlias: S378_PassedLabelTracker?` renames `passedTracker: S378_PassedLabelTracker?` only if available, so a type that receives `passedTrackerAlias` without `onlyIfAvailable` must be built after `passedTracker: S378_PassedLabelTracker?`. Receive `passedTrackerAlias` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `passedTracker: S378_PassedLabelTracker?` cannot be built first.")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func fixture_bindsAliasBeneathScopeToScopesOwnTracker_whenMockIsPassedTheLabelTheScopeDeclaresAgain_forSeed99() async throws {
+		// `PassedLabelHost` instantiates `PassedLabelScope`, which declares `passedTracker`, and `PassedLabelReader`, which
+		// receives `passedTracker: PassedLabelTracker?` only if available, so the mock takes it. The tracker receives
+		// nothing, so the scope builds it first, and the alias `PassedLabelSibling` declares, which `PassedLabelLeaf`
+		// requires, is the scope's tracker, not the value the mock is passed; the smoke batch compiles the mock.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 99)
+
+		#expect(Self.propertyDeclarations(of: "S99_PassedLabelHost", in: fixture) == [
+			"@Instantiated let passedLabelScope: S99_PassedLabelScope",
+			"@Instantiated let passedLabelReader: S99_PassedLabelReader",
+		])
+		#expect(Self.propertyDeclarations(of: "S99_PassedLabelReader", in: fixture) == [
+			"@Received(onlyIfAvailable: true) let passedTracker: S99_PassedLabelTracker?",
+		])
+		#expect(Self.propertyDeclarations(of: "S99_PassedLabelScope", in: fixture) == [
+			"@Instantiated let passedTracker: S99_PassedLabelTracker",
+			"@Instantiated let passedSibling: S99_PassedLabelSibling",
+		])
+		#expect(Self.propertyDeclarations(of: "S99_PassedLabelTracker", in: fixture) == [])
+		#expect(Self.propertyDeclarations(of: "S99_PassedLabelSibling", in: fixture) == [
+			"@Received(fulfilledByDependencyNamed: \"passedTracker\", ofType: S99_PassedLabelTracker?.self, onlyIfAvailable: true) let passedTrackerAlias: S99_PassedLabelTracker?",
+			"@Instantiated let passedLeaf: S99_PassedLabelLeaf",
+		])
+		#expect(Self.propertyDeclarations(of: "S99_PassedLabelLeaf", in: fixture) == [
+			"@Received let passedTrackerAlias: S99_PassedLabelTracker?",
+		])
+		#expect(GraphFuzzerFeature.features(of: fixture).contains(.onlyIfAvailableAliasBeneathLabelAMockIsPassed))
+		let result = try #require(try await smokeResults.value.first { $0.fixture.seed == 99 })
+		#expect(result.failure == nil)
+		#expect(Self.generatedFiles(of: result.outcome)["S99_PassedLabelHost+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension S99_PassedLabelHost {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            passedLabelScope: S99_PassedLabelScope.SafeDIMockConfiguration = .init(),
+		            passedLabelReader: ((S99_PassedLabelTracker?) -> S99_PassedLabelReader)? = nil,
+		            passedTracker: S99_PassedLabelTracker? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                passedLabelScope: passedLabelScope,
+		                passedLabelReader: passedLabelReader
+		            )
+		            self.passedTracker = passedTracker
+		        }
+
+		        var passedLabelScope: S99_PassedLabelScope.SafeDIMockConfiguration { __safeDI_storage.passedLabelScope }
+		        var passedLabelReader: ((S99_PassedLabelTracker?) -> S99_PassedLabelReader)? { __safeDI_storage.passedLabelReader }
+		        let passedTracker: S99_PassedLabelTracker?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                passedLabelScope: S99_PassedLabelScope.SafeDIMockConfiguration,
+		                passedLabelReader: ((S99_PassedLabelTracker?) -> S99_PassedLabelReader)?
+		            ) {
+		                self.passedLabelScope = passedLabelScope
+		                self.passedLabelReader = passedLabelReader
+		            }
+
+		            let passedLabelScope: S99_PassedLabelScope.SafeDIMockConfiguration
+		            let passedLabelReader: ((S99_PassedLabelTracker?) -> S99_PassedLabelReader)?
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> S99_PassedLabelHost {
+		        let passedTracker: S99_PassedLabelTracker? = safeDIOverrides.passedTracker
+		        func __safeDI_passedLabelScope() -> S99_PassedLabelScope {
+		            let passedTracker = if let safeDIBuilder = safeDIOverrides.passedLabelScope.passedTracker { safeDIBuilder() } else { S99_PassedLabelTracker() }
+		            func __safeDI_passedSibling() -> S99_PassedLabelSibling {
+		                #sourceLocation(file: "S99_PassedLabelSibling.swift", line: 8)
+		                let passedTrackerAlias: S99_PassedLabelTracker? = passedTracker
+		                #sourceLocation()
+		                let passedLeaf = if let safeDIBuilder = safeDIOverrides.passedLabelScope.passedSibling.passedLeaf { safeDIBuilder(passedTrackerAlias) } else { S99_PassedLabelLeaf(passedTrackerAlias: passedTrackerAlias) }
+		                return if let safeDIBuilder = safeDIOverrides.passedLabelScope.passedSibling.safeDIBuilder { safeDIBuilder(passedTrackerAlias, passedLeaf) } else { S99_PassedLabelSibling(passedTrackerAlias: passedTrackerAlias, passedLeaf: passedLeaf) }
+		            }
+		            let passedSibling: S99_PassedLabelSibling = __safeDI_passedSibling()
+		            return if let safeDIBuilder = safeDIOverrides.passedLabelScope.safeDIBuilder { safeDIBuilder(passedTracker, passedSibling) } else { S99_PassedLabelScope(passedTracker: passedTracker, passedSibling: passedSibling) }
+		        }
+		        let passedLabelScope: S99_PassedLabelScope = __safeDI_passedLabelScope()
+		        let passedLabelReader = if let safeDIBuilder = safeDIOverrides.passedLabelReader { safeDIBuilder(passedTracker) } else { S99_PassedLabelReader(passedTracker: passedTracker) }
+		        return S99_PassedLabelHost(passedLabelScope: passedLabelScope, passedLabelReader: passedLabelReader)
+		    }
+		}
+		#endif
+		""")
 	}
 
 	@Test
@@ -6489,10 +6669,16 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (`builderReceivedInsideItsTreeBesideBuilderLeftNil`). Seeds 4, 5, 7 and 70, which the tool rejects, keep the
 	/// rejected share at that quarter. Seed 98, rejected too, draws a hand-written mock's parameter whose dependency an
 	/// inactive `#if` clause declares (`addingGuardedMockParameterShapes`), so the batch applies that error's two remedies.
+	/// Seeds 99, 378 and 466 draw a mock passed a label that a scope its tree builds declares again above an alias of it
+	/// (`addingMockPassedLabelAboveAliasCycle`): the trackers of 378 and 466 receive the alias's owner, a cycle the mock
+	/// reports (378's alias, spelled with the tracker's optional form, is the graph 2.2.0 accepted and generated a mock
+	/// for that did not compile), and 99's does not, so the mock binds the alias to the scope's tracker. Seed 520 has a
+	/// constant that closes a cycle an instantiator defers (`constantCycleCloser`), since 466's graph, which had one, is
+	/// now rejected.
 	/// It is small because compiling generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on
 	/// every pull request. Compiling the batch is one `swiftc` invocation when nothing fails, and comparing its values
 	/// one compile and one link.
-	static let smokeSeeds: [UInt64] = [4, 5, 7, 12, 14, 18, 25, 30, 40, 59, 62, 70, 94, 97, 98, 99, 133, 161, 212, 267, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516, 5_889, 6_388]
+	static let smokeSeeds: [UInt64] = [4, 5, 7, 12, 14, 18, 25, 30, 40, 59, 62, 70, 94, 97, 98, 99, 133, 161, 212, 267, 304, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516, 5_889, 6_388]
 
 	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x3BC7ABF70F1A0A1D
 
@@ -6543,23 +6729,24 @@ struct SafeDIToolGraphFuzzerTests {
 		.requiredAlias: 957,
 		.onlyIfAvailableAlias: 809,
 		.aliasOfOnlyIfAvailableAlias: 66,
-		.aliasOfOptionalFormOfProperty: 12,
-		.erasedAlias: 195,
+		.aliasOfOptionalFormOfProperty: 67,
+		.onlyIfAvailableAliasBeneathLabelAMockIsPassed: 90,
+		.erasedAlias: 190,
 		.erasedRenameOfOptionalDependency: 34,
-		.forwardedTupleOptionalElement: 67,
+		.forwardedTupleOptionalElement: 66,
 		.forwardedTupleNestedTypeElement: 69,
 		.forwardedTupleGenericElementSpelledWithAngleBrackets: 74,
-		.forwardedTupleGenericElement: 69,
+		.forwardedTupleGenericElement: 68,
 		.forwardedTupleArrayElement: 85,
-		.forwardedTupleDictionaryElement: 73,
-		.forwardedTupleClosureElement: 79,
-		.forwardedTupleSendableClosureElement: 81,
+		.forwardedTupleDictionaryElement: 72,
+		.forwardedTupleClosureElement: 77,
+		.forwardedTupleSendableClosureElement: 79,
 		.forwardedTupleOptionalClosureElement: 66,
-		.forwardedTupleExistentialElement: 80,
-		.forwardedTupleOptionalExistentialElement: 74,
+		.forwardedTupleExistentialElement: 78,
+		.forwardedTupleOptionalExistentialElement: 73,
 		.forwardedTupleTupleElement: 80,
-		.forwardedTupleTypedThrowsClosureElement: 77,
-		.forwardedTupleVariadicClosureElement: 64,
+		.forwardedTupleTypedThrowsClosureElement: 76,
+		.forwardedTupleVariadicClosureElement: 63,
 		.forwardedTupleConventionClosureElement: 77,
 		.forwardedTupleIsolatedAnyClosureElement: 82,
 		.forwardedTupleQualifiedGlobalActorClosureElement: 64,
@@ -6591,7 +6778,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.sameLabelReceivedAsDifferentUnbuildableWrappers: 116,
 		.receivedErasedInstantiator: 755,
 		.forwardedErasedInstantiator: 143,
-		.defaultValuedInstantiateParameter: 563,
+		.defaultValuedInstantiateParameter: 553,
 		.nonSendableValuesInsideSendableBuilder: 133,
 		.handWrittenMockUnderMockCondition: 649,
 		.customMockNameBesideGeneratedMock: 767,
@@ -6743,34 +6930,34 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the base corpus's value oracle compares and skips over the whole corpus (`GraphFuzzerValueOracleCounts`).
 	static let corpusValueOracleCounts = GraphFuzzerValueOracleCounts(
-		rootPairCount: 4_593,
-		rootPairsSum: GraphFuzzerSeedSetSum(value: 0xE540826204A7011C),
-		mirroredPairCount: 3_826,
-		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0x5725DDEA222A71EC),
+		rootPairCount: 4_521,
+		rootPairsSum: GraphFuzzerSeedSetSum(value: 0x79BEACE2074EE6A8),
+		mirroredPairCount: 3_860,
+		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0xA19B84DC3854E58C),
 		skipCounts: [
 			.requiredParameter: 1_495,
 			.twoFormsOfOneLabel: 21,
 			.requiredOptionalReceiveOfNonOptionalDeclaration: 23,
-			.requiredReceiveOfUncreatedAlias: 20,
+			.requiredReceiveOfUncreatedAlias: 19,
 		],
 		shapeCounts: [
-			.rootTreePropertyReceivedByTwoOrMoreTypes: 1_398,
+			.rootTreePropertyReceivedByTwoOrMoreTypes: 1_379,
 			.rootTreeLabelDeclaredAtTwoDepthsAboveReceiver: 149,
-			.promotedDependencyReceivedByTwoOrMoreTypes: 396,
+			.promotedDependencyReceivedByTwoOrMoreTypes: 391,
 			.onlyIfAvailableAliasOfPromotedDependency: 94,
-			.requiredAliasOfPromotedDependency: 329,
+			.requiredAliasOfPromotedDependency: 320,
 			.promotedWrapperReceivedInAnotherForm: 5,
 			.instanceOfPromotedWrapperPassedToMockedType: 2,
-			.onlyIfAvailableReceiveInMockedTypesTreeLeftUnbuilt: 341,
+			.onlyIfAvailableReceiveInMockedTypesTreeLeftUnbuilt: 378,
 		],
-		drawnMocksMatchingOnlyAfterNormalizationCount: 652,
-		mirroredPairsTakingSamplesCount: 860,
-		forwardedPropertiesSampleCount: 2_364,
-		overridePairCount: 4_734,
-		overridePairsSum: GraphFuzzerSeedSetSum(value: 0x4DB5EB2EDF9118FB),
+		drawnMocksMatchingOnlyAfterNormalizationCount: 642,
+		mirroredPairsTakingSamplesCount: 848,
+		forwardedPropertiesSampleCount: 2_329,
+		overridePairCount: 4_759,
+		overridePairsSum: GraphFuzzerSeedSetSum(value: 0xBC7D8989E4951DAC),
 		overrideFieldKindCounts: [
-			.builder: 3_440,
-			.configuration: 1_294,
+			.builder: 3_410,
+			.configuration: 1_349,
 		],
 	)
 
@@ -7512,8 +7699,8 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)],
 			seeds: [330, 809, 950, 1_055],
 		),
-		// The same, in a graph the base corpus lists for its integrations' compile-time assertions, which the seam corpus's
-		// graph of the seed shows too.
+		// The same, in a graph whose integrations also emit other compile-time assertions, as the base corpus's graph of the
+		// seed did before `addingMockPassedLabelAboveAliasCycle` drew a cycle into it.
 		GraphFuzzerKnownIssue(
 			reason: "\(labelSortedPassThroughReason); and \(seamBuilderOrderReason); and \(compileTimeAssertionsDifferBetweenIntegrationsReason)",
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder), .integrationsDiffer(containing: "<compile-time assertions>")],
@@ -7588,7 +7775,7 @@ struct SafeDIToolGraphFuzzerTests {
 		let base: [UInt64]
 		let labels: [UInt64]
 		let sameSupply: [UInt64]
-		/// Why `sameSupply`'s graphs fail, which differs by corpus: the defect each corpus's same-supply edits show.
+		/// Why `sameSupply`'s graphs fail, which differs by corpus: the shape each corpus's same-supply edits show.
 		let sameSupplyReason: String
 		/// Seeds whose same-supply call stops compiling because the edit flips a builder's kind.
 		let sameSupplyBuilderKindFlips: [UInt64]
@@ -7620,17 +7807,19 @@ struct SafeDIToolGraphFuzzerTests {
 
 	private static let labelReason = "A builder of a hole is labeled `<fillingType>Builder` until a second returned type of its filling type appears, and a calling mock names builders apart after each called type, where contract rule 8 labels each builder by its filling type, returned type and family alone"
 
-	/// The seam corpus's same-supply defect, which no slice of the planned builder structs names yet: the seam's own
-	/// internal `mock()` takes `holeService: S83_HoleService` (seed 83) where the seam takes a builder.
-	private static let seamMockTakesHoleValueReason = "A seam's own internal mock, which cannot build a hole whose fill is in another module, takes the hole's value, or the wrapper its place spells, as a parameter where the seam takes one builder per filling type, returned type and family, as contract rules 7 and 8 ask of the mock too, so moving the place behind `LazilyInstantiated` or into an inner seam, or giving a second place the same label, changes the parameter's type, its label or its order"
+	/// The seam corpus's same-supply shape, which stays for 2.x: an internal mock keeps 2.2.0's flat parameters, so
+	/// `HoleOwner`'s internal `mock()` takes `holeService: any S98_HoleService` (seed 98) where the seam takes a builder,
+	/// and a builder added later comes with a default beside the flat parameter ("A seam's own internal mock" in
+	/// `public-mock-builders.md`).
+	private static let seamMockTakesHoleValueReason = "An internal mock of a type that is not a seam, such as `HoleOwner`'s, takes the value of a place its module cannot build, or the wrapper the place spells, as a flat parameter where the seam takes one builder per filling type, returned type and family, so moving the place behind `LazilyInstantiated` or into an inner seam, or giving a second place the same label, changes the parameter's type, its label or its order (Intended: an internal mock keeps the flat parameters 2.2.0 gave it for 2.x, and a builder added later comes with a default beside the flat parameter)"
 
-	/// The public mock corpus's same-supply defect: an internal calling mock takes `hole: S128_Hole` (seed 128), which the
-	/// calling-mock clause of contract rule 7, in the planned builder structs' last mock slice, removes. Seeds 230 and 539
-	/// show its other form: a type a mock builds with its hand-written mock (`customMockName`) takes the hole's value as
-	/// that mock's parameter, which stays a flat parameter, as a hand-written mock's parameters are its API. Seeds 79 and
-	/// 658 show a third: the calling mock builds a promoted `HoleHost` from the hole's flat value and passes it to the called
-	/// public mock (`S79_T6.__safeDI_mock(…, holeHostBuilder:)`).
-	private static let callingMockTakesHoleValueReason = "An internal calling mock passes the called public mock's hole up as the hole's value, or the wrapper its place spells, rather than filling it where the app fills or taking one builder per filling type, returned type and family (contract rules 7 and 8), or a type built with its hand-written mock takes that value or wrapper as the hand-written mock's parameter, so changing the place's wrapper changes the parameter's type or its label"
+	/// The public mock corpus's same-supply shape, which stays for 2.x: an internal mock keeps 2.2.0's flat parameters, so
+	/// an internal calling mock takes `hole: S128_Hole` (seed 128), and a builder added later comes with a default beside
+	/// the flat parameter. Seeds 230 and 539 show its other form: a type a mock builds with its hand-written mock
+	/// (`customMockName`) takes the hole's value as that mock's parameter, which stays a flat parameter, as a hand-written
+	/// mock's parameters are its API. Seeds 79 and 658 show a third: the calling mock builds a promoted `HoleHost` from the
+	/// hole's flat value and passes it to the called public mock (`S79_T6.__safeDI_mock(…, holeHostBuilder:)`).
+	private static let callingMockTakesHoleValueReason = "An internal calling mock passes the called public mock's hole up as a flat parameter, the hole's value or the wrapper its place spells, where its twin takes one builder per filling type, returned type and family, or a type built with its hand-written mock takes that value or wrapper as the hand-written mock's parameter, so changing the place's wrapper changes the parameter's type or its label (Intended: an internal mock keeps the flat parameters 2.2.0 gave it for 2.x, and a builder added later comes with a default beside the flat parameter; a hand-written mock's parameters are its API)"
 
 	/// Transitional: owned by the change that gives every public mock builder one form, which empties these seeds. The
 	/// edit moves a place behind `LazilyInstantiated` or into an instantiator that forwards a value, which keeps the
@@ -7653,8 +7842,8 @@ struct SafeDIToolGraphFuzzerTests {
 	/// The seam corpus's graphs that fail each part of the builder surface today, observed from a run of the tool over
 	/// the corpus (`GraphFuzzerBuilderSurface`), each part's seeds apart: the base check (every graph with a hole the tool
 	/// accepts), the label check, same supply (i), added supply (ii), places forwarding other values (iii) and calling
-	/// mocks (iv). The planned builder structs empty them, each slice the seeds it fixes, but for same supply's, whose
-	/// defect no slice names yet (`seamMockTakesHoleValueReason`).
+	/// mocks (iv). The planned builder structs empty them, each slice the seeds it fixes, but for same supply's, a shape
+	/// that stays for 2.x (`seamMockTakesHoleValueReason`).
 	static let seamBuilderSurfaceSeeds = BuilderSurfaceSeeds(
 		base: [],
 		labels: [],
@@ -8539,7 +8728,8 @@ struct SafeDIToolGraphFuzzerTests {
 	/// The public mock corpus's graphs that fail each part of the builder surface today, observed from a run of the tool over
 	/// the corpus (`GraphFuzzerBuilderSurface`), each part's seeds apart: the base check (every graph with a hole the tool
 	/// accepts), the label check, same supply (i), added supply (ii), places forwarding other values (iii) and calling
-	/// mocks (iv). The planned builder structs empty them, each slice the seeds it fixes.
+	/// mocks (iv). The planned builder structs empty them, each slice the seeds it fixes, but for same supply's, a shape
+	/// that stays for 2.x (`callingMockTakesHoleValueReason`).
 	static let publicMockBuilderSurfaceSeeds = BuilderSurfaceSeeds(
 		base: [],
 		labels: [],
@@ -8825,7 +9015,7 @@ struct SafeDIToolGraphFuzzerTests {
 				6, 36, 45, 55, 154, 157, 209, 281, 300, 371, 380, 381, 434, 476, 541, 548,
 				593, 657, 774, 808, 840, 903, 1_042, 1_073, 1_140, 1_185, 1_217, 1_300, 1_335, 1_369, 1_432,
 				1_563, 1_646, 1_664, 1_675, 1_742, 1_795, 1_817, 1_853, 1_867, 2_051, 2_057, 2_083, 2_149, 2_296, 2_337, 2_484,
-				2_626, 2_742, 2_791, 2_841, 2_916, 2_935, 3_160, 3_352, 3_470, 3_491, 3_513, 3_534, 3_537, 3_589, 3_600, 3_623,
+				2_626, 2_791, 2_841, 2_916, 2_935, 3_160, 3_352, 3_470, 3_491, 3_513, 3_534, 3_537, 3_589, 3_600, 3_623,
 				3_661, 3_674, 3_843, 3_994, 4_015, 4_090, 4_191, 4_192, 4_278, 4_541, 4_613, 4_634, 4_664, 4_712, 4_729,
 				4_834, 4_857, 4_865, 4_891, 4_947, 4_955, 4_983,
 			],
@@ -8846,7 +9036,7 @@ struct SafeDIToolGraphFuzzerTests {
 				3_506, 3_522, 3_526, 3_533, 3_567, 3_577, 3_582, 3_584, 3_588, 3_596, 3_602, 3_648, 3_699, 3_707, 3_715,
 				3_723, 3_741, 3_750, 3_775, 3_776, 3_805, 3_820, 3_823, 3_826, 3_850, 3_894, 3_915, 4_044, 4_068, 4_102,
 				4_107, 4_110, 4_117, 4_122, 4_125, 4_156, 4_177, 4_206, 4_213, 4_215, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281,
-				4_304, 4_344, 4_358, 4_371, 4_393, 4_396, 4_404, 4_420, 4_428, 4_515, 4_534, 4_545, 4_549, 4_567, 4_619, 4_637,
+				4_304, 4_344, 4_358, 4_371, 4_396, 4_404, 4_420, 4_428, 4_515, 4_534, 4_545, 4_549, 4_567, 4_619, 4_637,
 				4_640, 4_642, 4_666, 4_684, 4_699, 4_707, 4_716, 4_717, 4_775, 4_776, 4_781, 4_783, 4_786, 4_795, 4_859, 4_904,
 				4_918, 4_922, 4_944, 4_963, 4_996,
 			],
