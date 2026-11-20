@@ -942,14 +942,21 @@ extension DependencyTreeGenerator {
 			for parameter in parameters {
 				// A pass-through is declared, as far as a fill's reader is told, by the first type in the tree that receives it.
 				let firstReceiver = parameter.receivers.first
+				let declaringType = firstReceiver?.declaringType ?? seam.concreteInstantiable
+				let declarationLocation = firstReceiver?.declarationLocation ?? seam.dependencies.first { $0.property == parameter.property }?.declarationLocation ?? seam.declarationLocation
 				fields.append(SeamSignature.Hole.Field(
 					property: parameter.property,
 					access: parameter.tierAccess,
 					accessCause: parameter.accessCause,
-					declaringType: firstReceiver?.declaringType ?? seam.concreteInstantiable,
-					declarationLocation: firstReceiver?.declarationLocation ?? seam.dependencies.first { $0.property == parameter.property }?.declarationLocation ?? seam.declarationLocation,
+					declaringType: declaringType,
+					declarationLocation: declarationLocation,
 					isReceivedOnlyIfAvailable: parameter.isOnlyIfAvailable,
 					deferral: parameter.deferral,
+					// The memo a route hands a fill of a place inside a fill of this seam's place is this parameter's
+					// (`DependencyTreeGenerator.findingsOfFill`), as `fields(of:)` records it. A public mock's root level binds a receive
+					// again where its nearest declaration does not provide its form, so its parameters say nothing about the forms a
+					// fill may receive (the deliberate gap of contract rule 7 in `seam-and-mock-contract.md`).
+					seamParameterOrigin: bindsReceivesAgain ? nil : SeamSignature.Hole.Field.SeamParameterOrigin(of: parameter, of: seam, declaringType: declaringType, declarationLocation: declarationLocation),
 				))
 			}
 		} else {

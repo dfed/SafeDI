@@ -1186,8 +1186,76 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		}
 		"""])
 		// No values are compared: where `Outer` builds `GizmoImpl` itself, or in one module, `Inner`'s tree reads `token` in
-		// two forms, which SafeDI rejects, the leniency for an optional wrapper read only if available that
-		// `seam-hole-fills.md` describes.
+		// two forms, which SafeDI rejects. Across modules the fill binds the wrapper `Outer`'s level carries, no memo, and hands
+		// it to `GizmoImpl`, as inline would: accepted, a deliberate gap `seam-hole-fills.md` names, since the value is right.
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsParametersShareLabelAtDeferringSeam_whenCarriedLevelsFillReadsOptionalSendableWrapperBesideValue() async {
+		// `GizmoImpl` reads the value, so its fill takes the memo of `Inner`'s level, the instance of `Inner`'s parameter, which
+		// no read of the optional wrapper finds: the fill would pass `WrapperReader` `nil`, where inline passes `Outer`'s
+		// wrapper. Built in one module, `Inner`'s tree receives `token` in two forms (the cell below), so `App` reports that
+		// error, at `Inner`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["Core"]!["Token.swift"]):16:1: error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
+			\(fixtures["Core"]!["Token.swift"]):13:2: note: `Leaf` receives `token: Token` here.
+			\(fixtures["App"]!["WrapperReader.swift"]):14:2: note: `GizmoImpl` receives `token: Token` here.
+			\(fixtures["App"]!["WrapperReader.swift"]):8:2: note: `WrapperReader` receives `token: SendableLazilyInstantiated<Token>?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.carriedWrapperModules(gizmoReadsOnlyIfAvailable: true, gizmoReadsValueToo: true), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsParametersShareLabelAtSeam_whenGraphWhoseCarriedLevelsFillReadsOptionalSendableWrapperBesideValueIsBuiltInOneModule() async {
+		// The graph of the cell above with every module's declarations in one module, which builds `Inner`'s tree whole.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Token.swift"]):16:1: error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
+			\(fixtures["App"]!["Token.swift"]):13:2: note: `Leaf` receives `token: Token` here.
+			\(fixtures["App"]!["Token.swift"]):53:2: note: `GizmoImpl` receives `token: Token` here.
+			\(fixtures["App"]!["Token.swift"]):47:2: note: `WrapperReader` receives `token: SendableLazilyInstantiated<Token>?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.oneModule(Self.carriedWrapperModules(gizmoReadsOnlyIfAvailable: true, gizmoReadsValueToo: true)), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsParametersShareLabelAtDeferringSeam_whenCarriedLevelsFillReadsOptionalSendableWrapperBesideValueThatInnerSeamDefersPlainly() async {
+		// `Inner` defers `token` in a `LazilyInstantiated`, so the fill takes that memo, which no read of the optional
+		// `SendableLazilyInstantiated` finds either.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["Core"]!["Token.swift"]):16:1: error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
+			\(fixtures["Core"]!["Token.swift"]):13:2: note: `Leaf` receives `token: Token` here.
+			\(fixtures["App"]!["WrapperReader.swift"]):14:2: note: `GizmoImpl` receives `token: Token` here.
+			\(fixtures["App"]!["WrapperReader.swift"]):8:2: note: `WrapperReader` receives `token: SendableLazilyInstantiated<Token>?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.carriedWrapperModules(innerDefersSendable: false, gizmoReadsOnlyIfAvailable: true, gizmoReadsValueToo: true), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsParametersShareLabelAtSeam_whenGraphWhoseCarriedLevelsFillReadsOptionalSendableWrapperBesideValueThatInnerSeamDefersPlainlyIsBuiltInOneModule() async {
+		// The graph of the cell above with every module's declarations in one module, which builds `Inner`'s tree whole.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Token.swift"]):16:1: error: SafeDI cannot generate the dependency tree of `Inner`: its tree receives `token` as `token: Token` on `Leaf` and `token: Token` on `GizmoImpl` and `token: SendableLazilyInstantiated<Token>?` on `WrapperReader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Receive `token` the same way in every type of the tree, or declare it on `Inner` as the form that provides the others: `@Received let token: SendableLazilyInstantiated<Token>`.
+			\(fixtures["App"]!["Token.swift"]):13:2: note: `Leaf` receives `token: Token` here.
+			\(fixtures["App"]!["Token.swift"]):53:2: note: `GizmoImpl` receives `token: Token` here.
+			\(fixtures["App"]!["Token.swift"]):47:2: note: `WrapperReader` receives `token: SendableLazilyInstantiated<Token>?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.oneModule(Self.carriedWrapperModules(innerDefersSendable: false, gizmoReadsOnlyIfAvailable: true, gizmoReadsValueToo: true)), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
 	}
 
 	@Test
