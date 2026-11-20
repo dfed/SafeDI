@@ -10,7 +10,8 @@
 #   gate 2  Scripts/byte-identical-gate.sh (no line under Tests/ deleted or modified), and the code `generate` writes
 #           for the skill's 13 shapes is byte for byte the base's (every `<Module>.generated.swift` and `.safedi`);
 #   gate 4  the skill's one-round `generate` check (stage2.py --runs 1 against the base and 2.2.0, judged by
-#           bands.json; one round shows the scripts run and nothing regressed grossly, it is not a speed verdict);
+#           bands.json; one round shows the scripts run and nothing regressed grossly, it is not a speed verdict: the dry run,
+#           whose patch is the racer itself, failed 3 of 13 shapes on each side, different ones each run);
 #   cover   Scripts/changed-line-coverage.sh (taken from COVERAGE_SCRIPT_REF) against the base, on this machine's
 #           Swift, which must be 6.2.
 #

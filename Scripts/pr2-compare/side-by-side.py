@@ -29,6 +29,19 @@ def gate4(commit):
     return text + (f"; rejected: {', '.join(rejected)}" if rejected else "")
 
 
+def worst_ratio(commit):
+    """The largest HEAD/BASE wall ratio of stage2.py's verdict table, with its shape."""
+    log = read(commit, "stage2.log")
+    if not log:
+        return "not run"
+    ratios = []
+    for line in log.splitlines():
+        cells = [c.strip() for c in line.split("|")]
+        if len(cells) > 10 and cells[2] in ("median", "minimum"):
+            ratios.append((float(cells[3]), cells[1]))
+    return f"{max(ratios)[0]:.3f} ({max(ratios)[1]})" if ratios else "no verdict table"
+
+
 def coverage(commit):
     text = read(commit, "coverage.txt")
     if not text:
@@ -72,7 +85,10 @@ rows = [
     ("gate 1: compile checks", (read(racer, "compile-checks.txt") or "–").replace("\n", "; "), (read(candidate, "compile-checks.txt") or "–").replace("\n", "; ")),
     ("gate 2: test lines (byte-identical gate)", first_line(read(racer, "byte-identical.txt")), first_line(read(candidate, "byte-identical.txt"))),
     ("gate 2: 13 shapes' generated code", (read(racer, "identity.txt") or "not run").splitlines()[-1], (read(candidate, "identity.txt") or "not run").splitlines()[-1]),
-    ("gate 4: one round of generate", gate4(racer), gate4(candidate)),
+    # One round's bands are noise: the dry run, whose patch is the racer itself, failed 3 of 13 shapes on each side, on
+    # different shapes each run, on a 4-core container. Read it as "the scripts run, nothing regressed grossly".
+    ("gate 4: one round of generate (not a speed verdict)", gate4(racer), gate4(candidate)),
+    ("gate 4: HEAD/BASE wall, worst shape", worst_ratio(racer), worst_ratio(candidate)),
     ("Swift 6.2 Linux coverage of changed lines", coverage(racer), coverage(candidate)),
     ("API: frozen helper signature", api(ours), api(theirs)),
 ]
