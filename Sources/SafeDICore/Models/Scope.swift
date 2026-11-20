@@ -243,19 +243,25 @@ final class Scope: Hashable {
 	/// their type: a mock is passed each as a `mock()` parameter, which the scopes this scope builds receive, as
 	/// they would receive the property this scope generated. Always empty in a scope of the dependency tree,
 	/// whose validation rejects a dependency no scope builds. Read only once `propertiesToGenerate` is complete.
-	private(set) lazy var instantiatedDependenciesNotGenerated: [Dependency] = instantiable
-		.dependencies
-		.filter { dependency in
+	private(set) lazy var instantiatedDependenciesNotGenerated: [Dependency] = {
+		// A mock root can generate the dependency as the `LazilyInstantiated` its tree receives. One set, not a scan of the
+		// children per dependency: a record freezes this for every scope of its map, a root of a thousand children included.
+		var generatedProperties = Set<Property>()
+		for propertyToGenerate in propertiesToGenerate {
+			generatedProperties.insert(propertyToGenerate.property)
+			if let instanceProperty = propertyToGenerate.lazilyInstantiatedInstanceProperty {
+				generatedProperties.insert(instanceProperty)
+			}
+		}
+		return instantiable.dependencies.filter { dependency in
 			switch dependency.source {
 			case .instantiated:
-				// A mock root can generate the dependency as the `LazilyInstantiated` its tree receives.
-				!propertiesToGenerate.contains {
-					$0.property == dependency.property || $0.lazilyInstantiatedInstanceProperty == dependency.property
-				}
+				!generatedProperties.contains(dependency.property)
 			case .received, .aliased, .forwarded:
 				false
 			}
 		}
+	}()
 
 	/// The properties this scope declares for the scopes it builds, which those scopes therefore do not receive
 	/// from the scopes above it: those it generates and its type's `instantiatedDependenciesNotGenerated`. A
