@@ -74,9 +74,28 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_startsTasksForFewScopes_whenTreeHasManySmallSubtrees() async throws {
 		let starts = try await countCodeTaskStarts(of: Self.ternaryTree(depth: Self.depth, beneath: ["Root"], rootDeclarations: []))
-		// The root and the 12 scopes of the next two levels, whose subtrees have 364 and 121 scopes, and the 27 subtrees of
-		// 40 scopes beneath them. Every scope of the tree, one per path, started early: 1,093.
-		#expect(starts == 40)
+		// The root and the 12 scopes of the next two levels, whose subtrees have 364 and 121 scopes, each on a task of its
+		// own, and beneath each of the 9 scopes of 121 its 3 subtrees of 40 scopes in two groups, of 80 and 40: 13 and 18.
+		// One task for each subtree of 40 was 40; every scope of the tree, one per path, started early: 1,093.
+		#expect(starts == 31)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_startsOneTaskForEachGroupOfSmallSubtrees_whenRootHasManySmallSubtrees() async throws {
+		// The root instantiates 30 children of three scopes each, 91 scopes in all, so its subtree is large and each child's
+		// is small. The children start in groups of at least 64 scopes: the first 22 (66 scopes) on one task and the last
+		// 8 on another, beside the root's own. One task for each child, as before, ran 30 children's code together: 31.
+		let children = (0..<30).map { "Child\($0)" }
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: children.map { "@Instantiated let \($0.lowercased()): \($0)" }),
+			seamFixtureType(named: "LeafA", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "LeafB", isFinalClass: true, declarations: []),
+		] + children.map { child in
+			seamFixtureType(named: child, isFinalClass: true, declarations: ["@Instantiated let leafA: LeafA", "@Instantiated let leafB: LeafB"])
+		}
+		let starts = try await countCodeTaskStarts(of: fixture)
+		#expect(starts == 3)
 	}
 
 	@Test
@@ -84,8 +103,9 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 	mutating func generate_startsTasksForFewScopes_whenTreeIsCreatedAgainForItsLazyCycle() async throws {
 		// The step builds a session of its own, which the screen it builds again receives: the tree is created a second time
 		// with the parameter the screen's builder function takes. The first pass starts its scopes' code as it creates them,
-		// and the second once its tree exists: 42 each, the ternary tree's 40 and the root's two other small subtrees.
-		// Every scope of both passes started early: 2,196.
+		// and the second once its tree exists: 32 tasks each, the ternary tree's 31 and one for the root's two other small
+		// subtrees, which group together. One task for each small subtree was 42 each; every scope of both passes started
+		// early: 2,196.
 		let cycle = [
 			seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Received let session: Session", "@Instantiated let stepBuilder: Instantiator<Step>"]),
 			seamFixtureType(named: "Step", isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
@@ -96,7 +116,7 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 			beneath: ["Root"],
 			rootDeclarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"],
 		) + cycle)
-		#expect(starts == 84)
+		#expect(starts == 64)
 	}
 
 	// MARK: Private
