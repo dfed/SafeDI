@@ -47,6 +47,11 @@ public struct SafeDITool: AsyncParsableCommand {
 	}
 
 	@TaskLocal public static var fileFinder: FileFinder = FileManager.default
+
+	/// Whether the process ends once the command it runs returns, as the `SafeDITool` executable's does: `generate` then
+	/// keeps what it built rather than releasing it, which the process's end does at once. A test that runs a command in
+	/// its own process leaves this `false`.
+	@TaskLocal public static var processEndsWithCommand = false
 }
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
