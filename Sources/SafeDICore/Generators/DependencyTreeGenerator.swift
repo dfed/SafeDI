@@ -3263,19 +3263,6 @@ public actor DependencyTreeGenerator {
 
 		/// A property an ancestor declares, which the generated code names by its label everywhere below that ancestor.
 		struct LabelDeclaration: Hashable {
-			let property: Property
-			/// The by-value property with which types further down the tree receive the instance of `property`,
-			/// when `property` is lazily instantiated and offers one.
-			let lazilyInstantiatedInstanceProperty: Property?
-			let declarationLocation: Dependency.DeclarationLocation?
-			let declaringType: TypeDescription
-			/// Whether `declaringType` is forwarded `property`, which the tree is then handed rather than builds.
-			let isForwarded: Bool
-			/// The declaration of the label this one replaced as the closest on its path, from which `enclosingDeclarations` is
-			/// found. A walk enters a declaration at every scope of every path, and only an error reads what it hides, so the
-			/// declarations are kept as a chain of links rather than copied into an array each time.
-			private let replacedDeclaration: ReplacedDeclaration?
-
 			init(
 				property: Property,
 				lazilyInstantiatedInstanceProperty: Property?,
@@ -3284,12 +3271,42 @@ public actor DependencyTreeGenerator {
 				isForwarded: Bool,
 				replacing replacedDeclaration: LabelDeclaration?,
 			) {
-				self.property = property
-				self.lazilyInstantiatedInstanceProperty = lazilyInstantiatedInstanceProperty
-				self.declarationLocation = declarationLocation
-				self.declaringType = declaringType
-				self.isForwarded = isForwarded
-				self.replacedDeclaration = replacedDeclaration.map(ReplacedDeclaration.init)
+				let identity = Identity(
+					property: property,
+					lazilyInstantiatedInstanceProperty: lazilyInstantiatedInstanceProperty,
+					declarationLocation: declarationLocation,
+					declaringType: declaringType,
+					isForwarded: isForwarded,
+				)
+				let enclosingDeclarations: [LabelDeclaration] = if let replacedDeclaration {
+					([replacedDeclaration] + replacedDeclaration.enclosingDeclarations).filter { $0.storage.identity != identity }
+				} else {
+					[]
+				}
+				storage = Storage(identity: identity, enclosingDeclarations: enclosingDeclarations)
+			}
+
+			var property: Property {
+				storage.identity.property
+			}
+
+			/// The by-value property with which types further down the tree receive the instance of `property`,
+			/// when `property` is lazily instantiated and offers one.
+			var lazilyInstantiatedInstanceProperty: Property? {
+				storage.identity.lazilyInstantiatedInstanceProperty
+			}
+
+			var declarationLocation: Dependency.DeclarationLocation? {
+				storage.identity.declarationLocation
+			}
+
+			var declaringType: TypeDescription {
+				storage.identity.declaringType
+			}
+
+			/// Whether `declaringType` is forwarded `property`, which the tree is then handed rather than builds.
+			var isForwarded: Bool {
+				storage.identity.isForwarded
 			}
 
 			/// The declarations of the label that the scopes `declaringType` is built inside make on this path, which this one
@@ -3299,30 +3316,33 @@ public actor DependencyTreeGenerator {
 			/// leave it out, and the walk's memo of trees built again and the matching of a seam's chain with a root's compare
 			/// the closest declaration alone.
 			var enclosingDeclarations: [LabelDeclaration] {
-				// The chain of replaced declarations, nearest first. Each declaration's own list is its replaced declaration
-				// followed by that one's list, without those equal to it, found from the far end of the chain inward.
-				var chain = [LabelDeclaration]()
-				var next = replacedDeclaration?.declaration
-				while let declaration = next {
-					chain.append(declaration)
-					next = declaration.replacedDeclaration?.declaration
-				}
-				var enclosingDeclarations = [LabelDeclaration]()
-				for index in chain.indices.reversed() {
-					let owner = index == 0 ? self : chain[index - 1]
-					enclosingDeclarations = ([chain[index]] + enclosingDeclarations).filter { $0 != owner }
-				}
-				return enclosingDeclarations
+				storage.enclosingDeclarations
 			}
 
-			/// A link to the declaration a `LabelDeclaration` replaced.
-			private final class ReplacedDeclaration: Sendable {
-				init(_ declaration: LabelDeclaration) {
-					self.declaration = declaration
+			/// What makes the declaration the one it is, which `==` and `hash(into:)` compare.
+			private struct Identity: Hashable {
+				let property: Property
+				let lazilyInstantiatedInstanceProperty: Property?
+				let declarationLocation: Dependency.DeclarationLocation?
+				let declaringType: TypeDescription
+				let isForwarded: Bool
+			}
+
+			/// What the declaration holds, behind one reference: a walk copies the closest declaration of every label into the
+			/// context of each scope that builds a child, so a copy is one retain rather than one for each field. Each holds
+			/// every declaration it hides itself, never through the one it replaced, so releasing a declaration never releases a
+			/// chain of them nested one inside another.
+			private final class Storage: Sendable {
+				init(identity: Identity, enclosingDeclarations: [LabelDeclaration]) {
+					self.identity = identity
+					self.enclosingDeclarations = enclosingDeclarations
 				}
 
-				let declaration: LabelDeclaration
+				let identity: Identity
+				let enclosingDeclarations: [LabelDeclaration]
 			}
+
+			private let storage: Storage
 
 			/// Whether a receive that resolves to any of `acceptedProperties` resolves to this declaration: the declaration is
 			/// one of them, or a lazily instantiated declaration whose instance is.
@@ -3331,19 +3351,11 @@ public actor DependencyTreeGenerator {
 			}
 
 			static func == (lhs: LabelDeclaration, rhs: LabelDeclaration) -> Bool {
-				lhs.property == rhs.property
-					&& lhs.lazilyInstantiatedInstanceProperty == rhs.lazilyInstantiatedInstanceProperty
-					&& lhs.declarationLocation == rhs.declarationLocation
-					&& lhs.declaringType == rhs.declaringType
-					&& lhs.isForwarded == rhs.isForwarded
+				lhs.storage.identity == rhs.storage.identity
 			}
 
 			func hash(into hasher: inout Hasher) {
-				hasher.combine(property)
-				hasher.combine(lazilyInstantiatedInstanceProperty)
-				hasher.combine(declarationLocation)
-				hasher.combine(declaringType)
-				hasher.combine(isForwarded)
+				hasher.combine(storage.identity)
 			}
 		}
 
