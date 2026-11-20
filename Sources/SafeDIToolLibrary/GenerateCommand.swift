@@ -235,9 +235,13 @@ public struct Generate: AsyncParsableCommand {
 		// working directory. Without a project root, paths compare as the working directory spells them.
 		let comparisonFilePaths = projectFilePaths ?? ProjectFilePaths(projectRoot: FileManager.default.currentDirectoryPath)
 		// Each set is spelled at most once per run, since spelling a path for comparison costs far more than comparing it,
-		// and the inputs only when a reader needs them.
-		lazy var inputProjectFilePaths = inputFiles.projectFilePaths(comparedBy: comparisonFilePaths)
-		let ownProjectFilePaths = Self.ownProjectFilePaths(manifest: manifest, inputProjectFilePaths: inputProjectFilePaths, comparisonFilePaths: comparisonFilePaths)
+		// and the inputs only when a reader needs them. The manifest's list of the module's own files is what the parse
+		// reads; without one, the inputs are the module's own files, which the parse does not read, so they are spelled
+		// while it runs.
+		let mockScopedProjectFilePaths = manifest?.mockScopedFilePaths.map { Set($0.map(comparisonFilePaths.projectFilePath(of:))) }
+		async let inputProjectFilePathsSpelledBesideParse = mockScopedProjectFilePaths == nil
+			? inputFiles.projectFilePaths(comparedBy: comparisonFilePaths)
+			: nil
 
 		let listedModuleInfoPaths = try moduleInfoPaths(listedIn: dependentModuleInfoFilePath)
 		let (listedModuleInfoFiles, parsed) = try await (
@@ -247,11 +251,20 @@ public struct Generate: AsyncParsableCommand {
 				manifestPath: resolvedSwiftManifest,
 				manifest: manifest,
 				projectFilePaths: projectFilePaths,
-				ownProjectFilePaths: ownProjectFilePaths,
+				mockScopedProjectFilePaths: mockScopedProjectFilePaths,
 				comparisonFilePaths: comparisonFilePaths,
 				activeCompilationConditions: suppliedCompilationConditions,
 			),
 		)
+		let spelledInputProjectFilePaths = await inputProjectFilePathsSpelledBesideParse
+		lazy var inputProjectFilePaths = spelledInputProjectFilePaths ?? inputFiles.projectFilePaths(comparedBy: comparisonFilePaths)
+		// The module's own files, which the module this run generates code for compiles, as this run compares paths: the
+		// files the manifest's `mockScopedFilePaths` lists (a build tool plugin's target files, or `--mock-scoped-files`);
+		// and, without a manifest or with a hand-written one that lists none, the files the input CSV or `--include`
+		// names. A file reached through `additionalDirectoriesToInclude` is another module's. Both the access check
+		// (`isOwnFile`) and the seams (`ownFilePaths`, without a module name) read this one definition, as `scan` plans a
+		// seam's output for a mock-scoped file alone.
+		let ownProjectFilePaths = mockScopedProjectFilePaths ?? inputProjectFilePaths
 		// A reserved name is a mistake in the module's own files whatever its trees hold, so it is reported before any is
 		// built. A module that depends on this one never reads these declarations, so only this run reports them.
 		let reservedTypeNameDeclarations = parsed.module.reservedTypeNameDeclarations
@@ -974,29 +987,6 @@ public struct Generate: AsyncParsableCommand {
 		}
 	}
 
-	/// The module's own files, which the module this run generates code for compiles, as this run compares paths: the
-	/// files the manifest's `mockScopedFilePaths` lists (a build tool plugin's target files, or `--mock-scoped-files`);
-	/// and, without a manifest or with a hand-written one that lists none, the files the input CSV or `--include`
-	/// names. A file reached through `additionalDirectoriesToInclude` is another module's. Both the access check
-	/// (`isOwnFile`) and the seams (`ownFilePaths`, without a module name) read this one definition, as `scan` plans a
-	/// seam's output for a mock-scoped file alone. `generate` spells them once per run, and every reader takes that set.
-	/// - Parameters:
-	///   - inputProjectFilePaths: The files the input CSV and `--include` name, spelled by `comparisonFilePaths`, read
-	///     only without a list of mock-scoped files.
-	///   - comparisonFilePaths: How this run compares paths, which spells a file the same way whichever spelling names
-	///     it.
-	private static func ownProjectFilePaths(
-		manifest: SafeDIToolManifest?,
-		inputProjectFilePaths: @autoclosure () -> Set<ProjectFilePath>,
-		comparisonFilePaths: ProjectFilePaths,
-	) -> Set<ProjectFilePath> {
-		if let mockScopedFilePaths = manifest?.mockScopedFilePaths {
-			Set(mockScopedFilePaths.map(comparisonFilePaths.projectFilePath(of:)))
-		} else {
-			inputProjectFilePaths()
-		}
-	}
-
 	/// Whether a file a declaration records is one of the module's own files (see `ownProjectFilePaths`), so that the
 	/// generated code needs only `internal` access to a declaration in it.
 	private static func isOwnFile(
@@ -1387,7 +1377,7 @@ public struct Generate: AsyncParsableCommand {
 	}
 
 	/// The files the input CSV and `--include` name.
-	private struct InputFiles {
+	private struct InputFiles: Sendable {
 		/// - Parameters:
 		///   - foundFilePaths: The Swift files `--include` names, as `findSwiftFiles(inDirectories:)` found them.
 		///   - listedFilePaths: The files the input CSV lists, as it spells them.
@@ -1505,7 +1495,7 @@ public struct Generate: AsyncParsableCommand {
 	///     declare this module's configuration. In multi-module builds the CSV includes every module's files, so
 	///     several configurations may be present; without a manifest every input file belongs to this module.
 	///   - projectFilePaths: How the manifest's project spells its files, or `nil` without a project root.
-	///   - ownProjectFilePaths: The module's own files (see `ownProjectFilePaths`).
+	///   - mockScopedProjectFilePaths: The module's own files as the manifest lists them, if it does.
 	///   - comparisonFilePaths: How this run compares paths.
 	///   - activeCompilationConditions: The conditions supplied on the command line and through the manifest.
 	private func parsedModule(
@@ -1513,7 +1503,7 @@ public struct Generate: AsyncParsableCommand {
 		manifestPath: String?,
 		manifest: SafeDIToolManifest?,
 		projectFilePaths: ProjectFilePaths?,
-		ownProjectFilePaths: Set<ProjectFilePath>,
+		mockScopedProjectFilePaths: Set<ProjectFilePath>?,
 		comparisonFilePaths: ProjectFilePaths,
 		activeCompilationConditions: Set<String>,
 	) async throws -> (module: ParsedModule, isFromCache: Bool) {
@@ -1535,8 +1525,8 @@ public struct Generate: AsyncParsableCommand {
 			return (cached, true)
 		} else {
 			// Without a list of the module's own files, every input is one, which needs no path spelled for comparison.
-			let isReadingModuleFile: (String) -> Bool = if manifest?.mockScopedFilePaths != nil {
-				Self.isOwnFile(ownProjectFilePaths: ownProjectFilePaths, comparisonFilePaths: comparisonFilePaths)
+			let isReadingModuleFile: (String) -> Bool = if let mockScopedProjectFilePaths {
+				Self.isOwnFile(ownProjectFilePaths: mockScopedProjectFilePaths, comparisonFilePaths: comparisonFilePaths)
 			} else {
 				{ _ in true }
 			}
