@@ -30,7 +30,9 @@ import Testing
 /// do.
 ///
 /// Written before the type key exists: each test fails on the seam module's file until R2a switches seam bodies to the
-/// type key. The calling module's expected file is today's, which R2a must leave byte for byte.
+/// type key and to RT1's runtime layout (a context per set of values a builder reads from above the seam, and each hole's
+/// fill passed once as a flat closure). The calling module's expected file is today's, which R2a must leave byte for byte,
+/// except where the seam holds a hole: there the caller passes the fill closure instead of today's scope builders.
 struct SafeDIToolSeamTypeKeyTests: ~Copyable {
 	// MARK: Initialization
 
@@ -275,6 +277,135 @@ struct SafeDIToolSeamTypeKeyTests: ~Copyable {
 		)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsReceivedValueThroughContext_whenSeamBuilderSubtreeReadsValueFromAboveSeam() async throws {
+		// RT1 item 4: `Screen`, built by `Host`'s builder, reads `service` and `extra`, which `Host` receives from above the seam, so the builder reaches both through one context built once in `Host`'s initializer, and its closure captures one reference. Callers are unchanged.
+		try await expectSeamTypeKeyFiles(
+			ofFeature: [
+				Self.type("Host", isSeam: true, "@Received public let service: Service", "@Received public let extra: Extra", "@Instantiated public let screenBuilder: Instantiator<Screen>"),
+				Self.type("Screen", "@Forwarded public let id: Int", "@Received public let service: Service", "@Received public let extra: Extra"),
+				Self.type("Service"),
+				Self.type("Extra"),
+			],
+			ofApp: [seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let service: Service", "@Instantiated public let extra: Extra", "@Instantiated public let host: Host"])],
+			feature: """
+			extension Host {
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    fileprivate nonisolated final class __safeDI_screenBuilder_Context {
+			        let service: Service
+			        let extra: Extra
+
+			        init(service: Service, extra: Extra) {
+			            self.service = service
+			            self.extra = extra
+			        }
+			    }
+
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public convenience init(__safeDI_service service: Service, __safeDI_extra extra: Extra) {
+			        let __safeDI_screenBuilder_context = __safeDI_screenBuilder_Context(service: service, extra: extra)
+			        func __safeDI_screenBuilder(id: Int) -> Screen {
+			            Screen(id: id, service: __safeDI_screenBuilder_context.service, extra: __safeDI_screenBuilder_context.extra)
+			        }
+			        let screenBuilder = Instantiator<Screen> {
+			            __safeDI_screenBuilder(id: $0)
+			        }
+			        self.init(service: service, extra: extra, screenBuilder: screenBuilder)
+			    }
+			}
+
+			extension Host {
+			    public enum __safeDI_Host_104FA7B7C210CBCD {}
+			}
+			""",
+			app: """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        let service = Service()
+			        let extra = Extra()
+			        func __safeDI_host() -> Host {
+			            _ = Host.__safeDI_Host_104FA7B7C210CBCD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Host(__safeDI_service: service, __safeDI_extra: extra)
+			        }
+			        let host: Host = __safeDI_host()
+			        self.init(service: service, extra: extra, host: host)
+			    }
+			}
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesHoleFillAsFlatClosure_whenSeamBuilderSubtreeHoldsHole() async throws {
+		// RT1 items 2 and 3: `Detail`, built by `Host`'s builder, instantiates `any Api`, which only `App` fulfills. `App` passes the fill once, as one closure that takes the forwarded `detailID` and builds the fill's subtree inline; the builder reads nothing else from above the seam, so it captures the closure itself, without a context.
+		try await expectSeamTypeKeyFiles(
+			ofFeature: [
+				"public protocol Api {}",
+				Self.type("Host", isSeam: true, "@Instantiated public let detailBuilder: Instantiator<Detail>"),
+				Self.type("Detail", "@Forwarded public let detailID: Int", "@Instantiated public let api: any Api"),
+			],
+			ofApp: [
+				"""
+				@Instantiable(fulfillingAdditionalTypes: [Api.self])
+				public final class LiveApi: Api, Instantiable {
+				    public init(detailID: Int) {
+				        self.detailID = detailID
+				    }
+
+				    @Received public let detailID: Int
+				}
+				""",
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let host: Host"]),
+			],
+			feature: """
+			extension Host {
+			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+			    public convenience init(__safeDI_apiFill: @escaping (_ detailID: Int) -> any Api) {
+			        func __safeDI_detailBuilder(detailID: Int) -> Detail {
+			            let api: any Api = __safeDI_apiFill(detailID)
+			            return Detail(detailID: detailID, api: api)
+			        }
+			        let detailBuilder = Instantiator<Detail> {
+			            __safeDI_detailBuilder(detailID: $0)
+			        }
+			        self.init(detailBuilder: detailBuilder)
+			    }
+			}
+
+			extension Host {
+			    public enum __safeDI_Host_41E5AD98060BBB1E {}
+			}
+			""",
+			app: """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_host() -> Host {
+			            _ = Host.__safeDI_Host_41E5AD98060BBB1E.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            return Host(__safeDI_apiFill: { detailID in
+			                let api: any Api = LiveApi(detailID: detailID)
+			                return api
+			            })
+			        }
+			        let host: Host = __safeDI_host()
+			        self.init(host: host)
+			    }
+			}
+			""",
+		)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -285,15 +416,16 @@ struct SafeDIToolSeamTypeKeyTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func expectSeamTypeKeyFiles(
 		ofFeature featureFiles: [String],
+		ofApp appFiles: [String]? = nil,
 		feature expectedFeature: String,
 		app expectedApp: String,
 		sourceLocation: SourceLocation = #_sourceLocation,
 	) async throws {
 		let modules = [
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: featureFiles),
-			ModuleFixture(name: "App", packageName: "Shop", swiftFileContent: [
-				"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let host: Host"]),
-			], dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Shop", swiftFileContent: (appFiles ?? [
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let host: Host"]),
+			]).map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
 		]
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + expectedFeature], sourceLocation: sourceLocation)
