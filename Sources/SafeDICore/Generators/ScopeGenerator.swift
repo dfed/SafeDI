@@ -6600,6 +6600,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		case let .hole(property, _, site):
 			// A tree built only to compute the seam's signature has no site, and generates nothing.
 			guard let site else { return .empty }
+			// The seam side of hosting seam code as text, a hole's site here and a seam's root in
+			// `generateSeamRootCode`, lives until the 2.3.1 seam rework (R2a) plans seam bodies, fills and level
+			// functions on the builder graph and deletes today's seam emission with it. The caller side, a fill below,
+			// stays until fills are planned.
 			return .place(PlacePlan(
 				kind: .hostedSeamCode,
 				functionNames: [],

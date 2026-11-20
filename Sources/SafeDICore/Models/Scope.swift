@@ -2345,7 +2345,15 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		CodeTaskStart.record()
 		// A detached task inherits no task-local, so the work observer of the task that starts the code is handed on: the
 		// code a later request reads from the cache then counts its work whichever task asks for it first.
-		if let observer = GenerationWork.observer {
+		if let ordering = CodeTaskStart.ordering {
+			// A test forces the order in which the early starts finish, to show the code does not depend on it.
+			ordering.registerStart()
+			_ = Task.detached {
+				let turn = await ordering.waitForTurn()
+				_ = try? await scopeGenerator.generatePlan()
+				await ordering.finish(turn)
+			}
+		} else if let observer = GenerationWork.observer {
 			_ = Task.detached {
 				try await GenerationWork.$observer.withValue(observer) {
 					try await scopeGenerator.generatePlan()
