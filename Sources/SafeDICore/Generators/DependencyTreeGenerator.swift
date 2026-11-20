@@ -9258,21 +9258,21 @@ public actor DependencyTreeGenerator {
 			.sorted { lhs, rhs in
 				// Non-mockOnly before mockOnly (production claims slots first).
 				if lhs.instantiable.mockOnly != rhs.instantiable.mockOnly {
-					return !lhs.instantiable.mockOnly
+					!lhs.instantiable.mockOnly
 				} else if lhs.hasHandWrittenMock != rhs.hasHandWrittenMock {
 					// Within the same mockOnly tier, prefer entries with mock info
 					// so scope-reuse creates scopes from mock-capable entries.
 					// Hand-written mocks (mockInitializer) before generateMock,
 					// since hand-written mocks take priority.
-					return lhs.hasHandWrittenMock
+					lhs.hasHandWrittenMock
 				} else if lhs.hasMock != rhs.hasMock {
-					return lhs.hasMock
+					lhs.hasMock
 				} else if lhs.spellingWithoutAny != rhs.spellingWithoutAny {
 					// Stable tiebreaker: sort by concrete type name so scope-reuse
 					// selects the same entry across runs, as `TypeDescription.<` orders them.
-					return lhs.spellingWithoutAny < rhs.spellingWithoutAny
+					lhs.spellingWithoutAny < rhs.spellingWithoutAny
 				} else {
-					return lhs.spelling < rhs.spelling
+					lhs.spelling < rhs.spelling
 				}
 			}
 			.map(\.instantiable)
