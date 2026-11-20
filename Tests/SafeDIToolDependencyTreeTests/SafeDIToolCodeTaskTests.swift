@@ -47,9 +47,8 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_holdsNoFinishedCodeTask_whenSeveralRootsBuildTreesOfSeveralLevels() async throws {
 		// Two roots, each building four levels of three types, the two deepest through instantiators: 121 scopes each, so
-		// each root and the three subtrees beneath it start their code early. Each starts it for the context its parent asks
-		// in, so no task is still running once the code is done: with the release reverted, the trees hold one task for
-		// each scope, 121 each.
+		// each root generates its three children concurrently, in a task group that ends before the root's code does: with
+		// the release reverted, the trees hold one task for each scope, 121 each.
 		let fixture = Self.ternaryTree(depth: 4, beneath: ["FirstRoot", "SecondRoot"], rootDeclarations: [], instantiatesLayer: 3)
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
 		_ = try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
@@ -74,18 +73,19 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_startsTasksForFewScopes_whenTreeHasManySmallSubtrees() async throws {
 		let starts = try await countCodeTaskStarts(of: Self.ternaryTree(depth: Self.depth, beneath: ["Root"], rootDeclarations: []))
-		// The root and the 12 scopes of the next two levels, whose subtrees have 364 and 121 scopes, and the 27 subtrees of
-		// 40 scopes beneath them. Every scope of the tree, one per path, started early: 1,093.
-		#expect(starts == 40)
+		// The root and the 12 scopes of the next two levels, whose subtrees have 1,093, 364 and 121 scopes, generate their
+		// children concurrently: 3 + 9 + 27 child tasks. The subtrees of 40 scopes beneath them generate their children one
+		// after another. Every scope of the tree, one per path, on a task started early: 1,093.
+		#expect(starts == 39)
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_startsTasksForFewScopes_whenTreeIsCreatedAgainForItsLazyCycle() async throws {
 		// The step builds a session of its own, which the screen it builds again receives: the tree is created a second time
-		// with the parameter the screen's builder function takes. The first pass starts its scopes' code as it creates them,
-		// and the second once its tree exists: 42 each, the ternary tree's 40 and the root's two other small subtrees.
-		// Every scope of both passes started early: 2,196.
+		// with the parameter the screen's builder function takes. Only the second pass's tree generates code: the root's
+		// five children, and the 9 and 27 of the next two levels of the ternary tree. When each pass started its scopes'
+		// code, 84; when every scope of both passes started early, 2,196.
 		let cycle = [
 			seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Received let session: Session", "@Instantiated let stepBuilder: Instantiator<Step>"]),
 			seamFixtureType(named: "Step", isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
@@ -96,14 +96,14 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 			beneath: ["Root"],
 			rootDeclarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"],
 		) + cycle)
-		#expect(starts == 84)
+		#expect(starts == 41)
 	}
 
 	// MARK: Private
 
 	private var filesToDelete: [URL]
 
-	/// The layers of types beneath the root of the trees whose early starts are counted: 1 + 3 + 9 + … + 3⁶ = 1,093
+	/// The layers of types beneath the root of the trees whose child tasks are counted: 1 + 3 + 9 + … + 3⁶ = 1,093
 	/// scopes, one per path.
 	private static let depth = 6
 
@@ -133,7 +133,7 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 		return files
 	}
 
-	/// How many scopes started generating their code on a task of their own while `fixture` generated.
+	/// How many child tasks the scopes that generate their children concurrently started while `fixture` generated.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func countCodeTaskStarts(of fixture: [String]) async throws -> Int {
 		let (stream, continuation) = AsyncStream.makeStream(of: Void.self)

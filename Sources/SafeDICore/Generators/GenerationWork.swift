@@ -31,9 +31,9 @@
 ///
 /// `observer` is task-local. It sees every step `generate` runs: building each tree and computing each seam's signature in
 /// `generate`'s own task and its children, and emitting each scope's code on the task `ScopeGenerator.generateCode`
-/// creates for it, which inherits the observer of the task that asks for the code: `generate`'s, or the detached task's
-/// that starts a large subtree's code early (`Scope.startCodeGeneration(of:)`), which is handed the observer of the task
-/// that starts it. A step passes no `Step` (`taking(_:by:)` with `nil`) where its work is not counted:
+/// creates for it, and on the child tasks of the task group in which a large subtree's scope generates its children
+/// (`ScopeGenerator.concurrentlyGeneratedCode(of:)`), each of which inherits the observer of the task that asks for the
+/// code. A step passes no `Step` (`taking(_:by:)` with `nil`) where its work is not counted:
 /// `identifierSafeNames` counts only for a seam's signature.
 public struct GenerationWork: Sendable {
 	/// A step of generation whose work is counted.
