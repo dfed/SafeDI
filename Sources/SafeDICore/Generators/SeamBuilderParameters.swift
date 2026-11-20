@@ -230,7 +230,7 @@ extension DependencyTreeGenerator {
 			// A call the tree makes of this seam, or of a seam that passes this site back, is handed this builder.
 			let additions = ownSiteAdditions[content.site.sitePath, default: SiteAdditions()]
 			let insideFills = unreadableInsideFills(fillContexts(of: content.site, hiddenByCall: &hiddenByCall), placeFields: [], fillingModule: seamModule)
-			var hole = siteHole.addingUncarriedDeclarations(additions.declarations(besides: siteHole.uncarriedDeclarations), isSendable: additions.isSendable)
+			var hole = additions.presenting(siteHole)
 			hole = hole.addingUncarriedDeclarations(insideFills.calledCopyDeclarations.filter { declaration in !hole.uncarriedDeclarations.contains { $0.property.label == declaration.property.label } }, isSendable: hole.isSendable)
 			hole.reenteringCallDeclarations = Self.adding(additions.reenteringCallDeclarations, to: insideFills.reenteringCallDeclarations)
 			hole.reenteringPlaceFields = Self.adding(additions.reenteringPlaceFields, to: insideFills.reenteringPlaceFields)
@@ -453,8 +453,10 @@ extension DependencyTreeGenerator {
 					let presentedPlace = SeamSignature.Hole.UncarriedDeclaration.PresentedPlace(hole)
 					// The visible build fills the place inside the fills around the call, and that fill binds the place's fields.
 					let insideFills = unreadableInsideFills(fillContextsAtCall, placeFields: hole.fields, fillingModule: seamModule)
+					let boundOnPathToCall = pathDeclarations.map { $0.with(reason: .boundByPassingUpSeam(seam: seamType, module: seamModule, place: presentedPlace)) }
 					additionsBySite[hole.site, default: SiteAdditions()].add(
-						pathDeclarations.map { $0.with(reason: .boundByPassingUpSeam(seam: seamType, module: seamModule, place: presentedPlace)) } + hole.uncarriedDeclarations + insideFills.calledCopyDeclarations,
+						boundOnPathToCall + hole.uncarriedDeclarations + insideFills.calledCopyDeclarations,
+						boundOnPathToCall: boundOnPathToCall + insideFills.calledCopyDeclarations,
 						reenteringCallDeclarations: hole.reenteringCallDeclarations + insideFills.reenteringCallDeclarations,
 						reenteringPlaceFields: hole.reenteringPlaceFields + insideFills.reenteringPlaceFields,
 						isSendable: callIsInSendableFunction || hole.isSendable,
@@ -481,7 +483,7 @@ extension DependencyTreeGenerator {
 		return (
 			passedUpHoles.map { innerSeamType, typesToCall, route, hole in
 				let additions = additionsBySite[hole.site, default: SiteAdditions()]
-				var passedUpHole = hole.addingUncarriedDeclarations(additions.declarations(besides: hole.uncarriedDeclarations), isSendable: additions.isSendable)
+				var passedUpHole = additions.presenting(hole)
 				passedUpHole.reenteringCallDeclarations = additions.reenteringCallDeclarations
 				passedUpHole.reenteringPlaceFields = additions.reenteringPlaceFields
 				return (innerSeamType, typesToCall, route, passedUpHole)
@@ -640,12 +642,18 @@ extension DependencyTreeGenerator {
 		/// Whether a call that presents the site is made in a `@Sendable` function, a fill's included, or takes the builder
 		/// `@Sendable`.
 		private(set) var isSendable = false
+		/// What the scopes on the paths to the calls that present the site declare, or the fills around such a call bind, the
+		/// first of each label, in the order the calls present them.
+		private var declarationsBoundOnPathsToCalls = [String: SeamSignature.Hole.UncarriedDeclaration]()
 
 		/// Adds `newDeclarations`, those of labels not yet added, `newReenteringCallDeclarations` and `newReenteringPlaceFields`,
-		/// from a call that needs the builder `@Sendable` when `isSendable`.
-		mutating func add(_ newDeclarations: [SeamSignature.Hole.UncarriedDeclaration], reenteringCallDeclarations newReenteringCallDeclarations: [SeamSignature.Hole.ReenteringCallDeclaration], reenteringPlaceFields newReenteringPlaceFields: [SeamSignature.Hole.ReenteringPlaceField], isSendable: Bool) {
+		/// from a call that needs the builder `@Sendable` when `isSendable`, on whose path `boundOnPathToCall` is bound.
+		mutating func add(_ newDeclarations: [SeamSignature.Hole.UncarriedDeclaration], boundOnPathToCall: [SeamSignature.Hole.UncarriedDeclaration], reenteringCallDeclarations newReenteringCallDeclarations: [SeamSignature.Hole.ReenteringCallDeclaration], reenteringPlaceFields newReenteringPlaceFields: [SeamSignature.Hole.ReenteringPlaceField], isSendable: Bool) {
 			for declaration in newDeclarations where !declarations.contains(where: { $0.property.label == declaration.property.label }) {
 				declarations.append(declaration)
+			}
+			for declaration in boundOnPathToCall where declarationsBoundOnPathsToCalls[declaration.property.label] == nil {
+				declarationsBoundOnPathsToCalls[declaration.property.label] = declaration
 			}
 			reenteringCallDeclarations = DependencyTreeGenerator.adding(newReenteringCallDeclarations, to: reenteringCallDeclarations)
 			reenteringPlaceFields = DependencyTreeGenerator.adding(newReenteringPlaceFields, to: reenteringPlaceFields)
@@ -656,6 +664,19 @@ extension DependencyTreeGenerator {
 		func declarations(besides existing: [SeamSignature.Hole.UncarriedDeclaration]) -> [SeamSignature.Hole.UncarriedDeclaration] {
 			let existingLabels = Set(existing.map(\.property.label))
 			return declarations.filter { !existingLabels.contains($0.property.label) }
+		}
+
+		/// `hole` as the calls that present its site present it: with the declarations added of labels it holds none of. A
+		/// declaration its mock binds from its caller's argument (`isBoundFromCallersArgument`) whose label a call's path
+		/// binds is the declaration on that path, which the mock is passed, and not the value of the caller of the type that
+		/// passes the place up.
+		func presenting(_ hole: SeamSignature.Hole) -> SeamSignature.Hole {
+			var presented = hole.addingUncarriedDeclarations(declarations(besides: hole.uncarriedDeclarations), isSendable: isSendable)
+			presented.uncarriedDeclarations = presented.uncarriedDeclarations.map { declaration in
+				guard declaration.isBoundFromCallersArgument, let boundOnPath = declarationsBoundOnPathsToCalls[declaration.property.label] else { return declaration }
+				return boundOnPath
+			}
+			return presented
 		}
 	}
 
@@ -728,6 +749,19 @@ extension DependencyTreeGenerator {
 		return declarations
 	}
 
+	/// The value a mock's root binds for its child `property`, as its root level declares it. The mock builds every dependency
+	/// it promotes to its root and binds the non-optional value it builds, even where it promotes the dependency for a
+	/// receive of its optional form (`db: Db?`, which a call of another module's public mock receives only if available and
+	/// builds when passed `nil`): the root level declares the non-optional form, so a fill that requires the value reads it,
+	/// as the production twin's fill reads the seam's required parameter. The mocked type's own dependencies are bound as
+	/// they are declared.
+	static func mockRootBinding(ofChild property: Property, of mockedType: Instantiable) -> Property {
+		guard case .optional = property.typeDescription,
+		      !mockedType.dependencies.contains(where: { $0.property == property })
+		else { return property }
+		return property.asUnwrappedProperty
+	}
+
 	/// Whether a mock binds `dependency`, a dependency of a scope beneath its root, again under its label at the top of that
 	/// scope, given `nearestDeclaration`, the nearest declaration of the label above the scope: the dependency is received,
 	/// and `nearestDeclaration` provides no form it reads. The mock then supplies it from a parameter or override of its own,
@@ -792,6 +826,9 @@ extension DependencyTreeGenerator {
 		var alias: SeamSignature.Hole.UncarriedDeclaration.AliasOrigin?
 		/// For a parameter of a seam, its receives and the seam's declaration (`SeamSignature.Hole.Field.seamParameterOrigin`).
 		var seamParameterOrigin: SeamSignature.Hole.Field.SeamParameterOrigin?
+		/// Whether it is a received value a public mock binds at its root from the argument its caller passes
+		/// (`SeamSignature.Hole.UncarriedDeclaration.isBoundFromCallersArgument`).
+		var isBoundFromCallersArgument = false
 	}
 
 	/// The fields of `site`'s place, the declarations on its path that carry no field, the declarations a cycle hands the
@@ -1049,7 +1086,9 @@ extension DependencyTreeGenerator {
 			let pathProperty = frame.orderedChildren[pathPosition].generator.property
 			let carrierProperties = frame.orderedChildren.compactMap { frame.generator.startsAsCarrier($0.generator) ? $0.generator.property : nil }
 			for (position, child) in frame.orderedChildren.enumerated() {
-				guard let property = child.generator.property, level > 0 || !labelsNoRootChildDeclares.contains(property.label) else { continue }
+				guard let childProperty = child.generator.property, level > 0 || !labelsNoRootChildDeclares.contains(childProperty.label) else { continue }
+				// A mock's root binds what it promotes as the non-optional value it builds.
+				let property = level == 0 && bindsReceivesAgain ? mockRootBinding(ofChild: childProperty, of: instantiable) : childProperty
 				// An `onlyIfAvailable` alias is bound, to `nil` where its fulfilling property is unavailable, as every other
 				// child is.
 				// A member of the loop of builders the scope on the path is on (`ScopeGenerator.ReceivedBuilderLoops`) is still
@@ -1057,11 +1096,15 @@ extension DependencyTreeGenerator {
 				let isLoopMemberBuildingSite = position < pathPosition
 					&& frame.generator.areMembersOfOneLoop(child.generator, frame.orderedChildren[pathPosition].generator)
 				var pathDeclaration = declaration(of: property, isBoundBeforeSite: position < pathPosition && !isLoopMemberBuildingSite)
-				if case let .aliased(fulfillingProperty, _, _)? = instantiable.dependencies.first(where: { $0.property == property })?.source {
+				let source = instantiable.dependencies.first(where: { $0.property == property })?.source
+				if case let .aliased(fulfillingProperty, _, _)? = source {
 					// An alias binds its label to `fulfillingProperty`: the seam's, to the caller's, and any other type's, to one
 					// the seam's tree binds.
 					pathDeclaration.alias = .init(fulfillingProperty: fulfillingProperty, isSeams: level == 0)
 				}
+				// A public mock's root child that the mocked type or a type in its tree receives, which the mock promoted, is bound
+				// from the optional parameter `mock()` takes, which a calling mock passes its own nearest declaration of the label.
+				pathDeclaration.isBoundFromCallersArgument = bindsReceivesAgain && level == 0 && source?.isReceived ?? true
 				if position == pathPosition && ScopeGenerator.isBuilder(property) || isLoopMemberBuildingSite {
 					// An instantiator on the path, or a member of its loop, is building the site: inline, a receive of it in a
 					// fill's tree would read a wrapper made again of the function the seam's initializer declares.
@@ -1110,7 +1153,9 @@ extension DependencyTreeGenerator {
 					))
 				} else if declaration.frameLevel >= 0, let innermostFunction = sendableFunctions.last {
 					// Bound in the seam's tree outside the innermost `@Sendable` function: a fill that reads it is reported. A
-					// parameter of the seam is the caller's, which a fill reads from its own scope.
+					// parameter of the seam is the caller's, which a fill reads from its own scope. So is a received value a
+					// public mock binds at its root where the calling mock passes it its own: the fill of such a call reads the
+					// caller's (`isBoundFromCallersArgument`).
 					uncarriedDeclarations.append(SeamSignature.Hole.UncarriedDeclaration(
 						property: declaration.property,
 						declaringType: declaration.declaringType,
@@ -1118,6 +1163,7 @@ extension DependencyTreeGenerator {
 						parameterTakingType: declaration.parameterTakingType,
 						builtAfter: nil,
 						reason: .boundOutsideSendableFunction(functionProperty: innermostFunction.property, functionBuiltType: innermostFunction.builtType, isForwarded: declaration.isForwarded, cycleParameter: declaration.cycleParameterOrigin, alias: declaration.alias),
+						isBoundFromCallersArgument: declaration.isBoundFromCallersArgument,
 					))
 				}
 			} else {
@@ -2250,7 +2296,7 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 				} else {
 					false
 				}
-				let noteVerb = declaration.parameterTakingType == nil && !isAlias ? "declares" : "receives"
+				let noteVerb = declaration.parameterTakingType == nil && !isAlias && !declaration.isBoundFromCallersArgument ? "declares" : "receives"
 				let declarationNote = SourceDiagnostic(severity: .note, location: declaration.declarationLocation, message: "`\(declaration.declaringType.asSource)` \(noteVerb) `\(declaration.property.asSource)` here.")
 				let pathScope = "`\(declaration.builtAfter?.label ?? "")`"
 				// An instantiator the seam's tree builds after the site can be declared above the seam and received.
@@ -2328,6 +2374,12 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 							// the label comes from above the seam only once nothing in its tree declares it.
 							"`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which `\(declaration.declaringType.asSource)` receives as `\(alias.fulfillingProperty.label)` \(outside(functionProperty)) Declare `@\(Dependency.Source.receivedRawValue) let \(declaration.property.asSource)` on `\(declaration.declaringType.asSource)` without `fulfilledByDependencyNamed: \"\(alias.fulfillingProperty.label)\"`, and instantiate `\(declaration.property.label)` outside \(seamName), so the \(buildersPossessive) caller reads its own, or \(fulfillRemedy(seamModule))."
 						}
+					} else if declaration.isBoundFromCallersArgument {
+						// A value a public mock binds at its root from what its caller passes, which this caller holds no
+						// declaration of in that form to pass (`Scope.fillUnderConstruction`): the mock may build its own, which the
+						// fill cannot read. A deliberate gap against the twin, whose seam takes the value as a parameter
+						// (`seam-holes.md`).
+						"`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which `\(declaration.declaringType.asSource)`’s public mock binds from the `\(declaration.property.label)` its caller passes, \(outside(functionProperty)) Its caller passes no `\(declaration.property.asSource)` of its own, so the mock may build its own. Instantiate `\(declaration.property.label)` above the call of `\(declaration.declaringType.asSource)`’s public mock, so the call passes it and the \(buildersPossessive) caller reads it, or \(fulfillRemedy(seamModule))."
 					} else {
 						"`\(reader.type.asSource)` receives `\(reader.property.asSource)`, which `\(declaration.declaringType.asSource)` \(isForwarded ? "forwards" : "declares") \(outside(functionProperty)) "
 							+ (isForwarded
