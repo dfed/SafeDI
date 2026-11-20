@@ -1978,14 +1978,14 @@ private struct ScopeGeneratorUnderConstruction {
 			_ = Task.detached {
 				try await GenerationWork.$observer.withValue(observer) {
 					for scopeGenerator in scopeGenerators {
-						try await scopeGenerator.generateCode()
+						_ = try await scopeGenerator.generateCode()
 					}
 				}
 			}
 		} else {
 			_ = Task.detached {
 				for scopeGenerator in scopeGenerators {
-					try await scopeGenerator.generateCode()
+					_ = try await scopeGenerator.generateCode()
 				}
 			}
 		}
