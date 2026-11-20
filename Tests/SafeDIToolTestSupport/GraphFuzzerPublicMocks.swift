@@ -4243,6 +4243,11 @@ extension GraphFuzzerPublicMockDraw {
 		return declaringType.properties.map(\.label)
 	}
 
+	/// The pattern of what a call of a public mock reads first where the calling mock takes an optional builder for the
+	/// hole type it fills, `<name>.map { .init(__safeDI_noScope: $0) } ?? `, before the struct it hands otherwise, or
+	/// nothing (`public-mock-builders.md`, "Optional builders for filled places").
+	static let optionalBuilderRead = #"(\w+\.map \{ \.init\(__safeDI_noScope: \$0\) \} \?\? )?"#
+
 	/// What the generated files of an accepted graph show: `generatedFiles`, keyed by module (`FuzzFeature/…`).
 	static func outputFeatures(of fixture: GraphFuzzerFixture, generatedFiles: [String: String]) -> Set<GraphFuzzerPublicMockOutputFeature> {
 		let prefix = fixture.typeNamePrefix
@@ -4260,7 +4265,7 @@ extension GraphFuzzerPublicMockDraw {
 			let lines = contents.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
 			// A fill that builds the public mock's type again passes the fill around it, so the file passes it twice: to `mock()`
 			// or to the function only generated code calls.
-			if isConsumerFile, lines.filter({ ($0.contains(".mock(") || $0.contains(".__safeDI_mock(")) && $0.contains("Builder: __safeDI_") }).count >= 2 {
+			if isConsumerFile, lines.filter({ ($0.contains(".mock(") || $0.contains(".__safeDI_mock(")) && $0.range(of: #"Builder: \#(Self.optionalBuilderRead)__safeDI_"#, options: .regularExpression) != nil }).count >= 2 {
 				features.insert(.consumerFillReentersPublicMock)
 			}
 			var extendedType: String?
@@ -4344,7 +4349,7 @@ extension GraphFuzzerPublicMockDraw {
 					features.insert(.consumerFillsHole)
 				}
 				if line.contains(".__safeDI_mock(") {
-					if line.range(of: #"\w+: __safeDI_\w+\(\)"#, options: .regularExpression) != nil {
+					if line.range(of: #"\w+: \#(Self.optionalBuilderRead)__safeDI_\w+\(\)"#, options: .regularExpression) != nil {
 						features.insert(.consumerPassesLevelFunctionsStruct)
 					}
 					// A place passed up without a scope: the struct of a level function that takes the caller's struct as `up`, the

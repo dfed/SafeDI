@@ -8230,8 +8230,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// builder takes a value is an instantiator of a type that conforms to `Instantiable` by hand, which no type a
 				// caller declares can fulfill, since it would declare that conformance again, so no adapter is needed.
 				isOptional
-					? "\(name).map { .init(__safeDI_noScope: $0) } ?? \(fillsStruct)"
-					: ".init(__safeDI_noScope: \(name))"
+					? "\(name).map { .init(\(ReservedName.noScopeArgumentLabel): $0) } ?? \(fillsStruct)"
+					: ".init(\(ReservedName.noScopeArgumentLabel): \(name))"
 			}
 
 			/// What an override closure of the call is handed for the called builder, given `fillsCall`, the call of the
