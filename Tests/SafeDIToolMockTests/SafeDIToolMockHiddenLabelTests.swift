@@ -1904,6 +1904,14 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		        count: String,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        Screen.__safeDI_mock(count: count, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        count: String,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
 		        func __safeDI_middle() -> Middle {
 		            let child = if let safeDIBuilder = safeDIOverrides.middle.child { safeDIBuilder(nil) } else { Child(count: nil) }
 		            return Middle.__safeDI_init(count: count, child: child, safeDIBuilder: safeDIOverrides.middle.safeDIBuilder)
@@ -2583,6 +2591,14 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		        token: Instantiator<Token>? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        Screen.__safeDI_mock(token: token, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        token: Instantiator<Token>? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
 		        func __safeDI_token() -> Token {
 		            if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        }
@@ -2647,7 +2663,7 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		        }
 		        let token = Instantiator<Token>(__safeDI_token)
 		        _ = Screen.__safeDI_Screen_mock_65AF11639C4ED97D.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let screen = Screen.mock(token: token, safeDIOverrides: safeDIOverrides.screen)
+		        let screen = Screen.__safeDI_mock(token: token, safeDIOverrides: safeDIOverrides.screen)
 		        return Host(screen: screen)
 		    }
 		}
@@ -3401,6 +3417,16 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		    }
 
 		    public static func mock(
+		        count_Bool: Bool? = nil,
+		        count_String: String? = nil,
+		        promoted: Promoted? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        Screen.__safeDI_mock(count_Bool: count_Bool, count_String: count_String, promoted: promoted, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
 		        count_Bool: Bool? = nil,
 		        count_String: String? = nil,
 		        promoted: Promoted? = nil,
@@ -4432,6 +4458,16 @@ struct SafeDIToolMockHiddenLabelTests: ~Copyable {
 		    }
 
 		    public static func mock(
+		        promoted: Promoted? = nil,
+		        user: User? = nil,
+		        user_Draft: Draft? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        Screen.__safeDI_mock(promoted: promoted, user: user, user_Draft: user_Draft, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
 		        promoted: Promoted? = nil,
 		        user: User? = nil,
 		        user_Draft: Draft? = nil,
