@@ -62,6 +62,7 @@ extension DependencyTreeGenerator {
 		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
+		var constructionMemo = ConstructionMemo()
 		let mockRoot = try await createMockRoot(
 			for: instantiable,
 			scope: scope,
@@ -77,6 +78,7 @@ extension DependencyTreeGenerator {
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
+			constructionMemo: &constructionMemo,
 		)
 		// Whether a public mock can be generated is decided for one root and needs no emitting module, as
 		// `generateMockCode` decides it, so the query reports it too.

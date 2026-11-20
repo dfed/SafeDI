@@ -577,6 +577,7 @@ public actor DependencyTreeGenerator {
 					},
 				)
 				rootsOfOtherModules = rootScopesToGenerate.rootsOfOtherModules
+				var constructionMemo = ConstructionMemo()
 				var roots = [RootScopeInfo]()
 				for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
 					let (table, record) = validatedWorld.frozenScopeMap.freezing(rootScope: scope)
@@ -590,6 +591,7 @@ public actor DependencyTreeGenerator {
 							lazilyInstantiatedInstanceProperties: [],
 							erasedToConcreteExistential: false,
 							declaredTypeNames: declaredTypeNames,
+							constructionMemo: &constructionMemo,
 						),
 					))
 				}
