@@ -35,10 +35,10 @@ enum MockFileDistribution {
 	/// The index, from 0, of the file that holds the mock of the type spelled `typeName`: a 64-bit FNV-1a hash of the
 	/// spelling's UTF-8 bytes, which is the same on every platform and in every process, modulo `fileCount`.
 	static func fileIndex(ofMockOfTypeSpelled typeName: String) -> Int {
-		var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+		var hash: UInt64 = 0xCBF29CE484222325
 		for byte in typeName.utf8 {
 			hash ^= UInt64(byte)
-			hash = hash &* 0x0000_0100_0000_01B3
+			hash = hash &* 0x00000100000001B3
 		}
 		return Int(hash % UInt64(fileCount))
 	}
