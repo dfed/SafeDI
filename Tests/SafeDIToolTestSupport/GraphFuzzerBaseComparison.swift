@@ -57,6 +57,8 @@ enum GraphFuzzerBaseComparison {
 			let exitCode: Int32
 			/// The step's standard error, with the graph's directory reduced to `<graph>`.
 			let stderr: String
+			/// The step's standard output, reduced as `stderr` is.
+			var stdout = ""
 		}
 
 		var steps: [Step]
@@ -70,6 +72,7 @@ enum GraphFuzzerBaseComparison {
 		case steps(base: [String], head: [String])
 		case exitStatus(step: String, base: Int32, head: Int32)
 		case diagnostics(step: String, base: String, head: String)
+		case standardOutput(step: String, base: String, head: String)
 		case fileOnlyInBase(path: String)
 		case fileOnlyInHead(path: String)
 		case fileBytes(path: String, base: Data, head: Data)
@@ -82,6 +85,8 @@ enum GraphFuzzerBaseComparison {
 				"exit status of \(step): base \(base), head \(head)"
 			case let .diagnostics(step, base, head):
 				"diagnostics of \(step): \(Self.firstDifference(base: base, head: head))"
+			case let .standardOutput(step, base, head):
+				"standard output of \(step): \(Self.firstDifference(base: base, head: head))"
 			case let .fileOnlyInBase(path):
 				"file \(path): written by the base only"
 			case let .fileOnlyInHead(path):
@@ -153,7 +158,8 @@ enum GraphFuzzerBaseComparison {
 		)
 	}
 
-	/// Every way `base` and `head` differ: the steps they ran, then each step's exit status and diagnostics, then each
+	/// Every way `base` and `head` differ: the steps they ran, then each step's exit status, diagnostics and standard
+	/// output, then each
 	/// file either wrote, in path order.
 	static func differences(base: Record, head: Record) -> [Difference] {
 		var differences = [Difference]()
@@ -168,6 +174,9 @@ enum GraphFuzzerBaseComparison {
 			}
 			if baseStep.stderr != headStep.stderr {
 				differences.append(.diagnostics(step: baseStep.name, base: baseStep.stderr, head: headStep.stderr))
+			}
+			if baseStep.stdout != headStep.stdout {
+				differences.append(.standardOutput(step: baseStep.name, base: baseStep.stdout, head: headStep.stdout))
 			}
 		}
 		for path in Set(base.outputs.keys).union(head.outputs.keys).sorted() {
@@ -226,7 +235,12 @@ enum GraphFuzzerBaseComparison {
 			var steps = [Record.Step]()
 			for command in commands {
 				let result = try await runProcess(tool, arguments: command.arguments)
-				steps.append(Record.Step(name: command.name, exitCode: result.exitCode, stderr: result.stderr.replacingOccurrences(of: directory.path, with: "<graph>")))
+				steps.append(Record.Step(
+					name: command.name,
+					exitCode: result.exitCode,
+					stderr: result.stderr.replacingOccurrences(of: directory.path, with: "<graph>"),
+					stdout: result.stdout.replacingOccurrences(of: directory.path, with: "<graph>"),
+				))
 				guard result.exitCode == 0 else { break }
 			}
 			return Record(steps: steps, outputs: try Self.files(in: workDirectory))

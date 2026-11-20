@@ -1881,6 +1881,11 @@ jobs:
     if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     container: swift:6.2
+    # A cold build is the job's long pole: 8.6 minutes locally, and 10 to 11
+    # on CI for "Check Generate Time on Linux"'s build of the same product.
+    # The build step keeps its own 25; this bounds the fetch, cache and
+    # upload steps around it.
+    timeout-minutes: 35
     permissions:
       contents: read
     defaults:
@@ -2215,6 +2220,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # To read the pull request's current description (below).
+      pull-requests: read
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
@@ -2228,15 +2235,28 @@ jobs:
       # Judges the shards' comparisons with the base's SafeDITool: a pull
       # request whose description holds the line `Generated output:
       # unchanged` fails on any difference; any other pull request gets the
-      # list in the summary. The description is read through the
+      # list in the summary. The description is read as it is now, not as
+      # the event that started the run carried it, so a re-run of this job
+      # after the line is added judges it; it is read through the
       # environment, never spelled into the script.
       - name: Compare Generated Output with the Base
         if: ${{ !cancelled() }}
         env:
           BASE_TOOL_RESULT: ${{ needs.base-tool.result }}
-          PULL_REQUEST_BODY: ${{ github.event.pull_request.body }}
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+          EVENT_PULL_REQUEST_BODY: ${{ github.event.pull_request.body }}
         run: |
           python3 -I .github/scripts/combine-base-comparison-reports.py --self-test
+          PULL_REQUEST_BODY="$EVENT_PULL_REQUEST_BODY"
+          if [ -n "$PULL_REQUEST" ]; then
+            if live_body=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PULL_REQUEST" --jq '.body // ""'); then
+              PULL_REQUEST_BODY="$live_body"
+            else
+              echo "::warning::Could not read the pull request's current description; judging the one the run's event carried."
+            fi
+          fi
+          export PULL_REQUEST_BODY
           python3 -I .github/scripts/combine-base-comparison-reports.py reports >> "$GITHUB_STEP_SUMMARY"
 
   # Fails on any line under Sources/ or Plugins/ that no test executes on

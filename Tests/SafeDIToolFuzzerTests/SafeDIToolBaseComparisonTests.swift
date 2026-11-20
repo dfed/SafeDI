@@ -84,6 +84,26 @@ struct SafeDIToolBaseComparisonTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func compare_reportsStandardOutputOfEveryStep_whenHeadToolPrintsToIt() async throws {
+		var filesToDelete = [URL]()
+		defer {
+			for file in filesToDelete {
+				try? FileManager.default.removeItem(at: file)
+			}
+		}
+		let tool = try GraphFuzzerBaseComparison.builtTool()
+		let head = try Self.script("\"\(tool.path)\" \"$@\"\nstatus=$?\necho \"one more\"\nexit $status", filesToDelete: &filesToDelete)
+		// Seed 0 of the base corpus is in one module and accepted, so both steps run on both sides.
+		let result = try await GraphFuzzerBaseComparison.compare(GraphFuzzerGenerator.fixture(forSeed: 0), base: tool, head: head)
+		#expect(result.problem == nil)
+		#expect(result.differences == [
+			.standardOutput(step: "scan", base: "", head: "one more\n"),
+			.standardOutput(step: "generate", base: "", head: "one more\n"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func compare_reportsChangedFile_whenHeadToolWritesOtherBytes() async throws {
 		var filesToDelete = [URL]()
 		defer {
@@ -179,7 +199,7 @@ struct SafeDIToolBaseComparisonTests {
 			return
 		}
 		let report = GraphFuzzerReport(path: configuration.reportPath)
-		report.append("base-comparison corpus=\(configuration.corpusName) seeds=\(configuration.seeds.lowerBound)..<\(configuration.seeds.upperBound)")
+		report.append("base-comparison corpus=\(configuration.corpusName) seeds=\(configuration.seeds.lowerBound)..<\(configuration.seeds.upperBound) corpus-seeds=\(configuration.corpusSeedCount)")
 		let start = Date()
 		// Each graph's two runs are sequential, in one directory; graphs run side by side, a few more than the
 		// processes `runProcess` allows at once, so a graph's fixture is written while another's tool runs.
@@ -267,6 +287,8 @@ struct BaseComparisonLongRunConfiguration {
 	let headTool: URL
 	let features: Set<GraphFuzzerGeneratorFeature>
 	let seeds: Range<UInt64>
+	/// How many seeds the corpus holds, which the combine job checks the shards cover exactly once.
+	let corpusSeedCount: Int
 	let reportPath: String
 
 	/// The corpus's name in the report: its features, or `base`.
@@ -320,6 +342,7 @@ struct BaseComparisonLongRunConfiguration {
 			headTool: headTool,
 			features: Set(features),
 			seeds: startingSeed..<(startingSeed + UInt64(iterations)),
+			corpusSeedCount: corpusSeedCount,
 			reportPath: reportPath,
 		))
 	}
