@@ -249,6 +249,72 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 		#expect(keyedTypes == ["A", "B"])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysOnlyPlacesOfTypesBuiltAtSeveralPlaces_whenTreeIsSeamsOwn() async throws {
+		// `Shell`'s own tree builds `A` at one place and `G`, with `H` beneath it, under both `P` and `Q`. `Root` builds `A`
+		// too and calls `Shell`, so each tree builds `A` once: built inline, `A` would be built at two places and keyed.
+		let keyedTypes = try await typesKeyedInMemo(
+			of: [
+				seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let a: A", "@Instantiated let shell: Shell"]),
+				seamFixtureType(named: "Shell", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let a: A", "@Instantiated let p: P", "@Instantiated let q: Q"]),
+				seamFixtureType(named: "A", isFinalClass: true, declarations: []),
+				seamFixtureType(named: "P", isFinalClass: true, declarations: ["@Instantiated let g: G"]),
+				seamFixtureType(named: "Q", isFinalClass: true, declarations: ["@Instantiated let g: G"]),
+				seamFixtureType(named: "G", isFinalClass: true, declarations: ["@Instantiated let h: H"]),
+				seamFixtureType(named: "H", isFinalClass: true, declarations: []),
+			],
+			moduleMembershipArguments: ["--module-name", "App"],
+		)
+		#expect(keyedTypes == ["G", "H"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keysTypeBuiltOnceByItsTreeAndOnceAsFill_whenRootInstantiatesFulfillerOfSeamsHole() async throws {
+		// `Core`'s seam `Feature` takes a builder of `any Service`, which `App`'s `DefaultService` fills. `App`'s root builds
+		// `DefaultService` itself too, so the tree builds it at two places: once beneath `Root`, once as `Feature`'s fill.
+		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
+		_ = try await ConstructionMemoOracle.$keyedPlaceObserver.withValue({ continuation.yield($0) }) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Core",
+						packageName: "Shop",
+						swiftFileContent: [
+							"public protocol Service: AnyObject {}",
+							seamFixtureType(named: "Feature", isSeam: true, isFinalClass: true, declarations: ["@Instantiated public let service: any Service"]),
+						],
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContent: [
+							"""
+							import Core
+
+							@Instantiable(fulfillingAdditionalTypes: [Service.self])
+							public final class DefaultService: Instantiable, Service {
+							    public init() {}
+							}
+							""",
+							"import Core\n\n" + seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let feature: Feature", "@Instantiated public let service: any Service"]),
+						],
+						dependencies: ["Core"],
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		var keyedTypes = Set<String>()
+		for await keyedType in stream {
+			keyedTypes.insert(keyedType)
+		}
+		#expect(keyedTypes == ["DefaultService"])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -262,10 +328,10 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 
 	/// Generates `fixture` and returns the concrete type of each place a tree keyed in its construction memo.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private mutating func typesKeyedInMemo(of fixture: [String]) async throws -> Set<String> {
+	private mutating func typesKeyedInMemo(of fixture: [String], moduleMembershipArguments: [String] = []) async throws -> Set<String> {
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
 		_ = try await ConstructionMemoOracle.$keyedPlaceObserver.withValue({ continuation.yield($0) }) { [fixture] in
-			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, moduleMembershipArguments: moduleMembershipArguments)
 		}
 		continuation.finish()
 		var keyedTypes = Set<String>()
