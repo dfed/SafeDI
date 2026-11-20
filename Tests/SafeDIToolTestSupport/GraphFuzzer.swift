@@ -237,7 +237,9 @@ struct GraphFuzzerFixture: Equatable {
 
 	/// The sample values the comparator calls the instantiators `addingHoleShapes` draws that forward a value with:
 	/// `HoleNest`'s `holeNestScreenBuilder`, which forwards `holeNestId`, so that it traverses the route of the inner seam's
-	/// enum a place inside a plain fill reads `holeNestId` from (`DifferentialValueSample`). Empty for a graph without it.
+	/// enum a place inside a plain fill reads `holeNestId` from, and `HoleSeam`'s `holeScreenBuilder`, which forwards
+	/// `holeScreenTag`, so that it traverses the screen whose place's fill reads it (`DifferentialValueSample`). Empty for
+	/// a graph without either.
 	var holeDrawForwardedPropertiesSamples: [DifferentialValueSample] {
 		var samples = [DifferentialValueSample]()
 		let screenName = typeNamePrefix + "HoleNestScreen"
@@ -253,6 +255,10 @@ struct GraphFuzzerFixture: Equatable {
 			} else if declaration.contains("ForwardedProperties = (holeHandedId: Int, holeHandedName: String)") {
 				samples.append(DifferentialValueSample(type: "\(handedName).ForwardedProperties", expression: "(holeHandedId: 7, holeHandedName: \"7\")"))
 			}
+		}
+		let tagScreenName = typeNamePrefix + "HoleScreen"
+		if swiftFileContent.contains(where: { $0.contains("final class \(tagScreenName): ") }) {
+			samples.append(DifferentialValueSample(type: "\(tagScreenName).ForwardedProperties", expression: "\(typeNamePrefix)HoleScreenTag()"))
 		}
 		return samples
 	}
@@ -1478,6 +1484,22 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case holeLoopOfThreeMembers
 	/// The members hold their places through `HoleRingLeaf`, a type each instantiates.
 	case holeLoopPlaceThroughSharedLeaf
+	/// `HoleScreen`, which `HoleSeam` builds through an `Instantiator` that forwards `holeScreenTag`, holds a place of the
+	/// hole, and `HoleImpl` reads `holeScreenTag`, which only the screen's place carries.
+	case holeScreenPlace
+	/// `HoleImpl` builds `HoleSeam` again and reads `holeScreenTag` only if available, which the seam opened again does not
+	/// carry at its place outside the screen: inline that place reads the screen's tag, so the tool rejects it
+	/// (`fieldOfReenteringPlace`).
+	case holeScreenValueLostOnReentry
+	/// As `holeScreenValueLostOnReentry`, with `HoleImpl` requiring `holeScreenTag`, which every root that reaches the seam
+	/// instantiates: inline the place reads the screen's, the fill the root's.
+	case holeScreenValueRequiredLostOnReentry
+	/// The error's remedy: `HoleSeam` receives `holeScreenTag`, so the call opening it again passes the screen's on.
+	case holeScreenValueReceivedBySeam
+	/// `HoleSeam` instantiates `holeScreenTag` before its other places, which then carry it: the value is right, accepted.
+	case holeScreenValueBuiltBySeam
+	/// `HoleImpl` reads `holeScreenTag` and builds no seam again: accepted.
+	case holeScreenValueReadWithoutReentry
 	/// `HoleRingFlow`, which the seam builds by value, declares the loop, one level beneath the seam.
 	case holeLoopBeneathSeam
 	/// The members instantiate `holeRingMark` before their places, which `HoleImpl` reads only if available: the payload
@@ -1781,6 +1803,20 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case reenteredFillReadsValueOfOneRouteBoundAboveCall
 	/// The same read remedied: `ReenteredSubB`, the seam built again, receives `reenteredMark` only if available. Accepted.
 	case reenteredFillReadsValueOfOneRouteRemedied
+	/// `ReenteredSubA` binds `reenteredTag` before `reenteredFirst`, whose fill builds `ReenteredSubB` again, and
+	/// `ReenteredGadgetImpl` receives it only if available: only that place carries it, which both builds reject with
+	/// `fieldOfReenteringPlace`, the roots' module through the field `ReenteredHost`'s module records on the place.
+	case reenteredFillReadsPlaceField
+	/// The same read where `ReenteredHost` also binds `reenteredTag` above its call of `ReenteredTop`: a field of the label
+	/// above the seam call, which both builds reject too.
+	case reenteredFillReadsPlaceFieldBoundAboveCall
+	/// The same read required, `ReenteredHost` binding `reenteredTag` above its call of `ReenteredTop`: both builds reject it.
+	case reenteredFillRequiresPlaceField
+	/// Either read remedied: `ReenteredSubB`, the seam built again, receives `reenteredTag` as the reader does. Accepted.
+	case reenteredFillReadsPlaceFieldRemedied
+	/// Either read where `ReenteredSecondImpl` declares `reenteredTag` above the place, nearer the reader on every route.
+	/// Accepted.
+	case reenteredFillReadsPlaceFieldDeclaredInFill
 	/// `ReenteredFirstImpl`, the enclosing fill, holds a place of `ReenteredGadget` of its own.
 	case reenteredFillEnclosingFillHoldsPlace
 	/// `ReenteredSecondImpl` calls `ReenteredSubB` again, re-entering the fill that encloses the call.
@@ -1838,10 +1874,13 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// Whether `addingFillCallShapes`, `addingCarriedLevelShapes`, `addingPassingUpCopyShapes` or `addingReenteredFillShapes` draws this shape of a fixed
 	/// generator defect, whose count in accepted graphs the seam corpus pins (`acceptedDrawFeatureCounts`), at least ten
 	/// each: every shape but those the tool rejects by design – `passingUpCopiesHideLabel`, which the renamings judge, and
-	/// the unremedied reads of a value one route holds, which `toolRuns_rejectBothBuildsWithDeclarationBoundOnPathToReenteringCall_whenFillReadsValueOnlyOneRouteHoldsUnremedied` judges.
+	/// the unremedied reads of a value one route holds, which `toolRuns_rejectBothBuildsWithDeclarationBoundOnPathToReenteringCall_whenFillReadsValueOnlyOneRouteHoldsUnremedied` judges,
+	/// and the unremedied reads of a field only the place whose fill builds the seam again carries, which
+	/// `toolRuns_rejectBothBuildsWithFieldOfReenteringPlace_whenCallerFillsPlaceInsideFillBuiltAgainUnremedied` judges.
 	var isFixedSeamCallDefectShape: Bool {
 		switch self {
-		case .passingUpCopiesHideLabel, .reenteredFillReadsValueOfOneRoute, .reenteredFillReadsValueOfOneRouteBoundAboveCall:
+		case .passingUpCopiesHideLabel, .reenteredFillReadsValueOfOneRoute, .reenteredFillReadsValueOfOneRouteBoundAboveCall,
+		     .reenteredFillReadsPlaceField, .reenteredFillReadsPlaceFieldBoundAboveCall, .reenteredFillRequiresPlaceField:
 			false
 		default:
 			["fillCallReadsOwnLevel", "carriedLevel", "passingUpCopies", "reenteredFill"].contains { rawValue.hasPrefix($0) }
@@ -1854,6 +1893,12 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// declarations and chains: `seamDependencyReadThroughView` and `seamDependencyChainReadThroughView`.
 	var isReadThroughViewShape: Bool {
 		self == .seamDependencyReadThroughView || self == .seamDependencyChainReadThroughView
+	}
+
+	/// Whether the shape is one of a place in a screen whose value a fill building the seam again reads, whose accepted
+	/// graphs the seam corpus counts: the neighbours and the remedy the tool must accept.
+	var isScreenPlaceShape: Bool {
+		rawValue.hasPrefix("holeScreen")
 	}
 
 	static func < (lhs: GraphFuzzerSeamDrawFeature, rhs: GraphFuzzerSeamDrawFeature) -> Bool {
@@ -2548,6 +2593,7 @@ enum GraphFuzzerGenerator {
 			carriedLevelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.carriedLevelRandomSeedMask)
 			passingUpCopyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.passingUpCopyRandomSeedMask)
 			reenteredFillRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredFillRandomSeedMask)
+			reenteredPlaceFieldRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredPlaceFieldRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -3017,6 +3063,9 @@ enum GraphFuzzerGenerator {
 		private var carriedLevelRandom: GraphFuzzerRandomNumberGenerator
 		private var passingUpCopyRandom: GraphFuzzerRandomNumberGenerator
 		private var reenteredFillRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingReenteredFillShapes`' choices of `reenteredTag`, which `ReenteredSubA` binds before the place whose
+		/// fill builds `ReenteredSubB` again: whether the graph reads it, and how.
+		private var reenteredPlaceFieldRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -5403,6 +5452,10 @@ enum GraphFuzzerGenerator {
 			// Where the base draw's read of the root's `holeLogger` is all that keeps the value from being drawn, the value is drawn
 			// most of the time in its place, the read left out. Made after the stream's other rolls, so each draws as before.
 			let passedUpPlaceValueDropsRootLoggerRead = holeRolls.passedUpPlaceValue.percentChance(75)
+			// A place in a screen that forwards a value the fill reads, on a generator of its own, made whatever the base draw:
+			// in most graphs whose fill calls the seam again, which few draw, and in more than half of the others.
+			let screenPlaceRoll = holeRolls.screenPlace.integer(in: 0...99)
+			let screenRoll = holeRolls.screenPlace.integer(in: 0...9)
 			// The fillers and the root that reaches the seam are in another package than the seam's, unless the seam's module
 			// has no package, which this draw keeps apart from a caller in another package, as every other graph's draws were.
 			let fillsFromOtherPackage = drawsCrossPackage && !modulesOmittingPackageName.contains(.seamModule)
@@ -6190,6 +6243,51 @@ enum GraphFuzzerGenerator {
 				}
 				callerDeclarations.append(erasureImpl)
 			}
+			// A place in a screen: `HoleSeam` builds `HoleScreen` through an `Instantiator` that forwards `holeScreenTag`, and
+			// `HoleScreen` holds a place of the hole, whose fill `HoleImpl` reads `holeScreenTag`, only if available or required.
+			// Where `HoleImpl` builds the seam again, inline the seam opened again sits beneath the screen, so its place outside
+			// the screen reads the screen's tag, which no builder hands that place: the tool rejects the read
+			// (`fieldOfReenteringPlace`), unless `HoleSeam` receives the label, the error's remedy, which the call opening it
+			// again then passes on, or instantiates it before its other places, which then carry their own. A required read
+			// needs a tag above the seam, which every root that reaches it then instantiates. Only where the graph's types may
+			// hold an `Instantiator`, so that no `@Sendable` function inside the seam's tree encloses the place; not where
+			// `HoleImpl` reads `HoleOwner`'s alias, which the screen's place does not carry; and, where a fill calls the seam
+			// again, not beside the draws above whose places each call the seam again, whose value comparison then grows past
+			// a batch's traversals.
+			var rootHoldsScreenTag = false
+			if screenPlaceRoll < (fillCallsSeamAgain ? 90 : 60), sendability != .sendable, !implReadsOwnersAlias, !(fillCallsSeamAgain && (drawsPlainFillPlace || drawsSharedTypes || drawsTangle)) {
+				let tag = instantiable("HoleScreenTag", module: .seamModule)
+				let screen = instantiable("HoleScreen", module: .seamModule, properties: [
+					PropertyDeclaration(attribute: "@Forwarded", label: "holeScreenTag", type: tag.name),
+					holeProperty,
+				])
+				seamModuleDeclarations += [tag, screen]
+				seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeScreenBuilder", type: "Instantiator<\(screen.name)>"))
+				// 0–5: read only if available; 6–9: required. Within each: lost, remedied by the seam's receive, or built by the
+				// seam. The lost reads stay drawn in a graph with a hole, unlike the rolls the tool rejects by design that have a
+				// home outside hole graphs (`oneRouteVariant`, `declaresHole` in `addingReenteredFillShapes`): this draw is a
+				// hole's by construction and rejects only where the fill builds the seam again, so a hole graph is the only place
+				// the rejection can be drawn, at the cost of the few hole graphs that draw it.
+				let readsRequired = screenRoll >= 6
+				let variant = readsRequired ? [0, 0, 1, 2][screenRoll - 6] : [0, 0, 0, 1, 2, 2][screenRoll]
+				impl.properties.append(readsRequired
+					? PropertyDeclaration(attribute: "@Received", label: "holeScreenTag", type: tag.name)
+					: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "holeScreenTag", type: tag.name + "?"))
+				switch variant {
+				case 1:
+					seam.properties.append(readsRequired
+						? PropertyDeclaration(attribute: "@Received", label: "holeScreenTag", type: tag.name)
+						: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "holeScreenTag", type: tag.name + "?"))
+				case 2:
+					seam.properties.insert(PropertyDeclaration(attribute: "@Instantiated", label: "holeScreenTag", type: tag.name), at: 0)
+				default:
+					break
+				}
+				rootHoldsScreenTag = readsRequired && variant != 2
+				if secondHolePlace == nil {
+					secondHolePlace = (seamName, "holeScreenBuilder")
+				}
+			}
 			// The second place of a graph that draws none of the above, which the name-stability oracle removes.
 			if secondHolePlace == nil, drawsSecondHole {
 				secondHolePlace = (seamName, "holeSettings")
@@ -6270,6 +6368,9 @@ enum GraphFuzzerGenerator {
 			if readsRootLogger || trackerImpl?.properties.contains(where: { $0.label == "holeLogger" }) == true || drawsPassedUpPlaceValue && rootDeclaresPassedUpPlaceValueLabel {
 				rootProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeLogger", type: loggerName))
 			}
+			if rootHoldsScreenTag {
+				rootProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeScreenTag", type: name("HoleScreenTag")))
+			}
 			rootProperties.append(rootCall)
 			rootProperties += nestedRootProperties
 			if fillsFromOtherPackage {
@@ -6312,6 +6413,7 @@ enum GraphFuzzerGenerator {
 				nothingForwardedPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654E6F7468)
 				passedUpPlaceValue = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6550557056)
 				spelledPlaces = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6553706C6C)
+				screenPlace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6553637265)
 			}
 
 			var crossPackage: GraphFuzzerRandomNumberGenerator
@@ -6358,6 +6460,8 @@ enum GraphFuzzerGenerator {
 			/// Places inside a plain fill of one hole type spelled with and without `any`
 			/// (`holePlacesInsideFillSpellTypeWithAndWithoutAny`).
 			var spelledPlaces: GraphFuzzerRandomNumberGenerator
+			/// A place in a screen that forwards a value a fill reads, which a fill building the seam again would lose.
+			var screenPlace: GraphFuzzerRandomNumberGenerator
 		}
 
 		private static let holeRandomSeedMask: UInt64 = 0x686F6C655F726E64
@@ -8113,9 +8217,15 @@ enum GraphFuzzerGenerator {
 		/// in a `SendableInstantiator`, so the `@Sendable` function is above the call, in another module: each makes the reused
 		/// level function `@Sendable`, which the generator once left plain. In a graph with a hole, the read only one route
 		/// holds is always the remedied one: the tool rejects the other two by design, which would throw away the hole graph
-		/// the rest of the draw has it accept.
+		/// the rest of the draw has it accept. On a generator of its own, `reenteredPlaceFieldRandom`, `ReenteredSubA` binds
+		/// `reenteredTag` before `reenteredFirst`, and `ReenteredGadgetImpl` reads it only if available or required, so only
+		/// the place whose fill builds `ReenteredSubB` again carries it: rejected in both builds with `fieldOfReenteringPlace`,
+		/// also where `ReenteredHost` binds the label above its call of `ReenteredTop` (always, for a required read), and
+		/// accepted where `ReenteredSubB` receives it as the reader does, the error's remedy, or where `ReenteredSecondImpl`
+		/// declares it above the place. In a graph with a hole, the rolls that draw the two rejected reads of `reenteredTag`
+		/// draw the remedy instead, which keeps the hole graph the tool accepts.
 		///
-		/// `reenteredFillRandom` draws only for this pass, which runs after `addingPassingUpCopyShapes` and only in a graph
+		/// `reenteredFillRandom` and `reenteredPlaceFieldRandom` draw only for this pass, which runs after `addingPassingUpCopyShapes` and only in a graph
 		/// another pass split, so that every graph in one module, and every other draw of a graph it draws in, draws as
 		/// before. A graph whose seam's module has no package gains none, as for `addingFillCallShapes`.
 		private mutating func addingReenteredFillShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
@@ -8142,7 +8252,46 @@ enum GraphFuzzerGenerator {
 			// so each draws as before.
 			let relayCallInSendableFill = reenteredFillRandom.percentChance(60) && callThroughRelay && sendability != .nonSendable
 			let relayCallByTypeOfAnotherModule = reenteredFillRandom.percentChance(60) && callThroughRelay && sendability != .nonSendable
+			// `reenteredTag`, on a generator of its own, so that every shape above draws as it did: `ReenteredSubA` binds it
+			// before `reenteredFirst`, whose fill builds `ReenteredSubB` again, and `ReenteredGadgetImpl` reads it, only if
+			// available or, where `ReenteredHost` binds it above its call of `ReenteredTop` too, required. Nothing on the path to
+			// that call declares it, so only the place whose fill builds the seam again carries it: `ReenteredHost`'s module
+			// records the field on the place it passes up, and the roots' module, which fills that place, rejects the read
+			// with the visible build's `fieldOfReenteringPlace`.
+			let readsPlaceField = reenteredPlaceFieldRandom.percentChance(75)
+			let placeFieldReadIsRequired = reenteredPlaceFieldRandom.percentChance(40)
+			let placeFieldVariantRoll = reenteredPlaceFieldRandom.integer(in: 0...9)
 			guard !modulesOmittingPackageName.contains(.seamModule) else { return declarations }
+			// A graph with a hole draws the remedied read where a roll draws one of the reads the tool rejects by design, which
+			// would throw away the hole graph the rest of the draw has it accept: here and for the sibling read only one route
+			// holds (`oneRouteVariant`). The rolls are made above, so every graph without a hole draws as before.
+			// `self.prefix`, since this function declares a `prefix` of its own below.
+			let declaresHole = declarations.contains { $0.name == "\(self.prefix)HoleSeam" }
+			/// How the read of `reenteredTag` is drawn: unremedied, which both builds reject; unremedied with `ReenteredHost`
+			/// binding the label above its call of `ReenteredTop`, a field of the label that lifts no rejection; remedied, the
+			/// seam built again receiving the label as the reader does, the error's remedy; or with `ReenteredSecondImpl`
+			/// declaring the label above the place, which every route then reads.
+			enum PlaceFieldVariant {
+				case unremedied
+				case boundAboveCall
+				case receivedBySeamBuiltAgain
+				case declaredInFill
+			}
+			// A required read needs a value on `ReenteredTop`'s own route too, which `ReenteredHost` binds above its call. The
+			// remedy takes the largest share, since the graph's other draws reject most graphs it lands in, and the corpus floors
+			// the graphs of it the tool accepts.
+			// In a graph with a hole, the remedy stands in for both rejected reads.
+			let placeFieldVariant: PlaceFieldVariant? = if !readsPlaceField {
+				nil
+			} else if placeFieldVariantRoll >= 7 {
+				.declaredInFill
+			} else if placeFieldVariantRoll >= (placeFieldReadIsRequired ? 3 : 4) || declaresHole {
+				.receivedBySeamBuiltAgain
+			} else if placeFieldReadIsRequired || placeFieldVariantRoll >= 2 {
+				.boundAboveCall
+			} else {
+				.unremedied
+			}
 			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
 			let callInstantiator = switch sendability {
 			case .nonSendable: "Instantiator"
@@ -8152,8 +8301,6 @@ enum GraphFuzzerGenerator {
 			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
 			let prefix = prefix
 			// A graph with a hole draws the remedied read where the roll draws one of the two the tool rejects by design.
-			let holeSeamName = "\(prefix)HoleSeam"
-			let declaresHole = declarations.contains { $0.name == holeSeamName }
 			let oneRouteVariant = declaresHole && oneRouteVariantRoll < 2 ? oneRouteVariantRoll + 2 : oneRouteVariantRoll
 			func instantiable(_ suffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
 				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
@@ -8177,13 +8324,28 @@ enum GraphFuzzerGenerator {
 			let gadgetName = "\(prefix)ReenteredGadget"
 			let label = instantiable("ReenteredLabel", module: .seamDependency)
 			let labelReceive = PropertyDeclaration(attribute: "@Received", label: "reenteredLabel", type: label.name)
-			let subA = seam("ReenteredSubA", module: .seamDependency, properties: (readsValueAbove ? [labelReceive] : []) + [PropertyDeclaration(attribute: "@Instantiated", label: "reenteredFirst", type: "any \(firstName)")])
+			var subA = seam("ReenteredSubA", module: .seamDependency, properties: (readsValueAbove ? [labelReceive] : []) + [PropertyDeclaration(attribute: "@Instantiated", label: "reenteredFirst", type: "any \(firstName)")])
 			// A type of the module beneath the seam's module, so that `ReenteredSubB` can receive it.
 			let mark = instantiable("ReenteredMark", module: .seamDependency)
+			// The same, for `reenteredTag`.
+			let tag = instantiable("ReenteredTag", module: .seamDependency)
+			let tagReceive = placeFieldReadIsRequired
+				? PropertyDeclaration(attribute: "@Received", label: "reenteredTag", type: tag.name)
+				: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "reenteredTag", type: tag.name + "?")
+			let tagDeclaration = PropertyDeclaration(attribute: "@Instantiated", label: "reenteredTag", type: tag.name)
+			if placeFieldVariant != nil {
+				// Bound before the place whose fill builds `ReenteredSubB` again.
+				subA.properties.insert(tagDeclaration, at: subA.properties.count - 1)
+			}
 			var subB = seam("ReenteredSubB", module: .seamDependency, properties: (readsValueAbove ? [labelReceive] : []) + [PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSecond", type: "any \(secondName)")])
 			if readsOnlyIfAvailable, oneRouteVariant >= 2 {
 				// The remedy the error offers a reader only if available: the seam built again carries the label itself.
 				subB.properties.insert(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "reenteredMark", type: mark.name + "?"), at: 0)
+			}
+			if placeFieldVariant == .receivedBySeamBuiltAgain {
+				// The remedy the error offers: the seam built again receives the label as the reader does, so the call
+				// opening it again inside the fill of `reenteredFirst` passes `ReenteredSubA`'s on.
+				subB.properties.insert(tagReceive, at: 0)
 			}
 			// `ReenteredSubA`, built in a `SendableInstantiator` where the call is made inside a `@Sendable` fill.
 			let subAProperty = relayCallInSendableFill
@@ -8216,6 +8378,9 @@ enum GraphFuzzerGenerator {
 			if relayCallByTypeOfAnotherModule {
 				added.append(hub)
 			}
+			if placeFieldVariant != nil {
+				added.append(tag)
+			}
 			var firstProperties = [PropertyDeclaration]()
 			if readsOnlyIfAvailable {
 				firstProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "reenteredMark", type: mark.name))
@@ -8232,6 +8397,10 @@ enum GraphFuzzerGenerator {
 			}
 			added.append(fill("ReenteredFirstImpl", fulfilling: firstName, module: .seamModule, properties: firstProperties))
 			var secondProperties = [gadgetPlace]
+			if placeFieldVariant == .declaredInFill {
+				// A declaration of the label above the place, nearer the reader than `ReenteredSubA`'s on every route.
+				secondProperties.insert(tagDeclaration, at: 0)
+			}
 			if reentersEnclosingFill {
 				secondProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubBBuilder", type: "\(instantiator)<\(subB.name)>"))
 			}
@@ -8240,6 +8409,11 @@ enum GraphFuzzerGenerator {
 			if readsOnlyIfAvailable, oneRouteVariant == 1 {
 				// A field of the label above the seam call, which lifts no rejection.
 				host.properties.insert(PropertyDeclaration(attribute: "@Instantiated", label: "reenteredMark", type: mark.name), at: 0)
+			}
+			if placeFieldVariant == .boundAboveCall || (placeFieldReadIsRequired && placeFieldVariant != nil) {
+				// The value a required read gets on `ReenteredTop`'s own route, and, for any read, a field of the label above
+				// the seam call, which lifts no rejection.
+				host.properties.insert(tagDeclaration, at: 0)
 			}
 			host.additionalDeclarations.append("public protocol \(gadgetName)\(sendableSuffix) {}")
 			added.append(host)
@@ -8250,11 +8424,14 @@ enum GraphFuzzerGenerator {
 			if readsOnlyIfAvailable {
 				gadgetProperties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "reenteredMark", type: mark.name + "?"))
 			}
+			if placeFieldVariant != nil {
+				gadgetProperties.append(tagReceive)
+			}
 			var gadgetImplementation = fill("ReenteredGadgetImpl", fulfilling: gadgetName, module: .samePackageCaller, properties: gadgetProperties)
 			gadgetImplementation.fillsHole = true
-			if readsValueAbove || readsOnlyIfAvailable {
-				// `ReenteredLabel` and `ReenteredMark` are types of the module beneath the seam's module, which the roots' module
-				// does not import.
+			if readsValueAbove || readsOnlyIfAvailable || placeFieldVariant != nil {
+				// `ReenteredLabel`, `ReenteredMark` and `ReenteredTag` are types of the module beneath the seam's module, which
+				// the roots' module does not import.
 				gadgetImplementation.imports.append(GraphFuzzerModule.seamDependency.name)
 			}
 			var root = instantiable("ReenteredRoot", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "reenteredHost", type: host.name)])
@@ -8263,6 +8440,7 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let reenteredFillRandomSeedMask: UInt64 = 0x7265456E74657246
+		private static let reenteredPlaceFieldRandomSeedMask: UInt64 = 0x7265506C61636546
 
 		// MARK: Access proof extensions
 
@@ -9821,6 +9999,19 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					features.insert(.reenteredFillReadsValueOfOneRoute)
 				}
 			}
+			if let tagRead = gadgetProperties.first(where: { $0.label == "reenteredTag" }) {
+				if propertiesByType[prefix + "ReenteredSubB"]?.contains(where: { $0.label == "reenteredTag" }) == true {
+					features.insert(.reenteredFillReadsPlaceFieldRemedied)
+				} else if propertiesByType[prefix + "ReenteredSecondImpl"]?.contains(where: { $0.label == "reenteredTag" }) == true {
+					features.insert(.reenteredFillReadsPlaceFieldDeclaredInFill)
+				} else if tagRead.attribute == "@Received" {
+					features.insert(.reenteredFillRequiresPlaceField)
+				} else if propertiesByType[prefix + "ReenteredHost"]?.contains(where: { $0.label == "reenteredTag" }) == true {
+					features.insert(.reenteredFillReadsPlaceFieldBoundAboveCall)
+				} else {
+					features.insert(.reenteredFillReadsPlaceField)
+				}
+			}
 			let firstProperties = propertiesByType[prefix + "ReenteredFirstImpl"] ?? []
 			if firstProperties.contains(where: { $0.label == "reenteredGadget" }) {
 				features.insert(.reenteredFillEnclosingFillHoldsPlace)
@@ -10340,6 +10531,25 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 			if nestLabels.contains("holeNestScreenBuilder"), properties(of: "HoleNestImpl").contains(where: { $0.label == "holeNestId" }) {
 				features.insert(.holePlaceInsidePlainFillFulfillerReadsInnerLevel)
+			}
+		}
+		if declares("HoleScreen") {
+			features.insert(.holeScreenPlace)
+			let seamLabels = Set(seamProperties.map(\.label))
+			// The seam opened again beneath the fill: by `HoleImpl`, `HoleMiddle` or `HoleTrackerImpl`, which fills a hole of a
+			// seam `HoleImpl` builds.
+			let reenters = (properties(of: "HoleImpl") + properties(of: "HoleMiddle") + properties(of: "HoleTrackerImpl")).contains { $0.label == "holeSeamBuilder" }
+			let read = properties(of: "HoleImpl").first { $0.label == "holeScreenTag" }
+			if seamProperties.contains(where: { $0.label == "holeScreenTag" && $0.attribute.hasPrefix("@Received") }) {
+				features.insert(.holeScreenValueReceivedBySeam)
+			} else if seamLabels.contains("holeScreenTag") {
+				features.insert(.holeScreenValueBuiltBySeam)
+			} else if !reenters {
+				features.insert(.holeScreenValueReadWithoutReentry)
+			} else if read?.attribute == "@Received" {
+				features.insert(.holeScreenValueRequiredLostOnReentry)
+			} else {
+				features.insert(.holeScreenValueLostOnReentry)
 			}
 		}
 		if declares("HoleRingA") {
@@ -11465,8 +11675,11 @@ enum GraphFuzzerToolOutcome: Equatable {
 	/// `MiddleAlpha` instantiates `Flow` again (`flowBuilder`) and `MiddleZed` declares …, but"), each clause's places, and
 	/// its declaring types ("cannot hand it `MiddleAlpha`’s and `MiddleZed`’s values"), and, where a fill's seam opened again
 	/// loses a value (`fieldOfReenteringPlace`), the types the places carry it from ("carries from `AScreen` and `BScreen`,
-	/// and"), the seams and calls that open it again ("instantiates `ASeam` and `BSeam` again (`aBuilder` and `bBuilder`)"),
-	/// and the alternatives inline reads ("would read `AScreen`’s or `BScreen`’s `id` inside that `ASeam` or `BSeam`") – sorted as text, each item in its
+	/// and"), the calls that open it again ("instantiates `Seam` again (`aBuilder` and `bBuilder`)", or, through seams that
+	/// build it, "instantiates `ARelay` and `BRelay` (`aBuilder` and `bBuilder`), which instantiate `Seam` again", or both,
+	/// the direct call first: "instantiates `Seam` again (`seamBuilder`) and `ARelay` and `BRelay` (`aBuilder` and
+	/// `bBuilder`), which instantiate `Seam` again"), and the alternatives inline reads ("would read `AScreen`’s or
+	/// `BScreen`’s `id` inside that `Seam`", the seam built again) – sorted as text, each item in its
 	/// place among the list's separators, so two diagnostics that list the same items in another order compare equal, and
 	/// any other difference, including an item added, removed or changed, still tells them apart. A place keeps its owner,
 	/// its case and the seam whose tree holds it in one item, so a place moved to another seam's tree still differs; a
@@ -11480,8 +11693,9 @@ enum GraphFuzzerToolOutcome: Equatable {
 		let separator = "(?:, and |, | and )"
 		// A remedy that fulfills one type of a merged fill finding's places.
 		let fulfillRemedy = "declare an @Instantiable type that fulfills `[^`]*` in (?:module `[^`]*`|this module) or a module it lists among its SafeDI dependencies, so `[^`]*` fills the builders? itself"
-		// A clause of a declaration that hides a value on the paths from its places to a call that re-enters a seam.
-		let reenteringCallClause = "`[^`]*` declares on the paths? from the builders? for \(place)(?:\(separator)\(place))* to the call by which `[^`]*` instantiates `[^`]*` again \\(`[^`]*`\\)"
+		// A clause of a declaration that hides a value on the paths from its places to a call that re-enters a seam: a call of
+		// the seam itself, or of a seam that builds it, such as one that passes its place up.
+		let reenteringCallClause = "`[^`]*` declares on the paths? from the builders? for \(place)(?:\(separator)\(place))* to the call by which `[^`]*` instantiates `[^`]*`(?: again \\(`[^`]*`\\)| \\(`[^`]*`\\), which instantiates `[^`]*` again)"
 		var diagnostic = diagnostic
 		for (list, item) in [
 			("(?<=Did you mean one of )`[^`]*`(?:, `[^`]*`)+(?=\\?)", backtickedItem),
@@ -11499,8 +11713,10 @@ enum GraphFuzzerToolOutcome: Equatable {
 			// reads, and the seams inline reads it inside. The seams its remedy declares the value on are the remedy's list
 			// above.
 			("(?<= carries from | carry from )`[^`]*`(?:\(separator)`[^`]*`)+(?=, and )", backtickedItem),
-			("(?<= instantiates )`[^`]*`(?:\(separator)`[^`]*`)+(?= again \\()", backtickedItem),
-			("(?<= again \\()`[^`]*`(?:\(separator)`[^`]*`)+(?=\\))", backtickedItem),
+			("(?<= instantiates )`[^`]*`(?:\(separator)`[^`]*`)+(?= again \\(| \\(`)", backtickedItem),
+			// The seams that build it, after a direct call of it.
+			("(?<=\\) and )`[^`]*`(?:\(separator)`[^`]*`)+(?= \\(`[^`]*`(?:\(separator)`[^`]*`)*\\), which instantiate )", backtickedItem),
+			("(?<= again \\(|` \\()`[^`]*`(?:\(separator)`[^`]*`)+(?=\\))", backtickedItem),
 			("(?<=would read )`[^`]*`’s(?:(?:, or |, | or )`[^`]*`’s)+(?= `)", "`[^`]*`’s"),
 			("(?<=inside that )`[^`]*`(?:(?:, or |, | or )`[^`]*`)+(?=, but )", backtickedItem),
 		] {
