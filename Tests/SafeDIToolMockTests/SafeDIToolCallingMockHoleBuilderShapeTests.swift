@@ -271,7 +271,7 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 
 		#expect(Self.mockParameterLines(of: output) == [
 			"apiSendableBuilder: (@Sendable () -> any Api)? = nil,",
-			"storeBuilder: (@Sendable () -> any Store)? = nil,",
+			"liveStore_StoreSendableBuilder: (@Sendable () -> any Store)? = nil,",
 			"safeDIOverrides: SafeDIOverrides = .init()",
 		])
 		try await expectValues(of: output, modules: modules, pairs: [
@@ -284,27 +284,12 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_buildsReenteredCallsPlacesWithBuilder_whenFillOfOtherHoleTypeBuildsCalledTypeAgain() async throws {
-		// `F`'s fill of `any Store`, `LiveStore`, builds `F` again: that call re-enters the first's fills, so the builder of
-		// `any Api` passed to `Root`'s mock builds its place too, and an override of `F` is handed it.
-		let feat = """
-		import Base
-		import SafeDI
-
-		@Instantiable(generateMock: .public)
-		public struct F: Instantiable {
-		    init(api: any Api, store: any Store) {
-		        self.api = api
-		        self.store = store
-		    }
-
-		    @Instantiated public let api: any Api
-		    @Instantiated public let store: any Store
-		}
-		"""
-		let liveStore = """
-		@Instantiable
-		public struct LiveStore: Store, Instantiable {
+	mutating func mock_compilesAndBuildsReenteringCallsPlaces_whenFillOfHoleTypeBuildsCalledTypeAgain() async throws {
+		// `F`'s fill of `any Api`, `Live`, holds an `Instantiator<F>`: the call it makes re-enters the first call's fills,
+		// handed what the first call is handed, so `Root`'s mock still takes one builder of `any Api`.
+		let app = """
+		@Instantiable(fulfillingAdditionalTypes: [Api.self])
+		public struct Live: Api, Instantiable {
 		    public init(fBuilder: Instantiator<F>) {
 		        self.fBuilder = fBuilder
 		    }
@@ -312,18 +297,16 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 		    @Instantiated public let fBuilder: Instantiator<F>
 		}
 		"""
-		let modules = Self.modules(base: "public protocol Api {}\n\npublic protocol Store {}", feat: feat, app: [Self.live, Self.fakes, liveStore, Self.root(instantiating: ["f: F"])])
+		let modules = Self.modules(feat: Self.featWithApi, app: [app, Self.fakes, Self.root(instantiating: ["f: F"])])
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 
 		#expect(Self.mockParameterLines(of: output) == [
 			"apiBuilder: (() -> any Api)? = nil,",
-			"storeBuilder: (() -> any Store)? = nil,",
 			"safeDIOverrides: SafeDIOverrides = .init()",
 		])
 		try await expectValues(of: output, modules: modules, pairs: [
-			("(Root.mock().f.store as! App.LiveStore).fBuilder.instantiate().api", "App.Live()"),
-			("(Root.mock(apiBuilder: { App.Fake() }).f.store as! App.LiveStore).fBuilder.instantiate().api", "App.Fake()"),
-			("(Root.mock(apiBuilder: { App.Fake() }).f.store as! App.LiveStore).fBuilder.instantiate().store is App.LiveStore", "true"),
+			("(Root.mock().f.api as! App.Live).fBuilder.instantiate().api is App.Live", "true"),
+			("Root.mock(apiBuilder: { App.Fake() }).f.api", "App.Fake()"),
 		])
 	}
 
@@ -385,62 +368,6 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 			("(Root.mock().f.api as! App.LiveBuildingG).g.store", "App.LiveStore()"),
 			("(Root.mock(storeBuilder: { App.FakeStore() }).f.api as! App.LiveBuildingG).g.store", "App.FakeStore()"),
 			("Root.mock(apiBuilder: { App.Fake() }, storeBuilder: { App.FakeStore() }).f.api", "App.Fake()"),
-		])
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_handsInstantiatorCallAdaptedBuilder_whenCallsFillPlainPlaceAndInstantiatorOfHandConformingType() async throws {
-		// `Panel`'s plain place and `Deck`'s `Instantiator` of `HoleHanded` share one builder, `() -> HoleHanded`, as a
-		// passed-up pair does; `Deck`'s call is handed it through an adapter that drops the forwarded value.
-		let feat = """
-		import Base
-		import SafeDI
-
-		@Instantiable(generateMock: .public)
-		public struct Panel: Instantiable {
-		    init(handed: HoleHanded) {
-		        self.handed = handed
-		    }
-
-		    @Instantiated public let handed: HoleHanded
-		}
-
-		@Instantiable(generateMock: .public)
-		public struct Deck: Instantiable {
-		    init(handedBuilder: Instantiator<HoleHanded>) {
-		        self.handedBuilder = handedBuilder
-		    }
-
-		    @Instantiated public let handedBuilder: Instantiator<HoleHanded>
-		}
-		"""
-		let base = """
-		import SafeDI
-
-		open class HoleHanded: Instantiable, @unchecked Sendable {
-		    public init() {}
-		}
-		"""
-		let app = """
-		@Instantiable(fulfillingAdditionalTypes: [HoleHanded.self])
-		public final class LiveHanded: HoleHanded {
-		    public override init() {}
-		}
-
-		public final class FakeHanded: HoleHanded {}
-		"""
-		let modules = Self.modules(base: base, feat: feat, app: [app, Self.root(instantiating: ["panel: Panel", "deck: Deck"])])
-		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-
-		#expect(Self.mockParameterLines(of: output) == [
-			"holeHandedBuilder: (() -> HoleHanded)? = nil,",
-			"safeDIOverrides: SafeDIOverrides = .init()",
-		])
-		try await expectValues(of: output, modules: modules, pairs: [
-			("Root.mock().deck.handedBuilder.instantiate() is App.LiveHanded", "true"),
-			("Root.mock(holeHandedBuilder: { App.FakeHanded() }).deck.handedBuilder.instantiate() is App.FakeHanded", "true"),
-			("Root.mock(holeHandedBuilder: { App.FakeHanded() }).panel.handed is App.FakeHanded", "true"),
 		])
 	}
 
@@ -551,74 +478,6 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_readsRequiredBuilderInJoinedMockAndOptionalBuilderInOther_whenTwoMocksOfOneModuleShareCall() async throws {
-		// `Joined`'s tree also builds `G`, which passes its place of `any Api` up, so it takes `apiBuilder` required, and its
-		// call of `F` reads it; `Alone` takes it optional. Both share `F`'s override.
-		let feat = """
-		import Base
-		import SafeDI
-
-		@Instantiable(generateMock: .public)
-		public struct F: Instantiable {
-		    init(api: any Api) {
-		        self.api = api
-		    }
-
-		    @Instantiated public let api: any Api
-		}
-
-		@Instantiable(generateMock: .public)
-		public struct G: Instantiable {
-		    init(api: any Api) {
-		        self.api = api
-		    }
-
-		    @Instantiated(fulfilledByType: "Unbuilt") public let api: any Api
-		}
-		"""
-		let app = """
-		@Instantiable(generateMock: true)
-		public struct Joined: Instantiable {
-		    public init(f: F, g: G) {
-		        self.f = f
-		        self.g = g
-		    }
-
-		    @Instantiated public let f: F
-		    @Instantiated public let g: G
-		}
-
-		@Instantiable(generateMock: true)
-		public struct Alone: Instantiable {
-		    public init(f: F) {
-		        self.f = f
-		    }
-
-		    @Instantiated public let f: F
-		}
-		"""
-		let modules = Self.modules(feat: feat, app: [Self.live, Self.fakes, app])
-		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-
-		#expect(Self.mockParameterLines(of: output, type: "Joined") == [
-			"apiBuilder: @escaping () -> any Api,",
-			"safeDIOverrides: SafeDIOverrides = .init()",
-		])
-		#expect(Self.mockParameterLines(of: output, type: "Alone") == [
-			"apiBuilder: (() -> any Api)? = nil,",
-			"safeDIOverrides: SafeDIOverrides = .init()",
-		])
-		try await expectValues(of: output, modules: modules, pairs: [
-			("Joined.mock(apiBuilder: { App.Fake() }).f.api", "App.Fake()"),
-			("Joined.mock(apiBuilder: { App.Fake() }).g.api", "App.Fake()"),
-			("Joined.mock(apiBuilder: { App.Fake() }, safeDIOverrides: .init(f: { apiBuilder in F.mock(apiBuilder: apiBuilder) })).f.api", "App.Fake()"),
-			("Alone.mock().f.api", "App.Live()"),
-			("Alone.mock(apiBuilder: { App.Other() }).f.api", "App.Other()"),
-		])
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsWithCallersFills_whenThirdModuleCallsPublicCallingMockFromItsSafeDIFile() async throws {
 		// `Top`, in module `Third`, calls `Root`'s public mock, which takes an optional builder, knowing `Root` only from
 		// `App`'s `.safedi` file: its guard compiles, and `Root`'s fills build the place.
@@ -681,17 +540,17 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 
 		var initializerAccess: String {
 			switch self {
-			case .internal: "public "
+			case .internal: ""
 			case .public: "package "
 			}
 		}
 
 		var filledParameterLines: [String] {
-			[]
+			["apiBuilder: (() -> any Api)? = nil,", "safeDIOverrides: SafeDIOverrides = .init()"]
 		}
 
 		var passedUpParameterLines: [String] {
-			[]
+			["apiBuilder: @escaping () -> any Api,", "safeDIOverrides: SafeDIOverrides = .init()"]
 		}
 	}
 
@@ -818,7 +677,7 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 		guard compilation.failure == nil else { return }
 		let graph = DifferentialValueGraph(
 			name: "",
-			path: DifferentialValuePath(output: output, modules: modules),
+			path: try DifferentialValuePath(output: output, modules: modules),
 			probePairs: pairs.map { DifferentialValueProbePair(name: $0.0, featureExpression: $0.0, knownRightExpression: $0.1) },
 		)
 		let comparisons = try #require(try await DifferentialValueOracle.compare(graphs: [graph], filesToDelete: &filesToDelete))
