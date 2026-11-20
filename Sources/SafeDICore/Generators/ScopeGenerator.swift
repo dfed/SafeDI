@@ -9028,7 +9028,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 		if hasOverridableTree {
-			if let publicMock, let publicMockPlan {
+			if let publicMock {
 				lines.append(Self.publicSafeDIOverridesStruct(
 					rootChildren: treePropertyNodes,
 					rootLabelMap: rootLabelMap,
