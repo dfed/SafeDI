@@ -26,7 +26,8 @@ import Testing
 
 /// A calling mock whose fill of a called public mock's place constructs a type the calling mock's module cannot reach
 /// reports the access error its production twin reports, at the same declarations and with the same fix-its, where the
-/// build compiles the generated mocks. `Screen`, in `App`, instantiates `Panel`, whose initializer `App` cannot call, so
+/// build compiles the generated mocks, but for a hand-written mock method the fill calls where the twin calls the
+/// initializer. `Screen`, in `App`, instantiates `Panel`, whose initializer `App` cannot call, so
 /// its mock calls `Panel`'s public mock; `App`'s `DefaultService` fills `Panel`'s place and instantiates `any Clock`, which
 /// only `Meter`, declared in `Core`, fulfills.
 struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
@@ -123,9 +124,10 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_reportsEachAccessErrorOnce_whenTwoMockRootsReachFillThatConstructsInternalTypeOfAnotherModule() async {
-		// `Screen` and `Shell` each generate a mock whose tree calls `Panel`’s public mock, and both fill its place with
-		// `DefaultService`: each declaration to widen is reported once, naming the mock declared first.
+	mutating func generate_reportsEachAccessErrorOnceNamingMockDeclaredFirst_whenTwentyMockRootsReachFillThatConstructsInternalTypeOfAnotherModule() async {
+		// `Screen` and the nineteen roots declared after it, whose names all sort before it, each generate a mock whose tree
+		// calls `Panel`’s public mock, and each fills its place with `DefaultService`: each declaration to widen is reported
+		// once, naming `Screen`, the mock declared first, which neither name order nor an unordered pick would name.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["Core"]!["CoreTypes.swift"]):6:1: error: `Meter` is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Meter` `package` to fix.
@@ -134,7 +136,24 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 			\(fixtures["Core"]!["CoreTypes.swift"]):7:5-7:5: fixit: package\(" ")
 			"""
 		}) {
-			try await executeSafeDIToolMultiModuleTest(modules: Self.modules(caller: .internal, callee: Self.twinCalledTypes, meter: .internalInSamePackage, declaresShell: true), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+			try await executeSafeDIToolMultiModuleTest(modules: Self.modules(caller: .internal, callee: Self.twinCalledTypes, meter: .internalInSamePackage, declaresOtherMockRoots: true), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test(arguments: CallingMockCallerKind.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsMockMethodsAccessError_whenFillBuildsTypeWhoseHandWrittenMockIsInternalToAnotherModuleOfSamePackage(caller: CallingMockCallerKind) async throws {
+		// `Meter` and its initializer are `public`, and its hand-written `mock()` is `internal`. The twin builds `Meter` with
+		// its initializer and is accepted; the calling mock’s fill, as every mock’s tree, builds it with its hand-written
+		// mock, which `App` cannot call (`seam-and-mock-contract.md`, rule 7).
+		_ = try await executeSafeDIToolMultiModuleTest(modules: Self.twinModules(meter: .publicWithInternalMockInSamePackage), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["Core"]!["CoreTypes.swift"]):8:5: error: `Meter.mock()` is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make `Meter.mock()` `package` to fix.
+			\(fixtures["Core"]!["CoreTypes.swift"]):8:5-8:5: fixit: package\(" ")
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.modules(caller: caller, callee: Self.twinCalledTypes, meter: .publicWithInternalMockInSamePackage), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		}
 	}
 
@@ -144,21 +163,24 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_fillsPlaceAsTwin_whenAccessErrorsFixItsAreApplied(caller: CallingMockCallerKind, meter: MeterDeclaration) async throws {
 		// Each fix-it applied: the calling mock and its twin are accepted, and the mock fills the place with `DefaultService`,
-		// as the twin does, so `mock()` takes no builder for it.
+		// as the twin does, so `mock()` takes no builder for it. The fill builds `Meter` with its hand-written mock where it
+		// has one.
 		_ = try await executeSafeDIToolMultiModuleTest(modules: Self.twinModules(meter: meter.remedied), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(caller: caller, callee: Self.twinCalledTypes, meter: meter.remedied), integration: .moduleInfo, filesToDelete: &filesToDelete)
 
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.expectedFileWhereFillIsFilled(caller: caller)])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": Self.expectedFileWhereFillIsFilled(caller: caller, meterConstruction: meter.remedied.construction)])
 	}
 
 	// MARK: Tests – the mock condition off
 
-	@Test(arguments: [MockConditionCaller.internal, .public, .listed], MockConditionInactiveBuild.allCases)
+	@Test(arguments: [MockConditionCaller.internal, .public, .listed], MockConditionInactiveBuild.allCases.flatMap { build in [MeterDeclaration.internalInSamePackage, .publicWithInternalMockInSamePackage].map { (build: build, meter: $0) } })
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesPlaceUp_whenBuildLeavesMockConditionInactive(caller: MockConditionCaller, build: MockConditionInactiveBuild) async throws {
+	mutating func generate_passesPlaceUp_whenBuildLeavesMockConditionInactive(caller: MockConditionCaller, buildAndMeter: (build: MockConditionInactiveBuild, meter: MeterDeclaration)) async throws {
 		// A build that does not tell the tool `DEBUG`, the mock condition, never compiles the fill the error is about: a
 		// release build compiles no generated mock, and a debug build whose integration does not report `DEBUG` compiles the
-		// mock, which, the place passed up, constructs nothing it cannot reach. So the tool reports nothing.
+		// mock, which, the place passed up, constructs nothing it cannot reach. So the tool reports nothing, whether the fill
+		// would construct a type or call a hand-written mock it cannot reach.
+		let (build, meter) = buildAndMeter
 		let callerKind: CallingMockCallerKind = switch caller {
 		case .internal:
 			.internal
@@ -168,7 +190,7 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 			.listed
 		}
 		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: Self.modules(caller: callerKind, callee: Self.twinCalledTypes, meter: .internalInSamePackage, appBuild: build),
+			modules: Self.modules(caller: callerKind, callee: Self.twinCalledTypes, meter: meter, appBuild: build),
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
@@ -183,9 +205,10 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 	/// A called type’s attribute line in the production twin: a seam as well as a public mock.
 	private static let twinCalledTypes = CalledTypeDeclaration.seamAndPublicMock.attribute
 
-	/// What `App` generates where `Meter` is accessible: `Panel`’s place filled with `DefaultService`, which builds `Meter`,
-	/// as the twin fills it, and `mock()` taking no builder for it. A listed type’s mock is an internal mock’s.
-	private static func expectedFileWhereFillIsFilled(caller: CallingMockCallerKind) -> String {
+	/// What `App` generates where `Meter` is accessible: `Panel`’s place filled with `DefaultService`, which builds `Meter`
+	/// with `meterConstruction`, as the twin fills it, and `mock()` taking no builder for it. A listed type’s mock is an
+	/// internal mock’s.
+	private static func expectedFileWhereFillIsFilled(caller: CallingMockCallerKind, meterConstruction: String) -> String {
 		switch caller {
 		case .internal, .listed:
 			generatedFileHeader + """
@@ -232,7 +255,7 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 			        func __safeDI_panel() -> Panel {
 			            func __safeDI_serviceBuilder_Panel_service() -> any Service {
 			                func __safeDI_service() -> DefaultService {
-			                    let clock: any Clock = Meter()
+			                    let clock: any Clock = \(meterConstruction)
 			                    return DefaultService(clock: clock)
 			                }
 			                let service: any Service = __safeDI_service()
@@ -302,7 +325,7 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 			        func __safeDI_panel() -> Panel {
 			            func __safeDI_serviceBuilder_Panel_service() -> any Service {
 			                func __safeDI_service() -> DefaultService {
-			                    let clock: any Clock = Meter()
+			                    let clock: any Clock = \(meterConstruction)
 			                    return DefaultService(clock: clock)
 			                }
 			                let service: any Service = __safeDI_service()
@@ -458,8 +481,13 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 		case packageInSamePackage
 		/// `public`, in a package of its own: the fix-it of `packageInAnotherPackage` applied.
 		case publicInAnotherPackage
+		/// `public`, with a `public` initializer and an `internal` hand-written mock, in `App`’s package.
+		case publicWithInternalMockInSamePackage
+		/// `public`, with a `public` initializer and a `package` hand-written mock, in `App`’s package: the fix-it of
+		/// `publicWithInternalMockInSamePackage` applied.
+		case publicWithPackageMockInSamePackage
 
-		static let allCases: [Self] = [.internalInSamePackage, .packageInAnotherPackage]
+		static let allCases: [Self] = [.internalInSamePackage, .packageInAnotherPackage, .publicWithInternalMockInSamePackage]
 
 		/// The declaration with its error’s fix-its applied.
 		var remedied: Self {
@@ -468,6 +496,8 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 				.packageInSamePackage
 			case .packageInAnotherPackage, .publicInAnotherPackage:
 				.publicInAnotherPackage
+			case .publicWithInternalMockInSamePackage, .publicWithPackageMockInSamePackage:
+				.publicWithPackageMockInSamePackage
 			}
 		}
 
@@ -478,15 +508,37 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 				""
 			case .packageInAnotherPackage, .packageInSamePackage:
 				"package "
-			case .publicInAnotherPackage:
+			case .publicInAnotherPackage, .publicWithInternalMockInSamePackage, .publicWithPackageMockInSamePackage:
 				"public "
+			}
+		}
+
+		/// The line that declares `Meter`’s hand-written mock, or an empty one where it has none.
+		var mockMethod: String {
+			switch self {
+			case .internalInSamePackage, .packageInAnotherPackage, .packageInSamePackage, .publicInAnotherPackage:
+				""
+			case .publicWithInternalMockInSamePackage:
+				"static func mock() -> Meter { Meter() }"
+			case .publicWithPackageMockInSamePackage:
+				"package static func mock() -> Meter { Meter() }"
+			}
+		}
+
+		/// How a mock’s tree builds `Meter`: with its hand-written mock where it has one.
+		var construction: String {
+			switch self {
+			case .internalInSamePackage, .packageInAnotherPackage, .packageInSamePackage, .publicInAnotherPackage:
+				"Meter()"
+			case .publicWithInternalMockInSamePackage, .publicWithPackageMockInSamePackage:
+				"Meter.mock()"
 			}
 		}
 
 		/// `Core`’s package.
 		var packageName: String {
 			switch self {
-			case .internalInSamePackage, .packageInSamePackage:
+			case .internalInSamePackage, .packageInSamePackage, .publicWithInternalMockInSamePackage, .publicWithPackageMockInSamePackage:
 				"App"
 			case .packageInAnotherPackage, .publicInAnotherPackage:
 				"Core"
@@ -503,6 +555,10 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 				"package type of another module of the same package"
 			case .publicInAnotherPackage:
 				"public type of another package"
+			case .publicWithInternalMockInSamePackage:
+				"public type with an internal hand-written mock, of another module of the same package"
+			case .publicWithPackageMockInSamePackage:
+				"public type with a package hand-written mock, of another module of the same package"
 			}
 		}
 	}
@@ -515,10 +571,10 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 		callee: String,
 		meter: MeterDeclaration,
 		clockIsBeneathFill: Bool = false,
-		declaresShell: Bool = false,
+		declaresOtherMockRoots: Bool = false,
 		appBuild: MockConditionInactiveBuild? = nil,
 	) -> [ModuleFixture] {
-		var appFiles = ["AppTypes.swift": appContent(caller: caller.attribute(listed: "@Instantiable"), clockIsBeneathFill: clockIsBeneathFill, declaresShell: declaresShell)]
+		var appFiles = ["AppTypes.swift": appContent(caller: caller.attribute(listed: "@Instantiable"), clockIsBeneathFill: clockIsBeneathFill, declaresOtherMockRoots: declaresOtherMockRoots)]
 		if caller == .listed {
 			appFiles["SafeDIConfiguration.swift"] = "import SafeDI\n\n#SafeDIConfiguration(additionalMocksToGenerate: [\"Screen\"])\n"
 		}
@@ -541,7 +597,7 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 		[
 			coreModule(meter: meter),
 			upModule(callee: twinCalledTypes),
-			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": appContent(caller: "@Instantiable(generateDependencyTree: true)", clockIsBeneathFill: clockIsBeneathFill, declaresShell: false)], dependencies: ["Core", "Up"]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": appContent(caller: "@Instantiable(generateDependencyTree: true)", clockIsBeneathFill: clockIsBeneathFill, declaresOtherMockRoots: false)], dependencies: ["Core", "Up"]),
 		]
 	}
 
@@ -555,6 +611,7 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 			@Instantiable(fulfillingAdditionalTypes: [Clock.self])
 			\(meter.access)final class Meter: Clock, Instantiable {
 			    \(meter.access)init() {}
+			    \(meter.mockMethod)
 			}
 			""",
 		])
@@ -576,7 +633,11 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 		])
 	}
 
-	private static func appContent(caller: String, clockIsBeneathFill: Bool, declaresShell: Bool) -> String {
+	/// Nineteen types `App` declares after `Screen`, each a mock root whose tree calls `Panel`’s public mock, whose names all
+	/// sort before `Screen`’s.
+	private static let otherMockRootNames = ["Alcove", "Annex", "Arcade", "Atrium", "Attic", "Aviary", "Balcony", "Bazaar", "Cabin", "Cellar", "Chapel", "Cloister", "Corridor", "Courtyard", "Den", "Foyer", "Gallery", "Garage", "Hall"]
+
+	private static func appContent(caller: String, clockIsBeneathFill: Bool, declaresOtherMockRoots: Bool) -> String {
 		let part = """
 
 		@Instantiable
@@ -586,14 +647,16 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 		}
 
 		"""
-		let shell = """
+		let otherMockRoots = otherMockRootNames.map { name in
+			"""
 
-		@Instantiable(generateMock: true)
-		public final class Shell: Instantiable {
-		    public init(panel: Panel) { self.panel = panel }
-		    @Instantiated public let panel: Panel
-		}
-		"""
+			@Instantiable(generateMock: true)
+			public final class \(name): Instantiable {
+			    public init(panel: Panel) { self.panel = panel }
+			    @Instantiated public let panel: Panel
+			}
+			"""
+		}.joined()
 		let serviceProperty = clockIsBeneathFill ? (label: "part", type: "Part") : (label: "clock", type: "any Clock")
 		return """
 		import Core
@@ -611,7 +674,7 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 		    public init(panel: Panel) { self.panel = panel }
 		    @Instantiated public let panel: Panel
 		}
-		\(declaresShell ? shell : "")
+		\(declaresOtherMockRoots ? otherMockRoots : "")
 		"""
 	}
 }

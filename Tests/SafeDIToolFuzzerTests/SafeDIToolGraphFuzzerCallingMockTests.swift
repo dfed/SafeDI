@@ -470,7 +470,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			}
 			let draw = GraphFuzzerCallingMockDraw(seed: seed)
 			let graph = draw.graph
-			let knownRightModules = draw.cell.shape.twinRejects || graph.comparesValuesWithInline ? graph.inlineModules : graph.modules(.twin)
+			let knownRightModules = draw.twinRejects || graph.comparesValuesWithInline ? graph.inlineModules : graph.modules(.twin)
 			let output = try await executeSafeDIToolMultiModuleTest(modules: knownRightModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 			let knownRightPath = try DifferentialValuePath(output: output, modules: knownRightModules)
 			let knownRightProbes = try #require(graph.valueProbes).map { DifferentialValueProbe(name: $0.name, expression: $0.knownRightExpression ?? $0.expression) }
@@ -796,7 +796,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		var sitesByShape = [GraphFuzzerCallingMockShape: [[GraphFuzzerDiagnosticSite]?]]()
 		// The shape whose mock condition is inactive has the twin of `fillInstantiatesTypeNoDeclarationCanFulfill`, so its
 		// twin reports that shape's error.
-		for seed in GraphFuzzerCallingMockCell.firstSeeds where GraphFuzzerCallingMockDraw(seed: seed).cell.shape.twinRejects && GraphFuzzerCallingMockDraw(seed: seed).cell.shape != .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive {
+		for seed in GraphFuzzerCallingMockCell.firstSeeds where GraphFuzzerCallingMockDraw(seed: seed).twinRejects && GraphFuzzerCallingMockDraw(seed: seed).cell.shape != .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive {
 			let shape = GraphFuzzerCallingMockDraw(seed: seed).cell.shape
 			await sitesByShape[shape, default: []].append(try GraphFuzzerCallingMockCheck.run(GraphFuzzerCallingMockDraw(seed: seed).graph, seed: seed).twinSites)
 		}
@@ -1325,10 +1325,34 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
 	}
 
+	/// Seed 977 draws the first graph of `fillConstructsTypeCallerModuleCannotReach` whose type is out of reach only
+	/// through its hand-written mock, in a build that compiles the generated mocks, `internal/deferred`: the type and its
+	/// initializer are `public` and its mock `internal`, in a module of the caller's package. Its twin, which calls the
+	/// initializer, is accepted; the mock's fill calls the hand-written mock, which its module cannot reach, so the mock
+	/// reports that mock's access, an error of its own (contract rule 7). With the fill passed up in every build, as before
+	/// (`DependencyTreeGenerator.holesFilled(byCallsOf:in:)`), the mock is accepted, which the check reports as
+	/// `callingMockAcceptedWhereItsFillCallsMockItCannotReach`.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_reportsHandWrittenMocksAccessError_whenDrawnFillCallsMockCallerModuleCannotReach() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 977)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 977)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .fillConstructsTypeCallerModuleCannotReach, caller: .internal, place: .deferred))
+		#expect(draw.mockBuild == .compilesGeneratedMocks)
+		#expect(draw.unreachableConstruction?.access == .internalMockInCallersPackage)
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.twinSites == nil)
+		#expect(result.mockSites?.map(\.declaration) == draw.unreachableConstruction?.mockMethodLine.map { [$0] })
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
 	/// The graphs of the shape whose fill constructs a type the caller's module cannot reach draw each declaration of the
 	/// type, each place of it in the fill's tree, each build, each caller kind and each place, in the pinned number of
 	/// graphs, each at least ten, and the tool skips the twin's error in the mock, which the cell test then requires to pass
-	/// the place up, in the pinned number, at least ten.
+	/// the place up, in the pinned number, at least ten. The type out of reach only through its hand-written mock is drawn
+	/// in builds that compile the generated mocks and in builds that do not, at least ten of each.
 	@Test
 	func fillConstructsTypeCallerModuleCannotReachDraw_drawsEachVariation_inPinnedNumberOfGraphs() {
 		let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .fillConstructsTypeCallerModuleCannotReach }
@@ -1339,6 +1363,9 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 				counts["mockSkipsTwinsError", default: 0] += 1
 			}
 			counts[draw.unreachableConstruction?.access.rawValue ?? "none", default: 0] += 1
+			if draw.unreachableConstruction?.access == .internalMockInCallersPackage {
+				counts["internalMockInCallersPackage \(draw.graph.mockSkipsTwinsError ? "mockSkipsTwinsError" : "\(draw.mockBuild)")", default: 0] += 1
+			}
 			counts[draw.unreachableConstruction?.isBeneathFill == true ? "beneathFill" : "inFill", default: 0] += 1
 			counts[draw.cell.caller.rawValue, default: 0] += 1
 			counts[draw.cell.place.rawValue, default: 0] += 1
@@ -1350,8 +1377,11 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			"debugWithoutMockCondition": 18,
 			"release": 14,
 			"mockSkipsTwinsError": 32,
-			"internalInCallersPackage": 29,
-			"packageInAnotherPackage": 31,
+			"internalInCallersPackage": 18,
+			"packageInAnotherPackage": 17,
+			"internalMockInCallersPackage": 25,
+			"internalMockInCallersPackage compilesGeneratedMocks": 15,
+			"internalMockInCallersPackage mockSkipsTwinsError": 10,
 			"inFill": 34,
 			"beneathFill": 26,
 			"internal": 20,
