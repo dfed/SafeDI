@@ -315,8 +315,8 @@ struct GraphFuzzerFixture: Equatable {
 		return [DifferentialValueSample(type: "\(screenName).ForwardedProperties", expression: "7")]
 	}
 
-	/// Whether this graph declares a root of `addingFillCallShapes`, `addingCarriedLevelShapes` or
-	/// `addingReenteredFillShapes`, whose tree reaches a place through a seam beneath the seam's module, read from the
+	/// Whether this graph declares a root of `addingFillCallShapes`, `addingCarriedLevelShapes`,
+	/// `addingReenteredFillShapes` or `addingWrapperMixShapes`, whose tree reaches a place through a seam beneath the seam's module, read from the
 	/// roots' names whatever a renaming does to the prefix.
 	var declaresRootOfDrawBeneathSeamsModule: Bool {
 		swiftFileContent.contains(where: Self.declaresRootOfDrawBeneathSeamsModule(in:))
@@ -363,7 +363,7 @@ struct GraphFuzzerFixture: Equatable {
 	}
 
 	/// The roots `declaresRootOfDrawBeneathSeamsModule` reads.
-	private static let rootsOfDrawsBeneathTheSeamsModule = ["FillCallRoot", "CarriedRoot", "ReenteredRoot"]
+	private static let rootsOfDrawsBeneathTheSeamsModule = ["FillCallRoot", "CarriedRoot", "ReenteredRoot", "MixRoot"]
 
 	/// The visible build of a graph with a hole: every file whose first line says it fills a hole declared in the seam's
 	/// module instead, which can then see the fulfilling type and builds it inline, so the seam takes no builder.
@@ -1851,6 +1851,17 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// `SendableLazilyInstantiated` `CarriedRoot` declares as its own property, which provides the read: rejected by design
 	/// too, as `CarriedInner`'s tree receiving `carriedToken` in two forms, where the fill once passed the reader `nil`.
 	case carriedLevelFillReadsOptionalSendableWrapperOuterReceives
+	/// `addingWrapperMixShapes`' tree, reading the value alone, or the wrapper alone where no seam on the route declares it
+	/// and no route hands a plain memo.
+	case wrapperMix
+	/// The fill's tree reads the value and its `SendableLazilyInstantiated` where every memo route is `@Sendable`: accepted.
+	case wrapperMixValueAndSendableWrapper
+	/// The fill's tree reads the `SendableLazilyInstantiated` where `MixSeam` hands a plain memo: rejected by design.
+	case wrapperMixSendableWrapperBesidePlainMemo
+	/// `MixOuter` declares the wrapper the fill's tree reads above its call: rejected by design.
+	case wrapperMixWrapperDeclaredAboveCall
+	/// `MixThingImpl` builds the reader in a `SendableInstantiator`.
+	case wrapperMixWrapperReadInSendableFunction
 	/// `addingPassingUpCopyShapes`' tree: `Copy1Root` calls `Copy1Inner`, whose places in two files the roots' module fills,
 	/// each fill building a seam of its own that calls `Copy1Inner` again and passes both fills on.
 	case passingUpCopies
@@ -1953,7 +1964,8 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 		rawValue.hasPrefix("holePassedUpPlaceReads")
 	}
 
-	/// Whether `addingFillCallShapes`, `addingCarriedLevelShapes`, `addingPassingUpCopyShapes` or `addingReenteredFillShapes` draws this shape of a fixed
+	/// Whether `addingFillCallShapes`, `addingCarriedLevelShapes`, `addingPassingUpCopyShapes`, `addingReenteredFillShapes` or
+	/// `addingWrapperMixShapes` draws this shape of a fixed
 	/// generator defect, whose count in accepted graphs the seam corpus pins (`acceptedDrawFeatureCounts`), at least ten
 	/// each: every shape but those the tool rejects by design – `passingUpCopiesHideLabel`, which the renamings judge, and
 	/// the unremedied reads of a value one route holds, which `toolRuns_rejectBothBuildsWithDeclarationBoundOnPathToReenteringCall_whenFillReadsValueOnlyOneRouteHoldsUnremedied` judges,
@@ -1961,15 +1973,18 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// `toolRuns_rejectBothBuildsWithFieldOfReenteringPlace_whenCallerFillsPlaceInsideFillBuiltAgainUnremedied` judges, and
 	/// the optional wrapper a carried level's fill reads beside a plain memo, whether `CarriedOuter` declares, receives or
 	/// passes on the wrapper, which
-	/// `toolRuns_rejectBothBuildsWithEachDeferringSeamsTwoForms_whenCarriedLevelsFillReadsOptionalSendableWrapper` judges.
+	/// `toolRuns_rejectBothBuildsWithEachDeferringSeamsTwoForms_whenCarriedLevelsFillReadsOptionalSendableWrapper` judges,
+	/// and a passing-up seam's binding of the label a place inside its re-entered fill reads, a wrapper read beside a plain
+	/// memo, and a wrapper a seam on the route declares above its call, whose rejections the builds' comparison judges.
 	var isFixedSeamCallDefectShape: Bool {
 		switch self {
 		case .passingUpCopiesHideLabel, .reenteredFillReadsValueOfOneRoute, .reenteredFillReadsValueOfOneRouteBoundAboveCall,
 		     .reenteredFillReadsPlaceField, .reenteredFillReadsPlaceFieldBoundAboveCall, .reenteredFillRequiresPlaceField,
-		     .carriedLevelFillReadsOptionalSendableWrapper, .carriedLevelFillReadsOptionalSendableWrapperOuterReceives:
+		     .carriedLevelFillReadsOptionalSendableWrapper, .carriedLevelFillReadsOptionalSendableWrapperOuterReceives,
+		     .reenteredFillReadsLabelPassingUpSeamBinds, .wrapperMixSendableWrapperBesidePlainMemo, .wrapperMixWrapperDeclaredAboveCall:
 			false
 		default:
-			["fillCallReadsOwnLevel", "carriedLevel", "passingUpCopies", "reenteredFill"].contains { rawValue.hasPrefix($0) }
+			["fillCallReadsOwnLevel", "carriedLevel", "passingUpCopies", "reenteredFill", "wrapperMix"].contains { rawValue.hasPrefix($0) }
 		}
 	}
 
@@ -2778,6 +2793,7 @@ enum GraphFuzzerGenerator {
 			carriedLevelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.carriedLevelRandomSeedMask)
 			passingUpCopyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.passingUpCopyRandomSeedMask)
 			reenteredFillRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredFillRandomSeedMask)
+			wrapperMixRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperMixRandomSeedMask)
 			reenteredPlaceFieldRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredPlaceFieldRandomSeedMask)
 			reenteredRelayTagRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredRelayTagRandomSeedMask)
 			repeatedAncestorRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.repeatedAncestorRandomSeedMask)
@@ -2888,6 +2904,7 @@ enum GraphFuzzerGenerator {
 				finalDeclarations = addingCarriedLevelShapes(to: finalDeclarations)
 				finalDeclarations = addingPassingUpCopyShapes(to: finalDeclarations)
 				finalDeclarations = addingReenteredFillShapes(to: finalDeclarations)
+				finalDeclarations = addingWrapperMixShapes(to: finalDeclarations)
 				presentModules = Set(finalDeclarations.compactMap(\.module))
 			}
 			// Left out after every draw, so that the graph without its second place is drawn, and split, as the graph with it.
@@ -3278,6 +3295,8 @@ enum GraphFuzzerGenerator {
 		private var carriedLevelRandom: GraphFuzzerRandomNumberGenerator
 		private var passingUpCopyRandom: GraphFuzzerRandomNumberGenerator
 		private var reenteredFillRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingWrapperMixShapes`' choices.
+		private var wrapperMixRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingReenteredFillShapes`' choices of `reenteredTag`, which `ReenteredSubA` binds before the place whose
 		/// fill builds `ReenteredSubB` again: whether the graph reads it, and how.
 		private var reenteredPlaceFieldRandom: GraphFuzzerRandomNumberGenerator
@@ -9241,6 +9260,131 @@ enum GraphFuzzerGenerator {
 		private static let reenteredPlaceFieldRandomSeedMask: UInt64 = 0x7265506C61636546
 		private static let reenteredRelayTagRandomSeedMask: UInt64 = 0x72656C6179546167
 
+		// MARK: A fill reading a value and its wrapper through a passed-up place
+
+		/// With the `generateDependencyTree` feature on, every graph already split across modules, but for those of
+		/// all-`Sendable` wrappers, gains a place passed up twice whose fill's tree reads a deferred value, its wrapper, or both,
+		/// across four modules, as `SafeDIToolSeamPassedUpDeferredFieldTests`' `chainTokenModules` lays them out: `MixSeam` and
+		/// `MixSeamB`, seams of `FuzzSession`, hold a place of `MixHoleService` and build `MixLeaf`, which receives `mixToken`,
+		/// `MixSeam` through an `Instantiator`, so it defers the value in a `LazilyInstantiated`, `MixSeamB` through a
+		/// `SendableInstantiator`, so it defers it `@Sendable`; `MixOuter`, a seam of `FuzzSession`, builds `MixSeamB`, `MixSeam`
+		/// or both and passes their places up; `MixMid`, a seam of the seam's module, builds `MixOuter` and fills the place with
+		/// `MixHoleImpl`, which builds `MixWorker` through an `Instantiator`, whose place of `MixThing` `MixMid` passes up, and
+		/// now and then builds `MixWorker` on its own route too; `MixThingImpl`, beside `MixRoot` in the roots' module, fills
+		/// it, reading `mixToken` by value, its `SendableLazilyInstantiated` through `MixWrapperReader`, or both, where
+		/// `MixRoot` declares the value in a `SendableLazilyInstantiated` or a `LazilyInstantiated`. Now and then `MixOuter`
+		/// declares the wrapper above its calls instead, and now and then `MixThingImpl` builds the reader in a
+		/// `SendableInstantiator`, so the wrapper is read inside a `@Sendable` function. Each combination is one the 2.3.0
+		/// wrapper-mix fixes made compile or report: the fill takes the `Sendable` memo every route hands and the root dispatcher
+		/// hands the caller's own wrapper (`fillTakesSendableMemo`); a wrapper a seam on the route declares above its call is
+		/// reported at the reader (`declarationHiddenByField`); and a `SendableLazilyInstantiated` read beside `MixSeam`'s plain
+		/// memo is reported (`sendableWrapperReadBesidePlainMemo`), inside a `@Sendable` function too. The rejected
+		/// combinations are never drawn in a graph with a hole, whose other draws they would throw away.
+		///
+		/// `wrapperMixRandom` draws only for this pass, which runs after `addingReenteredFillShapes` and only in a graph
+		/// another pass split, so that every graph in one module, and every other draw of a graph it draws in, draws as
+		/// before. A graph whose seam's module has no package gains none, as for `addingFillCallShapes`.
+		private mutating func addingWrapperMixShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// `build()` calls this pass only for a graph split across modules.
+			guard features.contains(.generateDependencyTree) else { return declarations }
+			// Every roll is made before any is read, so that each draws as it does whatever the others draw.
+			let routeRoll = wrapperMixRandom.integer(in: 0...3)
+			let rootDeclaresSendableWrapper = wrapperMixRandom.percentChance(70)
+			let midBuildsWorkerToo = wrapperMixRandom.percentChance(60)
+			let readRoll = wrapperMixRandom.integer(in: 0...3)
+			let outerDeclaresWrapper = wrapperMixRandom.percentChance(20)
+			let readerInSendableFunction = wrapperMixRandom.percentChance(40)
+			guard !modulesOmittingPackageName.contains(.seamModule), sendability != .sendable else { return declarations }
+			let declaresHole = declarations.contains { $0.name == "\(self.prefix)HoleSeam" }
+			// `MixSeamB` alone in two graphs in four, beside `MixSeam` in one, and `MixSeam` alone in one.
+			let holdsSeam = routeRoll >= 2
+			let holdsSeamB = routeRoll != 3
+			// The value and the reader in two graphs in four, the reader alone in one, and the value alone in one.
+			let readsValue = readRoll != 2
+			let readsWrapper = readRoll != 3
+			// A `SendableLazilyInstantiated` read beside `MixSeam`'s plain memo, and a wrapper `MixOuter` declares above its
+			// calls, are rejected by design: never in a graph with a hole.
+			let readsWrapperBesidePlainMemo = readsWrapper && holdsSeam
+			let declaresWrapperOnOuter = outerDeclaresWrapper && readsWrapper && !holdsSeam
+			guard !declaresHole || (!readsWrapperBesidePlainMemo && !declaresWrapperOnOuter) else { return declarations }
+			let conformances = ["@unchecked Sendable"]
+			let prefix = prefix
+			func instantiable(_ suffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+				declaration.module = module
+				return declaration
+			}
+			func seam(_ suffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration]) -> TypeDeclaration {
+				var declaration = instantiable(suffix, module: module, properties: properties)
+				declaration.instantiableArguments = ["generateDependencyTree: true"]
+				return declaration
+			}
+			func fill(_ suffix: String, fulfilling protocolName: String, module: GraphFuzzerModule, properties: [PropertyDeclaration]) -> TypeDeclaration {
+				var declaration = instantiable(suffix, module: module, properties: properties)
+				declaration.instantiableArguments = ["fulfillingAdditionalTypes: [\(protocolName).self]"]
+				declaration.additionalConformances.append(protocolName)
+				return declaration
+			}
+			let holeServiceName = "\(prefix)MixHoleService"
+			let thingName = "\(prefix)MixThing"
+			let token = instantiable("MixToken", module: .seamDependency)
+			let leaf = instantiable("MixLeaf", module: .seamDependency, properties: [PropertyDeclaration(attribute: "@Received", label: "mixToken", type: token.name)])
+			let holePlace = PropertyDeclaration(attribute: "@Instantiated", label: "mixHoleService", type: "any \(holeServiceName)")
+			var mixSeam = seam("MixSeam", module: .seamDependency, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "mixLeafBuilder", type: "Instantiator<\(leaf.name)>"), holePlace])
+			mixSeam.additionalDeclarations.append("public protocol \(holeServiceName): Sendable {}\npublic protocol \(thingName): Sendable {}")
+			let mixSeamB = seam("MixSeamB", module: .seamDependency, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "mixLeafBuilder", type: "SendableInstantiator<\(leaf.name)>"), holePlace])
+			// A reader built in a `@Sendable` function beside a root's plain wrapper is rejected with advice to receive the
+			// plain wrapper there, which that function cannot capture: a remedy shape `fuzzer-remedy-oracle.md` records, which
+			// this draw does not repeat.
+			let tokenWrapper = rootDeclaresSendableWrapper || (readsWrapper && readerInSendableFunction) ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			var outerProperties = [PropertyDeclaration]()
+			if declaresWrapperOnOuter {
+				outerProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "mixToken", type: "SendableLazilyInstantiated<\(token.name)>"))
+			}
+			if holdsSeam {
+				outerProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "mixSeam", type: mixSeam.name))
+			}
+			if holdsSeamB {
+				outerProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "mixSeamB", type: mixSeamB.name))
+			}
+			let outer = seam("MixOuter", module: .seamDependency, properties: outerProperties)
+			let worker = instantiable("MixWorker", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "mixThing", type: "any \(thingName)")])
+			let workerBuilder = PropertyDeclaration(attribute: "@Instantiated", label: "mixWorkerBuilder", type: "Instantiator<\(worker.name)>")
+			let holeImplementation = fill("MixHoleImpl", fulfilling: holeServiceName, module: .seamModule, properties: [workerBuilder])
+			let mid = seam("MixMid", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "mixOuter", type: outer.name)] + (midBuildsWorkerToo ? [PropertyDeclaration(attribute: "@Instantiated", label: "mixMidWorkerBuilder", type: "Instantiator<\(worker.name)>")] : []))
+			var reader = instantiable("MixWrapperReader", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Received", label: "mixToken", type: "SendableLazilyInstantiated<\(token.name)>")])
+			reader.imports.append(GraphFuzzerModule.seamDependency.name)
+			// The visible build declares it beside `MixThingImpl`, whose tree builds it.
+			reader.fillsHole = true
+			var thingProperties = [PropertyDeclaration]()
+			if readsValue {
+				thingProperties.append(PropertyDeclaration(attribute: "@Received", label: "mixToken", type: token.name))
+			}
+			if readsWrapper {
+				thingProperties.append(readerInSendableFunction
+					? PropertyDeclaration(attribute: "@Instantiated", label: "mixWrapperReaderBuilder", type: "SendableInstantiator<\(reader.name)>")
+					: PropertyDeclaration(attribute: "@Instantiated", label: "mixWrapperReader", type: reader.name))
+			}
+			var thingImplementation = fill("MixThingImpl", fulfilling: thingName, module: .samePackageCaller, properties: thingProperties)
+			thingImplementation.fillsHole = true
+			// `MixToken` is a type of the module beneath the seam's module, which the roots' module does not import.
+			thingImplementation.imports.append(GraphFuzzerModule.seamDependency.name)
+			var root = instantiable("MixRoot", module: .samePackageCaller, properties: (declaresWrapperOnOuter ? [] : [PropertyDeclaration(attribute: "@Instantiated", label: "mixToken", type: "\(tokenWrapper)<\(token.name)>")]) + [PropertyDeclaration(attribute: "@Instantiated", label: "mixMid", type: mid.name)])
+			root.instantiableArguments = ["isRoot: true"]
+			root.imports.append(GraphFuzzerModule.seamDependency.name)
+			var added = [token, leaf, mixSeam]
+			if holdsSeamB {
+				added.append(mixSeamB)
+			}
+			added += [outer, worker, holeImplementation, mid]
+			if readsWrapper {
+				added.append(reader)
+			}
+			return declarations + added + [thingImplementation, root]
+		}
+
+		private static let wrapperMixRandomSeedMask: UInt64 = 0x777261704D697821
+
 		// MARK: Access proof extensions
 
 		/// With the `generateDependencyTree` feature on, extends `addingAccessProofShapes`' tree with the shapes that pass
@@ -10843,6 +10987,23 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 						features.insert(.carriedLevelFillReadsOptionalSendableWrapperOuterReceives)
 					}
 				}
+			}
+		}
+		if let thingProperties = propertiesByType[prefix + "MixThingImpl"] {
+			let outerProperties = propertiesByType[prefix + "MixOuter"] ?? []
+			let readsValue = thingProperties.contains { $0.label == "mixToken" }
+			let readsWrapper = thingProperties.contains { $0.label.hasPrefix("mixWrapperReader") }
+			if outerProperties.contains(where: { $0.label == "mixToken" }) {
+				features.insert(.wrapperMixWrapperDeclaredAboveCall)
+			} else if readsWrapper, outerProperties.contains(where: { $0.label == "mixSeam" }) {
+				features.insert(.wrapperMixSendableWrapperBesidePlainMemo)
+			} else if readsValue, readsWrapper {
+				features.insert(.wrapperMixValueAndSendableWrapper)
+			} else {
+				features.insert(.wrapperMix)
+			}
+			if thingProperties.contains(where: { $0.label == "mixWrapperReaderBuilder" }) {
+				features.insert(.wrapperMixWrapperReadInSendableFunction)
 			}
 		}
 		if propertiesByType[prefix + "Copy1Root"] != nil {
