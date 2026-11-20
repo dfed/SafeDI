@@ -6469,8 +6469,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}.joined(separator: ", ")
 			} else if constructsWithHandWrittenMock, let mockInitializer = instantiable.mockInitializer {
 				// A type a fill builds with its hand-written mock is passed what the mock takes of its dependencies, as an
-				// initializer is; each other parameter of the mock keeps its default.
-				try mockInitializer.createInitializerArgumentList(
+				// initializer is; each other parameter of the mock keeps its default. One without a default, whose dependency
+				// only an inactive clause declares, reaches here only in a build that compiles no generated mock, which never
+				// compiles the call, as it never compiles the same call outside a fill.
+				mockInitializer.createHandWrittenMockArgumentList(
 					given: instantiable.dependencies,
 					unavailableProperties: bodyUnavailableProperties(unavailableProperties),
 					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,

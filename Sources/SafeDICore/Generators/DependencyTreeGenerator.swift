@@ -6634,8 +6634,8 @@ public actor DependencyTreeGenerator {
 		try Self.validateDependencyLabelsAreDistinct(in: instantiablesInMockTree)
 		try Self.validateRenamesAreSpelledAsTheMacroAccepts(in: instantiablesInMockTree)
 		// The generated mocks are under the module's mock condition, so a build that leaves it inactive never compiles the
-		// call of a hand-written mock that the check rejects, and the shape builds there. A deliberate gap: such a call
-		// inside a fill still stops emission there with the unlocated error `createDependencyAndArgumentBinding` throws.
+		// call of a hand-written mock that the check rejects, and the shape builds there, inside a fill too
+		// (`Initializer.createHandWrittenMockArgumentList`).
 		if compilesGeneratedMocks {
 			try Self.validateHandWrittenMocksTakeOnlyFulfilledParameters(inMockTreeRootedAt: mockRootScope)
 		}

@@ -101,6 +101,13 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 	/// the label in two forms and reports it, so the calling mock reports at the same sites, rather than hand the fill the
 	/// called mock's optional wrapper.
 	case fillRequiresValueCalledTypeReceivesInOptionalWrapper
+	/// As `callersOwnValue`, with the fill's hand-written mock, under `#if DEBUG`, taking a value the fill declares only
+	/// inside an `#if` clause the build does not select (`GraphFuzzerCallingMockDraw.guardedValueCondition`), in a build of
+	/// the calling mock's module that does not tell the tool the mock condition is active
+	/// (`GraphFuzzerCallingMockGraph.MockBuild`). The tool reports such a parameter only where the generated mocks compile,
+	/// so the calling mock is accepted and fills the place with a call of that mock, as production fills it with the
+	/// fill's initializer; no build compiles that call.
+	case fillCallsMockTakingGuardedValueWhereMockConditionIsInactive
 
 	static func < (lhs: Self, rhs: Self) -> Bool {
 		allCases.firstIndex(of: lhs) ?? 0 < allCases.firstIndex(of: rhs) ?? 0
@@ -111,7 +118,7 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 		switch self {
 		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillRequiresValueCalledTypeReceivesInOptionalWrapper:
 			true
-		case .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType:
+		case .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType, .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive:
 			false
 		}
 	}
@@ -122,7 +129,7 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 		switch self {
 		case .fillReceivesCallersLazyValueBelowCalledRoot:
 			true
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .fillInstantiatesTypeNoDeclarationCanFulfill, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillHoldsBuilderOfEnclosingCalledType, .fillRequiresValueCalledTypeReceivesInOptionalWrapper:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .fillInstantiatesTypeNoDeclarationCanFulfill, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillHoldsBuilderOfEnclosingCalledType, .fillRequiresValueCalledTypeReceivesInOptionalWrapper, .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive:
 			false
 		}
 	}
@@ -132,7 +139,7 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 	/// tool does not check where the mock condition is inactive.
 	var passesUpExactlyTheExpectedLabels: Bool {
 		switch self {
-		case .noVisibleImplementation, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
+		case .noVisibleImplementation, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive:
 			true
 		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType, .fillRequiresValueCalledTypeReceivesInOptionalWrapper:
 			false
@@ -143,7 +150,7 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 		switch self {
 		case .noVisibleImplementation:
 			true
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType, .fillRequiresValueCalledTypeReceivesInOptionalWrapper:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType, .fillRequiresValueCalledTypeReceivesInOptionalWrapper, .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive:
 			false
 		}
 	}
@@ -208,8 +215,9 @@ struct GraphFuzzerCallingMockCell: Hashable, Comparable, CustomStringConvertible
 	/// inner public mock requires, for every caller; the place inside a `@Sendable` function whose fill reads the called
 	/// type's received value, for every caller and place; the fill that receives the caller's lazy value below the called
 	/// type's root, for every caller; the fill that holds a builder of the enclosing called type, for every caller and
-	/// place; and the fill that requires a value the called type receives only if available in a lazy wrapper, for every
-	/// caller and place.
+	/// place; the fill that requires a value the called type receives only if available in a lazy wrapper, for every
+	/// caller and place; and the fill whose hand-written mock takes a value only an inactive clause declares, where the
+	/// mock condition is inactive, for every caller and place.
 	static let blocks: [[Self]] = [
 		cells(of: firstShapes, callers: [.internal, .public]),
 		cells(of: firstShapes, callers: [.listed]),
@@ -223,6 +231,7 @@ struct GraphFuzzerCallingMockCell: Hashable, Comparable, CustomStringConvertible
 		cells(of: [.fillReceivesCallersLazyValueBelowCalledRoot], callers: Caller.allCases),
 		cells(of: [.fillHoldsBuilderOfEnclosingCalledType], callers: Caller.allCases),
 		cells(of: [.fillRequiresValueCalledTypeReceivesInOptionalWrapper], callers: Caller.allCases),
+		cells(of: [.fillCallsMockTakingGuardedValueWhereMockConditionIsInactive], callers: Caller.allCases),
 	]
 
 	/// Every cell, block by block.
@@ -279,12 +288,12 @@ struct GraphFuzzerCallingMockDraw {
 			FillHoles(random: &random, drawsSpellingNoHoleCanHave: false)
 		case .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
 			FillHoles(random: &random, drawsSpellingNoHoleCanHave: true)
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType, .fillRequiresValueCalledTypeReceivesInOptionalWrapper:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType, .fillRequiresValueCalledTypeReceivesInOptionalWrapper, .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive:
 			nil
 		}
-		// Drawn after the fill's holes, and only for its shape.
+		// Drawn after the fill's holes, and only for the shapes drawn where the mock condition is inactive.
 		mockBuild = switch cell.shape {
-		case .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
+		case .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive:
 			random.element(of: [.debugWithoutMockCondition, .release])
 		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .fillInstantiatesTypeNoDeclarationCanFulfill, .seamCallerFillSharesBuilder, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType, .fillRequiresValueCalledTypeReceivesInOptionalWrapper:
 			.compilesGeneratedMocks
@@ -293,7 +302,7 @@ struct GraphFuzzerCallingMockDraw {
 		callerLazyValue = switch cell.shape {
 		case .fillReceivesCallersLazyValueBelowCalledRoot:
 			CallerLazyValue(random: &random)
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .fillInstantiatesTypeNoDeclarationCanFulfill, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillHoldsBuilderOfEnclosingCalledType, .fillRequiresValueCalledTypeReceivesInOptionalWrapper:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .fillInstantiatesTypeNoDeclarationCanFulfill, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillHoldsBuilderOfEnclosingCalledType, .fillRequiresValueCalledTypeReceivesInOptionalWrapper, .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive:
 			nil
 		}
 		// Drawn after everything else, and only for its shape. A `LazilyInstantiated` is drawn only for a deferred place:
@@ -303,7 +312,7 @@ struct GraphFuzzerCallingMockDraw {
 		enclosingBuilder = switch cell.shape {
 		case .fillHoldsBuilderOfEnclosingCalledType:
 			random.element(of: cell.place == .deferred ? EnclosingBuilder.allCases : [.instantiator, .sendableInstantiator])
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .fillInstantiatesTypeNoDeclarationCanFulfill, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillRequiresValueCalledTypeReceivesInOptionalWrapper:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .fillInstantiatesTypeNoDeclarationCanFulfill, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillRequiresValueCalledTypeReceivesInOptionalWrapper, .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive:
 			nil
 		}
 		// Drawn after the builder, and only for its shape, so no graph that draws no builder changes. Beside a
@@ -327,6 +336,10 @@ struct GraphFuzzerCallingMockDraw {
 		callsMixedFormMock = cell.shape == .noVisibleImplementation && random.element(of: [false, true])
 		// Drawn after everything else, and only for its shape, so no other graph changes.
 		optionalWrapperValue = cell.shape == .fillRequiresValueCalledTypeReceivesInOptionalWrapper ? OptionalWrapperValue(random: &random) : nil
+		// Drawn after everything else, and only for its shape, so no other graph changes.
+		guardedValueCondition = cell.shape == .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive
+			? random.element(of: [Self.guardedValueClauseCondition, "DEBUG"])
+			: nil
 	}
 
 	static let callingMockRandomSeedMask: UInt64 = 0x63616C6C6D6F636B
@@ -542,6 +555,14 @@ struct GraphFuzzerCallingMockDraw {
 	/// tree receives it, or `nil`.
 	let optionalWrapperValue: OptionalWrapperValue?
 
+	/// For the shape whose fill's hand-written mock takes a value only an inactive clause declares, the condition of that
+	/// clause: `guardedValueClauseCondition`, which no build defines, or `DEBUG`, the mock condition, which the build leaves
+	/// inactive. `nil` for every other shape.
+	let guardedValueCondition: String?
+
+	/// The condition of the clause that declares the guarded value, which no build of the calling-mock corpus defines.
+	static let guardedValueClauseCondition = "FUZZ_GUARD"
+
 	/// The place of the hole `mixedFormTypeName` holds, in the other form.
 	private var mixedFormPlace: (label: String, type: String, attribute: String) {
 		switch cell.place {
@@ -552,8 +573,9 @@ struct GraphFuzzerCallingMockDraw {
 		}
 	}
 
-	/// The build of the calling mock's module the tool is told of: one that compiles the generated mocks, but in the shape
-	/// whose fill the tool does not check where the mock condition is inactive.
+	/// The build of the calling mock's module the tool is told of: one that compiles the generated mocks, but in the shapes
+	/// drawn where the mock condition is inactive: the one whose fill the tool does not check there, and the one whose
+	/// fill's hand-written mock takes a value only an inactive clause declares.
 	let mockBuild: GraphFuzzerCallingMockGraph.MockBuild
 
 	/// The graph the check judges.
@@ -592,7 +614,7 @@ struct GraphFuzzerCallingMockDraw {
 		switch cell.shape {
 		case .implementationReceivesWhatNothingProvides:
 			[names.token.lowercasedFirst]
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType, .fillRequiresValueCalledTypeReceivesInOptionalWrapper:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType, .fillRequiresValueCalledTypeReceivesInOptionalWrapper, .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive:
 			[]
 		}
 	}
@@ -613,7 +635,7 @@ struct GraphFuzzerCallingMockDraw {
 		case .fillHoldsBuilderOfEnclosingCalledType:
 			// The builder of what the fill instantiates that nothing fulfills is the place `mock()` takes.
 			!reenteringFillInstantiatesWhatNothingFulfills
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillRequiresValueCalledTypeReceivesInOptionalWrapper:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillRequiresValueCalledTypeReceivesInOptionalWrapper, .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive:
 			true
 		}
 	}
@@ -639,7 +661,7 @@ struct GraphFuzzerCallingMockDraw {
 		switch cell.shape {
 		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillRequiresValueCalledTypeReceivesInOptionalWrapper:
 			nil
-		case .callersOwnValue, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot:
+		case .callersOwnValue, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive:
 			[]
 		case .fillHoldsBuilderOfEnclosingCalledType:
 			reenteringFillInstantiatesWhatNothingFulfills ? [beaconBuilderLabel] : []
@@ -676,7 +698,7 @@ struct GraphFuzzerCallingMockDraw {
 		switch cell.shape {
 		case .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
 			fillHoles?.fulfillerIsSeam == false
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType, .fillRequiresValueCalledTypeReceivesInOptionalWrapper:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType, .fillRequiresValueCalledTypeReceivesInOptionalWrapper, .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive:
 			false
 		}
 	}
@@ -709,7 +731,7 @@ struct GraphFuzzerCallingMockDraw {
 			expectedBuilders.map(\.label)
 		case .fillHoldsBuilderOfEnclosingCalledType:
 			reenteringFillInstantiatesWhatNothingFulfills ? [beaconBuilderLabel] : []
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillRequiresValueCalledTypeReceivesInOptionalWrapper:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillRequiresValueCalledTypeReceivesInOptionalWrapper, .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive:
 			[]
 		}
 	}
@@ -741,7 +763,7 @@ struct GraphFuzzerCallingMockDraw {
 				let twinArguments = builders.map { "__safeDI_\($0.label): .init(__safeDI_noScope: \($0.value(names.callerModuleName)))" }
 				return ("\(caller).mock(\(mockArguments.joined(separator: ", ")))", "\(caller)(\(twinArguments.joined(separator: ", ")))")
 			}
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .noVisibleImplementation, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType, .fillRequiresValueCalledTypeReceivesInOptionalWrapper:
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .noVisibleImplementation, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType, .fillRequiresValueCalledTypeReceivesInOptionalWrapper, .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive:
 			nil
 		}
 		guard let calls else { return nil }
@@ -1013,7 +1035,7 @@ struct GraphFuzzerCallingMockDraw {
 		case .fillRequiresValueCalledTypeReceivesInOptionalWrapper:
 			// The seam's tree receives the label in two forms, which production reports at the called type's declaration.
 			return ("\(names.innerModuleName)/\(names.innerModuleName)Types.swift", "@Instantiable(generateDependencyTree: true, generateMock: .public)")
-		case .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType:
+		case .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType, .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive:
 			return nil
 		}
 	}
@@ -1023,7 +1045,7 @@ struct GraphFuzzerCallingMockDraw {
 	/// The draw's files, in dependency order, with each file's content by module and file name.
 	func files(_ form: Form) -> [File] {
 		switch cell.shape {
-		case .outerSeamValue, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesValueOnlyInnerMockRequires, .fillHoldsBuilderOfEnclosingCalledType:
+		case .outerSeamValue, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesValueOnlyInnerMockRequires, .fillHoldsBuilderOfEnclosingCalledType, .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive:
 			[
 				File(module: names.innerModuleName, dependencies: [], content: innerModuleContent(form)),
 				File(module: names.outerModuleName, dependencies: [names.innerModuleName], content: outerModuleContent),
@@ -1403,7 +1425,7 @@ struct GraphFuzzerCallingMockDraw {
 			    @Instantiated public let \(label): \(type)
 			}
 			"""
-		case .outerSeamValue, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .appOnlyScreenInLoop, .seamBuiltAgain, .fillReceivesValueBuildingTheCall, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillRequiresValueCalledTypeReceivesInOptionalWrapper:
+		case .outerSeamValue, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .appOnlyScreenInLoop, .seamBuiltAgain, .fillReceivesValueBuildingTheCall, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillRequiresValueCalledTypeReceivesInOptionalWrapper, .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive:
 			let value = names.value.lowercasedFirst
 			let inner = names.inner.lowercasedFirst
 			return """
@@ -1459,6 +1481,51 @@ struct GraphFuzzerCallingMockDraw {
 		"""
 		// An initializer with no properties leaves a blank line, which changes nothing the tool reads.
 		.replacingOccurrences(of: "\n\n}", with: "\n}")
+	}
+
+	/// The fill's declaration of the shape whose fill's hand-written mock takes a value only an inactive clause declares: as
+	/// `fillDeclaration`'s receiving the caller's value, with an `#if condition` block whose clause declares an initializer
+	/// that also takes `guarded<Token>`, which the clause receives, and whose `#else` declares the initializer without it,
+	/// and a hand-written mock under `#if DEBUG` that takes every value either clause declares and builds the fill as the
+	/// clause the compiler selects does.
+	private func guardedValueFillDeclaration(condition: String) -> String {
+		let fill = names.fill
+		let value = (label: names.value.lowercasedFirst, type: names.value)
+		let guarded = (label: "guarded\(names.token)", type: names.token)
+		var parameters = [String]()
+		var properties = [String]()
+		if cell.place == .deferred {
+			parameters.append("id: Int")
+			properties.append("@Forwarded let id: Int")
+		}
+		parameters.append("\(value.label): \(value.type)")
+		properties.append("@Received let \(value.label): \(value.type)")
+		let guardedParameters = parameters + ["\(guarded.label): \(guarded.type)"]
+		let assignments = parameters.map { "self.\($0.prefix { $0 != ":" }) = \($0.prefix { $0 != ":" })" }
+		let arguments = parameters.map { "\($0.prefix { $0 != ":" }): \($0.prefix { $0 != ":" })" }
+		let attribute = cell.place == .deferred ? "@Instantiable" : "@Instantiable(fulfillingAdditionalTypes: [(any \(names.hole)).self])"
+		return """
+		\(attribute)
+		\(callerAccess)final class \(fill): \(names.hole), Instantiable {
+		    #if \(condition)
+		    \(callerAccess)init(\(guardedParameters.joined(separator: ", "))) { \((assignments + ["self.\(guarded.label) = \(guarded.label)"]).joined(separator: "; ")) }
+		    @Received let \(guarded.label): \(guarded.type)
+		    #else
+		    \(callerAccess)init(\(parameters.joined(separator: ", "))) { \(assignments.joined(separator: "; ")) }
+		    #endif
+		\(properties.map { "    \($0)" }.joined(separator: "\n"))
+
+		    #if DEBUG
+		    \(callerAccess)static func mock(\(guardedParameters.joined(separator: ", "))) -> \(fill) {
+		        #if \(condition)
+		        \(fill)(\((arguments + ["\(guarded.label): \(guarded.label)"]).joined(separator: ", ")))
+		        #else
+		        \(fill)(\(arguments.joined(separator: ", ")))
+		        #endif
+		    }
+		    #endif
+		}
+		"""
 	}
 
 	/// The declarations of the shape whose fill instantiates what nothing fulfills: the protocols of the types nothing
@@ -1564,6 +1631,10 @@ struct GraphFuzzerCallingMockDraw {
 			declarations.append(callerDeclaration(form, properties: [(names.outer.lowercasedFirst, names.outer)]))
 		case .callersOwnValue:
 			declarations.append(fillDeclaration(named: names.fill, protocolName: names.hole, received: (names.value.lowercasedFirst, names.value), isPublic: callerIsPublic))
+			declarations.append(callerDeclaration(form, properties: [(names.value.lowercasedFirst, names.value), (names.inner.lowercasedFirst, names.inner)]))
+		case .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive:
+			declarations.append("\(callerAccess)struct \(names.token) {}")
+			declarations.append(guardedValueFillDeclaration(condition: guardedValueCondition ?? Self.guardedValueClauseCondition))
 			declarations.append(callerDeclaration(form, properties: [(names.value.lowercasedFirst, names.value), (names.inner.lowercasedFirst, names.inner)]))
 		case .fillReceivesValueOnlyInnerMockRequires:
 			declarations.append(fillDeclaration(named: names.fill, protocolName: names.hole, received: (names.value.lowercasedFirst, names.value), isPublic: callerIsPublic))
