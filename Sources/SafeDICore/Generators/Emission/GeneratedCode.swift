@@ -309,7 +309,8 @@ public enum PlaceKind: CaseIterable, Hashable, Sendable {
 	/// A rename of a value: no function.
 	case alias
 	/// A seam call's fill, or a seam's hole site, hosted as the text the seam emitter writes until seam bodies are planned:
-	/// no function the graph holds, and no place beneath it.
+	/// no function the graph holds, and no place beneath it. A hole's site, the seam side, is hosted until the 2.3.1 seam
+	/// rework (R2a) deletes today's seam emission; a fill, the caller side, until fills are planned.
 	case hostedSeamCode
 }
 
