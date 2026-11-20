@@ -12161,7 +12161,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		mergeSiblingDisambiguations(into: &combinedDisambiguationMap, for: propertyNodes, labelMap: labelMap)
 		for item in items {
 			if case let .alias(alias) = item {
-				guard alias.holeSite == nil, alias.loop == nil else { return nil }
+				// An erased rename only if available is mapped over its binding's optional form by the walk, whatever the
+				// binding, since a mock binds the value it renames from an optional override or parameter, which the production
+				// emitter's alias does not see (`fulfillingBindingIsOptional`), so the walk writes it.
+				guard alias.holeSite == nil, alias.loop == nil, !(alias.onlyIfAvailable && alias.erasedToConcreteExistential) else { return nil }
 				// The naming policy of a rename: the name apart a mock root binds it under, and the name its fulfilling
 				// property resolves to, as `emitAliasBinding` resolves it.
 				let bindingName = alias.declaredProperty.flatMap { $0.label == alias.property.label ? nil : alias.property.label }
