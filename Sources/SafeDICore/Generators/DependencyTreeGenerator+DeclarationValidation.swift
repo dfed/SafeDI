@@ -237,7 +237,9 @@ extension DependencyTreeGenerator {
 		return rejectedRenames
 	}
 
-	func validateReachableTypeDescriptions() throws {
+	/// - Parameter foreignSeamRoots: The signatures of the foreign seams this module's trees reach
+	///   (`computeForeignSeamRoots()`).
+	func validateReachableTypeDescriptions(foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?]) throws {
 		// In a module that holds or calls a seam, only the types reached outside every seam's tree are reported
 		// (`typesReachableOutsideSeamTrees`). A type reached only beneath a seam another module declares may be one
 		// this module cannot see, which the seam's module could: it is left to that module to report, and the
@@ -245,7 +247,7 @@ extension DependencyTreeGenerator {
 		// declaration fulfills is a hole, whose builder the seam's generated initializer takes, unless only
 		// hand-written code could build it; a root that calls the seam and cannot fill the builder is reported where
 		// its tree is generated.
-		let unbuildableTypeDescriptions = (seams.isEmpty ? reachableTypeDescriptions : try typesReachableOutsideSeamTrees())
+		let unbuildableTypeDescriptions = (seams.isEmpty ? reachableTypeDescriptions : try typesReachableOutsideSeamTrees(foreignSeamRoots: foreignSeamRoots))
 			.filter { typeDescriptionToFulfillingInstantiableMap[$0]?.mockOnly != false }
 		guard !unbuildableTypeDescriptions.isEmpty else { return }
 		throw noInstantiableFoundErrors(of: unbuildableTypeDescriptions)
