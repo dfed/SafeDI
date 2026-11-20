@@ -534,11 +534,15 @@ final class Scope: Hashable {
 				))
 			} else {
 				let createdScope = scopeGeneratorsUnderConstruction.removeLast()
-				let scopeGenerator = createdScope.scopeGenerator(collectingGeneratorsToStartInto: &generatorsToStart)
+				let (scopeGenerator, cycleRedeclarations) = createdScope.scopeGenerator(collectingGeneratorsToStartInto: &generatorsToStart)
 				if scopeGeneratorsUnderConstruction.isEmpty {
 					return scopeGenerator
 				} else {
-					scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].add(childGenerator: scopeGenerator, createdBy: createdScope)
+					scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].add(
+						childGenerator: scopeGenerator,
+						createdBy: createdScope,
+						handingUp: cycleRedeclarations,
+					)
 				}
 			}
 		}
@@ -1145,6 +1149,9 @@ private struct ScopeGeneratorUnderConstruction {
 
 	/// The generators created so far for `propertiesToGenerate`, in order, followed by those of `fillsOfThisCall`.
 	private(set) var childGenerators = [ScopeGenerator]()
+	/// What the children created so far hand up of the cycles that close beneath them, merged in their order
+	/// (`ScopeGenerator.CycleRedeclarations`), until this scope's generator is created.
+	private var childCycleRedeclarations = ScopeGenerator.CycleRedeclarations()
 	/// How many scopes this scope's subtree has so far: itself, and every scope created beneath it. An alias or a hole,
 	/// which generates a line or two, is not counted.
 	private var subtreeScopeCount = 1
@@ -1165,9 +1172,13 @@ private struct ScopeGeneratorUnderConstruction {
 	/// 64 from 256. 64 is the smaller, so a module of trees between 64 and 255 scopes still generates them in parallel.
 	static let scopeCountOfLargeSubtree = 64
 
-	/// Adds `childGenerator`, the generator `child` created, to this scope's children.
-	mutating func add(childGenerator: ScopeGenerator, createdBy child: ScopeGeneratorUnderConstruction) {
+	/// Adds `childGenerator`, the generator `child` created, to this scope's children, with what it hands up of the cycles
+	/// that close beneath it.
+	mutating func add(childGenerator: ScopeGenerator, createdBy child: ScopeGeneratorUnderConstruction, handingUp cycleRedeclarations: ScopeGenerator.CycleRedeclarations) {
 		childGenerators.append(childGenerator)
+		if !cycleRedeclarations.isEmpty {
+			ScopeGenerator.merging(cycleRedeclarations, into: &childCycleRedeclarations)
+		}
 		subtreeScopeCount += child.subtreeScopeCount
 		if child.startsCodeBeneathALargeSubtree {
 			childGeneratorsStartingBeneathALargeSubtree.append(childGenerator)
@@ -1806,9 +1817,29 @@ private struct ScopeGeneratorUnderConstruction {
 
 	/// Creates the scope's generator once `childGenerators` holds a generator for each of `propertiesToGenerate`, and starts
 	/// its code, or adds it to `generatorsToStart` when that is not `nil`.
-	func scopeGenerator(collectingGeneratorsToStartInto generatorsToStart: inout [ScopeGenerator]?) -> ScopeGenerator {
+	func scopeGenerator(collectingGeneratorsToStartInto generatorsToStart: inout [ScopeGenerator]?) -> (generator: ScopeGenerator, cycleRedeclarations: ScopeGenerator.CycleRedeclarations) {
 		// Every fill this call passes is an enclosing call's or its own.
 		let fillNames = holeArguments.isEmpty ? [:] : GenerationWork.taking(enclosingFillsOfThisCall, by: .gatheringFillsOfACall)
+		// From the inputs the generator is created with below: a root forwards nothing, and a forwarded lazily instantiated
+		// property is also forwarded as its instance.
+		var forwardedProperties = Set<Property>()
+		if property != nil {
+			for dependency in scope.instantiable.dependencies where dependency.source == .forwarded {
+				forwardedProperties.insert(dependency.property)
+			}
+		}
+		forwardedProperties.formUnion(scope.forwardedLazilyInstantiatedInstanceProperties)
+		let cycleRedeclarationSearch = ScopeGenerator.cycleRedeclarations(
+			instantiable: scope.instantiable,
+			property: property,
+			closedOnDeclaration: closedOnDeclaration,
+			isPropertyCycle: isPropertyCycle,
+			childrenTakePartInCycle: childGenerators.contains(where: \.takesPartInCycle),
+			childRedeclarations: childCycleRedeclarations,
+			propertiesToDeclare: isPropertyCycle ? [] : scope.propertiesToDeclare,
+			forwardedProperties: forwardedProperties,
+			cycleParameters: passedCycleParameters,
+		)
 		let builtGenerator = ScopeGenerator(
 			instantiable: scope.instantiable,
 			sharedInstantiable: scope.sharedInstantiable,
@@ -1824,6 +1855,7 @@ private struct ScopeGeneratorUnderConstruction {
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			isPropertyCycle: isPropertyCycle,
 			closedOnDeclaration: closedOnDeclaration,
+			cycleRedeclarationsClosingOnThisScope: cycleRedeclarationSearch.closingOnThisScope,
 			closedOnFillPathDeclarationsBeneath: closedOnFillPathDeclarationsBeneath,
 			builtInlineSeamComment: scope.builtInlineSeamComment,
 			seamCall: scope.seamCall,
@@ -1887,8 +1919,11 @@ private struct ScopeGeneratorUnderConstruction {
 			namesBoundBySeam: GenerationWork.taking(seamHoles.namesBoundBySeam, by: .joiningNamesBoundBySeam),
 			placeHoldingProperties: placeHoldingPropertiesByType.map { $0[scope.instantiable.concreteInstantiable] ?? [] },
 		)
-		let scopeGenerator = if let fill {
-			ScopeGenerator(
+		let scopeGenerator: ScopeGenerator
+		let cycleRedeclarations: ScopeGenerator.CycleRedeclarations
+		if let fill {
+			let callerReads = Self.callerReads(of: fill, child: builtGenerator, labelsHandedToReenteredFunctions: labelsHandedToReenteredFunctions(by: builtGenerator))
+			scopeGenerator = ScopeGenerator(
 				fill: fill.hole,
 				key: fill.key,
 				functionName: fill.functionName,
@@ -1896,15 +1931,29 @@ private struct ScopeGeneratorUnderConstruction {
 				fields: fill.fields,
 				caseHoles: fill.caseHoles,
 				emitsCode: fill.emitsCode,
-				callerReads: Self.callerReads(of: fill, child: builtGenerator, labelsHandedToReenteredFunctions: labelsHandedToReenteredFunctions(by: builtGenerator)),
+				callerReads: callerReads,
 				returnsWrapperBuilder: fill.returnsWrapperBuilder,
 				labelsHandedAsMemo: fill.labelsHandedAsMemo,
 				plainMemoRoutesOfSendableWrapperReads: fill.plainMemoRoutesOfSendableWrapperReads,
 				memoOriginsByLabel: fill.memoOriginsByLabel,
 				child: builtGenerator,
 			)
+			// The fill's generator is a scope of its own, which builds only the scope it fills, from the inputs
+			// `ScopeGenerator.init(fill:…)` creates it with.
+			cycleRedeclarations = ScopeGenerator.cycleRedeclarations(
+				instantiable: ScopeGenerator.fillInstantiable(of: fill.hole, callerReads: callerReads),
+				property: nil,
+				closedOnDeclaration: nil,
+				isPropertyCycle: false,
+				childrenTakePartInCycle: builtGenerator.takesPartInCycle,
+				childRedeclarations: cycleRedeclarationSearch.handedUp,
+				propertiesToDeclare: ScopeGenerator.fieldForms(of: fill.fields, boundLabels: fill.boundLabels),
+				forwardedProperties: [],
+				cycleParameters: [],
+			).handedUp
 		} else {
-			builtGenerator
+			scopeGenerator = builtGenerator
+			cycleRedeclarations = cycleRedeclarationSearch.handedUp
 		}
 		// A large subtree starts its own code and that of each small subtree directly beneath it. The code of every other
 		// scope starts when the scope above it, or the caller of a small tree's root, asks for it.
@@ -1921,7 +1970,7 @@ private struct ScopeGeneratorUnderConstruction {
 				}
 			}
 		}
-		return scopeGenerator
+		return (scopeGenerator, cycleRedeclarations)
 	}
 
 	/// Kicks off the generation of `scopeGenerator`'s plan, which a later request for the code reads from its cache. The plan

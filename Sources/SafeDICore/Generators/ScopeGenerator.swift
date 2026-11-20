@@ -56,6 +56,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		erasedToConcreteExistential: Bool,
 		isPropertyCycle: Bool,
 		closedOnDeclaration: BuiltDeclaration? = nil,
+		cycleRedeclarationsClosingOnThisScope: [String: CycleParameter.Redeclaration]? = nil,
 		closedOnFillPathDeclarationsBeneath: Int? = nil,
 		builtInlineSeamComment: String?,
 		seamCall: SeamCall? = nil,
@@ -324,19 +325,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			instantiable: instantiable,
 			property: property,
 			declaration: declaration,
-			closedOnDeclaration: closedOnDeclaration,
 			isPropertyCycle: isPropertyCycle,
-			childrenTakePartInCycle: cycleClosings.childrenTakePartInCycle,
+			redeclarationsClosingOnThisScope: cycleRedeclarationsClosingOnThisScope,
 			children: propertiesToGenerate,
 			propertiesToDeclare: propertiesToDeclare,
 			forwardedProperties: forwardedProperties,
-			cycleParameters: cycleParameters,
 			receivedProperties: receives.receivedProperties,
 			requiredReceivedProperties: receives.requiredReceivedProperties,
 			requiredAliasFulfillingProperties: aliasRequirements.requiredAliasFulfillingProperties,
 			onlyIfAvailableUnwrappedReceivedProperties: onlyIfAvailableUnwrappedReceivedProperties,
 		)
-		cycleClosingRedeclaredLabels = cycleParameterSearch.cycleClosingRedeclaredLabels
 		foundCycleParameters = cycleParameterSearch.foundCycleParameters
 		unpassableCycleLabelsInTree = cycleParameterSearch.unpassableCycleLabelsInTree
 		cycleParametersChangedInTree = cycleParameterSearch.foundCycleParameters != builtCycleParameters
@@ -993,9 +991,91 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			: onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.subtracting(requiredReceivedProperties.map(\.asUnwrappedProperty))
 	}
 
-	/// The parameters of the builder function a lazy cycle closes on that a scope finds, and what it carries up for them.
+	/// For each declaration a cycle-closing scope in a subtree closes on above the subtree's root, the labels the scopes
+	/// between it and the root's parent declare – their instantiated, aliased and forwarded properties and their own builder
+	/// functions' parameters (see `CycleParameter`) – each with the declaration of it that comes first in source order.
+	/// Empty for nearly every subtree.
+	///
+	/// Only a scope's parent reads the scope's, while the parent's generator is created, so no generator stores it:
+	/// `ScopeGeneratorUnderConstruction` holds what each child hands up until the parent's generator exists. A generator
+	/// that kept its own held a copy of every label declared from each cycle-closing scope up to it for the life of the
+	/// tree, which was most of a large mock module's peak memory.
+	typealias CycleRedeclarations = [BuiltDeclaration: [String: CycleParameter.Redeclaration]]
+
+	/// What `cycleRedeclarations` finds for one scope.
+	struct CycleRedeclarationSearch {
+		/// The labels redeclared between the scope and the cycle-closing scopes beneath it that close on its own declaration,
+		/// among which its generator finds its builder function's parameters (`cycleParameterSearch`). `nil` where no cycle
+		/// closes on it.
+		let closingOnThisScope: [String: CycleParameter.Redeclaration]?
+		/// The scope's own `CycleRedeclarations`, which its parent reads.
+		let handedUp: CycleRedeclarations
+	}
+
+	/// The redeclarations of the cycles that close beneath a scope, from `childRedeclarations`, what its children hand up
+	/// merged in their order (`merging(_:into:)`). Run by `ScopeGeneratorUnderConstruction` before it creates the scope's
+	/// generator, from the inputs it creates the generator with.
+	nonisolated static func cycleRedeclarations(
+		instantiable: Instantiable,
+		property: Property?,
+		closedOnDeclaration: BuiltDeclaration?,
+		isPropertyCycle: Bool,
+		childrenTakePartInCycle: Bool,
+		childRedeclarations: CycleRedeclarations,
+		propertiesToDeclare: Set<Property>,
+		forwardedProperties: Set<Property>,
+		cycleParameters: [CycleParameter],
+	) -> CycleRedeclarationSearch {
+		// The labels the scopes between each cycle-closing scope in this subtree and the scope it closes on declare, by the
+		// declaration the cycle closes on. A scope a cycle closes on takes those of them its tree receives from the scopes
+		// enclosing it as parameters of its builder function. Nearly every scope takes part in no cycle.
+		var cycleClosingRedeclaredLabels = CycleRedeclarations()
+		if let closedOnDeclaration {
+			cycleClosingRedeclaredLabels[closedOnDeclaration] = [:]
+		} else if childrenTakePartInCycle {
+			cycleClosingRedeclaredLabels = childRedeclarations
+		}
+		var closingOnThisScope: [String: CycleParameter.Redeclaration]?
+		if let property, !isPropertyCycle {
+			closingOnThisScope = cycleClosingRedeclaredLabels.removeValue(forKey: BuiltDeclaration(property: property, concreteType: instantiable.concreteInstantiable))
+		}
+		if !isPropertyCycle, !cycleClosingRedeclaredLabels.isEmpty {
+			// This scope's declarations, forwarded properties and own parameters are between each of those cycle-closing
+			// scopes and the scope it closes on. A declaration is noted at the dependency that declares its label, and a
+			// parameter at the declaration that made it one.
+			var redeclarations = [String: CycleParameter.Redeclaration]()
+			for declaredProperty in propertiesToDeclare.union(forwardedProperties) {
+				let dependency = instantiable.dependencies.first { !$0.source.isReceived && $0.property.label == declaredProperty.label }
+				let redeclaration = CycleParameter.Redeclaration(
+					property: dependency?.property ?? declaredProperty,
+					declaringType: instantiable.concreteInstantiable,
+					declarationLocation: dependency?.declarationLocation,
+				)
+				redeclarations[declaredProperty.label] = redeclarations[declaredProperty.label].map { $0.preceding(redeclaration) } ?? redeclaration
+			}
+			for parameter in cycleParameters {
+				redeclarations[parameter.property.label] = redeclarations[parameter.property.label].map { $0.preceding(parameter.redeclaration) } ?? parameter.redeclaration
+			}
+			cycleClosingRedeclaredLabels = cycleClosingRedeclaredLabels.mapValues { $0.merging(redeclarations) { $0.preceding($1) } }
+		}
+		return CycleRedeclarationSearch(closingOnThisScope: closingOnThisScope, handedUp: cycleClosingRedeclaredLabels)
+	}
+
+	/// Merges `childRedeclarations`, what one child hands up, into `redeclarations`, those of the children before it: the
+	/// declaration of a label that comes first in source order is kept.
+	nonisolated static func merging(_ childRedeclarations: CycleRedeclarations, into redeclarations: inout CycleRedeclarations) {
+		for (closedOnDeclaration, labels) in childRedeclarations {
+			redeclarations[closedOnDeclaration, default: [:]].merge(labels) { $0.preceding($1) }
+		}
+	}
+
+	/// Whether this scope closes a cycle, or one closes beneath it (`CycleClosings.childrenTakePartInCycle`).
+	nonisolated var takesPartInCycle: Bool {
+		isReferencedByCycleClosingScope || !cycleClosedOnDeclarations.isEmpty
+	}
+
+	/// The parameters of the builder function a lazy cycle closes on that a scope finds.
 	private struct CycleParameterSearch {
-		let cycleClosingRedeclaredLabels: [BuiltDeclaration: [String: CycleParameter.Redeclaration]]
 		let foundCycleParameters: [CycleParameter]
 		let unpassableCycleLabelsInTree: [UnpassableCycleLabel]
 	}
@@ -1005,34 +1085,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		instantiable: Instantiable,
 		property: Property?,
 		declaration: BuiltDeclaration?,
-		closedOnDeclaration: BuiltDeclaration?,
 		isPropertyCycle: Bool,
-		childrenTakePartInCycle: Bool,
+		redeclarationsClosingOnThisScope: [String: CycleParameter.Redeclaration]?,
 		children: [ScopeGenerator],
 		propertiesToDeclare: Set<Property>,
 		forwardedProperties: Set<Property>,
-		cycleParameters: [CycleParameter],
 		receivedProperties: Set<Property>,
 		requiredReceivedProperties: Set<Property>,
 		requiredAliasFulfillingProperties: Set<Property>,
 		onlyIfAvailableUnwrappedReceivedProperties: Set<Property>,
 	) -> CycleParameterSearch {
-		// The labels the scopes between each cycle-closing scope in this subtree and the scope it closes on declare, by the
-		// declaration the cycle closes on. A scope a cycle closes on takes those of them its tree receives from the scopes
-		// enclosing it as parameters of its builder function. Nearly every scope takes part in no cycle.
-		var cycleClosingRedeclaredLabels = [BuiltDeclaration: [String: CycleParameter.Redeclaration]]()
-		if let closedOnDeclaration {
-			cycleClosingRedeclaredLabels[closedOnDeclaration] = [:]
-		} else if childrenTakePartInCycle {
-			for child in children {
-				for (closedOnDeclaration, redeclarations) in child.cycleClosingRedeclaredLabels {
-					cycleClosingRedeclaredLabels[closedOnDeclaration, default: [:]].merge(redeclarations) { $0.preceding($1) }
-				}
-			}
-		}
 		var foundCycleParameters = [CycleParameter]()
 		var unpassableCycleLabelsInTree = [UnpassableCycleLabel]()
-		if let property, let declaration, !isPropertyCycle, let redeclarations = cycleClosingRedeclaredLabels.removeValue(forKey: declaration) {
+		if let property, let declaration, !isPropertyCycle, let redeclarations = redeclarationsClosingOnThisScope {
 			// The property's own label is no parameter: the function's body is passed `nil` for it wherever it is called,
 			// since every call is made inside the tree that builds a declaration of the label – the property itself where
 			// the function is declared, and the cycle-closing scope's own property where it closes the cycle. Nor is a label
@@ -1072,27 +1137,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for child in children where !child.unpassableCycleLabelsInTree.isEmpty {
 			unpassableCycleLabelsInTree.append(contentsOf: child.unpassableCycleLabelsInTree)
 		}
-		if !isPropertyCycle, !cycleClosingRedeclaredLabels.isEmpty {
-			// This scope's declarations, forwarded properties and own parameters are between each of those cycle-closing
-			// scopes and the scope it closes on. A declaration is noted at the dependency that declares its label, and a
-			// parameter at the declaration that made it one.
-			var redeclarations = [String: CycleParameter.Redeclaration]()
-			for declaredProperty in propertiesToDeclare.union(forwardedProperties) {
-				let dependency = instantiable.dependencies.first { !$0.source.isReceived && $0.property.label == declaredProperty.label }
-				let redeclaration = CycleParameter.Redeclaration(
-					property: dependency?.property ?? declaredProperty,
-					declaringType: instantiable.concreteInstantiable,
-					declarationLocation: dependency?.declarationLocation,
-				)
-				redeclarations[declaredProperty.label] = redeclarations[declaredProperty.label].map { $0.preceding(redeclaration) } ?? redeclaration
-			}
-			for parameter in cycleParameters {
-				redeclarations[parameter.property.label] = redeclarations[parameter.property.label].map { $0.preceding(parameter.redeclaration) } ?? parameter.redeclaration
-			}
-			cycleClosingRedeclaredLabels = cycleClosingRedeclaredLabels.mapValues { $0.merging(redeclarations) { $0.preceding($1) } }
-		}
 		return CycleParameterSearch(
-			cycleClosingRedeclaredLabels: cycleClosingRedeclaredLabels,
 			foundCycleParameters: foundCycleParameters,
 			unpassableCycleLabelsInTree: unpassableCycleLabelsInTree,
 		)
@@ -1188,7 +1233,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleParameters = []
 		cycleParameterUnavailableProperties = []
 		callSiteLazilyInstantiatedInstanceProperties = []
-		cycleClosingRedeclaredLabels = [:]
 		foundCycleParameters = []
 		unpassableCycleLabelsInTree = []
 		cycleParametersChangedInTree = false
@@ -1267,7 +1311,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleParameters = []
 		cycleParameterUnavailableProperties = []
 		callSiteLazilyInstantiatedInstanceProperties = ownerLazilyInstantiatedInstanceProperties
-		cycleClosingRedeclaredLabels = [:]
 		foundCycleParameters = []
 		unpassableCycleLabelsInTree = []
 		cycleParametersChangedInTree = false
@@ -1325,15 +1368,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		child: ScopeGenerator,
 	) {
 		self.init(
-			instantiable: Instantiable(
-				instantiableType: hole.property.typeDescription.asInstantiatedType,
-				isRoot: false,
-				initializer: nil,
-				additionalInstantiables: nil,
-				dependencies: callerReads.dependencies,
-				declarationType: .structType,
-				access: AccessDeclaration(level: .internal),
-			),
+			instantiable: Self.fillInstantiable(of: hole, callerReads: callerReads),
 			property: nil,
 			propertiesToGenerate: [child],
 			propertiesToDeclare: Self.fieldForms(of: fields, boundLabels: boundLabels),
@@ -1347,6 +1382,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			builtInlineSeamComment: nil,
 			fillReturnsWrapperBuilder: returnsWrapperBuilder,
 			fill: (hole, key, functionName, boundLabels, fields, caseHoles, emitsCode, callerReads, labelsHandedAsMemo, plainMemoRoutesOfSendableWrapperReads, memoOriginsByLabel),
+		)
+	}
+
+	/// The type a fill of `hole` stands for: the type the hole's property instantiates, with the dependencies the fill reads
+	/// of the caller's scope (`callerReads`).
+	nonisolated static func fillInstantiable(of hole: SeamSignature.Hole, callerReads: FillCallerReads) -> Instantiable {
+		Instantiable(
+			instantiableType: hole.property.typeDescription.asInstantiatedType,
+			isRoot: false,
+			initializer: nil,
+			additionalInstantiables: nil,
+			dependencies: callerReads.dependencies,
+			declarationType: .structType,
+			access: AccessDeclaration(level: .internal),
 		)
 	}
 
@@ -4190,7 +4239,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// its wrapper: the declaration of its own property, as cycle validation sees both, built for the same concrete type
 	/// – the wrapper, where the entry it repeats is a lazily instantiated declaration's instance. A constant and a lazily
 	/// instantiated declaration of one label close on each other. Every bookkeeping of the function the cycle closes on
-	/// (`cycleClosedOnDeclarations`, `cycleClosingRedeclaredLabels`, `BuilderFunctionNames.enclosingFunctionNames`, the tier
+	/// (`cycleClosedOnDeclarations`, `CycleRedeclarations`, `BuilderFunctionNames.enclosingFunctionNames`, the tier
 	/// omission passes, `Scope.createScopeGenerator`'s cycle parameter contexts) is keyed by it, and a scope claims the
 	/// reference only where its own `declaration` equals it: a declaration of the same property built for another
 	/// concrete type between the two is another function, which the closer must not call. `nil` for every other scope.
@@ -4210,11 +4259,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `cycleParameters`: for a scope that declares the function, those its parameters do not hide; for any other scope,
 	/// `lazilyInstantiatedInstanceProperties`.
 	private let callSiteLazilyInstantiatedInstanceProperties: Set<Property>
-	/// For each declaration a cycle-closing scope in this subtree closes on above this scope, the labels the scopes between
-	/// it and this scope's parent declare – their instantiated, aliased and forwarded properties and their own builder
-	/// functions' parameters (see `CycleParameter`) – each with the declaration of it that comes first in source order.
-	/// Empty for nearly every scope.
-	let cycleClosingRedeclaredLabels: [BuiltDeclaration: [String: CycleParameter.Redeclaration]]
 	/// The parameters this scope's builder function needs, which the next pass of `Scope.createScopeGenerator` creates
 	/// the tree with: the labels its tree receives from the scopes enclosing it that a scope between it and one of its
 	/// cycle-closing scopes declares (see `CycleParameter.parameters`). Empty for nearly every scope.
