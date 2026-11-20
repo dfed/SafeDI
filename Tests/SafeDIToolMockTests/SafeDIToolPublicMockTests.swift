@@ -10953,7 +10953,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            func __safeDI_router_AnyRoutingBuilder_Service_routerBuilder(analytics: Analytics) -> ErasedInstantiator<(), AnyRouting>.Builder {
 		                func __safeDI_routerBuilder() -> Router {
 		                    func __safeDI_serviceBuilder() -> Service {
-		                        Service.__safeDI_mock(router_AnyRoutingBuilder: __safeDI_router_AnyRoutingBuilder_Service(), analytics: analytics)
+		                        Service.__safeDI_mock(router_AnyRoutingBuilder: router_AnyRoutingBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_router_AnyRoutingBuilder_Service(), analytics: analytics)
 		                    }
 		                    let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
 		                    return Router(serviceBuilder: serviceBuilder)

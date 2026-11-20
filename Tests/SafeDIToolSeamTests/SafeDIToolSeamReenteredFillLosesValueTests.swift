@@ -659,7 +659,7 @@ struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
 			            func __safeDI_paymentsBuilder_Checkout_payments(_ scope: Checkout.SafeDIMockScope_Payments.payments_Values, cart: Cart?) -> any Payments {
 			                func __safeDI_payments() -> LivePayments {
 			                    func __safeDI_retryBuilder() -> Checkout {
-			                        Checkout.__safeDI_mock(paymentsBuilder: __safeDI_paymentsBuilder_Checkout(cart: cart))
+			                        Checkout.__safeDI_mock(paymentsBuilder: paymentsBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_paymentsBuilder_Checkout(cart: cart))
 			                    }
 			                    let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
 			                    return LivePayments(cart: cart, retryBuilder: retryBuilder)
@@ -671,7 +671,7 @@ struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
 			                let cart = scope.cart
 			                func __safeDI_payments() -> LivePayments {
 			                    func __safeDI_retryBuilder() -> Checkout {
-			                        Checkout.__safeDI_mock(paymentsBuilder: __safeDI_paymentsBuilder_Checkout(cart: cart))
+			                        Checkout.__safeDI_mock(paymentsBuilder: paymentsBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_paymentsBuilder_Checkout(cart: cart))
 			                    }
 			                    let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
 			                    return LivePayments(cart: cart, retryBuilder: retryBuilder)

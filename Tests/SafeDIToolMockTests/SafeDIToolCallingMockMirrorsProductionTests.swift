@@ -1224,7 +1224,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		            func __safeDI_api2Builder_F_B_Scope_api2(_ scope: F.SafeDIMockScope_Api2.B_Scope.api2_Values, log: Log) -> any Api2 {
 		                func __safeDI_api2() -> Live2 {
 		                    func __safeDI_builder() -> F {
-		                        F.__safeDI_mock(api2Builder: __safeDI_api2Builder_F(log: log), apiBuilder: __safeDI_apiBuilder_F(log: log))
+		                        F.__safeDI_mock(api2Builder: api2Builder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_api2Builder_F(log: log), apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_F(log: log))
 		                    }
 		                    let builder = Instantiator<F>(__safeDI_builder)
 		                    return Live2(log: log, builder: builder)
@@ -1395,7 +1395,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 		                func __safeDI_api2() -> Live2 {
 		                    let log = Log()
 		                    func __safeDI_builder() -> F {
-		                        F.__safeDI_mock(api2Builder: __safeDI_api2Builder_F(), apiBuilder: __safeDI_apiBuilder_F(), log: log)
+		                        F.__safeDI_mock(api2Builder: api2Builder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_api2Builder_F(), apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_F(), log: log)
 		                    }
 		                    let builder = Instantiator<F>(__safeDI_builder)
 		                    return Live2(log: log, builder: builder)
