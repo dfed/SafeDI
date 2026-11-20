@@ -127,7 +127,7 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case closureDefault
 	/// A `.public` type on no actor that builds a dependency, so that its mock has a `SafeDIOverrides`, and that takes an
 	/// optional-typed default-valued parameter, which its `mock()` takes as an internal mock does
-	/// (`GraphFuzzerFixture.publicMockOwnOptionalDefaultProbes`).
+	/// (`GraphFuzzerFixture.publicMockTypesTakingOwnOptionalName`).
 	case ownOptionalDefaultOnNonisolatedTypeThatBuilds
 	/// A child's default naming its own static member.
 	case childDefaultNamingOwnStaticMember
@@ -4436,11 +4436,16 @@ extension GraphFuzzerPublicMockDraw {
 /// What a generated public mock takes, read from its generated file by the readers that write or judge a call of it by hand.
 enum GraphFuzzerPublicMockBuilders {
 	/// The labels of the builders the generated `mock()` of `mockedType` in `generatedFiles` takes as a closure that takes
-	/// nothing, `<label>: @escaping () -> T` or `@escaping @Sendable () -> T`, in the order its widest tier declares them.
+	/// nothing, `<label>: @escaping () -> T` or `@escaping @Sendable () -> T`, each once, in the order the first tier that
+	/// declares it does, since each tier repeats the labels it shares with another.
 	static func labelsTakingNothing(of mockedType: String, in generatedFiles: [String: String]) -> [String] {
-		builderParameters(of: mockedType, in: generatedFiles)
-			.filter { $0.type.hasPrefix("@escaping () -> ") || $0.type.hasPrefix("@escaping @Sendable () -> ") }
-			.map(\.label)
+		var labels = [String]()
+		for parameter in builderParameters(of: mockedType, in: generatedFiles) where parameter.type.hasPrefix("@escaping () -> ") || parameter.type.hasPrefix("@escaping @Sendable () -> ") {
+			if !labels.contains(parameter.label) {
+				labels.append(parameter.label)
+			}
+		}
+		return labels
 	}
 
 	/// The builders each generated `mock()` of `mockedType` in `generatedFiles` takes, tier by tier in the order the files
