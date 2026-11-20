@@ -482,6 +482,73 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 		// `F` holds `any Api` twice, beneath levels whose `log` differs, and `Live` reads `log` lazily, so a pass-up gate
 		// passes `F`'s places up whole and `Root`'s mock takes `apiBuilder` required. `H`'s one place is filled; its call
 		// takes the required builder, so no optional one is added, and an override of `H` is handed it too.
+		let modules = Self.joinModules(caller: caller, buildsGInline: false)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+
+		#expect(Self.mockParameterLines(of: output) == [
+			"apiBuilder: @escaping () -> any Api,",
+			"safeDIOverrides: SafeDIOverrides = .init()",
+		])
+		try await expectValues(of: output, modules: modules, pairs: [
+			("Root.mock(apiBuilder: { App.Fake() }).h.api is App.Fake", "true"),
+			("Root.mock(apiBuilder: { App.Fake() }).f.a.api is App.Fake", "true"),
+			("Root.mock(apiBuilder: { App.Fake() }, safeDIOverrides: .init(h: { apiBuilder in H.mock(apiBuilder: apiBuilder) })).h.api is App.Fake", "true"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsWithCallersFills_whenThirdModuleCallsPublicCallingMockFromItsSafeDIFile() async throws {
+		// `Top`, in module `Third`, calls `Root`'s public mock, which takes an optional builder, knowing `Root` only from
+		// `App`'s `.safedi` file: its guard compiles, and `Root`'s fills build the place.
+		let third = """
+		import App
+		import SafeDI
+
+		@Instantiable(generateMock: true)
+		public struct Top: Instantiable {
+		    public init(root: Root) {
+		        self.root = root
+		    }
+
+		    @Instantiated public let root: Root
+		}
+		"""
+		var modules = Self.modules(feat: Self.featWithApi, app: [Self.live, Self.root(instantiating: ["f: F"], attribute: "@Instantiable(generateMock: .public)")])
+		modules.append(ModuleFixture(name: "Third", packageName: "Third", swiftFileContentByFilePath: ["ThirdTypes.swift": third], dependencies: ["App", "Feat", "Base"]))
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+
+		#expect(Self.mockParameterLines(of: output, type: "Root", module: "App") == [
+			"apiBuilder: (() -> any Api)? = nil,",
+			"safeDIOverrides: SafeDIOverrides = .init()",
+		])
+		try await expectValues(of: output, modules: modules, pairs: [
+			("Top.mock().root.f.api is App.Live", "true"),
+		])
+	}
+
+	@Test(arguments: Caller.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsInlineBuiltPublicMocksPlaceWithRequiredBuilder_whenAnotherCallPassesSameHoleTypeUp(caller: Caller) async throws {
+		// `G` is built inline, and its place of `any Api` reads the builder `mock()` takes required for its hole type, unless
+		// the place's own override is set.
+		let modules = Self.joinModules(caller: caller, buildsGInline: true)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+
+		#expect(Self.mockParameterLines(of: output) == [
+			"apiBuilder: @escaping () -> any Api,",
+			"safeDIOverrides: SafeDIOverrides = .init()",
+		])
+		try await expectValues(of: output, modules: modules, pairs: [
+			("Root.mock(apiBuilder: { App.Fake() }).g.api is App.Fake", "true"),
+			("Root.mock(apiBuilder: { App.Fake() }, safeDIOverrides: .init(g: .init(api: { _ in App.Other() }))).g.api is App.Other", "true"),
+		])
+	}
+
+	/// The modules of the join: `F` holds `any Api` twice, beneath levels whose `log` differs, and `Live` reads `log` lazily,
+	/// so a pass-up gate passes `F`'s places up whole and `Root`'s mock takes `apiBuilder` required, and `H`'s one place is
+	/// filled. Where `buildsGInline`, `Root` also instantiates `G`, whose public initializer lets the mock build it inline.
+	private static func joinModules(caller: Caller, buildsGInline: Bool) -> [ModuleFixture] {
 		let feat = """
 		import SafeDI
 
@@ -534,7 +601,7 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 		    @Instantiated public let z: Z
 		}
 
-		@Instantiable(generateMock: .public)
+		\(buildsGInline ? Self.inlineBuiltG : "")@Instantiable(generateMock: .public)
 		public final class H: Instantiable {
 		    init(api: any Api) {
 		        self.api = api
@@ -560,66 +627,43 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 		    public init() {}
 		}
 
+		public final class Other: Api {
+		    public init() {}
+		}
+
 		\(caller.attribute)
 		public final class Root: Instantiable {
-		    public init(log: LazilyInstantiated<Log>, f: F, h: H) {
+		    public init(log: LazilyInstantiated<Log>, f: F, h: H\(buildsGInline ? ", g: G" : "")) {
 		        self.log = log
 		        self.f = f
-		        self.h = h
+		        self.h = h\(buildsGInline ? "\n        self.g = g" : "")
 		    }
 
 		    @Instantiated public let log: LazilyInstantiated<Log>
 		    @Instantiated public let f: F
-		    @Instantiated public let h: H
+		    @Instantiated public let h: H\(buildsGInline ? "\n    @Instantiated public let g: G" : "")
 		}
 		"""
 		let modules = [
 			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": feat]),
 			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": app], dependencies: ["Feat"]),
 		]
-		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-
-		#expect(Self.mockParameterLines(of: output) == [
-			"apiBuilder: @escaping () -> any Api,",
-			"safeDIOverrides: SafeDIOverrides = .init()",
-		])
-		try await expectValues(of: output, modules: modules, pairs: [
-			("Root.mock(apiBuilder: { App.Fake() }).h.api is App.Fake", "true"),
-			("Root.mock(apiBuilder: { App.Fake() }).f.a.api is App.Fake", "true"),
-			("Root.mock(apiBuilder: { App.Fake() }, safeDIOverrides: .init(h: { apiBuilder in H.mock(apiBuilder: apiBuilder) })).h.api is App.Fake", "true"),
-		])
+		return modules
 	}
 
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_buildsWithCallersFills_whenThirdModuleCallsPublicCallingMockFromItsSafeDIFile() async throws {
-		// `Top`, in module `Third`, calls `Root`'s public mock, which takes an optional builder, knowing `Root` only from
-		// `App`'s `.safedi` file: its guard compiles, and `Root`'s fills build the place.
-		let third = """
-		import App
-		import SafeDI
+	/// A public mock whose initializer is public, so a calling mock builds it inline, holding a place of `any Api`.
+	private static let inlineBuiltG = """
+	@Instantiable(generateMock: .public)
+	public final class G: Instantiable {
+	    public init(api: any Api) {
+	        self.api = api
+	    }
 
-		@Instantiable(generateMock: true)
-		public struct Top: Instantiable {
-		    public init(root: Root) {
-		        self.root = root
-		    }
-
-		    @Instantiated public let root: Root
-		}
-		"""
-		var modules = Self.modules(feat: Self.featWithApi, app: [Self.live, Self.root(instantiating: ["f: F"], attribute: "@Instantiable(generateMock: .public)")])
-		modules.append(ModuleFixture(name: "Third", packageName: "Third", swiftFileContentByFilePath: ["ThirdTypes.swift": third], dependencies: ["App", "Feat", "Base"]))
-		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
-
-		#expect(Self.mockParameterLines(of: output, type: "Root", module: "App") == [
-			"apiBuilder: (() -> any Api)? = nil,",
-			"safeDIOverrides: SafeDIOverrides = .init()",
-		])
-		try await expectValues(of: output, modules: modules, pairs: [
-			("Top.mock().root.f.api is App.Live", "true"),
-		])
+	    @Instantiated public let api: any Api
 	}
+
+
+	"""
 
 	// MARK: Private
 

@@ -711,6 +711,9 @@ struct PublicMockParameter: Sendable {
 	/// mock's tree and its fills declare, and the builders of the calls whose places it builds.
 	var internalName: String?
 	var filledCallBuilders = [ScopeGenerator.MockRootParameters.SeamMockBuilder.FilledCallBuilder]()
+	/// For an optional builder, the hole type and family whose places it builds, which a place of a public mock the tree
+	/// builds inline reads it for (`ScopeGenerator.holeBuildersByInlinePlace(in:buildersByFamily:foreignPublicMocks:)`).
+	var optionalBuilderFamily: ScopeGenerator.MockRootParameters.SeamMockBuilder.Family?
 	/// The lines that document the parameter above each tier that takes it
 	/// (`MockRootParameters.UncoveredParameter.sharedValueDocumentation`).
 	var sharedValueDocumentation = [String]()
@@ -1164,6 +1167,7 @@ extension ScopeGenerator {
 			}
 			parameter.internalName = internalNames.claim(functionName(toBuildPropertyNamed: label))
 			parameter.filledCallBuilders = filled.callBuilders
+			parameter.optionalBuilderFamily = filled.family
 			parameters.append(parameter)
 		}
 		return parameters

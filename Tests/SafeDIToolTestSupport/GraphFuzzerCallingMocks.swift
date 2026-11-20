@@ -345,6 +345,8 @@ struct GraphFuzzerCallingMockDraw {
 		// Drawn after everything else, and only where the second place's fill calls the called type again and the fill that
 		// reads the caller's wrapper does not, so no other graph changes.
 		joinsFilledCall = callerLazyValue.map { $0.secondPlaceCallsAgain && $0.reentersCalledType && $0.call != .fillCallsAgain } == true && random.element(of: [false, true])
+		// Drawn after everything else, and only where a plain place joins a filled call, so no other graph changes.
+		buildsDockInline = joinsFilledCall && cell.place == .plain && random.element(of: [false, true])
 	}
 
 	static let callingMockRandomSeedMask: UInt64 = 0x63616C6C6D6F636B
@@ -616,6 +618,12 @@ struct GraphFuzzerCallingMockDraw {
 	/// place of an optional builder (the join, `public-mock-builders.md`, "Optional builders for filled places"), so the
 	/// probe hands that builder a stub and reads whether `Dock`'s place holds it (`joinedCallProbes`).
 	let joinsFilledCall: Bool
+
+	/// Where the graph `joinsFilledCall` with a plain place, whether `Dock` is a plain public mock whose initializer is
+	/// public, so the calling mock builds it inline rather than calling its mock, and `Dock`'s place, a hole of its module,
+	/// reads the required builder at its construction (`ScopeGenerator.holeBuildersByInlinePlace`). The same probe judges
+	/// it (`joinedCallProbes`).
+	let buildsDockInline: Bool
 
 	/// The name and label of the second called type of `joinsFilledCall`.
 	var dockName: String {
@@ -2075,16 +2083,17 @@ struct GraphFuzzerCallingMockDraw {
 	}
 
 	/// `Dock`, where the graph `joinsFilledCall`: a seam and public mock whose root holds a place of the hole type in the
-	/// cell's form. Empty elsewhere.
+	/// cell's form, or, where the graph `buildsDockInline`, a public mock whose initializer is public. Empty elsewhere.
 	private var dockDeclaration: String {
 		guard joinsFilledCall else { return "" }
 		let place = holePlace(protocolName: names.hole, fillName: names.fill)
+		let attribute = buildsDockInline ? "@Instantiable(generateMock: .public)" : "@Instantiable(generateDependencyTree: true, generateMock: .public)"
 		return """
 
 
-		@Instantiable(generateDependencyTree: true, generateMock: .public)
+		\(attribute)
 		public final class \(dockName): Instantiable {
-		    init(\(place.label): \(place.type)) { self.\(place.label) = \(place.label) }
+		    \(buildsDockInline ? "public " : "")init(\(place.label): \(place.type)) { self.\(place.label) = \(place.label) }
 		    \(place.attribute) public let \(place.label): \(place.type)
 		}
 		"""
