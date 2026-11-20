@@ -168,37 +168,37 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		            db: (() -> Db)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
-		                db: db,
-		                k: nil
+		                k: nil,
+		                db: db
 		            )
 		        }
 
 		        init(
-		            db: (() -> Db)? = nil,
-		            k: (@Sendable (any Api) -> K)? = nil
+		            k: (@Sendable (any Api) -> K)? = nil,
+		            db: (() -> Db)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
-		                db: db,
-		                k: k
+		                k: k,
+		                db: db
 		            )
 		        }
 
-		        public var db: (() -> Db)? { __safeDI_storage.db }
 		        var k: (@Sendable (any Api) -> K)? { __safeDI_storage.k }
+		        public var db: (() -> Db)? { __safeDI_storage.db }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
 		        private final class __safeDI_Storage {
 		            init(
-		                db: (() -> Db)?,
-		                k: (@Sendable (any Api) -> K)?
+		                k: (@Sendable (any Api) -> K)?,
+		                db: (() -> Db)?
 		            ) {
-		                self.db = db
 		                self.k = k
+		                self.db = db
 		            }
 
-		            let db: (() -> Db)?
 		            let k: (@Sendable (any Api) -> K)?
+		            let db: (() -> Db)?
 		        }
 		    }
 

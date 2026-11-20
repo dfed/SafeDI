@@ -1105,37 +1105,37 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    nonisolated public struct SafeDIOverrides {
 		        public init(
+		            a: ((any Api) -> A)? = nil,
 		            log: (() -> Log)? = nil,
-		            z: ((Log) -> Z)? = nil,
-		            a: ((any Api) -> A)? = nil
+		            z: ((Log) -> Z)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
+		                a: a,
 		                log: log,
-		                z: z,
-		                a: a
+		                z: z
 		            )
 		        }
 
+		        public var a: ((any Api) -> A)? { __safeDI_storage.a }
 		        public var log: (() -> Log)? { __safeDI_storage.log }
 		        public var z: ((Log) -> Z)? { __safeDI_storage.z }
-		        public var a: ((any Api) -> A)? { __safeDI_storage.a }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
 		        private final class __safeDI_Storage {
 		            init(
+		                a: ((any Api) -> A)?,
 		                log: (() -> Log)?,
-		                z: ((Log) -> Z)?,
-		                a: ((any Api) -> A)?
+		                z: ((Log) -> Z)?
 		            ) {
+		                self.a = a
 		                self.log = log
 		                self.z = z
-		                self.a = a
 		            }
 
+		            let a: ((any Api) -> A)?
 		            let log: (() -> Log)?
 		            let z: ((Log) -> Z)?
-		            let a: ((any Api) -> A)?
 		        }
 		    }
 
@@ -1451,37 +1451,37 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    nonisolated public struct SafeDIOverrides {
 		        public init(
+		            a: ((any Api) -> A)? = nil,
 		            log: (() -> Log)? = nil,
-		            z: ((Log) -> Z)? = nil,
-		            a: ((any Api) -> A)? = nil
+		            z: ((Log) -> Z)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
+		                a: a,
 		                log: log,
-		                z: z,
-		                a: a
+		                z: z
 		            )
 		        }
 
+		        public var a: ((any Api) -> A)? { __safeDI_storage.a }
 		        public var log: (() -> Log)? { __safeDI_storage.log }
 		        public var z: ((Log) -> Z)? { __safeDI_storage.z }
-		        public var a: ((any Api) -> A)? { __safeDI_storage.a }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
 		        private final class __safeDI_Storage {
 		            init(
+		                a: ((any Api) -> A)?,
 		                log: (() -> Log)?,
-		                z: ((Log) -> Z)?,
-		                a: ((any Api) -> A)?
+		                z: ((Log) -> Z)?
 		            ) {
+		                self.a = a
 		                self.log = log
 		                self.z = z
-		                self.a = a
 		            }
 
+		            let a: ((any Api) -> A)?
 		            let log: (() -> Log)?
 		            let z: ((Log) -> Z)?
-		            let a: ((any Api) -> A)?
 		        }
 		    }
 
@@ -1795,37 +1795,37 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    nonisolated public struct SafeDIOverrides {
 		        public init(
+		            a: ((any Api) -> A)? = nil,
 		            log: (() -> Log)? = nil,
-		            z: ((Log) -> Z)? = nil,
-		            a: ((any Api) -> A)? = nil
+		            z: ((Log) -> Z)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
+		                a: a,
 		                log: log,
-		                z: z,
-		                a: a
+		                z: z
 		            )
 		        }
 
+		        public var a: ((any Api) -> A)? { __safeDI_storage.a }
 		        public var log: (() -> Log)? { __safeDI_storage.log }
 		        public var z: ((Log) -> Z)? { __safeDI_storage.z }
-		        public var a: ((any Api) -> A)? { __safeDI_storage.a }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
 		        private final class __safeDI_Storage {
 		            init(
+		                a: ((any Api) -> A)?,
 		                log: (() -> Log)?,
-		                z: ((Log) -> Z)?,
-		                a: ((any Api) -> A)?
+		                z: ((Log) -> Z)?
 		            ) {
+		                self.a = a
 		                self.log = log
 		                self.z = z
-		                self.a = a
 		            }
 
+		            let a: ((any Api) -> A)?
 		            let log: (() -> Log)?
 		            let z: ((Log) -> Z)?
-		            let a: ((any Api) -> A)?
 		        }
 		    }
 

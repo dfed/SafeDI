@@ -373,6 +373,21 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// around the value `LabelPanel` receives as `labelGadget: LazilyInstantiated<LabelWidget>`, so that no type receives
 	/// the hole's label and the tool names the generated value instead.
 	case holeLabelReceivedByPromotedSiblingEqualsGeneratedName
+	/// On a stream of its own (`publicMockCarrierOrderRandomSeedMask`), a holder of one of a public mock's places declared
+	/// before a sibling that holds none: `CarrierHome`, a `.public` type of the declaring module, declares `carrierStore`,
+	/// `carrierCart`, which receives it, and before them, or between them, the holder of a place of `CarrierApi`. The mock
+	/// builds the holder after its siblings, so that the place's scope struct carries them, and its `SafeDIOverrides` takes
+	/// them in declaration order all the same (`GraphFuzzerToolRuns.publicMockOverridesOrderFailure`). `CarrierApp`, a mocked
+	/// consumer, builds `CarrierHome`, and `CarrierLive` fills the place.
+	case carrierBeforeSibling
+	/// The holder is declared between `carrierStore` and `carrierCart`, rather than before both.
+	case carrierBeforeSiblingBetweenSiblings
+	/// The holder is `CarrierBanner`, a seam of the declaring module whose tree holds the place, rather than `CarrierPart`,
+	/// whose own property is the place.
+	case carrierBeforeSiblingThroughSameModuleSeam
+	/// `CarrierShelf`, a type `CarrierHome` builds, declares the three, so that `CarrierShelf`'s module-level configuration,
+	/// which `CarrierHome`'s overrides nest, takes them in declaration order.
+	case carrierBeforeSiblingBeneathConfiguredChild
 
 	/// The shapes of `overrideClosureCall` whose call can hand an override closure no builder a person writes, so that the
 	/// consumer's overrides hold no member for it.
@@ -380,7 +395,7 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 
 	/// Whether one of the gating draws (`selfBuildingPublicMock…`, `placeInsidePublicMockFill…`,
 	/// `retentionPublicMockValueBeforeBuilder…`, `sharedConstructionPublicMock…`, `keywordLabeledPublicMock…`,
-	/// `overrideClosure…`, `promotedHolePublicMock…`, `unbuildableValuePublicMockCall…`, and `T6`'s mock isolated to the main
+	/// `overrideClosure…`, `promotedHolePublicMock…`, `unbuildableValuePublicMockCall…`, `carrierBeforeSibling…`, and `T6`'s mock isolated to the main
 	/// actor or built with its hand-written mock in another public mock) draws this shape, whose count in accepted graphs the
 	/// public mock corpus pins too (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
 	/// `unbuildableValuePublicMockCallTierOmits` is not one: the tool rejects every graph of it, which
@@ -391,6 +406,7 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 			|| rawValue.hasPrefix("sharedConstructionPublicMock") || rawValue.hasPrefix("keywordLabeledPublicMock")
 			|| rawValue.hasPrefix("overrideClosureCall") || rawValue.hasPrefix("promotedHolePublicMock")
 			|| rawValue.hasPrefix("unbuildableValuePublicMockCall") && self != .unbuildableValuePublicMockCallTierOmits
+			|| rawValue.hasPrefix("carrierBeforeSibling")
 			|| self == .holeMockIsolatedToMainActor || self == .holeHandWrittenMockBuiltInPublicMock
 	}
 
@@ -653,6 +669,8 @@ struct GraphFuzzerPublicMockDraw {
 		drawUnbuildableValuePassedToPublicMock(random: &unbuildableValueRandom)
 		var holeLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockHoleLabelRandomSeedMask)
 		drawHoleLabelReceivedByPromotedSibling(random: &holeLabelRandom)
+		var carrierOrderRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockCarrierOrderRandomSeedMask)
+		drawCarrierBeforeSiblingPublicMock(random: &carrierOrderRandom)
 	}
 
 	/// The files of the graph, each beginning with its module's marker: as drawn, or, for the known-right path of the
@@ -781,6 +799,9 @@ struct GraphFuzzerPublicMockDraw {
 	/// Draws only a hole whose label a promoted sibling receives as another type (`drawHoleLabelReceivedByPromotedSibling`):
 	/// rolls added after the rest of the draw was pinned, so that its other shapes are drawn as before.
 	static let publicMockHoleLabelRandomSeedMask: UInt64 = 0x7075626D6B686C62
+	/// Draws only a holder of a place declared before a sibling that holds none (`drawCarrierBeforeSiblingPublicMock`): rolls
+	/// added after the rest of the draw was pinned, so that its other shapes are drawn as before.
+	static let publicMockCarrierOrderRandomSeedMask: UInt64 = 0x7075626D6B636F72
 	/// Draws only whether a `Sendable` graph the main stream draws without a `Sendable` wrapper above a leaf (`T9`) draws one
 	/// anyway, and in which consumer module, so that a consumer's overrides hold a `@Sendable` factory
 	/// (`GraphFuzzerPublicMockOutputFeature.consumerSendableFactory`) in a share of the accepted graphs that clears its floor
@@ -2739,6 +2760,71 @@ struct GraphFuzzerPublicMockDraw {
 		files.append(File(module: .seamModule, declarations: [Self.renderer(of: home), Self.renderer(of: panel)] + handConformingClasses))
 	}
 
+	/// A holder of one of a public mock's places declared before a sibling that holds none, in three graphs in twenty:
+	/// `CarrierHome`, a `.public` type of the declaring module with an `internal` initializer, declares `carrierStore`, then
+	/// `carrierCart`, which receives it, and before both, or three draws in ten between them, the holder of a place of
+	/// `CarrierApi`, which no declaration of the declaring module fulfills: `CarrierPart`, whose own property is the place,
+	/// or, half the time, `CarrierBanner`, a seam of the declaring module whose tree holds it, which then sets
+	/// `generatePlainDependencyTreeInitializers: true`. Two draws in five
+	/// `CarrierShelf`, a type `CarrierHome` builds, declares the three instead. The mock builds the holder after its
+	/// siblings, so that the place's scope struct carries them, but `CarrierHome`'s `SafeDIOverrides`, or `CarrierShelf`'s
+	/// module-level configuration, takes them in declaration order, as the internal mock does
+	/// (`GraphFuzzerToolRuns.publicMockOverridesOrderFailure`). `CarrierApp`, a mocked consumer in one consumer module,
+	/// builds `CarrierHome`, so that its mock calls `CarrierHome`'s public mock, and `CarrierLive` beside it fills the
+	/// place. Every roll is made before any is read.
+	private mutating func drawCarrierBeforeSiblingPublicMock(random: inout GraphFuzzerRandomNumberGenerator) {
+		let drawsShape = random.percentChance(15)
+		let holdsThroughSeam = random.percentChance(50)
+		let holderBetweenSiblings = random.percentChance(30)
+		let beneathConfiguredChild = random.percentChance(40)
+		let consumerModuleRoll = random.integer(in: 0...1)
+		let consumerModules = consumerModules
+		guard drawsShape, !consumerModules.isEmpty, !hasDifferingMockCondition else { return }
+		let consumerModule = consumerModules[consumerModuleRoll % consumerModules.count]
+		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
+		let apiName = name("CarrierApi")
+		var holder = InstantiableClass(name: name(holdsThroughSeam ? "CarrierBanner" : "CarrierPart"), conformances: conformances)
+		if holdsThroughSeam {
+			holder.arguments = ["generateDependencyTree: true"]
+		}
+		holder.properties = [Property(attribute: "@Instantiated", label: "carrierApi", type: "any \(apiName)")]
+		let store = InstantiableClass(name: name("CarrierStore"), conformances: conformances)
+		var cart = InstantiableClass(name: name("CarrierCart"), conformances: conformances)
+		cart.properties = [Property(attribute: "@Received", label: "carrierStore", type: store.name)]
+		let holderProperty = Property(attribute: "@Instantiated", label: holdsThroughSeam ? "carrierBanner" : "carrierPart", type: holder.name)
+		var siblings = [
+			Property(attribute: "@Instantiated", label: "carrierStore", type: store.name),
+			Property(attribute: "@Instantiated", label: "carrierCart", type: cart.name),
+		]
+		siblings.insert(holderProperty, at: holderBetweenSiblings ? 1 : 0)
+		var home = InstantiableClass(name: name("CarrierHome"), conformances: conformances)
+		home.mockGeneration = ".public"
+		// An `internal` initializer, which no consumer module can call, so that a consumer's mock calls the public mock.
+		home.initializerAccess = .internal
+		var declaringModuleDeclarations = [protocolDeclaration(apiName)]
+		if beneathConfiguredChild {
+			var shelf = InstantiableClass(name: name("CarrierShelf"), conformances: conformances)
+			shelf.properties = siblings
+			home.properties = [Property(attribute: "@Instantiated", label: "carrierShelf", type: shelf.name)]
+			declaringModuleDeclarations.append(Self.renderer(of: shelf))
+		} else {
+			home.properties = siblings
+		}
+		declaringModuleDeclarations += [Self.renderer(of: home), Self.renderer(of: holder), Self.renderer(of: store), Self.renderer(of: cart)]
+		if holdsThroughSeam {
+			// The seam's readable initializer, which the builder surface's oracle reads, as the seam corpus's modules declare it
+			// (`GraphFuzzerFixture.seamCorpusFixture`). No other module of a graph this draw reaches declares a configuration.
+			declaringModuleDeclarations.append { _ in "#SafeDIConfiguration(generatePlainDependencyTreeInitializers: true)" }
+		}
+		var app = InstantiableClass(name: name("CarrierApp"), conformances: conformances)
+		app.mockGeneration = "true"
+		app.properties = [Property(attribute: "@Instantiated", label: "carrierHome", type: home.name)]
+		var live = InstantiableClass(name: name("CarrierLive"), conformances: [apiName] + conformances)
+		live.arguments = ["fulfillingAdditionalTypes: [\(apiName).self]"]
+		files.append(File(module: .seamModule, declarations: declaringModuleDeclarations))
+		files.append(File(module: consumerModule, declarations: [Self.renderer(of: app), Self.renderer(of: live)]))
+	}
+
 	/// Declares `Logger`, its production type `ConsoleLogger`, which instantiates `Level`, and a fake: a class at `package`
 	/// or `internal` access in a file with no SafeDI content, as a macro expansion would declare it, extended by a
 	/// `mockOnly` extension spelling `package` or no access level, whose `mock` takes a defaulted parameter half the
@@ -3033,6 +3119,39 @@ extension GraphFuzzerToolRuns {
 		)
 	}
 
+	/// The failure of a `generateMockPublic` graph the tool accepts that draws a holder of a place declared before a sibling
+	/// (`GraphFuzzerPublicMockDrawFeature.carrierBeforeSibling`), whose `CarrierHome` `SafeDIOverrides`, or whose
+	/// `CarrierShelf` module-level configuration where `CarrierShelf` declares the holder, takes the holder and its siblings
+	/// in another order than their declaration: the order the internal mock takes them in, whatever order the public mock
+	/// builds them in (the contract's rule 7). `nil` for any other graph. With `MockParameterNode.inInlineOrder` returning
+	/// its nodes in build order, the holder last, seeds 17, 22, 24, 57, 89, 186 and 246 fail.
+	var publicMockOverridesOrderFailure: GraphFuzzerFailure? {
+		guard knownRightOutcome != nil, case let .accepted(generatedFiles, _) = firstOutcome else { return nil }
+		let prefix = fixture.typeNamePrefix
+		let types = GraphFuzzerPublicMockDraw.DeclaredTypes(of: fixture)
+		guard let declaredLabels = GraphFuzzerPublicMockDraw.carrierBeforeSiblingDeclaredLabels(in: types, prefix: prefix) else { return nil }
+		// The struct whose initializer takes the three: the module-level configuration of `CarrierShelf`, or the overrides
+		// `CarrierHome`'s extension declares.
+		let (structName, opening) = if types.declarations["\(prefix)CarrierShelf"] != nil {
+			("`\(prefix)CarrierShelf`'s module-level configuration", "_\(prefix)CarrierShelf_MockConfiguration {")
+		} else {
+			("`\(prefix)CarrierHome`'s `SafeDIOverrides`", "extension \(prefix)CarrierHome {")
+		}
+		let takenLabels = generatedFiles.keys.sorted().lazy.compactMap { fileName in
+			generatedFiles[fileName].flatMap { GraphFuzzerOracle.initializerLabels(after: opening, struct: opening.hasPrefix("extension ") ? "struct SafeDIOverrides {" : nil, in: $0) }
+		}.first
+		guard let takenLabels else {
+			return GraphFuzzerFailure(seed: fixture.seed, kind: .publicMockOverridesFollowBuildOrder, details: "No generated file declares \(structName).\nThis graph:\n\(firstOutcome.description)")
+		}
+		let takenDeclaredLabels = takenLabels.filter(declaredLabels.contains)
+		guard takenDeclaredLabels != declaredLabels else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .publicMockOverridesFollowBuildOrder,
+			details: "\(structName) takes \(takenDeclaredLabels.joined(separator: ", ")), where its type declares \(declaredLabels.joined(separator: ", ")).\nThis graph:\n\(firstOutcome.description)",
+		)
+	}
+
 	/// The failure of a `generateMockPublic` graph the tool accepts that generates a `public` or `package` declaration
 	/// naming a type narrower than the declaration, by the access the generator gave the type
 	/// (`GraphFuzzerGenerator.narrowerTypeAccess`), or `nil`.
@@ -3072,6 +3191,29 @@ extension GraphFuzzerOracle {
 	/// fill reads the nearest level's value, so only a graph that draws that read may report it
 	/// (`GraphFuzzerPublicMockDrawFeature.holeLoopDeclaresContextAgain`).
 	static let publicMockStaleValueErrorMarker = "the same values at every level of that cycle"
+
+	/// The labels of the first initializer of a struct in `contents`, a generated file, in the order it takes them: the
+	/// struct whose declaration line ends with `opening`, or, where `structOpening` is given, the first struct after it whose
+	/// declaration line ends with `structOpening`. `nil` where `contents` declares no such struct.
+	static func initializerLabels(after opening: String, struct structOpening: String?, in contents: String) -> [String]? {
+		var lines = contents.split(separator: "\n", omittingEmptySubsequences: false).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.makeIterator()
+		var expectsStruct = structOpening != nil
+		var foundOpening = false
+		while let line = lines.next() {
+			if !foundOpening {
+				foundOpening = line.hasSuffix(opening)
+			} else if expectsStruct, let structOpening {
+				expectsStruct = !line.hasSuffix(structOpening)
+			} else if line.hasSuffix("init(") {
+				var labels = [String]()
+				while let parameter = lines.next(), !parameter.hasPrefix(")") {
+					labels.append(String(parameter.prefix { $0 != ":" }))
+				}
+				return labels
+			}
+		}
+		return nil
+	}
 
 	/// What the error says that a tree filling a seam's place inside a `@Sendable` function reports for a fill that reads a
 	/// value the seam's tree declares outside that function (`boundOutsideSendableFunction`), which a calling mock reports as
@@ -3920,7 +4062,27 @@ extension GraphFuzzerPublicMockDraw {
 				features.insert(.holeLabelReceivedByPromotedSiblingHeldInLazilyInstantiated)
 			}
 		}
+		if let carrierLabels = carrierBeforeSiblingDeclaredLabels(in: types, prefix: prefix) {
+			features.insert(.carrierBeforeSibling)
+			if carrierLabels.first == "carrierStore" {
+				features.insert(.carrierBeforeSiblingBetweenSiblings)
+			}
+			if carrierLabels.contains("carrierBanner") {
+				features.insert(.carrierBeforeSiblingThroughSameModuleSeam)
+			}
+			if types.declarations["\(prefix)CarrierShelf"] != nil {
+				features.insert(.carrierBeforeSiblingBeneathConfiguredChild)
+			}
+		}
 		return features
+	}
+
+	/// The labels the type that declares `drawCarrierBeforeSiblingPublicMock`'s holder and its siblings declares, in
+	/// declaration order – `CarrierShelf` where it is declared, and otherwise `CarrierHome` – or `nil` for a graph that does
+	/// not draw it.
+	static func carrierBeforeSiblingDeclaredLabels(in types: DeclaredTypes, prefix: String) -> [String]? {
+		guard let declaringType = types.declarations["\(prefix)CarrierShelf"] ?? types.declarations["\(prefix)CarrierHome"] else { return nil }
+		return declaringType.properties.map(\.label)
 	}
 
 	/// What the generated files of an accepted graph show: `generatedFiles`, keyed by module (`FuzzFeature/…`).
