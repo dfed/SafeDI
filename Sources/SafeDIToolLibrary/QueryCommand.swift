@@ -123,7 +123,9 @@ public struct QueryNeeds: AsyncParsableCommand {
 		// without the declarations that exist only for mocks.
 		let productionGenerator = generator(over: typeDescriptionToFulfillingInstantiableMap.compactMapValues { $0.mockOnly ? nil : $0.withoutHandWrittenMock })
 
-		var typeReports = [TypeReport]()
+		// What the report says of each type named, each once, before either view is built.
+		var typeEntries = [QueriedType]()
+		var mockQueries = [DependencyTreeGenerator.RequirementsQuery]()
 		var reportedTypeNames = Set<String>()
 		for typeName in typeNames where reportedTypeNames.insert(typeName).inserted {
 			let declarationsOfType = typeDescriptionToFulfillingInstantiableMap.values.filter { $0.concreteInstantiable.asSource == typeName }
@@ -168,10 +170,36 @@ public struct QueryNeeds: AsyncParsableCommand {
 			} else {
 				nil
 			}
+			var mock: (kind: TypeReport.Mock.Kind, queryIndex: Int)?
+			if let mockKind {
+				mock = (mockKind, mockQueries.count)
+				mockQueries.append(DependencyTreeGenerator.RequirementsQuery(typeName: typeName, generatesMock: generatesMock, mockEmittingModule: mockEmittingModule))
+			}
+			typeEntries.append(QueriedType(
+				typeName: typeName,
+				generatesMock: generatesMock,
+				mock: mock,
+				mockMethodName: mockMethodName,
+				generatingModuleNames: generatingModuleNames,
+			))
+		}
+
+		// Each view builds the scope map its types' mock roots are built from once, for every type named. The mock view's
+		// results are read first, type by type, so that a missing name is reported from the full map.
+		let mockResults = await mockGenerator.requirements(of: mockQueries)
+		let productionResults = await productionGenerator.requirements(of: typeEntries.map {
+			DependencyTreeGenerator.RequirementsQuery(typeName: $0.typeName, generatesMock: $0.generatesMock, mockEmittingModule: nil)
+		})
+		var typeReports = [TypeReport]()
+		for (typeEntry, productionResult) in zip(typeEntries, productionResults) {
+			let typeName = typeEntry.typeName
+			let mockMethodName = typeEntry.mockMethodName
+			let generatingModuleNames = typeEntry.generatingModuleNames
 			// What the type's mock needs, or would need: built from every declaration.
 			let mockReport: TypeReport.MockReport
-			if let mockKind {
-				guard let mockRequirements = try await mockGenerator.requirements(forTypeNamed: typeName, generatesMock: generatesMock, mockEmittingModule: mockEmittingModule) else {
+			if let (mockKind, mockQueryIndex) = typeEntry.mock {
+				// `requirements(of:)` returns a result for every query.
+				guard let mockRequirements = try mockResults[mockQueryIndex].get() else {
 					let fulfilledBy = Set(typeDescriptionToFulfillingInstantiableMap.filter { $0.key.asSource == typeName }.map(\.value.concreteInstantiable.asSource)).sorted()
 					throw QueryError.noInstantiableNamed(
 						typeName,
@@ -192,12 +220,24 @@ public struct QueryNeeds: AsyncParsableCommand {
 					reason: "`\(typeName)` has no mock: no module generates `\(typeName).\(InstantiableVisitor.mockMethodName)()`, and a hand-written `\(typeName).\(InstantiableVisitor.mockMethodName)` that returns another type would collide with a generated one, so no #\(SafeDIConfigurationVisitor.macroName) can list `\(typeName)` in `additionalMocksToGenerate`.",
 				))
 			}
-			guard let productionRequirements = try await productionGenerator.requirements(forTypeNamed: typeName, generatesMock: generatesMock, mockEmittingModule: nil) else {
+			guard let productionRequirements = try productionResult.get() else {
 				throw QueryError.onlyMockOnlyDeclarationNamed(typeName)
 			}
 			typeReports.append(TypeReport(productionRequirements, mockReport: mockReport, attributionsByFilePath: attributionsByFilePath))
 		}
 		return QueryReport(types: typeReports)
+	}
+
+	/// A type `query()` reports, with what decides its mock.
+	private struct QueriedType {
+		let typeName: String
+		let generatesMock: Bool
+		/// The mock reported, with the index of the type's query among the mock view's, or `nil` when SafeDI can build no
+		/// mock for the type.
+		let mock: (kind: TypeReport.Mock.Kind, queryIndex: Int)?
+		let mockMethodName: String
+		/// The modules that generate `mock()` for the type.
+		let generatingModuleNames: [String]
 	}
 
 	/// The included modules, each read as `generate` reads it: a directory as a module's own files, with its own
