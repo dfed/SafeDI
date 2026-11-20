@@ -6150,24 +6150,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var calls = [FilledCall]()
 		// A stack of its own, since a tree can be as deep as the module has types. Each scope's children are pushed in
 		// reverse, so they are visited in the order they are generated.
-		var generatorsToVisit = [(generator: ScopeGenerator, isInsideSendableFunction: Bool)]()
-		func pushFills(of call: ScopeGenerator, insideSendableFunction: Bool) {
+		var generatorsToVisit = [(generator: ScopeGenerator, isInsideSendableFunction: Bool, enclosingCalls: [ScopeGenerator])]()
+		func pushFills(of call: ScopeGenerator, insideSendableFunction: Bool, enclosingCalls: [ScopeGenerator]) {
 			for fill in call.propertiesToGenerate.reversed() where fill.fillHole != nil && fill.fillEmitsCode {
 				let fillIsInsideSendableFunction = insideSendableFunction || call.buildsInSendableFunction(ofFill: fill)
 				for child in fill.propertiesToGenerate.reversed() {
-					generatorsToVisit.append((child, fillIsInsideSendableFunction))
+					generatorsToVisit.append((child, fillIsInsideSendableFunction, enclosingCalls))
 				}
 			}
 		}
-		pushFills(of: self, insideSendableFunction: insideSendableFunction)
-		while let (generator, enclosingIsInsideSendableFunction) = generatorsToVisit.popLast() {
+		pushFills(of: self, insideSendableFunction: insideSendableFunction, enclosingCalls: [self])
+		while let (generator, enclosingIsInsideSendableFunction, generatorEnclosingCalls) = generatorsToVisit.popLast() {
 			// A scope that closes a cycle builds nothing; an alias builds nothing either.
 			guard case let .property(instantiable, property, _, _, false, _) = generator.scopeData else { continue }
 			declaredLabels.insert(property.label)
 			let isInsideSendableFunction = enclosingIsInsideSendableFunction || generator.buildsInSendableFunction
 			if generator.publicMockCall != nil {
-				calls.append(FilledCall(generator: generator, isInsideSendableFunction: isInsideSendableFunction))
-				pushFills(of: generator, insideSendableFunction: isInsideSendableFunction)
+				calls.append(FilledCall(generator: generator, isInsideSendableFunction: isInsideSendableFunction, enclosingCalls: generatorEnclosingCalls))
+				pushFills(of: generator, insideSendableFunction: isInsideSendableFunction, enclosingCalls: [generator] + generatorEnclosingCalls)
 			} else {
 				let builtLabels = Set(generator.propertiesToGenerate.compactMap(\.property?.label))
 				for dependency in instantiable.dependencies {
@@ -6177,7 +6177,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 				}
 				for child in generator.propertiesToGenerate.reversed() {
-					generatorsToVisit.append((child, isInsideSendableFunction))
+					generatorsToVisit.append((child, isInsideSendableFunction, generatorEnclosingCalls))
 				}
 			}
 		}
@@ -6670,7 +6670,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let source: ArgumentSource = if let builderValue = publicMockBuilderStructValuesByLabel[argument.innerLabel] {
 					.builderArgument(holeBuilders[argument.innerLabel]?.structValue(fillsStruct: builderValue) ?? builderValue)
 				} else if let holeValue = holeArgumentValuesByLabel[argument.innerLabel] {
-					.holeArgument(holeValue)
+					// A call that re-enters an enclosing call's level function hands it on as the enclosing call does.
+					.holeArgument(holeBuilders[argument.innerLabel]?.structValue(fillsStruct: holeValue) ?? holeValue)
 				} else if let dependency, unavailableProperties.contains(dependency.property) {
 					.nil
 				} else if let dependency, dependency.source.isReceived, lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty) {
@@ -8001,7 +8002,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 
 			/// A builder of a call of another module's public mock whose places the call fills.
-			struct FilledCallBuilder {
+			struct FilledCallBuilder: Equatable {
 				/// The generator of the call.
 				let call: ObjectIdentifier
 				/// The called builder's label.
@@ -8169,6 +8170,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	struct FilledCall {
 		let generator: ScopeGenerator
 		let isInsideSendableFunction: Bool
+		/// The calls whose fills hold this call, nearest first, one of which a call that re-enters an enclosing call's level
+		/// function re-enters (`reenteredBuilders`).
+		let enclosingCalls: [ScopeGenerator]
 
 		/// Each builder the call fills a place of, with its family, in the order the call passes them.
 		var filledBuilders: [(builder: SeamSignature.Builder, family: MockRootParameters.SeamMockBuilder.Family)] {
@@ -8178,6 +8182,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				      let builder = publicMockCall.builders.first(where: { $0.label == argument.label })
 				else { return nil }
 				return (builder, MockRootParameters.SeamMockBuilder.Family(holeType: builder.enumKey.holeType, isSendable: builder.enumKey.isSendable || isInsideSendableFunction))
+			}
+		}
+
+		/// Each builder the call passes the level function of an enclosing call's builder, re-entering it, with the nearest
+		/// enclosing call that passes that function and its label there: the call passes what the enclosing call passes.
+		var reenteredBuilders: [(label: String, enclosingCall: ScopeGenerator, enclosingLabel: String)] {
+			generator.builderCallArguments.compactMap { argument in
+				guard argument.builderStruct == nil, let enclosingFill = argument.enclosingFill else { return nil }
+				for enclosingCall in enclosingCalls {
+					if let enclosingArgument = enclosingCall.builderCallArguments.first(where: { $0.builderStruct?.rootDispatcherKey == enclosingFill.key }) {
+						return (argument.label, enclosingCall, enclosingArgument.label)
+					}
+				}
+				return nil
 			}
 		}
 	}
@@ -8937,7 +8955,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					FillPlace(generator: place.generator, dependency: place.dependency, isInsideSendableFunction: place.isInsideSendableFunction, order: places.count + place.order)
 				}
 				declaredLabels.formUnion(callPlaces.declaredLabels)
-				calls.append(FilledCall(generator: fillingGenerator, isInsideSendableFunction: node.requiresSendable))
+				calls.append(FilledCall(generator: fillingGenerator, isInsideSendableFunction: node.requiresSendable, enclosingCalls: []))
 				calls += callPlaces.calls
 			}
 			nodesToVisit.append(contentsOf: node.propertyChildren.filter(\.subtreeCallsPublicMock).reversed())
@@ -9138,6 +9156,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				} else {
 					indexByFamily[family] = filledFamilies.count
 					filledFamilies.append(FilledFamily(family: family, callBuilders: [callBuilder], placeProperties: placeProperties, receivedProperty: receivedProperty))
+				}
+			}
+		}
+		// A call that re-enters an enclosing call's level function passes what the enclosing call passes, so reads the builder of
+		// the enclosing call's family, or of its `@Sendable` twin where the call is made inside a `@Sendable` function.
+		for filledCall in filledCalls {
+			for reentered in filledCall.reenteredBuilders {
+				let enclosingCallBuilder = MockRootParameters.SeamMockBuilder.FilledCallBuilder(call: ObjectIdentifier(reentered.enclosingCall), label: reentered.enclosingLabel)
+				guard let enclosingIndex = filledFamilies.firstIndex(where: { $0.callBuilders.contains(enclosingCallBuilder) }) else { continue }
+				let callBuilder = MockRootParameters.SeamMockBuilder.FilledCallBuilder(call: ObjectIdentifier(filledCall.generator), label: reentered.label)
+				let enclosingFamily = filledFamilies[enclosingIndex].family
+				let family = MockRootParameters.SeamMockBuilder.Family(holeType: enclosingFamily.holeType, isSendable: enclosingFamily.isSendable || filledCall.isInsideSendableFunction)
+				if let index = indexByFamily[family] {
+					filledFamilies[index].callBuilders.append(callBuilder)
+				} else {
+					indexByFamily[family] = filledFamilies.count
+					filledFamilies.append(FilledFamily(family: family, callBuilders: [callBuilder], placeProperties: filledFamilies[enclosingIndex].placeProperties, receivedProperty: filledFamilies[enclosingIndex].receivedProperty))
 				}
 			}
 		}
