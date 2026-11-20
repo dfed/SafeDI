@@ -2737,7 +2737,7 @@ extension GraphFuzzerOracle {
 	/// hole declares again (`declarationBoundOnCycleReentry`), as a tree that fills a seam's reports it: inline, the
 	/// fill reads the nearest level's value, so only a graph that draws that read may report it
 	/// (`GraphFuzzerPublicMockDrawFeature.holeLoopDeclaresContextAgain`).
-	static let publicMockStaleValueErrorMarker = "holds the same values at every level of that cycle"
+	static let publicMockStaleValueErrorMarker = "the same values at every level of that cycle"
 
 	/// Whether every error in `diagnostics`, a rejection of a `generateMockPublic` graph as drawn, is one of a public
 	/// mock's own (`publicMockOnlyErrorMarkers`), or, where `staleValueLoopTypeName` names the graph's `HoleLoop`, the

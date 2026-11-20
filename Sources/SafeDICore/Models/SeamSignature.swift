@@ -347,12 +347,26 @@ public struct SeamSignature: Sendable {
 				/// `seam` passes up: inline, a receive of its label would read it, and `seam`'s caller, which fills the builder,
 				/// does not hold it.
 				case boundByPassingUpSeam(seam: TypeDescription, module: ModuleIdentity, place: PresentedPlace)
-				/// It is bound outside the innermost `@Sendable` function that builds the site – `functionProperty`'s, which
-				/// builds `functionBuiltType`, or `nil` for a `Sendable` wrapper the place is held in – and a place is handed only
-				/// what that function binds. `isForwarded` says the declaring type forwards it. Where it is a parameter of a
-				/// builder function a lazy cycle closes on, `cycleParameter` says whose, and what the cycle passes it. Where the
-				/// declaring type, the seam or a type in its tree, receives it under an alias, `alias` says what fulfills it.
-				case boundOutsideSendableFunction(functionProperty: Property, functionBuiltType: TypeDescription?, isForwarded: Bool, cycleParameter: CycleParameterOrigin?, alias: AliasOrigin?)
+				/// It is bound outside the innermost `@Sendable` function that builds the site – `functionProperty`'s, of the kind
+				/// `function` says – and a place is handed only what that function binds. `isForwarded` says the declaring type
+				/// forwards it. Where it is a parameter of a builder function a lazy cycle closes on, `cycleParameter` says whose,
+				/// and what the cycle passes it. Where the declaring type, the seam or a type in its tree, receives it under an
+				/// alias, `alias` says what fulfills it.
+				case boundOutsideSendableFunction(functionProperty: Property, function: SendableFunction, isForwarded: Bool, cycleParameter: CycleParameterOrigin?, alias: AliasOrigin?)
+			}
+
+			/// The `@Sendable` function a place is built inside, which decides whether a value can be forwarded into it.
+			public enum SendableFunction: Sendable {
+				/// The builder function of an instantiator, which builds `builtType` and takes its forwarded properties.
+				case instantiator(builtType: TypeDescription)
+				/// The builder function of a `SendableLazilyInstantiated`, which builds `builtType`, and would take its forwarded
+				/// properties as an instantiator: a lazy wrapper is handed none.
+				case sendableLazyWrapper(builtType: TypeDescription)
+				/// A function no forwarded value can reach: a `@Sendable` fill, whose fulfiller takes what the hole's type, which
+				/// another module declares, forwards; the `Sendable` wrapper the place is held in; or the builder function of a
+				/// value built by value, which a cycle makes `@Sendable`, where a forwarded property would need an instantiator the
+				/// cycle cannot build by value.
+				case other
 			}
 
 			/// An alias that binds a label to another property than the one of its own label: `fulfillingProperty`, the
@@ -423,6 +437,19 @@ public struct SeamSignature: Sendable {
 			/// it, which is the passing type's own caller's where nothing on the path to the call declares the label, and a
 			/// declaration on that path is reported where the place is filled (`boundByPassingUpSeam`).
 			public let isBoundFromCallersArgument: Bool
+			/// Whether the seam's tree instantiates it with a tree that receives only labels a type above the seam would hold
+			/// for it (`labelsHeldAboveSeam`), so that such a type could build it and the seam receive it instead. Where that
+			/// tree holds places, whose fills the seam's module does not see, the module that fills them keeps it only where
+			/// each place's fill receives only those labels too (`resolvingBuildabilityAboveSeam(fillsOfCall:)`).
+			public internal(set) var isBuildableAboveSeam = false
+			/// Where `isBuildableAboveSeam`, the labels a type above the seam would hold for the declaration's tree: those the
+			/// seam receives from its caller, and the declaration's own, which that type would then declare.
+			var labelsHeldAboveSeam = Set<String>()
+			/// Where `isBuildableAboveSeam`, the sites of the places the declaration's tree holds or passes up.
+			var placesInTree = [Site]()
+			/// Whether a module whose fill the reading module does not see fills one of `placesInTree`
+			/// (`resolvingBuildabilityAboveSeam(fillsOfCall:)`), so that no remedy moves the declaration.
+			var holdsPlaceFilledElsewhere = false
 		}
 
 		/// A declaration a cycle in the seam's tree hands the site's owner when it builds it again: the site lies in the body
@@ -439,8 +466,10 @@ public struct SeamSignature: Sendable {
 			/// The type whose builder function takes the label as a parameter between the function and the cycle-closing
 			/// scope, when a cycle nested inside passes it `property`, or `nil` when `declaringType` is between itself.
 			public let parameterTakingType: TypeDescription?
-			/// The property whose builder function the cycle closes on, and the type that declares it.
+			/// The property whose builder function the cycle closes on, the concrete type it builds, which an erased instantiator's
+			/// type does not name, and the type that declares it.
 			public let closedOnProperty: Property
+			public let closedOnBuiltType: TypeDescription
 			public let closedOnDeclaringType: TypeDescription
 			/// The type that instantiates `closedOnProperty` again, closing the cycle.
 			public let reenteringType: TypeDescription

@@ -12138,7 +12138,7 @@ enum GraphFuzzerToolOutcome: Equatable {
 	/// `SendableInstantiator<X>` to fix."), which SafeDI lists in source order, so a file-name reversal reorders them,
 	/// and of the lists a merged fill finding prints, in name
 	/// order: the seams whose calls present its places ("which `Mid` builds where it calls `Hub` and `Hub2`, but"), the
-	/// seams a remedy names ("Declare `@Received let tag: Tag` on `Hub` and `Hub2`, so the builders’ values structs carry it"), its
+	/// seams a remedy names ("Declare `@Received let tag: Tag` on `Hub` and `Hub2`, so SafeDI hands it to the builders"), its
 	/// fulfil remedies ("declare an @Instantiable type that fulfills `Api` in module `Middle` or a module it lists among its
 	/// SafeDI dependencies, so `Mid` fills the builders itself, and declare … that fulfills `Gadget` …", `boundByPassingUpSeam`),
 	/// and, where a declaration hides a value on the paths to a call that re-enters a seam
@@ -12176,7 +12176,7 @@ enum GraphFuzzerToolOutcome: Equatable {
 			("(?<=which one value cannot carry together\\. Receive )`[^`]*`(?:(?:, and |, | and )`[^`]*`)+(?= under different labels to fix\\.)", backtickedItem),
 			("(?<=builder for |builders for |takes for )\(place)(?:(?:, and |, | and )\(place))+", place),
 			("(?<= calls )`[^`]*`(?:\(separator)`[^`]*`)+(?=, but |, because )", backtickedItem),
-			("(?<= on )`[^`]*`(?:\(separator)`[^`]*`)+(?=, so the )", backtickedItem),
+			("(?<= on )`[^`]*`(?:\(separator)`[^`]*`)+(?=, so SafeDI hands )", backtickedItem),
 			("\(fulfillRemedy)(?:\(separator)\(fulfillRemedy))+", fulfillRemedy),
 			("(?<=, which )\(reenteringCallClause)(?:\(separator)\(reenteringCallClause))+(?=, but )", reenteringCallClause),
 			("(?<=cannot hand it |cannot hand them )`[^`]*`’s(?:\(separator)`[^`]*`’s)+(?= values)", "`[^`]*`’s"),

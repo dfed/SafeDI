@@ -2929,7 +2929,7 @@ struct SafeDIToolGraphFuzzerTests {
 			let buildFindings = findings(in: diagnostics)
 			findingsByBuild[build] = buildFindings
 			#expect(buildFindings.contains { $0.contains("carries from `\(prefix)ReenteredSubA`, and \(call)") }, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
-			#expect(buildFindings.contains { $0.contains("inside that `\(prefix)ReenteredSubB`, but") && $0.contains("` on `\(prefix)ReenteredSubB`, so the builder’s values struct carries it") }, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
+			#expect(buildFindings.contains { $0.contains("inside that `\(prefix)ReenteredSubB`, but") && $0.contains("` on `\(prefix)ReenteredSubB`, so SafeDI hands it to the builder") }, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
 			#expect(!buildFindings.contains { $0.contains("` on `\(prefix)ReenteredRelay`") }, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
 		}
 		#expect(findingsByBuild["hole"] == findingsByBuild["visible"])
@@ -5077,10 +5077,10 @@ struct SafeDIToolGraphFuzzerTests {
 		// renaming that moves type names across wrapper names reorders (seam corpus seed 566); the same places in another
 		// order are the same diagnostic, and another place is not.
 		func reenteringCallDiagnostics(places: String) -> GraphFuzzerToolOutcome {
-			.rejected(diagnostics: "/a/<fixture-directory>/S566_HoleImpl.swift:14:2: error: `S566_HoleImpl` receives `holeLogger: S566_HoleLogger`, which `S566_HoleSeam`’s tree builds where it instantiates `S566_HoleSeam` again, but that call passes the builder `S566_HoleSeam` takes for \(places) on unchanged, so the caller that fills it cannot hand it those values. Declare `@Received let holeLogger: S566_HoleLogger` on `S566_HoleSeam`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `S566_HoleService` in module `FuzzFeature` or a module it lists among its SafeDI dependencies, so `S566_HoleSeam` fills the builder itself.\n/a/<fixture-directory>/S566_HoleLoop.swift:11:2: note: `S566_HoleLoop` declares `holeLogger: S566_HoleLogger` here.")
+			.rejected(diagnostics: "/a/<fixture-directory>/S566_HoleImpl.swift:14:2: error: `S566_HoleImpl` receives `holeLogger: S566_HoleLogger`, which `S566_HoleSeam`’s tree builds where it instantiates `S566_HoleSeam` again, but that call passes the builder `S566_HoleSeam` takes for \(places) on unchanged, so the caller that fills it cannot hand it those values. Declare `@Received let holeLogger: S566_HoleLogger` on `S566_HoleSeam`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `S566_HoleService` in module `FuzzFeature` or a module it lists among its SafeDI dependencies, so `S566_HoleSeam` fills the builder itself.\n/a/<fixture-directory>/S566_HoleLoop.swift:11:2: note: `S566_HoleLoop` declares `holeLogger: S566_HoleLogger` here.")
 		}
 		func scopeDiagnostics(places: String) -> GraphFuzzerToolOutcome {
-			.rejected(diagnostics: "/a/<fixture-directory>/S1_Impl.swift:9:5: error: `S1_Impl` receives `theme: S1_Theme`, which `S1_Home` builds after `profile`, since `S1_Theme` receives `profile` only if available, so the values structs SafeDI hands the builders for \(places) do not carry it. Receive `profile` on `S1_Theme` some other way, or declare an @Instantiable type that fulfills `S1_Service` in module `FuzzFeature` or a module it lists among its SafeDI dependencies.")
+			.rejected(diagnostics: "/a/<fixture-directory>/S1_Impl.swift:9:5: error: `S1_Impl` receives `theme: S1_Theme`, which `S1_Home` builds after `profile`, since `S1_Theme` receives `profile` only if available, so SafeDI does not hand it to the builders for \(places). Receive `profile` on `S1_Theme` some other way, or declare an @Instantiable type that fulfills `S1_Service` in module `FuzzFeature` or a module it lists among its SafeDI dependencies.")
 		}
 		let ownerPlace = "`S566_HoleOwner`’s `holeService: any S566_HoleService`"
 		let ownerLazyPlace = "`S566_HoleOwner`’s `holeServiceLazy: LazilyInstantiated<any S566_HoleService>`"
@@ -5107,7 +5107,7 @@ struct SafeDIToolGraphFuzzerTests {
 		let serviceRemedy = "declare an @Instantiable type that fulfills `S116_HoleService` in module `FuzzFeature` or a module it lists among its SafeDI dependencies, so `S116_HoleOuter` fills the builders itself"
 		let gadgetRemedy = "declare an @Instantiable type that fulfills `S116_HoleGadget` in module `FuzzFeature` or a module it lists among its SafeDI dependencies, so `S116_HoleOuter` fills the builders itself"
 		func diagnostics(calledSeams: String, places: String, remedySeams: String = "`S116_HoleSeam` and `S116_HoleStager`", remedies: String = "\(serviceRemedy) and \(gadgetRemedy)") -> GraphFuzzerToolOutcome {
-			.rejected(diagnostics: "<fixture-directory>/shop/Sources/FuzzApp/S116_HoleImpl.swift:13:3: error: `S116_HoleNamespace.S116_HoleImpl` receives `holeLogger: S116_HoleLogger`, which `S116_HoleOuter` builds where it calls \(calledSeams), but `S116_HoleOuter` passes the builders for \(places) on from its own caller, which cannot hand them `S116_HoleOuter`’s values. Declare `@Received let holeLogger: S116_HoleLogger` on \(remedySeams), so the builders’ values structs carry it, or \(remedies).\n<fixture-directory>/shop/Sources/FuzzFeature/S116_HoleOuter.swift:11:2: note: `S116_HoleOuter` declares `holeLogger: S116_HoleLogger` here.")
+			.rejected(diagnostics: "<fixture-directory>/shop/Sources/FuzzApp/S116_HoleImpl.swift:13:3: error: `S116_HoleNamespace.S116_HoleImpl` receives `holeLogger: S116_HoleLogger`, which `S116_HoleOuter` builds where it calls \(calledSeams), but `S116_HoleOuter` passes the builders for \(places) on from its own caller, which cannot hand them `S116_HoleOuter`’s values. Declare `@Received let holeLogger: S116_HoleLogger` on \(remedySeams), so SafeDI hands it to the builders, or \(remedies).\n<fixture-directory>/shop/Sources/FuzzFeature/S116_HoleOuter.swift:11:2: note: `S116_HoleOuter` declares `holeLogger: S116_HoleLogger` here.")
 		}
 		let original = diagnostics(calledSeams: "`S116_HoleSeam` and `S116_HoleStager`", places: "\(deepPlace) and \(stagePlace)")
 
@@ -5130,7 +5130,7 @@ struct SafeDIToolGraphFuzzerTests {
 		let alphaNote = "/a/<fixture-directory>/MiddleAlpha.swift:10:5: note: `MiddleAlpha` declares `logger: Logger` here."
 		let zedNote = "/a/<fixture-directory>/MiddleZed.swift:10:5: note: `MiddleZed` declares `logger: Logger` here."
 		func diagnostics(clauses: String, declaringTypes: String = "`MiddleAlpha`’s and `MiddleZed`’s", notes: [String] = [alphaNote, zedNote]) -> GraphFuzzerToolOutcome {
-			.rejected(diagnostics: (["/a/<fixture-directory>/DefaultRouter.swift:10:5: error: `DefaultRouter` receives `logger: Logger`, which \(clauses), but those calls pass the builder on as module `App` fills it, which cannot hand it \(declaringTypes) values. Declare `@Received let logger: Logger` on `Flow`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies."] + notes).joined(separator: "\n"))
+			.rejected(diagnostics: (["/a/<fixture-directory>/DefaultRouter.swift:10:5: error: `DefaultRouter` receives `logger: Logger`, which \(clauses), but those calls pass the builder on as module `App` fills it, which cannot hand it \(declaringTypes) values. Declare `@Received let logger: Logger` on `Flow`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies."] + notes).joined(separator: "\n"))
 		}
 		let original = diagnostics(clauses: "\(alphaClause) and \(zedClause)")
 
@@ -5151,7 +5151,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// A renaming reorders the lists of a fill's error about a value its seam, opened again, loses, which follow names. Another
 		// type, seam or call in one list still differs.
 		func outcome(_ first: String, _ second: String, call: String = "Builder") -> GraphFuzzerToolOutcome {
-			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `\(first)Owner`’s `service: any Service` and `\(second)Owner`’s `service: any Service` carries from `\(first)Screen` and `\(second)Screen`, and each of their fills instantiates `\(first)Seam` and `\(second)Seam` again (`\(first)\(call)` and `\(second)Builder`). Inline, `Impl` would read `\(first)Screen`’s or `\(second)Screen`’s `id` inside that `\(first)Seam` or `\(second)Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `\(first)Seam` and `\(second)Seam`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
+			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `\(first)Owner`’s `service: any Service` and `\(second)Owner`’s `service: any Service` carries from `\(first)Screen` and `\(second)Screen`, and each of their fills instantiates `\(first)Seam` and `\(second)Seam` again (`\(first)\(call)` and `\(second)Builder`). Inline, `Impl` would read `\(first)Screen`’s or `\(second)Screen`’s `id` inside that `\(first)Seam` or `\(second)Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `\(first)Seam` and `\(second)Seam`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
 		}
 
 		#expect(GraphFuzzerToolOutcome.differences(between: outcome("A", "B"), and: outcome("B", "A")) == [])
@@ -5159,7 +5159,7 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(GraphFuzzerToolOutcome.difference(between: outcome("A", "B"), and: outcome("B", "A", call: "Factory")) == "its diagnostics")
 		// Calls of seams that build the seam built again, named as written.
 		func relayOutcome(_ first: String, _ second: String) -> GraphFuzzerToolOutcome {
-			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `Owner`’s `service: any Service` carries from `Screen`, and that builder’s fill instantiates `\(first)Relay` and `\(second)Relay` (`\(first)Builder` and `\(second)Builder`), which instantiate `Seam` again. Inline, `Impl` would read `Screen`’s `id` inside that `Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `Seam`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
+			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `Owner`’s `service: any Service` carries from `Screen`, and that builder’s fill instantiates `\(first)Relay` and `\(second)Relay` (`\(first)Builder` and `\(second)Builder`), which instantiate `Seam` again. Inline, `Impl` would read `Screen`’s `id` inside that `Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `Seam`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
 		}
 		#expect(GraphFuzzerToolOutcome.differences(between: relayOutcome("A", "B"), and: relayOutcome("B", "A")) == [])
 		#expect(GraphFuzzerToolOutcome.difference(between: relayOutcome("A", "B"), and: relayOutcome("B", "C")) == "its diagnostics")
@@ -5170,7 +5170,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// A fill that opens the seam again both directly and through two seams that build it lists the direct call first, then
 		// the relays and their calls, which follow names. Another relay or call in that list still differs.
 		func outcome(_ first: String, _ second: String) -> GraphFuzzerToolOutcome {
-			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `Owner`’s `service: any Service` carries from `Screen`, and that builder’s fill instantiates `Seam` again (`seamBuilder`) and `\(first)Relay` and `\(second)Relay` (`\(first)Builder` and `\(second)Builder`), which instantiate `Seam` again. Inline, `Impl` would read `Screen`’s `id` inside that `Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `Seam`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
+			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `Owner`’s `service: any Service` carries from `Screen`, and that builder’s fill instantiates `Seam` again (`seamBuilder`) and `\(first)Relay` and `\(second)Relay` (`\(first)Builder` and `\(second)Builder`), which instantiate `Seam` again. Inline, `Impl` would read `Screen`’s `id` inside that `Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `Seam`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
 		}
 		#expect(GraphFuzzerToolOutcome.differences(between: outcome("A", "B"), and: outcome("B", "A")) == [])
 		#expect(GraphFuzzerToolOutcome.difference(between: outcome("A", "B"), and: outcome("B", "C")) == "its diagnostics")
@@ -6803,9 +6803,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// again and reads a value only the place it fills carries (`fieldOfReenteringPlace`), which `addingHoleShapes` draws in
 	/// a screen: a read only if available, then a required read, counted apart.
 	static let seamCorpusErrorMarkers = [
-		"holds the same values at every level of that cycle",
+		"the same values at every level of that cycle",
 		"which one value cannot carry together",
-		"carries only as `",
+		"only as `",
 		"cannot be received inside a `@Sendable` function in chain",
 		"would get `nil` or another value.",
 		"would get another value.",

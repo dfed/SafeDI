@@ -486,7 +486,7 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 		// reported, never handed `Root`'s.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["DefaultApi.swift"]):11:5: error: `DefaultApi` receives `theme: Theme`, which `Outer` builds where it calls `Inner`, but `Outer` passes the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`) on from its own caller, which cannot hand it `Outer`’s values. Declare `@Received let theme: Theme` on `Inner`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies, so `Outer` fills the builder itself.
+			\(fixtures["App"]!["DefaultApi.swift"]):11:5: error: `DefaultApi` receives `theme: Theme`, which `Outer` builds where it calls `Inner`, but `Outer` passes the builder for `Panel`’s `api: any Api` (`api` of `apiBuilder`) on from its own caller, which cannot hand it `Outer`’s values. Declare `@Received let theme: Theme` on `Inner`, so SafeDI hands it to the builder, or declare an @Instantiable type that fulfills `Api` in module `Feature` or a module it lists among its SafeDI dependencies, so `Outer` fills the builder itself.
 			\(fixtures["Feature"]!["Outer.swift"]):8:5: note: `Outer` declares `theme: Theme` here.
 			"""
 		}) {
