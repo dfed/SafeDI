@@ -42,32 +42,13 @@ final class ScopeRecord: Sendable {
 			onlyIfAvailable: Bool,
 			declarationReference: AliasDeclarationReferences.Reference?,
 		)
-
-		/// The property this scope declares.
-		var property: Property {
-			switch self {
-			case let .instantiated(property, _, _),
-			     let .hole(property, _),
-			     let .aliased(property, _, _, _, _):
-				property
-			}
-		}
 	}
 
 	/// How a call passes the builder for one place, as `Scope.HoleArgument` holds it, with the scope of a fill named by its
 	/// position.
 	enum HoleArgument: Sendable {
 		case fill(SeamSignature.Hole, ScopeID)
-		case passUp(SeamSignature.Hole)
-
-		/// The hole the argument is passed for.
-		var hole: SeamSignature.Hole {
-			switch self {
-			case let .fill(hole, _), let .passUp(hole):
-				hole
-			}
-		}
-	}
+		case passUp(SeamSignature.Hole)	}
 
 	/// See `Scope.instantiable`.
 	let instantiable: Instantiable
@@ -142,17 +123,13 @@ struct ScopeTable: Sendable {
 		let index = Int(id.index)
 		if !overlaidRecords.isEmpty, let record = overlaidRecords[index] {
 			return record
-		} else if index < storage.records.count {
-			return storage.records[index]
 		} else {
-			return appendedRecords[index - storage.records.count]
+			return storage.records[index]
 		}
 	}
 
-	/// How many records the table holds.
-	var count: Int {
-		storage.records.count + appendedRecords.count
-	}
+	/// How many records the table holds: `storage`'s, then those `overlaidRecords` holds after them.
+	fileprivate(set) var count = 0
 
 	/// The position of the scope the map held under `key`, or `nil` when it held none: for a signature pass's table, when
 	/// the pass's map holds no `key`, whatever the base holds.
@@ -179,9 +156,9 @@ struct ScopeTable: Sendable {
 	}
 
 	fileprivate var storage = Storage(records: [], idByKey: [:])
-	/// The records after `storage`'s, in `ScopeID` order: a root's scope and the scopes it refers to that the map did not hold.
-	fileprivate var appendedRecords = [ScopeRecord]()
-	/// The records a signature pass puts in place of the base's, by position (`FrozenScopeMap.overlaying`).
+	/// The records a table holds beyond `storage`, by position: those a signature pass puts in place of the base's
+	/// (`FrozenScopeMap.overlaying`), and those of the scopes given positions after `storage`'s, which a freeze makes here
+	/// first (`FrozenScopeMap.freezePendingScopes`) and a map's freeze then moves into `storage`.
 	fileprivate var overlaidRecords = [Int: ScopeRecord]()
 	/// For a signature pass's table, the keys the pass's map holds, which its reachable types fulfill
 	/// (`FrozenScopeMap.overlaying`): a key outside them names no record. `nil` for a table frozen from a map, whose keys are its own.
@@ -231,8 +208,8 @@ struct FrozenScopeMap {
 		}
 		freezePendingScopes()
 		// Every table made from this one shares what it holds now.
-		table.storage = ScopeTable.Storage(records: table.appendedRecords, idByKey: idByKey)
-		table.appendedRecords = []
+		table.storage = ScopeTable.Storage(records: (0..<table.count).compactMap { table.overlaidRecords[$0] }, idByKey: idByKey)
+		table.overlaidRecords = [:]
 		scopeStorage = ScopeStorage(scopes: addedScopes, idByScope: addedIDByScope)
 		addedScopes = []
 		addedIDByScope = [:]
@@ -384,7 +361,8 @@ struct FrozenScopeMap {
 	/// Makes the record of every scope given a position but no record yet, in `ScopeID` order; each can give more positions.
 	private mutating func freezePendingScopes() {
 		while table.count < scopeStorage.scopes.count + addedScopes.count {
-			table.appendedRecords.append(record(freezing: addedScopes[table.count - scopeStorage.scopes.count]))
+			table.overlaidRecords[table.count] = record(freezing: addedScopes[table.count - scopeStorage.scopes.count])
+			table.count += 1
 		}
 	}
 

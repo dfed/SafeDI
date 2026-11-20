@@ -159,6 +159,47 @@ struct SafeDIToolScopeTableTests: ~Copyable {
 	private var filesToDelete: [URL]
 
 	/// A permutation of `0..<count`, which `seed` decides alone (Fisher–Yates over SplitMix64).
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_freezesHolesAliasesAndFills_whenRootFillsHoleOfSeamInAnotherModule() async throws {
+		// `Hub`, a seam of `Feature`, instantiates `api: any Api`, which nothing in `Feature` fulfills, so its tree holds a
+		// hole there. `App`'s `Root` builds `Hub`, whose call fills the hole with `LiveApi`, and renames `hub`. Each table
+		// spells every kind of property a record holds, and the fill of a call.
+		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
+		try await ScopeTableObservation.$observer.withValue({ projection in
+			continuation.yield(projection)
+		}) {
+			_ = try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [Self.hub]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [Self.app], dependencies: ["Feature"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		continuation.finish()
+		var projections = [String]()
+		for await projection in stream {
+			projections.append(projection)
+		}
+		// `Feature` freezes its maps and overlays each seam signature pass on them; `App` freezes its validated map and its
+		// seam map, in which `Hub` is a call that fills its hole. Sorted, since the order the tables are made in is not
+		// this test's subject.
+		#expect(projections.sorted() == [
+			"0: Hub keys [Hub]",
+			"0: Hub keys [Hub]",
+			"0: Hub keys [Hub] api -> 1\n1: LiveApi keys [Api, LiveApi]\n2: Root keys [Root] hub -> 0 renamedHub = hub",
+			"0: Hub keys [Hub] api -> hole",
+			"0: Hub keys [Hub] api -> hole",
+			"0: Hub keys [Hub] api -> hole",
+			"0: Hub keys [Hub] api -> hole",
+			"0: Hub keys [Hub] api -> hole",
+			"0: Hub keys [Hub] api -> hole",
+			"0: Hub keys [Hub] fill api -> 1\n1: LiveApi keys [Api, LiveApi]\n2: Root keys [Root] hub -> 0 renamedHub = hub",
+		])
+	}
+
 	private static func shuffledPositions(count: Int, seed: UInt64) -> [Int] {
 		var positions = Array(0..<count)
 		var random = GraphFuzzerRandomNumberGenerator(seed: seed)
@@ -167,6 +208,39 @@ struct SafeDIToolScopeTableTests: ~Copyable {
 		}
 		return positions
 	}
+
+	private static let hub = """
+	public protocol Api {}
+
+	@Instantiable(generateDependencyTree: true)
+	public final class Hub: Instantiable {
+		public init(api: any Api) {
+			self.api = api
+		}
+
+		@Instantiated let api: any Api
+	}
+	"""
+
+	private static let app = """
+	import Feature
+
+	@Instantiable(fulfillingAdditionalTypes: [Api.self])
+	public final class LiveApi: Api, Instantiable {
+		public init() {}
+	}
+
+	@Instantiable(isRoot: true)
+	public final class Root: Instantiable {
+		public init(hub: Hub, renamedHub: Hub) {
+			self.hub = hub
+			self.renamedHub = renamedHub
+		}
+
+		@Instantiated let hub: Hub
+		@Received(fulfilledByDependencyNamed: "hub", ofType: Hub.self) let renamedHub: Hub
+	}
+	"""
 
 	private static let chain = """
 	@Instantiable
