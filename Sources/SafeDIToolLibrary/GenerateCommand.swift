@@ -75,9 +75,14 @@ public struct Generate: AsyncParsableCommand {
 	public func run() async throws {
 		let buildLog = BuildLog()
 		do {
-			let warnings = try await generate(buildLog: buildLog).warnings
-			if !warnings.isEmpty {
-				FileHandle.standardError.write(Data("\(buildLog.formatted(warnings))\n".utf8))
+			let output = try await generate(buildLog: buildLog)
+			if !output.warnings.isEmpty {
+				FileHandle.standardError.write(Data("\(buildLog.formatted(output.warnings))\n".utf8))
+			}
+			if SafeDITool.processEndsWithCommand {
+				// The process is about to end, and its end frees everything at once, while releasing what the run built,
+				// one object after another, took a few milliseconds of every module's run under Bazel and Tuist.
+				_ = Unmanaged.passRetained(HeldUntilProcessEnds(output))
 			}
 		} catch let error as any SourceLocatedError {
 			// Print located errors ourselves. ArgumentParser would print `Error: ` ahead of the first line,
@@ -149,6 +154,18 @@ public struct Generate: AsyncParsableCommand {
 		public let module: ModuleInfo
 		/// The dependent modules' info, in the order this run combined their declarations.
 		let dependentModules: [ModuleInfo]
+		/// What the run built on its way to its outputs, which nothing reads: held here so that `run()` can keep it from
+		/// being released when the process ends with the run.
+		let builtValues: [any Sendable]
+	}
+
+	/// An output `run()` keeps until the process ends.
+	private final class HeldUntilProcessEnds: Sendable {
+		init(_ output: Output) {
+			self.output = output
+		}
+
+		let output: Output
 	}
 
 	/// Parses, validates, and writes the configured outputs.
@@ -440,16 +457,7 @@ public struct Generate: AsyncParsableCommand {
 			mockImportStatements: importingOtherModules(importingModulesReadFromBeneath(dependentModuleInfo.flatMap(\.mockImports) + viewOnlyDeclarations.flatMap(\.mockImports) + additionalImportStatements + module.mockImports)),
 			typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap,
 			aliasDeclarationReferences: AliasDeclarationReferences(
-				declarationFilePaths: Set(normalizedInstantiables.flatMap { instantiable in
-					instantiable.dependencies.compactMap { dependency in
-						switch dependency.source {
-						case .aliased:
-							dependency.declarationLocation?.filePath
-						case .forwarded, .instantiated, .received:
-							nil
-						}
-					}
-				}),
+				declarationFilePaths: Self.aliasDeclarationFilePaths(of: normalizedInstantiables),
 				compilerFilePaths: compilerFilePaths(manifest: manifest, buildSystemFilePaths: buildSystemFilePaths, inputFilePaths: inputFilePaths),
 				// A plugin's paths relative to its project root, and any other integration's paths as it wrote them.
 				commentFilePath: { [projectFilePaths] filePath in
@@ -883,7 +891,13 @@ public struct Generate: AsyncParsableCommand {
 				.moduleInfoData
 				.writeIfChanged(toPath: moduleInfoDestination.path)
 		}
-		return Output(warnings: warnings, module: module, dependentModules: dependentModuleInfo)
+		return Output(
+			warnings: warnings,
+			module: module,
+			dependentModules: dependentModuleInfo,
+			// Only what the run reads until its end: holding a value it is done with sooner would raise its peak memory.
+			builtValues: [generator, moduleInfoView],
+		)
 	}
 
 	// MARK: Private
@@ -1820,6 +1834,24 @@ public struct Generate: AsyncParsableCommand {
 	/// spelling: Xcode reports a package under `/tmp` to its plugin as `/tmp/…` and hands the compiler
 	/// `/private/tmp/…`, and a plugin that runs `scan` while it plans the build records only the first. This tool
 	/// then does not know how the compiler spells any path.
+	/// The files that declare the aliased dependencies of `instantiables`, collected without an array per declaration.
+	private static func aliasDeclarationFilePaths(of instantiables: [Instantiable]) -> Set<String> {
+		var filePaths = Set<String>()
+		for instantiable in instantiables {
+			for dependency in instantiable.dependencies {
+				switch dependency.source {
+				case .aliased:
+					if let filePath = dependency.declarationLocation?.filePath {
+						filePaths.insert(filePath)
+					}
+				case .forwarded, .instantiated, .received:
+					break
+				}
+			}
+		}
+		return filePaths
+	}
+
 	private func compilerFilePaths(
 		manifest: SafeDIToolManifest?,
 		buildSystemFilePaths: BuildSystemFilePaths?,
