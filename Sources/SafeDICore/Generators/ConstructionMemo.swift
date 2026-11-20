@@ -138,7 +138,7 @@ struct ConstructionMemo {
 		let subtreeScopeCount: Int
 		/// The generators the build started or collected to start, in order, which a later pass that reuses the generator
 		/// collects again.
-		let startedBeneath: [ScopeGenerator]
+		let startedBeneath: StartedGenerators
 		/// Whether the build found, everywhere in its subtree, what it read from the pass before: the same cycle parameters,
 		/// loops of builders and fill struct labels. Building the place again from this generator then reads what the build
 		/// read from the pass before, so it builds this generator again (see `settledReuse`).
@@ -146,6 +146,27 @@ struct ConstructionMemo {
 		/// The generator's `ScopeGenerator.CycleClosingRedeclaredLabels`, which no generator keeps, for the parent of a place
 		/// that reuses it to merge.
 		let cycleClosingRedeclaredLabels: ScopeGenerator.CycleClosingRedeclaredLabels
+	}
+
+	/// Every generator one pass started or collected to start, in order (`ScopeRecord.createScopeGenerator`), which the
+	/// pass's entries share: each names its own part, so no entry copies the generators beneath its place, which made a
+	/// deep chain's entries hold a number of generators that grows with the square of its depth.
+	final class StartLog {
+		private(set) var generators = [ScopeGenerator]()
+
+		func append(_ generator: ScopeGenerator) {
+			generators.append(generator)
+		}
+	}
+
+	/// The part of a pass's start log one place's build started or collected.
+	struct StartedGenerators {
+		let log: StartLog
+		let positions: Range<Int>
+
+		var generators: ArraySlice<ScopeGenerator> {
+			log.generators[positions]
+		}
 	}
 
 	/// A reuse of an entry by another place: the entry, with the depths its reads are answered at in the place's context.
@@ -404,11 +425,7 @@ struct ConstructionLog {
 	/// Adds `log`'s reads to this log's.
 	mutating func formUnion(_ log: Self) {
 		guard isRecording else { return }
-		if answersByRead.isEmpty {
-			answersByRead = log.answersByRead
-		} else {
-			answersByRead.merge(log.answersByRead) { existing, _ in existing }
-		}
+		answersByRead.merge(log.answersByRead) { existing, _ in existing }
 	}
 
 	/// These reads as `context` answers them, or `nil` when `context` answers one otherwise.

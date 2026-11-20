@@ -42,16 +42,6 @@ final class ScopeRecord: Sendable {
 			onlyIfAvailable: Bool,
 			declarationReference: AliasDeclarationReferences.Reference?,
 		)
-
-		/// The property this scope declares.
-		var property: Property {
-			switch self {
-			case let .instantiated(property, _, _),
-			     let .hole(property, _),
-			     let .aliased(property, _, _, _, _):
-				property
-			}
-		}
 	}
 
 	/// How a call passes the builder for one place, as `Scope.HoleArgument` holds it, with the scope of a fill named by its
@@ -59,14 +49,6 @@ final class ScopeRecord: Sendable {
 	enum HoleArgument: Sendable {
 		case fill(SeamSignature.Hole, ScopeID)
 		case passUp(SeamSignature.Hole)
-
-		/// The hole the argument is passed for.
-		var hole: SeamSignature.Hole {
-			switch self {
-			case let .fill(hole, _), let .passUp(hole):
-				hole
-			}
-		}
 	}
 
 	/// See `Scope.instantiable`.
@@ -142,17 +124,13 @@ struct ScopeTable: Sendable {
 		let index = Int(id.index)
 		if !overlaidRecords.isEmpty, let record = overlaidRecords[index] {
 			return record
-		} else if index < storage.records.count {
-			return storage.records[index]
 		} else {
-			return appendedRecords[index - storage.records.count]
+			return storage.records[index]
 		}
 	}
 
-	/// How many records the table holds.
-	var count: Int {
-		storage.records.count + appendedRecords.count
-	}
+	/// How many records the table holds: `storage`'s, then those `overlaidRecords` holds after them.
+	fileprivate(set) var count = 0
 
 	/// The position of the scope the map held under `key`, or `nil` when it held none: for a signature pass's table, when
 	/// the pass's map holds no `key`, whatever the base holds.
@@ -179,9 +157,9 @@ struct ScopeTable: Sendable {
 	}
 
 	fileprivate var storage = Storage(records: [], idByKey: [:])
-	/// The records after `storage`'s, in `ScopeID` order: a root's scope and the scopes it refers to that the map did not hold.
-	fileprivate var appendedRecords = [ScopeRecord]()
-	/// The records a signature pass puts in place of the base's, by position (`FrozenScopeMap.overlaying`).
+	/// The records a table holds beyond `storage`, by position: those a signature pass puts in place of the base's
+	/// (`FrozenScopeMap.overlaying`), and those of the scopes given positions after `storage`'s, which a freeze makes here
+	/// first (`FrozenScopeMap.freezePendingScopes`) and a map's freeze then moves into `storage`.
 	fileprivate var overlaidRecords = [Int: ScopeRecord]()
 	/// For a signature pass's table, the keys the pass's map holds, which its reachable types fulfill
 	/// (`FrozenScopeMap.overlaying`): a key outside them names no record. `nil` for a table frozen from a map, whose keys are its own.
@@ -231,8 +209,8 @@ struct FrozenScopeMap {
 		}
 		freezePendingScopes()
 		// Every table made from this one shares what it holds now.
-		table.storage = ScopeTable.Storage(records: table.appendedRecords, idByKey: idByKey)
-		table.appendedRecords = []
+		table.storage = ScopeTable.Storage(records: (0..<table.count).compactMap { table.overlaidRecords[$0] }, idByKey: idByKey)
+		table.overlaidRecords = [:]
 		scopeStorage = ScopeStorage(scopes: addedScopes, idByScope: addedIDByScope)
 		addedScopes = []
 		addedIDByScope = [:]
@@ -263,10 +241,21 @@ struct FrozenScopeMap {
 	) -> FrozenScopeMap {
 		var frozenScopeMap = self
 		frozenScopeMap.table.reachableKeys = Set(passScopeMap.keys)
-		for (key, scope) in passScopeMap {
-			if let id = table.storage.idByKey[key] {
-				frozenScopeMap.addedIDByScope[ObjectIdentifier(scope)] = id
+		var passEntries = Array(passScopeMap)
+		if let entryOrder = ScopeTableObservation.entryOrder {
+			passEntries = entryOrder(passEntries.count).map { passEntries[$0] }
+		}
+		// A scope the pass's map holds under several keys names the base's position of the first of them in
+		// `precedesInScopeOrder`, as a freeze orders a scope by its first key, so no order the entries arrive in decides it.
+		var firstKeyByScope = [ObjectIdentifier: TypeDescription]()
+		for (key, scope) in passEntries {
+			guard let id = table.storage.idByKey[key] else { continue }
+			let identifier = ObjectIdentifier(scope)
+			if let firstKey = firstKeyByScope[identifier], !TypeDescription.precedesInScopeOrder(key, firstKey) {
+				continue
 			}
+			firstKeyByScope[identifier] = key
+			frozenScopeMap.addedIDByScope[identifier] = id
 		}
 		var callScopeByID = [ScopeID: Scope]()
 		for scope in Self.scopesReached(from: rootScopes, passScopeMap: passScopeMap, fulfillingKey: fulfillingKey) where scope.seamCall != nil {
@@ -290,6 +279,9 @@ struct FrozenScopeMap {
 			overlaidCallRecords(callScopeByID.values.map(\.instantiable.concreteInstantiable.asSource).sorted())
 		}
 		frozenScopeMap.freezePendingScopes()
+		if let observer = ScopeTableObservation.observer {
+			observer(frozenScopeMap.table.projection)
+		}
 		return frozenScopeMap
 	}
 
@@ -370,7 +362,8 @@ struct FrozenScopeMap {
 	/// Makes the record of every scope given a position but no record yet, in `ScopeID` order; each can give more positions.
 	private mutating func freezePendingScopes() {
 		while table.count < scopeStorage.scopes.count + addedScopes.count {
-			table.appendedRecords.append(record(freezing: addedScopes[table.count - scopeStorage.scopes.count]))
+			table.overlaidRecords[table.count] = record(freezing: addedScopes[table.count - scopeStorage.scopes.count])
+			table.count += 1
 		}
 	}
 
@@ -484,10 +477,12 @@ extension ScopeTable {
 
 /// What the tests read of each freeze, and how they order its entries: set by the tests, never by the tool.
 public enum ScopeTableObservation {
-	/// When set, each freeze takes its map's entries in the order this returns, a permutation of the positions of as many
-	/// entries as it is passed, so that a test can show the table does not depend on the order entries arrive in.
+	/// When set, each freeze takes its map's entries, and each signature pass's overlay its pass map's, in the order this
+	/// returns, a permutation of the positions of as many entries as it is passed, so that a test can show a table does not
+	/// depend on the order entries arrive in.
 	@TaskLocal public static var entryOrder: (@Sendable (_ entryCount: Int) -> [Int])?
-	/// Called with each table a map freezes, as text (`ScopeTable.projection`).
+	/// Called with each table a map freezes, and each table a signature pass assembles (`FrozenScopeMap.overlaying`), as text
+	/// (`ScopeTable.projection`).
 	@TaskLocal public static var observer: (@Sendable (_ projection: String) -> Void)?
 	/// When set, called once per seam signature pass with each key whose record in the pass's table, assembled from the base
 	/// and the pass's overlay, differs from the record frozen from the pass's own map (by `ScopeTable.projectionByKey`), and

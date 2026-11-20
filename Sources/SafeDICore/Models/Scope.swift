@@ -524,7 +524,8 @@ extension ScopeRecord {
 		// Within a pass, a memo that only this tree reads reuses a place's generator only at another place of the same scope,
 		// so no pass keys, looks up or stores a place of a scope the tree builds at one place only. A memo shared across trees
 		// keys every place, since a later tree can reach any of them, and so does the sharing oracle's build that offers each
-		// place what a place after it built, which a place at one place can reuse.
+		// place what a place after it built, which a place at one place can reuse. So does a tree that may take a later pass,
+		// which reuses what the pass before built only through its entries (`ScopesBuiltAtOnePlace.init(treeRootedAt:)`).
 		let keysPlacesAtOnePlace = sharesMemo && constructionMemo.sharing == .acrossTrees
 			|| ConstructionSharingSchedule.current?.offersLaterPlacesCandidates == true
 		let scopesBuiltAtOnePlace = keysPlacesAtOnePlace || !ConstructionMemo.isEnabled ? nil : ScopesBuiltAtOnePlace(treeRootedAt: root)
@@ -673,7 +674,7 @@ extension ScopeRecord {
 		var startedGenerators = Set<ObjectIdentifier>()
 		// Every generator this pass started or collected, in order: what each place's build started is the part of it from
 		// the place's `startLogIndex` on, which a later pass that reuses the place's generator collects again.
-		var startLog = [ScopeGenerator]()
+		let startLog = ConstructionMemo.StartLog()
 		while true {
 			let index = scopeGeneratorsUnderConstruction.count - 1
 			if let propertyToGenerate = scopeGeneratorsUnderConstruction[index].nextPropertyToGenerate() {
@@ -692,7 +693,7 @@ extension ScopeRecord {
 					} else if let key, let reuse = settledPassMemo?.settledReuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property)) {
 						// The pass before built this place's generator settled: building the place again would build it again.
 						// Its code starts as the build would have started it, and the memo holds it for the places after it.
-						for generator in reuse.entry.startedBeneath where startedGenerators.insert(ObjectIdentifier(generator)).inserted {
+						for generator in reuse.entry.startedBeneath.generators where startedGenerators.insert(ObjectIdentifier(generator)).inserted {
 							generatorsToStart?.append(generator)
 							startLog.append(generator)
 						}
@@ -706,7 +707,7 @@ extension ScopeRecord {
 							isKeyed: key != nil,
 						)
 						child.memoKey = key
-						child.startLogIndex = startLog.count
+						child.startLogIndex = startLog.generators.count
 						scopeGeneratorsUnderConstruction.append(child)
 					}
 				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
@@ -730,7 +731,7 @@ extension ScopeRecord {
 				))
 			} else {
 				var createdScope = scopeGeneratorsUnderConstruction.removeLast()
-				let scopeGenerator = createdScope.scopeGenerator(collectingGeneratorsToStartInto: &generatorsToStart, startedGenerators: &startedGenerators, startLog: &startLog)
+				let scopeGenerator = createdScope.scopeGenerator(collectingGeneratorsToStartInto: &generatorsToStart, startedGenerators: &startedGenerators, startLog: startLog)
 				if scopeGeneratorsUnderConstruction.isEmpty {
 					return scopeGenerator
 				} else {
@@ -742,7 +743,7 @@ extension ScopeRecord {
 							reads: readsAnsweredAbove,
 							generator: scopeGenerator,
 							subtreeScopeCount: createdScope.subtreeScopeCount,
-							startedBeneath: Array(startLog[createdScope.startLogIndex...]),
+							startedBeneath: ConstructionMemo.StartedGenerators(log: startLog, positions: createdScope.startLogIndex..<startLog.generators.count),
 							isSettled: isSettled,
 							cycleClosingRedeclaredLabels: createdScope.cycleClosingRedeclaredLabels,
 						), for: key, keepingAlive: createdScope.builtScope.identity)
@@ -1290,7 +1291,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	}
 
 	/// Whether a mock passes `nil` to a receive of `property` only if available, by `dependency` on `receivingType`, among
-	/// `nearestDeclarations` (see `NearestDeclarations.passesNil(to:receivedBy:on:)`), logged in `log`, `false` included: two
+	/// `nearestDeclarations` (see `NearestDeclarations.resolvingPassesNil(to:receivedBy:on:)`), logged in `log`, `false` included: two
 	/// mock roots can reach one place and differ only in this. Where no declaration enclosing the tree holds such a receive,
 	/// the answer is `false` at every place of the tree, which a construction memo's key holds, so nothing is logged.
 	private static func passesNil(to property: Property, receivedBy dependency: Dependency, on receivingType: TypeDescription, in nearestDeclarations: NearestDeclarations, log: inout ConstructionLog) -> Bool {
@@ -2219,7 +2220,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// - Parameter startedGenerators: The generators whose code the pass started or collected, which grows by those this
 	///   scope starts or collects: a generator several places share starts once.
 	/// - Parameter startLog: Every generator the pass started or collected, in order, which grows as `startedGenerators` does.
-	mutating func scopeGenerator(collectingGeneratorsToStartInto generatorsToStart: inout [ScopeGenerator]?, startedGenerators: inout Set<ObjectIdentifier>, startLog: inout [ScopeGenerator]) -> ScopeGenerator {
+	mutating func scopeGenerator(collectingGeneratorsToStartInto generatorsToStart: inout [ScopeGenerator]?, startedGenerators: inout Set<ObjectIdentifier>, startLog: ConstructionMemo.StartLog) -> ScopeGenerator {
 		// Every fill this call passes is an enclosing call's or its own.
 		let fillNames = holeArguments.isEmpty ? [:] : GenerationWork.taking(enclosingFillsOfThisCall, by: .gatheringFillsOfACall)
 		let builtGenerator = ScopeGenerator(
@@ -3164,15 +3165,10 @@ extension NearestDeclarations {
 
 	/// Whether a receive of `property` only if available, by `dependency` on `receivingType`, reads none of the forms
 	/// the nearest declaration of its label binds in this place, which a mock passes `nil` as production does: wherever
-	/// its type is built, or beneath a required receive of its label that pins the declaration to a form it cannot read.
-	/// Asked only where `mayPassNil`.
-	func passesNil(to property: Property, receivedBy dependency: Dependency, on receivingType: TypeDescription) -> Bool {
-		resolvingPassesNil(to: property, receivedBy: dependency, on: receivingType).passesNil
-	}
-
-	/// `passesNil(to:receivedBy:on:)`, with the depth of the scope that made the nearest declaration of `property`'s label
-	/// the nearest (see `resolving(_:)`). The answer reads that declaration alone, so a construction memo that asks it again
-	/// at that depth asks it of the declaration whole.
+	/// its type is built, or beneath a required receive of its label that pins the declaration to a form it cannot read;
+	/// with the depth of the scope that made the nearest declaration of `property`'s label the nearest (see
+	/// `resolving(_:)`). The answer reads that declaration alone, so a construction memo that asks it again at that depth
+	/// asks it of the declaration whole. Asked only where `mayPassNil`.
 	func resolvingPassesNil(to property: Property, receivedBy dependency: Dependency, on receivingType: TypeDescription) -> (passesNil: Bool, depth: Int) {
 		let (nearestDeclaration, depth) = resolving(property.label)
 		guard holdsReceivesPassedNil, let nearestDeclaration else { return (false, depth) }
