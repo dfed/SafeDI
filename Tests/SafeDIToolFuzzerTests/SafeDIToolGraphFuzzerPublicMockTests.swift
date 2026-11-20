@@ -816,9 +816,10 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func statedPublicMockValueDivergences_exemptOnlyWhatLeafCallsExplain_whenConsumerCallsPublicMocks() async throws {
 		// The two divergences section 5 states, derived from the leaf calls of graphs shaped as the fuzzer draws them.
-		// M8.32: a consumer passes `analytics.instance` of the wrapper it holds; the leaf's re-made wrapper and the early
-		// read are exempt (seed 901), through a call of the function only generated code calls too (seed 906) – unless the
-		// leaf wraps a new instance, whose wrapper still fails (seed 902). M8.9b: two
+		// M8.32: a consumer passes `analytics.instance` of the wrapper it holds; the leaf's re-made wrapper, which the value
+		// comparator compares by its instance, agrees, and the early read is exempt (seed 901), through a call of the
+		// function only generated code calls too (seed 906) – unless the leaf wraps a new instance, which still fails
+		// (seed 902). M8.9b: two
 		// leaves each build the `session` their caller in another package cannot name (seed 903), or one builds it and the
 		// other, receiving it only if available, holds `nil` (seed 905) – but a caller that holds `session` itself and passes
 		// it to neither leaf still fails (seed 904).
@@ -844,7 +845,7 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 			return valueComparison.differences.filter { !stated.contains($0) }
 		}
 		#expect(remaining[0] == [])
-		#expect(remaining[1] == [DifferentialValueDifference(probe: "S902_T8.mock()", path: ["<1> S902_T8", "analytics"], feature: "analytics: <4> LazilyInstantiated<S902_Analytics> (instance read last)", knownRight: "analytics: <3> LazilyInstantiated<S902_Analytics> (seen, first at <1> S902_T8 > t0 > analytics)")])
+		#expect(remaining[1] == [DifferentialValueDifference(probe: "S902_T8.mock()", path: ["<4>.instance"], feature: "<4>.instance: <6> S902_Analytics (built before the probe's value)", knownRight: "<4>.instance: <5> S902_Analytics (seen, first at <3>.instance)")])
 		#expect(remaining[2] == [])
 		#expect(remaining[4] == [])
 		#expect(remaining[5] == [])
