@@ -248,6 +248,9 @@ public struct Initializer: Codable, Hashable, Sendable {
 		for argument in arguments {
 			guard let dependency = dependencies.first(where: argument.isFulfilled(by:)) else {
 				guard argument.hasDefaultValue else {
+					// A deliberate gap: a fill's call of a hand-written mock that takes a dependency only an inactive clause
+					// declares still ends here in a build that compiles no generated mock, which the located check
+					// (`validateHandWrittenMocksTakeOnlyFulfilledParameters`) leaves alone, so that the inline shape builds there.
 					throw GenerationError.unexpectedArgument(argument.asProperty.asSource)
 				}
 				// We do not care about this argument because it has a default value.
@@ -256,6 +259,14 @@ public struct Initializer: Codable, Hashable, Sendable {
 			bindings.append((dependency: dependency, argument: argument))
 		}
 		return bindings
+	}
+
+	/// The arguments without a default value that none of `dependencies` is passed to, in declaration order, each with its
+	/// position among `arguments`: those a call generated from `dependencies` cannot pass.
+	func argumentsWithoutDefaultFulfilledByNone(of dependencies: [Dependency]) -> [(position: Int, argument: Argument)] {
+		arguments.enumerated()
+			.filter { !$0.element.hasDefaultValue && !dependencies.contains(where: $0.element.isFulfilled(by:)) }
+			.map { (position: $0.offset, argument: $0.element) }
 	}
 
 	/// - Parameter lazilyInstantiatedInstanceProperties: The received properties that are in scope only as the

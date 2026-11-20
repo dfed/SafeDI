@@ -24,6 +24,9 @@ public actor DependencyTreeGenerator {
 	/// - Parameters:
 	///   - importStatements: The imports generated dependency-tree code needs.
 	///   - mockImportStatements: The imports generated mock code needs.
+	///   - compilesGeneratedMocks: Whether the build compiles the generated mocks
+	///     (`ConditionalCompilationEvaluator.compilesGeneratedMocks`). A call of a hand-written mock that a build compiles
+	///     no generated mock in is never compiled, so it is checked only where they are compiled.
 	///   - emittingModule: The module the generated code compiles in, which decides what access each declaration the
 	///     generated code constructs needs, or `nil` to check no access, as `SafeDITool query` does.
 	///   - seams: The seams among the declarations – the types declared with `generateDependencyTree: true` – whose
@@ -52,6 +55,7 @@ public actor DependencyTreeGenerator {
 		mockImportStatements: [ImportStatement],
 		typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
 		aliasDeclarationReferences: AliasDeclarationReferences,
+		compilesGeneratedMocks: Bool,
 		emittingModule: EmittingModule? = nil,
 		seams: SeamResolution = .none,
 		plainTypeDeclarations: [PlainTypeDeclaration] = [],
@@ -82,6 +86,7 @@ public actor DependencyTreeGenerator {
 		self.readOwnFiles = readOwnFiles
 		self.typeDescriptionToFulfillingInstantiableMap = typeDescriptionToFulfillingInstantiableMap
 		self.aliasDeclarationReferences = aliasDeclarationReferences
+		self.compilesGeneratedMocks = compilesGeneratedMocks
 		self.emittingModule = emittingModule
 		self.seams = seams
 		self.plainTypeDeclarations = plainTypeDeclarations
@@ -1590,6 +1595,9 @@ public actor DependencyTreeGenerator {
 		/// Reported at each `@Received(fulfilledByDependencyNamed:ofType:)` declaration spelled as the `@Instantiable` macro
 		/// rejects. See `RejectedRename`.
 		case rejectedRenames([RejectedRename])
+		/// Reported at each parameter of a hand-written mock a generated mock calls that the generated call cannot pass. See
+		/// `UnfulfilledMockParameter`.
+		case unfulfilledMockParameters([UnfulfilledMockParameter])
 		/// Reported at each declaration whose access keeps the generated code from constructing a type, or, when the
 		/// declaration's file cannot be read, where this module refers to the construction. See `InaccessibleConstruction`.
 		case inaccessibleConstructions([InaccessibleConstruction])
@@ -1625,14 +1633,25 @@ public actor DependencyTreeGenerator {
 		}
 
 		/// The diagnostics of this error in the groups `independentErrors` joins, leaving out those of the constructions
-		/// an `inaccessibleConstructions` error reports, which `independentErrors` merges across the errors it joins.
-		/// Every validation that finds inaccessible constructions throws them as an `inaccessibleConstructions` error
-		/// of its own, which `reportingAll(of:)` joins directly.
-		private var sourceDiagnosticGroupsOtherThanInaccessibleConstructions: [[SourceDiagnostic]] {
+		/// an `inaccessibleConstructions` error reports and of the parameters an `unfulfilledMockParameters` error
+		/// reports, which `independentErrors` merges across the errors it joins. Every validation that finds either
+		/// throws them as an error of its own, which `reportingAll(of:)` joins directly.
+		private var sourceDiagnosticGroupsOfUnmergedFindings: [[SourceDiagnostic]] {
 			if case .inaccessibleConstructions = self {
+				[]
+			} else if case .unfulfilledMockParameters = self {
 				[]
 			} else {
 				[sourceDiagnostics]
+			}
+		}
+
+		/// The parameters this error reports as unfulfilled, if it is an `unfulfilledMockParameters` error.
+		private var reportedUnfulfilledMockParameters: [UnfulfilledMockParameter] {
+			if case let .unfulfilledMockParameters(unfulfilledMockParameters) = self {
+				unfulfilledMockParameters
+			} else {
+				[]
 			}
 		}
 
@@ -1648,10 +1667,12 @@ public actor DependencyTreeGenerator {
 		var sourceDiagnostics: [SourceDiagnostic] {
 			switch self {
 			case let .independentErrors(errors):
-				// The trees of several mock roots can each need one declaration to widen, which is reported once.
+				// The trees of several mock roots can each need one declaration to widen, or each call one hand-written mock
+				// whose parameter they cannot pass, which is reported once.
 				SourceDiagnostic.joiningInSourceOrder(
-					errors.flatMap(\.sourceDiagnosticGroupsOtherThanInaccessibleConstructions)
-						+ InaccessibleConstruction.sourceDiagnosticGroups(of: errors.flatMap(\.reportedInaccessibleConstructions)),
+					errors.flatMap(\.sourceDiagnosticGroupsOfUnmergedFindings)
+						+ InaccessibleConstruction.sourceDiagnosticGroups(of: errors.flatMap(\.reportedInaccessibleConstructions))
+						+ UnfulfilledMockParameter.sourceDiagnosticGroups(of: errors.flatMap(\.reportedUnfulfilledMockParameters)),
 				)
 			case let .inaccessibleConstructions(inaccessibleConstructions):
 				// A declaration that several constructions need to widen the same way is reported once.
@@ -1710,6 +1731,8 @@ public actor DependencyTreeGenerator {
 				rejectedRenames
 					.map(\.sourceDiagnostic)
 					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
+			case let .unfulfilledMockParameters(unfulfilledMockParameters):
+				SourceDiagnostic.joiningInSourceOrder(UnfulfilledMockParameter.sourceDiagnosticGroups(of: unfulfilledMockParameters))
 			case let .configurationBuiltTwoWays(configurationsBuiltTwoWays):
 				// Sorted by location so the order never depends on map iteration.
 				configurationsBuiltTwoWays
@@ -2758,6 +2781,136 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
+		/// A parameter without a default value of a hand-written mock that a generated mock calls – the mocked type's own,
+		/// or that of a type a mock's tree, or a fill a call in it declares, builds with its mock – which no dependency the
+		/// type declares under this build's conditions fulfills, so the generated call cannot pass it. The macro checks a
+		/// mock against the dependencies of every `#if` clause, since the compiler has chosen among them, so such a
+		/// parameter is one only a clause SafeDITool's evaluation did not select declares a dependency of (`clause`), which
+		/// the error points at. Otherwise it is input the macro rejects, a parameter that names no dependency, which is
+		/// reported plainly at the mock. No fix-it: either remedy the message names can be the one wanted.
+		struct UnfulfilledMockParameter {
+			/// The type whose hand-written mock takes the parameter.
+			let declaringType: TypeDescription
+			/// The hand-written mock.
+			let mockInitializer: Initializer
+			/// The mock's name: `mock`, or the type's `customMockName`.
+			let mockMethodName: String
+			let parameter: Initializer.Argument
+			/// Where the mock declares `parameter` among its parameters, which orders the errors at one location.
+			let parameterPosition: Int
+			/// The outermost clause the evaluation did not select around a dependency of the parameter's label.
+			let clause: Instantiable.DependencyLabelInUnselectedClause?
+			/// Whether moving the mock into `clause` compiles under every condition, which the message then offers.
+			let offersMoveIntoClause: Bool
+			let mockDeclarationLocation: Dependency.DeclarationLocation?
+
+			/// The parameters of `instantiable`'s hand-written mock, in declaration order, that no dependency it declares
+			/// fulfills and that have no default value.
+			static func parameters(ofMockOf instantiable: Instantiable) -> [UnfulfilledMockParameter] {
+				guard let mockInitializer = instantiable.mockInitializer else { return [] }
+				let positionedParameters = mockInitializer.argumentsWithoutDefaultFulfilledByNone(of: instantiable.dependencies)
+				let unfulfilledParameters = positionedParameters.map(\.argument)
+				let clauses = unfulfilledParameters.map { parameter in
+					instantiable.dependencyLabelsInUnselectedClauses.first { $0.label == parameter.innerLabel }
+				}
+				return zip(positionedParameters, clauses).map { positionedParameter, clause in
+					UnfulfilledMockParameter(
+						declaringType: instantiable.concreteInstantiable,
+						mockInitializer: mockInitializer,
+						mockMethodName: instantiable.customMockName ?? InstantiableVisitor.mockMethodName,
+						parameter: positionedParameter.argument,
+						parameterPosition: positionedParameter.position,
+						clause: clause,
+						offersMoveIntoClause: canMoveMock(of: instantiable, intoClauseOf: clauses, unfulfilledParameters: unfulfilledParameters),
+						mockDeclarationLocation: instantiable.mockDeclarationLocation,
+					)
+				}
+			}
+
+			/// Whether the hand-written mock of `instantiable`, moved into the clause that declares the dependencies of its
+			/// `unfulfilledParameters` (whose clauses are `clauses`), compiles wherever that clause is compiled and where it
+			/// is not: one clause declares each of them itself, rather than in a block nested in it, and every other
+			/// parameter without a default value takes a dependency declared outside every `#if`. Where the clause is not
+			/// compiled, the type has no hand-written mock and generated mocks build it with its initializer, which a
+			/// `mockOnly` type does not have.
+			private static func canMoveMock(
+				of instantiable: Instantiable,
+				intoClauseOf clauses: [Instantiable.DependencyLabelInUnselectedClause?],
+				unfulfilledParameters: [Initializer.Argument],
+			) -> Bool {
+				guard !instantiable.mockOnly,
+				      let firstClause = clauses.first ?? nil,
+				      clauses.allSatisfy({ $0?.clauseLocation == firstClause.clauseLocation && $0?.clause == firstClause.clause && $0?.isDeclaredDirectlyInClause == true }),
+				      let mockInitializer = instantiable.mockInitializer
+				else { return false }
+				let unfulfilledLabels = Set(unfulfilledParameters.map(\.innerLabel))
+				return mockInitializer.arguments.allSatisfy { argument in
+					argument.hasDefaultValue
+						|| unfulfilledLabels.contains(argument.innerLabel)
+						|| !instantiable.dependencyLabelsInsideConditionalBlocks.contains(argument.innerLabel)
+				}
+			}
+
+			/// The diagnostics of `unfulfilledMockParameters`, which several mock roots can each find, in one group per
+			/// location: each parameter once, however many roots found it, and the parameters at one location in the order
+			/// the mock declares them, never by their labels. Neither depends on the order of `unfulfilledMockParameters`.
+			static func sourceDiagnosticGroups(of unfulfilledMockParameters: [UnfulfilledMockParameter]) -> [[SourceDiagnostic]] {
+				// One declaration's mock reads the same to every root, so a parameter found twice is reported once, keyed by
+				// where it is reported and which parameter of which type's mock it is.
+				struct Key: Hashable {
+					let location: Dependency.DeclarationLocation?
+					let declaringType: TypeDescription
+					let parameter: Initializer.Argument
+				}
+				var reportedKeys = Set<Key>()
+				var parametersByLocation = [Dependency.DeclarationLocation?: [UnfulfilledMockParameter]]()
+				for unfulfilledMockParameter in unfulfilledMockParameters where reportedKeys.insert(Key(
+					location: unfulfilledMockParameter.location,
+					declaringType: unfulfilledMockParameter.declaringType,
+					parameter: unfulfilledMockParameter.parameter,
+				)).inserted {
+					parametersByLocation[unfulfilledMockParameter.location, default: []].append(unfulfilledMockParameter)
+				}
+				// Each group's location is its own, so `joiningInSourceOrder` orders the groups by location alone.
+				return parametersByLocation.values.map { parametersAtLocation in
+					parametersAtLocation
+						.sorted { ($0.declaringType, $0.parameterPosition) < ($1.declaringType, $1.parameterPosition) }
+						.map(\.sourceDiagnostic)
+				}
+			}
+
+			/// Where the error is reported: at the clause, or at the mock when no clause declares a dependency of the
+			/// parameter's label.
+			private var location: Dependency.DeclarationLocation? {
+				clause?.clauseLocation ?? mockDeclarationLocation
+			}
+
+			/// An `error:` line at `location`.
+			private var sourceDiagnostic: SourceDiagnostic {
+				SourceDiagnostic(
+					severity: .error,
+					location: location,
+					message: message,
+				)
+			}
+
+			private var message: String {
+				let typeName = declaringType.asSource
+				let argumentLabels = mockInitializer.arguments.map { "\($0.label.spelledWithoutBackticks):" }.joined()
+				let mockMethod = "`\(typeName).\(mockMethodName)(\(argumentLabels))`"
+				let parameterSpelling = "`\(parameter.asProperty.asSource)`"
+				return if let clause {
+					if offersMoveIntoClause {
+						"\(mockMethod) takes \(parameterSpelling), which `\(typeName)` declares only inside `\(clause.clause)`, inactive in this build, so generated code cannot call the mock. Give the parameter a default value, or move the `\(mockMethodName)` method inside `\(clause.clause)`."
+					} else {
+						"\(mockMethod) takes \(parameterSpelling), which `\(typeName)` declares only inside `\(clause.clause)`, inactive in this build, so generated code cannot call the mock. Give the parameter a default value."
+					}
+				} else {
+					"\(mockMethod) takes \(parameterSpelling), which is not a dependency of `\(typeName)`, so generated code cannot call the mock. The @\(InstantiableVisitor.macroName) macro requires a default value for such a parameter: give it one."
+				}
+			}
+		}
+
 		/// A `@Received(fulfilledByDependencyNamed:ofType:)` declaration spelled as the `@Instantiable` macro rejects: a
 		/// rename of another rename of the same declaration, or a rename of a dependency to itself. Every build runs
 		/// SafeDITool before the compiler expands the macro, so SafeDITool reports them too, plainly, wherever its
@@ -3241,6 +3394,8 @@ public actor DependencyTreeGenerator {
 	private var ownFilesRead: OwnFilesRead?
 	private let typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]
 	private let aliasDeclarationReferences: AliasDeclarationReferences
+	/// See `init`.
+	private let compilesGeneratedMocks: Bool
 	private let emittingModule: EmittingModule?
 	private let unreadImports: UnreadImports?
 	private let seams: SeamResolution
@@ -3916,6 +4071,7 @@ public actor DependencyTreeGenerator {
 				mockImportStatements: [],
 				typeDescriptionToFulfillingInstantiableMap: foreignPublicMock.visibleInstantiables,
 				aliasDeclarationReferences: aliasDeclarationReferences,
+				compilesGeneratedMocks: compilesGeneratedMocks,
 				// The declaring module's files are not this run's own: its declarations record its name.
 				emittingModule: EmittingModule(
 					identity: foreignPublicMock.declaringModule,
@@ -3964,6 +4120,7 @@ public actor DependencyTreeGenerator {
 			mockImportStatements: [],
 			typeDescriptionToFulfillingInstantiableMap: callersVisibleInstantiables,
 			aliasDeclarationReferences: aliasDeclarationReferences,
+			compilesGeneratedMocks: compilesGeneratedMocks,
 			emittingModule: emittingModule,
 			seams: seams,
 			plainTypeDeclarations: seams.callersVisiblePlainTypeDeclarations,
@@ -6293,6 +6450,12 @@ public actor DependencyTreeGenerator {
 		}
 		try Self.validateDependencyLabelsAreDistinct(in: instantiablesInMockTree)
 		try Self.validateRenamesAreSpelledAsTheMacroAccepts(in: instantiablesInMockTree)
+		// The generated mocks are under the module's mock condition, so a build that leaves it inactive never compiles the
+		// call of a hand-written mock that the check rejects, and the shape builds there. A deliberate gap: such a call
+		// inside a fill still stops emission there with the unlocated error `createDependencyAndArgumentBinding` throws.
+		if compilesGeneratedMocks {
+			try Self.validateHandWrittenMocksTakeOnlyFulfilledParameters(inMockTreeRootedAt: mockRootScope)
+		}
 		// Only a walk that completed is kept, as every memo shared across roots keeps them. The mock root's own scope is
 		// made for this root alone, and once released its identifier can name another scope, so it is never kept.
 		visitedScopesInMockTree.remove(ObjectIdentifier(mockRootScope))
@@ -11085,6 +11248,39 @@ public actor DependencyTreeGenerator {
 		}
 		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
 			throw error
+		}
+	}
+
+	/// Rejects each hand-written mock the mock tree rooted at `mockRootScope` calls that takes a parameter without a
+	/// default value the generated call cannot pass: the mocked type's own mock, which builds it, and the mock of each type
+	/// the tree, or a fill a call in it declares, builds with its mock, as generation chooses one – where the mock returns a
+	/// type the property it builds accepts. Each is reported, in source order. A type no mock tree builds with its
+	/// hand-written mock traps nowhere, so it is not reported: a shape that works must not become an error.
+	private static func validateHandWrittenMocksTakeOnlyFulfilledParameters(inMockTreeRootedAt mockRootScope: Scope) throws {
+		var unfulfilledMockParameters = [DependencyTreeGeneratorError.UnfulfilledMockParameter]()
+		var checkedScopes = Set<ObjectIdentifier>()
+		var visitedScopes = Set<ObjectIdentifier>()
+		var scopesToVisit = [(scope: mockRootScope, isBuiltWithHandWrittenMock: true)]
+		while let scopeToVisit = scopesToVisit.popLast() {
+			let scope = scopeToVisit.scope
+			// A call of another module's public mock, or of a seam's generated initializer, calls no hand-written mock.
+			if scopeToVisit.isBuiltWithHandWrittenMock,
+			   scope.publicMockCall == nil,
+			   scope.seamCall == nil,
+			   checkedScopes.insert(ObjectIdentifier(scope)).inserted
+			{
+				unfulfilledMockParameters += DependencyTreeGeneratorError.UnfulfilledMockParameter.parameters(ofMockOf: scope.instantiable)
+			}
+			guard visitedScopes.insert(ObjectIdentifier(scope)).inserted else { continue }
+			for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate {
+				scopesToVisit.append((childScope, childScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType)))
+			}
+			for case let .fill(hole, fillScope) in scope.holeArguments {
+				scopesToVisit.append((fillScope, fillScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: hole.property.typeDescription.asInstantiatedType)))
+			}
+		}
+		if !unfulfilledMockParameters.isEmpty {
+			throw DependencyTreeGeneratorError.unfulfilledMockParameters(unfulfilledMockParameters)
 		}
 	}
 

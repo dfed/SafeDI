@@ -106,6 +106,7 @@ enum BinaryFile {
 			SafeDIConfiguration.self,
 			Instantiable.self,
 			Instantiable.DeclarationType.self,
+			Instantiable.DependencyLabelInUnselectedClause.self,
 			PlainTypeDeclaration.self,
 			ReservedTypeNameDeclaration.self,
 			MockGeneration.self,

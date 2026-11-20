@@ -250,6 +250,8 @@ struct GraphFuzzerPartition: Equatable, Sendable {
 				swiftFileContent: swiftFileContent,
 				swiftFileContentByFilePath: swiftFileContentByFilePath,
 				dependencies: module.dependencies,
+				// Every module of a graph is one build's, so each is told what the graph in one module is told.
+				activeCompilationConditions: fixture.activeCompilationConditions,
 			)
 		}
 	}

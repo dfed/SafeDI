@@ -135,6 +135,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 					diagnose(identifier.text, reservedAs: reservation, at: identifier)
 				}
 				diagnoseNameEncodedDifferently(identifier.text, at: identifier)
+				if enclosingConditionalCompilationBlockCount > 0 {
+					dependencyLabelsInsideConditionalBlocks.append(identifier.text.spelledAsIdentifier)
+				}
 				dependencies.append(
 					Dependency(
 						property: Property(
@@ -241,8 +244,51 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		case .scanAllClauses:
 			.visitChildren
 		case .evaluate:
-			activeIfConfigClauses.contains(node.id) ? .visitChildren : .skipChildren
+			if activeIfConfigClauses.contains(node.id) {
+				.visitChildren
+			} else {
+				recordDependencyLabels(inUnselectedClause: node)
+			}
 		}
+	}
+
+	/// Records, in `dependencyLabelsInUnselectedClauses`, the label of each dependency property that `clause`, a clause
+	/// the evaluator did not select, declares, there or in any clause of a block nested in it, with the clause, and skips
+	/// its children. An extension's dependencies are its `instantiate(…)` method's parameters, and the macro rejects an
+	/// extension with one such method in each clause, so only a type declaration records any.
+	private func recordDependencyLabels(inUnselectedClause clause: IfConfigClauseSyntax) -> SyntaxVisitorContinueKind {
+		guard instantiableConstruction != nil, let members = clause.elements?.as(MemberBlockItemListSyntax.self) else {
+			return .skipChildren
+		}
+		let clauseSpelling = [clause.poundKeyword.text, clause.condition?.trimmedDescription].compactMap(\.self).joined(separator: " ")
+		var labels = [(label: String, isDeclaredDirectlyInClause: Bool)]()
+		func recordLabels(declaredBy members: MemberBlockItemListSyntax, isDirectlyInClause: Bool) {
+			for member in members {
+				if let variable = member.decl.as(VariableDeclSyntax.self),
+				   declarationType.isTypeDefinition,
+				   variable.modifiers.staticModifier == nil,
+				   !variable.attributes.dependencySources.isEmpty
+				{
+					for case let identifier? in variable.bindings.map({ IdentifierPatternSyntax($0.pattern)?.identifier }) {
+						labels.append((identifier.text.spelledAsIdentifier, isDirectlyInClause))
+					}
+				} else if let nestedBlock = member.decl.as(IfConfigDeclSyntax.self) {
+					for nestedMembers in nestedBlock.clauses.compactMap({ $0.elements?.as(MemberBlockItemListSyntax.self) }) {
+						recordLabels(declaredBy: nestedMembers, isDirectlyInClause: false)
+					}
+				}
+			}
+		}
+		recordLabels(declaredBy: members, isDirectlyInClause: true)
+		for (label, isDeclaredDirectlyInClause) in labels where !dependencyLabelsInUnselectedClauses.contains(where: { $0.label == label }) {
+			dependencyLabelsInUnselectedClauses.append(Instantiable.DependencyLabelInUnselectedClause(
+				label: label,
+				clause: clauseSpelling,
+				clauseLocation: declarationLocation(of: clause),
+				isDeclaredDirectlyInClause: isDeclaredDirectlyInClause,
+			))
+		}
+		return .skipChildren
 	}
 
 	public override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -506,6 +552,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var conditionalCompilationDecisions = [ConditionalCompilationDecision]()
 	/// Every bare condition whose value decided which members SafeDI scans.
 	public private(set) var consultedCompilationConditions = Set<String>()
+	/// See `Instantiable.dependencyLabelsInUnselectedClauses`.
+	public private(set) var dependencyLabelsInUnselectedClauses = [Instantiable.DependencyLabelInUnselectedClause]()
+	/// See `Instantiable.dependencyLabelsInsideConditionalBlocks`.
+	public private(set) var dependencyLabelsInsideConditionalBlocks = [String]()
 
 	/// The initializer SafeDI selects for construction — the first in source
 	/// order that fulfills this type's dependencies. `Instantiable.initializer`
@@ -586,6 +636,15 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	}
 
 	public var instantiables: [Instantiable] {
+		instantiablesWithoutUnselectedClauses.map { instantiable in
+			var instantiable = instantiable
+			instantiable.dependencyLabelsInUnselectedClauses = dependencyLabelsInUnselectedClauses
+			instantiable.dependencyLabelsInsideConditionalBlocks = dependencyLabelsInsideConditionalBlocks
+			return instantiable
+		}
+	}
+
+	private var instantiablesWithoutUnselectedClauses: [Instantiable] {
 		switch declarationType {
 		case .concreteDecl:
 			if let instantiableType, let instantiableDeclarationType {
