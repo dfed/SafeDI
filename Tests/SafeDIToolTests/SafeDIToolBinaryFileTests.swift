@@ -200,6 +200,27 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func binaryReader_throws_whenFieldFlagsHoldAFlagNoFieldReads() throws {
+		// A module identity has two optional and Boolean fields, so a third flag is one it does not read.
+		var writer = BinaryWriter()
+		try writer.write(ModuleIdentity.sample(isDistinct: false))
+		var bytes = writer.encoded
+		let flagsOffset = bytes.count - writer.bytes.count
+		bytes[flagsOffset] |= 0b100
+
+		#expect(throws: BinaryDecodingError.unreadFieldFlags(offset: flagsOffset)) {
+			let _: ModuleIdentity = try read(bytes)
+		}
+	}
+
+	@Test
+	func binaryFileReadError_explains_whenBodyHoldsFieldFlagNoFieldReads() {
+		let error = BinaryFileReadError(kind: .moduleInfo, reason: .malformedBody(.unreadFieldFlags(offset: 7)))
+
+		#expect(error.description == "The module info file’s body holds a field flag at byte 7 that no field reads.")
+	}
+
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_writesEachSpellingOfLabel_whenLabelsAreCanonicallyEquivalentAndGenerateReadsScanCache() async throws {
 		let output = try await executeSafeDIToolTest(
@@ -595,10 +616,10 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func dumpScanCache_explains_whenFormatVersionDiffers() async throws {
 		try await assertDumpThrows(
-			"The scan cache is in format version 2, but this SafeDITool reads format version 1.",
+			"The scan cache is in format version 3, but this SafeDITool reads format version 2.",
 			whenCacheIs: { cache in
 				var cache = cache
-				cache[cache.startIndex + 4] = 2
+				cache[cache.startIndex + 4] = 3
 				return cache
 			},
 		)
@@ -688,10 +709,10 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func dumpScanCache_explains_whenBodyRefersToStringOutsideItsTable() async throws {
 		let project = try await scannedKitchenSinkProject()
-		// An empty string table, then one import whose attribute is the first string.
-		try BinaryFile.data(.scanCache, body: [0, 1, 0]).write(to: project.cacheURL)
+		// An empty string table, then one import, with no field flags, whose attribute is the first string.
+		try BinaryFile.data(.scanCache, body: [0, 1, 0, 0]).write(to: project.cacheURL)
 
-		try assertDumpThrows("The scan cache’s body refers to string 0 at byte 2, which its string table does not hold.", project: project)
+		try assertDumpThrows("The scan cache’s body refers to string 0 at byte 3, which its string table does not hold.", project: project)
 	}
 
 	@Test
@@ -709,12 +730,12 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func dumpScanCache_explains_whenBodyNestsTooDeeply() async throws {
 		let project = try await scannedKitchenSinkProject()
-		// An empty string table; no imports or mock imports; then one instantiable, whose concrete type is
-		// `optional` (tag 4) wrapped one level more deeply than SafeDITool reads.
-		let body: [UInt8] = [0, 0, 0, 1] + [UInt8](repeating: 4, count: BinaryReader.maximumNestingDepth + 1)
+		// An empty string table; no imports or mock imports; then one instantiable, with no field flags, whose concrete
+		// type is `optional` (tag 4) wrapped one level more deeply than SafeDITool reads.
+		let body: [UInt8] = [0, 0, 0, 1, 0] + [UInt8](repeating: 4, count: BinaryReader.maximumNestingDepth + 1)
 		try BinaryFile.data(.scanCache, body: body).write(to: project.cacheURL)
 
-		try assertDumpThrows("The scan cache’s body nests values too deeply at byte \(4 + BinaryReader.maximumNestingDepth).", project: project)
+		try assertDumpThrows("The scan cache’s body nests values too deeply at byte \(5 + BinaryReader.maximumNestingDepth).", project: project)
 	}
 
 	// MARK: Nesting
@@ -1083,9 +1104,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		case let .structure(fields, _):
 			for distinctField in fields {
 				var writer = BinaryWriter()
-				for field in fields {
-					try writeSample(of: field.type, isDistinct: field.name == distinctField.name, to: &writer)
-				}
+				try writeFieldSamples(of: Member.self, fields: fields, to: &writer) { $0.name == distinctField.name }
 				let bytes = writer.encoded
 				let context = "\(Member.self) with a distinct \(distinctField.name)"
 				let value: Member
@@ -1460,6 +1479,49 @@ private func writeSample(of type: any BinaryCodable.Type, isDistinct: Bool, to w
 	writer.write(sample)
 }
 
+/// Writes a sample of each of `fields` as `Member`'s coder writes them: a struct that writes field flags writes them
+/// first, and each optional and Boolean field as a flag.
+private func writeFieldSamples<Member: BinarySchemaMember>(
+	of _: Member.Type,
+	fields: [BinaryLayoutField<Member>],
+	to writer: inout BinaryWriter,
+	isDistinct: (BinaryLayoutField<Member>) -> Bool,
+) throws {
+	if Member.writesFieldFlags {
+		var flags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
+		for field in fields {
+			if let flaggedType = field.type as? any BinaryFlaggedSample.Type {
+				try flaggedType.writeFlaggedSample(isDistinct: isDistinct(field), to: &writer, flags: &flags)
+			} else {
+				try writeSample(of: field.type, isDistinct: isDistinct(field), to: &writer)
+			}
+		}
+		writer.finishFields(flags, startingAt: fieldsStart)
+	} else {
+		for field in fields {
+			try writeSample(of: field.type, isDistinct: isDistinct(field), to: &writer)
+		}
+	}
+}
+
+/// A type a struct that writes field flags writes as a flag: a Boolean, or an optional's presence before its value.
+private protocol BinaryFlaggedSample {
+	static func writeFlaggedSample(isDistinct: Bool, to writer: inout BinaryWriter, flags: inout BinaryFieldFlags) throws
+}
+
+extension Bool: BinaryFlaggedSample {
+	fileprivate static func writeFlaggedSample(isDistinct: Bool, to _: inout BinaryWriter, flags: inout BinaryFieldFlags) {
+		flags.append(sample(isDistinct: isDistinct))
+	}
+}
+
+extension Optional: BinaryFlaggedSample where Wrapped: BinarySample {
+	fileprivate static func writeFlaggedSample(isDistinct: Bool, to writer: inout BinaryWriter, flags: inout BinaryFieldFlags) throws {
+		try writer.writeOptional(sample(isDistinct: isDistinct), flaggedIn: &flags)
+	}
+}
+
 /// The value `bytes`, which ``BinaryWriter/encoded`` produced, hold.
 private func read<Value: BinaryCodable>(_ bytes: [UInt8]) throws -> Value {
 	try bytes.withUnsafeBytes { bytes in
@@ -1493,9 +1555,7 @@ extension BinarySample where Self: BinarySchemaMember {
 		var writer = BinaryWriter()
 		switch binaryLayout {
 		case let .structure(fields, _):
-			for field in fields {
-				try writeSample(of: field.type, isDistinct: isDistinct, to: &writer)
-			}
+			try writeFieldSamples(of: Self.self, fields: fields, to: &writer) { _ in isDistinct }
 		case let .enumeration(cases):
 			let tag = isDistinct ? 1 : 0
 			guard cases.indices.contains(tag) else {
