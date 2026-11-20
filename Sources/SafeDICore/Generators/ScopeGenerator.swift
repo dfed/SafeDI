@@ -12107,7 +12107,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			&& node.defaultParameters.isEmpty
 			&& !node.useMockInitializer
 			&& !node.erasedToConcreteExistential
-			&& !node.isExtensionBased
 			&& node.valuesBindings.isEmpty
 			&& node.memberCallsInsideBuilderFunction.isEmpty
 			&& uncoveredInstantiatedDependencies(of: node).isEmpty
