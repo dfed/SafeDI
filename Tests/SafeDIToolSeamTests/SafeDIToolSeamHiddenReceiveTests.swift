@@ -750,8 +750,9 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsChainsThatReadAlikeOnce_whenTwoFulfilledByTypePropertiesOfOneTypeReachHiddenReceive() async {
 		// `Root` holds two `ScreenProtocol` properties, one built by `Screen` and one by the plain `Other`: the chains through them read
-		// alike. With no seam, the one error of today; with `Screen` a seam, in either order, the root's chain through `Other` keeps its
-		// report beside the seam's own; with both seams, each seam's own and no root copy.
+		// alike. With no seam, one error; with `Screen` a seam, the root's one chain, through the property it declares first, keeps its
+		// report beside the seam's own when it runs through `Other`, and is the seam's error again when it runs through `Screen`; with
+		// both seams, each seam's own and no root copy.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
 			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> ScreenProtocol -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
@@ -792,9 +793,12 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 		}
 		for screenFirst in [true, false] {
 			await assertThrowsError(diagnostics: { fixtures in
-				"""
+				let rootsChain = screenFirst ? "" : """
 				\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> ScreenProtocol -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
 				\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
+
+				"""
+				return rootsChain + """
 				\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Screen -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
 				\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
 				"""
@@ -908,7 +912,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsHiddenErrorFromEachSeamsChain_whenSiblingSeamsReachHiddenReceiveAtDifferentDepths(panelFirst: Bool) async {
 		// `Screen` reaches `Reader` beneath `Left`, and `Panel` beneath `Middle` and `Left`: each seam's own chain is reported, and the
-		// root's chain through either is not, whichever is declared first. Inline reports the root's chain through each.
+		// root's chain through either is not, whichever is declared first. Inline reports the root's chain through the one declared first.
 		let rootDeclarations = ["@Instantiated let user: User"] + (panelFirst ? ["@Instantiated let panel: Panel", "@Instantiated let screen: Screen"] : ["@Instantiated let screen: Screen", "@Instantiated let panel: Panel"])
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
@@ -931,9 +935,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 		}
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> Panel -> Middle -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
-			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> Screen -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
+			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: \(panelFirst ? "Root -> Panel -> Middle" : "Root -> Screen") -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
 			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
 			"""
 		}) {
@@ -988,20 +990,25 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 		}
 	}
 
-	@Test
+	@Test(arguments: [true, false])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsHiddenErrorFromRootAndSeam_whenRootAlsoReachesHiddenReceiveWithoutSeam() async {
-		// `Root` instantiates `Left` itself too: that chain passes through no seam, so it is reported beside the seam's own.
+	mutating func generate_throwsHiddenErrorFromRootsFirstChainAndSeam_whenRootAlsoReachesHiddenReceiveWithoutSeam(leftFirst: Bool) async {
+		// `Root` instantiates `Left` itself too. The root reports one chain, through the property it declares first: through its own
+		// `Left`, which passes through no seam, it is reported beside the seam's own; through `Screen`, it is the seam's error again.
+		let rootDeclarations = ["@Instantiated let user: User"] + (leftFirst ? ["@Instantiated let left: Left", "@Instantiated let screen: Screen"] : ["@Instantiated let screen: Screen", "@Instantiated let left: Left"])
 		await assertThrowsError(diagnostics: { fixtures in
-			"""
+			let rootsChain = leftFirst ? """
 			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
 			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
+
+			""" : ""
+			return rootsChain + """
 			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Screen -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
 			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
 			"""
 		}) {
 			try await executeSafeDIToolTest(swiftFileContent: [
-				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated let screen: Screen", "@Instantiated let left: Left"]),
+				seamFixtureType(named: "Root", isRoot: true, declarations: rootDeclarations),
 				seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Received(onlyIfAvailable: true) let user: User?", "@Instantiated let left: Left"]),
 				Self.left,
 				seamFixtureType(named: "Reader", declarations: ["@Received(onlyIfAvailable: true) let user: User?"]),
@@ -1011,14 +1018,12 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 		}
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
-			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> Screen -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
+			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: \(leftFirst ? "Root" : "Root -> Screen") -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
 			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
 			"""
 		}) {
 			try await executeSafeDIToolTest(swiftFileContent: [
-				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated let screen: Screen", "@Instantiated let left: Left"]),
+				seamFixtureType(named: "Root", isRoot: true, declarations: rootDeclarations),
 				seamFixtureType(named: "Screen", declarations: ["@Received(onlyIfAvailable: true) let user: User?", "@Instantiated let left: Left"]),
 				Self.left,
 				seamFixtureType(named: "Reader", declarations: ["@Received(onlyIfAvailable: true) let user: User?"]),
@@ -1031,7 +1036,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsHiddenErrorFromEachSeamsChain_whenSiblingSeamsReachHiddenReceiveAtSameDepth() async {
-		// Two seams at one depth: each its own chain.
+		// Two seams at one depth: each its own chain. Inline, the root's chain through the one declared first.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
 			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Panel -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
@@ -1052,8 +1057,6 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 		}
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> Panel -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
-			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
 			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> Screen -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
 			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
 			"""
@@ -1070,21 +1073,26 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 		}
 	}
 
-	@Test
+	@Test(arguments: [true, false])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsHiddenErrorFromEachSeamsChain_whenSeamReachesAnotherSeamAndHiddenReceiveDirectly() async {
-		// `Panel` reaches `Screen` beneath `Middle` and holds `Left` itself: `Panel`'s own chain through its `Left`, and `Screen`'s.
+	mutating func generate_throwsHiddenErrorFromEachSeamsFirstChain_whenSeamReachesAnotherSeamAndHiddenReceiveDirectly(middleFirst: Bool) async {
+		// `Panel` reaches `Screen` beneath `Middle` and holds `Left` itself. `Panel` reports one chain, through the property it declares
+		// first: through its own `Left`, it is reported beside `Screen`'s own; through `Middle` and `Screen`, it is `Screen`'s error again.
+		let panelDeclarations = ["@Received(onlyIfAvailable: true) let user: User?"] + (middleFirst ? ["@Instantiated let middle: Middle", "@Instantiated let left: Left"] : ["@Instantiated let left: Left", "@Instantiated let middle: Middle"])
 		await assertThrowsError(diagnostics: { fixtures in
-			"""
+			let panelsChain = middleFirst ? "" : """
 			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Panel -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
 			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
+
+			"""
+			return panelsChain + """
 			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Screen -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
 			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
 			"""
 		}) {
 			try await executeSafeDIToolTest(swiftFileContent: [
 				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated let panel: Panel"]),
-				seamFixtureType(named: "Panel", isSeam: true, declarations: ["@Received(onlyIfAvailable: true) let user: User?", "@Instantiated let middle: Middle", "@Instantiated let left: Left"]),
+				seamFixtureType(named: "Panel", isSeam: true, declarations: panelDeclarations),
 				seamFixtureType(named: "Middle", declarations: ["@Instantiated let screen: Screen"]),
 				seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Received(onlyIfAvailable: true) let user: User?", "@Instantiated let left: Left"]),
 				Self.left,
@@ -1095,15 +1103,13 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 		}
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> Panel -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
-			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> Panel -> Middle -> Screen -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
+			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: \(middleFirst ? "Root -> Panel -> Middle -> Screen" : "Root -> Panel") -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
 			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
 			"""
 		}) {
 			try await executeSafeDIToolTest(swiftFileContent: [
 				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated let panel: Panel"]),
-				seamFixtureType(named: "Panel", declarations: ["@Received(onlyIfAvailable: true) let user: User?", "@Instantiated let middle: Middle", "@Instantiated let left: Left"]),
+				seamFixtureType(named: "Panel", declarations: panelDeclarations),
 				seamFixtureType(named: "Middle", declarations: ["@Instantiated let screen: Screen"]),
 				seamFixtureType(named: "Screen", declarations: ["@Received(onlyIfAvailable: true) let user: User?", "@Instantiated let left: Left"]),
 				Self.left,
@@ -1157,15 +1163,12 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsCallersHiddenError_whenCallerOnInstantiatorCycleHidesSeamsParameter() async {
-		// `T` hides `user` above the seam `Z` and both hold `Reader`: the chain through `Z` that `T`'s declaration hides is the caller's
-		// own error, which the seam's chain does not report, and the seam's own call site inside its tree is a chain of its own.
+		// `T` hides `user` above the seam `Z` and both hold `Reader`. Each root reports the receive once, from the first chain its walk
+		// meets: the root through `T`'s own `Reader`, the caller's error, and the seam through the `T` its tree builds, whose chain the
+		// root's does not run through.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> T -> Instantiator<Z> -> Reader. `T` declares `user: Name` with the same label, so the types below `T` receive `user: Name` instead. Give `user: Name` on `T` a different label to fix.
-			\(fixtures["T.swift"]):9:5: note: `user: Name` is declared here
 			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> T -> Reader. `T` declares `user: Name` with the same label, so the types below `T` receive `user: Name` instead. Give `user: Name` on `T` a different label to fix.
-			\(fixtures["T.swift"]):9:5: note: `user: Name` is declared here
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Z -> Instantiator<T> -> Instantiator<Z> -> Reader. `T` declares `user: Name` with the same label, so the types below `T` receive `user: Name` instead. Give `user: Name` on `T` a different label to fix.
 			\(fixtures["T.swift"]):9:5: note: `user: Name` is declared here
 			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Z -> Instantiator<T> -> Reader. `T` declares `user: Name` with the same label, so the types below `T` receive `user: Name` instead. Give `user: Name` on `T` a different label to fix.
 			\(fixtures["T.swift"]):9:5: note: `user: Name` is declared here
@@ -1180,16 +1183,10 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 				Self.name,
 			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
-		// Inline, the `Z` that `T`'s `zBuilder` builds again inside the cycle is a chain of its own too, as the seam's call site
-		// inside its tree is: its `Reader` receives the `user` the `T` between declares.
+		// Inline, the root alone reports the receive, from the same first chain; the chains through `Z`, and through the `Z` that `T`'s
+		// `zBuilder` builds again inside the cycle, reach the same receive later.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> T -> Instantiator<Z> -> Instantiator<T> -> Instantiator<Z> -> Reader. `T` declares `user: Name` with the same label, so the types below `T` receive `user: Name` instead. Give `user: Name` on `T` a different label to fix.
-			\(fixtures["T.swift"]):9:5: note: `user: Name` is declared here
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> T -> Instantiator<Z> -> Instantiator<T> -> Reader. `T` declares `user: Name` with the same label, so the types below `T` receive `user: Name` instead. Give `user: Name` on `T` a different label to fix.
-			\(fixtures["T.swift"]):9:5: note: `user: Name` is declared here
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> T -> Instantiator<Z> -> Reader. `T` declares `user: Name` with the same label, so the types below `T` receive `user: Name` instead. Give `user: Name` on `T` a different label to fix.
-			\(fixtures["T.swift"]):9:5: note: `user: Name` is declared here
 			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> T -> Reader. `T` declares `user: Name` with the same label, so the types below `T` receive `user: Name` instead. Give `user: Name` on `T` a different label to fix.
 			\(fixtures["T.swift"]):9:5: note: `user: Name` is declared here
 			"""
