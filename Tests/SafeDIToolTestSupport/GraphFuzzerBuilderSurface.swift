@@ -326,7 +326,8 @@ extension GraphFuzzerBuilderSurface {
 	/// Whether `parameter` takes a hole's builder: on main, a closure handed a scope enum; once builders take no scope, a
 	/// parameter whose label ends with `Builder` (or a `Builder_<Type>` a calling mock names apart) and whose type is a
 	/// closure or a wrapper's `Builder`. An `@autoclosure` is no builder: a mock takes an instantiator its tree receives and
-	/// it cannot build as one, and passes it on unread, whatever its label (`holeTicketBuilder`, seam corpus seed 3855).
+	/// it cannot build as one, and passes it on unread, whatever its label (`holeTicketBuilder`, which seam corpus seed 3855
+	/// drew until a seam's own mock took its hole's builder).
 	/// That holds because SafeDI spells no builder `@autoclosure`: each is an `@escaping` closure, which can take no
 	/// argument (`() -> B`), a wrapper's `Builder`, or a builder struct, all of which a caller passes as a function or a
 	/// value rather than an expression; revisit this exemption if SafeDI ever spells a builder `@autoclosure`. A closure

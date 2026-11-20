@@ -372,8 +372,8 @@ struct SafeDIToolSeamPassedUpValuesTests: ~Copyable {
 	mutating func generate_releasesOuterSeamsValues_whenValueOuterSeamBuiltBeforeInnerSeamHoldsInnerSeam(fillsWithGeneratedCode: Bool) async throws {
 		// `Home` builds `navigator`, then `detailBuilder`, which builds `Detail`, a seam of another module whose place `api`
 		// `Home` passes up. Inline, nothing `Detail` holds captures `navigator`, so a navigator that holds a detail is freed
-		// with `Home`. The closure that hands `Detail`'s enum up is the builder `Detail` holds, so the case it builds carries
-		// no value of `Home`'s.
+		// with `Home`. The builder `Detail` holds is the one `Home` passes up, which takes nothing, so it carries no value of
+		// `Home`'s.
 		let modules = Self.innerAndOuterModules(
 			inner: [
 				seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Instantiated public let api: any Api"]),

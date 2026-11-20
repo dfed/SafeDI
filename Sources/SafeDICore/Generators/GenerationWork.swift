@@ -55,8 +55,8 @@ public struct GenerationWork: Sendable {
 		/// Naming the scope value each call of an inner seam hands a fill (`DependencyTreeGenerator.innerScopeNames`): each
 		/// call and builder takes the names it must avoid.
 		case namingInnerScopes
-		/// Naming the payload of each case on the routes to a seam's places (`DependencyTreeGenerator.valuesBindingNames`):
-		/// each payload takes the names it must avoid.
+		/// Naming the struct each member call on the routes to a seam's places returns (`DependencyTreeGenerator.memberBindingNames`):
+		/// each binding takes the names it must avoid.
 		case namingValuesBindings
 		/// Reserving the names a seam call's fills and dispatchers avoid: the enclosing calls' fills and the names the seam
 		/// whose tree holds the call binds, which each call takes.

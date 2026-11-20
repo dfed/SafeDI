@@ -1822,8 +1822,21 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			"Analytics+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Service {
-			    @frozen public enum SafeDISendableMockScope_Panel {
-			        case part(Panel.ForwardedProperties)
+			    nonisolated public enum SafeDISendableMockScope_Panel {
+			        nonisolated public struct part_Values: Sendable {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let part: @Sendable (part_Values) -> SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder
+
+			            public init(part: @escaping @Sendable (part_Values) -> SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
+			                self.part = part
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Panel.ForwardedProperties, __safeDI_Built>.Builder) {
+			                self.part = { _ in __safeDI_builder }
+			            }
+			        }
 			    }
 
 			    /// Overrides for the mock dependency tree.
@@ -1852,20 +1865,25 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			    }
 
 			    public static func mock(
-			        panelSendableBuilder: @escaping @Sendable (Service.SafeDISendableMockScope_Panel) -> Panel,
+			        panelSendableBuilder: @escaping SendableInstantiator<Panel>.Builder,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Service {
-			        let __safeDI_panelSendableBuilder = panelSendableBuilder
+			        Service.__safeDI_mock(panelSendableBuilder: .init(__safeDI_noScope: panelSendableBuilder), safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        panelSendableBuilder __safeDI_panelSendableBuilder: Service.SafeDISendableMockScope_Panel.__safeDI_Builder<Panel>,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Service {
 			        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-			        let part = SendableInstantiator<Panel> {
-			            __safeDI_panelSendableBuilder(.part($0))
-			        }
+			        let part = SendableInstantiator<Panel>(__safeDI_panelSendableBuilder.part(SafeDISendableMockScope_Panel.part_Values()))
 			        return Service(analytics: analytics, part: part)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_mock_27AF017839E8B473 {}
+			    public enum __safeDI_Service_mock_8F5C6DDDC76AE12D {}
 			}
 			#endif
 			""",
@@ -1918,16 +1936,38 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		#expect(generated == generatedFileHeader + """
 		#if DEBUG
 		extension Service {
-		    @frozen public enum SafeDIMockScope_Gadget {
-		        case again(again_Values, SafeDIMockScope_Gadget.Middle_Scope)
+		    nonisolated public enum SafeDIMockScope_Gadget {
+		        nonisolated public struct again_Values {}
 
-		        public struct again_Values {}
-
-		        @frozen public enum Middle_Scope {
-		            case again(again_Values)
-
-		            public struct again_Values {
+		        nonisolated public enum Middle_Scope {
+		            nonisolated public struct again_Values {
 		                public let beneath: Beneath
+		            }
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let again: (again_Values) -> __safeDI_Built
+
+		                public init(again: @escaping (again_Values) -> __safeDI_Built) {
+		                    self.again = again
+		                }
+
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                    self.again = { _ in __safeDI_builder() }
+		                }
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let again: (again_Values) -> SafeDIMockScope_Gadget.Middle_Scope.__safeDI_Builder<__safeDI_Built>
+
+		            public init(again: @escaping (again_Values) -> SafeDIMockScope_Gadget.Middle_Scope.__safeDI_Builder<__safeDI_Built>) {
+		                self.again = again
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.again = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }
 		        }
 		    }
@@ -1958,11 +1998,18 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        gadgetBuilder: @escaping (Service.SafeDIMockScope_Gadget) -> any Gadget,
+		        gadgetBuilder: @escaping () -> any Gadget,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
-		        let __safeDI_gadgetBuilder = gadgetBuilder
-		        let __safeDI_gadgetValues_again = SafeDIMockScope_Gadget.again_Values()
+		        Service.__safeDI_mock(gadgetBuilder: .init(__safeDI_noScope: gadgetBuilder), safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        gadgetBuilder __safeDI_gadgetBuilder: Service.SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Service {
+		        let __safeDI_gadgetBuilder_again = __safeDI_gadgetBuilder.again(SafeDIMockScope_Gadget.again_Values())
 		        func __safeDI_again() -> Middle {
 		            func __safeDI_beneath() -> Beneath {
 		                let again = Instantiator<Middle>(__safeDI_again)
@@ -1970,7 +2017,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		            }
 		            let beneath: Beneath = __safeDI_beneath()
 		            func __safeDI_again_Gadget() -> any Gadget {
-		                __safeDI_gadgetBuilder(.again(__safeDI_gadgetValues_again, .again(SafeDIMockScope_Gadget.Middle_Scope.again_Values(beneath: beneath))))
+		                __safeDI_gadgetBuilder_again.again(SafeDIMockScope_Gadget.Middle_Scope.again_Values(beneath: beneath))
 		            }
 		            let again = LazilyInstantiated<any Gadget>(__safeDI_again_Gadget)
 		            return Middle.__safeDI_init(again: again, beneath: beneath, safeDIBuilder: safeDIOverrides.again.safeDIBuilder)
@@ -1981,7 +2028,7 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_mock_00BD27B0A51ED46F {}
+		    public enum __safeDI_Service_mock_1C37BA18F474E3CB {}
 		}
 		#endif
 		""")
@@ -2600,25 +2647,40 @@ struct SafeDIToolSeamBuiltWrapperTests: ~Copyable {
 			"Service+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Service {
-			    @frozen public enum SafeDIMockScope_ActionPanel {
-			        case part(part_Values, ActionPanel.ForwardedProperties)
+			    nonisolated public enum SafeDIMockScope_ActionPanel {
+			        nonisolated public struct part_Values {}
 
-			        public struct part_Values {}
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let part: (part_Values) -> ErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder
+
+			            public init(part: @escaping (part_Values) -> ErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
+			                self.part = part
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<ActionPanel.ForwardedProperties, __safeDI_Built>.Builder) {
+			                self.part = { _ in __safeDI_builder }
+			            }
+			        }
 			    }
 
 			    public static func mock(
-			        actionPanelBuilder: @escaping (Service.SafeDIMockScope_ActionPanel) -> ActionPanel
+			        actionPanelBuilder: @escaping Instantiator<ActionPanel>.Builder
 			    ) -> Service {
-			        let __safeDI_actionPanelBuilder = actionPanelBuilder
-			        let part = Instantiator<ActionPanel> {
-			            __safeDI_actionPanelBuilder(.part(SafeDIMockScope_ActionPanel.part_Values(), $0))
-			        }
+			        Service.__safeDI_mock(actionPanelBuilder: .init(__safeDI_noScope: actionPanelBuilder))
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        actionPanelBuilder __safeDI_actionPanelBuilder: Service.SafeDIMockScope_ActionPanel.__safeDI_Builder<ActionPanel>
+			    ) -> Service {
+			        let part = Instantiator<ActionPanel>(__safeDI_actionPanelBuilder.part(SafeDIMockScope_ActionPanel.part_Values()))
 			        return Service(part: part)
 			    }
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_mock_32BFD4F1F0E93C07 {}
+			    public enum __safeDI_Service_mock_F4CFA341CF5D1F83 {}
 			}
 			#endif
 			""",

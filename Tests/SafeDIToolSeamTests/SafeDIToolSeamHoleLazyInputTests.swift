@@ -1422,9 +1422,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 
 			#if DEBUG
 			extension ExportFeature {
-			    @frozen nonisolated public enum SafeDIMockScope_Uploader {
-			        case uploader(uploader_Values)
-
+			    nonisolated public enum SafeDIMockScope_Uploader {
 			        nonisolated public struct uploader_Values {
 			            public let exportService: ExportService
 			            public let screenBuilder: Instantiator<ExportScreen>
@@ -1553,9 +1551,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			"ExportFeature+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension ExportFeature {
-			    @frozen nonisolated public enum SafeDIMockScope_Uploader {
-			        case uploader(uploader_Values)
-
+			    nonisolated public enum SafeDIMockScope_Uploader {
 			        nonisolated public struct uploader_Values {
 			            public let exportService: ExportService
 			            public let screenBuilder: Instantiator<ExportScreen>

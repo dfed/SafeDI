@@ -66,10 +66,6 @@ struct GraphFuzzerFixture: Equatable {
 	/// The contents of each file, in declaration order. Every type name begins with `typeNamePrefix`, so the
 	/// fixtures of several seeds compile together as one module.
 	let swiftFileContent: [String]
-	/// Whether the graph is a public mock corpus graph with a builder surface edit applied after the draw
-	/// (`GraphFuzzerGenerator.fixture(forSeed:features:builderSurfaceEdit:)`), which can give `T6` builders the hand-written
-	/// call its draw wrote does not pass: the same-supply judgment, not that call, judges the calls of the edited graph.
-	var isBuilderSurfaceEdit = false
 
 	/// A seam corpus graph, every module of which that declares a seam sets `generatePlainDependencyTreeInitializers: true`,
 	/// so the oracles read and call the readable initializer a person calls, beside the one only generated code calls. The
@@ -2326,7 +2322,7 @@ enum GraphFuzzerGenerator {
 	static func fixture(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature>, builderSurfaceEdit edit: GraphFuzzerBuilderSurfaceEdit) -> GraphFuzzerFixture? {
 		guard !features.contains(.generateMockPublic) else {
 			let draw = GraphFuzzerPublicMockDraw(seed: seed, builderSurfaceEdit: edit)
-			return draw.appliesBuilderSurfaceEdit ? GraphFuzzerFixture(seed: seed, swiftFileContent: draw.swiftFileContent(storingEveryParameter: false, isKnownRight: false), isBuilderSurfaceEdit: true) : nil
+			return draw.appliesBuilderSurfaceEdit ? GraphFuzzerFixture(seed: seed, swiftFileContent: draw.swiftFileContent(storingEveryParameter: false, isKnownRight: false)) : nil
 		}
 		guard features.contains(.generateDependencyTree) else { return nil }
 		var builder = Builder(seed: seed, features: features, storesEveryParameter: false)
@@ -11857,6 +11853,10 @@ struct GraphFuzzerFailure: Equatable {
 		/// A consumer's mock in a `generateMockPublic` graph takes a builder of `T6`'s places, which the fill its module declares
 		/// fills from what `T6`'s mock binds before its tree (`GraphFuzzerToolRuns.publicMockRootLevelFailure`).
 		case publicMockPassesUpPlaceItsRootLevelFills = "a consumer passes up a public mock's place its fill fills from what the public mock binds before its tree"
+		/// A consumer's overrides in a `generateMockPublic` graph hold a closure that builds a called public mock whose call can
+		/// hand it no builder a person writes, or hold none where the call can (`GraphFuzzerToolRuns.publicMockOverrideClosureFailure`).
+		case publicMockOffersOverrideClosureItsCallCannotHand = "a consumer's overrides hold a closure that builds a called public mock its call can hand no builder a person writes"
+		case publicMockDropsOverrideClosureItsCallCanHand = "a consumer's overrides hold no closure that builds a called public mock its call can hand a builder a person writes"
 		/// The differential value comparator describes other values for a probe of a `generateMockPublic` graph than for
 		/// the same probe of its known-right path, beyond the stated divergences.
 		case publicMockBuildsOtherValuesThanKnownRight = "the graph builds other values than its known-right path"
@@ -13552,7 +13552,7 @@ enum GraphFuzzerOracle {
 		}
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
-			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
+			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
 			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
@@ -14461,8 +14461,11 @@ enum GraphFuzzerOracle {
 				warnings += moduleOutput.warnings.map { normalize("\($0)") }
 			}
 			return (.accepted(
-				generatedFiles: addingPublicMockCallers(
-					to: addingSeamCallers(to: generatedFiles, seamTypeAccess: fixture.seamTypeAccess, modules: presentModules),
+				generatedFiles: addingOverrideClosureCallers(
+					to: addingPublicMockCallers(
+						to: addingSeamCallers(to: generatedFiles, seamTypeAccess: fixture.seamTypeAccess, modules: presentModules),
+						of: fixture,
+					),
 					of: fixture,
 				),
 				warnings: warnings,
@@ -14745,25 +14748,33 @@ enum GraphFuzzerOracle {
 				guard let colon = moduleAndCall.firstIndex(of: ":"), let callee = moduleAndCall[moduleAndCall.index(after: colon)...].trimmingCharacters(in: .whitespaces).components(separatedBy: ".mock(").first else { continue }
 				let moduleName = String(moduleAndCall[..<colon])
 				var call = moduleAndCall[moduleAndCall.index(after: colon)...].trimmingCharacters(in: .whitespaces)
-				// The call passes one builder, of `T6`'s one hole type, labeled from type names the renamed graph renames, so it
-				// is found by its form, not its label. A draw whose call or mock has another number of builders breaks that
-				// reading, which fails the run rather than leave a builder unconverted; a builder surface edit can give the mock
-				// more after the call was written (`GraphFuzzerFixture.isBuilderSurfaceEdit`).
-				if !GraphFuzzerPublicMockBuilders.labelsTakingNothing(of: callee, in: generatedFiles).isEmpty {
-					let builderPattern = #"(\w+Builder\w*): \{ _ in "#
-					let builderCount = (try? NSRegularExpression(pattern: builderPattern)).map { $0.numberOfMatches(in: call, range: NSRange(call.startIndex..., in: call)) } ?? 0
-					let mostBuildersOfOneMock = GraphFuzzerPublicMockBuilders.publicTierBuilderCounts(of: callee, in: generatedFiles).max() ?? 0
-					if builderCount != 1 || (mostBuildersOfOneMock != 1 && !fixture.isBuilderSurfaceEdit) {
-						Issue.record("The hand-written call of `\(callee)`’s public mock passes \(builderCount) builders, and its `public` `mock()` takes \(mostBuildersOfOneMock), where the conversion reads one: \(call)")
-					}
-					call = call.replacingOccurrences(of: builderPattern, with: "$1: { ", options: .regularExpression)
+				// The draw writes each builder as a closure that ignores the scope it is handed, `<label>: { _ in `. Where the
+				// generated `mock()` takes a closure that takes nothing under that label, the call passes one: each builder by its
+				// label, however many the mock takes. A builder the mock takes that the call does not pass is left as it is: a
+				// builder surface edit gives the mock builders after the draw wrote the call, which the same-supply judgment
+				// judges. One the call passes under such a label in another form is a draw this reading does not know. A graph
+				// renamed to change an order renames the type names the mock's labels are spelled from but not the call the
+				// draw wrote, so where the call passes none of the mock's labels, each builder is converted by its form.
+				let labelsTakingNothing = GraphFuzzerPublicMockBuilders.labelsTakingNothing(of: callee, in: generatedFiles)
+				let passedLabels = labelsTakingNothing.filter { call.range(of: #"\b\#($0): "#, options: .regularExpression) != nil }
+				if passedLabels.isEmpty, !labelsTakingNothing.isEmpty {
+					call = call.replacingOccurrences(of: #"(\w+Builder\w*): \{ _ in "#, with: "$1: { ", options: .regularExpression)
 				}
+				for label in passedLabels {
+					if call.range(of: #"\b\#(label): \{ _ in "#, options: .regularExpression) != nil {
+						call = call.replacingOccurrences(of: #"\b\#(label): \{ _ in "#, with: "\(label): { ", options: .regularExpression)
+					} else {
+						Issue.record("The hand-written call of `\(callee)`’s public mock passes `\(label)`, which its `mock()` takes as a closure that takes nothing, in a form the conversion does not read: \(call)")
+					}
+				}
+				// A mock isolated to the main actor through `mockAttributes` is called from a function isolated to it.
+				let isolation = declaresMainActorMock(typeNamed: callee, in: content) ? "@MainActor " : ""
 				generatedFiles["\(moduleName)/\(callee)\(publicMockCallerFileSuffix)"] = """
 				import \(GraphFuzzerModule.seamModule.name)
 
 				#if DEBUG
 				public enum \(callee)PublicMockCaller {
-				\tpublic static func call() -> \(callee) {
+				\t\(isolation)public static func call() -> \(callee) {
 				\t\t\(call)
 				\t}
 				}
@@ -14773,6 +14784,157 @@ enum GraphFuzzerOracle {
 			}
 		}
 		return generatedFiles
+	}
+
+	/// `generatedFiles` with, for a graph whose call of `OverriddenDetail`'s public mock can hand its override closure a
+	/// builder a person writes for each place (`GraphFuzzerPublicMockDrawFeature.overrideClosureCallCanHand`), a file in
+	/// `OverriddenScreen`'s module, `<OverriddenScreen>+SafeDIPublicMockCaller.swift`, holding the closure a person writes:
+	/// it takes what the consumer's overrides member hands it and passes each on to `OverriddenDetail`'s `mock()`, under the
+	/// label of the parameter of that type, so a builder handed without the `@escaping` the called `mock()` takes it with
+	/// fails the compile. Every name is read from the generated code – the consumer's from its mock's file name, the called
+	/// type's from the member's return type – so a renamed graph's caller is renamed with its files: the graph is chosen by
+	/// the member alone, which the consumer's overrides hold exactly where the call can hand it
+	/// (`GraphFuzzerToolRuns.publicMockOverrideClosureFailure` judges that), since the draw's features are read by the
+	/// unrenamed names. The known-right path declares no `.public` mock, so it gets none.
+	static func addingOverrideClosureCallers(to generatedFiles: [String: String], of fixture: GraphFuzzerFixture) -> [String: String] {
+		guard fixture.swiftFileContent.contains(where: { $0.contains("OverriddenDetail") && $0.contains("generateMock: .public") }) else { return generatedFiles }
+		var generatedFiles = generatedFiles
+		let suffix = "OverriddenScreen+SafeDIMock.swift"
+		for fileName in generatedFiles.keys.sorted() where fileName.hasSuffix(suffix) {
+			guard let contents = generatedFiles[fileName], let slash = fileName.firstIndex(of: "/") else { continue }
+			let moduleName = String(fileName[..<slash])
+			let screenName = String(fileName[fileName.index(after: slash)...].dropLast("+SafeDIMock.swift".count))
+			let lines = contents.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+			guard let memberIndex = lines.firstIndex(where: { $0.range(of: #"^(public )?let overriddenDetail(Builder)?: \("#, options: .regularExpression) != nil }),
+			      let structLine = lines[..<memberIndex].last(where: { $0.range(of: #"^(public )?struct \w+ \{$"#, options: .regularExpression) != nil }),
+			      let member = overrideClosureMember(lines[memberIndex])
+			else { continue }
+			let structName = structLine.split(separator: " ").dropLast().last.map(String.init) ?? ""
+			let mocks = personCalledMockParameters(of: member.returnType, in: generatedFiles)
+			guard let arguments = mocks.lazy.compactMap({ overrideClosureArguments(handing: member.parameterTypes, to: $0) }).first else {
+				Issue.record("`\(screenName)`’s overrides hand `\(member.returnType)`’s override closure \(member.parameterTypes), which no `mock()` of `\(member.returnType)` a person calls takes: \(mocks)")
+				continue
+			}
+			let parameterNames = member.parameterTypes.indices.map { "overriddenArgument\($0)" }
+			let closureParameters = parameterNames.isEmpty ? "" : " \(parameterNames.joined(separator: ", ")) in"
+			generatedFiles["\(moduleName)/\(screenName)\(publicMockCallerFileSuffix)"] = """
+			import \(GraphFuzzerModule.seamModule.name)
+
+			#if DEBUG
+			enum \(screenName)OverrideClosureCaller {
+			\tstatic func overrides() -> \(screenName).\(structName) {
+			\t\t.init(\(member.label): {\(closureParameters) \(member.returnType).mock(\(arguments)) })
+			\t}
+			}
+			#endif
+
+			"""
+		}
+		return generatedFiles
+	}
+
+	/// The label, the parameter types as written, and the return type of `line`, an overrides member whose type is an
+	/// optional closure, `let label: ((A, B) -> R)?`, or `nil` for any other line.
+	private static func overrideClosureMember(_ line: String) -> (label: String, parameterTypes: [String], returnType: String)? {
+		guard let letRange = line.range(of: "let "), let colon = line[letRange.upperBound...].range(of: ": ") else { return nil }
+		let label = String(line[letRange.upperBound..<colon.lowerBound])
+		var type = line[colon.upperBound...].trimmingCharacters(in: .whitespaces)
+		guard type.hasPrefix("("), type.hasSuffix(")?") else { return nil }
+		type = String(type.dropFirst().dropLast(2))
+		// The closure may spell attributes, such as `@Sendable`, before its parameters.
+		guard let parametersStart = type.firstIndex(of: "(") else { return nil }
+		var depth = 0
+		var parametersEnd: String.Index?
+		for index in type[parametersStart...].indices {
+			switch type[index] {
+			case "(":
+				depth += 1
+			case ")":
+				depth -= 1
+				if depth == 0, parametersEnd == nil {
+					parametersEnd = index
+				}
+			default:
+				break
+			}
+			if parametersEnd != nil {
+				break
+			}
+		}
+		guard let parametersEnd, let arrow = type[parametersEnd...].range(of: " -> ") else { return nil }
+		let parameterTypes = topLevelParameters(String(type[type.index(after: parametersStart)..<parametersEnd])).map { $0.trimmingCharacters(in: .whitespaces) }
+		return (label, parameterTypes, type[arrow.upperBound...].trimmingCharacters(in: .whitespaces))
+	}
+
+	/// The parameters of each `mock()` of `mockedType` a person calls in `generatedFiles` – not the one only generated code
+	/// calls – `public` ones first, each with its label, its type as written, and whether it has a default.
+	private static func personCalledMockParameters(of mockedType: String, in generatedFiles: [String: String]) -> [[(label: String, type: String, hasDefault: Bool)]] {
+		var publicMocks = [[(label: String, type: String, hasDefault: Bool)]]()
+		var otherMocks = [[(label: String, type: String, hasDefault: Bool)]]()
+		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where !fileName.hasSuffix(publicMockCallerFileSuffix) {
+			var extendedType: String?
+			var parameters: [(label: String, type: String, hasDefault: Bool)]?
+			var isPublic = false
+			for line in contents.split(separator: "\n") {
+				let trimmed = line.trimmingCharacters(in: .whitespaces)
+				if trimmed.hasPrefix("extension "), trimmed.hasSuffix(" {") {
+					extendedType = String(trimmed.dropFirst("extension ".count).dropLast(2))
+				}
+				if extendedType == mockedType, trimmed.hasSuffix("static func mock(") {
+					parameters = []
+					isPublic = trimmed.hasPrefix("public ")
+				} else if let collected = parameters, trimmed.hasPrefix(")") {
+					if isPublic {
+						publicMocks.append(collected)
+					} else {
+						otherMocks.append(collected)
+					}
+					parameters = nil
+				} else if parameters != nil, let colon = trimmed.range(of: ": ") {
+					let declaredType = trimmed[colon.upperBound...].trimmingCharacters(in: CharacterSet(charactersIn: ", "))
+					let defaultRange = declaredType.range(of: " = ")
+					parameters?.append((
+						String(trimmed[..<colon.lowerBound]),
+						defaultRange.map { String(declaredType[..<$0.lowerBound]) } ?? declaredType,
+						defaultRange != nil,
+					))
+				}
+			}
+		}
+		return publicMocks + otherMocks
+	}
+
+	/// The arguments of a call of a `mock()` that takes `mockParameters` passing on each of the override closure's
+	/// parameters, `overriddenArgument<index>`, under the label of the parameter of its type, in the mock's order, or `nil`
+	/// where a parameter of the closure matches none or the mock requires one the closure is not handed. Types are compared
+	/// without `@escaping`, which only the missing spelling of distinguishes the defect the call compiles to catch.
+	private static func overrideClosureArguments(handing parameterTypes: [String], to mockParameters: [(label: String, type: String, hasDefault: Bool)]) -> String? {
+		func unescaped(_ type: String) -> String {
+			type.hasPrefix("@escaping ") ? String(type.dropFirst("@escaping ".count)) : type
+		}
+		var argumentIndexByMockIndex = [Int: Int]()
+		for (argumentIndex, parameterType) in parameterTypes.enumerated() {
+			guard let mockIndex = mockParameters.indices.first(where: { argumentIndexByMockIndex[$0] == nil && unescaped(mockParameters[$0].type) == unescaped(parameterType) }) else { return nil }
+			argumentIndexByMockIndex[mockIndex] = argumentIndex
+		}
+		var arguments = [String]()
+		for (mockIndex, parameter) in mockParameters.enumerated() {
+			if let argumentIndex = argumentIndexByMockIndex[mockIndex] {
+				arguments.append("\(parameter.label): overriddenArgument\(argumentIndex)")
+			} else if !parameter.hasDefault {
+				return nil
+			}
+		}
+		return arguments.joined(separator: ", ")
+	}
+
+	/// Whether the `@Instantiable` attribute on the line before `typeName`'s class declaration in `content`, a fixture
+	/// file, spells `mockAttributes: "@MainActor"`.
+	static func declaresMainActorMock(typeNamed typeName: String, in content: String) -> Bool {
+		let lines = content.split(separator: "\n", omittingEmptySubsequences: false)
+		guard let classIndex = lines.firstIndex(where: { $0.contains("final class \(typeName): ") }), classIndex > 0 else { return false }
+		let attribute = lines[classIndex - 1]
+		return attribute.hasPrefix("@Instantiable(") && attribute.contains("mockAttributes: \"@MainActor\"")
 	}
 
 	/// The generated initializers in `contents` – one seam's generated file, or a module's combined output – of each

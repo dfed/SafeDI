@@ -1605,10 +1605,9 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_handsLevelFunctionsToPublicMockThatBuildsSeamInline_whenCallerFillsPlaceReadingLevelValue() async throws {
-		// `Inner`'s public mock builds `Innermost`'s tree inline as a nested level, and takes `Service`'s builder struct, since
-		// no place of `Service` forwards a value, is lazy or is built in a `@Sendable` function, and no case holds another
-		// scope. `Screen`'s mock fills the place, which reads `logger` from `detailBuilder_Values`, so it calls
-		// `Inner.__safeDI_mock` with level functions.
+		// `Inner`'s seam side hands `Innermost` a struct; its public mock builds `Innermost`'s tree itself and takes its builder
+		// struct, as the seam does. `Screen`'s mock fills the place, which reads `logger` from `detailBuilder_Values`, so it
+		// calls `Inner.__safeDI_mock` with level functions.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.fixtures["mockBeside"] ?? [], integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Inner {
@@ -1703,16 +1702,12 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 
 		#if DEBUG
 		extension Inner {
-		    @frozen nonisolated public enum SafeDIMockScope_Service {
-		        case innermost(innermost_Values, SafeDIMockScope_Service.Innermost_Scope)
-
+		    nonisolated public enum SafeDIMockScope_Service {
 		        nonisolated public struct innermost_Values {
 		            public let navigator: Navigator
 		        }
 
-		        @frozen nonisolated public enum Innermost_Scope {
-		            case detailBuilder(detailBuilder_Values, SafeDIMockScope_Service.Detail_Scope)
-
+		        nonisolated public enum Innermost_Scope {
 		            nonisolated public struct detailBuilder_Values {
 		                public let logger: Logger
 		            }
@@ -1731,9 +1726,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		            }
 		        }
 
-		        @frozen nonisolated public enum Detail_Scope {
-		            case service(service_Values)
-
+		        nonisolated public enum Detail_Scope {
 		            nonisolated public struct service_Values {}
 
 		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.

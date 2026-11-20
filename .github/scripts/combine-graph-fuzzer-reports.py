@@ -99,7 +99,6 @@ output_minimums_by_corpus = {}
 NEW_BUILDER_OUTPUT_FEATURES = [
     "generatedOnlyMockFunction",
     "consumerPassesLevelFunctionsStruct",
-    "consumerConvertsClosureOverEnum",
     "holeLoopBuilderOfBuilderStruct",
 ]
 NEW_BUILDER_OUTPUT_FLOOR = 10

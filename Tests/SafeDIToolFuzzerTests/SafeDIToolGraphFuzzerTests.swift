@@ -8068,8 +8068,6 @@ struct SafeDIToolGraphFuzzerTests {
 		.configurationStruct: 34,
 		.constructionFunction: 84,
 		.consumerCall: 82,
-		// pins: derive on CI
-		.consumerConvertsClosureOverEnum: 0,
 		.consumerErasedCall: 19,
 		.consumerErasedInline: 3,
 		.consumerFillReentersPublicMock: 2,
@@ -8084,12 +8082,16 @@ struct SafeDIToolGraphFuzzerTests {
 		.forwardedProvider: 3,
 		// pins: derive on CI
 		.generatedOnlyMockFunction: 0,
+		// pins: derive on CI
+		.generatedOnlyMockFunctionBesideConstructionFunction: 0,
 		.holeBuilder: 39,
 		// pins: derive on CI
 		.holeLoopBuilder: 0,
 		// pins: derive on CI
 		.holeLoopBuilderOfBuilderStruct: 0,
 		.isolatedConstruction: 3,
+		// pins: derive on CI
+		.isolatedGeneratedOnlyMockFunction: 0,
 		.moduleConfiguration: 84,
 		.publicTier: 100,
 		.secondTier: 60,
@@ -8137,7 +8139,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// and, without that check, fills with `T6`'s at every level (seed 555), and a graph whose fill reads `T6`'s
 	/// `holeContext` under that loop, which the loop does not declare again (seed 836); declarations moved
 	/// beneath the declaring module (seed 98) and a chain of public mocks through the three modules beneath it (seed 208),
-	/// which a consumer computes from the declaring module's view (`GraphFuzzerSeamDependencyDraw`). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
+	/// which a consumer computes from the declaring module's view (`GraphFuzzerSeamDependencyDraw`); and a type built with
+	/// its hand-written mock inside another public mock of its module, whose extensions declare the function only generated
+	/// code calls beside the construction function of that name (seed 37). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
 	/// which `publicMockSmokeSeeds_exercisePublicMockFeature_inGraphsTheToolAccepts` checks. Beyond the corpus, seeds
 	/// 1339, 1649, 2687 and 2840 build a type whose public mock names `customMockName` erased to a concrete existential in
 	/// another module's public mock, whose shared construction function returned the eraser and did not compile
@@ -8147,7 +8151,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// code did not compile before each construction had a function of its own
 	/// (`SafeDIToolPublicMockSharedConstructionTests`); seed 555 draws it in the graph the tool rejects.
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
-	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
+	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
 	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x6811652CBED7F527
 
@@ -8157,7 +8161,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockParametersSortedByLabelReason,
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
-			seeds: [103, 106, 167, 251, 351, 562, 771],
+			seeds: [103, 106, 167, 251, 351, 562, 771, 836],
 		),
 		// The base corpus's shape, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy
 		// cycle through it, in the gating draw of the shape #702 fixed, a `.public` type that builds itself again through
@@ -8323,36 +8327,35 @@ struct SafeDIToolGraphFuzzerTests {
 	/// mocks (iv). The planned builder structs empty them, each slice the seeds it fixes.
 	static let publicMockBuilderSurfaceSeeds = BuilderSurfaceSeeds(
 		base: [
-			2, 3, 4, 8, 9, 10, 12, 15, 17, 18, 19, 20, 21, 22, 24, 28, 33, 34, 42, 43,
-			44, 47, 48, 49, 54, 55, 56, 57, 58, 59, 60, 62, 63, 64, 65, 66, 67, 69, 77, 79,
-			82, 84, 87, 88, 89, 90, 92, 95, 96, 99, 103, 106, 108, 109, 111, 115, 119, 122, 123, 124,
-			129, 130, 131, 136, 137, 138, 143, 146, 147, 148, 149, 150, 151, 155, 156, 157, 158, 160, 161, 162,
-			165, 166, 167, 168, 171, 172, 176, 177, 178, 180, 181, 182, 183, 185, 186, 189, 190, 192, 195, 196,
-			197, 198, 199, 200, 201, 202, 204, 205, 207, 210, 211, 212, 213, 216, 218, 222, 223, 225, 226, 227,
-			228, 229, 230, 231, 233, 238, 239, 242, 243, 244, 245, 246, 247, 248, 250, 252, 256, 257, 261, 263,
-			264, 265, 266, 267, 268, 269, 270, 271, 272, 273, 274, 278, 280, 281, 282, 283, 284, 285, 287, 289,
-			290, 293, 295, 296, 297, 299, 300, 301, 302, 304, 306, 307, 308, 309, 310, 311, 312, 313, 314, 317,
-			319, 321, 322, 324, 326, 327, 328, 329, 331, 333, 335, 336, 337, 339, 340, 342, 344, 346, 347, 348,
-			349, 350, 351, 352, 353, 356, 360, 361, 366, 368, 369, 370, 371, 372, 374, 379, 380, 381, 383, 386,
-			387, 388, 389, 392, 394, 395, 397, 398, 401, 402, 404, 406, 409, 411, 412, 413, 415, 416, 417, 421,
-			423, 424, 425, 428, 429, 431, 432, 433, 434, 436, 438, 440, 441, 442, 443, 445, 448, 453, 455, 456,
-			459, 463, 465, 467, 468, 469, 472, 474, 477, 478, 479, 481, 482, 484, 486, 488, 490, 492, 494, 497,
-			498, 499, 503, 507, 508, 510, 511, 515, 516, 519, 521, 522, 525, 526, 527, 528, 532, 537, 539, 540,
-			541, 542, 543, 545, 549, 550, 551, 556, 558, 559, 561, 563, 564, 565, 567, 568, 571, 572, 575, 576,
-			577, 580, 581, 584, 587, 589, 592, 594, 595, 597, 598, 601, 602, 605, 606, 607, 608, 610, 611, 612,
-			614, 616, 618, 619, 621, 622, 623, 624, 627, 631, 632, 635, 636, 638, 639, 642, 643, 644, 645, 646,
-			647, 648, 649, 651, 652, 653, 654, 655, 658, 659, 660, 663, 664, 669, 670, 671, 673, 675, 677, 678,
-			679, 681, 682, 685, 691, 692, 693, 695, 697, 699, 700, 701, 703, 706, 707, 708, 711, 713, 714, 715,
-			716, 717, 718, 720, 721, 722, 723, 724, 725, 727, 728, 730, 732, 733, 734, 735, 737, 739, 740, 741,
-			743, 746, 747, 748, 751, 753, 757, 758, 765, 766, 768, 770, 772, 773, 774, 775, 776, 777, 778, 779,
-			781, 782, 783, 784, 786, 787, 789, 792, 793, 795, 797, 798, 799, 801, 802, 803, 804, 805, 807, 808,
-			814, 817, 818, 819, 820, 821, 823, 824, 825, 827, 828, 832, 833, 834, 836, 838, 839, 840, 843, 844,
-			845, 846, 847, 848, 849, 850, 851, 852, 853, 854, 858, 860, 861, 862, 863, 864, 865, 866, 870, 872,
-			873, 875, 877, 879, 880, 881, 883, 884, 885, 886, 887, 888, 889, 890, 891, 892, 896, 897, 898, 899,
-			901, 902, 903, 904, 906, 907, 909, 910, 911, 912, 913, 915, 917, 918, 919, 923, 926, 927, 930, 931,
-			933, 934, 935, 936, 937, 940, 941, 943, 944, 946, 947, 950, 951, 953, 956, 958, 959, 960, 961, 962,
-			963, 965, 966, 970, 971, 973, 974, 975, 977, 978, 979, 981, 983, 985, 987, 988, 989, 990, 991, 992,
-			993, 995, 996, 998,
+			2, 3, 4, 8, 9, 12, 15, 17, 18, 19, 20, 21, 22, 24, 28, 33, 34, 42, 44, 47,
+			48, 49, 54, 55, 56, 57, 58, 60, 62, 63, 64, 65, 66, 67, 69, 77, 79, 82, 84, 87,
+			88, 89, 90, 92, 95, 96, 99, 103, 106, 108, 109, 111, 115, 119, 122, 123, 124, 129, 130, 131,
+			136, 137, 138, 143, 146, 147, 148, 149, 150, 155, 156, 157, 158, 160, 161, 162, 165, 166, 167, 168,
+			171, 172, 176, 177, 178, 180, 181, 182, 183, 185, 186, 189, 190, 192, 195, 196, 197, 198, 199, 200,
+			201, 202, 204, 205, 207, 210, 211, 212, 213, 216, 218, 222, 223, 225, 226, 227, 228, 229, 230, 231,
+			233, 238, 239, 242, 243, 244, 245, 246, 247, 248, 250, 252, 256, 257, 261, 263, 264, 265, 266, 267,
+			268, 269, 270, 271, 272, 273, 274, 278, 280, 281, 282, 283, 284, 285, 287, 289, 290, 293, 295, 296,
+			297, 299, 300, 301, 302, 304, 306, 307, 308, 309, 310, 311, 312, 313, 314, 317, 319, 321, 322, 324,
+			326, 327, 328, 329, 331, 333, 335, 336, 337, 339, 340, 342, 344, 346, 347, 348, 349, 350, 351, 352,
+			353, 356, 360, 361, 366, 368, 369, 370, 371, 372, 374, 379, 380, 381, 383, 386, 387, 388, 389, 392,
+			394, 395, 397, 398, 401, 402, 404, 406, 409, 411, 412, 413, 415, 416, 417, 421, 423, 424, 425, 428,
+			429, 431, 432, 433, 434, 436, 438, 440, 441, 442, 443, 445, 448, 453, 455, 456, 459, 463, 465, 467,
+			468, 469, 472, 474, 477, 478, 479, 481, 482, 484, 486, 488, 490, 492, 494, 497, 498, 499, 503, 507,
+			508, 510, 511, 515, 516, 519, 521, 522, 525, 526, 527, 528, 532, 537, 539, 540, 541, 542, 543, 545,
+			549, 550, 556, 558, 559, 561, 563, 564, 565, 567, 568, 571, 572, 575, 576, 577, 580, 581, 584, 587,
+			589, 592, 594, 595, 597, 598, 601, 602, 605, 606, 607, 608, 610, 611, 612, 614, 616, 618, 619, 621,
+			622, 623, 624, 627, 631, 632, 635, 636, 638, 639, 642, 643, 644, 645, 646, 647, 648, 649, 651, 652,
+			653, 654, 655, 658, 659, 660, 663, 664, 669, 670, 671, 673, 675, 677, 678, 679, 681, 682, 685, 691,
+			692, 693, 695, 697, 699, 700, 701, 703, 706, 707, 708, 711, 713, 714, 715, 716, 717, 718, 720, 721,
+			722, 723, 724, 725, 727, 728, 730, 732, 733, 734, 735, 737, 739, 740, 741, 743, 746, 747, 748, 751,
+			753, 757, 758, 765, 766, 768, 770, 772, 773, 774, 775, 776, 777, 778, 779, 781, 782, 783, 784, 786,
+			787, 789, 792, 793, 795, 797, 798, 799, 801, 802, 803, 804, 805, 807, 808, 814, 817, 818, 819, 820,
+			821, 823, 824, 825, 827, 828, 832, 833, 834, 838, 839, 840, 843, 844, 845, 846, 847, 848, 849, 850,
+			851, 852, 853, 854, 858, 860, 861, 862, 863, 864, 865, 866, 870, 872, 873, 875, 877, 879, 880, 881,
+			883, 884, 885, 886, 887, 888, 889, 890, 891, 892, 896, 897, 898, 899, 901, 902, 903, 904, 906, 907,
+			909, 910, 911, 912, 913, 915, 917, 918, 919, 923, 926, 927, 930, 931, 933, 934, 935, 936, 937, 940,
+			941, 943, 944, 946, 947, 950, 951, 953, 956, 958, 959, 960, 961, 962, 963, 965, 966, 970, 971, 973,
+			974, 975, 977, 978, 979, 981, 983, 985, 987, 988, 989, 990, 991, 992, 993, 995, 996, 998,
 		],
 		labels: [
 			19, 64, 119, 166, 211, 230, 299, 307, 333, 406, 415, 456, 486, 510, 597, 658, 692, 743, 748,
@@ -8525,6 +8528,14 @@ struct SafeDIToolGraphFuzzerTests {
 		.sharedConstructionPublicMockWithoutMockFirst: 108,
 		.keywordLabeledPublicMock: 264,
 		.keywordLabeledPublicMockBesideInternalConfiguration: 119,
+		.overrideClosureCall: 358,
+		.overrideClosureCallCanHand: 200,
+		.overrideClosureCallFillReadsCalledMocksOtherPlace: 43,
+		.overrideClosureCallFillReadsCalledMocksParameter: 45,
+		.overrideClosureCallFillReadsValueCalledMockRenames: 41,
+		.overrideClosureCallInternalCallerPassesPlaceUp: 98,
+		.overrideClosureCallPublicCallerPassesPlaceUp: 96,
+		.overrideClosureCallPlaceIsErasedInstantiator: 98,
 		.instantiableParameterType: 235,
 		.internalInitializer: 520,
 		.lazilyInstantiatedOmittedValueProvider: 58,
