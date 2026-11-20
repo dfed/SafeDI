@@ -142,6 +142,70 @@ struct SafeDIToolGraphFuzzerBuilderCallTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addingBuilderCalls_writesClosureOverForwardedValue_whenEveryPlaceIsInSeamTheBuilderCalls() {
+		// `Home`'s one place is `Inner`'s, which its struct's member hands up as `Inner`'s struct, in `Inner`'s file: its builder
+		// takes the `Int` that place forwards, though `Home`'s own root enum has the name of `Inner`'s.
+		let generatedFiles = [
+			"FuzzFeature/Home+SafeDI.swift": Self.callingSeamFile(member: "inner: (inner_Values) -> Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>", readableBuilderType: "@escaping ErasedInstantiator<Int, any Api>.Builder"),
+			"FuzzFeature/Inner+SafeDI.swift": Self.calledSeamFile(enumName: "SafeDIScope_Api", member: "api: (api_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder", builtType: "any Api", readableBuilderType: "@escaping ErasedInstantiator<Int, any Api>.Builder"),
+		]
+
+		let withCalls = GraphFuzzerBuilderSurface.addingBuilderCalls(to: generatedFiles)
+
+		#expect(withCalls.keys.sorted() == ["FuzzFeature/Home+SafeDI.swift", "FuzzFeature/Home+SafeDIBuilderCall.swift", "FuzzFeature/Inner+SafeDI.swift", "FuzzFeature/Inner+SafeDIBuilderCall.swift"])
+		#expect(withCalls["FuzzFeature/Home+SafeDIBuilderCall.swift"] == """
+		public enum HomeBuilderCall {
+		    public static func callTier0WritingClosures(_ parameter0: @escaping (Int) -> any Api) -> Home {
+		        Home(apiBuilder: { value in parameter0(value) })
+		    }
+		    public static func callTier0PassingStoredClosures(_ parameter0: @escaping (Int) -> any Api) -> Home {
+		        Home(apiBuilder: parameter0)
+		    }
+		}
+
+		""")
+		#expect(withCalls["FuzzFeature/Inner+SafeDIBuilderCall.swift"] == """
+		public enum InnerBuilderCall {
+		    public static func callTier0WritingClosures(_ parameter0: @escaping (Int) -> any Api) -> Inner {
+		        Inner(apiBuilder: { value in parameter0(value) })
+		    }
+		    public static func callTier0PassingStoredClosures(_ parameter0: @escaping (Int) -> any Api) -> Inner {
+		        Inner(apiBuilder: parameter0)
+		    }
+		}
+
+		""")
+		#expect(GraphFuzzerBuilderSurface.callsWrapperBuilder(in: ["FuzzFeature/Home+SafeDI.swift": generatedFiles["FuzzFeature/Home+SafeDI.swift", default: ""], "FuzzFeature/Inner+SafeDI.swift": Self.calledSeamFile(enumName: "SafeDIScope_Api", member: "api: (api_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder", builtType: "any Api", readableBuilderType: nil)]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func addingBuilderCalls_writesClosureOverForwardedValue_whenPlaceIsInsideFillOfSeamWhosePlacesAreBuiltPlainly() {
+		// `Home` fills `Inner`'s `service`, a plain place of `Inner`'s, with `Default`, whose place of `Api` forwards an `Int`:
+		// the member returns `Inner`'s struct over `Default`'s level's, and only the fill's own level is `Home`'s builder's.
+		let generatedFiles = [
+			"FuzzFeature/Home+SafeDI.swift": Self.callingSeamFile(member: "inner_serviceBuilder: (inner_serviceBuilder_Values) -> Inner.SafeDIScope_Service.__safeDI_Builder<SafeDIScope_Api.Default_Scope.__safeDI_Builder<__safeDI_Built>>", readableBuilderType: "@escaping ErasedInstantiator<Int, any Api>.Builder"),
+			"FuzzFeature/Inner+SafeDI.swift": Self.calledSeamFile(enumName: "SafeDIScope_Service", member: "service: (service_Values) -> __safeDI_Built", builtType: "any Service", readableBuilderType: nil),
+		]
+
+		let withCalls = GraphFuzzerBuilderSurface.addingBuilderCalls(to: generatedFiles)
+
+		#expect(withCalls.keys.sorted() == ["FuzzFeature/Home+SafeDI.swift", "FuzzFeature/Home+SafeDIBuilderCall.swift", "FuzzFeature/Inner+SafeDI.swift"])
+		#expect(withCalls["FuzzFeature/Home+SafeDIBuilderCall.swift"] == """
+		public enum HomeBuilderCall {
+		    public static func callTier0WritingClosures(_ parameter0: @escaping (Int) -> any Api) -> Home {
+		        Home(apiBuilder: { value in parameter0(value) })
+		    }
+		    public static func callTier0PassingStoredClosures(_ parameter0: @escaping (Int) -> any Api) -> Home {
+		        Home(apiBuilder: parameter0)
+		    }
+		}
+
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func callsWrapperBuilder_findsBuilderTakingForwardedValue_whenAPlaceIsHeldInAnInstantiator() {
 		#expect(GraphFuzzerBuilderSurface.callsWrapperBuilder(in: ["FuzzFeature/Home+SafeDI.swift": Self.forwardingSeamFile]))
 	}
@@ -272,6 +336,84 @@ struct SafeDIToolGraphFuzzerBuilderCallTests {
 	}
 
 	// MARK: Fixtures
+
+	/// The file SafeDI generates for `Home`, a seam whose builder of `any Api` takes a struct with one member, `member`, which
+	/// returns the struct of a seam `Home` calls, and, for a fill case, of `Default`'s level, whose place of `any Api` forwards
+	/// an `Int`; the readable parameter spelled `readableBuilderType`.
+	private static func callingSeamFile(member: String, readableBuilderType: String) -> String {
+		"""
+		extension Home {
+		    nonisolated public enum SafeDIScope_Api {
+		        nonisolated public enum Default_Scope {
+		            nonisolated public struct api_Values {}
+
+		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		                public let api: (api_Values) -> ErasedInstantiator<Int, __safeDI_Built>.Builder
+		            }
+		        }
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let \(member)
+		        }
+		    }
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    public convenience init(apiBuilder: \(readableBuilderType)) {
+		        self.init(__safeDI_apiBuilder: .init(__safeDI_noScope: apiBuilder))
+		    }
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public convenience init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+		        self.init()
+		    }
+		}
+
+		extension Home {
+		    public enum __safeDI_Home_0 {}
+		}
+
+		"""
+	}
+
+	/// The file SafeDI generates for `Inner`, a seam `Home` calls, whose root enum `enumName` declares a struct with one
+	/// member, `member`, building `builtType`, with a readable initializer whose parameter is spelled `readableBuilderType`,
+	/// or none where it is `nil`.
+	private static func calledSeamFile(enumName: String, member: String, builtType: String, readableBuilderType: String?) -> String {
+		let holeTypeName = String(enumName.dropFirst("SafeDIScope_".count))
+		let label = "\(holeTypeName.prefix(1).lowercased())\(holeTypeName.dropFirst())Builder"
+		let readableInitializer = readableBuilderType.map { """
+
+		    /// For code you write: each argument is evaluated at the call, and nothing of the calling code is retained but the builders, which can be called after this initializer returns.
+		    public convenience init(\(label): \($0)) {
+		        self.init(__safeDI_\(label): .init(__safeDI_noScope: \(label)))
+		    }
+		""" } ?? ""
+		return """
+		extension Inner {
+		    nonisolated public enum \(enumName) {
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let \(member)
+		        }
+		    }
+		\(readableInitializer)
+
+		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+		    /// From code you write, call the initializer above instead.
+		    public convenience init(__safeDI_\(label): \(enumName).__safeDI_Builder<\(builtType)>) {
+		        self.init()
+		    }
+		}
+
+		extension Inner {
+		    public enum __safeDI_Inner_0 {}
+		}
+
+		"""
+	}
 
 	/// The file SafeDI generates for `<prefix>Home`, a seam with a value `count` and a place of `any <prefix>Api` in each
 	/// family, each of whose builders takes a builder struct; the plain family's readable parameter spelled

@@ -927,9 +927,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		case .sendableLazilyInstantiated:
 			#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "Inner+SafeDI.swift": generatedFileHeader + """
 			extension Inner {
-			    @frozen nonisolated public enum SafeDISendableScope_Panel {
-			        case panel
-
+			    nonisolated public enum SafeDISendableScope_Panel {
 			        nonisolated public struct panel_Values: Sendable {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1061,10 +1059,8 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		case .beneathSendableInstantiator:
 			#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "Inner+SafeDI.swift": generatedFileHeader + """
 			extension Inner {
-			    @frozen nonisolated public enum SafeDIScope_Panel {
-			        @frozen nonisolated public enum Detail_Scope {
-			            case panel(panel_Values)
-
+			    nonisolated public enum SafeDIScope_Panel {
+			        nonisolated public enum Detail_Scope {
 			            nonisolated public struct panel_Values {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1082,9 +1078,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen nonisolated public enum SafeDISendableScope_Panel {
-			        case detailBuilder(SafeDIScope_Panel.Detail_Scope)
-
+			    nonisolated public enum SafeDISendableScope_Panel {
 			        nonisolated public struct detailBuilder_Values: Sendable {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1261,21 +1255,17 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == [
 			integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
-			    @frozen nonisolated public enum SafeDIScope_UserService {
-			        case profileBuilder(profileBuilder_Values, SafeDIScope_UserService.Profile_Scope)
-
+			    nonisolated public enum SafeDIScope_UserService {
 			        nonisolated public struct profileBuilder_Values {
 			            public var token: Token { __safeDI_token.instance }
-			            let __safeDI_token: LazilyInstantiated<Token>
+			            public let __safeDI_token: LazilyInstantiated<Token>
 
 			            init(token: LazilyInstantiated<Token>) {
 			                __safeDI_token = token
 			            }
 			        }
 
-			        @frozen nonisolated public enum Profile_Scope {
-			            case userService(userService_Values)
-
+			        nonisolated public enum Profile_Scope {
 			            nonisolated public struct userService_Values {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.

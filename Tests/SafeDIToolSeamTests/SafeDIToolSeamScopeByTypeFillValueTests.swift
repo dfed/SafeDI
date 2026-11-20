@@ -454,26 +454,21 @@ struct SafeDIToolSeamScopeByTypeFillValueTests: ~Copyable {
 			    public init() {
 			        let theme = Theme()
 			        func __safeDI_outer() -> Outer {
-			            _ = Outer.__safeDI_Outer_73B20716AC529436.self // \(Self.moduleInfoComment)
-			            func __safeDI_apiBuilder_Outer(_ scope: Outer.SafeDIScope_Api) -> any Api {
-			                switch scope {
-			                case let .inner(scope): return __safeDI_apiBuilder_Inner(scope)
-			                }
+			            _ = Outer.__safeDI_Outer_9229E580D0455D2E.self // \(Self.moduleInfoComment)
+			            func __safeDI_apiBuilder_Outer() -> Outer.SafeDIScope_Api.__safeDI_Builder<any Api> {
+			                .init(inner: { _ in __safeDI_apiBuilder_Inner() })
 			            }
-			            func __safeDI_apiBuilder_Inner(_ scope: Inner.SafeDIScope_Api) -> any Api {
-			                switch scope {
-			                case let .panel(_, scope): return __safeDI_apiBuilder_Inner_Panel_Scope(scope)
-			                }
+			            func __safeDI_apiBuilder_Inner() -> Inner.SafeDIScope_Api.__safeDI_Builder<any Api> {
+			                .init(panel: { _ in __safeDI_apiBuilder_Inner_Panel_Scope() })
 			            }
-			            func __safeDI_apiBuilder_Inner_Panel_Scope(_ scope: Inner.SafeDIScope_Api.Panel_Scope) -> any Api {
-			                switch scope {
-			                case let .api(scope):
+			            func __safeDI_apiBuilder_Inner_Panel_Scope() -> Inner.SafeDIScope_Api.Panel_Scope.__safeDI_Builder<any Api> {
+			                .init(api: { scope in
 			                    let session = scope.session
 			                    let api: any Api = DefaultApi(session: session, theme: theme)
 			                    return api
-			                }
+			                })
 			            }
-			            return Outer(__safeDI_apiBuilder: __safeDI_apiBuilder_Outer)
+			            return Outer(__safeDI_apiBuilder: __safeDI_apiBuilder_Outer())
 			        }
 			        let outer: Outer = __safeDI_outer()
 			        self.init(theme: theme, outer: outer)

@@ -272,13 +272,10 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			),
 			expectedFeatureFile: (name: "Feature.swift", contents: """
 			extension Hub {
-			    @frozen nonisolated public enum SafeDIScope_Api {
-			        case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
-			        case cBuilder(cBuilder_Values, SafeDIScope_Api.C_Scope)
-
+			    nonisolated public enum SafeDIScope_Api {
 			        nonisolated public struct tBuilder_Values {
 			            public var mark: Mark? { __safeDI_mark.instance }
-			            let __safeDI_mark: LazilyInstantiated<Mark?>
+			            public let __safeDI_mark: LazilyInstantiated<Mark?>
 
 			            init(mark: LazilyInstantiated<Mark?>) {
 			                __safeDI_mark = mark
@@ -288,7 +285,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			        nonisolated public struct cBuilder_Values {
 			            public var mark: Mark? { __safeDI_mark.instance }
 			            public let tBuilder: Instantiator<T>
-			            let __safeDI_mark: LazilyInstantiated<Mark?>
+			            public let __safeDI_mark: LazilyInstantiated<Mark?>
 
 			            init(mark: LazilyInstantiated<Mark?>, tBuilder: Instantiator<T>) {
 			                __safeDI_mark = mark
@@ -296,10 +293,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum T_Scope {
-			            indirect case cBuilder(cBuilder_Values, SafeDIScope_Api.C_Scope)
-			            case api(api_Values)
-
+			        nonisolated public enum T_Scope {
 			            nonisolated public struct cBuilder_Values {
 			                public let mark: Mark?
 			                public let reader: MarkReader
@@ -328,9 +322,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum C_Scope {
-			            indirect case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
-
+			        nonisolated public enum C_Scope {
 			            nonisolated public struct tBuilder_Values {
 			                public let mark: Mark
 			            }
@@ -470,14 +462,10 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			),
 			expectedFeatureFile: (name: "Feature.swift", contents: """
 			extension Hub {
-			    @frozen nonisolated public enum SafeDIScope_Api {
-			        case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
-			        case cBuilder(cBuilder_Values, SafeDIScope_Api.C_Scope)
-			        case t(t_Values, SafeDIScope_Api.T_Scope)
-
+			    nonisolated public enum SafeDIScope_Api {
 			        nonisolated public struct tBuilder_Values {
 			            public var mark: Mark { __safeDI_mark.instance }
-			            let __safeDI_mark: LazilyInstantiated<Mark>
+			            public let __safeDI_mark: LazilyInstantiated<Mark>
 
 			            init(mark: LazilyInstantiated<Mark>) {
 			                __safeDI_mark = mark
@@ -487,7 +475,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			        nonisolated public struct cBuilder_Values {
 			            public var mark: Mark { __safeDI_mark.instance }
 			            public let tBuilder: Instantiator<T>
-			            let __safeDI_mark: LazilyInstantiated<Mark>
+			            public let __safeDI_mark: LazilyInstantiated<Mark>
 
 			            init(mark: LazilyInstantiated<Mark>, tBuilder: Instantiator<T>) {
 			                __safeDI_mark = mark
@@ -499,7 +487,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            public var mark: Mark { __safeDI_mark.instance }
 			            public let tBuilder: Instantiator<T>
 			            public let cBuilder: Instantiator<C>
-			            let __safeDI_mark: LazilyInstantiated<Mark>
+			            public let __safeDI_mark: LazilyInstantiated<Mark>
 
 			            init(mark: LazilyInstantiated<Mark>, tBuilder: Instantiator<T>, cBuilder: Instantiator<C>) {
 			                __safeDI_mark = mark
@@ -508,10 +496,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum T_Scope {
-			            indirect case cBuilder(cBuilder_Values, SafeDIScope_Api.C_Scope)
-			            case api(api_Values)
-
+			        nonisolated public enum T_Scope {
 			            nonisolated public struct cBuilder_Values {
 			                public let mark: Mark
 			                public let reader: MarkReader
@@ -540,9 +525,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum C_Scope {
-			            indirect case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
-
+			        nonisolated public enum C_Scope {
 			            nonisolated public struct tBuilder_Values {
 			                public let mark: Mark
 			            }
@@ -706,11 +689,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			),
 			expectedFeatureFile: (name: "Feature.swift", contents: """
 			extension Hub {
-			    @frozen nonisolated public enum SafeDIScope_Api {
-			        case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
-			        case cBuilder(cBuilder_Values, SafeDIScope_Api.C_Scope)
-			        case t(t_Values, SafeDIScope_Api.T_Scope)
-
+			    nonisolated public enum SafeDIScope_Api {
 			        nonisolated public struct tBuilder_Values {
 			            public let mark: LazilyInstantiated<Mark>
 			        }
@@ -726,10 +705,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            public let cBuilder: Instantiator<C>
 			        }
 
-			        @frozen nonisolated public enum T_Scope {
-			            indirect case cBuilder(cBuilder_Values, SafeDIScope_Api.C_Scope)
-			            case api(api_Values)
-
+			        nonisolated public enum T_Scope {
 			            nonisolated public struct cBuilder_Values {
 			                public let mark: Mark
 			                public let reader: MarkReader
@@ -758,9 +734,7 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum C_Scope {
-			            indirect case tBuilder(tBuilder_Values, SafeDIScope_Api.T_Scope)
-
+			        nonisolated public enum C_Scope {
 			            nonisolated public struct tBuilder_Values {
 			                public let mark: Mark
 			            }
@@ -1059,10 +1033,8 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			),
 			expectedFeatureFile: (name: "Feature.swift", contents: """
 			extension Hub {
-			    @frozen nonisolated public enum SafeDIScope_Api {
-			        @frozen nonisolated public enum B_Scope {
-			            case api(api_Values)
-
+			    nonisolated public enum SafeDIScope_Api {
+			        nonisolated public enum B_Scope {
 			            nonisolated public struct api_Values {
 			                public let a: A
 			            }
@@ -1082,14 +1054,10 @@ struct SafeDIToolSeamHoleOnCycleTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen nonisolated public enum SafeDISendableScope_Api {
-			        case a_Sendable(SafeDISendableScope_Api.A_Scope)
-
+			    nonisolated public enum SafeDISendableScope_Api {
 			        nonisolated public struct a_Sendable_Values: Sendable {}
 
-			        @frozen nonisolated public enum A_Scope {
-			            case bBuilder(SafeDIScope_Api.B_Scope)
-
+			        nonisolated public enum A_Scope {
 			            nonisolated public struct bBuilder_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.

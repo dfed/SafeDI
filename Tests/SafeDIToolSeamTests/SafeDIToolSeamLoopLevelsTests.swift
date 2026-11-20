@@ -54,20 +54,14 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
 			"Feature.swift": generatedFileHeader + """
 			extension Home {
-			    @frozen nonisolated public enum SafeDIScope_Api {
-			        case screenABuilder(screenABuilder_Values, SafeDIScope_Api.ScreenA_Scope)
-			        case screenBBuilder(screenBBuilder_Values, SafeDIScope_Api.ScreenB_Scope)
-			        case screenCBuilder(screenCBuilder_Values, SafeDIScope_Api.ScreenC_Scope)
-
+			    nonisolated public enum SafeDIScope_Api {
 			        nonisolated public struct screenABuilder_Values {}
 
 			        nonisolated public struct screenBBuilder_Values {}
 
 			        nonisolated public struct screenCBuilder_Values {}
 
-			        @frozen nonisolated public enum ScreenA_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum ScreenA_Scope {
 			            nonisolated public struct api_Values {
 			                public let id: Int
 			                public let screenBBuilder: Instantiator<ScreenB>
@@ -87,9 +81,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum ScreenB_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum ScreenB_Scope {
 			            nonisolated public struct api_Values {
 			                public let id: Int
 			                public let screenCBuilder: Instantiator<ScreenC>
@@ -109,9 +101,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum ScreenC_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum ScreenC_Scope {
 			            nonisolated public struct api_Values {
 			                public let id: Int
 			                public let screenABuilder: Instantiator<ScreenA>
@@ -335,19 +325,12 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
 			"Feature.swift": generatedFileHeader + """
 			extension Home {
-			    @frozen nonisolated public enum SafeDIScope_Api {
-			        case screenABuilder(screenABuilder_Values, SafeDIScope_Api.ScreenA_Scope)
-			        case screenBBuilder(screenBBuilder_Values, SafeDIScope_Api.ScreenB_Scope)
-
+			    nonisolated public enum SafeDIScope_Api {
 			        nonisolated public struct screenABuilder_Values {}
 
 			        nonisolated public struct screenBBuilder_Values {}
 
-			        @frozen nonisolated public enum ScreenA_Scope {
-			            case api(api_Values)
-			            case tabXBuilder(tabXBuilder_Values, SafeDIScope_Api.TabX_Scope)
-			            case tabYBuilder(tabYBuilder_Values, SafeDIScope_Api.TabY_Scope)
-
+			        nonisolated public enum ScreenA_Scope {
 			            nonisolated public struct api_Values {
 			                public let screenBBuilder: Instantiator<ScreenB>
 			            }
@@ -382,9 +365,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum ScreenB_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum ScreenB_Scope {
 			            nonisolated public struct api_Values {
 			                public let screenABuilder: Instantiator<ScreenA>
 			            }
@@ -403,9 +384,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum TabX_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum TabX_Scope {
 			            nonisolated public struct api_Values {
 			                public let tabYBuilder: Instantiator<TabY>
 			            }
@@ -424,9 +403,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum TabY_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum TabY_Scope {
 			            nonisolated public struct api_Values {
 			                public let tabXBuilder: Instantiator<TabX>
 			            }
@@ -625,15 +602,10 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
 			"Feature.swift": generatedFileHeader + """
 			extension Home {
-			    @frozen nonisolated public enum SafeDIScope_Api {
-			        case flowBuilder(flowBuilder_Values, SafeDIScope_Api.Flow_Scope)
-
+			    nonisolated public enum SafeDIScope_Api {
 			        nonisolated public struct flowBuilder_Values {}
 
-			        @frozen nonisolated public enum Flow_Scope {
-			            case aBuilder(aBuilder_Values, SafeDIScope_Api.A_Scope)
-			            case bBuilder(bBuilder_Values, SafeDIScope_Api.B_Scope)
-
+			        nonisolated public enum Flow_Scope {
 			            nonisolated public struct aBuilder_Values {}
 
 			            nonisolated public struct bBuilder_Values {}
@@ -655,9 +627,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum A_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum A_Scope {
 			            nonisolated public struct api_Values {
 			                public let bBuilder: Instantiator<B>
 			                public let flowBuilder: Instantiator<Flow>
@@ -677,9 +647,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum B_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum B_Scope {
 			            nonisolated public struct api_Values {
 			                public let aBuilder: Instantiator<A>
 			            }
@@ -838,17 +806,12 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
 			"Feature.swift": generatedFileHeader + """
 			extension Box.Home {
-			    @frozen nonisolated public enum SafeDIScope_Api {
-			        case screenABuilder(screenABuilder_Values, SafeDIScope_Api.ScreenA_Scope)
-			        case screenBBuilder(screenBBuilder_Values, SafeDIScope_Api.ScreenB_Scope)
-
+			    nonisolated public enum SafeDIScope_Api {
 			        nonisolated public struct screenABuilder_Values {}
 
 			        nonisolated public struct screenBBuilder_Values {}
 
-			        @frozen nonisolated public enum ScreenA_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum ScreenA_Scope {
 			            nonisolated public struct api_Values {
 			                public let screenBBuilder: Instantiator<ScreenB>
 			            }
@@ -867,9 +830,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum ScreenB_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum ScreenB_Scope {
 			            nonisolated public struct api_Values {
 			                public let screenABuilder: Instantiator<ScreenA>
 			            }
@@ -969,20 +930,14 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
 			"Feature.swift": generatedFileHeader + """
 			extension Home {
-			    @frozen nonisolated public enum SafeDIScope_Api {
-			        case flowA(flowA_Values, SafeDIScope_Api.Flow_Scope)
-			        case flowB(flowB_Values, SafeDIScope_Api.Flow_Scope)
-
+			    nonisolated public enum SafeDIScope_Api {
 			        nonisolated public struct flowA_Values {}
 
 			        nonisolated public struct flowB_Values {
 			            public let flowA: Flow
 			        }
 
-			        @frozen nonisolated public enum Flow_Scope {
-			            case aBuilder(aBuilder_Values, SafeDIScope_Api.A_Scope)
-			            case bBuilder(bBuilder_Values, SafeDIScope_Api.B_Scope)
-
+			        nonisolated public enum Flow_Scope {
 			            nonisolated public struct aBuilder_Values {}
 
 			            nonisolated public struct bBuilder_Values {}
@@ -1004,9 +959,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum A_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum A_Scope {
 			            nonisolated public struct api_Values {
 			                public let bBuilder: Instantiator<B>
 			            }
@@ -1025,9 +978,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum B_Scope {
-			            case api(api_Values)
-
+			        nonisolated public enum B_Scope {
 			            nonisolated public struct api_Values {
 			                public let aBuilder: Instantiator<A>
 			            }
@@ -1166,9 +1117,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, [
 			"Inner+SafeDI.swift": generatedFileHeader + """
 			extension Inner {
-			    @frozen nonisolated public enum SafeDIScope_Service {
-			        case service(service_Values)
-
+			    nonisolated public enum SafeDIScope_Service {
 			        nonisolated public struct service_Values {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1231,94 +1180,140 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			#endif
 
 			extension Outer {
-			    @frozen public enum SafeDIScope_Gadget {
-			        case inner_serviceBuilder(inner_serviceBuilder_Values, Inner.SafeDIScope_Service, SafeDIScope_Gadget.DefaultService_Scope)
+			    nonisolated public enum SafeDIScope_Gadget {
+			        nonisolated public struct inner_serviceBuilder_Values {}
 
-			        public struct inner_serviceBuilder_Values {}
+			        nonisolated public enum DefaultService_Scope {
+			            nonisolated public struct aBuilder_Values {}
 
-			        @frozen public enum DefaultService_Scope {
-			            case aBuilder(aBuilder_Values, SafeDIScope_Gadget.LoopA_Scope)
-			            case bBuilder(bBuilder_Values, SafeDIScope_Gadget.LoopB_Scope)
+			            nonisolated public struct bBuilder_Values {}
 
-			            public struct aBuilder_Values {}
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let aBuilder: (aBuilder_Values) -> SafeDIScope_Gadget.LoopA_Scope.__safeDI_Builder<__safeDI_Built>
+			                public let bBuilder: (bBuilder_Values) -> SafeDIScope_Gadget.LoopB_Scope.__safeDI_Builder<__safeDI_Built>
 
-			            public struct bBuilder_Values {}
-			        }
+			                public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Gadget.LoopA_Scope.__safeDI_Builder<__safeDI_Built>, bBuilder: @escaping (bBuilder_Values) -> SafeDIScope_Gadget.LoopB_Scope.__safeDI_Builder<__safeDI_Built>) {
+			                    self.aBuilder = aBuilder
+			                    self.bBuilder = bBuilder
+			                }
 
-			        @frozen public enum LoopA_Scope {
-			            case gadget(gadget_Values)
-
-			            public struct gadget_Values {
-			                public let bBuilder: Instantiator<LoopB>
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                    self.bBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+			                }
 			            }
 			        }
 
-			        @frozen public enum LoopB_Scope {
-			            case gadget(gadget_Values)
+			        nonisolated public enum LoopA_Scope {
+			            nonisolated public struct gadget_Values {
+			                public let bBuilder: Instantiator<LoopB>
+			            }
 
-			            public struct gadget_Values {
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let gadget: (gadget_Values) -> __safeDI_Built
+
+			                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
+			                    self.gadget = gadget
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.gadget = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+
+			        nonisolated public enum LoopB_Scope {
+			            nonisolated public struct gadget_Values {
 			                public let aBuilder: Instantiator<LoopA>
+			            }
+
+			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			                public let gadget: (gadget_Values) -> __safeDI_Built
+
+			                public init(gadget: @escaping (gadget_Values) -> __safeDI_Built) {
+			                    self.gadget = gadget
+			                }
+
+			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                    self.gadget = { _ in __safeDI_builder() }
+			                }
+			            }
+			        }
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+			            public let inner_serviceBuilder: (inner_serviceBuilder_Values) -> Inner.SafeDIScope_Service.__safeDI_Builder<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>
+
+			            public init(inner_serviceBuilder: @escaping (inner_serviceBuilder_Values) -> Inner.SafeDIScope_Service.__safeDI_Builder<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<__safeDI_Built>>) {
+			                self.inner_serviceBuilder = inner_serviceBuilder
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.inner_serviceBuilder = { _ in .init(__safeDI_noScope: { .init(__safeDI_noScope: __safeDI_builder) }) }
 			            }
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public convenience init(__safeDI_gadgetBuilder: @escaping (SafeDIScope_Gadget) -> any Gadget) {
-			        let __safeDI_gadgetValues_inner_serviceBuilder = SafeDIScope_Gadget.inner_serviceBuilder_Values()
+			    public convenience init(__safeDI_gadgetBuilder: SafeDIScope_Gadget.__safeDI_Builder<any Gadget>) {
+			        let __safeDI_gadgetBuilder_inner_serviceBuilder = __safeDI_gadgetBuilder.inner_serviceBuilder(SafeDIScope_Gadget.inner_serviceBuilder_Values())
 			        func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_8DBB5EEFBE99D753.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
-			            func __safeDI_serviceBuilder_Inner(_ __safeDI_inner_serviceBuilder: Inner.SafeDIScope_Service) -> any Service {
-			                switch __safeDI_inner_serviceBuilder {
-			                case .service:
-			                    func __safeDI_service() -> DefaultService {
-			                        let __safeDI_aBuilder_loopLevels = __safeDI_LoopLevels_5E3B7FB84B385091(
-			                            __safeDI_gadgetValues_aBuilder: SafeDIScope_Gadget.DefaultService_Scope.aBuilder_Values(),
-			                            __safeDI_gadgetValues_bBuilder: SafeDIScope_Gadget.DefaultService_Scope.bBuilder_Values()
-			                        )
-			                        func __safeDI_aBuilder() -> LoopA {
-			                            let __safeDI_gadgetValues_aBuilder = __safeDI_aBuilder_loopLevels.__safeDI_gadgetValues_aBuilder
-			                            let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
-			                            let gadget: any Gadget = __safeDI_gadgetBuilder(.inner_serviceBuilder(__safeDI_gadgetValues_inner_serviceBuilder, __safeDI_inner_serviceBuilder, .aBuilder(__safeDI_gadgetValues_aBuilder, .gadget(SafeDIScope_Gadget.LoopA_Scope.gadget_Values(bBuilder: bBuilder)))))
-			                            return LoopA(gadget: gadget, bBuilder: bBuilder)
-			                        }
-			                        let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
-			                        func __safeDI_bBuilder() -> LoopB {
-			                            let __safeDI_gadgetValues_bBuilder = __safeDI_aBuilder_loopLevels.__safeDI_gadgetValues_bBuilder
-			                            let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
-			                            let gadget: any Gadget = __safeDI_gadgetBuilder(.inner_serviceBuilder(__safeDI_gadgetValues_inner_serviceBuilder, __safeDI_inner_serviceBuilder, .bBuilder(__safeDI_gadgetValues_bBuilder, .gadget(SafeDIScope_Gadget.LoopB_Scope.gadget_Values(aBuilder: aBuilder)))))
-			                            return LoopB(gadget: gadget, aBuilder: aBuilder)
-			                        }
+			            func __safeDI_serviceBuilder_Inner_service(_ scope: Inner.SafeDIScope_Service.service_Values, __safeDI_inner_serviceBuilder: SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> any Service {
+			                func __safeDI_service() -> DefaultService {
+			                    let __safeDI_aBuilder_loopLevels = __safeDI_LoopLevels_A5B9BE4983B4B4E1(
+			                        __safeDI_gadgetBuilder_aBuilder: __safeDI_inner_serviceBuilder.aBuilder(SafeDIScope_Gadget.DefaultService_Scope.aBuilder_Values()),
+			                        __safeDI_gadgetBuilder_bBuilder: __safeDI_inner_serviceBuilder.bBuilder(SafeDIScope_Gadget.DefaultService_Scope.bBuilder_Values())
+			                    )
+			                    func __safeDI_aBuilder() -> LoopA {
+			                        let __safeDI_gadgetBuilder_aBuilder = __safeDI_aBuilder_loopLevels.__safeDI_gadgetBuilder_aBuilder
 			                        let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
-			                        return DefaultService(aBuilder: aBuilder, bBuilder: bBuilder)
+			                        let gadget: any Gadget = __safeDI_gadgetBuilder_aBuilder.gadget(SafeDIScope_Gadget.LoopA_Scope.gadget_Values(bBuilder: bBuilder))
+			                        return LoopA(gadget: gadget, bBuilder: bBuilder)
 			                    }
-			                    let service: any Service = __safeDI_service()
-			                    return service
+			                    let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
+			                    func __safeDI_bBuilder() -> LoopB {
+			                        let __safeDI_gadgetBuilder_bBuilder = __safeDI_aBuilder_loopLevels.__safeDI_gadgetBuilder_bBuilder
+			                        let aBuilder = Instantiator<LoopA>(__safeDI_aBuilder)
+			                        let gadget: any Gadget = __safeDI_gadgetBuilder_bBuilder.gadget(SafeDIScope_Gadget.LoopB_Scope.gadget_Values(aBuilder: aBuilder))
+			                        return LoopB(gadget: gadget, aBuilder: aBuilder)
+			                    }
+			                    let bBuilder = Instantiator<LoopB>(__safeDI_bBuilder)
+			                    return DefaultService(aBuilder: aBuilder, bBuilder: bBuilder)
 			                }
+			                let service: any Service = __safeDI_service()
+			                return service
 			            }
-			            return Inner(__safeDI_serviceBuilder: .init(service: { __safeDI_serviceValues in __safeDI_serviceBuilder_Inner(.service(__safeDI_serviceValues)) }))
+			            func __safeDI_serviceBuilder_Inner(up: Inner.SafeDIScope_Service.__safeDI_Builder<SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>>) -> Inner.SafeDIScope_Service.__safeDI_Builder<any Service> {
+			                .init(service: { scope in __safeDI_serviceBuilder_Inner_service(scope, __safeDI_inner_serviceBuilder: up.service(scope)) })
+			            }
+			            return Inner(__safeDI_serviceBuilder: __safeDI_serviceBuilder_Inner(up: __safeDI_gadgetBuilder_inner_serviceBuilder))
 			        }
 			        let inner: Inner = __safeDI_inner()
 			        self.init(inner: inner)
 			    }
 
 			    /// Holds the payloads of a loop of builders, so that each builder function of the loop captures one reference.
-			    nonisolated private final class __safeDI_LoopLevels_5E3B7FB84B385091 {
+			    nonisolated private final class __safeDI_LoopLevels_A5B9BE4983B4B4E1 {
 			        init(
-			            __safeDI_gadgetValues_aBuilder: SafeDIScope_Gadget.DefaultService_Scope.aBuilder_Values,
-			            __safeDI_gadgetValues_bBuilder: SafeDIScope_Gadget.DefaultService_Scope.bBuilder_Values
+			            __safeDI_gadgetBuilder_aBuilder: SafeDIScope_Gadget.LoopA_Scope.__safeDI_Builder<any Gadget>,
+			            __safeDI_gadgetBuilder_bBuilder: SafeDIScope_Gadget.LoopB_Scope.__safeDI_Builder<any Gadget>
 			        ) {
-			            self.__safeDI_gadgetValues_aBuilder = __safeDI_gadgetValues_aBuilder
-			            self.__safeDI_gadgetValues_bBuilder = __safeDI_gadgetValues_bBuilder
+			            self.__safeDI_gadgetBuilder_aBuilder = __safeDI_gadgetBuilder_aBuilder
+			            self.__safeDI_gadgetBuilder_bBuilder = __safeDI_gadgetBuilder_bBuilder
 			        }
 
-			        let __safeDI_gadgetValues_aBuilder: SafeDIScope_Gadget.DefaultService_Scope.aBuilder_Values
-			        let __safeDI_gadgetValues_bBuilder: SafeDIScope_Gadget.DefaultService_Scope.bBuilder_Values
+			        let __safeDI_gadgetBuilder_aBuilder: SafeDIScope_Gadget.LoopA_Scope.__safeDI_Builder<any Gadget>
+			        let __safeDI_gadgetBuilder_bBuilder: SafeDIScope_Gadget.LoopB_Scope.__safeDI_Builder<any Gadget>
 			    }
 			}
 
 			extension Outer {
-			    public enum __safeDI_Outer_6CBDC3DBEDDE9FFB {}
+			    public enum __safeDI_Outer_BE2D86C29E4B0747 {}
 			}
 			""",
 			"Outer+SafeDIMock.swift": generatedFileHeader + """
@@ -1448,33 +1443,29 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_outer() -> Outer {
-			            _ = Outer.__safeDI_Outer_6CBDC3DBEDDE9FFB.self // If this line does not compile, add the SafeDI plugin to the target that declares Outer.
-			            func __safeDI_gadgetBuilder_Outer(_ scope: Outer.SafeDIScope_Gadget) -> any Gadget {
-			                switch scope {
-			                case let .inner_serviceBuilder(_, _, scope): return __safeDI_gadgetBuilder_Outer_DefaultService_Scope(scope)
-			                }
+			            _ = Outer.__safeDI_Outer_BE2D86C29E4B0747.self // If this line does not compile, add the SafeDI plugin to the target that declares Outer.
+			            func __safeDI_gadgetBuilder_Outer() -> Outer.SafeDIScope_Gadget.__safeDI_Builder<any Gadget> {
+			                .init(inner_serviceBuilder: { _ in __safeDI_gadgetBuilder_Outer_Inner() })
 			            }
-			            func __safeDI_gadgetBuilder_Outer_DefaultService_Scope(_ scope: Outer.SafeDIScope_Gadget.DefaultService_Scope) -> any Gadget {
-			                switch scope {
-			                case let .aBuilder(_, scope): return __safeDI_gadgetBuilder_Outer_LoopA_Scope(scope)
-			                case let .bBuilder(_, scope): return __safeDI_gadgetBuilder_Outer_LoopB_Scope(scope)
-			                }
+			            func __safeDI_gadgetBuilder_Outer_DefaultService_Scope() -> Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget> {
+			                .init(aBuilder: { _ in __safeDI_gadgetBuilder_Outer_LoopA_Scope() }, bBuilder: { _ in __safeDI_gadgetBuilder_Outer_LoopB_Scope() })
 			            }
-			            func __safeDI_gadgetBuilder_Outer_LoopA_Scope(_ scope: Outer.SafeDIScope_Gadget.LoopA_Scope) -> any Gadget {
-			                switch scope {
-			                case .gadget:
+			            func __safeDI_gadgetBuilder_Outer_LoopA_Scope() -> Outer.SafeDIScope_Gadget.LoopA_Scope.__safeDI_Builder<any Gadget> {
+			                .init(gadget: { _ in
 			                    let gadget: any Gadget = LiveGadget()
 			                    return gadget
-			                }
+			                })
 			            }
-			            func __safeDI_gadgetBuilder_Outer_LoopB_Scope(_ scope: Outer.SafeDIScope_Gadget.LoopB_Scope) -> any Gadget {
-			                switch scope {
-			                case .gadget:
+			            func __safeDI_gadgetBuilder_Outer_LoopB_Scope() -> Outer.SafeDIScope_Gadget.LoopB_Scope.__safeDI_Builder<any Gadget> {
+			                .init(gadget: { _ in
 			                    let gadget: any Gadget = LiveGadget()
 			                    return gadget
-			                }
+			                })
 			            }
-			            return Outer(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Outer)
+			            func __safeDI_gadgetBuilder_Outer_Inner() -> Inner.SafeDIScope_Service.__safeDI_Builder<Outer.SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>> {
+			                .init(service: { _ in __safeDI_gadgetBuilder_Outer_DefaultService_Scope() })
+			            }
+			            return Outer(__safeDI_gadgetBuilder: __safeDI_gadgetBuilder_Outer())
 			        }
 			        let outer: Outer = __safeDI_outer()
 			        self.init(outer: outer)

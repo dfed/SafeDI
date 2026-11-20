@@ -2526,7 +2526,7 @@ public actor DependencyTreeGenerator {
 					receivers = []
 					let (_, requiredBy, publicMockRequirement) = tierRequirement(tier)
 					let causeText = builder.accessCause.map { " " + SeamAccessExplanation.causeSentence($0, receivers: []) } ?? ""
-					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(builder.label(inTierAt: tier)): \(builder.readableParameterType.asSource)`, whose scope holds the builders of `\(innerSeam.asSource)`, a seam visible only at `\(builder.tierAccess.spelledOnGeneratedDeclaration)` access.\(publicMockRequirement)\(causeText) Declare \(seamName) at `\(builder.tierAccess.spelledOnGeneratedDeclaration)` access, or make `\(innerSeam.asSource)` `\(tier.spelledOnGeneratedDeclaration)`."
+					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(builder.label(inTierAt: tier)): \(builder.readableParameterType.asSource)`, whose builder struct holds the builders of `\(innerSeam.asSource)`, a seam visible only at `\(builder.tierAccess.spelledOnGeneratedDeclaration)` access.\(publicMockRequirement)\(causeText) Declare \(seamName) at `\(builder.tierAccess.spelledOnGeneratedDeclaration)` access, or make `\(innerSeam.asSource)` `\(tier.spelledOnGeneratedDeclaration)`."
 				case let .tierOmitsBuilder(hole, builder, tier):
 					// Explained as a required parameter's omission is, by the shared formatter, with the builder's remedy in
 					// the place of a pass-through's.
@@ -3772,9 +3772,11 @@ public actor DependencyTreeGenerator {
 				callerModuleMockCondition: seams.currentModuleMockCondition,
 				receiversByLabel: ownPlan.receiversByLabel,
 				typesDeclaredEscaping: ownPlan.typesDeclaredEscaping.intersection(tierParameters.map(\.type)),
-				holes: (ownPlan.plan.holes + ownPlan.plan.unpresentedHoles).map { $0.atTier(tier) },
-				builders: ownPlan.plan.builders.map { $0.atTier(tier) },
-				scopeEnums: ownPlan.plan.scopeEnums,
+				calledBuilders: CalledBuilders(
+					holes: (ownPlan.plan.holes + ownPlan.plan.unpresentedHoles).map { $0.atTier(tier) },
+					builders: ownPlan.plan.builders.map { $0.atTier(tier) },
+					scopeEnums: ownPlan.plan.scopeEnums,
+				),
 			)
 		}
 		return publicMockCalls

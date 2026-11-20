@@ -1382,13 +1382,11 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		)
 		#expect(try #require(output.modules["Feature"]).generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDIScope_Service {
-		        case service(service_Values)
-
+		    nonisolated public enum SafeDIScope_Service {
 		        nonisolated public struct service_Values {
 		            package var serviceBuilder: Thing? { __safeDI_serviceBuilder.instance }
 		            package let badge: Badge
-		            let __safeDI_serviceBuilder: LazilyInstantiated<Thing?>
+		            package let __safeDI_serviceBuilder: LazilyInstantiated<Thing?>
 
 		            init(serviceBuilder: LazilyInstantiated<Thing?>, badge: Badge) {
 		                __safeDI_serviceBuilder = serviceBuilder
@@ -1504,9 +1502,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 		)
 		#expect(try #require(output.modules["Feature"]).generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
-		    @frozen nonisolated public enum SafeDISendableScope_Service {
-		        case service
-
+		    nonisolated public enum SafeDISendableScope_Service {
 		        nonisolated public struct service_Values: Sendable {}
 
 		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.

@@ -32,6 +32,10 @@ extension DependencyTreeGenerator {
 		let steps: [ReachedStep]
 		/// The call's generator, or `nil` for a place.
 		let call: ScopeGenerator?
+		/// Whether this is a seam's call inside a fill that re-enters an enclosing call's fill by name, whose last step is its
+		/// case for the builder that fill is passed for: the member of that case returns the struct the call passes to the
+		/// enclosing call's level function.
+		var reentersEnclosingFill = false
 	}
 
 	/// A property on the path to a place or a call, which a case of the seam's enums stands for.
@@ -102,6 +106,8 @@ extension DependencyTreeGenerator {
 	///   - bindsReceivesAgain: Whether the tree is a public mock's, whose types' levels hold the receives it binds again
 	///     (`receivesBoundAgainOfAnyBuild(inTreeRootedAt:rootFields:namesApartAtRoot:)`).
 	///   - namesApartAtRoot: For a public mock, what its root binds only under names apart, which no level declares.
+	///   - reenteredFillsByKey: The fills a call inside a fill of the same call can re-enter
+	///     (`emittingFillsByKey(inTreeRootedAt:)`), found once for the seam; empty for a public mock's tree.
 	static func scopeEnumsByType(
 		of seam: Instantiable,
 		holeType: SeamSignature.HoleType,
@@ -114,6 +120,7 @@ extension DependencyTreeGenerator {
 		parameters: [SeamSignature.Parameter],
 		bindsReceivesAgain: Bool,
 		namesApartAtRoot: PublicMockRootLevel.NamesApart,
+		reenteredFillsByKey: [String: ScopeGenerator],
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
 		reachedEnum: (SeamSignature.ScopeEnum.Key) -> SeamSignature.ScopeEnum?,
@@ -167,16 +174,30 @@ extension DependencyTreeGenerator {
 				return [.declaration(inSendableFunction: child.buildsInSendableFunction)]
 			}
 		}, fillEdges: { _, call in
-			call.children.compactMap { fill in
+			var fillEdges = [(edge: SeamDeclarationGraph.FillEdge, fulfiller: ScopeGenerator)]()
+			for fill in call.children {
 				guard fill.fillEmitsCode,
-				      fill.containsBuildSite || fill.passesUpBuilder,
+				      Self.leadsToPlace(fill, reenteringFills: bindsReceivesAgain ? [:] : reenteredFillsByKey),
 				      let fulfiller = fill.children.first,
-				      let innerKey = Self.filledRootKey(of: fill)
-				else { return nil }
+				      let innerKey = Self.filledRootKey(of: fill, in: call, keysTheCalledSeam: !bindsReceivesAgain)
+				else { continue }
 				let inSendableFunction = call.buildsInSendableFunction || call.buildsInSendableFunction(ofFill: fill) || fulfiller.buildsInSendableFunction
-				return (SeamDeclarationGraph.FillEdge(innerKey: innerKey, inSendableFunction: inSendableFunction, fulfillerBuildsInSendableFunction: fulfiller.buildsInSendableFunction), fulfiller)
+				fillEdges.append((SeamDeclarationGraph.FillEdge(innerKey: innerKey, inSendableFunction: inSendableFunction, fulfillerBuildsInSendableFunction: fulfiller.buildsInSendableFunction), fulfiller))
 			}
-		})
+			// A seam's call inside a fill that passes an enclosing call's fill by name re-enters it: an edge to the type that fill
+			// builds, whose case on the calling type returns the called seam's struct over that type's level, which the enclosing
+			// call's level functions take. A public mock's call keeps its enum form, keyed by the deeper seam.
+			for reused in bindsReceivesAgain ? [] : Self.reenteredFills(by: call, in: reenteredFillsByKey) {
+				guard let fulfiller = reused.children.first, let innerKey = Self.filledRootKey(of: reused, in: call, keysTheCalledSeam: true) else { continue }
+				let inSendableFunction = call.buildsInSendableFunction || fulfiller.buildsInSendableFunction
+				var edge = SeamDeclarationGraph.FillEdge(innerKey: innerKey, inSendableFunction: inSendableFunction, fulfillerBuildsInSendableFunction: fulfiller.buildsInSendableFunction)
+				edge.reusesEnclosingFill = true
+				fillEdges.append((edge, fulfiller))
+			}
+			return fillEdges
+		}, fulfillingCallsHoldPlaces: !bindsReceivesAgain)
+		// The type the builder of the hole type returns, which the struct of a fill's own level is over.
+		let builtTypeOfHoleType = holesBySite.values.builtType(of: holeType)
 		let cycleParametersOfAnyBuild = Self.cycleParametersOfAnyBuild(inTreeRootedAt: generator)
 		let reboundPropertiesOfAnyBuild = Self.reboundPropertiesOfAnyBuild(inTreeRootedAt: generator)
 		let receivesBoundAgainOfAnyBuild = bindsReceivesAgain
@@ -220,6 +241,14 @@ extension DependencyTreeGenerator {
 		}
 		var plainDraftCasesByType = [TypeDescription: [DraftCase]]()
 		var sendableDraftCasesByType = [TypeDescription: [DraftCase]]()
+		/// For a call's case for a builder it fills with a fulfiller that is itself a call handing up an enum of the hole type,
+		/// that enum's key, by the calling type, the call's property and the filled builder's root key: the case holds it.
+		struct FillOfProperty: Hashable {
+			let type: TypeDescription
+			let property: Property
+			let innerKey: SeamSignature.ScopeEnum.Key
+		}
+		var handedUpKeyByFillOfProperty = [FillOfProperty: (plain: SeamSignature.ScopeEnum.Key?, sendable: SeamSignature.ScopeEnum.Key?)]()
 		let typesWithCases = Set(placeHolding.plainCasePropertiesByType.keys)
 			.union(placeHolding.sendableOwnCasePropertiesByType.keys)
 			.union(placeHolding.sendableBeneathCasePropertiesByType.keys)
@@ -301,6 +330,13 @@ extension DependencyTreeGenerator {
 				// A call's case for each builder it fills with a type whose tree leads to a place, after the call's own, in the
 				// order the call takes its builders.
 				guard !plainFills.isEmpty || !sendableOwnFills.isEmpty || !sendableBeneathFills.isEmpty, let calledBuilders = child.calledBuilders else { continue }
+				for fill in child.children where fill.fillEmitsCode && !bindsReceivesAgain {
+					guard let fulfiller = fill.children.first, !fulfiller.passedUpHoles.isEmpty, let filledKey = Self.filledRootKey(of: fill, in: child, keysTheCalledSeam: !bindsReceivesAgain) else { continue }
+					let handedUpKeys = (plain: innerKey(handedUpBy: fulfiller, isSendable: false), sendable: innerKey(handedUpBy: fulfiller, isSendable: true))
+					if handedUpKeys.plain != nil || handedUpKeys.sendable != nil {
+						handedUpKeyByFillOfProperty[FillOfProperty(type: type, property: property, innerKey: filledKey)] = handedUpKeys
+					}
+				}
 				// A builder whose fills differ in whether a place inside them carries the inner scope has a case for each, the one
 				// that carries it first: the inner scope is bound in the fill, outside a builder function of the fulfiller's own that
 				// is `@Sendable`.
@@ -496,6 +532,12 @@ extension DependencyTreeGenerator {
 					guard let innerEnum = reachedEnum(innerKey) else { continue }
 					kind = .inner(enumKey: innerKey, enumType: innerEnum.type, isIndirect: false)
 				case let .fill(filledBuilder, _, _, fulfiller, isSendable):
+					// A fulfiller that is itself a call handing up an enum of the hole type: the case holds that call's enum.
+					let handedUpKeys = handedUpKeyByFillOfProperty[FillOfProperty(type: current.type, property: draftCase.property, innerKey: filledBuilder.innerKey)]
+					if let handedUpKey = isSendable ? handedUpKeys?.sendable : handedUpKeys?.plain, let handedUpEnum = reachedEnum(handedUpKey), let innerEnum = reachedEnum(filledBuilder.innerKey) {
+						kind = .fill(innerKey: filledBuilder.innerKey, innerEnumType: filledBuilder.carriesInnerScope ? innerEnum.type : nil, enumKey: handedUpKey, enumType: handedUpEnum.type, isIndirect: false)
+						break
+					}
 					let heldDescribed = Described(type: fulfiller, isSendable: isSendable)
 					guard let heldEnumType = enumTypeByDescribed[heldDescribed], let innerEnum = reachedEnum(filledBuilder.innerKey) else { continue }
 					// A case that leads to a `@Sendable` function inside the fill carries no value bound outside it.
@@ -529,8 +571,13 @@ extension DependencyTreeGenerator {
 		func routeStep(of caseOfProperty: CaseOfProperty, bindingPrefix: [Property]?, buildsInSendableFunction: Bool, isSendableRoute: Bool) -> SeamSignature.Hole.RouteStep? {
 			guard let enumCase = casesByProperty[caseOfProperty] else { return nil }
 			var innerScope: SeamSignature.Hole.RouteStep.InnerScope?
-			if case let .fill(innerKey, innerEnumType?, _, _, _) = enumCase.kind, let bindingPrefix {
-				innerScope = .init(callPath: bindingPrefix, innerKey: innerKey, enumType: innerEnumType, builderLabel: reachedEnum(innerKey)?.builderLabel ?? "", name: "")
+			if case let .fill(innerKey, innerEnumType?, _, fillLevelEnumType, _) = enumCase.kind, let bindingPrefix {
+				// A seam's fill is handed the struct of its own level, which the called seam's struct the case's member returns
+				// builds at the place; a public mock's, the scope value the inner seam handed it.
+				let carriedType: TypeDescription = bindsReceivesAgain
+					? innerEnumType
+					: .nested(name: ReservedName.builderStructTypeName, parentType: fillLevelEnumType, generics: [builtTypeOfHoleType])
+				innerScope = .init(callPath: bindingPrefix, innerKey: innerKey, enumType: carriedType, builderLabel: reachedEnum(innerKey)?.builderLabel ?? "", name: "")
 			}
 			let leadsIntoFill = caseOfProperty.filledBuilder != nil
 			let enumType = enumTypeByDescribed[caseOfProperty.described]
@@ -598,10 +645,57 @@ extension DependencyTreeGenerator {
 					} else {
 						CaseOfProperty(described: Described(type: type, isSendable: false), property: property, isSendableBeneath: false, filledBuilder: reachedStep.filledBuilder)
 					}
-					guard let step = routeStep(of: caseOfProperty, bindingPrefix: index < count - 1 ? Array(reached.sitePath.prefix(reachedStep.pathLength)) : nil, buildsInSendableFunction: reachedStep.buildsInSendableFunction, isSendableRoute: innermostSendableIndex != nil) else { break }
+					// A call that is itself the fulfiller of a fill ends on the case of the call it fills, whose member is bound as a
+					// step's before that call, and is handed the struct of the fill's own level.
+					let isFulfillingCall = (reached.call != nil || reached.reentersEnclosingFill) && index == count - 1 && reachedStep.filledBuilder != nil && !bindsReceivesAgain
+					// Where the call is built in a `@Sendable` function, the fill's own included, its member is called at the top of
+					// the call's own builder function, inside that function: bound at the calling scope, before the fill, it would be
+					// a plain struct a `@Sendable` function captures.
+					// Likewise a call's case for a fill whose fulfiller builds its type in a `@Sendable` builder function of its own: the
+					// case carries no inner scope, and the plain struct its member returns is called at the top of that function, which a
+					// place inside the fill reads it in.
+					let isBoundInsideFulfillersFunction = index < count - 1
+						&& caseOfProperty.described.isSendable
+						&& !caseOfProperty.isSendableBeneath
+						&& reachedStep.filledBuilder?.carriesInnerScope == false
+						&& !bindsReceivesAgain
+					let bindingPrefix: [Property]? = if isFulfillingCall, caseOfProperty.described.isSendable, reachedStep.buildsInSendableFunction {
+						reached.sitePath
+					} else if isBoundInsideFulfillersFunction {
+						Array(reached.sitePath.prefix(reached.steps[index + 1].pathLength - 1))
+					} else if index < count - 1 || isFulfillingCall {
+						Array(reached.sitePath.prefix(reachedStep.pathLength))
+					} else {
+						nil
+					}
+					guard let step = routeStep(of: caseOfProperty, bindingPrefix: bindingPrefix, buildsInSendableFunction: reachedStep.buildsInSendableFunction || isBoundInsideFulfillersFunction, isSendableRoute: innermostSendableIndex != nil) else { break }
 					if index < count - 1 {
 						steps.append(step)
 						continue
+					}
+					// A call that re-enters an enclosing call's fill is handed what its case's member returns, the called seam's struct,
+					// which the enclosing call's level function takes.
+					if isFulfillingCall, reached.reentersEnclosingFill, let filledBuilder = reachedStep.filledBuilder {
+						result.callRoutes.append(SeamSignature.CallRoute(
+							sitePath: reached.sitePath,
+							innerKey: filledBuilder.innerKey,
+							rootKey: SeamSignature.ScopeEnum.Key(seamType: seamType, holeType: holeType, isSendable: innermostSendableIndex != nil),
+							route: steps + [step],
+							caseName: "",
+							reentersEnclosingFill: true,
+						))
+						break
+					}
+					if isFulfillingCall, let innerKey {
+						result.callRoutes.append(SeamSignature.CallRoute(
+							sitePath: reached.sitePath,
+							innerKey: innerKey,
+							rootKey: SeamSignature.ScopeEnum.Key(seamType: seamType, holeType: holeType, isSendable: innermostSendableIndex != nil),
+							route: steps + [step],
+							caseName: "",
+							handsFillLevelStruct: true,
+						))
+						break
 					}
 					// Every edge of a path to a place is left in the graph, so each step has its case.
 					guard let enumTypeName = enumTypeNameByDescribed[caseOfProperty.described], let enumCase = casesByProperty[caseOfProperty] else { break }
@@ -613,6 +707,9 @@ extension DependencyTreeGenerator {
 							rootKey: SeamSignature.ScopeEnum.Key(seamType: seamType, holeType: holeType, isSendable: innermostSendableIndex != nil),
 							route: steps,
 							caseName: enumCase.name,
+							memberValuesType: enumCase.memberValuesTypeName.flatMap { memberValuesTypeName in
+								enumTypeByDescribed[caseOfProperty.described].map { .nested(name: memberValuesTypeName, parentType: $0, generics: []) }
+							},
 						))
 					} else {
 						let site = SeamSignature.Hole.Site(seamType: seamType, path: reached.sitePath)
@@ -952,12 +1049,66 @@ extension DependencyTreeGenerator {
 		return namesByStem
 	}
 
+	/// The fills in the tree `root` roots whose code is generated and whose tree leads to a place, by key
+	/// (`ScopeGenerator.fillKey`): those a call inside a fill of the same call can pass by name and so re-enter. A fill leads
+	/// to a place where its tree builds one or a call that passes one up, or holds a call that re-enters such a fill, found as
+	/// a fixed point, so a chain of re-entries leads there too.
+	static func emittingFillsByKey(inTreeRootedAt root: ScopeGenerator) -> [String: ScopeGenerator] {
+		var candidatesByKey = [String: ScopeGenerator]()
+		var generatorsToVisit = [root]
+		while let generator = generatorsToVisit.popLast() {
+			guard generator.containsBuildSite || generator.passesUpBuilder || generator.holdsCallReenteringEnclosingFill else { continue }
+			if let key = generator.fillKey, generator.fillEmitsCode {
+				candidatesByKey[key] = generator
+			}
+			generatorsToVisit += generator.children
+		}
+		var fillsByKey = candidatesByKey.filter { $0.value.containsBuildSite || $0.value.passesUpBuilder }
+		var foundFill = true
+		while foundFill {
+			foundFill = false
+			for (key, fill) in candidatesByKey where fillsByKey[key] == nil && Self.holdsCallReentering(fillsByKey, in: fill) {
+				fillsByKey[key] = fill
+				foundFill = true
+			}
+		}
+		return fillsByKey
+	}
+
+	/// Whether the tree of `generator` holds a call that passes one of `fillsByKey` by name.
+	private static func holdsCallReentering(_ fillsByKey: [String: ScopeGenerator], in generator: ScopeGenerator) -> Bool {
+		var generatorsToVisit = [generator]
+		while let visited = generatorsToVisit.popLast() {
+			guard reenteredFills(by: visited, in: fillsByKey).isEmpty else { return true }
+			generatorsToVisit += visited.children.filter(\.holdsCallReenteringEnclosingFill)
+		}
+		return false
+	}
+
+	/// The fills of `fillsByKey` that `call`, a call inside a fill of an enclosing call, passes by name and so re-enters, in the
+	/// order the call takes its builders.
+	static func reenteredFills(by call: ScopeGenerator, in fillsByKey: [String: ScopeGenerator]) -> [ScopeGenerator] {
+		call.enclosingFillsPassed.compactMap { fillsByKey[$0.key] }
+	}
+
+	/// Whether the tree of `fill`, a fill whose code is generated, leads to a place: it builds a place or a call that passes
+	/// one up, or is among `fillsByKey` (`emittingFillsByKey(inTreeRootedAt:)`).
+	static func leadsToPlace(_ fill: ScopeGenerator, reenteringFills fillsByKey: [String: ScopeGenerator]) -> Bool {
+		fill.containsBuildSite || fill.passesUpBuilder || fill.fillKey.map { fillsByKey[$0] != nil } == true
+	}
+
 	/// The key of the root enum of the seam whose tree holds the place `fill` fills, of the family that builds it: the scope
 	/// value that seam hands its builder, which the fill is handed whether the seam called makes it or passes it up, and so
 	/// what a place inside the fill carries. A value the passing-up seam binds before its call is no level of it, as no
 	/// generated fill reads one (`boundByPassingUpSeam`).
-	static func filledRootKey(of fill: ScopeGenerator) -> SeamSignature.ScopeEnum.Key? {
-		fill.fillHole.map(SeamSignature.ScopeEnum.rootKey(of:))
+	///
+	/// A seam's builder struct carries the called seam's struct instead (`keysTheCalledSeam`): the key of the called seam's
+	/// root enum whose builder reaches the place, its own or one it passes up from a seam it calls, so one case stands for
+	/// every place of the call's builder, and the struct it returns walks every level of every seam on the place's route.
+	static func filledRootKey(of fill: ScopeGenerator, in call: ScopeGenerator, keysTheCalledSeam: Bool) -> SeamSignature.ScopeEnum.Key? {
+		guard let hole = fill.fillHole else { return nil }
+		guard keysTheCalledSeam, let calledBuilders = call.calledBuilders else { return SeamSignature.ScopeEnum.rootKey(of: hole) }
+		return calledBuilders.keyOfFirstBuilderReaching(hole) ?? SeamSignature.ScopeEnum.rootKey(of: hole)
 	}
 
 	/// The keys of the root enums of `calledBuilders`, each once, with the label of the called seam's builder that is handed

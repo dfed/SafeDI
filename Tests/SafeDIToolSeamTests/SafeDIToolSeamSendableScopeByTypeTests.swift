@@ -70,14 +70,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    @frozen nonisolated public enum SafeDIScope_Widget {
-			        case shell(shell_Values, SafeDIScope_Widget.Shell_Scope)
-
+			    nonisolated public enum SafeDIScope_Widget {
 			        nonisolated public struct shell_Values {}
 
-			        @frozen nonisolated public enum Shell_Scope {
-			            case widget(widget_Values)
-
+			        nonisolated public enum Shell_Scope {
 			            nonisolated public struct widget_Values {
 			                public let part: Part
 			                public let panelBuilder: SendableInstantiator<Panel>
@@ -97,9 +93,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum Panel_Scope {
-			            case widget(widget_Values)
-
+			        nonisolated public enum Panel_Scope {
 			            nonisolated public struct widget_Values {
 			                public let name: String
 			                public let part: Part
@@ -133,14 +127,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen nonisolated public enum SafeDISendableScope_Widget {
-			        case shell_Sendable(SafeDISendableScope_Widget.Shell_Scope)
-
+			    nonisolated public enum SafeDISendableScope_Widget {
 			        nonisolated public struct shell_Sendable_Values: Sendable {}
 
-			        @frozen nonisolated public enum Shell_Scope {
-			            case panelBuilder(SafeDIScope_Widget.Panel_Scope)
-
+			        nonisolated public enum Shell_Scope {
 			            nonisolated public struct panelBuilder_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -263,14 +253,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    @frozen nonisolated public enum SafeDISendableScope_DefaultWidget_Widget {
-			        case shell_Sendable(SafeDISendableScope_DefaultWidget_Widget.Shell_Scope)
-
+			    nonisolated public enum SafeDISendableScope_DefaultWidget_Widget {
 			        nonisolated public struct shell_Sendable_Values: Sendable {}
 
-			        @frozen nonisolated public enum Shell_Scope {
-			            case widgetBuilder(Int)
-
+			        nonisolated public enum Shell_Scope {
 			            nonisolated public struct widgetBuilder_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -372,14 +358,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    @frozen nonisolated public enum SafeDIScope_Widget {
-			        case shell(shell_Values, SafeDIScope_Widget.Shell_Scope)
-
+			    nonisolated public enum SafeDIScope_Widget {
 			        nonisolated public struct shell_Values {}
 
-			        @frozen nonisolated public enum Shell_Scope {
-			            case plainPanelBuilder(plainPanelBuilder_Values, SafeDIScope_Widget.Panel_Scope)
-
+			        nonisolated public enum Shell_Scope {
 			            nonisolated public struct plainPanelBuilder_Values {
 			                public let panelBuilder: SendableInstantiator<Panel>
 			            }
@@ -398,9 +380,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum Panel_Scope {
-			            case widget(widget_Values)
-
+			        nonisolated public enum Panel_Scope {
 			            nonisolated public struct widget_Values {
 			                public let name: String
 			            }
@@ -433,14 +413,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen nonisolated public enum SafeDISendableScope_Widget {
-			        case shell_Sendable(SafeDISendableScope_Widget.Shell_Scope)
-
+			    nonisolated public enum SafeDISendableScope_Widget {
 			        nonisolated public struct shell_Sendable_Values: Sendable {}
 
-			        @frozen nonisolated public enum Shell_Scope {
-			            case panelBuilder(SafeDIScope_Widget.Panel_Scope)
-
+			        nonisolated public enum Shell_Scope {
 			            nonisolated public struct panelBuilder_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -564,10 +540,8 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    @frozen nonisolated public enum SafeDIScope_Widget {
-			        @frozen nonisolated public enum Panel_Scope {
-			            case widget(widget_Values)
-
+			    nonisolated public enum SafeDIScope_Widget {
+			        nonisolated public enum Panel_Scope {
 			            nonisolated public struct widget_Values {
 			                public let name: String
 			            }
@@ -587,9 +561,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen nonisolated public enum SafeDISendableScope_Widget {
-			        case panelBuilder(SafeDIScope_Widget.Panel_Scope)
-
+			    nonisolated public enum SafeDISendableScope_Widget {
 			        nonisolated public struct panelBuilder_Values: Sendable {}
 
 			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -678,10 +650,8 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    @frozen nonisolated public enum SafeDIScope_Widget {
-			        @frozen nonisolated public enum Panel_Scope {
-			            case widget(widget_Values)
-
+			    nonisolated public enum SafeDIScope_Widget {
+			        nonisolated public enum Panel_Scope {
 			            nonisolated public struct widget_Values {
 			                public let name: String
 			            }
@@ -701,15 +671,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen nonisolated public enum SafeDISendableScope_Widget {
-			        case shell_Sendable(SafeDISendableScope_Widget.Shell_Scope)
-
+			    nonisolated public enum SafeDISendableScope_Widget {
 			        nonisolated public struct shell_Sendable_Values: Sendable {}
 
-			        @frozen nonisolated public enum Shell_Scope {
-			            case screen_Sendable_(SafeDISendableScope_Widget.Screen_Scope)
-			            case screen_Sendable(SafeDIScope_Widget.Panel_Scope)
-
+			        nonisolated public enum Shell_Scope {
 			            nonisolated public struct screen_Sendable__Values: Sendable {}
 
 			            nonisolated public struct screen_Sendable_Values: Sendable {}
@@ -731,9 +696,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			            }
 			        }
 
-			        @frozen nonisolated public enum Screen_Scope {
-			            case panelBuilder(SafeDIScope_Widget.Panel_Scope)
-
+			        nonisolated public enum Screen_Scope {
 			            nonisolated public struct panelBuilder_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -937,10 +900,8 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			probes: [DifferentialValueProbe("{ () -> [Any] in let root = Root(); return [root, root.home.mid.screenBuilder.instantiate()] }()")],
 			expectedFeature: """
 			extension Home {
-			    @frozen nonisolated public enum SafeDIScope_Api {
-			        @frozen nonisolated public enum Screen_Scope {
-			            case api(api_Values)
-
+			    nonisolated public enum SafeDIScope_Api {
+			        nonisolated public enum Screen_Scope {
 			            nonisolated public struct api_Values {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -958,14 +919,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen nonisolated public enum SafeDISendableScope_Api {
-			        case mid_Sendable(SafeDISendableScope_Api.Mid_Scope)
-
+			    nonisolated public enum SafeDISendableScope_Api {
 			        nonisolated public struct mid_Sendable_Values: Sendable {}
 
-			        @frozen nonisolated public enum Mid_Scope {
-			            case screenBuilder(SafeDIScope_Api.Screen_Scope)
-
+			        nonisolated public enum Mid_Scope {
 			            nonisolated public struct screenBuilder_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1123,10 +1080,8 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Hub {
-			    @frozen nonisolated public enum SafeDIScope_Api {
-			        @frozen nonisolated public enum C_Scope {
-			            case api(api_Values)
-
+			    nonisolated public enum SafeDIScope_Api {
+			        nonisolated public enum C_Scope {
 			            nonisolated public struct api_Values {
 			                public let tag: Tag
 			            }
@@ -1146,14 +1101,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			        }
 			    }
 
-			    @frozen nonisolated public enum SafeDISendableScope_Api {
-			        case aBuilder_Sendable(SafeDISendableScope_Api.A_Scope)
-
+			    nonisolated public enum SafeDISendableScope_Api {
 			        nonisolated public struct aBuilder_Sendable_Values: Sendable {}
 
-			        @frozen nonisolated public enum A_Scope {
-			            case cBuilder(SafeDIScope_Api.C_Scope)
-
+			        nonisolated public enum A_Scope {
 			            nonisolated public struct cBuilder_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1338,6 +1289,70 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: ["declarationOrder", "reversedFileNames"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsOneErrorNamingBothPlaces_whenPassingSeamCallsTwoSeamsEachPassingUpSendablePlaceThatReadsItsValue(fileNames: String) async {
+		// `Mid` instantiates `tag` and calls `Hub` and `Hub2`, each of whose places a `@Sendable` function builds, and passes
+		// both builders up: one error names both calls and both places, whatever order the files are in.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `tag: Tag?`, which `Mid` builds where it calls `Hub` and `Hub2`, but `Mid` passes the builders for `A`’s `api: any Api` (case `A_Scope.api` of `apiSendableBuilder`) in `Hub`’s tree and `B`’s `api: any Api` (case `B_Scope.api` of `apiSendableBuilder`) in `Hub2`’s tree on from its own caller, which cannot hand them `Mid`’s values. Instantiate `tag` outside `Mid` and declare `@Received let tag: Tag` on `Mid`, so the builders’ caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Middle` or a module it lists among its SafeDI dependencies, so `Mid` fills the builders itself.
+			\(fixtures["Middle"]!["Mid.swift"]):11:5: note: `Mid` declares `tag: Tag` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.twoPassingUpModules(swapsOwners: false, reversesFileNames: fileNames == "reversedFileNames"),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: ["declarationOrder", "reversedFileNames"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsEveryFindingOfReader_whenPlacesOneFillFillsLoseItsValueForDifferentReasons(fileNames: String) async {
+		// `Mid` instantiates `tag`, builds `D`, whose place `api` its own `@Sendable` function builds, and calls `Hub`, whose
+		// place `A`'s `api` a `@Sendable` function builds, which it passes up. `App`'s `LiveApi` fills both and reads `tag`:
+		// `D`'s place is built outside the function that binds `tag`, and `A`'s is passed up by `Mid`, which cannot hand its
+		// caller `Mid`'s `tag`. Both errors are reported, whatever order `Feature`'s files are in, in source order.
+		let reversesFileNames = fileNames == "reversedFileNames"
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let boundByPassingUpSeam = """
+			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `tag: Tag?`, which `Mid` builds where it calls `Hub`, but `Mid` passes the builder for `A`’s `api: any Api` (case `A_Scope.api` of `apiSendableBuilder`) on from its own caller, which cannot hand it `Mid`’s values. Instantiate `tag` outside `Mid` and declare `@Received let tag: Tag` on `Mid`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Middle` or a module it lists among its SafeDI dependencies, so `Mid` fills the builder itself.
+			\(fixtures["Middle"]!["Mid.swift"]):11:5: note: `Mid` declares `tag: Tag` here.
+			"""
+			let boundOutsideSendableFunction = """
+			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `tag: Tag?`, which `Mid` declares outside the `@Sendable` function that builds `dBuilder: SendableInstantiator<D>`, and the scope SafeDI hands the builder for `D`’s `api: any Api` (case `D_Scope.api` of `apiSendableBuilder`) carries only what that function binds. Instantiate `tag` outside `Mid` and declare `@Received let tag: Tag` on `Mid`, so the builder’s caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Middle` or a module it lists among its SafeDI dependencies.
+			\(fixtures["Middle"]!["Mid.swift"]):11:5: note: `Mid` declares `tag: Tag` here.
+			"""
+			return reversesFileNames ? boundOutsideSendableFunction + "\n" + boundByPassingUpSeam : boundByPassingUpSeam + "\n" + boundOutsideSendableFunction
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.passingUpAndSendablePlaceModules(reversesFileNames: reversesFileNames),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsOneErrorNamingBothPlaces_whenTwoSeamsPassingUpSendablePlacesHoldEachOthersOwnerType() async {
+		// As above, with `Hub` holding `B` and `Hub2` holding `A`: the error names the places by the seams that hold them.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveApi.swift"]):10:5: error: `LiveApi` receives `tag: Tag?`, which `Mid` builds where it calls `Hub2` and `Hub`, but `Mid` passes the builders for `A`’s `api: any Api` (case `A_Scope.api` of `apiSendableBuilder`) in `Hub2`’s tree and `B`’s `api: any Api` (case `B_Scope.api` of `apiSendableBuilder`) in `Hub`’s tree on from its own caller, which cannot hand them `Mid`’s values. Instantiate `tag` outside `Mid` and declare `@Received let tag: Tag` on `Mid`, so the builders’ caller reads its own, or declare an @Instantiable type that fulfills `Api` in module `Middle` or a module it lists among its SafeDI dependencies, so `Mid` fills the builders itself.
+			\(fixtures["Middle"]!["Mid.swift"]):11:5: note: `Mid` declares `tag: Tag` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.twoPassingUpModules(swapsOwners: true, reversesFileNames: false),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_fillReadsCallersValue_whenSeamThatPassesSendablePlaceUpReceivesTheValue() async throws {
@@ -1351,20 +1366,29 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		#endif
 
 		extension Mid {
-		    @frozen public enum SafeDISendableScope_Api {
-		        case hub_Sendable(Hub.SafeDISendableScope_Api)
+		    nonisolated public enum SafeDISendableScope_Api {
+		        nonisolated public struct hub_Sendable_Values: Sendable {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+		            public let hub_Sendable: @Sendable (hub_Sendable_Values) -> Hub.SafeDISendableScope_Api.__safeDI_Builder<__safeDI_Built>
+
+		            public init(hub_Sendable: @escaping @Sendable (hub_Sendable_Values) -> Hub.SafeDISendableScope_Api.__safeDI_Builder<__safeDI_Built>) {
+		                self.hub_Sendable = hub_Sendable
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		                self.hub_Sendable = { _ in .init(__safeDI_noScope: __safeDI_builder) }
+		            }
+		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_tag tag: Tag, __safeDI_apiSendableBuilder: @escaping @Sendable (SafeDISendableScope_Api) -> any Api) {
+		    public init(__safeDI_tag tag: Tag, __safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
 		        func __safeDI_hub() -> Hub {
 		            _ = Hub.__safeDI_Hub_6C9C0998745FE12B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub(__safeDI_tag: tag, __safeDI_apiSendableBuilder: .init(
-		                aBuilder: { _ in
-		                    .init(api: { __safeDI_apiValues in __safeDI_apiSendableBuilder(.hub_Sendable(.aBuilder(.api(__safeDI_apiValues)))) })
-		                }
-		            ))
+		            return Hub(__safeDI_tag: tag, __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder.hub_Sendable(SafeDISendableScope_Api.hub_Sendable_Values()))
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        self.init(tag: tag, hub: hub)
@@ -1372,7 +1396,7 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		}
 
 		extension Mid {
-		    public enum __safeDI_Mid_ED297296080C8B89 {}
+		    public enum __safeDI_Mid_F725DF89F69CD9BD {}
 		}
 		""")
 		#expect(output.modules["App"]?.generatedFiles["App.swift"] == generatedFileHeader + """
@@ -1387,25 +1411,20 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 		    public init() {
 		        let tag = Tag()
 		        func __safeDI_mid() -> Mid {
-		            _ = Mid.__safeDI_Mid_ED297296080C8B89.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable func __safeDI_apiSendableBuilder_Mid(_ scope: Mid.SafeDISendableScope_Api) -> any Api {
-		                switch scope {
-		                case let .hub_Sendable(scope): return __safeDI_apiSendableBuilder_Hub(scope)
-		                }
+		            _ = Mid.__safeDI_Mid_F725DF89F69CD9BD.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Mid() -> Mid.SafeDISendableScope_Api.__safeDI_Builder<any Api> {
+		                .init(hub_Sendable: { _ in __safeDI_apiSendableBuilder_Hub() })
 		            }
-		            @Sendable func __safeDI_apiSendableBuilder_Hub(_ scope: Hub.SafeDISendableScope_Api) -> any Api {
-		                switch scope {
-		                case let .aBuilder(scope): return __safeDI_apiBuilder_Hub_A_Scope(scope)
-		                }
+		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.SafeDISendableScope_Api.__safeDI_Builder<any Api> {
+		                .init(aBuilder: { _ in __safeDI_apiBuilder_Hub_A_Scope() })
 		            }
-		            @Sendable func __safeDI_apiBuilder_Hub_A_Scope(_ scope: Hub.SafeDIScope_Api.A_Scope) -> any Api {
-		                switch scope {
-		                case .api:
+		            @Sendable nonisolated func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.SafeDIScope_Api.A_Scope.__safeDI_Builder<any Api> {
+		                .init(api: { _ in
 		                    let api: any Api = LiveApi(tag: tag)
 		                    return api
-		                }
+		                })
 		            }
-		            return Mid(__safeDI_tag: tag, __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Mid)
+		            return Mid(__safeDI_tag: tag, __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Mid())
 		        }
 		        let mid: Mid = __safeDI_mid()
 		        self.init(tag: tag, mid: mid)
@@ -1512,14 +1531,10 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 			],
 			expectedFeature: """
 			extension Host {
-			    @frozen nonisolated public enum SafeDISendableScope_DefaultWidget_Widget {
-			        case shell_Sendable(SafeDISendableScope_DefaultWidget_Widget.Shell_Scope_)
-
+			    nonisolated public enum SafeDISendableScope_DefaultWidget_Widget {
 			        nonisolated public struct shell_Sendable_Values: Sendable {}
 
-			        @frozen nonisolated public enum Shell_Scope_ {
-			            case widgetBuilder(Shell_Scope)
-
+			        nonisolated public enum Shell_Scope_ {
 			            nonisolated public struct widgetBuilder_Values: Sendable {}
 
 			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
@@ -1631,6 +1646,55 @@ struct SafeDIToolSeamSendableScopeByTypeTests: ~Copyable {
 	/// `Middle` with `midDeclarations`, which calls `Hub` and passes its builder up; and `App`'s root, which holds a `tag` of
 	/// its own, and `LiveApi`, which reads `tag` only if available and fulfills `Api` in `App`, or in `Feature` where
 	/// `fulfillerInFeature`.
+	/// `Mid` instantiates `tag` and calls `Hub` and `Hub2`, which each receive `tag` and build `A`'s or `B`'s `api: any Api`
+	/// in a `SendableInstantiator`, `Hub` `A` unless `swapsOwners`; `App` fills both with `LiveApi`, which reads `tag`. With
+	/// `reversesFileNames`, `Feature`'s files are named so their order reverses.
+	private static func twoPassingUpModules(swapsOwners: Bool, reversesFileNames: Bool) -> [ModuleFixture] {
+		let liveApi = SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let tag: Tag?"])
+		let (hubOwner, hub2Owner) = swapsOwners ? ("B", "A") : ("A", "B")
+		let feature = [
+			("Api", "public protocol Api {}"),
+			("Tag", tag),
+			("A", seamFixtureType(named: "A", declarations: ["@Instantiated public let api: any Api"])),
+			("B", seamFixtureType(named: "B", declarations: ["@Instantiated public let api: any Api"])),
+			("Hub", seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Received public let tag: Tag", "@Instantiated public let ownerBuilder: SendableInstantiator<\(hubOwner)>"])),
+			("Hub2", seamFixtureType(named: "Hub2", isSeam: true, declarations: ["@Received public let tag: Tag", "@Instantiated public let ownerBuilder: SendableInstantiator<\(hub2Owner)>"])),
+		]
+		let featureModule = if reversesFileNames {
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [], swiftFileContentByFilePath: Dictionary(uniqueKeysWithValues: feature.enumerated().map { ("File\(feature.count - $0.offset).swift", $0.element.1) }))
+		} else {
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature.map(\.1))
+		}
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let mid: Mid"])
+		return [
+			featureModule,
+			ModuleFixture(name: "Middle", packageName: "Other", swiftFileContent: ["import Feature\n\n" + seamFixtureType(named: "Mid", isSeam: true, declarations: ["@Instantiated public let tag: Tag", "@Instantiated public let hub: Hub", "@Instantiated public let hub2: Hub2"])], dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [liveApi, root].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
+		]
+	}
+
+	/// `Hub`, a seam of `Feature` that receives `tag` and builds `A`'s place `api` in a `SendableInstantiator`, and `D`, which
+	/// holds the place `api`; `Mid`, a seam of `Middle` that instantiates `tag`, builds `D` in a `SendableInstantiator` and
+	/// calls `Hub`, passing its builder up; and `App`'s `LiveApi`, which fills `Api` and reads `tag`. With `reversesFileNames`,
+	/// `Feature`'s files are named so their order reverses, which puts `D`'s place before `A`'s.
+	private static func passingUpAndSendablePlaceModules(reversesFileNames: Bool) -> [ModuleFixture] {
+		let liveApi = SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let tag: Tag?"])
+		let feature = [
+			"public protocol Api {}",
+			tag,
+			seamFixtureType(named: "A", declarations: ["@Instantiated public let api: any Api"]),
+			seamFixtureType(named: "Hub", isSeam: true, declarations: ["@Received public let tag: Tag", "@Instantiated public let aBuilder: SendableInstantiator<A>"]),
+			seamFixtureType(named: "D", declarations: ["@Instantiated public let api: any Api"]),
+		]
+		let featureModule = ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [], swiftFileContentByFilePath: Dictionary(uniqueKeysWithValues: feature.enumerated().map { ("File\(reversesFileNames ? feature.count - $0.offset : $0.offset + 1).swift", $0.element) }))
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let mid: Mid"])
+		return [
+			featureModule,
+			ModuleFixture(name: "Middle", packageName: "Other", swiftFileContent: ["import Feature\n\n" + seamFixtureType(named: "Mid", isSeam: true, declarations: ["@Instantiated public let tag: Tag", "@Instantiated public let dBuilder: SendableInstantiator<D>", "@Instantiated public let hub: Hub"])], dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [liveApi, root].map { "import Feature\nimport Middle\n\n" + $0 }, dependencies: ["Feature", "Middle"]),
+		]
+	}
+
 	private static func passingUpModules(midDeclarations: [String], fulfillerInFeature: Bool = false) -> [ModuleFixture] {
 		let liveApi = SafeDIToolSeamBuilderParameterTests.fulfillingType(named: "LiveApi", fulfilling: "Api", declarations: ["@Received(onlyIfAvailable: true) public let tag: Tag?"])
 		let feature = [
