@@ -29,7 +29,12 @@ import Foundation
 ///   running finish, and the jobs never admitted are `.notAdmitted`.
 /// - **The reported failure is chosen by index, never by time.** `map` throws the error of the failed job with the
 ///   lowest index. Since admission is in index order and nothing is cancelled, every job before that one ran to its end,
-///   so which error is thrown depends only on what the jobs do, never on which finished first.
+///   so which error is thrown depends only on what the jobs do, never on which finished first. That lowest failure is
+///   the only outcome under `stopAdmittingAtFirstFailure` that does not depend on timing: which later jobs ran, which
+///   of them failed, and which were never admitted depend on when the first failure arrived.
+/// - **Cancellation is not checked.** A cancelled caller's jobs see the cancellation as their own, since they run in its
+///   child tasks, but the helper keeps admitting and waits for every admitted job; a job that should stop early checks
+///   `Task.isCancelled` itself.
 /// - **A job's input is released when the job ends.** The elements are held by the jobs not yet admitted and by the
 ///   running ones, never for the whole call; a caller that wants the memory back passes its only copy of the array.
 /// - **A width of 1 runs in the caller's task**, one job after another, with no child task.
@@ -98,10 +103,16 @@ enum BoundedConcurrency {
 			var nextIndex = 0
 			var runningCost = 0
 			var admits = true
+			// The cost of the next job to admit, once asked, so a job that waits for room is asked its cost only once.
+			var nextJobCost: Int?
 			func admitWhatFits() {
 				while admits, let element = remaining.last {
-					let jobCost = min(width, max(1, cost(element)))
-					guard runningCost + jobCost <= width else { return }
+					let jobCost = nextJobCost ?? min(width, max(1, cost(element)))
+					guard runningCost + jobCost <= width else {
+						nextJobCost = jobCost
+						return
+					}
+					nextJobCost = nil
 					remaining.removeLast()
 					let index = nextIndex
 					nextIndex += 1
@@ -139,15 +150,22 @@ enum BoundedConcurrency {
 		let outcomes = await outcomes(of: elements, width: width, cost: cost, failurePolicy: .stopAdmittingAtFirstFailure, transform)
 		var results = [Transformed]()
 		results.reserveCapacity(outcomes.count)
-		// Admission is in index order and stops only after a failure, so a job not admitted follows a failure, which
-		// this loop throws first.
+		var lowestFailure: (any Error)?
 		for outcome in outcomes {
-			if case let .finished(transformed) = outcome {
+			switch outcome {
+			case let .finished(transformed):
 				results.append(transformed)
-			} else if case let .failed(error) = outcome {
-				throw error
+			case let .failed(error):
+				lowestFailure = lowestFailure ?? error
+			case .notAdmitted:
+				// Admission is in index order and stops only after a failure, so a job not admitted follows a failure.
+				continue
 			}
 		}
-		return results
+		if let lowestFailure {
+			throw lowestFailure
+		} else {
+			return results
+		}
 	}
 }
