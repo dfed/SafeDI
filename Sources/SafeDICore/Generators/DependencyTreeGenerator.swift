@@ -318,68 +318,101 @@ public actor DependencyTreeGenerator {
 			nil
 		}
 		let trees = try buildsDependencyTrees ? dependencyTrees(unreadTypeComment: publicMockContext?.unreadTypeComment) : nil
-		// The roots' code generates in a child task while the warnings, the DOT graph and the mocks are made, since none
-		// of them reads it. Its error is still the one reported before theirs: their results are kept until it is awaited.
-		let rootsToGenerate = request.generatesDependencyTrees ? trees?.roots : nil
-		let rootsOfOtherModules = trees?.rootsOfOtherModules ?? []
-		async let generatedRoots: [GeneratedRoot] = if let rootsToGenerate {
-			generatedCode(of: rootsToGenerate, rootsOfOtherModules: rootsOfOtherModules)
-		} else {
-			[]
+		// The roots' plans generate in a child task while the warnings, the DOT graph and the mocks are made, since none of
+		// them reads them. Its error is still the one reported before theirs: their results are kept until it is awaited.
+		// The child holds the roots' generators only while it runs, so once the plans are done this function holds the
+		// last references to the trees.
+		// The checks run in this task, not the one that plans the code: their walks are as deep as the trees, and a task
+		// frees the memory its frames took when it ends, which on a deep module took as long as releasing the trees.
+		if request.generatesDependencyTrees, let trees {
+			try await validateBeforeGeneratingCode(of: trees.roots)
 		}
-		let warnings = if let trees, request.generatesDependencyTrees {
-			generateWarnings(validatedScopes: trees.validatedScopes)
-		} else {
-			[SourceDiagnostic]()
-		}
+		let plannedRoots: Result<[PlannedRoot], any Error>
+		let warnings: [SourceDiagnostic]
 		let dotTreeAndMocks: Result<(String?, MockGenerationResult?), any Error>
 		do {
-			var dotTree: String?
-			if let trees, request.generatesDOTTree {
-				// Drawn from the trees the code was generated from, before any mock is built, so that no tree outlives its
-				// use. Drawing a tree throws nothing, so an error in a mock is still the one reported after the trees'.
-				dotTree = try await generateDOTTree(of: trees.roots)
+			// The trees as the work below reads them, released at the end of this block.
+			let trees = trees
+			(plannedRoots, warnings, dotTreeAndMocks) = await withTaskGroup(
+				of: Result<[PlannedRoot], any Error>.self,
+				returning: (Result<[PlannedRoot], any Error>, [SourceDiagnostic], Result<(String?, MockGenerationResult?), any Error>).self,
+			) { taskGroup in
+				if request.generatesDependencyTrees, let trees {
+					taskGroup.addTask { [roots = trees.roots, rootsOfOtherModules = trees.rootsOfOtherModules] in
+						do {
+							return try await .success(self.plannedCode(of: roots, rootsOfOtherModules: rootsOfOtherModules))
+						} catch {
+							return .failure(error)
+						}
+					}
+				}
+				let warnings = if let trees, request.generatesDependencyTrees {
+					generateWarnings(validatedScopes: trees.validatedScopes)
+				} else {
+					[SourceDiagnostic]()
+				}
+				let dotTreeAndMocks: Result<(String?, MockGenerationResult?), any Error>
+				do {
+					var dotTree: String?
+					if let trees, request.generatesDOTTree {
+						// Drawn from the trees the code was generated from, before any mock is built, so that no tree outlives
+						// its use. Drawing a tree throws nothing, so an error in a mock is still the one reported after the
+						// trees'.
+						dotTree = try await generateDOTTree(of: trees.roots)
+					}
+					var mocks: MockGenerationResult?
+					if let mockRequest = request.mocks {
+						mocks = try await generateMockCode(
+							mockConditionalCompilation: mockRequest.mockConditionalCompilation,
+							currentModuleSourceFilePaths: mockRequest.currentModuleSourceFilePaths,
+							additionalMocksToGenerate: mockRequest.additionalMocksToGenerate,
+							publicMockContext: declaresPublicMock ? publicMockContext : nil,
+						)
+					}
+					dotTreeAndMocks = .success((dotTree, mocks))
+				} catch {
+					dotTreeAndMocks = .failure(error)
+				}
+				let plannedRoots = await taskGroup.next() ?? .success([])
+				return (plannedRoots, warnings, dotTreeAndMocks)
 			}
-			var mocks: MockGenerationResult?
-			if let mockRequest = request.mocks {
-				mocks = try await generateMockCode(
-					mockConditionalCompilation: mockRequest.mockConditionalCompilation,
-					currentModuleSourceFilePaths: mockRequest.currentModuleSourceFilePaths,
-					additionalMocksToGenerate: mockRequest.additionalMocksToGenerate,
-					publicMockContext: declaresPublicMock ? publicMockContext : nil,
-				)
-			}
-			dotTreeAndMocks = .success((dotTree, mocks))
-		} catch {
-			dotTreeAndMocks = .failure(error)
 		}
-		let roots = try await generatedRoots
+		let plans = try plannedRoots.get()
+		// The roots' plans are spelled in a child task while this one releases the trees, which takes about as long on a
+		// large module: releasing them after the text, or before it, made `generate` wait for both.
+		async let roots = Self.spelled(plans)
+		// A read, not an assignment, so the optimizer cannot release the trees before the spelling starts.
+		_ = consume trees
 		let (dotTree, mocks) = try dotTreeAndMocks.get()
-		return GenerationResults(generatedRoots: roots, warnings: warnings, mocks: mocks, dotTree: dotTree)
+		return await GenerationResults(generatedRoots: roots, warnings: warnings, mocks: mocks, dotTree: dotTree)
 	}
 
-	/// The code of each root and seam among `roots`, the trees this module generates, then a file for each of
-	/// `rootsOfOtherModules`, the roots another module declares, once every whole-module check of the trees passes.
-	private func generatedCode(of roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable]) async throws -> [GeneratedRoot] {
-		let rootScopeGenerators = roots
+	/// Runs every whole-module check of `roots`, the trees this module generates, which their code needs to pass.
+	private func validateBeforeGeneratingCode(of roots: [RootScopeInfo]) async throws {
 		try Self.validateFills(
-			inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator),
+			inTreesRootedAt: roots.map(\.scopeGenerator),
 			callerModule: seams.currentModule,
 		)
-		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: rootScopeGenerators.map { ($0.instantiable, $0.scopeGenerator) })
-		try await validateNoSeamTierOmitsProvidedValue(inTreesRootedAt: rootScopeGenerators)
+		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: roots.map { ($0.instantiable, $0.scopeGenerator) })
+		try await validateNoSeamTierOmitsProvidedValue(inTreesRootedAt: roots)
+	}
 
+	/// The plan of each root's and seam's code among `roots`, the trees this module generates, then a file for each of
+	/// `rootsOfOtherModules`, the roots another module declares.
+	private func plannedCode(of roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable]) async throws -> [PlannedRoot] {
+		let rootScopeGenerators = roots
 		if let ordering = CodeTaskStart.ordering {
 			await ordering.runEveryStart()
 		}
-		let generatedRoots = try await withThrowingTaskGroup(
-			of: GeneratedRoot?.self,
-			returning: [GeneratedRoot].self,
+		let plannedRoots = try await withThrowingTaskGroup(
+			of: PlannedRoot?.self,
+			returning: [PlannedRoot].self,
 		) { taskGroup in
 			for rootInfo in rootScopeGenerators {
 				taskGroup.addTask {
-					let code = try await rootInfo.scopeGenerator.generateCode()
-					return await GeneratedRoot(
+					let code = try await rootInfo.scopeGenerator.generatePlan()
+					PlaceObservation.record(code)
+					return await PlannedRoot(
 						typeDescription: rootInfo.typeDescription,
 						sourceFilePath: rootInfo.sourceFilePath,
 						code: code,
@@ -387,13 +420,13 @@ public actor DependencyTreeGenerator {
 					)
 				}
 			}
-			var generatedRoots = [GeneratedRoot]()
-			for try await generatedRoot in taskGroup {
-				if let generatedRoot {
-					generatedRoots.append(generatedRoot)
+			var plannedRoots = [PlannedRoot]()
+			for try await plannedRoot in taskGroup {
+				if let plannedRoot {
+					plannedRoots.append(plannedRoot)
 				}
 			}
-			return generatedRoots
+			return plannedRoots
 		}
 		if let observer = HeldCodeTasks.observer {
 			for rootInfo in rootScopeGenerators {
@@ -404,16 +437,16 @@ public actor DependencyTreeGenerator {
 		// The file `scan` plans for a root another module declares holds no code: that module generates the root's
 		// `init()`, so the file says where, and what to do when that module does not run SafeDI. A root without
 		// dependencies gets no `init()` in its own module either, so its file says nothing.
-		return generatedRoots + rootsOfOtherModules.map { root in
+		return plannedRoots + rootsOfOtherModules.map { root in
 			let rootType = root.concreteInstantiable.asSource
 			// Type and module names are written bare in generated comments, as the root's is.
 			let declaringModule = root.moduleName.map { "\($0), the module that declares \(rootType)" } ?? "the module that declares \(rootType)"
-			return GeneratedRoot(
+			return PlannedRoot(
 				typeDescription: root.concreteInstantiable,
 				sourceFilePath: root.sourceFilePath,
 				code: root.dependencies.isEmpty
-					? ""
-					: "// SafeDI generates \(rootType)’s init() only in \(declaringModule). If \(rootType)() does not compile, add the SafeDI plugin to the target that declares \(rootType).",
+					? .empty
+					: .text("// SafeDI generates \(rootType)’s init() only in \(declaringModule). If \(rootType)() does not compile, add the SafeDI plugin to the target that declares \(rootType)."),
 				fulfillers: [],
 			)
 		}
@@ -498,6 +531,26 @@ public actor DependencyTreeGenerator {
 		let instantiable: Instantiable
 		let sourceFilePath: String?
 		let scopeGenerator: ScopeGenerator
+	}
+
+	/// A root's code as a plan, which `spelled(_:)` writes once the trees are no longer needed.
+	struct PlannedRoot: Sendable {
+		let typeDescription: TypeDescription
+		let sourceFilePath: String?
+		let code: GeneratedCode
+		let fulfillers: Set<FulfillerImports.Fulfiller>
+	}
+
+	/// The text of each root's plan.
+	private static func spelled(_ plannedRoots: [PlannedRoot]) -> [GeneratedRoot] {
+		plannedRoots.map { plannedRoot in
+			GeneratedRoot(
+				typeDescription: plannedRoot.typeDescription,
+				sourceFilePath: plannedRoot.sourceFilePath,
+				code: plannedRoot.code.spelled(),
+				fulfillers: plannedRoot.fulfillers,
+			)
+		}
 	}
 
 	/// The trees of the roots and seams a run of `generate` builds once, validated, which their code, their warnings and
