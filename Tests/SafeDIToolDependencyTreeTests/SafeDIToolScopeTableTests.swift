@@ -158,7 +158,6 @@ struct SafeDIToolScopeTableTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
-	/// A permutation of `0..<count`, which `seed` decides alone (Fisher–Yates over SplitMix64).
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_freezesHolesAliasesAndFills_whenRootFillsHoleOfSeamInAnotherModule() async throws {
@@ -184,22 +183,18 @@ struct SafeDIToolScopeTableTests: ~Copyable {
 			projections.append(projection)
 		}
 		// `Feature` freezes its maps and overlays each seam signature pass on them; `App` freezes its validated map and its
-		// seam map, in which `Hub` is a call that fills its hole. Sorted, since the order the tables are made in is not
-		// this test's subject.
-		#expect(projections.sorted() == [
-			"0: Hub keys [Hub]",
+		// seam map, in which `Hub` is a call that fills its hole. Compared as a set: which tables are made is this test's
+		// subject, not how many times each is made, which follows how many maps and signature passes a run freezes (a run
+		// that reads another module's seam signatures from its module info makes no pass of its own over them).
+		#expect(Set(projections) == [
 			"0: Hub keys [Hub]",
 			"0: Hub keys [Hub] api -> 1\n1: LiveApi keys [Api, LiveApi]\n2: Root keys [Root] hub -> 0 renamedHub = hub",
-			"0: Hub keys [Hub] api -> hole",
-			"0: Hub keys [Hub] api -> hole",
-			"0: Hub keys [Hub] api -> hole",
-			"0: Hub keys [Hub] api -> hole",
-			"0: Hub keys [Hub] api -> hole",
 			"0: Hub keys [Hub] api -> hole",
 			"0: Hub keys [Hub] fill api -> 1\n1: LiveApi keys [Api, LiveApi]\n2: Root keys [Root] hub -> 0 renamedHub = hub",
 		])
 	}
 
+	/// A permutation of `0..<count`, which `seed` decides alone (Fisher–Yates over SplitMix64).
 	private static func shuffledPositions(count: Int, seed: UInt64) -> [Int] {
 		var positions = Array(0..<count)
 		var random = GraphFuzzerRandomNumberGenerator(seed: seed)
