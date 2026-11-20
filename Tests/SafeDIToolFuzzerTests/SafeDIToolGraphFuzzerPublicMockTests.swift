@@ -1028,6 +1028,29 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func leafCalls_labelLeafBySecondLabel_whenConsumerBuildsT6UnderT6Second() {
+		// A consumer that builds `T6` under its second label calls its public mock inside that label's builder function,
+		// whose calls are the `t6Second` leaf's.
+		let mock = "extension S1_T8 {\n    static func mock() -> S1_T8 {\n        func __safeDI_t6() -> S1_T6 {\n            return S1_T6.__safeDI_mock(s1_HoleBuilder: __safeDI_b(), safeDIOverrides: safeDIOverrides.t6)\n        }\n        let t6: S1_T6 = __safeDI_t6()\n        func __safeDI_t6Second() -> S1_T6 {\n            return S1_T6.__safeDI_mock(s1_HoleBuilder: __safeDI_b(), safeDIOverrides: safeDIOverrides.t6Second)\n        }\n        let t6Second: S1_T6 = __safeDI_t6Second()\n        return S1_T8(t6: t6, t6Second: t6Second)\n    }\n}\n"
+		#expect(GraphFuzzerOracle.leafCalls(ofMockedType: "S1_T8", in: ["FuzzOther/S1_T8+SafeDIMock.swift": mock], prefix: "S1_") == [
+			GraphFuzzerOracle.PublicMockLeafCall(leafLabel: "t6", passedLabels: ["s1_HoleBuilder"], instanceLabels: []),
+			GraphFuzzerOracle.PublicMockLeafCall(leafLabel: "t6Second", passedLabels: ["s1_HoleBuilder"], instanceLabels: []),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func leafCalls_readCallOfSecondCalledMock_whenConsumerBuildsT6Twin() {
+		// A consumer that reaches the hole type through `T6Twin` too calls that public mock under `t6Twin`.
+		let mock = "extension S1_T8 {\n    static func mock() -> S1_T8 {\n        let t6 = S1_T6.mock(theme: theme)\n        let t6Twin = S1_T6Twin.mock(theme: theme)\n        return S1_T8(t6: t6, t6Twin: t6Twin)\n    }\n}\n"
+		#expect(GraphFuzzerOracle.leafCalls(ofMockedType: "S1_T8", in: ["FuzzOther/S1_T8+SafeDIMock.swift": mock], prefix: "S1_") == [
+			GraphFuzzerOracle.PublicMockLeafCall(leafLabel: "t6", passedLabels: ["theme"], instanceLabels: []),
+			GraphFuzzerOracle.PublicMockLeafCall(leafLabel: "t6Twin", passedLabels: ["theme"], instanceLabels: []),
+		])
+	}
+
 	// MARK: Compiler oracle
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "The oracle compiles generated code only when compile verification is enabled"))

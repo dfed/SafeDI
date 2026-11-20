@@ -115,6 +115,11 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		#if DEBUG
 		extension Db {
 		    public static func mock() -> Db {
+		        Db.__safeDI_mock()
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock() -> Db {
 		        Db()
 		    }
 		}
@@ -631,6 +636,13 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let db = if let safeDIBuilder = safeDIOverrides.db { safeDIBuilder() } else { Db() }

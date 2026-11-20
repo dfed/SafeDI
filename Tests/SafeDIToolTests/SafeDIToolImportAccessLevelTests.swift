@@ -425,6 +425,14 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			        gaugeBuilder: Instantiator<Gauge>? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Service {
+			        Service.__safeDI_mock(gaugeBuilder: gaugeBuilder, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        gaugeBuilder: Instantiator<Gauge>? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Service {
 			        func __safeDI_gaugeBuilder() -> Gauge {
 			            if let safeDIBuilder = safeDIOverrides.gaugeBuilder { safeDIBuilder() } else { Gauge() }
 			        }
@@ -518,6 +526,15 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_qosClass() -> DispatchQoS.QoSClass? { .utility }
 
 			    public static func mock(
+			        qos: Dispatch.DispatchQoS? = nil,
+			        qosClass: DispatchQoS.QoSClass? = Worker.__safeDI_publicMockDefault_qosClass(),
+			        label: String? = nil
+			    ) -> Worker {
+			        Worker.__safeDI_mock(qos: qos, qosClass: qosClass, label: label)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        qos: Dispatch.DispatchQoS? = nil,
 			        qosClass: DispatchQoS.QoSClass? = Worker.__safeDI_publicMockDefault_qosClass(),
 			        label: String? = nil
@@ -1805,6 +1822,14 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			        started: Date? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Holder {
+			        Holder.__safeDI_mock(started: started, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        started: Date? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Holder {
 			        let started = started ?? (Date())
 			        func __safeDI_child() -> Child {
 			            return Child.__safeDI_init(date: safeDIOverrides.child.date, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
@@ -2161,6 +2186,11 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 	#if DEBUG
 	extension Gauge {
 	    public static func mock() -> Gauge {
+	        Gauge.__safeDI_mock()
+	    }
+
+	    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+	    public static func __safeDI_mock() -> Gauge {
 	        Gauge()
 	    }
 	}
@@ -2323,8 +2353,16 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		        window: Window,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        Screen.__safeDI_mock(window: window, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        window: Window,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
 		        _ = Service.__safeDI_Service_mock_3CD7306A9A29A31B.self\(pluginComment)
-		        let service = Service.mock(window: window, safeDIOverrides: safeDIOverrides.service)
+		        let service = Service.__safeDI_mock(window: window, safeDIOverrides: safeDIOverrides.service)
 		        return Screen(service: service)
 		    }
 		}
@@ -2366,6 +2404,13 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 	#if DEBUG
 	extension Child {
 	    public static func mock(
+	        date: Date? = nil
+	    ) -> Child {
+	        Child.__safeDI_mock(date: date)
+	    }
+
+	    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+	    public static func __safeDI_mock(
 	        date: Date? = nil
 	    ) -> Child {
 	        let date = date ?? (Date())

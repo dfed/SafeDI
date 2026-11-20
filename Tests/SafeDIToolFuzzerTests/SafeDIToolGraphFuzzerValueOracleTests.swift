@@ -307,6 +307,83 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 	}
 
 	@Test
+	func mirror_declaresAliasOfForwardedProperty_whenMockedTypeAliasesItsOwnForwardedPropertyOnlyIfAvailable() throws {
+		// The mock and production bind `sessionAlias` to the forwarded `session`, so the mirror declares the alias beside
+		// the value it forwards rather than passing it `nil`.
+		let fixture = Self.fixture([
+			Self.type("S1_Screen", arguments: "generateMock: true", properties: [
+				"@Forwarded let session: S1_Session",
+				"@Received(fulfilledByDependencyNamed: \"session\", ofType: S1_Session.self, onlyIfAvailable: true) let sessionAlias: S1_Session?",
+			]),
+			Self.type("S1_Session", properties: []),
+		])
+
+		#expect(try Self.mirrorSource(of: "S1_Screen", in: fixture, forwarding: [GraphFuzzerMirrorProperty(label: "session", type: "S1_Session")]) == """
+		@Instantiable
+		public final class S1_ZMirror0: Instantiable {
+			public init(session: S1_Session, sessionAlias: S1_Session?) {
+				self.session = session
+				self.sessionAlias = sessionAlias
+				differentialMirrorValue = S1_Screen(session: session, sessionAlias: sessionAlias)
+			}
+
+			@Forwarded let session: S1_Session
+			@Received(fulfilledByDependencyNamed: "session", ofType: S1_Session.self, onlyIfAvailable: true) let sessionAlias: S1_Session?
+			let differentialMirrorValue: S1_Screen
+		}
+
+		@Instantiable(isRoot: true)
+		public final class S1_ZMirror0Host: Instantiable {
+			public init(mirrorBuilder: Instantiator<S1_ZMirror0>) {
+				self.mirrorBuilder = mirrorBuilder
+			}
+
+			@Instantiated let mirrorBuilder: Instantiator<S1_ZMirror0>
+		}
+
+		""")
+	}
+
+	@Test
+	func mirror_forwardsWrapperAndPassesItsInstance_whenMockTakesValueItsTreeReceivesLazily() throws {
+		// The mock takes `session` by value and wraps it for the mocked type's lazy receive, handing `S1_Editor` the same
+		// instance, so the mirror forwards the wrapper, whose declaration provides its instance too.
+		let fixture = Self.fixture([
+			Self.type("S1_Screen", arguments: "generateMock: true", properties: [
+				"@Received let session: LazilyInstantiated<S1_Session>",
+				"@Instantiated let editor: S1_Editor",
+			]),
+			Self.type("S1_Editor", properties: ["@Received let session: S1_Session"]),
+			"public final class S1_Session {}\n",
+		])
+
+		#expect(try Self.mirrorSource(of: "S1_Screen", in: fixture, forwarding: [GraphFuzzerMirrorProperty(label: "session", type: "S1_Session")]) == """
+		@Instantiable
+		public final class S1_ZMirror0: Instantiable {
+			public init(session: LazilyInstantiated<S1_Session>, editor: S1_Editor) {
+				self.session = session
+				self.editor = editor
+				differentialMirrorValue = S1_Screen(session: session, editor: editor)
+			}
+
+			@Forwarded let session: LazilyInstantiated<S1_Session>
+			@Instantiated let editor: S1_Editor
+			let differentialMirrorValue: S1_Screen
+		}
+
+		@Instantiable(isRoot: true)
+		public final class S1_ZMirror0Host: Instantiable {
+			public init(mirrorBuilder: Instantiator<S1_ZMirror0>) {
+				self.mirrorBuilder = mirrorBuilder
+			}
+
+			@Instantiated let mirrorBuilder: Instantiator<S1_ZMirror0>
+		}
+
+		""")
+	}
+
+	@Test
 	func mirror_skipsMockTakingRequiredParameter_whenTheMockedTypeInstantiatesAnInstanceTheMockCannotBuild() {
 		// The mock takes the unbuildable `token` its mocked type instantiates, which no forwarded declaration stands for.
 		let fixture = Self.fixture([

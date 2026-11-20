@@ -8955,10 +8955,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				"\(typeName)(\(argumentList))"
 			}
+			// A public mock's `mock()` calls the function only generated code calls, as every tier does (`publicMockTiers`).
 			let code = if let publicMockPlan {
 				"""
 				extension \(typeName) {
 				    \(mockAttributesPrefix)public static func mock() -> \(mockMethodReturnType) {
+				        \(typeName).\(ReservedName.publicMockFunctionName)()
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    \(mockAttributesPrefix)public static func \(ReservedName.publicMockFunctionName)() -> \(mockMethodReturnType) {
 				        \(construction)
 				    }
 				}
@@ -12373,12 +12379,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		guard !disambiguationMap.isEmpty else { return disambiguationMap }
 		var disambiguationMap = disambiguationMap
 		// Writing through a subscript copies the map even when nothing is removed, so look first.
+		func removeRenames(of typeDescription: TypeDescription, labeled label: String) {
+			guard let renames = disambiguationMap[label] else { return }
+			let optionalTypeDescription = TypeDescription.optional(typeDescription)
+			guard renames[typeDescription] != nil || renames[optionalTypeDescription] != nil else { return }
+			disambiguationMap[label]?[typeDescription] = nil
+			disambiguationMap[label]?[optionalTypeDescription] = nil
+		}
+		// A declaration of a lazily instantiated wrapper is the nearest declaration of its instance too, so it also hides
+		// the rename of the other wrapper kind around that instance, whose `.instance` a by-value receive beneath would
+		// otherwise read (`disambiguatedLazilyInstantiatedBinding`).
 		func removeRenames(of property: Property) {
-			guard let renames = disambiguationMap[property.label] else { return }
-			let optionalTypeDescription = TypeDescription.optional(property.typeDescription)
-			guard renames[property.typeDescription] != nil || renames[optionalTypeDescription] != nil else { return }
-			disambiguationMap[property.label]?[property.typeDescription] = nil
-			disambiguationMap[property.label]?[optionalTypeDescription] = nil
+			removeRenames(of: property.typeDescription, labeled: property.label)
+			guard let instance = property.asUnwrappedProperty.asLazilyInstantiatedInstanceProperty else { return }
+			for wrapperName in [Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType] {
+				removeRenames(of: .simple(name: wrapperName, generics: [instance.typeDescription]), labeled: property.label)
+			}
 		}
 		for parameter in parameters {
 			removeRenames(of: parameter)
