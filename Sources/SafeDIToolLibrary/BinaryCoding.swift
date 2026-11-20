@@ -350,17 +350,12 @@ struct BinaryReader {
 	mutating func readString() throws(BinaryDecodingError) -> String {
 		let indexOffset = offset
 		let index = try readUnsigned()
-		if decodesStringsUpFront {
-			guard index < UInt64(strings.count) else {
-				throw .stringIndexOutOfRange(index: index, offset: indexOffset)
-			}
-			return strings[Int(index)]
-		} else {
-			guard index < UInt64(stringRanges.count) else {
-				throw .stringIndexOutOfRange(index: index, offset: indexOffset)
-			}
-			return String(decoding: UnsafeRawBufferPointer(rebasing: bytes[stringRanges[Int(index)]]), as: UTF8.self)
+		guard index < UInt64(decodesStringsUpFront ? strings.count : stringRanges.count) else {
+			throw .stringIndexOutOfRange(index: index, offset: indexOffset)
 		}
+		return decodesStringsUpFront
+			? strings[Int(index)]
+			: String(decoding: UnsafeRawBufferPointer(rebasing: bytes[stringRanges[Int(index)]]), as: UTF8.self)
 	}
 
 	/// Reads a value that may contain itself, such as a type description, throwing rather than recursing

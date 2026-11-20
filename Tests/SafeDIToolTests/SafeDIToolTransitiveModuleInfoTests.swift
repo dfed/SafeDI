@@ -559,6 +559,28 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		#expect(output.modules["App"]?.generatedFiles == reference.modules["App"]?.generatedFiles)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsUnresolvableModuleReference_whenNoModuleBeneathIsListed() async throws {
+		await assertThrowsError(containing: "SafeDI could not find the module info of module `Deep`, which `") {
+			try await ModuleReferenceResolver(transitiveModuleInfoListPath: nil).resolvingReferences(in: [(Self.fileReferringToDeep, "/App.safedi")])
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingTheFile_whenViewRefersToModuleAndAModuleBeneathCannotBeRead() async throws {
+		let unreadableModuleInfo = URL.temporaryFile.appendingPathExtension("safedi")
+		try Data("not a module info file".utf8).write(to: unreadableModuleInfo)
+		filesToDelete.append(unreadableModuleInfo)
+		let modulesBeneathCSV = URL.temporaryFile
+		try unreadableModuleInfo.path.write(to: modulesBeneathCSV, atomically: true, encoding: .utf8)
+		filesToDelete.append(modulesBeneathCSV)
+		await assertThrowsError(containing: "Could not read the SafeDI module info file at \(unreadableModuleInfo.path)") {
+			try await ModuleReferenceResolver(transitiveModuleInfoListPath: modulesBeneathCSV.path).resolvingReferences(in: [(Self.fileReferringToDeep, "/App.safedi")])
+		}
+	}
+
 	// MARK: Tests – Mocks
 
 	@Test
@@ -2313,6 +2335,23 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 	private var filesToDelete: [URL]
 
 	private static let clock = seamFixtureType(named: "Clock", declarations: [])
+
+	/// The module info file of a module `App` whose view refers to a module `Deep`.
+	private static let fileReferringToDeep = ModuleInfoFile(
+		moduleName: "App",
+		packageName: nil,
+		dependencyModuleNames: [],
+		imports: [],
+		mockImports: [],
+		instantiables: [],
+		configurations: [],
+		filesWithUnexpectedNodes: nil,
+		conditionalCompilationDecisions: [],
+		instantiableTypeNamesInAnyClause: [],
+		plainTypeDeclarations: [],
+		seamSignatures: [],
+		view: ModuleInfoView(moduleGraph: [], declarations: [], references: [ViewedModuleReference(moduleName: "Deep", checksum: 1)]),
+	)
 
 	/// `DefaultThing`, which fulfills `Thing` and builds nothing.
 	private static let leafThingImplementation = """

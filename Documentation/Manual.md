@@ -1616,6 +1616,7 @@ An Xcode script phase that runs `SafeDITool` can keep `ENABLE_USER_SCRIPT_SANDBO
 | `--module-info-output` | Where to write this module’s `.safedi` file, for the modules that list it. |
 | `--dependent-module-info-file-path` | A file listing the `.safedi` file of each module this one [lists](#which-modules-to-list). |
 | `--transitive-module-info-file-path` | A file listing the `.safedi` file of every module this one depends on, directly or through other modules, as the Bazel rule passes. |
+| `--module-info-views-refer-to-modules` | A smaller `.safedi` file: it names the modules whose declarations a module that calls this one’s seams or public mocks needs, instead of copying them. Pass it only when every module that reads the file is also given the `.safedi` of every module beneath it through `--transitive-module-info-file-path`, as the Bazel rule does. |
 | `--compiler-receives-input-paths-unchanged` | Better error locations, when your build allows it; see below. |
 
 `--module-name` and `--package-name` tell `SafeDITool` which module and package declare each type it reads, which decides the access its generated code needs ([Access levels](#access-levels)).
