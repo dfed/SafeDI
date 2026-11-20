@@ -3,10 +3,7 @@
 # 1.25 times the slowest measurement. A waiver that matches nothing near the limit fails the check, so remove a line
 # in the change that brings its function under the limit; never add one for new code.
 
-# A 646-line initializer whose computed blocks the optimizer handles as one function. Measured 172 s, 189 s and 198 s, of
-# which one `sil-combine` run is 96 s. Splitting its blocks into functions of their own removes this line.
-sil 250 SafeDICore.ScopeGenerator.init(instantiable:
-
-# A switch whose arms join arrays with `+` over `map` and `sorted`. Measured 9.9 s and 12.0 s. Building each arm's
-# array with sequential appends removes this line.
-type-check 15 getter SafeDICore.(file).DependencyTreeGenerator.DependencyTreeGeneratorError.sourceDiagnostics
+# The initializer #819 split into functions of its own: from 172 s to 198 s before the split to 11.3 s on main at
+# 00da8b5 (Swift 6.2, four cores, 2026-11-20), still over the limit of 10 s. Moving another block out of it removes
+# this line.
+sil 15 SafeDICore.ScopeGenerator.init(instantiable:

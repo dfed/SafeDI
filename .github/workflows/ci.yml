@@ -2066,8 +2066,9 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: swift package resolve
-      # Measured: 604 s and 733 s on four cores, swift-syntax included, of
-      # which SafeDICore is about 400 s until its long initializer is split.
+      # Measured: 604 s and 733 s on four cores, swift-syntax included,
+      # before #819 split SafeDICore's long initializer, and 537 s after it
+      # on a four-core cloud machine (main at 00da8b5, 2026-11-20).
       # The optimizer prints each pass of 20 ms or more over one function:
       # about 1,400 lines, 5% of the log, where 200 ms printed 62 and missed
       # a function whose time is spread over short passes.
