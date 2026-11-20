@@ -406,6 +406,84 @@ struct SafeDIToolSeamTypeKeyTests: ~Copyable {
 		)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_suffixesSecondFillInFirstReachOrder_whenTwoHolesShareLabelAndTypesAreRenamed() async throws {
+		// RT1-NAMES item 4: two holes labeled `api` take `__safeDI_apiFill` and `__safeDI_apiFill_2` in the order `Host`'s tree first reaches them. Renaming every type and label so that names sort the other way leaves the first-declared builder's hole unsuffixed.
+		for names in [
+			(first: "A", second: "B", firstHole: "Api", secondHole: "Store", hash: "B05CEE6DB6614019"),
+			(first: "Zed", second: "Abe", firstHole: "Zip", secondHole: "Ark", hash: "1009CFDAF6684705"),
+		] {
+			let first = names.first
+			let second = names.second
+			let firstLabel = first.prefix(1).lowercased() + first.dropFirst()
+			let secondLabel = second.prefix(1).lowercased() + second.dropFirst()
+			let hash = names.hash
+			try await expectSeamTypeKeyFiles(
+				ofFeature: [
+					"public protocol \(names.firstHole) {}\n\npublic protocol \(names.secondHole) {}",
+					Self.type("Host", isSeam: true, "@Instantiated public let \(firstLabel)Builder: Instantiator<\(first)>", "@Instantiated public let \(secondLabel)Builder: Instantiator<\(second)>"),
+					Self.type(first, "@Forwarded public let \(firstLabel)ID: Int", "@Instantiated public let api: any \(names.firstHole)"),
+					Self.type(second, "@Forwarded public let \(secondLabel)ID: Int", "@Instantiated public let api: any \(names.secondHole)"),
+				],
+				ofApp: [
+					Self.fillType("Live\(names.firstHole)", fulfilling: names.firstHole, receiving: "\(firstLabel)ID"),
+					Self.fillType("Live\(names.secondHole)", fulfilling: names.secondHole, receiving: "\(secondLabel)ID"),
+					seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated public let host: Host"]),
+				],
+				feature: """
+				extension Host {
+				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
+				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
+				    public convenience init(__safeDI_apiFill: @escaping (_ \(firstLabel)ID: Int) -> any \(names.firstHole), __safeDI_apiFill_2: @escaping (_ \(secondLabel)ID: Int) -> any \(names.secondHole)) {
+				        func __safeDI_\(firstLabel)Builder(\(firstLabel)ID: Int) -> \(first) {
+				            let api: any \(names.firstHole) = __safeDI_apiFill(\(firstLabel)ID)
+				            return \(first)(\(firstLabel)ID: \(firstLabel)ID, api: api)
+				        }
+				        let \(firstLabel)Builder = Instantiator<\(first)> {
+				            __safeDI_\(firstLabel)Builder(\(firstLabel)ID: $0)
+				        }
+				        func __safeDI_\(secondLabel)Builder(\(secondLabel)ID: Int) -> \(second) {
+				            let api: any \(names.secondHole) = __safeDI_apiFill_2(\(secondLabel)ID)
+				            return \(second)(\(secondLabel)ID: \(secondLabel)ID, api: api)
+				        }
+				        let \(secondLabel)Builder = Instantiator<\(second)> {
+				            __safeDI_\(secondLabel)Builder(\(secondLabel)ID: $0)
+				        }
+				        self.init(\(firstLabel)Builder: \(firstLabel)Builder, \(secondLabel)Builder: \(secondLabel)Builder)
+				    }
+				}
+
+				extension Host {
+				    public enum __safeDI_Host_\(hash) {}
+				}
+				""",
+				app: """
+				#if canImport(Feature)
+				import Feature
+				#endif
+
+				extension Root {
+				    public convenience init() {
+				        func __safeDI_host() -> Host {
+				            _ = Host.__safeDI_Host_\(hash).self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+				            return Host(__safeDI_apiFill: { \(firstLabel)ID in
+				                let api: any \(names.firstHole) = Live\(names.firstHole)(\(firstLabel)ID: \(firstLabel)ID)
+				                return api
+				            }, __safeDI_apiFill_2: { \(secondLabel)ID in
+				                let api: any \(names.secondHole) = Live\(names.secondHole)(\(secondLabel)ID: \(secondLabel)ID)
+				                return api
+				            })
+				        }
+				        let host: Host = __safeDI_host()
+				        self.init(host: host)
+				    }
+				}
+				""",
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -451,6 +529,19 @@ struct SafeDIToolSeamTypeKeyTests: ~Copyable {
 
 	private static func type(_ name: String, isSeam: Bool = false, _ declarations: String...) -> String {
 		seamFixtureType(named: name, isSeam: isSeam, isFinalClass: true, declarations: declarations)
+	}
+
+	private static func fillType(_ name: String, fulfilling holeType: String, receiving label: String) -> String {
+		"""
+		@Instantiable(fulfillingAdditionalTypes: [\(holeType).self])
+		public final class \(name): \(holeType), Instantiable {
+		    public init(\(label): Int) {
+		        self.\(label) = \(label)
+		    }
+
+		    @Received public let \(label): Int
+		}
+		"""
 	}
 
 	private static func sendableType(_ name: String, _ declarations: String...) -> String {
