@@ -18,7 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
 import SafeDICore
 
 // The signatures a module info file carries of the seams its module declares (`StoredSeamSignature`), each type
@@ -1634,9 +1633,9 @@ extension AccessRequirement: BinarySchemaMember {
 	static var binaryLayout: BinaryLayout<Self> {
 		.enumeration(writtenAs: Tag.self) { tag in
 			switch tag {
-			case .`internal`: []
+			case .internal: []
 			case .package: []
-			case .`public`: []
+			case .public: []
 			case .packageUnverified: []
 			}
 		}
@@ -1644,12 +1643,12 @@ extension AccessRequirement: BinarySchemaMember {
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		self = switch try reader.readTag() as Tag {
-		case .`internal`:
-			.`internal`
+		case .internal:
+			.internal
 		case .package:
 			.package
-		case .`public`:
-			.`public`
+		case .public:
+			.public
 		case .packageUnverified:
 			.packageUnverified
 		}
@@ -1657,12 +1656,12 @@ extension AccessRequirement: BinarySchemaMember {
 
 	func write(to writer: inout BinaryWriter) {
 		switch self {
-		case .`internal`:
-			writer.writeTag(Tag.`internal`)
+		case .internal:
+			writer.writeTag(Tag.internal)
 		case .package:
 			writer.writeTag(Tag.package)
-		case .`public`:
-			writer.writeTag(Tag.`public`)
+		case .public:
+			writer.writeTag(Tag.public)
 		case .packageUnverified:
 			writer.writeTag(Tag.packageUnverified)
 		}

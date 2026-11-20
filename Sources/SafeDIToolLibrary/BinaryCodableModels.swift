@@ -1455,4 +1455,3 @@ extension ViewedModule: BinarySchemaMember {
 		writer.write(seamSignatures)
 	}
 }
-
