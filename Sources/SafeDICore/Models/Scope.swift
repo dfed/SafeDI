@@ -1927,12 +1927,12 @@ private struct ScopeGeneratorUnderConstruction {
 		if let observer = GenerationWork.observer {
 			_ = Task.detached {
 				try await GenerationWork.$observer.withValue(observer) {
-					try await scopeGenerator.generateCode()
+					_ = try await scopeGenerator.generateCodePlan()
 				}
 			}
 		} else {
 			_ = Task.detached {
-				try await scopeGenerator.generateCode()
+				_ = try await scopeGenerator.generateCodePlan()
 			}
 		}
 	}

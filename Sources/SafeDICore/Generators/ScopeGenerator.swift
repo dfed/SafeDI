@@ -2841,7 +2841,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	func generateCode(
 		codeGeneration: CodeGeneration = .dependencyTree,
 	) async throws -> String {
-		let code = try await generateCode(
+		let code = try await generateCodePlan(codeGeneration: codeGeneration)
+		// The tree's code is spelled once, here: each level holds its children's code rather than a copy of its text, and
+		// the root's larger levels are spelled at their final indentation in parallel.
+		return await code.spelledAsRoot()
+	}
+
+	/// Builds the plan of this scope's code as the root of what is generated, and spells nothing: a scope whose code
+	/// starts early caches its plan, which the root's code reads, and only the root's plan is spelled.
+	func generateCodePlan(
+		codeGeneration: CodeGeneration = .dependencyTree,
+	) async throws -> GeneratedCode {
+		try await generateCode(
 			codeGeneration: codeGeneration,
 			unavailableProperties: unavailableProperties(
 				isGeneratedBefore: { _ in false },
@@ -2853,9 +2864,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// The root of what is generated is inside no fill an internal mock declares.
 			fillPlaceBindings: .none,
 		)
-		// The tree's code is spelled once, here: each level holds its children's code rather than a copy of its text, and
-		// the root's larger levels are spelled at their final indentation in parallel.
-		return await code.spelledAsRoot()
 	}
 
 	/// - Parameters:
