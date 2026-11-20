@@ -636,6 +636,120 @@ struct SafeDIToolCallingMockOnlyIfAvailableOverrideTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsOwnOverrideLabelAndNamesNewOverrideApart_whenTreeReceivesLabelOnlyIfAvailableAsAnotherType() async throws {
+		// `Reader` receives `filter: Marker?` only if available, which nothing provides, so `mock()` takes an override for it,
+		// as it did before it took one for what `Cache`’s call receives: that override keeps its label, and the override for
+		// the `filter` only `Cache`’s call receives is named apart from it. The same types built inline name both apart.
+		let modules = Self.modules(screen: """
+		import Core
+		import SafeDI
+
+		@Instantiable(generateMock: true)
+		public struct Screen: Instantiable {
+		    public init(cache: Cache, reader: Reader) {
+		        self.cache = cache
+		        self.reader = reader
+		    }
+
+		    @Instantiated let cache: Cache
+		    @Instantiated let reader: Reader
+		}
+
+		public final class Marker {
+		    public init() {}
+		}
+
+		@Instantiable
+		public struct Reader: Instantiable {
+		    public init(filter: Marker?) {
+		        self.filter = filter
+		    }
+
+		    @Received(onlyIfAvailable: true) let filter: Marker?
+		}
+		""")
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            cache: Cache.SafeDIOverrides = .init(),
+		            reader: ((Marker?) -> Reader)? = nil,
+		            filter_FilterProtocol: (any FilterProtocol)? = nil,
+		            filter: Marker? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                cache: cache,
+		                reader: reader
+		            )
+		            self.filter_FilterProtocol = filter_FilterProtocol
+		            self.filter = filter
+		        }
+
+		        var cache: Cache.SafeDIOverrides { __safeDI_storage.cache }
+		        var reader: ((Marker?) -> Reader)? { __safeDI_storage.reader }
+		        let filter_FilterProtocol: (any FilterProtocol)?
+		        let filter: Marker?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                cache: Cache.SafeDIOverrides,
+		                reader: ((Marker?) -> Reader)?
+		            ) {
+		                self.cache = cache
+		                self.reader = reader
+		            }
+
+		            let cache: Cache.SafeDIOverrides
+		            let reader: ((Marker?) -> Reader)?
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let filter_FilterProtocol: (any FilterProtocol)? = safeDIOverrides.filter_FilterProtocol
+		        let filter: Marker? = safeDIOverrides.filter
+		        _ = Cache.__safeDI_Cache_mock_215B449271BCAB93.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_cache() -> Cache {
+		            let filter: (any FilterProtocol)? = filter_FilterProtocol
+		            return Cache.__safeDI_mock(filter: filter, safeDIOverrides: safeDIOverrides.cache)
+		        }
+		        let cache: Cache = __safeDI_cache()
+		        let reader = if let safeDIBuilder = safeDIOverrides.reader { safeDIBuilder(filter) } else { Reader(filter: filter) }
+		        return Screen(cache: cache, reader: reader)
+		    }
+		}
+		#endif
+		"""])
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [
+			DifferentialValueProbe(
+				name: "Screen.mock() passed a marker",
+				expression: "Screen.mock(safeDIOverrides: .init(filter: Marker()))",
+				knownRightExpression: "Screen.mock(safeDIOverrides: .init(filter_Marker: Marker()))",
+			),
+			DifferentialValueProbe(
+				name: "Screen.mock() passed a filter and a marker",
+				expression: "Screen.mock(safeDIOverrides: .init(filter_FilterProtocol: ProbeFilter(), filter: Marker()))",
+				knownRightExpression: "Screen.mock(safeDIOverrides: .init(filter_FilterProtocol: ProbeFilter(), filter_Marker: Marker()))",
+			),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesNoOverrideAndPassesCallNil_whenCallInSendableFunctionReceivesValueOnlyIfAvailable() async throws {
 		// `Wrapper` is built inside the `@Sendable` builder function of a `SendableInstantiator`, where an override the mock
 		// bound above it would be captured, and `any FilterProtocol` is not `Sendable`: the mock takes no override, and the
