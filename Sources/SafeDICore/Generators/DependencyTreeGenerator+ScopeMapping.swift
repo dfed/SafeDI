@@ -23,8 +23,8 @@ extension DependencyTreeGenerator {
 	/// seam: those the roots' trees reach outside every seam's tree, the fills this module generates for the holes of the
 	/// foreign seams they call included, and those a seam's tree reaches through a dependency that cannot be a hole
 	/// (`canBeHole`), since only hand-written code could build its type.
-	func typesReachableOutsideSeamTrees() throws -> Set<TypeDescription> {
-		let foreignSeamRoots = try foreignSeamRoots.get()
+	func typesReachableOutsideSeamTrees() async throws -> Set<TypeDescription> {
+		let foreignSeamRoots = try await foreignSeamRoots.get()
 		/// The seam `typeDescription` is, when its tree is another tree's leaf: one with a signature, generated here or
 		/// in another module.
 		func isSeamWithTree(_ instantiable: Instantiable) -> Bool {
