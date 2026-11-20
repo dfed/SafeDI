@@ -1861,7 +1861,7 @@ private struct ScopeGeneratorUnderConstruction {
 			// A large subtree generates its children's code in a task group of its own; a small one, one child after another.
 			generatesChildrenConcurrently: mayGenerateChildrenConcurrently && subtreeScopeCount >= Self.scopeCountOfLargeSubtree,
 		)
-		let scopeGenerator = if let fill {
+		return if let fill {
 			ScopeGenerator(
 				fill: fill.hole,
 				key: fill.key,
@@ -1879,7 +1879,6 @@ private struct ScopeGeneratorUnderConstruction {
 		} else {
 			builtGenerator
 		}
-		return scopeGenerator
 	}
 
 	private let scope: Scope
