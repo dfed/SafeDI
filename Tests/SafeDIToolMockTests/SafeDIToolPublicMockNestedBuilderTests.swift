@@ -2400,7 +2400,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesThePassedUpBuilderAfterTheCalledMock_whenInternalCallerInstantiatesAPropertyUnderTheBuildersLabel() async throws {
+	mutating func generate_bindsThePassedUpBuilderApart_whenInternalCallerInstantiatesAPropertyUnderTheBuildersLabel() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(app: [
 			Self.thing,
 			"""
@@ -2481,7 +2481,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesThePassedUpBuilderAfterTheCalledMock_whenInternalCallerReceivesAPropertyUnderTheBuildersLabel() async throws {
+	mutating func generate_namesThePassedUpBuilderApart_whenInternalCallerReceivesAPropertyUnderTheBuildersLabel() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(app: [
 			"""
 			import SafeDI
@@ -2528,7 +2528,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesThePassedUpBuilderAfterTheCalledMock_whenATypeBetweenTheCallerAndTheCallInstantiatesAPropertyUnderTheBuildersLabel() async throws {
+	mutating func generate_bindsThePassedUpBuilderApart_whenATypeBetweenTheCallerAndTheCallInstantiatesAPropertyUnderTheBuildersLabel() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(app: [
 			Self.thing,
 			"""
@@ -2761,7 +2761,7 @@ struct SafeDIToolPublicMockNestedBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesThePassedUpBuilderAfterItsType_whenTheNameAfterTheCalledMockIsTaken() async throws {
+	mutating func generate_bindsThePassedUpBuilderApart_whenTreeAlsoDeclaresTheLabelSuffixedWithTheCalledType() async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(app: [
 			Self.thing,
 			"""

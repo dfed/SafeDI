@@ -1336,13 +1336,14 @@ jobs:
       # Runs the bundle as `swift test` would, in one process. Only that
       # process writes to the profile folder: every process a test starts gets
       # an LLVM_PROFILE_FILE of its own in the test's temporary directory.
-      # A time limit for the macOS job's reason: twice the slowest suite,
-      # which took 13.5 to 17.8 minutes with every compile check compiling
-      # (the runs "Build Tests on Linux" names; 15 to 20 in Verify's runs of
-      # the suite in one process, as verify.yml says) and 7.5 with the checks
-      # skipped (run 43765011597).
+      # A time limit for the macOS job's reason: twice the slowest suite.
+      # It took 13.5 to 17.8 minutes with every compile check compiling (the
+      # runs "Build Tests on Linux" names; 15 to 20 in Verify's runs of the
+      # suite in one process, as verify.yml says) and 7.5 with the checks
+      # skipped (run 43765011597); the 2.3.0 stack's suite took 34.9 (run
+      # 44545790927), and run 44573505588 passed 40 still running.
       - name: Test
-        timeout-minutes: 40
+        timeout-minutes: 70
         env:
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
           LLVM_PROFILE_FILE: ${{ runner.temp }}/unit-suite-profiles/unit-suite-%p.profraw
@@ -1474,9 +1475,12 @@ jobs:
         run: tar -xzf graph-fuzzer-test-bundle.tar.gz
       # A pass took about 6.3 minutes when four took 25.3 (run 43755152593)
       # and about 5.1 in run 43760851366, and up to 8.3 over forty passes
-      # since (run 44034763455); the limit is about twice the slowest.
+      # since (run 44034763455). The 2.3.0 stack's suite, 6,735 tests, took
+      # 12.5 to 16.1 minutes a pass (run 44243231996), and 13.0 in run
+      # 44545790927, whose other two passes the old limit of 17 cut off
+      # seven tests from the end; the limit is about twice the slowest, 18.
       - name: Run Tests
-        timeout-minutes: 17
+        timeout-minutes: 36
         env:
           SAFEDI_SKIP_COMPILE_CHECK: 1
           LLVM_PROFILE_FILE: ${{ runner.temp }}/repeat-tests-%p.profraw
@@ -2095,14 +2099,20 @@ jobs:
       # reached the 35-minute limit after its tests had passed. The tests
       # alone take about 5.5 minutes; the rest is the build, and the compile
       # of the code each test generates, which the builder-surface check
-      # added tool runs to. Twice 35 minutes is 70.
+      # added tool runs to. Twice 35 minutes is 70. The 2.3.0 stack's run
+      # 44594501340 (job 135809244065) reached those 70 minutes with its
+      # tests still running, not hung: its first bundle passed 1,493 tests
+      # in 623 seconds, and the rest ran past the limit. The stack added
+      # 1,016 tests, doubled the seam corpus to 2,000 seeds, grew the smoke
+      # seeds from 29 to 40, and added a value-memo suite of about 18
+      # minutes, and this job compiles every check (below), so it has 100.
       #
       # No cache of passed compile checks here, deliberately: this job
       # compiles every test's generated code on every run, so a check the
       # pinned jobs skip because it passed in an earlier run is still
       # compiled once per run, by a third compiler.
       - name: Build and Test Framework
-        timeout-minutes: 70
+        timeout-minutes: 100
         run: swift test --traits sourceBuild
 
   readme-validation:

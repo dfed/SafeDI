@@ -8505,7 +8505,10 @@ enum GraphFuzzerGenerator {
 		/// worker is built, and the roots' module's level of `CarriedInner` once read the memo's instance where
 		/// `CarriedInner` built its place, which the value comparator marks as an instance built before the probe's value
 		/// (`SafeDIToolSeamPassedUpDeferredFieldTests`' `levelFunctionHandsMemoOn`). Now and then, where `CarriedRoot`
-		/// declares it, `CarriedTop` builds `CarriedWorker` on its own route too; and in a graph of mixed wrappers
+		/// declares it, `CarriedTop` builds `CarriedWorker` on its own route too; and in a graph of mixed wrappers, or in half
+		/// of the graphs of wrappers that are not `Sendable`, whose carried types are then `@unchecked Sendable` and whose
+		/// carried protocols `Sendable`, as a mixed graph's are (so that ten graphs of each shape below are accepted, which
+		/// mixed graphs alone, most of which the graph's other draws have the tool reject, do not give),
 		/// `CarriedOuter` always builds `CarriedInnerB` too, which builds `CarriedLeaf` in a `SendableInstantiator`, so it
 		/// defers `carriedToken` `@Sendable`, which the type that declares it then holds in a `SendableLazilyInstantiated`, and
 		/// holds a place `CarriedServiceImpl` fills (drawn in every such graph, so that ten graphs of it are accepted): the
@@ -8548,8 +8551,15 @@ enum GraphFuzzerGenerator {
 			let gizmoReadsOptionalSendableWrapper = carriedLevelRandom.percentChance(65)
 			// Drawn last, so that every graph draws as before but where it is read.
 			let outerReceivesOptionallyReadWrapper = carriedLevelRandom.percentChance(50)
+			// Drawn after it, for the same reason: whether a graph of wrappers that are not `Sendable` draws its carried types
+			// as a mixed graph does, which `CarriedInnerB` needs.
+			let carriedTypesSendableInNonSendableGraph = carriedLevelRandom.percentChance(50)
 			guard !modulesOmittingPackageName.contains(.seamModule), sendability != .sendable else { return declarations }
-			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			// The carried types are `@unchecked Sendable`, and their protocols `Sendable`, in a mixed graph, and where a graph
+			// of wrappers that are not `Sendable` draws them so: they form a tree of their own beneath `CarriedRoot`, which no
+			// other type of the graph builds or receives.
+			let carriedTypesAreSendable = sendability == .mixed || (fillReadsDeferredValue && carriedTypesSendableInNonSendableGraph)
+			let conformances = carriedTypesAreSendable ? ["@unchecked Sendable"] : []
 			let prefix = prefix
 			func instantiable(_ suffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
 				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
@@ -8562,7 +8572,7 @@ enum GraphFuzzerGenerator {
 				declaration.additionalConformances.append(protocolName)
 				return declaration
 			}
-			let sendableSuffix = helperTypesAreSendable ? ": Sendable" : ""
+			let sendableSuffix = carriedTypesAreSendable ? ": Sendable" : ""
 			let serviceName = "\(prefix)CarriedService"
 			let gadgetName = "\(prefix)CarriedGadget"
 			let gizmoName = "\(prefix)CarriedGizmo"
@@ -8584,7 +8594,7 @@ enum GraphFuzzerGenerator {
 			var deferredValueDeclarations = [TypeDeclaration]()
 			var gadgetImplementation = fill("CarriedGadgetImpl", fulfilling: gadgetName, module: .seamModule, properties: [gizmoPlace])
 			// `CarriedInnerB` takes `carriedToken` `@Sendable`, so the type that declares it holds it in the `Sendable` wrapper.
-			let drawsSecondInner = fillReadsDeferredValue && sendability == .mixed
+			let drawsSecondInner = fillReadsDeferredValue && carriedTypesAreSendable
 			let tokenWrapper = drawsSecondInner ? "SendableLazilyInstantiated" : "LazilyInstantiated"
 			// The fill of `CarriedGizmo` reads that `SendableLazilyInstantiated` too, through `CarriedWrapperReader`, where every
 			// seam defers `carriedToken` `@Sendable`: a seam that defers it in a `LazilyInstantiated` would make the graph a
