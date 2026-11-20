@@ -777,6 +777,13 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			    public static func mock(
 			        store: Store
 			    ) -> Screen {
+			        Screen.__safeDI_mock(store: store)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        store: Store
+			    ) -> Screen {
 			        return Screen(store: store)
 			    }
 			}
@@ -848,6 +855,13 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				    public static func mock(
 				        window: Window
 				    ) -> Screen {
+				        Screen.__safeDI_mock(window: window)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        window: Window
+				    ) -> Screen {
 				        return Screen(window: window)
 				    }
 				}
@@ -867,6 +881,13 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			#if DEBUG
 			extension Screen {
 			\(integration == .moduleInfo ? "    // SafeDI counts `Window` as `public`: no module it reads declares it narrower. If `Window` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.\n" : "")    public static func mock(
+			        window: Window
+			    ) -> Screen {
+			        Screen.__safeDI_mock(window: window)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        window: Window
 			    ) -> Screen {
 			        return Screen(window: window)
@@ -938,6 +959,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			        user: User? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
+			        Screen.__safeDI_mock(user: user, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        user: User? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
 			        let user = if let user { user } else if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User.mock() }
 			        return Screen(user: user)
 			    }
@@ -982,6 +1011,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			    }
 
 			\(integration == .moduleInfo ? "    // SafeDI counts `User` as `public`: no module it reads declares it narrower. If `User` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.\n" : "")    public static func mock(
+			        user: User? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        Screen.__safeDI_mock(user: user, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        user: User? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
@@ -2625,6 +2662,15 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        render: @escaping (Window.Scene) -> Void,
 		        window: Window? = nil
 		    ) -> Screen {
+		        Screen.__safeDI_mock(image: image, render: render, window: window)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        image: Image,
+		        render: @escaping (Window.Scene) -> Void,
+		        window: Window? = nil
+		    ) -> Screen {
 		        return Screen(image: image, window: window, render: render)
 		    }
 		}
@@ -2788,10 +2834,25 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    public static func mock(
 		        window: Window
 		    ) -> Screen {
-		        Screen.mock(window: window, token: nil)
+		        Screen.__safeDI_mock(window: window)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        window: Window
+		    ) -> Screen {
+		        Screen.__safeDI_mock(window: window, token: nil)
 		    }
 
 		    package static func mock(
+		        window: Window,
+		        token: Token? = nil
+		    ) -> Screen {
+		        Screen.__safeDI_mock(window: window, token: token)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    package static func __safeDI_mock(
 		        window: Window,
 		        token: Token? = nil
 		    ) -> Screen {
@@ -2830,6 +2891,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		extension Screen {
 		    // SafeDI counts `Palette` and `Window` as `public`: no module it reads declares them narrower. If one is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 		    public static func mock(
+		        tint: Palette? = nil,
+		        window: Window
+		    ) -> Screen {
+		        Screen.__safeDI_mock(tint: tint, window: window)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
 		        tint: Palette? = nil,
 		        window: Window
 		    ) -> Screen {
@@ -2873,6 +2942,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		    @usableFromInline nonisolated static func __safeDI_publicMockDefault_tint() -> Palette? { Palette() }
 
 		    public static func mock(
+		        tint: Palette? = Screen.__safeDI_publicMockDefault_tint(),
+		        window: Window
+		    ) -> Screen {
+		        Screen.__safeDI_mock(tint: tint, window: window)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
 		        tint: Palette? = Screen.__safeDI_publicMockDefault_tint(),
 		        window: Window
 		    ) -> Screen {
@@ -2942,6 +3019,14 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 
 		    // SafeDI counts `Window` as `public`: no module it reads declares it narrower. If `Window` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 		    public static func mock(
+		        window: Window,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        Screen.__safeDI_mock(window: window, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
 		        window: Window,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
@@ -3881,6 +3966,13 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			    public static func mock(
 			        theme: Theme? = nil
 			    ) -> Screen {
+			        Screen.__safeDI_mock(theme: theme)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        theme: Theme? = nil
+			    ) -> Screen {
 			        return Screen(theme: theme)
 			    }
 			}
@@ -3919,10 +4011,22 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    public static func mock() -> Screen {
-		        Screen.mock(theme: nil)
+		        Screen.__safeDI_mock()
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock() -> Screen {
+		        Screen.__safeDI_mock(theme: nil)
 		    }
 
 		    package static func mock(
+		        theme: Theme? = nil
+		    ) -> Screen {
+		        Screen.__safeDI_mock(theme: theme)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    package static func __safeDI_mock(
 		        theme: Theme? = nil
 		    ) -> Screen {
 		        return Screen(theme: theme)
@@ -4748,10 +4852,22 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 				#if DEBUG
 				extension Screen {
 				    public static func mock() -> Screen {
-				        Screen.mock(theme: nil)
+				        Screen.__safeDI_mock()
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock() -> Screen {
+				        Screen.__safeDI_mock(theme: nil)
 				    }
 
 				    package static func mock(
+				        theme: Theme? = nil
+				    ) -> Screen {
+				        Screen.__safeDI_mock(theme: theme)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    package static func __safeDI_mock(
 				        theme: Theme? = nil
 				    ) -> Screen {
 				        return Screen(theme: theme)
@@ -4773,10 +4889,22 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 					#if DEBUG
 					extension Screen {
 					    public static func mock() -> Screen {
-					        Screen.mock(theme: nil)
+					        Screen.__safeDI_mock()
+					    }
+
+					    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+					    public static func __safeDI_mock() -> Screen {
+					        Screen.__safeDI_mock(theme: nil)
 					    }
 
 					    package static func mock(
+					        theme: Theme? = nil
+					    ) -> Screen {
+					        Screen.__safeDI_mock(theme: theme)
+					    }
+
+					    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+					    package static func __safeDI_mock(
 					        theme: Theme? = nil
 					    ) -> Screen {
 					        return Screen(theme: theme)
@@ -4804,10 +4932,22 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 					#if DEBUG
 					extension Screen {
 					    public static func mock() -> Screen {
-					        Screen.mock(theme: nil)
+					        Screen.__safeDI_mock()
+					    }
+
+					    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+					    public static func __safeDI_mock() -> Screen {
+					        Screen.__safeDI_mock(theme: nil)
 					    }
 
 					    package static func mock(
+					        theme: Theme? = nil
+					    ) -> Screen {
+					        Screen.__safeDI_mock(theme: theme)
+					    }
+
+					    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+					    package static func __safeDI_mock(
 					        theme: Theme? = nil
 					    ) -> Screen {
 					        return Screen(theme: theme)
@@ -5894,6 +6034,16 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#if DEBUG
 		extension Screen {
 		    public static func mock(
+		        badgeBuilder: @escaping Instantiator<Badge>.Builder,
+		        erasedBadgeBuilder: @escaping ErasedInstantiator<(), Badge>.Builder,
+		        sendableBadgeBuilder: @escaping SendableInstantiator<Badge>.Builder,
+		        sendableErasedBadgeBuilder: @escaping SendableErasedInstantiator<(), Badge>.Builder
+		    ) -> Screen {
+		        Screen.__safeDI_mock(badgeBuilder: badgeBuilder, erasedBadgeBuilder: erasedBadgeBuilder, sendableBadgeBuilder: sendableBadgeBuilder, sendableErasedBadgeBuilder: sendableErasedBadgeBuilder)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
 		        badgeBuilder: @escaping Instantiator<Badge>.Builder,
 		        erasedBadgeBuilder: @escaping ErasedInstantiator<(), Badge>.Builder,
 		        sendableBadgeBuilder: @escaping SendableInstantiator<Badge>.Builder,

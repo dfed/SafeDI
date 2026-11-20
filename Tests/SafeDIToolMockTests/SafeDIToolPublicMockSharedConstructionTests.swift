@@ -112,6 +112,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
+			        A.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> A {
 			        func __safeDI_clock() -> Clock {
 			            return SystemClock.__safeDI_mock(zone: safeDIOverrides.clock.zone, safeDIBuilder: safeDIOverrides.clock.safeDIBuilder)
 			        }
@@ -153,6 +160,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> B {
+			        B.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> B {
 			        func __safeDI_systemClock() -> SystemClock {
@@ -279,6 +293,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    public static func mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> A {
+				        A.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> A {
 				        func __safeDI_clock() -> Clock {
 				            return SystemClock.__safeDI_mock(zone: safeDIOverrides.clock.zone, safeDIBuilder: safeDIOverrides.clock.safeDIBuilder)
 				        }
@@ -320,6 +341,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> B {
+				        B.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> B {
 				        func __safeDI_systemClock() -> SystemClock {
@@ -462,6 +490,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
+			        A.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> A {
 			        func __safeDI_systemClock() -> SystemClock {
 			            return SystemClock.__safeDI_init(zone: safeDIOverrides.systemClock.zone, safeDIBuilder: safeDIOverrides.systemClock.safeDIBuilder)
 			        }
@@ -503,6 +538,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> B {
+			        B.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> B {
 			        func __safeDI_clock() -> Clock {
@@ -629,6 +671,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    public static func mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> A {
+				        A.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> A {
 				        func __safeDI_systemClock() -> SystemClock {
 				            return SystemClock.__safeDI_init(zone: safeDIOverrides.systemClock.zone, safeDIBuilder: safeDIOverrides.systemClock.safeDIBuilder)
 				        }
@@ -670,6 +719,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> B {
+				        B.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> B {
 				        func __safeDI_clock() -> Clock {
@@ -831,6 +887,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Both {
+			        Both.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Both {
 			        func __safeDI_clock() -> Clock {
 			            return SystemClock.__safeDI_mock(zone: safeDIOverrides.clock.zone, safeDIBuilder: safeDIOverrides.clock.safeDIBuilder)
 			        }
@@ -963,6 +1026,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Both {
+				        Both.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Both {
 				        func __safeDI_clock() -> Clock {
@@ -1112,6 +1182,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
+			        A.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> A {
 			        func __safeDI_clock() -> Clock {
 			            return SystemClock.__safeDI_mock(zone: safeDIOverrides.clock.zone, safeDIBuilder: safeDIOverrides.clock.safeDIBuilder)
 			        }
@@ -1153,6 +1230,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> B {
+			        B.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> B {
 			        func __safeDI_systemClock() -> SystemClock {
@@ -1262,6 +1346,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    public static func mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> A {
+				        A.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> A {
 				        func __safeDI_clock() -> Clock {
 				            return SystemClock.__safeDI_mock(zone: safeDIOverrides.clock.zone, safeDIBuilder: safeDIOverrides.clock.safeDIBuilder)
 				        }
@@ -1303,6 +1394,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> B {
+				        B.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> B {
 				        func __safeDI_systemClock() -> SystemClock {
@@ -1476,6 +1574,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
+			        A.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> A {
 			        func __safeDI_clock() -> Clock {
 			            return SystemClock.__safeDI_mock(zone: safeDIOverrides.clock.zone, safeDIBuilder: safeDIOverrides.clock.safeDIBuilder)
 			        }
@@ -1517,6 +1622,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> B {
+			        B.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> B {
 			        func __safeDI_systemClock() -> SystemClock {
@@ -1643,6 +1755,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    public static func mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> A {
+				        A.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> A {
 				        func __safeDI_clock() -> Clock {
 				            return SystemClock.__safeDI_mock(zone: safeDIOverrides.clock.zone, safeDIBuilder: safeDIOverrides.clock.safeDIBuilder)
 				        }
@@ -1684,6 +1803,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> B {
+				        B.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> B {
 				        func __safeDI_systemClock() -> SystemClock {
@@ -1838,6 +1964,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> FeatureRoot {
+			        FeatureRoot.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> FeatureRoot {
 			        func __safeDI_service() -> ServiceProtocol {
 			            return ConcreteService.__safeDI_mock(name: safeDIOverrides.service.name, safeDIBuilder: safeDIOverrides.service.safeDIBuilder)
 			        }
@@ -1932,6 +2065,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> OtherErased {
+			        OtherErased.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> OtherErased {
 			        func __safeDI_service() -> AnyService {
 			            return AnyService(ConcreteService.__safeDI_init(name: safeDIOverrides.service.name, safeDIBuilder: safeDIOverrides.service.safeDIBuilder))
 			        }
@@ -1973,6 +2113,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> OtherLeaf {
+			        OtherLeaf.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> OtherLeaf {
 			        func __safeDI_service() -> ServiceProtocol {
@@ -2070,6 +2217,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> FeatureRoot {
+				        FeatureRoot.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> FeatureRoot {
 				        func __safeDI_service() -> ServiceProtocol {
@@ -2173,6 +2327,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    public static func mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> OtherErased {
+				        OtherErased.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> OtherErased {
 				        func __safeDI_service() -> AnyService {
 				            return AnyService(ConcreteService.__safeDI_init(name: safeDIOverrides.service.name, safeDIBuilder: safeDIOverrides.service.safeDIBuilder))
 				        }
@@ -2214,6 +2375,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> OtherLeaf {
+				        OtherLeaf.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> OtherLeaf {
 				        func __safeDI_service() -> ServiceProtocol {
@@ -2348,6 +2516,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> OtherErased {
+			        OtherErased.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> OtherErased {
 			        func __safeDI_service() -> AnyService {
 			            return AnyService(ConcreteService.__safeDI_init(name: safeDIOverrides.service.name, safeDIBuilder: safeDIOverrides.service.safeDIBuilder))
 			        }
@@ -2389,6 +2564,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> OtherLeaf {
+			        OtherLeaf.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> OtherLeaf {
 			        func __safeDI_service() -> ServiceProtocol {
@@ -2491,6 +2673,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    public static func mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> OtherErased {
+				        OtherErased.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> OtherErased {
 				        func __safeDI_service() -> AnyService {
 				            return AnyService(ConcreteService.__safeDI_init(name: safeDIOverrides.service.name, safeDIBuilder: safeDIOverrides.service.safeDIBuilder))
 				        }
@@ -2532,6 +2721,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> OtherLeaf {
+				        OtherLeaf.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> OtherLeaf {
 				        func __safeDI_service() -> ServiceProtocol {
@@ -2697,6 +2893,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
 			        func __safeDI_concreteService() -> ConcreteService {
 			            func __safeDI_tickerBuilder() -> Ticker {
 			                func __safeDI_service() -> ServiceProtocol {
@@ -2839,6 +3042,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Root {
+				        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Root {
 				        func __safeDI_concreteService() -> ConcreteService {
@@ -3046,6 +3256,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
 			        func __safeDI_concreteService() -> ConcreteService {
 			            func __safeDI_tickerBuilder() -> Ticker {
 			                func __safeDI_service() -> ServiceProtocol {
@@ -3197,6 +3414,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Root {
+				        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Root {
 				        func __safeDI_concreteService() -> ConcreteService {
@@ -3413,6 +3637,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
+			        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
 			        func __safeDI_concreteService() -> ConcreteService {
 			            func __safeDI_tickerBuilder() -> Ticker {
 			                func __safeDI_service() -> ServiceProtocol {
@@ -3563,6 +3794,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Root {
+				        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Root {
 				        func __safeDI_concreteService() -> ConcreteService {
@@ -3797,6 +4035,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
+			        A.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> A {
 			        func __safeDI_clock() -> Clock {
 			            return SystemClock.__safeDI_mock(zone: safeDIOverrides.clock.zone, safeDIBuilder: safeDIOverrides.clock.safeDIBuilder)
 			        }
@@ -3838,6 +4083,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> B {
+			        B.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> B {
 			        func __safeDI_systemClock() -> SystemClock {
@@ -3964,6 +4216,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    public static func mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> A {
+				        A.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> A {
 				        func __safeDI_clock() -> Clock {
 				            return SystemClock.__safeDI_mock(zone: safeDIOverrides.clock.zone, safeDIBuilder: safeDIOverrides.clock.safeDIBuilder)
 				        }
@@ -4005,6 +4264,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> B {
+				        B.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> B {
 				        func __safeDI_systemClock() -> SystemClock {
@@ -4187,6 +4453,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
+			        A.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> A {
 			        func __safeDI_clock() -> Clock {
 			            return SystemClock.__safeDI_mock(zone: safeDIOverrides.clock.zone, safeDIBuilder: safeDIOverrides.clock.safeDIBuilder)
 			        }
@@ -4228,6 +4501,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> B {
+			        B.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> B {
 			        func __safeDI_systemClock() -> SystemClock {
@@ -4354,6 +4634,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    public static func mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> A {
+				        A.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> A {
 				        func __safeDI_clock() -> Clock {
 				            return SystemClock.__safeDI_mock(zone: safeDIOverrides.clock.zone, safeDIBuilder: safeDIOverrides.clock.safeDIBuilder)
 				        }
@@ -4395,6 +4682,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> B {
+				        B.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> B {
 				        func __safeDI_systemClock() -> SystemClock {
@@ -4595,6 +4889,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    public static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
+			        A.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> A {
 			        let __safeDI_clockBoxBuilder__clockBoxBuilder_clock_safeDIBuilder = safeDIOverrides.clockBoxBuilder.clock.safeDIBuilder
 			        let __safeDI_clockBoxBuilder__clockBoxBuilder_clock_zone = safeDIOverrides.clockBoxBuilder.clock.zone
 			        let __safeDI_clockBoxBuilder__safeDIBuilder = safeDIOverrides.clockBoxBuilder.safeDIBuilder
@@ -4643,6 +4944,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> B {
+			        B.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> B {
 			        let __safeDI_systemClockBoxBuilder__systemClockBoxBuilder_systemClock_safeDIBuilder = safeDIOverrides.systemClockBoxBuilder.systemClock.safeDIBuilder
@@ -4852,6 +5160,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    public static func mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> A {
+				        A.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> A {
 				        let __safeDI_clockBoxBuilder__clockBoxBuilder_clock_safeDIBuilder = safeDIOverrides.clockBoxBuilder.clock.safeDIBuilder
 				        let __safeDI_clockBoxBuilder__clockBoxBuilder_clock_zone = safeDIOverrides.clockBoxBuilder.clock.zone
 				        let __safeDI_clockBoxBuilder__safeDIBuilder = safeDIOverrides.clockBoxBuilder.safeDIBuilder
@@ -4900,6 +5215,13 @@ struct SafeDIToolPublicMockSharedConstructionTests: ~Copyable {
 				    }
 
 				    public static func mock(
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> B {
+				        B.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> B {
 				        let __safeDI_systemClockBoxBuilder__systemClockBoxBuilder_systemClock_safeDIBuilder = safeDIOverrides.systemClockBoxBuilder.systemClock.safeDIBuilder

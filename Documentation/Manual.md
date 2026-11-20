@@ -1298,7 +1298,7 @@ Each parameter of a public `mock()` is as visible as the types it names. So, lik
 
 ```swift
 public static func mock(retries: Int? = nil, analytics: LazilyInstantiated<Analytics>? = nil, safeDIOverrides: SafeDIOverrides = .init()) -> Service {
-    Service.mock(retries: retries, analytics: analytics, session: nil, safeDIOverrides: safeDIOverrides)
+    // …builds the tree as the `package` tier does when passed `session: nil`…
 }
 
 package static func mock(retries: Int? = nil, analytics: LazilyInstantiated<Analytics>? = nil, session: Session? = nil, safeDIOverrides: SafeDIOverrides = .init()) -> Service {
@@ -1327,7 +1327,7 @@ The parameters come in this order: `@Forwarded` properties; default-valued initi
 
 - A [hole](#generating-a-dependency-tree-per-module) – here, a type the tree instantiates that no `@Instantiable` or `mockOnly` declaration the module sees fulfills – takes a required builder under the seam’s label, which takes what the hole’s places forward and nothing else: where no place forwards a value, it takes nothing, as `feedServiceBuilder` [below](#calling-a-public-mock-from-another-module) does. Places built in a `Sendable` function take a `@Sendable` builder of their own, labeled `…SendableBuilder`. A `mockOnly` stub that fulfills the hole’s type, in the module or one it depends on, removes the builder: the mock builds the stub, and production still fills the hole. As for a seam, one builder fills every place of its type, so those places must forward the same values, or SafeDI reports an error.
 
-A public mock that takes builders also has, beside each tier’s `mock()`, a `__safeDI_mock(…)` that takes each builder as a struct. Only generated code calls it, and its shape can change in any release, as the seam’s initializer for generated code can. Each generated call of a public mock names an empty enum that encodes the mock’s signature, so a call generated against an older signature fails to compile at the call.
+Beside each tier’s `mock()`, a public mock has a `__safeDI_mock(…)`, which that `mock()` calls, and which takes each builder as a struct. Only generated code calls it: a mock another module generates calls it, never `mock()`. Its shape can change in any release, as the seam’s initializer for generated code can. Each generated call of a public mock names an empty enum that encodes the mock’s signature, so a call generated against an older signature fails to compile at the call.
 
 #### Calling a public mock from another module
 
