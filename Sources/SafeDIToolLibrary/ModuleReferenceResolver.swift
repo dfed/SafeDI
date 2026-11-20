@@ -24,6 +24,7 @@ import Foundation
 /// run was given, or else one `--transitive-module-info-file-path` lists. The first time a reference names a module the
 /// given files do not describe, the resolver reads the first fields of every listed file (`ModuleInfoFile.Head`) to learn
 /// which module each describes, and then reads whole, without its view, only each file a reference resolves to.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 actor ModuleReferenceResolver {
 	init(transitiveModuleInfoListPath: String?) {
 		self.transitiveModuleInfoListPath = transitiveModuleInfoListPath
