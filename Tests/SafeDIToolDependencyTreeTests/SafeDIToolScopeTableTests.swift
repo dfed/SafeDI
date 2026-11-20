@@ -118,6 +118,42 @@ struct SafeDIToolScopeTableTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_assemblesTheSamePassTables_whenPassMapEntriesArriveInAnyOrder() async throws {
+		// Each seam pass overlays its own map on the base table, and every scope of its map is held under two keys, its own
+		// type and the protocol it also fulfills. Each run builds every scope afresh and takes each map's entries, the pass
+		// maps' included, in another order; every run freezes and assembles the same tables.
+		var projectionsBySeed = [UInt64: [String]]()
+		for seed in UInt64(1)...20 {
+			let (stream, continuation) = AsyncStream.makeStream(of: String.self)
+			try await ScopeTableObservation.$entryOrder.withValue({ entryCount in
+				Self.shuffledPositions(count: entryCount, seed: seed)
+			}) {
+				try await ScopeTableObservation.$observer.withValue({ projection in
+					continuation.yield(projection)
+				}) {
+					_ = try await executeSafeDIToolTest(
+						swiftFileContent: [Self.twoKeyedChain],
+						buildSwiftOutputDirectory: true,
+						filesToDelete: &filesToDelete,
+					)
+				}
+			}
+			continuation.finish()
+			var projections = [String]()
+			for await projection in stream {
+				projections.append(projection)
+			}
+			projectionsBySeed[seed] = projections.sorted()
+		}
+		let firstProjections = try #require(projectionsBySeed[1])
+		#expect(firstProjections.count > 2)
+		for seed in UInt64(2)...20 {
+			#expect(projectionsBySeed[seed] == firstProjections, "seed \(seed)")
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -189,6 +225,127 @@ struct SafeDIToolScopeTableTests: ~Copyable {
 
 	@Instantiable
 	public final class Leaf: Instantiable {
+		public init() {}
+	}
+	"""
+
+	private static let twoKeyedChain = """
+	@Instantiable
+	public final class Root: Instantiable {
+		public init(firstSeam: FirstSeam) {
+			self.firstSeam = firstSeam
+		}
+
+		@Instantiated let firstSeam: FirstSeam
+	}
+
+	public protocol FirstSeamProtocol {}
+
+	@Instantiable(generateDependencyTree: true, fulfillingAdditionalTypes: [FirstSeamProtocol.self])
+	public final class FirstSeam: FirstSeamProtocol, Instantiable {
+		public init(alpha: Alpha, bravo: Bravo, charlie: Charlie, delta: Delta, echo: Echo, secondSeam: SecondSeam) {
+			self.alpha = alpha
+			self.bravo = bravo
+			self.charlie = charlie
+			self.delta = delta
+			self.echo = echo
+			self.secondSeam = secondSeam
+		}
+
+		@Instantiated let alpha: Alpha
+		@Instantiated let bravo: Bravo
+		@Instantiated let charlie: Charlie
+		@Instantiated let delta: Delta
+		@Instantiated let echo: Echo
+		@Instantiated let secondSeam: SecondSeam
+	}
+
+	public protocol SecondSeamProtocol {}
+
+	@Instantiable(generateDependencyTree: true, fulfillingAdditionalTypes: [SecondSeamProtocol.self])
+	public final class SecondSeam: SecondSeamProtocol, Instantiable {
+		public init(foxtrot: Foxtrot, golf: Golf, hotel: Hotel, india: India, juliet: Juliet) {
+			self.foxtrot = foxtrot
+			self.golf = golf
+			self.hotel = hotel
+			self.india = india
+			self.juliet = juliet
+		}
+
+		@Instantiated let foxtrot: Foxtrot
+		@Instantiated let golf: Golf
+		@Instantiated let hotel: Hotel
+		@Instantiated let india: India
+		@Instantiated let juliet: Juliet
+	}
+
+	public protocol AlphaProtocol {}
+
+	@Instantiable(fulfillingAdditionalTypes: [AlphaProtocol.self])
+	public final class Alpha: AlphaProtocol, Instantiable {
+		public init() {}
+	}
+
+	public protocol BravoProtocol {}
+
+	@Instantiable(fulfillingAdditionalTypes: [BravoProtocol.self])
+	public final class Bravo: BravoProtocol, Instantiable {
+		public init() {}
+	}
+
+	public protocol CharlieProtocol {}
+
+	@Instantiable(fulfillingAdditionalTypes: [CharlieProtocol.self])
+	public final class Charlie: CharlieProtocol, Instantiable {
+		public init() {}
+	}
+
+	public protocol DeltaProtocol {}
+
+	@Instantiable(fulfillingAdditionalTypes: [DeltaProtocol.self])
+	public final class Delta: DeltaProtocol, Instantiable {
+		public init() {}
+	}
+
+	public protocol EchoProtocol {}
+
+	@Instantiable(fulfillingAdditionalTypes: [EchoProtocol.self])
+	public final class Echo: EchoProtocol, Instantiable {
+		public init() {}
+	}
+
+	public protocol FoxtrotProtocol {}
+
+	@Instantiable(fulfillingAdditionalTypes: [FoxtrotProtocol.self])
+	public final class Foxtrot: FoxtrotProtocol, Instantiable {
+		public init() {}
+	}
+
+	public protocol GolfProtocol {}
+
+	@Instantiable(fulfillingAdditionalTypes: [GolfProtocol.self])
+	public final class Golf: GolfProtocol, Instantiable {
+		public init() {}
+	}
+
+	public protocol HotelProtocol {}
+
+	@Instantiable(fulfillingAdditionalTypes: [HotelProtocol.self])
+	public final class Hotel: HotelProtocol, Instantiable {
+		public init() {}
+	}
+
+	public protocol IndiaProtocol {}
+
+	@Instantiable(fulfillingAdditionalTypes: [IndiaProtocol.self])
+	public final class India: IndiaProtocol, Instantiable {
+		public init() {}
+	}
+
+	public protocol JulietProtocol {}
+
+	@Instantiable(fulfillingAdditionalTypes: [JulietProtocol.self])
+	public final class Juliet: JulietProtocol, Instantiable {
 		public init() {}
 	}
 	"""
