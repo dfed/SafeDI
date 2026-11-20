@@ -139,7 +139,19 @@ final class ScopeRecord: Sendable {
 struct ScopeTable: Sendable {
 	/// The record at `id`, which this table gave.
 	subscript(id: ScopeID) -> ScopeRecord {
-		records[Int(id.index)]
+		let index = Int(id.index)
+		if !overlaidRecords.isEmpty, let record = overlaidRecords[index] {
+			return record
+		} else if index < storage.records.count {
+			return storage.records[index]
+		} else {
+			return appendedRecords[index - storage.records.count]
+		}
+	}
+
+	/// How many records the table holds.
+	var count: Int {
+		storage.records.count + appendedRecords.count
 	}
 
 	/// The position of the scope the map held under `key`, or `nil` when it held none: for a signature pass's table, when
@@ -148,14 +160,29 @@ struct ScopeTable: Sendable {
 		if let reachableKeys, !reachableKeys.contains(key) {
 			nil
 		} else {
-			idByKey[key]
+			storage.idByKey[key]
 		}
 	}
 
-	/// The records, in `ScopeID` order.
-	fileprivate(set) var records = [ScopeRecord]()
-	/// The map's keys, each with the position of its scope. For lookup only: never iterated.
-	fileprivate(set) var idByKey = [TypeDescription: ScopeID]()
+	/// The records of the map a table was frozen from, and that map's keys, each with the position of its scope: shared,
+	/// never copied, by every table made from it (a signature pass's, a root's), each of which holds only what it adds.
+	fileprivate final class Storage: Sendable {
+		init(records: [ScopeRecord], idByKey: [TypeDescription: ScopeID]) {
+			self.records = records
+			self.idByKey = idByKey
+		}
+
+		/// The records, in `ScopeID` order.
+		let records: [ScopeRecord]
+		/// For lookup only: never iterated, but by the tests' projection.
+		let idByKey: [TypeDescription: ScopeID]
+	}
+
+	fileprivate var storage = Storage(records: [], idByKey: [:])
+	/// The records after `storage`'s, in `ScopeID` order: a root's scope and the scopes it refers to that the map did not hold.
+	fileprivate var appendedRecords = [ScopeRecord]()
+	/// The records a signature pass puts in place of the base's, by position (`FrozenScopeMap.overlaying`).
+	fileprivate var overlaidRecords = [Int: ScopeRecord]()
 	/// For a signature pass's table, the keys the pass's map holds, which its reachable types fulfill
 	/// (`FrozenScopeMap.overlaying`): a key outside them names no record. `nil` for a table frozen from a map, whose keys are its own.
 	fileprivate(set) var reachableKeys: Set<TypeDescription>?
@@ -198,10 +225,17 @@ struct FrozenScopeMap {
 		for (_, scope) in keyedScopes {
 			_ = id(of: scope)
 		}
+		var idByKey = [TypeDescription: ScopeID]()
 		for (key, scope) in entries {
-			table.idByKey[key] = id(of: scope)
+			idByKey[key] = id(of: scope)
 		}
 		freezePendingScopes()
+		// Every table made from this one shares what it holds now.
+		table.storage = ScopeTable.Storage(records: table.appendedRecords, idByKey: idByKey)
+		table.appendedRecords = []
+		scopeStorage = ScopeStorage(scopes: addedScopes, idByScope: addedIDByScope)
+		addedScopes = []
+		addedIDByScope = [:]
 		if let observer = ScopeTableObservation.observer {
 			observer(table.projection)
 		}
@@ -224,8 +258,8 @@ struct FrozenScopeMap {
 		frozenScopeMap.table.reachableKeys = Set(passScopeMap.keys)
 		var callScopeByID = [ScopeID: Scope]()
 		for (key, scope) in passScopeMap {
-			if let id = table.idByKey[key] {
-				frozenScopeMap.idByScope[ObjectIdentifier(scope)] = id
+			if let id = table.storage.idByKey[key] {
+				frozenScopeMap.addedIDByScope[ObjectIdentifier(scope)] = id
 				if scope.seamCall != nil {
 					callScopeByID[id] = scope
 				}
@@ -241,7 +275,7 @@ struct FrozenScopeMap {
 					.passUp(hole)
 				}
 			}
-			frozenScopeMap.table.records[Int(id.index)] = frozenScopeMap.record(freezing: scope, holeArguments: holeArguments)
+			frozenScopeMap.table.overlaidRecords[Int(id.index)] = frozenScopeMap.record(freezing: scope, holeArguments: holeArguments)
 		}
 		frozenScopeMap.freezePendingScopes()
 		return frozenScopeMap
@@ -257,29 +291,43 @@ struct FrozenScopeMap {
 		return (frozenScopeMap.table, record)
 	}
 
-	/// The scopes, in `ScopeID` order. Holding them keeps each identifier in `idByScope` naming its own scope.
-	private var scopes = [Scope]()
-	private var idByScope = [ObjectIdentifier: ScopeID]()
-	/// A signature pass's scopes, which `idByScope` names by their base positions (`overlaying`).
+	/// The scopes of the map this one was frozen from, in `ScopeID` order, with the position of each: shared, as
+	/// `ScopeTable.Storage` is. Holding them keeps each identifier naming its own scope.
+	private final class ScopeStorage {
+		init(scopes: [Scope], idByScope: [ObjectIdentifier: ScopeID]) {
+			self.scopes = scopes
+			self.idByScope = idByScope
+		}
+
+		let scopes: [Scope]
+		let idByScope: [ObjectIdentifier: ScopeID]
+	}
+
+	private var scopeStorage = ScopeStorage(scopes: [], idByScope: [:])
+	/// The scopes given positions after `scopeStorage`'s, in `ScopeID` order.
+	private var addedScopes = [Scope]()
+	/// The positions of `addedScopes`, and of a signature pass's scopes, which name the base's (`overlaying`).
+	private var addedIDByScope = [ObjectIdentifier: ScopeID]()
+	/// A signature pass's scopes, held for as long as their identifiers name positions (`overlaying`).
 	private var overlaidScopes = [Scope]()
 
 	/// The position of `scope`, given to it now when it has none.
 	private mutating func id(of scope: Scope) -> ScopeID {
 		let identifier = ObjectIdentifier(scope)
-		if let id = idByScope[identifier] {
+		if let id = addedIDByScope[identifier] ?? scopeStorage.idByScope[identifier] {
 			return id
 		} else {
-			let id = ScopeID(scopes.count)
-			scopes.append(scope)
-			idByScope[identifier] = id
+			let id = ScopeID(scopeStorage.scopes.count + addedScopes.count)
+			addedScopes.append(scope)
+			addedIDByScope[identifier] = id
 			return id
 		}
 	}
 
 	/// Makes the record of every scope given a position but no record yet, in `ScopeID` order; each can give more positions.
 	private mutating func freezePendingScopes() {
-		while table.records.count < scopes.count {
-			table.records.append(record(freezing: scopes[table.records.count]))
+		while table.count < scopeStorage.scopes.count + addedScopes.count {
+			table.appendedRecords.append(record(freezing: addedScopes[table.count - scopeStorage.scopes.count]))
 		}
 	}
 
@@ -363,11 +411,12 @@ extension ScopeTable {
 	/// the scopes it builds and fills. Two freezes of one map give the same text exactly when they give the same table.
 	fileprivate var projection: String {
 		var keysByID = [ScopeID: [TypeDescription]]()
-		for (key, id) in idByKey {
+		for (key, id) in storage.idByKey {
 			keysByID[id, default: []].append(key)
 		}
 		var lines = [String]()
-		for (index, record) in records.enumerated() {
+		for index in 0..<count {
+			let record = self[ScopeID(index)]
 			var line = "\(index): \(record.instantiable.concreteInstantiable.asSource)"
 			let keys = (keysByID[ScopeID(index)] ?? []).sorted(by: TypeDescription.precedesInScopeOrder)
 			line.append(" keys [\(keys.map(\.asSource).joined(separator: ", "))]")
