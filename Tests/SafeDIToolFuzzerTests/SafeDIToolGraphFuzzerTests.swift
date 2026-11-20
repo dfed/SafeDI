@@ -6784,7 +6784,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.sendableAndNonSendableWrappers: 499,
 		.mockedTypeOnLazyCycle: 503,
 		.typesReceivingEachOtherOnlyIfAvailable: 245,
-		.labelReceivedAsInstanceAndAsInstantiator: 124,
+		.labelReceivedAsInstanceAndAsInstantiator: 211,
 		.sameLabelReceivedAsDifferentUnbuildableWrappers: 116,
 		.receivedErasedInstantiator: 755,
 		.forwardedErasedInstantiator: 143,
@@ -6969,6 +6969,7 @@ struct SafeDIToolGraphFuzzerTests {
 			.builder: 3_410,
 			.configuration: 1_349,
 		],
+		pinnedPlacePairCount: 88,
 	)
 
 	/// The seeds of `knownIssues` whose value-oracle fixture is known not to compile.
