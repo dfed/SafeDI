@@ -182,7 +182,7 @@ If your session started outside the worktree you are editing, scoped rules and n
 | a change's tests, before writing them | `.claude/rules/test-design.md` |
 | `Documentation/`, `README.md` | `.claude/rules/documentation.md` |
 | a breaking-change judgment, release notes, `publish.yml`, packaging | `.claude/rules/releases-and-packaging.md` |
-| "Graph fuzzer" | `.claude/rules/fuzzer-overview.md`, then `fuzzer-known-issues.md`, `fuzzer-seam-draws.md`, `fuzzer-seam-oracles.md`, `fuzzer-builder-surface.md`, `fuzzer-gating-checks.md`, `fuzzer-corpora.md`, `fuzzer-seam-dependencies.md`, `fuzzer-value-oracles.md`, `fuzzer-remedy-oracle.md`, `fuzzer-calling-mocks.md` |
+| "Graph fuzzer" | `.claude/rules/fuzzer-overview.md`, then `fuzzer-known-issues.md`, `fuzzer-seam-draws.md`, `fuzzer-seam-oracles.md`, `fuzzer-builder-surface.md`, `fuzzer-gating-checks.md`, `fuzzer-corpora.md`, `fuzzer-seam-dependencies.md`, `fuzzer-value-oracles.md`, `fuzzer-remedy-oracle.md`, `fuzzer-calling-mocks.md`, `fuzzer-calling-mock-limits.md` |
 | Bazel rules | `bazel/CLAUDE.md` |
 | the macro target's sources (what it compiles of SafeDICore) | `Sources/SafeDIMacros/CLAUDE.md` |
 | the Tuist plugin | `TuistPlugins/CLAUDE.md` |

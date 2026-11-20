@@ -36,8 +36,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///     though its root binds a form they read, as production always passes them `nil` (see
 	///     `NearestDeclarations.binding(_:passingNilTo:)`): among `unavailableOptionalProperties`, and received from no
 	///     scope above, so that the mock root binds and offers nothing that only they would read.
-	///   - enclosingLevelCalls: For a call of another module's public mock, the call of each level function an enclosing
-	///     call declares that a case of this call's level functions re-enters, by its dispatcher's key
+	///   - enclosingLevelCalls: For a call of another module's public mock, each level function an enclosing call declares
+	///     that a case of this call's level functions re-enters, and the values the case hands it, by its dispatcher's key
 	///     (`PublicMockLevelFunctions.init`).
 	init(
 		instantiable: Instantiable,
@@ -78,7 +78,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		reboundProperties: Set<Property> = [],
 		previousPassReceivedBuilderLoops: ReceivedBuilderLoops? = nil,
 		previousPassPublicMockLevelReentries: [String: PublicMockLevelFunctions.Reentry] = [:],
-		enclosingLevelCalls: [String: String] = [:],
+		enclosingLevelCalls: [String: PublicMockLevelFunctions.EnclosingLevelCall] = [:],
 		namesBoundBySeam: Set<String> = [],
 		placeHoldingProperties: Set<Property>? = nil,
 	) {
@@ -6442,6 +6442,54 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
+		/// Whether the no-scope initializer of the struct of the level of `key` takes a `@Sendable` builder: where the level
+		/// is of the `@Sendable` family, or its initializer hands the builder to the no-scope initializer of a struct that
+		/// takes one, a struct of the `@Sendable` family or a level that hands it on so. A level of the plain family whose
+		/// call's case re-enters an enclosing call's fill through a builder held in a `Sendable` wrapper returns the called
+		/// seam's struct of the `@Sendable` family (`SeamScopeEnumsByType.leadsToPlace(_:reenteringFills:)`), which no builder
+		/// that is not `@Sendable` can make; the enclosing call's fill is then built in a `@Sendable` function, so the root
+		/// that holds the level is of the `@Sendable` family and hands its own builder down.
+		mutating func takesSendableBuilder(atLevel key: SeamSignature.ScopeEnum.Key) -> Bool {
+			if let levelsTakingSendableBuilder {
+				return levelsTakingSendableBuilder.contains(key)
+			} else {
+				// The levels that hold each level, from which a level that takes a `@Sendable` builder makes its holders take one.
+				var holdersByKey = [SeamSignature.ScopeEnum.Key: [SeamSignature.ScopeEnum.Key]]()
+				var takingKeys = Set<SeamSignature.ScopeEnum.Key>()
+				for (holderKey, scopeEnum) in enumsByKey {
+					// The structs the level's no-scope initializer makes: a call's case for a builder it fills makes the called
+					// seam's struct around the fill's level, unless it carries no scope value.
+					var heldKeys = [SeamSignature.ScopeEnum.Key]()
+					for enumCase in scopeEnum.cases {
+						switch enumCase.kind {
+						case .place:
+							break
+						case let .fill(innerKey, _?, heldKey, _, _):
+							heldKeys += [innerKey, heldKey]
+						case let .nested(heldKey, _, _),
+						     let .inner(heldKey, _, _),
+						     let .fill(_, _, heldKey, _, _):
+							heldKeys.append(heldKey)
+						}
+					}
+					if holderKey.isSendable || heldKeys.contains(where: \.isSendable) {
+						takingKeys.insert(holderKey)
+					}
+					for heldKey in heldKeys {
+						holdersByKey[heldKey, default: []].append(holderKey)
+					}
+				}
+				var keysToVisit = Array(takingKeys)
+				while let visitedKey = keysToVisit.popLast() {
+					for holderKey in holdersByKey[visitedKey, default: []] where takingKeys.insert(holderKey).inserted {
+						keysToVisit.append(holderKey)
+					}
+				}
+				levelsTakingSendableBuilder = takingKeys
+				return takingKeys.contains(key)
+			}
+		}
+
 		/// What `DependencyTreeGenerator.builderForm(ofPlaces:)` reads of a place: whether it is held in an instantiator, and
 		/// then the wrapper's spelling and that of the value it forwards.
 		private struct PlaceSpelling: Hashable, Comparable {
@@ -6487,6 +6535,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		private let holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]
 		private var formByKey = [SeamSignature.ScopeEnum.Key: DependencyTreeGenerator.BuilderForm]()
 		private var ownPlacesByKey = [SeamSignature.ScopeEnum.Key: [PlaceSpelling: SeamSignature.Hole]]()
+		private var levelsTakingSendableBuilder: Set<SeamSignature.ScopeEnum.Key>?
 	}
 
 	/// The builder struct of `scopeEnum`, `__safeDI_Builder<Built>`, indented by `indent`: one stored function per case, its
@@ -6496,10 +6545,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// the enum the case holds; the memberwise initializer; and `init(__safeDI_noScope:)`, which makes every member call one
 	/// builder, as a seam's readable initializer passes it the builder a person wrote. That builder's type is the one a
 	/// person writes for the places at and beneath the level, in the level's own family
-	/// (`DependencyTreeGenerator.builderForm(ofPlaces:)`), over `Built`. A member whose own type takes another value than the
-	/// level's builder – nothing, where the level's takes `()` or a forwarded value, or `T.ForwardedProperties`, which is
-	/// `Void` where it meets `()` – is handed the builder adapted to it. A `@Sendable` enum's struct is `Sendable`, with
-	/// `@Sendable` members.
+	/// (`DependencyTreeGenerator.builderForm(ofPlaces:)`), over `Built`, or in the `@Sendable` family where the level hands
+	/// it to a struct that takes a `@Sendable` one (`LevelBuilderForms.takesSendableBuilder(atLevel:)`). A member whose own
+	/// type takes another value than the level's builder – nothing, where the level's takes `()` or a forwarded value, or
+	/// `T.ForwardedProperties`, which is `Void` where it meets `()` – is handed the builder adapted to it. A `@Sendable`
+	/// enum's struct is `Sendable`, with `@Sendable` members.
 	private static func builderStructDeclaration(
 		of scopeEnum: SeamSignature.ScopeEnum,
 		holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole],
@@ -6515,9 +6565,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let builtType = TypeDescription.simple(name: builtTypeName, generics: [])
 		let builderParameter = ReservedName.noScopeParameterName
 		let levelForm = levelForms.form(ofLevel: scopeEnum.key)
+		let takesSendableBuilder = levelForms.takesSendableBuilder(atLevel: scopeEnum.key)
 		let noScopeType: TypeDescription = if let forwarded = levelForm.forwardedValue {
-			DependencyTreeGenerator.erasedBuilderType(forwarding: forwarded, returning: builtType, isSendable: isSendable)
-		} else if isSendable {
+			DependencyTreeGenerator.erasedBuilderType(forwarding: forwarded, returning: builtType, isSendable: takesSendableBuilder)
+		} else if takesSendableBuilder {
 			TypeDescription.closure(arguments: [], isAsync: false, doesThrow: false, returnType: builtType).asSendableFunction
 		} else {
 			TypeDescription.closure(arguments: [], isAsync: false, doesThrow: false, returnType: builtType)

@@ -298,6 +298,12 @@ struct GraphFuzzerCallingMockDraw {
 		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesWhatNothingFulfills, .fillInstantiatesTypeNoDeclarationCanFulfill, .seamCallerFillSharesBuilder, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot:
 			nil
 		}
+		// Drawn after the builder, and only for its shape, so no graph that draws no builder changes. Beside a
+		// `SendableInstantiator`, the fill is built in that builder's `@Sendable` function, so the builder is of the
+		// `@Sendable` family, and the plain struct of the fill's level holds a member that returns the third module's
+		// `@Sendable` family's struct, whose no-scope initializer takes a `@Sendable` builder
+		// (`ScopeGenerator.LevelBuilderForms.takesSendableBuilder(atLevel:)`).
+		reenteringFillInstantiatesWhatNothingFulfills = enclosingBuilder != nil && random.element(of: [false, true])
 	}
 
 	static let callingMockRandomSeedMask: UInt64 = 0x63616C6C6D6F636B
@@ -450,6 +456,24 @@ struct GraphFuzzerCallingMockDraw {
 	/// For the shape whose fill holds a builder of the enclosing called type, how the third module's type holds it.
 	let enclosingBuilder: EnclosingBuilder?
 
+	/// For the shape whose fill holds a builder of the enclosing called type, whether the fill also instantiates
+	/// `beacon: any Beacon`, a type no declaration fulfills, which the twin takes a builder for: a `.public` caller hands the
+	/// builder through the struct of its own level, which the call inside the fill hands on to the level function it
+	/// re-enters (`PublicMockLevelFunctions.Member.reentry`).
+	let reenteringFillInstantiatesWhatNothingFulfills: Bool
+
+	/// The protocol no declaration fulfills that the fill instantiates where `reenteringFillInstantiatesWhatNothingFulfills`,
+	/// and the plain class a probe hands its builder.
+	static let beaconProtocol = "Beacon"
+	static let beaconStub = "StubBeacon"
+
+	/// The label of the builder of what the fill instantiates where `reenteringFillInstantiatesWhatNothingFulfills`: of the
+	/// `@Sendable` family where the third module's type holds the enclosing called type in a `SendableInstantiator`, whose
+	/// `@Sendable` builder function re-enters the fill.
+	var beaconBuilderLabel: String {
+		enclosingBuilder == .sendableInstantiator ? "beaconSendableBuilder" : "beaconBuilder"
+	}
+
 	/// The build of the calling mock's module the tool is told of: one that compiles the generated mocks, but in the shape
 	/// whose fill the tool does not check where the mock condition is inactive.
 	let mockBuild: GraphFuzzerCallingMockGraph.MockBuild
@@ -497,9 +521,10 @@ struct GraphFuzzerCallingMockDraw {
 
 	/// Whether the calling mock's pass-ups must be exactly `expectedPassUpLabels`: the shape's
 	/// (`GraphFuzzerCallingMockShape.passesUpExactlyTheExpectedLabels`), and those the gate for a re-entered called type
-	/// passes up (`CallerLazyValue.reentersCalledType`).
+	/// passes up (`CallerLazyValue.reentersCalledType`), and the builder of what a re-entering fill instantiates that
+	/// nothing fulfills, the twin's (`reenteringFillInstantiatesWhatNothingFulfills`).
 	var passesUpExactlyTheExpectedLabels: Bool {
-		cell.shape.passesUpExactlyTheExpectedLabels || callerLazyValue?.reentersCalledType == true
+		cell.shape.passesUpExactlyTheExpectedLabels || callerLazyValue?.reentersCalledType == true || reenteringFillInstantiatesWhatNothingFulfills
 	}
 
 	/// Whether a type that fulfills the hole is visible from the calling mock's module.
@@ -507,7 +532,10 @@ struct GraphFuzzerCallingMockDraw {
 		switch cell.shape {
 		case .noVisibleImplementation, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder:
 			false
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType:
+		case .fillHoldsBuilderOfEnclosingCalledType:
+			// The builder of what the fill instantiates that nothing fulfills is the place `mock()` takes.
+			!reenteringFillInstantiatesWhatNothingFulfills
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot:
 			true
 		}
 	}
@@ -533,8 +561,10 @@ struct GraphFuzzerCallingMockDraw {
 		switch cell.shape {
 		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillInstantiatesTypeNoDeclarationCanFulfillWhereMockConditionIsInactive:
 			nil
-		case .callersOwnValue, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType:
+		case .callersOwnValue, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot:
 			[]
+		case .fillHoldsBuilderOfEnclosingCalledType:
+			reenteringFillInstantiatesWhatNothingFulfills ? [beaconBuilderLabel] : []
 		case .implementationReceivesWhatNothingProvides:
 			[names.token.lowercasedFirst]
 		case .noVisibleImplementation:
@@ -599,7 +629,9 @@ struct GraphFuzzerCallingMockDraw {
 			twinErrorIsCheckedOnlyWhereMocksCompile ? [holeBuilderLabel] : []
 		case .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder:
 			expectedBuilders.map(\.label)
-		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType:
+		case .fillHoldsBuilderOfEnclosingCalledType:
+			reenteringFillInstantiatesWhatNothingFulfills ? [beaconBuilderLabel] : []
+		case .outerSeamValue, .appOnlyScreenInLoop, .seamBuiltAgain, .loopThroughInnerSeamBuilder, .callersOwnValue, .implementationReceivesWhatNothingProvides, .fillReceivesValueBuildingTheCall, .fillInstantiatesTypeNoDeclarationCanFulfill, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot:
 			[]
 		}
 	}
@@ -833,6 +865,13 @@ struct GraphFuzzerCallingMockDraw {
 			"caller.\(place).instantiate(7)"
 		}
 		let reentered = builder.builtValue(of: "(\(filled) as! \(fill)).\(names.outer.lowercasedFirst)", label: builder.label(of: names.inner))
+		// Where the fill instantiates what nothing fulfills, both calls hand its builder the stub.
+		let stub = "{ \(names.callerModuleName).\(Self.beaconStub)() }"
+		let calls = if reenteringFillInstantiatesWhatNothingFulfills {
+			(mock: "\(caller).mock(\(beaconBuilderLabel): \(stub))", twin: "\(caller)(__safeDI_\(beaconBuilderLabel): .init(__safeDI_noScope: \(stub)))")
+		} else {
+			(mock: "\(caller).mock()", twin: "\(caller)()")
+		}
 		func probe(of call: String) -> String {
 			switch cell.place {
 			case .plain:
@@ -847,7 +886,7 @@ struct GraphFuzzerCallingMockDraw {
 		case .deferred:
 			"(\(caller), \(caller).\(place).instantiate(7), re-entered \(names.inner), its \(placeLabel).instantiate(7))"
 		}
-		return [DifferentialValueProbe(name: name, expression: probe(of: "\(caller).mock()"), knownRightExpression: probe(of: "\(caller)()"))]
+		return [DifferentialValueProbe(name: name, expression: probe(of: calls.mock), knownRightExpression: probe(of: calls.twin))]
 	}
 
 	/// The second place's protocol, the label of the level that holds it and its own, and the type that fills it, of the
@@ -1252,7 +1291,7 @@ struct GraphFuzzerCallingMockDraw {
 	/// The fill's declaration, receiving `received` (a label and type) when given, instantiating `instantiated` when given,
 	/// forwarding `id: Int` for a deferred place, and fulfilling `protocolName` by name or through
 	/// `fulfillingAdditionalTypes`.
-	private func fillDeclaration(named fillName: String, protocolName: String, received: (label: String, type: String)?, receivedOnlyIfAvailable: Bool = false, instantiated: (label: String, type: String)? = nil, isPublic: Bool) -> String {
+	private func fillDeclaration(named fillName: String, protocolName: String, received: (label: String, type: String)?, receivedOnlyIfAvailable: Bool = false, instantiated: [(label: String, type: String)] = [], isPublic: Bool) -> String {
 		var parameters = [String]()
 		var assignments = [String]()
 		var properties = [String]()
@@ -1266,7 +1305,7 @@ struct GraphFuzzerCallingMockDraw {
 			assignments.append("self.\(received.label) = \(received.label)")
 			properties.append("\(receivedOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received") let \(received.label): \(received.type)")
 		}
-		if let instantiated {
+		for instantiated in instantiated {
 			parameters.append("\(instantiated.label): \(instantiated.type)")
 			assignments.append("self.\(instantiated.label) = \(instantiated.label)")
 			properties.append("@Instantiated let \(instantiated.label): \(instantiated.type)")
@@ -1421,8 +1460,20 @@ struct GraphFuzzerCallingMockDraw {
 			declarations.append(fillDeclaration(named: names.fill, protocolName: names.hole, received: (sibling, names.sibling), isPublic: callerIsPublic))
 			declarations.append(callerDeclaration(form, properties: [(sibling, names.sibling)]))
 		case .fillHoldsBuilderOfEnclosingCalledType:
-			// The fill of the inner type's place builds the outer type, whose public mock holds a builder of the inner type.
-			declarations.append(fillDeclaration(named: names.fill, protocolName: names.hole, received: nil, instantiated: (names.outer.lowercasedFirst, names.outer), isPublic: callerIsPublic))
+			// The fill of the inner type's place builds the outer type, whose public mock holds a builder of the inner type, and,
+			// where drawn, a type no declaration fulfills, whose stub a probe hands the builder.
+			var instantiated = [(label: names.outer.lowercasedFirst, type: names.outer)]
+			if reenteringFillInstantiatesWhatNothingFulfills {
+				declarations.append("""
+				public protocol \(Self.beaconProtocol): AnyObject {}
+
+				public final class \(Self.beaconStub): \(Self.beaconProtocol) {
+				    public init() {}
+				}
+				""")
+				instantiated.append((label: Self.beaconProtocol.lowercasedFirst, type: "any \(Self.beaconProtocol)"))
+			}
+			declarations.append(fillDeclaration(named: names.fill, protocolName: names.hole, received: nil, instantiated: instantiated, isPublic: callerIsPublic))
 			declarations.append(callerDeclaration(form, properties: [(names.inner.lowercasedFirst, names.inner)]))
 		case .appOnlyScreenInLoop, .seamBuiltAgain, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot:
 			break
@@ -1673,7 +1724,7 @@ struct GraphFuzzerCallingMockDraw {
 		let value = names.value.lowercasedFirst
 		let inner = names.inner.lowercasedFirst
 		let wrapped = "\(callerLazyValue?.wrapper ?? "LazilyInstantiated")<\(names.value)>"
-		let instantiated: (label: String, type: String)? = callerLazyValue?.call == .fillCallsAgain ? ("\(inner)Builder", "Instantiator<\(names.inner)>") : nil
+		let instantiated: [(label: String, type: String)] = callerLazyValue?.call == .fillCallsAgain ? [("\(inner)Builder", "Instantiator<\(names.inner)>")] : []
 		var fillReceived = wrapped
 		// The fill reads the value only if available where the called type's copy holds it so, which a read by value could not
 		// be handed.
