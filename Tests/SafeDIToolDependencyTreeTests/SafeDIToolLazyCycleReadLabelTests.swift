@@ -448,11 +448,7 @@ struct SafeDIToolLazyCycleReadLabelTests: ~Copyable {
 		fixture.append(seamFixtureType(named: "OtherContext", isFinalClass: true, declarations: []))
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen00.swift"]):10:5: error: @Received property `context: Context` is hidden in chain: Root -> Instantiator<Screen00> -> Instantiator<Screen01> -> Instantiator<Hub> -> Instantiator<Screen01> -> Instantiator<Screen00> -> Instantiator<Screen01> -> Screen00. `Hub` declares `context: OtherContext` with the same label, so the types below `Hub` receive `context: OtherContext` instead. Give `context: OtherContext` on `Hub` a different label to fix.
-			\(fixtures["Hub.swift"]):12:5: note: `context: OtherContext` is declared here
 			\(fixtures["Screen00.swift"]):10:5: error: @Received property `context: Context` is hidden in chain: Root -> Instantiator<Screen00> -> Instantiator<Screen01> -> Instantiator<Hub> -> Instantiator<Screen01> -> Screen00. `Hub` declares `context: OtherContext` with the same label, so the types below `Hub` receive `context: OtherContext` instead. Give `context: OtherContext` on `Hub` a different label to fix.
-			\(fixtures["Hub.swift"]):12:5: note: `context: OtherContext` is declared here
-			\(fixtures["Screen01.swift"]):11:5: error: @Received property `context: Context` is hidden in chain: Root -> Instantiator<Screen00> -> Instantiator<Screen01> -> Instantiator<Hub> -> Instantiator<Screen01> -> Instantiator<Screen00> -> Screen01. `Hub` declares `context: OtherContext` with the same label, so the types below `Hub` receive `context: OtherContext` instead. Give `context: OtherContext` on `Hub` a different label to fix.
 			\(fixtures["Hub.swift"]):12:5: note: `context: OtherContext` is declared here
 			\(fixtures["Screen01.swift"]):11:5: error: @Received property `context: Context` is hidden in chain: Root -> Instantiator<Screen00> -> Instantiator<Screen01> -> Instantiator<Hub> -> Screen01. `Hub` declares `context: OtherContext` with the same label, so the types below `Hub` receive `context: OtherContext` instead. Give `context: OtherContext` on `Hub` a different label to fix.
 			\(fixtures["Hub.swift"]):12:5: note: `context: OtherContext` is declared here
@@ -476,11 +472,7 @@ struct SafeDIToolLazyCycleReadLabelTests: ~Copyable {
 		)
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen00.swift"]):10:5: error: @Received property `context: Context` is hidden in chain: Root -> Instantiator<Screen00> -> Instantiator<Screen01> -> Instantiator<Hub> -> Instantiator<Screen01> -> Instantiator<Screen00> -> Instantiator<Screen01> -> Screen00. `Hub` declares `context: Context?` with the same label, so the types below `Hub` receive `context: Context?` instead. Give `context: Context?` on `Hub` a different label to fix.
-			\(fixtures["Hub.swift"]):12:5: note: `context: Context?` is declared here
 			\(fixtures["Screen00.swift"]):10:5: error: @Received property `context: Context` is hidden in chain: Root -> Instantiator<Screen00> -> Instantiator<Screen01> -> Instantiator<Hub> -> Instantiator<Screen01> -> Screen00. `Hub` declares `context: Context?` with the same label, so the types below `Hub` receive `context: Context?` instead. Give `context: Context?` on `Hub` a different label to fix.
-			\(fixtures["Hub.swift"]):12:5: note: `context: Context?` is declared here
-			\(fixtures["Screen01.swift"]):11:5: error: @Received property `context: Context` is hidden in chain: Root -> Instantiator<Screen00> -> Instantiator<Screen01> -> Instantiator<Hub> -> Instantiator<Screen01> -> Instantiator<Screen00> -> Screen01. `Hub` declares `context: Context?` with the same label, so the types below `Hub` receive `context: Context?` instead. Give `context: Context?` on `Hub` a different label to fix.
 			\(fixtures["Hub.swift"]):12:5: note: `context: Context?` is declared here
 			\(fixtures["Screen01.swift"]):11:5: error: @Received property `context: Context` is hidden in chain: Root -> Instantiator<Screen00> -> Instantiator<Screen01> -> Instantiator<Hub> -> Screen01. `Hub` declares `context: Context?` with the same label, so the types below `Hub` receive `context: Context?` instead. Give `context: Context?` on `Hub` a different label to fix.
 			\(fixtures["Hub.swift"]):12:5: note: `context: Context?` is declared here
