@@ -86,6 +86,25 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func binaryWriter_writesEachSpellingOfPlaces_whenPlacesDifferOnlyInAny() throws {
+		// `==` calls `any Service` and `Service` equal, but each list of places reads back as written.
+		let places = [TypeDescription.any(.simple(name: "Service")), .simple(name: "Service"), .any(.simple(name: "Service"))].map { type in
+			BinaryShared([SeamSignature.Hole.Site(seamType: .simple(name: "Host"), path: [Property(label: "service", typeDescription: type)])])
+		}
+		var writer = BinaryWriter()
+		writer.write(places)
+
+		let readPlaces = try writer.encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let readPlaces: [BinaryShared<[SeamSignature.Hole.Site]>] = try reader.read()
+			try reader.finish()
+			return readPlaces
+		}
+
+		#expect(readPlaces.map { $0.value.map { $0.path.map(\.typeDescription.asSource) } } == [[["any Service"]], [["Service"]], [["any Service"]]])
+	}
+
+	@Test
 	func binaryReader_throws_whenSharedValueReferenceComesBeforeTheValue() {
 		// An empty string table, then a reference to the first shared value, which no value before it holds.
 		let bytes: [UInt8] = [0, 1]
@@ -800,6 +819,86 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		let dumped = try JSONDecoder().decode(ModuleInfo.self, from: Data(json.utf8))
 		#expect(dumped.instantiables.map(\.concreteInstantiable) == [.simple(name: "UpstreamService")])
 		#expect(try reflectedDescription(of: dumped) == reflectedDescription(of: upstream.writtenModuleInfo))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func dump_printsEverySeamSignatureModuleInfoFileHoldsAsJSON() async throws {
+		// `Badge`, `package`, receives `serviceBuilder` only if available, so `Host`'s `package` tier takes the builder of
+		// its hole `service` under another label than its `public` tier.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Service {}",
+				"package struct Thing {}",
+				"""
+				@Instantiable
+				package struct Badge: Instantiable {
+				    package init(serviceBuilder: Thing?) {
+				        self.serviceBuilder = serviceBuilder
+				    }
+
+				    @Received(onlyIfAvailable: true) let serviceBuilder: Thing?
+				}
+				""",
+				"""
+				@Instantiable(generateDependencyTree: true)
+				public struct Host: Instantiable {
+				    init(service: any Service, badge: Badge) {
+				        self.service = service
+				        self.badge = badge
+				    }
+
+				    @Instantiated let service: any Service
+				    @Instantiated let badge: Badge
+				}
+				""",
+			])],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		let seamModule = try #require(output.modules["Feature"])
+
+		let json = try Dump.parse([#require(seamModule.moduleInfoOutputPath)]).json()
+
+		let dumped = try JSONDecoder().decode(ModuleInfoFile.self, from: Data(json.utf8))
+		let written = try #require(seamModule.moduleInfoFile)
+		#expect(dumped.seamSignatures.first?.signature?.holes.map(\.narrowerTierBuilderLabels) == [[.package: "serviceBuilder_"]])
+		#expect(reflectedDescription(of: dumped.seamSignatures) == reflectedDescription(of: written.seamSignatures))
+	}
+
+	@Test
+	func encode_writesLabelsInSortedOrder_whenValuesBindLabelsLater() throws {
+		let labels = (0..<24).map { "label\($0)" }
+		let values = SeamSignature.ScopeEnum.Values(typeName: "Values", fields: [], labelsBoundLater: Set(labels))
+
+		let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(values)) as? [String: Any]
+
+		#expect(json?["labelsBoundLater"] as? [String] == labels.sorted())
+	}
+
+	@Test
+	func encode_writesNarrowerTierLabelsWidestTierFirst_whenBuilderTakesLabelOnEveryTier() throws {
+		let tiers: [AccessLevel] = [.open, .public, .package, .internal, .fileprivate, .private]
+		let builder = SeamSignature.Builder(
+			enumKey: .init(seamType: .simple(name: "Host"), holeType: .init(instantiatedType: .simple(name: "Service"), builtType: .simple(name: "Service")), isSendable: false),
+			label: "serviceBuilder",
+			internalName: "serviceBuilder",
+			parameterType: .simple(name: "Service"),
+			readableParameterType: .simple(name: "Service"),
+			takesBuilderStruct: false,
+			tierAccess: .open,
+			accessCause: nil,
+			narrowingInnerSeam: nil,
+			narrowerTierLabels: Dictionary(uniqueKeysWithValues: tiers.reversed().map { ($0, "serviceBuilder_\($0)") }),
+		)
+
+		let encoded = try JSONEncoder().encode(builder)
+
+		let decoded = try JSONDecoder().decode(SeamSignature.Builder.self, from: encoded)
+		let json = try JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+		let pairs = try #require(json?["narrowerTierLabels"] as? [Any])
+		#expect(pairs.enumerated().filter { $0.offset.isMultiple(of: 2) == false }.map { $0.element as? String } == tiers.map { "serviceBuilder_\($0)" })
+		#expect(decoded.narrowerTierLabels == builder.narrowerTierLabels)
 	}
 
 	@Test
