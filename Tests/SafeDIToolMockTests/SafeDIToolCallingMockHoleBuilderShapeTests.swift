@@ -527,12 +527,12 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 		])
 	}
 
-	@Test(arguments: Caller.allCases)
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_buildsInlineBuiltPublicMocksPlaceWithRequiredBuilder_whenAnotherCallPassesSameHoleTypeUp(caller: Caller) async throws {
+	mutating func mock_buildsInlineBuiltPublicMocksPlaceWithRequiredBuilder_whenAnotherCallPassesSameHoleTypeUp() async throws {
 		// `G` is built inline, and its place of `any Api` reads the builder `mock()` takes required for its hole type, unless
 		// the place's own override is set.
-		let modules = Self.joinModules(caller: caller, buildsGInline: true)
+		let modules = Self.joinModules(caller: .internal, buildsGInline: true)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 
 		#expect(Self.mockParameterLines(of: output) == [
@@ -542,6 +542,24 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 		try await expectValues(of: output, modules: modules, pairs: [
 			("Root.mock(apiBuilder: { App.Fake() }).g.api is App.Fake", "true"),
 			("Root.mock(apiBuilder: { App.Fake() }, safeDIOverrides: .init(g: .init(api: { _ in App.Other() }))).g.api is App.Other", "true"),
+		])
+	}
+
+	@Test(arguments: [Caller.public, .seamPublic])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_callsPublicMockItCouldBuildInlineWithRequiredBuilder_whenPublicMockTakesBuilderOfItsPlace(caller: Caller) async throws {
+		// A `.public` mock calls `G`'s public mock, whose tree it could build, since it takes `apiBuilder` as a struct with no
+		// member for a place it builds inline; the call is handed the builder, and an override of `G` replaces the call.
+		let modules = Self.joinModules(caller: caller, buildsGInline: true)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+
+		#expect(Self.mockParameterLines(of: output) == [
+			"apiBuilder: @escaping () -> any Api,",
+			"safeDIOverrides: SafeDIOverrides = .init()",
+		])
+		try await expectValues(of: output, modules: modules, pairs: [
+			("Root.mock(apiBuilder: { App.Fake() }).g.api is App.Fake", "true"),
+			("Root.mock(apiBuilder: { App.Fake() }, safeDIOverrides: .init(g: { _ in G(api: App.Other()) })).g.api is App.Other", "true"),
 		])
 	}
 

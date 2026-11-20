@@ -1834,7 +1834,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		let firstCalledSeed = draws.first { $0.joinsFilledCall && !$0.buildsDockInline }?.seed
 		print("calling-mock joined call counts=\(counts.sorted { $0.key < $1.key }) firstSeed=\(firstSeed.map(String.init) ?? "none") firstInlineSeed=\(firstInlineSeed.map(String.init) ?? "none") firstCalledSeed=\(firstCalledSeed.map(String.init) ?? "none")")
 
-		#expect(counts == ["graphs": 60, "eligible": 17, "joins": 11, "joinsPlain": 4, "joinsDeferred": 7, "buildsDockInline": 5, "buildsDockInlinePlain": 1])
+		#expect(counts == ["graphs": 60, "eligible": 17, "joins": 11, "joinsPlain": 4, "joinsDeferred": 7, "buildsDockInline": 6, "buildsDockInlinePlain": 1])
 		#expect(firstSeed == 737)
 		#expect(firstInlineSeed == 737)
 		#expect(firstCalledSeed == 751)

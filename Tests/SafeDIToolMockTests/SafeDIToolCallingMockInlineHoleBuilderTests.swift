@@ -80,7 +80,7 @@ struct SafeDIToolCallingMockInlineHoleBuilderTests: ~Copyable {
 		}
 	}
 
-	@Test(arguments: ["@Instantiable(generateMock: true)", "@Instantiable(generateMock: .public)"], Passed.allCases)
+	@Test(arguments: Self.inlineBuildingRootAttributes, Passed.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsInlineBuiltPublicMocksPlaceWithBuilder_whenBuilderIsPassed(rootAttribute: String, passed: Passed) async throws {
 		let modules = Self.modules(rootAttribute: rootAttribute)
@@ -185,7 +185,7 @@ struct SafeDIToolCallingMockInlineHoleBuilderTests: ~Copyable {
 		}
 	}
 
-	@Test(arguments: ["@Instantiable(generateMock: true)", "@Instantiable(generateMock: .public)"], WrappedPlace.allCases)
+	@Test(arguments: Self.inlineBuildingRootAttributes, WrappedPlace.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsInlineBuiltPublicMocksWrappedPlaceWithBuilder_whenBuilderIsPassed(rootAttribute: String, place: WrappedPlace) async throws {
 		let modules = Self.wrappedPlaceModules(rootAttribute: rootAttribute, place: place)
@@ -200,7 +200,7 @@ struct SafeDIToolCallingMockInlineHoleBuilderTests: ~Copyable {
 		])
 	}
 
-	@Test(arguments: ["@Instantiable(generateMock: true)", "@Instantiable(generateMock: .public)"])
+	@Test(arguments: Self.inlineBuildingRootAttributes)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_buildsPlaceOfPublicMockBuiltInlineInsideFillWithBuilder_whenBuilderIsPassed(rootAttribute: String) async throws {
 		let modules = Self.insideFillModules(rootAttribute: rootAttribute)
@@ -216,6 +216,11 @@ struct SafeDIToolCallingMockInlineHoleBuilderTests: ~Copyable {
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// The calling mock that builds `G` inline: an internal one. A `.public` mock calls `G`'s public mock instead, since it
+	/// takes a required builder as a struct with no member for a place it would build inline
+	/// (`DependencyTreeGenerator.publicMockCalls`), which the graph fuzzer's seed 763 checks.
+	private static let inlineBuildingRootAttributes = ["@Instantiable(generateMock: true)"]
 
 	/// Compares what each probe's first expression evaluates to in the generated mocks with its second.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)

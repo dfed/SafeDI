@@ -11344,10 +11344,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// A place inside a call of a public mock is the call's (`FillPlaceBindings.holeBuildersByCall`), and one inside a fill
 	/// is found by `holeBuildersByInlinePlaceInFills(of:buildersByFamily:foreignPublicMocks:)`.
 	///
-	/// A gap: a `.public` mock takes each required builder as a struct with one member for each route to the places its
-	/// calls pass up (`SafeDIMockScope_…`), and none for a place it builds inline, so such a place reads no required
-	/// builder a generated caller passes; it reads the optional builder of its family, which `mock()` hands
-	/// `__safeDI_mock` where the family is joined. Closing it adds a member to the public mock's builder struct.
+	/// A `.public` mock builds no such place inline: it takes each required builder as a struct with a member for each
+	/// place its calls hold and none for a place it builds inline, so the module calls a public mock a `.public` mock of it
+	/// reaches whose tree holds a hole of that mock (`DependencyTreeGenerator.publicMockCalls`).
 	static func holeBuildersByInlinePlace(
 		in nodes: [MockParameterNode],
 		buildersByFamily: [MockRootParameters.SeamMockBuilder.Family: FillPlaceBindings.HoleBuilder],

@@ -345,10 +345,9 @@ struct GraphFuzzerCallingMockDraw {
 		// Drawn after everything else, and only where the second place's fill calls the called type again and the fill that
 		// reads the caller's wrapper does not, so no other graph changes.
 		joinsFilledCall = callerLazyValue.map { $0.secondPlaceCallsAgain && $0.reentersCalledType && $0.call != .fillCallsAgain } == true && random.element(of: [false, true])
-		// Drawn after everything else, and only where a graph joins a filled call, so no other graph changes. Not for a `.public`
-		// caller, whose required builder is a struct with no member for a place it builds inline, a gap the comment at
-		// `ScopeGenerator.holeBuildersByInlinePlace` states.
-		buildsDockInline = joinsFilledCall && cell.caller != .public && random.element(of: [false, true])
+		// Drawn after everything else, and only where a graph joins a filled call, so no other graph changes. A `.public` caller
+		// calls `Dock`'s public mock all the same (`DependencyTreeGenerator.publicMockCalls`).
+		buildsDockInline = joinsFilledCall && random.element(of: [false, true])
 	}
 
 	static let callingMockRandomSeedMask: UInt64 = 0x63616C6C6D6F636B
