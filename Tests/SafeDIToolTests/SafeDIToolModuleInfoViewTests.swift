@@ -375,7 +375,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> AppFeature {
 				        _ = FeedService.__safeDI_FeedService_mock_51799E6AA5E7B634.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				        let feedService = FeedService.mock(safeDIOverrides: safeDIOverrides.feedService)
+				        let feedService = FeedService.__safeDI_mock(safeDIOverrides: safeDIOverrides.feedService)
 				        return AppFeature(feedService: feedService)
 				    }
 				}
@@ -429,7 +429,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> AppFeature {
 				        _ = FeedService.__safeDI_FeedService_mock_51799E6AA5E7B634.self // If this line does not compile, add the SafeDI plugin to the target that declares FeedService.
-				        let feedService = FeedService.mock(safeDIOverrides: safeDIOverrides.feedService)
+				        let feedService = FeedService.__safeDI_mock(safeDIOverrides: safeDIOverrides.feedService)
 				        return AppFeature(feedService: feedService)
 				    }
 				}
@@ -813,7 +813,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> AppFeature {
 			        _ = FeedService.__safeDI_FeedService_mock_51799E6AA5E7B634.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			        let feedService = FeedService.mock(safeDIOverrides: safeDIOverrides.feedService)
+			        let feedService = FeedService.__safeDI_mock(safeDIOverrides: safeDIOverrides.feedService)
 			        return AppFeature(feedService: feedService)
 			    }
 			}
@@ -862,7 +862,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> AppFeature {
 			        _ = FeedService.__safeDI_FeedService_mock_51799E6AA5E7B634.self // If this line does not compile, add the SafeDI plugin to the target that declares FeedService.
-			        let feedService = FeedService.mock(safeDIOverrides: safeDIOverrides.feedService)
+			        let feedService = FeedService.__safeDI_mock(safeDIOverrides: safeDIOverrides.feedService)
 			        return AppFeature(feedService: feedService)
 			    }
 			}

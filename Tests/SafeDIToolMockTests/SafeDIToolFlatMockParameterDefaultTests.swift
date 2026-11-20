@@ -910,6 +910,13 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 				    public static func mock(
 				        service: Service? = nil
 				    ) -> Screen {
+				        Screen.__safeDI_mock(service: service)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        service: Service? = nil
+				    ) -> Screen {
 				        let service = service ?? (FakeService.mock())
 				        return Screen(service: service)
 				    }
@@ -944,6 +951,13 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 				#if DEBUG
 				extension Screen {\(unreadTypeComment)
 				    public static func mock(
+				        service: Service? = nil
+				    ) -> Screen {
+				        Screen.__safeDI_mock(service: service)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        service: Service? = nil
 				    ) -> Screen {
 				        let service = service ?? (FakeService.mock())
@@ -1006,6 +1020,13 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 				    public static func mock(
 				        session: Session? = nil
 				    ) -> Consumer {
+				        Consumer.__safeDI_mock(session: session)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        session: Session? = nil
+				    ) -> Consumer {
 				        let session = session ?? (Session.preview())
 				        return Consumer(session: session)
 				    }
@@ -1030,6 +1051,13 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 				#if DEBUG
 				extension Consumer {
 				    public static func mock(
+				        session: Session? = nil
+				    ) -> Consumer {
+				        Consumer.__safeDI_mock(session: session)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
 				        session: Session? = nil
 				    ) -> Consumer {
 				        let session = session ?? (Session.preview())
@@ -1134,7 +1162,7 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        _ = Consumer.__safeDI_Consumer_mock_D4A974D59A93702C.self\(seamCallComment)
-			        let consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(nil) } else { Consumer.mock(session: nil) }
+			        let consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(nil) } else { Consumer.__safeDI_mock(session: nil) }
 			        return Screen(consumer: consumer)
 			    }
 			}
@@ -1183,7 +1211,7 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        _ = Consumer.__safeDI_Consumer_mock_D4A974D59A93702C.self\(seamCallComment)
-			        let consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(nil) } else { Consumer.mock(session: nil) }
+			        let consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(nil) } else { Consumer.__safeDI_mock(session: nil) }
 			        return Screen(consumer: consumer)
 			    }
 			}
@@ -1218,10 +1246,22 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 				#if DEBUG
 				extension Consumer {
 				    public static func mock() -> Consumer {
-				        Consumer.mock(session: nil)
+				        Consumer.__safeDI_mock()
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock() -> Consumer {
+				        Consumer.__safeDI_mock(session: nil)
 				    }
 
 				    package static func mock(
+				        session: Session? = nil
+				    ) -> Consumer {
+				        Consumer.__safeDI_mock(session: session)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    package static func __safeDI_mock(
 				        session: Session? = nil
 				    ) -> Consumer {
 				        let session = session ?? (Session.preview())
@@ -1248,10 +1288,22 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 				#if DEBUG
 				extension Consumer {
 				    public static func mock() -> Consumer {
-				        Consumer.mock(session: nil)
+				        Consumer.__safeDI_mock()
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock() -> Consumer {
+				        Consumer.__safeDI_mock(session: nil)
 				    }
 
 				    package static func mock(
+				        session: Session? = nil
+				    ) -> Consumer {
+				        Consumer.__safeDI_mock(session: session)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    package static func __safeDI_mock(
 				        session: Session? = nil
 				    ) -> Consumer {
 				        let session = session ?? (Session.preview())

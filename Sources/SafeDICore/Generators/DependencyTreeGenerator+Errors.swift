@@ -1121,6 +1121,10 @@ extension DependencyTreeGenerator {
 				/// Receive the label the same way everywhere, or declare the form that provides the others on the seam,
 				/// spelled as a receiver spells it: the wrapper of the one kind received, else the by-value property.
 				case declareProvidingForm(String)
+				/// Receive the label the same way everywhere, or declare on the seam the by-value form a type of its tree
+				/// requires: the providing form would be a wrapper only the seam itself receives, which no declaration the
+				/// seam's module sees outside the seam provides, so nothing proves a caller holds it.
+				case declareRequiredForm(String)
 			}
 
 			/// Why the seam's generated initializer cannot take the parameters its tree needs. Each case names the
@@ -1348,6 +1352,8 @@ extension DependencyTreeGenerator {
 					"Receive `\(label)` the same way in every type of the tree."
 				case let .declareProvidingForm(providingForm):
 					"Receive `\(label)` the same way in every type of the tree, or declare it on \(seamName) as the form that provides the others: `@\(Dependency.Source.receivedRawValue) let \(label): \(providingForm)`."
+				case let .declareRequiredForm(requiredForm):
+					"Receive `\(label)` the same way in every type of the tree, or declare it on \(seamName) as the form its tree requires: `@\(Dependency.Source.receivedRawValue) let \(label): \(requiredForm)`."
 				}
 			}
 
@@ -1636,6 +1642,61 @@ extension DependencyTreeGenerator {
 			/// Whether an `@Instantiated` declaration of `property` could fulfill it, which decides whether the hint
 			/// suggests one.
 			let instantiatedDeclaration: InstantiatedDeclaration
+			/// Where `property` is received inside a `@Sendable` function that a `Sendable` wrapper of the chain builds the
+			/// receiver in, the declarations that fulfill it without that function capturing them; `nil` elsewhere.
+			let sendableBoundaryAdvice: SendableBoundaryAdvice?
+			/// The declarations of `property`'s label, of forms that do not provide it, that the tree of a type whose mock is
+			/// generated holds above the receiver, so a declaration of `property` above the mocked type would leave the
+			/// receive hidden in that mock: the advice relabels them too. Each once, in the order the walk meets them.
+			let declarationsHidingReceiveInMocks: [HidingDeclaration]
+
+			/// A declaration of a label that a receive beneath it in some tree is hidden by.
+			struct HidingDeclaration: Hashable {
+				let property: Property
+				let declaringType: TypeDescription
+
+				var asSource: String {
+					"`\(property.asSource)` on `\(declaringType.asSource)`"
+				}
+			}
+
+			/// The repairs of a receive of a non-optional `Instantiator` or `LazilyInstantiated` inside a `@Sendable`
+			/// function, which cannot capture a declaration of it made outside the function. Each is listed only where it
+			/// passes the checks it would meet (`DependencyTreeGenerator.sendableBoundaryAdvice`).
+			struct SendableBoundaryAdvice: Hashable {
+				/// The innermost `Sendable` wrapper on the chain, as declared, whose `@Sendable` function builds the receiver.
+				let boundary: Property
+				/// The type that declares `boundary`.
+				let boundaryDeclaringType: TypeDescription
+				/// The type `boundary` builds.
+				let builtType: TypeDescription
+				/// The property's `Sendable` twin, which a `@Sendable` function can capture, where declaring it on
+				/// `boundaryDeclaringType` passes; `nil` otherwise.
+				let sendableForm: TypeDescription?
+				/// The types the function builds on the chain, outermost first, where declaring the property on one of them
+				/// passes; empty otherwise.
+				let typesInsideFunction: [TypeDescription]
+
+				/// The hint for a receive of `property`, or `nil` where neither repair passes and the hint is today's.
+				func hint(for property: Property) -> String? {
+					var repairs = [String]()
+					if let sendableForm {
+						repairs.append("`@\(Dependency.Source.instantiatedRawValue) let \(property.label): \(sendableForm.asSource)` on `\(boundaryDeclaringType.asSource)` and receive this property as `\(sendableForm.asSource)`")
+					}
+					if !typesInsideFunction.isEmpty {
+						repairs.append("`@\(Dependency.Source.instantiatedRawValue) let \(property.asSource)` on \(typesInsideFunction.map { "`\($0.asSource)`" }.joined(separator: " or on "))")
+					}
+					guard !repairs.isEmpty else { return nil }
+					let article = property.propertyType.isLazilyInstantiated ? "a" : "an"
+					var hint = "`\(boundary.asSource)` on `\(boundaryDeclaringType.asSource)` builds `\(builtType.asSource)` in a `@Sendable` function, which cannot capture \(article) `\(property.typeDescription.asSource)` declared outside it. Declare \(repairs.joined(separator: ", or declare "))"
+					if repairs.count > 1 {
+						hint.append(", to fix.")
+					} else {
+						hint.append(" to fix.")
+					}
+					return hint
+				}
+			}
 
 			/// Whether an `@Instantiated` declaration of a received property's non-optional form could fulfill it. The
 			/// macro rejects an optional `@Instantiated` property, so the hint always suggests the non-optional form, which
@@ -1652,6 +1713,11 @@ extension DependencyTreeGenerator {
 				/// The tree of the type the non-optional form builds requires that form, or its optional form, from above
 				/// it, so wherever it is declared, that tree receives it while it is still being built: a dependency cycle.
 				case closesCycle
+				/// The tree of the type the non-optional form builds requires the property the chain's root declares for the
+				/// receiver's chain, a constant or lazily instantiated one no type of the chain declares again, whose tree
+				/// holds the receiver: declared on the root, the two siblings require each other; declared on any type of the
+				/// chain, that tree receives the root's property while it is still being built. A dependency cycle either way.
+				case closesCycleThrough(Property)
 
 				/// Whether an `@Instantiated` declaration of `property`'s non-optional form could fulfill it, among the
 				/// declarations of `fulfillingInstantiables`.
@@ -1663,6 +1729,25 @@ extension DependencyTreeGenerator {
 					}
 					return fulfillingInstantiable.dependencies.contains { $0.source == .forwarded } ? .typeHasForwardedProperties : .possible
 				}
+			}
+
+			/// The one suggested alternative, where it is the optional form of the property, the property's type is the
+			/// receiver's own constant type, and the receiver's mock is generated and builds the receiver itself (it forwards
+			/// nothing): the mock promotes the receive and builds it as the receiver, whose tree receives it still being built,
+			/// a dependency cycle a required receive of the suggestion closes. Received only if available, it is passed `nil`
+			/// there, and production hands it the value the suggestion names.
+			private var suggestedReceiveOnlyIfAvailableClosingNoCycleInMock: Property? {
+				guard suggestedAlternatives.count == 1,
+				      case let suggestedAlternative = suggestedAlternatives[0],
+				      suggestedAlternative.label == property.label,
+				      suggestedAlternative.typeDescription.isOptional,
+				      suggestedAlternative.typeDescription.unwrapped == property.typeDescription,
+				      property.propertyType.isConstant,
+				      instantiable.generatesMock,
+				      instantiable.instantiableTypes.contains(property.typeDescription.asInstantiatedType),
+				      !instantiable.dependencies.contains(where: { $0.source == .forwarded })
+				else { return nil }
+				return suggestedAlternative
 			}
 
 			/// A single `error:` line. The suggestion or fix hint is folded into it rather than emitted as a
@@ -1700,6 +1785,21 @@ extension DependencyTreeGenerator {
 					} else {
 						" to fix."
 					}
+					// A declaration of the property above a mocked type whose tree declares the label in another form would leave
+					// the receive hidden in that mock, so the advice relabels those declarations too.
+					var possibleDeclarationEnd = instantiatedDeclarationEnd
+					if let lastHidingDeclaration = declarationsHidingReceiveInMocks.last {
+						let relabeling = if declarationsHidingReceiveInMocks.count == 1 {
+							"give \(lastHidingDeclaration.asSource) a different label"
+						} else {
+							"give \(declarationsHidingReceiveInMocks.dropLast().map(\.asSource).joined(separator: ", ")) and \(lastHidingDeclaration.asSource) different labels"
+						}
+						possibleDeclarationEnd = if property.typeDescription.isOptional {
+							", \(relabeling)\(instantiatedDeclarationEnd)"
+						} else {
+							", and \(relabeling), to fix."
+						}
+					}
 					// A forwarded property can be optional, and fulfills a required receive of exactly its type.
 					let forwardingRemedy = "`@\(Dependency.Source.forwardedRawValue) let \(property.asSource)` on a type below `\(root.asSource)` in the chain, and pass the value to the `Instantiator` that builds that type"
 					hint = if suggestedProperty.propertyType.isErasedInstantiator {
@@ -1708,10 +1808,14 @@ extension DependencyTreeGenerator {
 					} else {
 						switch instantiatedDeclaration {
 						case .possible:
-							"Declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain\(instantiatedDeclarationEnd)"
+							sendableBoundaryAdvice?.hint(for: property)
+								?? "Declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain\(possibleDeclarationEnd)"
 						case .closesCycle:
 							// The remedies of the cycle error a declaration would lead to.
 							"Declaring `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` would close a dependency cycle wherever it is declared, because the tree of `\(suggestedProperty.typeDescription.asInstantiatedType.asSource)` requires `\(suggestedProperty.label)`, which is still being built there. \(DependencyTreeGeneratorError.onlyIfAvailableRemedy)"
+						case let .closesCycleThrough(requiredProperty):
+							// The remedies of the cycle error a declaration would lead to, wherever it is declared.
+							"Declaring `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` would close a dependency cycle wherever it is declared, because the tree of `\(suggestedProperty.typeDescription.asInstantiatedType.asSource)` receives `\(requiredProperty.asSource)`, which requires `\(suggestedProperty.label)`. \(DependencyTreeGeneratorError.onlyIfAvailableRemedy)"
 						case .typeHasForwardedProperties:
 							"`\(typeName)` has @\(Dependency.Source.forwardedRawValue) properties, so SafeDI builds it only through an `Instantiator`, never as an @\(Dependency.Source.instantiatedRawValue) constant. Declare \(forwardingRemedy), to fix."
 						case .typeIsNotInstantiable:
@@ -1720,6 +1824,12 @@ extension DependencyTreeGenerator {
 							"No @\(InstantiableVisitor.macroName) declaration fulfills `\(fulfilledTypeName)`, so SafeDI cannot instantiate it. \(DependencyTreeGeneratorError.fulfillingDeclarationRemedy(typeName: fulfilledTypeName)), and declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain\(instantiatedDeclarationEnd) Or declare \(forwardingRemedy)."
 						}
 					}
+					fixIts = []
+				} else if suggestedAlternatives.count == 1, let suggestedReceive = suggestedReceiveOnlyIfAvailableClosingNoCycleInMock {
+					// Received as required, the suggested optional form of the receiver's own type is still being built when the
+					// receiver's mock builds the receiver, so the suggestion receives it only if available. That edits the
+					// attribute and the type, which one fix-it cannot span without rewriting what lies between them.
+					hint = "Did you mean `@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true) let \(suggestedReceive.asSource)`? Received as required, `\(suggestedReceive.asSource)` is still being built when the mock of `\(instantiable.concreteInstantiable.asSource)` builds `\(instantiable.concreteInstantiable.asSource)`."
 					fixIts = []
 				} else if suggestedAlternatives.count == 1 {
 					let suggestedAlternative = suggestedAlternatives[0]

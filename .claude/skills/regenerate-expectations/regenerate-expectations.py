@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Usage: regenerate-expectations.py --write-manifest RECORD_DIR --checkout DIR
        regenerate-expectations.py --base-records DIR --head-records DIR --rules FILE --report DIR --checkout DIR
-                                  [--dry-run] [--sample N]
+                                  [--dry-run] [--sample N] [--allow-compile-skipped-records]
        regenerate-expectations.py --self-test DIR
 
 Rewrites the expected literals of SafeDITool's tests from what the test helpers recorded, and sorts every changed
@@ -15,7 +15,12 @@ every output of a generation helper, and every mismatch of an assertion helper. 
   2. head records: a run on the new generator.
 After each run, write that directory's manifest of Tests/:
   python3 -I .claude/skills/regenerate-expectations/regenerate-expectations.py --write-manifest RECORD_DIR --checkout .
-SAFEDI_SKIP_COMPILE_CHECK=1 may skip compiles in a record run.
+Record without SAFEDI_SKIP_COMPILE_CHECK. A test that reads `compileVerificationIsEnabled` skips part or all of
+itself under that variable, so what it would have recorded is missing and its expectations stay as they were, with
+nothing to say so. A record run made under the variable leaves a marker in its directory, and applying such records
+is refused (exit 2) with the count of the places under Tests/ that read `compileVerificationIsEnabled` and the
+first few of them. --allow-compile-skipped-records applies them anyway, prints the same as a warning, and lists
+every such place first in the report: use it only when none of those places guards an expectation the change alters, and say so in the change.
 
 Applying. With both record directories, the change's rules file and an empty report directory:
   python3 -I .claude/skills/regenerate-expectations/regenerate-expectations.py --base-records BASE --head-records HEAD --rules RULES.json \\
@@ -71,8 +76,9 @@ Exit status: 0 when every changed literal is explained; 1 when some are unexplai
 An output that changed but matched no literal, such as one no test compares, is listed first in the report and
 leaves the status alone, since the script cannot tell whether a test compares it. 2 on an error, with nothing
 written: the two manifests differ or the checkout's Tests/ differs from them (as it does once the records are
-applied), a record's fileID names no single file under Tests/, a rule is rejected, a rewrite fails its own check,
-or a file cannot be parsed. --dry-run writes the report and no test file.
+applied), a record run was made under SAFEDI_SKIP_COMPILE_CHECK and --allow-compile-skipped-records is not given, a
+record's fileID names no single file under Tests/, a rule is rejected, a rewrite fails its own check, or a file
+cannot be parsed. --dry-run writes the report and no test file.
 
 --self-test DIR writes fixture checkouts, records and rules into DIR, which must not exist, and checks each case.
 """
@@ -86,6 +92,13 @@ import sys
 
 MANIFEST_NAME = "tests-manifest.json"
 HEADER_NAME = "generated-file-header.txt"
+# The file `ExpectationRecording` writes into a record directory when the run has compile verification off. Keep in
+# step with `ExpectationRecording.compileVerificationSkippedFileName`.
+COMPILE_SKIPPED_NAME = "compile-verification-skipped.txt"
+# What a test reads to learn that compile verification is off, and so what marks the code a skipped run did not run.
+COMPILE_VERIFICATION_FLAG = "compileVerificationIsEnabled"
+# How many of those places a refusal or a warning names before it gives their count; the report lists them all.
+READERS_NAMED = 5
 UUID = r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"
 ASSERTION_FUNCTIONS = {
     "plain": "assertThrowsError",
@@ -1115,6 +1128,47 @@ def manifest_difference(first, second):
     return names
 
 
+def compile_verification_readers(checkout):
+    """Every line under Tests/ that reads the flag, as "path:line", in path and line order: the places whose tests
+    skip part or all of themselves when compile verification is off. The flag's own declaration is not one."""
+    readers = []
+    tests = os.path.join(checkout, "Tests")
+    for directory, directory_names, file_names in os.walk(tests):
+        directory_names.sort()
+        for file_name in sorted(file_names):
+            if not file_name.endswith(".swift"):
+                continue
+            path = os.path.join(directory, file_name)
+            with open(path, encoding="utf-8") as swift_file:
+                for number, line in enumerate(swift_file, start=1):
+                    if COMPILE_VERIFICATION_FLAG in line and f"var {COMPILE_VERIFICATION_FLAG}" not in line:
+                        readers.append(f"{os.path.relpath(path, checkout)}:{number}")
+    return sorted(readers, key=lambda reader: (reader.rpartition(":")[0], int(reader.rpartition(":")[2])))
+
+
+def compile_skipped_records(arguments):
+    """The readers a record run made with compile verification off did not run as written, or an empty list when
+    neither run was. Refuses such records unless the caller allowed them."""
+    skipped = [directory for directory in (arguments.base_records, arguments.head_records) if os.path.exists(os.path.join(directory, COMPILE_SKIPPED_NAME))]
+    if not skipped:
+        return []
+    readers = compile_verification_readers(arguments.checkout)
+    if not readers:
+        return []
+    listing = "\n".join(f"  {reader}" for reader in readers[:READERS_NAMED])
+    if len(readers) > READERS_NAMED:
+        listing += f"\n  and {len(readers) - READERS_NAMED} more: grep -rn {COMPILE_VERIFICATION_FLAG} Tests"
+    explanation = (
+        f"{' and '.join(skipped)} recorded under SAFEDI_SKIP_COMPILE_CHECK, so every test that reads "
+        f"{COMPILE_VERIFICATION_FLAG} skipped part or all of itself and recorded nothing for it; its expectations would "
+        f"stay as they are. Under Tests/ it is read at ({len(readers)}):\n{listing}"
+    )
+    if not getattr(arguments, "allow_compile_skipped_records", False):
+        raise ApplyError(explanation + "\nRecord again without the variable, or pass --allow-compile-skipped-records when none of these guards an expectation the change alters.")
+    print(f"WARNING: {explanation}\nApplying anyway (--allow-compile-skipped-records): update what these guard by hand.", file=sys.stderr)
+    return readers
+
+
 def read_records(record_directory):
     records = []
     for file_name in sorted(os.listdir(record_directory)):
@@ -1233,6 +1287,7 @@ def apply(arguments):
     difference = manifest_difference(base_manifest, tests_manifest(arguments.checkout))
     if difference:
         raise ApplyError("the checkout’s Tests/ changed since recording: " + ", ".join(difference[:5]))
+    compile_skipped_readers = compile_skipped_records(arguments)
     header = read_header(arguments.base_records, arguments.head_records)
     base_records = read_records(arguments.base_records)
     head_records = read_records(arguments.head_records)
@@ -1500,6 +1555,7 @@ def apply(arguments):
         "unexplained": len(unexplained),
         "manual": len(manual) + sum(1 for outcome in assertion_outcomes if outcome[2] is not None),
         "changedWithoutLiteral": len(changed_without_literal),
+        "compileSkippedReaders": compile_skipped_readers,
         "hits": {name: hits.get(name, 0) for name in rules.names},
     }
     if not arguments.dry_run:
@@ -1527,6 +1583,12 @@ def write_report(arguments, rules, summary, explained, unexplained, manual, asse
     lines.append(f"Manual (not rewritten): {summary['manual']}")
     lines.append(f"Changed outputs no literal matched (read the list below): {summary['changedWithoutLiteral']}")
     lines.append("")
+    if summary["compileSkippedReaders"]:
+        lines.append(f"RECORDED WITH COMPILE VERIFICATION OFF (SAFEDI_SKIP_COMPILE_CHECK). {COMPILE_VERIFICATION_FLAG} is read at ({len(summary['compileSkippedReaders'])}):")
+        for reader in summary["compileSkippedReaders"]:
+            lines.append(f"  {reader}")
+        lines.append("What each guards did not run, recorded nothing, and was not regenerated: update it by hand, or record again without the variable")
+        lines.append("")
     lines.append("Changed outputs no literal matched: a test that compares one still fails, so update it by hand")
     counts = {}
     for relative_path, line, test_name, output_name, module, integration in changed_without_literal:
@@ -1674,10 +1736,11 @@ class SelfTestCase:
             write_manifest(directory, self.checkout)
         write_file(self.rules, json.dumps(rules or {}))
 
-    def run(self, dry_run=False, sample=5):
+    def run(self, dry_run=False, sample=5, allow_compile_skipped_records=False):
         arguments = argparse.Namespace(
             base_records=self.base, head_records=self.head, rules=self.rules, report=self.report,
             checkout=self.checkout, dry_run=dry_run, sample=sample,
+            allow_compile_skipped_records=allow_compile_skipped_records,
         )
         try:
             status, summary = apply(arguments)
@@ -1905,6 +1968,32 @@ def self_test(root):
     write_manifest(test.head, test.checkout)
     status, summary = test.run()
     expect(status == 2 and "different Tests/" in summary.get("error", "") and test.source() == original and not os.path.exists(test.report), f"manifest mismatch: {status} {summary}")
+
+    # a record run under SAFEDI_SKIP_COMPILE_CHECK, over tests that read the flag: exit 2, nothing written, the
+    # readers named; allowed, it applies and the report opens with them. Without a reader the marker changes nothing.
+    test = case("compile-skipped-records")
+    original = test_function('\t\t#expect(run() == "Old")\n\t\tguard compileVerificationIsEnabled else { return }\n\t\t#expect(other() == "Stale")')
+    test.test_file(original)
+    test.test_file("var compileVerificationIsEnabled: Bool { true }\n", "Tests/Support/Flag.swift")
+    test.records([generation_record("k", 4, "Old")], [generation_record("k", 4, "New")])
+    write_file(os.path.join(test.head, COMPILE_SKIPPED_NAME), "skipped\n")
+    status, summary = test.run()
+    expect(status == 2 and "SAFEDI_SKIP_COMPILE_CHECK" in summary.get("error", "") and "\n  Tests/Mod/FileTests.swift:5\n" in summary.get("error", "") and "Flag.swift" not in summary.get("error", "") and test.source() == original and not os.path.exists(test.report), f"compile-skipped records: {status} {summary}")
+    status, summary = test.run(allow_compile_skipped_records=True)
+    expect(status == 1 and summary["rewritten"] == 1 and summary["compileSkippedReaders"] == ["Tests/Mod/FileTests.swift:5"] and '"New"' in test.source() and '"Stale"' in test.source(), f"compile-skipped records allowed: {status} {summary}")
+    expect("RECORDED WITH COMPILE VERIFICATION OFF (SAFEDI_SKIP_COMPILE_CHECK). compileVerificationIsEnabled is read at (1):\n  Tests/Mod/FileTests.swift:5\n" in test.report_text() and "\n  Tests/Mod/FileTests.swift:5\n" in test.report_text(), "compile-skipped records allowed: reported")
+    test = case("compile-skipped-records-many-readers")
+    test.test_file(test_function('\t\t#expect(run() == "Old")\n' + "\n".join("\t\tif compileVerificationIsEnabled {}" for _ in range(READERS_NAMED + 2))))
+    test.records([generation_record("k", 4, "Old")], [generation_record("k", 4, "New")])
+    write_file(os.path.join(test.base, COMPILE_SKIPPED_NAME), "skipped\n")
+    status, summary = test.run()
+    expect(status == 2 and f"read at ({READERS_NAMED + 2}):" in summary.get("error", "") and f"\n  Tests/Mod/FileTests.swift:{4 + READERS_NAMED}\n  and 2 more: grep -rn compileVerificationIsEnabled Tests\n" in summary.get("error", "") and f"FileTests.swift:{5 + READERS_NAMED}" not in summary.get("error", ""), f"compile-skipped records, many readers: {status} {summary}")
+    test = case("compile-skipped-records-no-reader")
+    test.test_file(test_function('\t\t#expect(run() == "Old")'))
+    test.records([generation_record("k", 4, "Old")], [generation_record("k", 4, "New")])
+    write_file(os.path.join(test.base, COMPILE_SKIPPED_NAME), "skipped\n")
+    status, summary = test.run()
+    expect(status == 1 and summary["rewritten"] == 1 and summary["compileSkippedReaders"] == [] and "COMPILE VERIFICATION OFF" not in test.report_text(), f"compile-skipped records, no reader: {status} {summary}")
 
     # checkout changed since recording: exit 2.
     test = case("checkout-changed")
@@ -2363,6 +2452,7 @@ def main(argv):
     parser.add_argument("--checkout")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--sample", type=int, default=5)
+    parser.add_argument("--allow-compile-skipped-records", action="store_true")
     parser.add_argument("--self-test", metavar="DIR")
     arguments = parser.parse_args(argv)
     try:

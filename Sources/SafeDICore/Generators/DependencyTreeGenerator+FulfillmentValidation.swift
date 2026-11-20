@@ -479,20 +479,109 @@ extension DependencyTreeGenerator {
 		/// receive in that tree resolves to the declaration still building it. The tree is walked through the declarations
 		/// the module's types fulfill, since a type no root reaches has no scope; only an unfulfillable receive asks, so the
 		/// walk runs only on the failure path.
-		func instantiatedDeclaration(of receivedProperty: Property) -> DependencyTreeGeneratorError.UnfulfillableProperty.InstantiatedDeclaration {
+		/// - Parameters:
+		///   - receiver: The scope that receives `receivedProperty`.
+		///   - instantiationStack: The properties of `receiver` and of the scopes it is built inside, innermost first, as
+		///     cycle validation sees them.
+		///   - root: The type at the root of the tree.
+		///   - closestDeclarationByLabel: The closest declaration of each label above `receiver`.
+		func instantiatedDeclaration(
+			of receivedProperty: Property,
+			receivedBy receiver: Scope,
+			instantiationStack: [Property],
+			root: TypeDescription,
+			closestDeclarationByLabel: [String: DependencyTreeGeneratorError.LabelDeclaration],
+		) -> DependencyTreeGeneratorError.UnfulfillableProperty.InstantiatedDeclaration {
 			let declaration = DependencyTreeGeneratorError.UnfulfillableProperty.InstantiatedDeclaration.of(receivedProperty, among: typeDescriptionToFulfillingInstantiableMap)
 			let declaredProperty = receivedProperty.asUnwrappedProperty
-			// An erased instantiator's declaration names the type it builds, which the hint leaves to the user. An
-			// instantiator's tree may receive that instantiator while it is still being built (see "Received builder loops"
-			// in `cycle-validation.md`), so only a constant or a `LazilyInstantiated` declaration can close a cycle.
+			// An erased instantiator's declaration names the type it builds, which the hint leaves to the user.
 			guard case .possible = declaration,
 			      !declaredProperty.propertyType.isErasedInstantiator,
-			      !declaredProperty.propertyType.isInstantiator,
 			      let declaredInstantiable = typeDescriptionToFulfillingInstantiableMap[declaredProperty.typeDescription.asInstantiatedType]
 			else { return declaration }
-			return Self.treeRequires(declaredProperty, from: declaredInstantiable, typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap)
-				? .closesCycle
-				: declaration
+			// An instantiator's tree may receive that instantiator while it is still being built (see "Received builder loops"
+			// in `cycle-validation.md`), so only a constant or a `LazilyInstantiated` declaration closes a cycle through itself.
+			if !declaredProperty.propertyType.isInstantiator,
+			   Self.treeRequires(declaredProperty, from: declaredInstantiable, typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap)
+			{
+				return .closesCycle
+			}
+			// Any declaration closes a cycle through the root's property for the chain, where the declaration's tree requires
+			// it, it is a value (a cycle through an instantiator alone is a loop of builders, accepted), and no type of the
+			// chain declares its label again: declared on the root, the two siblings require each other, and declared on any
+			// type of the chain, the declaration's tree receives the root's property while it is still being built. Where a
+			// type of the chain declares the label again, a declaration above that type would leave the tree's receive
+			// unfulfilled, which is no cycle, so the advice is today's.
+			guard let rootProperty = instantiationStack.last,
+			      rootProperty.propertyType.isConstant,
+			      let closestDeclaration = closestDeclarationByLabel[rootProperty.label],
+			      closestDeclaration.declaringType == root,
+			      closestDeclaration.property.asValidatedForDependencyCycles == rootProperty,
+			      !receiver.instantiable.dependencies.contains(where: { $0.property.label == rootProperty.label }),
+			      Self.treeRequires(rootProperty, from: declaredInstantiable, typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap)
+			else { return declaration }
+			return .closesCycleThrough(rootProperty)
+		}
+		/// The mocked types, each once, in type order, which `declarationsHidingReceiveInMocks(of:receivedBy:)` walks. Only
+		/// an unfulfillable receive asks, so the list is made on the failure path.
+		lazy var mockedInstantiables: [Instantiable] = {
+			var mockedTypes = Set<TypeDescription>()
+			return typeDescriptionToFulfillingInstantiableMap.values
+				.filter { $0.generatesMock && mockedTypes.insert($0.concreteInstantiable).inserted }
+				.sorted { $0.concreteInstantiable < $1.concreteInstantiable }
+		}()
+		var declarationsHidingReceiveByReceive = [Property: [TypeDescription: [DependencyTreeGeneratorError.UnfulfillableProperty.HidingDeclaration]]]()
+		/// The declarations of `receivedProperty`'s label that the tree of a type whose mock is generated holds closest
+		/// above a build of `receiver` and that do not provide the receive (its property, its unwrapped form, or a lazily
+		/// instantiated wrapper of either): a declaration of the property above the mocked type, as the advice for an
+		/// unfulfillable receive names, would leave the receive hidden in that mock. Each mocked type's tree is walked
+		/// depth first in declaration order, each type once, so each hiding declaration is met once, in an order no set
+		/// decides.
+		func declarationsHidingReceiveInMocks(of receivedProperty: Property, receivedBy receiver: TypeDescription) -> [DependencyTreeGeneratorError.UnfulfillableProperty.HidingDeclaration] {
+			if let memoized = declarationsHidingReceiveByReceive[receivedProperty]?[receiver] {
+				return memoized
+			}
+			let providingProperties: Set<Property> = [receivedProperty, receivedProperty.asUnwrappedProperty]
+			var hidingDeclarations = [DependencyTreeGeneratorError.UnfulfillableProperty.HidingDeclaration]()
+			for mockedInstantiable in mockedInstantiables {
+				var reachedTypes: Set<TypeDescription> = [mockedInstantiable.concreteInstantiable]
+				var instantiablesToVisit: [(instantiable: Instantiable, closestDeclaration: DependencyTreeGeneratorError.UnfulfillableProperty.HidingDeclaration?)] = [(mockedInstantiable, nil)]
+				while let instantiableToVisit = instantiablesToVisit.popLast() {
+					let reachedInstantiable = instantiableToVisit.instantiable
+					let closestDeclaration = instantiableToVisit.closestDeclaration
+					if reachedInstantiable.concreteInstantiable == receiver,
+					   let closestDeclaration,
+					   !providingProperties.contains(closestDeclaration.property),
+					   !providingProperties.contains(closestDeclaration.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding ?? closestDeclaration.property),
+					   !hidingDeclarations.contains(closestDeclaration)
+					{
+						hidingDeclarations.append(closestDeclaration)
+					}
+					var childClosestDeclaration = closestDeclaration
+					for dependency in reachedInstantiable.dependencies where dependency.property.label == receivedProperty.label {
+						switch dependency.source {
+						case .instantiated, .forwarded, .aliased:
+							childClosestDeclaration = .init(property: dependency.property, declaringType: reachedInstantiable.concreteInstantiable)
+						case .received:
+							continue
+						}
+					}
+					for dependency in reachedInstantiable.dependencies.reversed() {
+						switch dependency.source {
+						case .instantiated:
+							if let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[dependency.asInstantiatedType],
+							   reachedTypes.insert(builtInstantiable.concreteInstantiable).inserted
+							{
+								instantiablesToVisit.append((builtInstantiable, childClosestDeclaration))
+							}
+						case .received, .forwarded, .aliased:
+							continue
+						}
+					}
+				}
+			}
+			declarationsHidingReceiveByReceive[receivedProperty, default: [:]][receiver] = hidingDeclarations
+			return hidingDeclarations
 		}
 		/// Each hidden receive each root's tree reaches, with the one chain of scopes it is reported from: of every chain of
 		/// that tree that reaches it, the first the walk meets, which is the first in declaration order (see
@@ -1523,7 +1612,22 @@ extension DependencyTreeGenerator {
 								|| receivedProperty.label == alternative.label)
 								&& closestDeclarationByLabel[alternative.label]?.fulfills(anyOf: [alternative, alternative.asUnwrappedProperty]) != false
 						}.sorted(),
-						instantiatedDeclaration: instantiatedDeclaration(of: receivedProperty),
+						instantiatedDeclaration: instantiatedDeclaration(
+							of: receivedProperty,
+							receivedBy: scope,
+							instantiationStack: instantiationStack,
+							root: root,
+							closestDeclarationByLabel: closestDeclarationByLabel,
+						),
+						sendableBoundaryAdvice: Self.sendableBoundaryAdvice(
+							for: receivedProperty,
+							receivedBy: scope,
+							instantiationStack: instantiationStack.map { lazilyInstantiatedDeclarations[$0] ?? $0 },
+							parentTypeStack: scopeToValidate.parentTypeStack,
+							root: root,
+							typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap,
+						),
+						declarationsHidingReceiveInMocks: declarationsHidingReceiveInMocks(of: receivedProperty, receivedBy: scope.instantiable.concreteInstantiable),
 					))
 				}
 			}

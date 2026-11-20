@@ -529,12 +529,12 @@ final class Scope: Hashable {
 					scope: fill.scope,
 				))
 			} else {
-				let createdScope = scopeGeneratorsUnderConstruction.removeLast()
+				var createdScope = scopeGeneratorsUnderConstruction.removeLast()
 				let scopeGenerator = createdScope.scopeGenerator(collectingGeneratorsToStartInto: &generatorsToStart)
 				if scopeGeneratorsUnderConstruction.isEmpty {
 					return scopeGenerator
 				} else {
-					scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].add(childGenerator: scopeGenerator, createdBy: createdScope)
+					scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].add(childGenerator: scopeGenerator, createdBy: &createdScope)
 				}
 			}
 		}
@@ -1141,6 +1141,10 @@ private struct ScopeGeneratorUnderConstruction {
 
 	/// The generators created so far for `propertiesToGenerate`, in order, followed by those of `fillsOfThisCall`.
 	private(set) var childGenerators = [ScopeGenerator]()
+	/// The `ScopeGenerator.CycleClosingRedeclaredLabels` of `childGenerators`, merged in their order, which this scope's
+	/// generator is created from; then, once `scopeGenerator(collectingGeneratorsToStartInto:)` has created it, its own,
+	/// which `add(childGenerator:createdBy:)` merges into its parent's. No generator keeps one. An alias or a hole has none.
+	private var cycleClosingRedeclaredLabels = ScopeGenerator.CycleClosingRedeclaredLabels()
 	/// How many scopes this scope's subtree has so far: itself, and every scope created beneath it. An alias or a hole,
 	/// which generates a line or two, is not counted.
 	private var subtreeScopeCount = 1
@@ -1162,8 +1166,16 @@ private struct ScopeGeneratorUnderConstruction {
 	static let scopeCountOfLargeSubtree = 64
 
 	/// Adds `childGenerator`, the generator `child` created, to this scope's children.
-	mutating func add(childGenerator: ScopeGenerator, createdBy child: ScopeGeneratorUnderConstruction) {
+	mutating func add(childGenerator: ScopeGenerator, createdBy child: inout ScopeGeneratorUnderConstruction) {
 		childGenerators.append(childGenerator)
+		if cycleClosingRedeclaredLabels.isEmpty {
+			// Nearly every scope has at most one child that takes part in a cycle, whose map it takes whole.
+			swap(&cycleClosingRedeclaredLabels, &child.cycleClosingRedeclaredLabels)
+		} else {
+			for (closedOnDeclaration, redeclarations) in child.cycleClosingRedeclaredLabels {
+				cycleClosingRedeclaredLabels[closedOnDeclaration, default: [:]].merge(redeclarations) { $0.preceding($1) }
+			}
+		}
 		subtreeScopeCount += child.subtreeScopeCount
 		if child.startsCodeBeneathALargeSubtree {
 			childGeneratorsStartingBeneathALargeSubtree.append(childGenerator)
@@ -1580,11 +1592,12 @@ private struct ScopeGeneratorUnderConstruction {
 	/// (`CallersOwnLabels.mockRootBindingByLabel`).
 	///
 	/// Any other label keeps its field, which the levels on each route hand the fill. A level of the called mock that
-	/// declares the label again hands its own value, which inline reads there. Where no level on a route binds a form that
-	/// provides the one the fill reads, the route passes the place up, and the calling mock names a builder it does not
-	/// declare: a level that holds only the called mock's by-value copy cannot hand a fill that reads the caller's
-	/// `LazilyInstantiated`. That is a known defect (`public-mock-builders.md`, "The caller's own value") on a route to one
-	/// place of a case whose other place a level that declares the label again hides the copy from.
+	/// declares the label again hands its own value, which inline reads there. A level that holds only the called mock's
+	/// by-value copy cannot hand a fill that reads the caller's `LazilyInstantiated`, so where a level that declares the
+	/// label again hides the copy from one place of a case and the copy reaches another, the fills of that hole type read
+	/// different wrappers, and `DependencyTreeGenerator.holeTypesTheFillGatesPassUp(of:in:lazilyHeldValues:)` passes it up
+	/// whole before any fill is generated (`SafeDIToolCallingMockMirrorsProductionTests`'
+	/// `whenPlacesOfOneHoleTypeReadDifferentLazyValuesBesideTheirFields`).
 	private static func callersOwnLabels(
 		amongLabelsOf fields: [SeamSignature.Hole.Field],
 		carrying carriedLabels: Set<String>,
@@ -1643,9 +1656,12 @@ private struct ScopeGeneratorUnderConstruction {
 				callersOwnLabels.mockRootBindingByLabel[label] = binding
 			} else if formsRead.allSatisfy({ callerDeclaration.bindings[$0]?.label == label }) {
 				// The forms being built where the call is (`NearestDeclaration.formsBeingBuilt`) need no check: a fill that reads
-				// one, such as an `Instantiator` whose tree makes the call, is rejected for a calling mock as a dependency cycle
-				// (`dependencyReceivedInSameChainItIsInstantiated`). That is a known defect, since production and the inline mock
-				// accept it, and closing it decides how this fill reads an instantiator being built.
+				// one, such as an `Instantiator` whose tree makes the call, reads a label the called type receives, which its
+				// mock builds itself after the place for a caller that passes `nil`, so the fill is rejected for a calling mock:
+				// the place's payload does not carry the label (`requiresOtherCarrier`), and inside a `@Sendable` function the
+				// mock's own declaration outside it is not handed in (`boundOutsideSendableFunction`). That is a known gate,
+				// since production and the inline mock accept it, and lifting it decides how this fill reads an instantiator
+				// being built.
 				callersOwnLabels.labels.insert(label)
 			}
 		}
@@ -1802,7 +1818,7 @@ private struct ScopeGeneratorUnderConstruction {
 
 	/// Creates the scope's generator once `childGenerators` holds a generator for each of `propertiesToGenerate`, and starts
 	/// its code, or adds it to `generatorsToStart` when that is not `nil`.
-	func scopeGenerator(collectingGeneratorsToStartInto generatorsToStart: inout [ScopeGenerator]?) -> ScopeGenerator {
+	mutating func scopeGenerator(collectingGeneratorsToStartInto generatorsToStart: inout [ScopeGenerator]?) -> ScopeGenerator {
 		// Every fill this call passes is an enclosing call's or its own.
 		let fillNames = holeArguments.isEmpty ? [:] : GenerationWork.taking(enclosingFillsOfThisCall, by: .gatheringFillsOfACall)
 		let builtGenerator = ScopeGenerator(
@@ -1881,6 +1897,7 @@ private struct ScopeGeneratorUnderConstruction {
 			enclosingLevelCalls: scope.publicMockCall == nil ? [:] : enclosingLevelCalls,
 			namesBoundBySeam: GenerationWork.taking(seamHoles.namesBoundBySeam, by: .joiningNamesBoundBySeam),
 			placeHoldingProperties: placeHoldingPropertiesByType.map { $0[scope.instantiable.concreteInstantiable] ?? [] },
+			cycleClosingRedeclaredLabels: &cycleClosingRedeclaredLabels,
 		)
 		let scopeGenerator = if let fill {
 			ScopeGenerator(
@@ -1897,6 +1914,7 @@ private struct ScopeGeneratorUnderConstruction {
 				plainMemoRoutesOfSendableWrapperReads: fill.plainMemoRoutesOfSendableWrapperReads,
 				memoOriginsByLabel: fill.memoOriginsByLabel,
 				child: builtGenerator,
+				cycleClosingRedeclaredLabels: &cycleClosingRedeclaredLabels,
 			)
 		} else {
 			builtGenerator

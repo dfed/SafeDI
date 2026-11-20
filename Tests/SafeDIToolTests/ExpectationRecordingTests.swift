@@ -66,6 +66,27 @@ struct ExpectationRecordingTests: ~Copyable {
 		#expect(try String(contentsOf: recordDirectory.appendingPathComponent(ExpectationRecording.headerFileName), encoding: .utf8) == generatedFileHeader)
 	}
 
+	/// The marker is what tells the script that tests reading `compileVerificationIsEnabled` recorded nothing for what
+	/// that guards. CI runs this test both ways: "Repeat Tests on Linux" sets `SAFEDI_SKIP_COMPILE_CHECK`.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func executeSafeDIToolTest_marksTheRecordDirectory_onlyWhenCompileVerificationIsOff() async throws {
+		_ = try await executeSafeDIToolTest(
+			swiftFileContent: Self.aliasedReceiveFixture,
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
+			recordDirectory: recordDirectory,
+		)
+
+		let marker = recordDirectory.appendingPathComponent(ExpectationRecording.compileVerificationSkippedFileName)
+		if compileVerificationIsEnabled {
+			#expect(!FileManager.default.fileExists(atPath: marker.path))
+		} else {
+			#expect(try String(contentsOf: marker, encoding: .utf8) == ExpectationRecording.compileVerificationSkippedNotice)
+		}
+	}
+
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func executeSafeDIToolMultiModuleTest_writesOneRecordPerGeneratedFileWithPlaceholderPaths_whenGivenARecordDirectory(integration: MultiModuleIntegration) async throws {

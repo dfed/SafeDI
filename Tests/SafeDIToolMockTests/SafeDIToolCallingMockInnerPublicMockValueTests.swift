@@ -969,6 +969,13 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		    public static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
 		        let db = if let safeDIBuilder = safeDIOverrides.db { safeDIBuilder() } else { Db() }
 		        func __safeDI_f() -> F {
 		            func __safeDI_apiBuilder_F() -> F.SafeDIMockScope_Api.__safeDI_Builder<any Api> {

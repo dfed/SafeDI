@@ -1,5 +1,5 @@
 name: Upload Passed Compile Checks
-description: Uploads the compile checks this run's own tests passed, with their identity, for other runs to read and for "Share Passed Compile Checks" to add to the shared list.
+description: Uploads the compile checks this run's own tests passed, and the value comparison outputs they printed, with their identity, for other runs to read and for "Share Passed Compile Checks" to add the checks to the shared list.
 
 # Call it after the tests, with `if: always()`: the checks that passed before a
 # failure or a cancellation passed all the same. A run with no file uploads
@@ -19,15 +19,35 @@ inputs:
 runs:
   using: composite
   steps:
+    # With the value comparison outputs this run's test processes printed
+    # (`fileOfKeysWrittenInThisRun` in DifferentialValueOutputMemo.swift), for
+    # the same reason: `.compile-check-cache/value-outputs` also holds what
+    # the job restored. An output larger than restore-from-artifacts.js reads
+    # is left out.
     - shell: bash
       env:
         IDENTITY: ${{ inputs.identity }}
       run: |
         rm -rf passed-compile-checks
-        if [ -s ".compile-check-cache/passed-in-run-$GITHUB_RUN_ID.txt" ] && [ -n "$IDENTITY" ]; then
-          mkdir passed-compile-checks
-          cp ".compile-check-cache/passed-in-run-$GITHUB_RUN_ID.txt" passed-compile-checks/passed.txt
+        passed=".compile-check-cache/passed-in-run-$GITHUB_RUN_ID.txt"
+        written=".compile-check-cache/value-outputs-written-in-run-$GITHUB_RUN_ID.txt"
+        if { [ -s "$passed" ] || [ -s "$written" ]; } && [ -n "$IDENTITY" ]; then
+          mkdir -p passed-compile-checks/value-outputs
+          if [ -s "$passed" ]; then
+            cp "$passed" passed-compile-checks/passed.txt
+          else
+            touch passed-compile-checks/passed.txt
+          fi
           echo "$IDENTITY" > passed-compile-checks/identity.txt
+          if [ -s "$written" ]; then
+            LC_ALL=C sort -u "$written" | { grep -Ex '[0-9a-f]{64}' || true; } | while read -r key; do
+              output=".compile-check-cache/value-outputs/$key.txt"
+              if [ -f "$output" ] && [ "$(wc -c < "$output")" -le 8388608 ]; then
+                cp "$output" passed-compile-checks/value-outputs/
+              fi
+            done
+          fi
+          echo "Uploading $(wc -l < passed-compile-checks/passed.txt | tr -d ' ') passed compile checks and $(find passed-compile-checks/value-outputs -type f | wc -l | tr -d ' ') value comparison outputs of this run."
         fi
     # One artifact per operating system, since CI's two test jobs each upload
     # one. The name ends with the identity, so that a run lists only the

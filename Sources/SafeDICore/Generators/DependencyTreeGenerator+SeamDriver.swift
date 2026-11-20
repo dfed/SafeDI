@@ -1388,10 +1388,21 @@ extension DependencyTreeGenerator {
 		// Every label's collision and every tier's omission is collected, so the seam reports each of its errors.
 		var errors = [DependencyTreeGeneratorError]()
 		func labelCollision(_ label: String, among collidingReceivers: [SeamReceiver]) -> DependencyTreeGeneratorError {
-			.seam(.init(seam: seam, kind: .parameters(.parametersShareLabel(
+			var remedy = Self.labelCollisionRemedy(among: collidingReceivers.map(\.property), requiredProperties: requiredProperties)
+			if case .declareProvidingForm = remedy,
+			   let requiredForm = Self.requiredFormOfWrapperOnlySeamReceives(
+			   	among: collidingReceivers.map { ($0.property, $0.declaringType) },
+			   	seam: seam.concreteInstantiable,
+			   	requiredProperties: requiredProperties,
+			   	instantiables: instantiables,
+			   )
+			{
+				remedy = .declareRequiredForm(requiredForm.typeDescription.asSource)
+			}
+			return .seam(.init(seam: seam, kind: .parameters(.parametersShareLabel(
 				label: label,
 				receivers: collidingReceivers.map(\.asErrorReceiver),
-				remedy: Self.labelCollisionRemedy(among: collidingReceivers.map(\.property), requiredProperties: requiredProperties),
+				remedy: remedy,
 			))))
 		}
 
@@ -1687,6 +1698,42 @@ extension DependencyTreeGenerator {
 		guard wrapperKinds.isEmpty || !hasRequiredOptionalValue else { return .receiveTheSameWay }
 		let providingForm = forms.first(where: isWrapper) ?? forms[0]
 		return .declareProvidingForm(providingForm.typeDescription.unwrapped.asSource)
+	}
+
+	/// The by-value form of one label that a type of a seam's tree requires, where every wrapper form of the label is the
+	/// seam's own receive and no declaration `instantiables` holds outside the seam provides that wrapper: then
+	/// `labelCollisionRemedy(among:requiredProperties:)`'s providing form, the wrapper, is one nothing proves a caller
+	/// holds, while the tree's requirement of the value is a fact of the graph in hand. `nil` otherwise. Only the seam's
+	/// own collision asks: a fill's collision keeps the providing form, since its caller is the module that fills it.
+	static func requiredFormOfWrapperOnlySeamReceives(
+		among receivers: [(property: Property, declaringType: TypeDescription)],
+		seam: TypeDescription,
+		requiredProperties: Set<Property>,
+		instantiables: [TypeDescription: Instantiable],
+	) -> Property? {
+		let wrappers = receivers.filter { $0.property.typeDescription.unwrapped.lazilyInstantiatedInstanceType != nil }
+		guard !wrappers.isEmpty,
+		      wrappers.allSatisfy({ $0.declaringType == seam }),
+		      let requiredForm = receivers.first(where: { receiver in
+		      	receiver.property.typeDescription.lazilyInstantiatedInstanceType == nil
+		      		&& !receiver.property.typeDescription.isOptional
+		      		&& requiredProperties.contains(receiver.property)
+		      })?.property
+		else { return nil }
+		let wrapperProperties = Set(wrappers.map(\.property.asUnwrappedProperty))
+		// Whether any declaration outside the seam provides the wrapper; the answer, not an element, is what is used, so
+		// the dictionary's order decides nothing.
+		let wrapperProvidedOutsideSeam = instantiables.values.contains { instantiable in
+			instantiable.concreteInstantiable != seam && instantiable.dependencies.contains { dependency in
+				switch dependency.source {
+				case .instantiated, .forwarded, .aliased:
+					wrapperProperties.contains(dependency.property)
+				case .received:
+					false
+				}
+			}
+		}
+		return wrapperProvidedOutsideSeam ? nil : requiredForm
 	}
 
 	/// The one form that provides each of `forms`, the forms of one label a seam's tree receives from outside it that the

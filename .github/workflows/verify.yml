@@ -79,7 +79,7 @@ on:
         type: boolean
         default: false
       base:
-        description: With `pins`, the commit or branch the coverage report lists changes since, or empty for the merge base with main.
+        description: The commit or branch the coverage reports list changes since (the tests' report of every whole-suite `release` run, and with `pins` the corpora's), or empty for the merge base with main.
         required: false
         default: ''
   # Only to warm the two modes' build caches, which a dispatched run on any
@@ -116,8 +116,12 @@ jobs:
       split: ${{ steps.split.outputs.split }}
       tests: ${{ steps.count.outputs.tests }}
     steps:
+      # Every branch's history, so that "Find an Earlier Verify Run's Build"
+      # can tell which earlier runs built an ancestor of this commit.
       - name: Checkout Repo
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       # The whole suite in release mode runs in "Verify Tests on Linux"
       # below, one job per group of test targets, from the bundle this job
       # builds. A filter runs here as one process, and fast mode needs one.
@@ -175,6 +179,105 @@ jobs:
           restore-keys: |
             verify-release-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ github.sha }}-
             verify-release-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-
+      # A cache is readable only from its own branch and main, and a run is
+      # usually dispatched on a scratch ref that is deleted when it ends, so
+      # the build above is main's: for a branch that changes SafeDICore, as
+      # every branch of a stack does, a start that rebuilds nearly everything
+      # (20.1 minutes on the 2.3.0 stack, run 44595917463, where a build from
+      # nothing takes 23 to 26). An artifact is readable from every branch,
+      # so each whole-suite run uploads its build directory ("Upload Build
+      # Directory for Later Runs" below) and the next run of a commit above
+      # it starts from that: the newest such build whose commit is an
+      # ancestor of this one, or this one, and is not on main, where the
+      # cache above is at least as new. Sources are stamped by content, so a
+      # build from any commit is a correct start, as main's is; an ancestor's
+      # is the closest. The artifact's name carries a hash of the compiler's
+      # version and the build's arguments, so a build is a start only for
+      # the compiler and flags that made it. Only a build that a dispatched
+      # run of this workflow in this repository uploaded counts: a pull
+      # request from a fork can upload an artifact of any name from ci.yml.
+      # Nothing here fails the job: whatever goes wrong, the build starts
+      # from the cache above.
+      - name: Name the Build Directory Artifact
+        id: build-artifact
+        if: ${{ inputs.mode == 'release' }}
+        run: |
+          compiler=$(swift --version 2>&1)
+          hash=$(printf '%s\n%s' "$RELEASE_SWIFT_TEST_ARGUMENTS" "$compiler" | sha256sum | cut -c1-16)
+          test "${#hash}" -eq 16
+          echo "name=verify-release-build-$hash" >> "$GITHUB_OUTPUT"
+      - name: Find an Earlier Verify Run's Build
+        id: earlier-build
+        if: ${{ inputs.mode == 'release' }}
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/github-script@v8
+        env:
+          ARTIFACT_NAME: ${{ steps.build-artifact.outputs.name }}
+        with:
+          script: |
+            const { execFileSync } = require('child_process')
+            const git = (...arguments_) => execFileSync('git', ['-c', `safe.directory=${process.env.GITHUB_WORKSPACE}`, ...arguments_], { cwd: process.env.GITHUB_WORKSPACE, stdio: ['ignore', 'pipe', 'ignore'] })
+            const isAncestor = (ancestor, descendant) => {
+              try {
+                git('merge-base', '--is-ancestor', ancestor, descendant)
+                return true
+              } catch {
+                return false
+              }
+            }
+            const { data } = await github.rest.actions.listArtifactsForRepo({
+              ...context.repo,
+              name: process.env.ARTIFACT_NAME,
+              per_page: 50,
+            })
+            const candidates = data.artifacts
+              .filter(artifact => !artifact.expired && artifact.workflow_run && /^[0-9a-f]{40}$/.test(artifact.workflow_run.head_sha || ''))
+              .sort((first, second) => Date.parse(second.created_at) - Date.parse(first.created_at))
+            core.info(`${candidates.length} builds named ${process.env.ARTIFACT_NAME}.`)
+            for (const artifact of candidates) {
+              const commit = artifact.workflow_run.head_sha
+              if (artifact.workflow_run.id === context.runId) { continue }
+              if (!isAncestor(commit, 'HEAD')) { continue }
+              if (isAncestor(commit, 'origin/main')) {
+                core.info(`The build of ${commit} is of a commit on main; the cache is at least as new.`)
+                break
+              }
+              const { data: run } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: artifact.workflow_run.id })
+              if (run.path !== '.github/workflows/verify.yml' || run.event !== 'workflow_dispatch' || !run.head_repository || run.head_repository.id !== run.repository.id) {
+                core.info(`The build of ${commit} is not a dispatched Verify run's of this repository.`)
+                continue
+              }
+              core.info(`Starting from the build of ${commit} (run ${run.id}, ${artifact.size_in_bytes} bytes).`)
+              core.setOutput('run', String(run.id))
+              core.setOutput('commit', commit)
+              return
+            }
+            core.info('No earlier Verify run built an ancestor of this commit that is not on main.')
+      - name: Download the Earlier Run's Build
+        id: download-earlier-build
+        if: ${{ inputs.mode == 'release' && steps.earlier-build.outputs.run != '' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ steps.build-artifact.outputs.name }}
+          run-id: ${{ steps.earlier-build.outputs.run }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/earlier-build
+      # The cache's build goes only once the earlier run's has unpacked, so a
+      # download cut short leaves the cache's.
+      - name: Unpack the Earlier Run's Build
+        if: ${{ inputs.mode == 'release' && steps.download-earlier-build.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          mkdir "$RUNNER_TEMP/earlier-build/unpacked"
+          tar -xzf "$RUNNER_TEMP/earlier-build/verify-release-build.tar.gz" -C "$RUNNER_TEMP/earlier-build/unpacked"
+          test -d "$RUNNER_TEMP/earlier-build/unpacked/.build"
+          rm -rf .build
+          mv "$RUNNER_TEMP/earlier-build/unpacked/.build" .build
+          rm -rf "$RUNNER_TEMP/earlier-build"
       # The key is the warming job's: a hit is never re-saved, so it holds
       # the build's arguments and the compiler's version. This job saves no
       # build: when the key hashed this workflow instead, each branch a run
@@ -256,6 +359,34 @@ jobs:
           retention-days: 1
           # A re-run of the job replaces what an earlier attempt uploaded.
           overwrite: true
+      # The whole build directory, for "Find an Earlier Verify Run's Build"
+      # of a later run. After the bundle, and never failing the job: the
+      # tests wait on this job, not on a later run's start. The fastest
+      # compression, since the runners' network is faster than gzip.
+      - name: Package Build Directory for Later Runs
+        id: package-build
+        if: ${{ steps.split.outputs.split == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          mkdir "$RUNNER_TEMP/build-for-later-runs"
+          tar --use-compress-program='gzip -1' -cf "$RUNNER_TEMP/build-for-later-runs/verify-release-build.tar.gz" .build
+          ls -l "$RUNNER_TEMP/build-for-later-runs"
+      - name: Upload Build Directory for Later Runs
+        if: ${{ steps.split.outputs.split == 'true' && steps.package-build.outcome == 'success' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.build-artifact.outputs.name }}
+          path: ${{ runner.temp }}/build-for-later-runs/verify-release-build.tar.gz
+          # A stack is verified many times a day, so the newest build is
+          # rarely a day old; two days span a night.
+          retention-days: 2
+          # The archive is compressed already.
+          compression-level: 0
+          # A re-run of the job replaces what an earlier attempt uploaded.
+          overwrite: true
       - name: Restore Passed Compile Checks
         if: ${{ steps.split.outputs.split == 'false' }}
         uses: actions/cache/restore@v6
@@ -279,6 +410,7 @@ jobs:
         with:
           identity: ${{ steps.compile-check-identity.outputs.identity }}
       - name: Test
+        id: tests
         if: ${{ steps.split.outputs.split == 'false' }}
         timeout-minutes: 60
         env:
@@ -291,6 +423,19 @@ jobs:
           else
             swift test $SWIFT_TEST_ARGUMENTS
           fi
+      # A run keeps in its branch's cache only the value comparison outputs it
+      # read or printed and those the newest artifacts of its identity hold,
+      # since the restore adds other runs' outputs to the directory, and keeps
+      # them all when its tests did not run to their end
+      # (.github/scripts/keep-value-outputs-used-in-run.sh says why). The
+      # cache only saves time, so this cannot fail the job.
+      - name: Keep the Value Comparison Outputs This Run Used
+        if: ${{ always() && steps.split.outputs.split == 'false' && hashFiles('.compile-check-cache/passed.txt') != '' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+        run: .github/scripts/keep-value-outputs-used-in-run.sh .compile-check-cache "$GITHUB_RUN_ID" "$TEST_OUTCOME"
       - name: Save Passed Compile Checks
         if: ${{ always() && steps.split.outputs.split == 'false' && hashFiles('.compile-check-cache/passed.txt') != '' }}
         uses: actions/cache/save@v6
@@ -375,8 +520,8 @@ jobs:
         uses: ./.github/actions/restore-shared-compile-checks
         with:
           identity: ${{ needs.verify.outputs.identity }}
-      # The bundle is built for coverage, which nothing here reads, so its
-      # profiles go to the runner's temporary directory.
+      # The bundle is built for coverage, and "Report Changed Lines No Verify
+      # Test Executed on Linux" reads the profiles its processes write.
       # The limit is twice the slowest group's time with every compile check
       # compiling: the seam tests took 5.5 minutes, the mock tests 5.0, the
       # seam smoke seeds 3.4, the other smoke tests 1.9 and the other three
@@ -384,13 +529,14 @@ jobs:
       # 6.5 (run 44097575826), and on the 2.3.0 stack the fuzzer smoke tests
       # took 10.1 (run 44595917463), so the limit is twice that, rounded up.
       - name: Test
+        id: tests
         timeout-minutes: 21
         shell: bash
         env:
           SELECTION: ${{ matrix.selection }}
           GROUP: ${{ matrix.group }}
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
-          LLVM_PROFILE_FILE: ${{ runner.temp }}/verify-tests-%p.profraw
+          LLVM_PROFILE_FILE: ${{ runner.temp }}/verify-profiles/verify-tests-%p.profraw
         run: |
           set -o pipefail
           # shellcheck disable=SC2086 # The selection is words to split.
@@ -408,17 +554,58 @@ jobs:
           retention-days: 1
           # A re-run of the job replaces what an earlier attempt uploaded.
           overwrite: true
+      # The artifact always holds the group's outcome and, when its tests
+      # wrote one, their profile, also when a test failed: a failing run's
+      # coverage is still most of the answer, and the report names the group.
+      - name: Merge the Group's Profile
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          GROUP: ${{ matrix.group }}
+          OUTCOME: ${{ steps.tests.outcome }}
+        run: |
+          mkdir -p verify-profile
+          echo "$OUTCOME" > verify-profile/outcome.txt
+          shopt -s nullglob
+          profiles=("$RUNNER_TEMP"/verify-profiles/*.profraw)
+          if [ ${#profiles[@]} -gt 0 ]; then
+            llvm-profdata merge -sparse "${profiles[@]}" -o "verify-profile/$GROUP.profdata"
+          else
+            echo "The group's tests wrote no coverage profile."
+          fi
+      - name: Upload the Group's Profile
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: verify-profile-${{ matrix.group }}
+          path: verify-profile/
+          retention-days: 1
+          # A re-run of the job replaces what an earlier attempt uploaded.
+          overwrite: true
+      # As in a job that saves its own cache: the group hands on only the
+      # value comparison outputs it read or printed and those the newest
+      # artifacts hold, or all of them when its tests did not run to their end.
+      - name: Keep the Value Comparison Outputs the Group Used
+        if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+        run: .github/scripts/keep-value-outputs-used-in-run.sh .compile-check-cache "$GITHUB_RUN_ID" "$TEST_OUTCOME"
       - name: Upload Passed Compile Checks of the Group
         if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: verify-passed-compile-checks-${{ matrix.group }}
-          # Every check the group's cache holds, for this branch's cache, and
-          # the ones the group itself passed, for the list all branches share.
+          # Every check the group's cache holds and every value comparison
+          # output it used, for this branch's cache, and the checks the group
+          # itself passed and outputs it printed, for other branches.
           path: |
             .compile-check-cache/passed.txt
             .compile-check-cache/passed-in-run-${{ github.run_id }}.txt
+            .compile-check-cache/value-outputs/
+            .compile-check-cache/value-outputs-written-in-run-${{ github.run_id }}.txt
           retention-days: 1
           include-hidden-files: true
           # A re-run of the job replaces what an earlier attempt uploaded.
@@ -451,6 +638,79 @@ jobs:
       coverage: true
       base: ${{ inputs.base }}
       bundle: verify-test-bundle
+
+  # The changed lines under Sources/ and Plugins/ that none of the seven
+  # groups' tests executed, in the run's summary, so that a change's coverage
+  # is known from the Verify run that tests it and not first from a pull
+  # request's "Check Line Coverage on Linux", which waits for both platforms'
+  # full test jobs. It costs the run no build and no test: the bundle is
+  # already built for coverage and the groups already write profiles.
+  # Advisory: it fails only when it cannot report, it runs when a group's
+  # tests failed, and it reads Linux alone, so the check stays the gate
+  # (.github/scripts/report-verify-coverage.sh says what it cannot see).
+  # The job's limit is "Report Changed Lines No Fuzzer Graph Executed on
+  # Linux"'s, which does the same work over more profiles; neither step that
+  # can hang here has been measured in this job yet.
+  verify-coverage:
+    name: Report Changed Lines No Verify Test Executed on Linux
+    needs: [verify, verify-tests]
+    if: ${{ !cancelled() && needs.verify.result == 'success' && needs.verify.outputs.split == 'true' }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+        with:
+          # Every branch's history, so any base is present.
+          fetch-depth: 0
+      - name: Download Test Bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: verify-test-bundle
+      - name: Download the Groups' Profiles
+        uses: actions/download-artifact@v8
+        with:
+          pattern: verify-profile-*
+          path: verify-profiles
+      # Retried for the reason "Install curl for Codecov" in ci.yml gives.
+      - name: Install Python
+        uses: ./.github/actions/retry
+        with:
+          command: command -v python3 >/dev/null || { apt-get update && apt-get install -y --no-install-recommends python3; }
+      - name: Report
+        env:
+          BASE: ${{ inputs.base }}
+          # The groups of "Verify Tests on Linux"'s matrix.
+          EXPECTED_GROUPS: mocks seams dependency-trees tool fuzzer-seam-smoke fuzzer-smoke others
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          tar -xzf verify-test-bundle.tar.gz
+          mkdir -p verify-profiles
+          if [ -z "$BASE" ]; then
+            base=origin/main
+          elif ! base=$(git rev-parse --verify --quiet "$BASE^{commit}" || git rev-parse --verify --quiet "origin/$BASE^{commit}"); then
+            echo "::error::The base '$BASE' names no commit of this repository."
+            exit 1
+          fi
+          .github/scripts/report-verify-coverage.sh \
+            .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest verify-profiles \
+            "$base" "$RUNNER_TEMP/verify-coverage" "$EXPECTED_GROUPS"
+      - name: Upload Coverage
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: verify-coverage
+          path: ${{ runner.temp }}/verify-coverage/
+          if-no-files-found: ignore
+          retention-days: 3
+          # A re-run of the job replaces what an earlier attempt uploaded.
+          overwrite: true
 
   # Fails unless all seven groups reported and their test counts sum to the
   # bundle's, which any selection that drops or repeats tests breaks. It only
@@ -503,8 +763,11 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
-      # The steps below move a few hundred kilobytes; the limits only stop a
-      # stalled transfer, as in "Share Passed Compile Checks".
+      # The steps below move the groups' lists and their value comparison
+      # outputs, 2,720 outputs and 109 MB uncompressed in a run that printed
+      # them all, which the download, join, save and upload did in 2, 0, 3 and
+      # 9 seconds (run 44637806385); the limits only stop a stalled transfer,
+      # as in "Share Passed Compile Checks".
       - name: Download the Groups' Passed Compile Checks
         timeout-minutes: 5
         continue-on-error: true
@@ -522,6 +785,14 @@ jobs:
             # "Upload Passed Compile Checks to Share" uploads.
             find group-compile-checks -name "passed-in-run-$GITHUB_RUN_ID.txt" -exec cat {} + | LC_ALL=C sort -u > ".compile-check-cache/passed-in-run-$GITHUB_RUN_ID.txt"
             echo "Passed compile checks of $groups groups: $(wc -l < .compile-check-cache/passed.txt) together, $(wc -l < ".compile-check-cache/passed-in-run-$GITHUB_RUN_ID.txt") of them passed in this run."
+            # The outputs each group used, which are what its cache would have
+            # kept, and the list of those its processes printed, which is all
+            # the upload below shares. Two groups that used one output hold
+            # the same file, named by the program's key.
+            mkdir -p .compile-check-cache/value-outputs
+            find group-compile-checks -path '*/value-outputs/*' -type f -exec cp -t .compile-check-cache/value-outputs/ {} +
+            find group-compile-checks -name "value-outputs-written-in-run-$GITHUB_RUN_ID.txt" -exec cat {} + | LC_ALL=C sort -u > ".compile-check-cache/value-outputs-written-in-run-$GITHUB_RUN_ID.txt"
+            echo "Value comparison outputs of $groups groups: $(find .compile-check-cache/value-outputs -type f | wc -l) used, $(wc -l < ".compile-check-cache/value-outputs-written-in-run-$GITHUB_RUN_ID.txt") of them printed in this run."
           else
             echo "No group uploaded passed compile checks."
           fi

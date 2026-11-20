@@ -684,6 +684,93 @@ extension DependencyTreeGenerator {
 		}
 	}
 
+	/// The repairs of an unfulfilled receive of `receivedProperty`, a non-optional `Instantiator` or `LazilyInstantiated`,
+	/// inside the `@Sendable` function of the innermost `Sendable` wrapper on its chain, which cannot capture a declaration
+	/// made outside it; `nil` where no such wrapper is on the chain. Each repair is offered only where it passes what it
+	/// would meet: the wrapper's `Sendable` twin, declared beside the `Sendable` wrapper, where the tree of the type it
+	/// builds, now built in a `@Sendable` function, receives no `Instantiator`, `ErasedInstantiator` or
+	/// `LazilyInstantiated` it would capture; a declaration on a type inside the function where that tree requires no
+	/// value of the chain that function is still building, which would close a dependency cycle. A receive of an
+	/// optional wrapper, or of an `ErasedInstantiator`, whose declaration names the type it builds, keeps today's advice.
+	/// - Parameters:
+	///   - instantiationStack: The properties of `receiver` and of the scopes it is built inside, innermost first, each
+	///     lazily instantiated one as declared.
+	///   - parentTypeStack: The concrete types of the scopes `receiver` is built inside, innermost first.
+	static func sendableBoundaryAdvice(
+		for receivedProperty: Property,
+		receivedBy receiver: Scope,
+		instantiationStack: [Property],
+		parentTypeStack: [TypeDescription],
+		root: TypeDescription,
+		typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
+	) -> DependencyTreeGeneratorError.UnfulfillableProperty.SendableBoundaryAdvice? {
+		let sendableTwinName: String
+		switch receivedProperty.propertyType {
+		case .instantiator:
+			sendableTwinName = Dependency.sendableInstantiatorType
+		case .lazilyInstantiated:
+			sendableTwinName = Dependency.sendableLazilyInstantiatedType
+		case .constant, .erasedInstantiator, .sendableInstantiator, .sendableErasedInstantiator, .sendableLazilyInstantiated:
+			return nil
+		}
+		guard case let .simple(_, generics) = receivedProperty.typeDescription,
+		      let boundaryIndex = instantiationStack.firstIndex(where: \.propertyType.isSendable),
+		      let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[receivedProperty.typeDescription.asInstantiatedType]
+		else { return nil }
+		func builtType(at index: Int) -> TypeDescription {
+			index == 0 ? receiver.instantiable.concreteInstantiable : parentTypeStack[index - 1]
+		}
+		let boundaryDeclaringType = boundaryIndex + 1 < instantiationStack.count ? builtType(at: boundaryIndex + 1) : root
+		let builtTreeCapturesNothing = !treeReceivesNonSendableWrapper(from: builtInstantiable, typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap)
+		let builtTreeRequiresNothingBeingBuilt = !instantiationStack[...boundaryIndex].contains { stackProperty in
+			!stackProperty.propertyType.isInstantiator
+				&& !stackProperty.propertyType.isErasedInstantiator
+				&& treeRequires(stackProperty.asValidatedForDependencyCycles, from: builtInstantiable, typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap)
+		}
+		return .init(
+			boundary: instantiationStack[boundaryIndex],
+			boundaryDeclaringType: boundaryDeclaringType,
+			builtType: builtType(at: boundaryIndex),
+			sendableForm: builtTreeCapturesNothing ? .simple(name: sendableTwinName, generics: generics) : nil,
+			typesInsideFunction: builtTreeRequiresNothingBeingBuilt ? (0...boundaryIndex).reversed().map(builtType(at:)) : [],
+		)
+	}
+
+	/// Whether the tree of `instantiable` receives an `Instantiator`, `ErasedInstantiator` or `LazilyInstantiated`, in
+	/// any form, that no type of the tree declares: a value a `@Sendable` function that builds `instantiable` would capture.
+	private static func treeReceivesNonSendableWrapper(
+		from instantiable: Instantiable,
+		typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
+	) -> Bool {
+		var reachedTypes: Set<TypeDescription> = [instantiable.concreteInstantiable]
+		var instantiablesToVisit = [instantiable]
+		var receivedWrappers = Set<Property>()
+		var declaredProperties = Set<Property>()
+		while let reachedInstantiable = instantiablesToVisit.popLast() {
+			for dependency in reachedInstantiable.dependencies {
+				switch dependency.source {
+				case .received:
+					receivedWrappers.insert(dependency.property.asUnwrappedProperty)
+				case let .aliased(fulfillingProperty, _, _):
+					receivedWrappers.insert(fulfillingProperty.asUnwrappedProperty)
+					declaredProperties.insert(dependency.property.asUnwrappedProperty)
+				case .instantiated:
+					declaredProperties.insert(dependency.property)
+					if let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[dependency.asInstantiatedType],
+					   reachedTypes.insert(builtInstantiable.concreteInstantiable).inserted
+					{
+						instantiablesToVisit.append(builtInstantiable)
+					}
+				case .forwarded:
+					declaredProperties.insert(dependency.property.asUnwrappedProperty)
+				}
+			}
+		}
+		return receivedWrappers.subtracting(declaredProperties).contains { property in
+			!property.propertyType.isConstant && !property.propertyType.isSendable
+		}
+	}
+
 	/// Whether the tree of `instantiable` – the types it builds, constants and builders alike, and theirs – requires
 	/// `property`, or its optional form, from above it: whether a type in it receives either without `onlyIfAvailable`, or
 	/// renames either without it, beneath no type of the tree that declares either form, the nearer declaration such a

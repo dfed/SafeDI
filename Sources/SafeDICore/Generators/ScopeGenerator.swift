@@ -42,6 +42,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///   - enclosingLevelCalls: For a call of another module's public mock, each level function an enclosing call declares
 	///     that a case of this call's level functions re-enters, and the values the case hands it, by its dispatcher's key
 	///     (`PublicMockLevelFunctions.init`).
+	///   - cycleClosingRedeclaredLabels: On entry, the `CycleClosingRedeclaredLabels` of `propertiesToGenerate`, merged in
+	///     their order; on return, this scope's, which only its parent reads.
 	init(
 		instantiable: Instantiable,
 		property: Property?,
@@ -87,6 +89,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		enclosingLevelCalls: [String: PublicMockLevelFunctions.EnclosingLevelCall] = [:],
 		namesBoundBySeam: Set<String> = [],
 		placeHoldingProperties: Set<Property>? = nil,
+		cycleClosingRedeclaredLabels: inout CycleClosingRedeclaredLabels,
 	) {
 		self.placeHoldingProperties = placeHoldingProperties
 		self.builtInlineSeamComment = builtInlineSeamComment
@@ -323,6 +326,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			closedOnDeclaration: closedOnDeclaration,
 			isPropertyCycle: isPropertyCycle,
 			childrenTakePartInCycle: cycleClosings.childrenTakePartInCycle,
+			childrenCycleClosingRedeclaredLabels: cycleClosingRedeclaredLabels,
 			children: propertiesToGenerate,
 			propertiesToDeclare: propertiesToDeclare,
 			forwardedProperties: forwardedProperties,
@@ -990,7 +994,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// The parameters of the builder function a lazy cycle closes on that a scope finds, and what it carries up for them.
 	private struct CycleParameterSearch {
-		let cycleClosingRedeclaredLabels: [BuiltDeclaration: [String: CycleParameter.Redeclaration]]
+		let cycleClosingRedeclaredLabels: CycleClosingRedeclaredLabels
 		let foundCycleParameters: [CycleParameter]
 		let unpassableCycleLabelsInTree: [UnpassableCycleLabel]
 	}
@@ -1003,6 +1007,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		closedOnDeclaration: BuiltDeclaration?,
 		isPropertyCycle: Bool,
 		childrenTakePartInCycle: Bool,
+		childrenCycleClosingRedeclaredLabels: CycleClosingRedeclaredLabels,
 		children: [ScopeGenerator],
 		propertiesToDeclare: Set<Property>,
 		forwardedProperties: Set<Property>,
@@ -1015,15 +1020,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// The labels the scopes between each cycle-closing scope in this subtree and the scope it closes on declare, by the
 		// declaration the cycle closes on. A scope a cycle closes on takes those of them its tree receives from the scopes
 		// enclosing it as parameters of its builder function. Nearly every scope takes part in no cycle.
-		var cycleClosingRedeclaredLabels = [BuiltDeclaration: [String: CycleParameter.Redeclaration]]()
+		// The children's maps arrive merged, so no child keeps a copy once this scope exists (see
+		// `CycleClosingRedeclaredLabels`).
+		var cycleClosingRedeclaredLabels = CycleClosingRedeclaredLabels()
 		if let closedOnDeclaration {
 			cycleClosingRedeclaredLabels[closedOnDeclaration] = [:]
 		} else if childrenTakePartInCycle {
-			for child in children {
-				for (closedOnDeclaration, redeclarations) in child.cycleClosingRedeclaredLabels {
-					cycleClosingRedeclaredLabels[closedOnDeclaration, default: [:]].merge(redeclarations) { $0.preceding($1) }
-				}
-			}
+			cycleClosingRedeclaredLabels = childrenCycleClosingRedeclaredLabels
 		}
 		var foundCycleParameters = [CycleParameter]()
 		var unpassableCycleLabelsInTree = [UnpassableCycleLabel]()
@@ -1084,7 +1087,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for parameter in cycleParameters {
 				redeclarations[parameter.property.label] = redeclarations[parameter.property.label].map { $0.preceding(parameter.redeclaration) } ?? parameter.redeclaration
 			}
-			cycleClosingRedeclaredLabels = cycleClosingRedeclaredLabels.mapValues { $0.merging(redeclarations) { $0.preceding($1) } }
+			// Merged in place: the map is this scope's alone.
+			for closedOnDeclaration in Array(cycleClosingRedeclaredLabels.keys) {
+				cycleClosingRedeclaredLabels[closedOnDeclaration, default: [:]].merge(redeclarations) { $0.preceding($1) }
+			}
 		}
 		return CycleParameterSearch(
 			cycleClosingRedeclaredLabels: cycleClosingRedeclaredLabels,
@@ -1182,7 +1188,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleParameters = []
 		cycleParameterUnavailableProperties = []
 		callSiteLazilyInstantiatedInstanceProperties = []
-		cycleClosingRedeclaredLabels = [:]
 		foundCycleParameters = []
 		unpassableCycleLabelsInTree = []
 		cycleParametersChangedInTree = false
@@ -1292,7 +1297,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleParameters = []
 		cycleParameterUnavailableProperties = []
 		callSiteLazilyInstantiatedInstanceProperties = ownerLazilyInstantiatedInstanceProperties
-		cycleClosingRedeclaredLabels = [:]
 		foundCycleParameters = []
 		unpassableCycleLabelsInTree = []
 		cycleParametersChangedInTree = false
@@ -1380,6 +1384,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		plainMemoRoutesOfSendableWrapperReads: [String: [FillDispatcher.PlainMemoRoute]] = [:],
 		memoOriginsByLabel: [String: [SeamSignature.Hole.Field.SeamParameterOrigin]] = [:],
 		child: ScopeGenerator,
+		cycleClosingRedeclaredLabels: inout CycleClosingRedeclaredLabels,
 	) {
 		self.init(
 			instantiable: Instantiable(
@@ -1404,6 +1409,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			builtInlineSeamComment: nil,
 			fillReturnsWrapperBuilder: returnsWrapperBuilder,
 			fill: (hole, key, functionName, boundLabels, fields, caseHoles, emitsCode, callerReads, labelsHandedAsMemo, plainMemoRoutesOfSendableWrapperReads, memoOriginsByLabel),
+			cycleClosingRedeclaredLabels: &cycleClosingRedeclaredLabels,
 		)
 	}
 
@@ -4151,11 +4157,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `cycleParameters`: for a scope that declares the function, those its parameters do not hide; for any other scope,
 	/// `lazilyInstantiatedInstanceProperties`.
 	private let callSiteLazilyInstantiatedInstanceProperties: Set<Property>
-	/// For each declaration a cycle-closing scope in this subtree closes on above this scope, the labels the scopes between
-	/// it and this scope's parent declare – their instantiated, aliased and forwarded properties and their own builder
+	/// For each declaration a cycle-closing scope in a subtree closes on above the subtree's root, the labels the scopes
+	/// between it and the root's parent declare – their instantiated, aliased and forwarded properties and their own builder
 	/// functions' parameters (see `CycleParameter`) – each with the declaration of it that comes first in source order.
-	/// Empty for nearly every scope.
-	let cycleClosingRedeclaredLabels: [BuiltDeclaration: [String: CycleParameter.Redeclaration]]
+	/// Empty for nearly every subtree. Only the parent's construction reads a scope's map, so no generator stores it:
+	/// `ScopeGeneratorUnderConstruction` merges each child's into its parent's as the child's generator is created, and
+	/// hands the result to the parent's initializer. A map kept on every generator held a copy at each level of a cycle's
+	/// path for the tree's whole life.
+	typealias CycleClosingRedeclaredLabels = [BuiltDeclaration: [String: CycleParameter.Redeclaration]]
 	/// The parameters this scope's builder function needs, which the next pass of `Scope.createScopeGenerator` creates
 	/// the tree with: the labels its tree receives from the scopes enclosing it that a scope between it and one of its
 	/// cycle-closing scopes declares (see `CycleParameter.parameters`). Empty for nearly every scope.
@@ -9117,10 +9126,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				"\(typeName)(\(argumentList))"
 			}
+			// A public mock's `mock()` calls the function only generated code calls, as every tier does (`publicMockTiers`).
 			let code = if let publicMockPlan {
 				"""
 				extension \(typeName) {
 				    \(mockAttributesPrefix)public static func mock() -> \(mockMethodReturnType) {
+				        \(typeName).\(ReservedName.publicMockFunctionName)()
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    \(mockAttributesPrefix)public static func \(ReservedName.publicMockFunctionName)() -> \(mockMethodReturnType) {
 				        \(construction)
 				    }
 				}
@@ -12535,12 +12550,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		guard !disambiguationMap.isEmpty else { return disambiguationMap }
 		var disambiguationMap = disambiguationMap
 		// Writing through a subscript copies the map even when nothing is removed, so look first.
+		func removeRenames(of typeDescription: TypeDescription, labeled label: String) {
+			guard let renames = disambiguationMap[label] else { return }
+			let optionalTypeDescription = TypeDescription.optional(typeDescription)
+			guard renames[typeDescription] != nil || renames[optionalTypeDescription] != nil else { return }
+			disambiguationMap[label]?[typeDescription] = nil
+			disambiguationMap[label]?[optionalTypeDescription] = nil
+		}
+		// A declaration of a lazily instantiated wrapper is the nearest declaration of its instance too, so it also hides
+		// the rename of the other wrapper kind around that instance, whose `.instance` a by-value receive beneath would
+		// otherwise read (`disambiguatedLazilyInstantiatedBinding`).
 		func removeRenames(of property: Property) {
-			guard let renames = disambiguationMap[property.label] else { return }
-			let optionalTypeDescription = TypeDescription.optional(property.typeDescription)
-			guard renames[property.typeDescription] != nil || renames[optionalTypeDescription] != nil else { return }
-			disambiguationMap[property.label]?[property.typeDescription] = nil
-			disambiguationMap[property.label]?[optionalTypeDescription] = nil
+			removeRenames(of: property.typeDescription, labeled: property.label)
+			guard let instance = property.asUnwrappedProperty.asLazilyInstantiatedInstanceProperty else { return }
+			for wrapperName in [Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType] {
+				removeRenames(of: .simple(name: wrapperName, generics: [instance.typeDescription]), labeled: property.label)
+			}
 		}
 		for parameter in parameters {
 			removeRenames(of: parameter)
