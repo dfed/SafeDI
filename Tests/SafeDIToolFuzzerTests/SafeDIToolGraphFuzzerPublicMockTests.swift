@@ -607,12 +607,90 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func handWrittenBuilderFindings_reportsOnlyCallsPassingClosureOverEnum_whenCallerFilesHoldHandWrittenCalls() {
-		let switched = ["FuzzOther/S1_T6+SafeDIPublicMockCaller.swift": "public enum S1_T6PublicMockCaller {\n\tpublic static func call() -> S1_T6 {\n\t\tS1_T6.mock(s1_HoleBuilder: { S1_Hole() })\n\t}\n}\n"]
+		let switched = Self.callerFile(calling: "S1_T6.mock(s1_HoleBuilder: { S1_Hole() })").merging(Self.mockTaking(["s1_HoleBuilder: @escaping () -> S1_Hole"])) { $1 }
 		#expect(GraphFuzzerBuilderSurface.handWrittenBuilderFindings(in: switched).isEmpty)
-		let kept = ["FuzzOther/S1_T6+SafeDIPublicMockCaller.swift": "public enum S1_T6PublicMockCaller {\n\tpublic static func call() -> S1_T6 {\n\t\tS1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() })\n\t}\n}\n"]
+		let kept = Self.callerFile(calling: "S1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() })").merging(Self.mockTaking(["s1_HoleBuilder: @escaping (S1_T6.SafeDIMockScope_S1_Hole) -> S1_Hole"])) { $1 }
 		#expect(GraphFuzzerBuilderSurface.handWrittenBuilderFindings(in: kept) == [
 			GraphFuzzerBuilderSurface.Finding(declaration: "the hand-written call `S1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() })`", parameter: "s1_HoleBuilder: { _ in", reason: "takes a scope its place does not forward"),
 		])
+	}
+
+	@Test(arguments: [
+		"@escaping Instantiator<S1_Hole>.Builder",
+		"@escaping SendableInstantiator<S1_Hole>.Builder",
+		"@escaping ErasedInstantiator<Int, S1_AnyHole>.Builder",
+		"@escaping SendableErasedInstantiator<Int, S1_AnyHole>.Builder",
+		"@escaping ErasedInstantiator<(id: Int, name: String), S1_AnyHole>.Builder",
+		"@escaping ErasedInstantiator<Swift.Int, Dictionary<String, Int>>.Builder",
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func handWrittenBuilderFindings_reportsNothing_whenMockTakesWrapperBuilderOfPlaceThatForwardsValue(builderType: String) {
+		// The builder takes what the place forwards – an `Instantiator<T>`'s `T.ForwardedProperties`, which the module cannot
+		// see is `()` for a type that conforms to `Instantiable` by hand, or an erased instantiator's named value – so the
+		// call's `{ _ in … }` takes no scope.
+		let files = Self.callerFile(calling: "S1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() })").merging(Self.mockTaking(["s1_HoleBuilder: \(builderType)"])) { $1 }
+		#expect(GraphFuzzerBuilderSurface.handWrittenBuilderFindings(in: files) == [])
+	}
+
+	@Test(arguments: [
+		"@escaping ErasedInstantiator<(), S1_AnyHole>.Builder",
+		"@escaping SendableErasedInstantiator<Void, S1_AnyHole>.Builder",
+		"@escaping () -> S1_Hole",
+		"@escaping @Sendable () -> S1_Hole",
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func handWrittenBuilderFindings_reportsClosureThatTakesAValue_whenMockTakesBuilderOfPlaceThatForwardsNothing(builderType: String) {
+		// A place that forwards nothing takes `() -> T`; a builder that takes `()` is the form the fold removed.
+		let files = Self.callerFile(calling: "S1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() })").merging(Self.mockTaking(["s1_HoleBuilder: \(builderType)"])) { $1 }
+		#expect(GraphFuzzerBuilderSurface.handWrittenBuilderFindings(in: files) == [
+			GraphFuzzerBuilderSurface.Finding(declaration: "the hand-written call `S1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() })`", parameter: "s1_HoleBuilder: { _ in", reason: "takes a scope its place does not forward"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func handWrittenBuilderFindings_reportsEachBuilderThatTakesAScope_whenCallPassesBuilderOfForwardingPlaceFirst() {
+		// Every builder of the call is judged by its own label, not only the first the call passes.
+		let call = "S1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() }, s1_OtherBuilder: { _ in S1_Other() })"
+		let files = Self.callerFile(calling: call).merging(Self.mockTaking(["s1_HoleBuilder: @escaping Instantiator<S1_Hole>.Builder", "s1_OtherBuilder: @escaping () -> S1_Other"])) { $1 }
+		#expect(GraphFuzzerBuilderSurface.handWrittenBuilderFindings(in: files) == [
+			GraphFuzzerBuilderSurface.Finding(declaration: "the hand-written call `\(call)`", parameter: "s1_OtherBuilder: { _ in", reason: "takes a scope its place does not forward"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func handWrittenBuilderFindings_reportsBuilder_whenAnyTierOfMockTakesItsLabelAsBuilderOfPlaceThatForwardsNothing() {
+		// The call reaches the widest tier it can see; a narrower tier that spells the builder otherwise is judged too.
+		let files = Self.callerFile(calling: "S1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() })").merging([
+			"FuzzFeature/S1_T6+SafeDIMock.swift": "extension S1_T6 {\n    public static func mock(\n        s1_HoleBuilder: @escaping Instantiator<S1_Hole>.Builder\n    ) -> S1_T6 {\n    }\n\n    package static func mock(\n        s1_HoleBuilder: @escaping ErasedInstantiator<(), S1_Hole>.Builder,\n        holeToken: S1_HoleToken\n    ) -> S1_T6 {\n    }\n}\n",
+		]) { $1 }
+		#expect(GraphFuzzerBuilderSurface.handWrittenBuilderFindings(in: files) == [
+			GraphFuzzerBuilderSurface.Finding(declaration: "the hand-written call `S1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() })`", parameter: "s1_HoleBuilder: { _ in", reason: "takes a scope its place does not forward"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func handWrittenBuilderFindings_reportsBuilder_whenNoGeneratedMockOfCalledTypeTakesItsLabel() {
+		// A builder whose form the generated surface does not show is judged as taking a scope, as the judgment did before it
+		// read the surface: the mock of another type that takes the label is not the called type's.
+		let files = Self.callerFile(calling: "S1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() })").merging([
+			"FuzzFeature/S1_T5+SafeDIMock.swift": "extension S1_T5 {\n    public static func mock(\n        s1_HoleBuilder: @escaping Instantiator<S1_Hole>.Builder\n    ) -> S1_T5 {\n    }\n}\n",
+		]) { $1 }
+		#expect(GraphFuzzerBuilderSurface.handWrittenBuilderFindings(in: files) == [
+			GraphFuzzerBuilderSurface.Finding(declaration: "the hand-written call `S1_T6.mock(s1_HoleBuilder: { _ in S1_Hole() })`", parameter: "s1_HoleBuilder: { _ in", reason: "takes a scope its place does not forward"),
+		])
+	}
+
+	/// A caller file the oracle adds in `FuzzOther` holding `call`.
+	private static func callerFile(calling call: String) -> [String: String] {
+		["FuzzOther/S1_T6+SafeDIPublicMockCaller.swift": "public enum S1_T6PublicMockCaller {\n\tpublic static func call() -> S1_T6 {\n\t\t\(call)\n\t}\n}\n"]
+	}
+
+	/// `S1_T6`'s generated file, whose `public` `mock()` takes `parameters`.
+	private static func mockTaking(_ parameters: [String]) -> [String: String] {
+		["FuzzFeature/S1_T6+SafeDIMock.swift": "extension S1_T6 {\n    public static func mock(\n        \(parameters.joined(separator: ",\n        "))\n    ) -> S1_T6 {\n    }\n}\n"]
 	}
 
 	@Test

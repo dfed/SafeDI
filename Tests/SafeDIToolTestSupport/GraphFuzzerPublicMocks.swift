@@ -4146,7 +4146,16 @@ enum GraphFuzzerPublicMockBuilders {
 	/// The labels of the builders the generated `mock()` of `mockedType` in `generatedFiles` takes as a closure that takes
 	/// nothing, `<label>: @escaping () -> T` or `@escaping @Sendable () -> T`, in the order its widest tier declares them.
 	static func labelsTakingNothing(of mockedType: String, in generatedFiles: [String: String]) -> [String] {
-		var labels = [String]()
+		builderParameters(of: mockedType, in: generatedFiles)
+			.filter { $0.type.hasPrefix("@escaping () -> ") || $0.type.hasPrefix("@escaping @Sendable () -> ") }
+			.map(\.label)
+	}
+
+	/// The builders each generated `mock()` of `mockedType` in `generatedFiles` takes, tier by tier in the order the files
+	/// declare them: each parameter labeled as a builder, with its type as the mock spells it, `@escaping` included and a
+	/// trailing comma dropped.
+	static func builderParameters(of mockedType: String, in generatedFiles: [String: String]) -> [(label: String, type: String)] {
+		var parameters = [(label: String, type: String)]()
 		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where !fileName.hasSuffix("+SafeDIPublicMockCaller.swift") {
 			var extendedType: String?
 			var isInMockParameters = false
@@ -4162,13 +4171,46 @@ enum GraphFuzzerPublicMockBuilders {
 				} else if isInMockParameters, let colon = trimmed.firstIndex(of: ":") {
 					let label = String(trimmed[..<colon])
 					let type = trimmed[trimmed.index(after: colon)...].trimmingCharacters(in: .whitespaces)
-					if label.contains("Builder"), type.hasPrefix("@escaping () -> ") || type.hasPrefix("@escaping @Sendable () -> ") {
-						labels.append(label)
+					if label.contains("Builder") {
+						parameters.append((label, type.hasSuffix(",") ? String(type.dropLast()) : type))
 					}
 				}
 			}
 		}
-		return labels
+		return parameters
+	}
+
+	/// Whether a builder of `type`, as `builderParameters(of:in:)` spells it, takes a value its place forwards, so that a
+	/// hand-written `{ _ in … }` passed to it takes no scope: the `Builder` of an `Instantiator<T>` or its `Sendable` twin,
+	/// which takes `T.ForwardedProperties` (the module cannot see that a type that conforms to `Instantiable` by hand forwards
+	/// `()`, so such a place keeps the wrapper's `Builder`, by "A seam's builder takes the type its places give it" in
+	/// `seam-and-mock-contract.md`), or of an `ErasedInstantiator<F, T>` or its `Sendable` twin whose `F` is not `()` or
+	/// `Void`. A closure that takes nothing, a closure over a scope enum and an erased instantiator's `Builder` over `()`
+	/// take none.
+	static func takesForwardedValue(builderType type: String) -> Bool {
+		let wrapperBuilder = type.hasPrefix("@escaping ") ? String(type.dropFirst("@escaping ".count)) : type
+		guard wrapperBuilder.hasSuffix(">.Builder"), let openingBracket = wrapperBuilder.firstIndex(of: "<") else { return false }
+		let arguments = wrapperBuilder[wrapperBuilder.index(after: openingBracket)...].dropLast(">.Builder".count)
+		switch wrapperBuilder[..<openingBracket] {
+		case "Instantiator", "SendableInstantiator":
+			return true
+		case "ErasedInstantiator", "SendableErasedInstantiator":
+			// The forwarded value is the first generic argument: the arguments up to their first comma outside brackets.
+			var depth = 0
+			var forwarded = ""
+			for character in arguments {
+				guard character != "," || depth > 0 else { break }
+				if "<([".contains(character) {
+					depth += 1
+				} else if ">)]".contains(character) {
+					depth -= 1
+				}
+				forwarded.append(character)
+			}
+			return !["()", "Void", "Swift.Void"].contains(forwarded.trimmingCharacters(in: .whitespaces))
+		default:
+			return false
+		}
 	}
 
 	/// For each generated `public` `mock()` of `mockedType` in `generatedFiles`, the number of builders it takes: parameters
