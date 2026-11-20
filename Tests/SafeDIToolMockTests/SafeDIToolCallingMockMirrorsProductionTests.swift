@@ -2595,6 +2595,14 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 			        names: [String]? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
+			        Screen.__safeDI_mock(names: names, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        names: [String]? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
 			        func __safeDI_panel() -> Panel {
 			            func __safeDI_serviceBuilder_Panel() -> Panel.SafeDIMockScope_Service.__safeDI_Builder<any Service> {
 			                .init(

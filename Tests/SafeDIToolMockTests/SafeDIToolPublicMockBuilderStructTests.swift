@@ -1435,6 +1435,14 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        token: Token? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Shell {
+		        Shell.__safeDI_mock(token: token, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        token: Token? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Shell {
 		        let logger = if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder() } else { Logger() }
 		        let token = if let token { token } else if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_hub() -> Hub {
@@ -1515,7 +1523,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		    ) -> Root {
 		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        _ = Shell.__safeDI_Shell_mock_C51D6EADDA480E49.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let shell = Shell.mock(token: token, safeDIOverrides: safeDIOverrides.shell)
+		        let shell = Shell.__safeDI_mock(token: token, safeDIOverrides: safeDIOverrides.shell)
 		        return Root(shell: shell)
 		    }
 		}
@@ -1789,6 +1797,13 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		    public static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Shell {
+		        Shell.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Shell {
 		        let logger = if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder() } else { Logger() }
 		        func __safeDI_hub() -> Hub {
 		            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
@@ -1861,7 +1876,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        _ = Shell.__safeDI_Shell_mock_51799E6AA5E7B634.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let shell = Shell.mock(safeDIOverrides: safeDIOverrides.shell)
+		        let shell = Shell.__safeDI_mock(safeDIOverrides: safeDIOverrides.shell)
 		        return Root(shell: shell)
 		    }
 		}
@@ -4570,7 +4585,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        _ = Shell.__safeDI_Shell_mock_51799E6AA5E7B634.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let shell = Shell.mock(safeDIOverrides: safeDIOverrides.shell)
+		        let shell = Shell.__safeDI_mock(safeDIOverrides: safeDIOverrides.shell)
 		        return Root(shell: shell)
 		    }
 		}
@@ -4826,6 +4841,13 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		    }
 
 		    public static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Shell {
+		        Shell.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Shell {
 		        let logger = if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder() } else { Logger() }
@@ -5376,6 +5398,14 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		        token: Token? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Shell {
+		        Shell.__safeDI_mock(token: token, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        token: Token? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Shell {
 		        let logger = if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder() } else { Logger() }
 		        let token = if let token { token } else if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        func __safeDI_hub() -> Hub {
@@ -5456,7 +5486,7 @@ struct SafeDIToolPublicMockBuilderStructTests: ~Copyable {
 		    ) -> Root {
 		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 		        _ = Shell.__safeDI_Shell_mock_C51D6EADDA480E49.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let shell = Shell.mock(token: token, safeDIOverrides: safeDIOverrides.shell)
+		        let shell = Shell.__safeDI_mock(token: token, safeDIOverrides: safeDIOverrides.shell)
 		        return Root(shell: shell)
 		    }
 		}

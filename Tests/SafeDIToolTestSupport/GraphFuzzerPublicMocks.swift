@@ -500,7 +500,8 @@ enum GraphFuzzerPublicMockOutputFeature: String, CaseIterable, Comparable {
 	/// The comment naming a type the file's `public` declarations name that SafeDI reads no declaration of, which it counts
 	/// as `public` (`GraphFuzzerPublicMockDrawFeature.unreadParameterType`).
 	case unreadTypeComment
-	/// A public mock's function only generated code calls, `static func __safeDI_mock(`, which takes a builder struct.
+	/// A public mock's function only generated code calls, `static func __safeDI_mock(`, which every tier declares beside its
+	/// `mock()`, taking a builder struct.
 	case generatedOnlyMockFunction
 	/// That function isolated to the main actor, `@MainActor public static func __safeDI_mock(`
 	/// (`GraphFuzzerPublicMockDrawFeature.holeMockIsolatedToMainActor`).
@@ -517,6 +518,10 @@ enum GraphFuzzerPublicMockOutputFeature: String, CaseIterable, Comparable {
 	case consumerPassesPlaceUpWithoutScope
 	/// `HoleLoop`'s generated code (`holeLoopBuilder`) in a graph whose `T6` takes the builder struct for its hole type.
 	case holeLoopBuilderOfBuilderStruct
+	/// A consumer's call of the function only generated code calls of a `.public` type's mock that has two tiers or more
+	/// and takes no builder struct, whose wider tiers forward to the narrower ones' functions only generated code calls,
+	/// never to their `mock()`.
+	case consumerCallsTieredMockWithoutBuilderStruct
 
 	static func < (lhs: GraphFuzzerPublicMockOutputFeature, rhs: GraphFuzzerPublicMockOutputFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -4210,6 +4215,8 @@ extension GraphFuzzerPublicMockDraw {
 		/// name, by the type the extension extends.
 		var typesDeclaringGeneratedOnlyMockFunction = Set<String>()
 		var typesDeclaringConstructionMockFunction = Set<String>()
+		/// The leaves a consumer calls the function only generated code calls of.
+		var leavesConsumersCall = Set<String>()
 		for (fileName, contents) in generatedFiles where !fileName.hasSuffix(GraphFuzzerOracle.publicMockCallerFileSuffix) {
 			let isConsumerFile = GraphFuzzerModule.allCases.contains { $0.isCaller && fileName.hasPrefix($0.name + "/") }
 			let lines = contents.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
@@ -4219,6 +4226,8 @@ extension GraphFuzzerPublicMockDraw {
 				features.insert(.consumerFillReentersPublicMock)
 			}
 			var extendedType: String?
+			/// The declaration of the function only generated code calls whose parameter lines follow.
+			var pendingGeneratedOnlyMockFunction: (isolated: Bool, type: String)?
 			for line in lines {
 				if line.hasPrefix("extension "), line.hasSuffix(" {") {
 					extendedType = String(line.dropFirst("extension ".count).dropLast(2))
@@ -4244,11 +4253,20 @@ extension GraphFuzzerPublicMockDraw {
 				if line.contains("__safeDI_init(") || (line.contains("__safeDI_mock(") && line.contains("safeDIBuilder:")) {
 					features.insert(.constructionFunction)
 				}
+				// Every tier declares the function only generated code calls: the one that takes a builder struct, read from the
+				// parameter lines below the declaration, is the feature.
 				if line.contains("static func __safeDI_mock("), !line.contains("safeDIBuilder:") {
-					features.insert(.generatedOnlyMockFunction)
-					typesDeclaringGeneratedOnlyMockFunction.insert(extendedType ?? "")
-					if line.hasPrefix("@MainActor ") {
-						features.insert(.isolatedGeneratedOnlyMockFunction)
+					pendingGeneratedOnlyMockFunction = (isolated: line.hasPrefix("@MainActor "), type: extendedType ?? "")
+				} else if let pending = pendingGeneratedOnlyMockFunction {
+					if Self.takesBuilderStruct(parameter: line) {
+						features.insert(.generatedOnlyMockFunction)
+						typesDeclaringGeneratedOnlyMockFunction.insert(pending.type)
+						if pending.isolated {
+							features.insert(.isolatedGeneratedOnlyMockFunction)
+						}
+					}
+					if line.hasPrefix(")") {
+						pendingGeneratedOnlyMockFunction = nil
 					}
 				}
 				if line.contains("static func __safeDI_mock("), line.contains("safeDIBuilder:") {
@@ -4301,6 +4319,9 @@ extension GraphFuzzerPublicMockDraw {
 					let leafName = "\(prefix)T\(leafIndex)"
 					if line.contains("\(leafName).mock(") || line.contains("\(leafName).__safeDI_mock(") {
 						features.insert(.consumerCall)
+						if line.contains("\(leafName).__safeDI_mock(") {
+							leavesConsumersCall.insert(leafName)
+						}
 						if line.contains(".instance") {
 							features.insert(.consumerPassesInstance)
 						}
@@ -4331,6 +4352,9 @@ extension GraphFuzzerPublicMockDraw {
 		}
 		if !typesDeclaringGeneratedOnlyMockFunction.isDisjoint(with: typesDeclaringConstructionMockFunction) {
 			features.insert(.generatedOnlyMockFunctionBesideConstructionFunction)
+		}
+		if leavesConsumersCall.contains(where: { leaf in tierAccessesByType[leaf, default: []].count >= 2 && !typesDeclaringGeneratedOnlyMockFunction.contains(leaf) }) {
+			features.insert(.consumerCallsTieredMockWithoutBuilderStruct)
 		}
 		return features
 	}
