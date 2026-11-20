@@ -19,37 +19,100 @@
 // SOFTWARE.
 
 extension DependencyTreeGenerator {
-	/// What building the `@Instantiable` type named `typeName` needs when every dependency it receives is provided
-	/// beside it, or `nil` when no declaration this generator knows has a concrete type of that name. The type is
-	/// built as the mock root `generateMockCode` builds for a type listed in `additionalMocksToGenerate`, from
-	/// every declaration this generator knows, so over every declaration the result is what the type's mock needs
-	/// (or would need, were it generated), and over the declarations with every hand-written mock removed it is
-	/// what the type needs in production; see `TypeRequirements`. The type's tree is validated as
-	/// `generateMockCode` validates a listed type's root, through the same `mockScopes` and `createMockRoot`, so
-	/// the result throws what building that root throws. The passes `generateMockCode` runs over every mock root
-	/// together once its loop is done – that no `@Sendable` builder captures a non-`Sendable` wrapper, and that
-	/// each `SafeDIMockConfiguration` is built one way – gate emitting the module's mocks and change nothing in
-	/// the report, so they are deliberately not run here: a module they reject has no generated mock for the
-	/// report to disagree with, and `generate` reports them with their fix-its.
-	/// - Parameters:
-	///   - generatesMock: Whether `mock()` is generated for the type, so that a hand-written method named `mock` is
-	///     rejected as `generateMockCode` rejects it. Otherwise such a method is the type's mock, which the root is
-	///     built with.
-	///   - mockEmittingModule: The module that generates the type's mock, whose access to each hand-written mock
-	///     decides, as in that module's `generateMockCode`, which flat parameters of `mock()` default to one
-	///     (`flatParameterMockDefaults(in:emittingModule:)`), or `nil` when no one module is known to generate it: every
-	///     hand-written mock is then taken to be callable. No other access is checked.
-	public func requirements(forTypeNamed typeName: String, generatesMock: Bool, mockEmittingModule: EmittingModule?) async throws -> TypeRequirements? {
-		var receivedPropertiesCache = ReceivedPropertiesCache()
-		// Every value the query computes is a local of this call: the generator keeps nothing between the types it is asked
-		// about.
-		var foreignPublicMockPlans = PublicMockPlans()
-		let mockScopes = try await mockScopes(
-			additionalMocksToGenerate: [typeName],
-			mockEmittingModule: constructsOnlyPublicDeclarations ? nil : mockEmittingModule,
-			receivedPropertiesCache: &receivedPropertiesCache,
-			foreignPublicMockPlans: &foreignPublicMockPlans,
-		)
+	/// One type `requirements(of:)` is asked about.
+	public struct RequirementsQuery: Sendable {
+		public init(typeName: String, generatesMock: Bool, mockEmittingModule: EmittingModule?) {
+			self.typeName = typeName
+			self.generatesMock = generatesMock
+			self.mockEmittingModule = mockEmittingModule
+		}
+
+		/// The name of the type.
+		public let typeName: String
+		/// Whether `mock()` is generated for the type, so that a hand-written method named `mock` is rejected as
+		/// `generateMockCode` rejects it. Otherwise such a method is the type's mock, which the root is built with.
+		public let generatesMock: Bool
+		/// The module that generates the type's mock, whose access to each hand-written mock decides, as in that module's
+		/// `generateMockCode`, which flat parameters of `mock()` default to one (`flatParameterMockDefaults(in:emittingModule:)`),
+		/// or `nil` when no one module is known to generate it: every hand-written mock is then taken to be callable. No other
+		/// access is checked.
+		public let mockEmittingModule: EmittingModule?
+	}
+
+	/// What building each type `queries` names needs when every dependency it receives is provided beside it, in the
+	/// order of `queries`: for each, `nil` when no declaration this generator knows has a concrete type of that name.
+	/// Each type is built as the mock root `generateMockCode` builds for a type listed in `additionalMocksToGenerate`,
+	/// from every declaration this generator knows, so over every declaration the result is what the type's mock needs
+	/// (or would need, were it generated), and over the declarations with every hand-written mock removed it is what the
+	/// type needs in production; see `TypeRequirements`. The type's tree is validated as `generateMockCode` validates a
+	/// listed type's root, through the same `mockScopes` and `createMockRoot`, so the result is the error building that
+	/// root throws. The passes `generateMockCode` runs over every mock root together once its loop is done – that no
+	/// `@Sendable` builder captures a non-`Sendable` wrapper, and that each `SafeDIMockConfiguration` is built one way –
+	/// gate emitting the module's mocks and change nothing in the report, so they are deliberately not run here: a module
+	/// they reject has no generated mock for the report to disagree with, and `generate` reports them with their fix-its.
+	///
+	/// The mock scope map reads no type the query names, so it is built once, with the first type listed, and every
+	/// later type is validated on its own (`validateListedMockRoot(named:mockScopes:receivedPropertiesCache:)`):
+	/// once the first type's call succeeds, every tree but a later type's own has passed, so each type reports what a
+	/// call that listed it alone reports. No type after the first that throws is built: each reports that type's error,
+	/// since the caller reports that error and nothing after it.
+	public func requirements(of queries: [RequirementsQuery]) async -> [Result<TypeRequirements?, any Error>] {
+		var results = [Result<TypeRequirements?, any Error>]()
+		// What every type's mock root is built from, once the first type's call has built it.
+		// `defaultsReadEmittingModule` says whether its flat parameter defaults were decided by a module's access.
+		var built: (mockScopes: MockScopes, receivedPropertiesCache: ReceivedPropertiesCache, defaultsReadEmittingModule: Bool)?
+		for (index, query) in queries.enumerated() {
+			do {
+				let mockEmittingModule = constructsOnlyPublicDeclarations ? nil : query.mockEmittingModule
+				var mockScopes: MockScopes
+				var receivedPropertiesCache: ReceivedPropertiesCache
+				if let built {
+					(mockScopes, receivedPropertiesCache, _) = built
+					try validateListedMockRoot(
+						named: query.typeName,
+						mockScopes: mockScopes,
+						receivedPropertiesCache: &receivedPropertiesCache,
+					)
+					// Which flat parameters default is decided by the module that emits this type's mock.
+					if mockEmittingModule != nil || built.defaultsReadEmittingModule {
+						mockScopes.flatParameterMockDefaults = flatParameterMockDefaults(in: mockScopes.typeDescriptionToScopeMap, emittingModule: mockEmittingModule)
+					}
+				} else {
+					receivedPropertiesCache = ReceivedPropertiesCache()
+					// The plans of other modules' public mocks are needed only while the map is built.
+					var foreignPublicMockPlans = PublicMockPlans()
+					mockScopes = try await self.mockScopes(
+						additionalMocksToGenerate: [query.typeName],
+						mockEmittingModule: mockEmittingModule,
+						receivedPropertiesCache: &receivedPropertiesCache,
+						foreignPublicMockPlans: &foreignPublicMockPlans,
+					)
+				}
+				let requirements = try await requirements(
+					forTypeNamed: query.typeName,
+					generatesMock: query.generatesMock,
+					mockScopes: mockScopes,
+					receivedPropertiesCache: &receivedPropertiesCache,
+				)
+				// Only complete results outlive a walk, so the cache serves every later type.
+				built = (mockScopes, receivedPropertiesCache, mockEmittingModule != nil)
+				results.append(.success(requirements))
+			} catch {
+				results += Array(repeating: .failure(error), count: queries.count - index)
+				break
+			}
+		}
+		return results
+	}
+
+	/// What building the type named `typeName` needs, built from `mockScopes`, which validated the type's tree; see
+	/// `requirements(of:)`.
+	private func requirements(
+		forTypeNamed typeName: String,
+		generatesMock: Bool,
+		mockScopes: MockScopes,
+		receivedPropertiesCache: inout ReceivedPropertiesCache,
+	) async throws -> TypeRequirements? {
 		// The type's own entry in the scope map, which `generateMockCode` builds each mock root from. The name is
 		// matched as `additionalMocksToGenerate` matches it, and the entry is chosen by type, never by map order.
 		guard let (concreteType, scope) = mockScopes.typeDescriptionToScopeMap
@@ -62,6 +125,7 @@ extension DependencyTreeGenerator {
 		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
+		var constructionMemo = ConstructionMemo()
 		let mockRoot = try await createMockRoot(
 			for: instantiable,
 			scope: scope,
@@ -77,6 +141,7 @@ extension DependencyTreeGenerator {
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
+			constructionMemo: &constructionMemo,
 		)
 		// Whether a public mock can be generated is decided for one root and needs no emitting module, as
 		// `generateMockCode` decides it, so the query reports it too.
