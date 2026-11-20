@@ -32,12 +32,23 @@ jobs:
     # empty one. When in doubt (a scheduled run, or a diff that can't
     # be computed) the answer is "everything changed", and the gates
     # below treat a missing answer the same way.
+    #
+    # `integrations` is false when every changed file is Markdown or
+    # under `Tests/` or `.claude/`. The two macOS jobs that build SafeDI
+    # for Apple platforms and build the examples compile only products
+    # and the examples, never a test target or an agent skill, so such a
+    # change cannot alter what they build, and they skip. Together they
+    # took 49 of a run's 80 to 88 macOS runner minutes (runs 44672257156
+    # and 44678862998), and a run waits on the account's five macOS
+    # slots longer than on anything else. Any other path, a workflow
+    # among them, counts as feeding them.
     runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
       source: ${{ steps.classify.outputs.source }}
       docc: ${{ steps.classify.outputs.docc }}
+      integrations: ${{ steps.classify.outputs.integrations }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
@@ -54,6 +65,7 @@ jobs:
         run: |
           source=false
           docc=false
+          integrations=false
           # A stacked pull request's base is the branch below it, and CI
           # runs on the top pull request only, so a Markdown-only top
           # would skip the tests of every change beneath it. A pull
@@ -66,10 +78,12 @@ jobs:
             echo "Event '$EVENT_NAME' has no diff to classify; treating everything as changed."
             source=true
             docc=true
+            integrations=true
           elif ! changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA"); then
             echo "Could not diff $BASE_SHA...$HEAD_SHA; treating everything as changed."
             source=true
             docc=true
+            integrations=true
           else
             echo "Changed files:"
             echo "$changed"
@@ -82,11 +96,16 @@ jobs:
                 *.md) ;;
                 *) source=true ;;
               esac
+              case "$file" in
+                *.md | Tests/* | .claude/*) ;;
+                *) integrations=true ;;
+              esac
             done <<< "$changed"
           fi
           echo "source=$source" >> "$GITHUB_OUTPUT"
           echo "docc=$docc" >> "$GITHUB_OUTPUT"
-          echo "source=$source docc=$docc"
+          echo "integrations=$integrations" >> "$GITHUB_OUTPUT"
+          echo "source=$source docc=$docc integrations=$integrations"
 
   version-consistency-check:
     name: Version Consistency Check
@@ -295,8 +314,9 @@ jobs:
     # run's longest job queues for the few macOS runners first and the run ends when it does, not 30 minutes later.
     needs: &after-the-long-macos-job-queues [changes, bazel-source-archive-check]
     # DocC articles under `*.docc/` are Markdown, so this job also runs
-    # when only those changed, and then only its DocC steps do.
-    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || needs.changes.outputs.docc == 'true') }}
+    # when only those changed, and then only its DocC steps do. It skips
+    # when the change feeds nothing it builds ("Detect Changed Files").
+    if: ${{ !cancelled() && ((needs.changes.outputs.source != 'false' && needs.changes.outputs.integrations != 'false') || needs.changes.outputs.docc == 'true') }}
     runs-on: macos-26
     permissions:
       contents: read
@@ -547,7 +567,8 @@ jobs:
     # minutes, where its own job took 5 to 21.
     name: Build Package, Tuist and Bazel Integrations on Xcode 26
     needs: *after-the-long-macos-job-queues
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    # Skips when the change feeds nothing it builds ("Detect Changed Files").
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.changes.outputs.integrations != 'false' }}
     runs-on: macos-26
     permissions:
       contents: read
