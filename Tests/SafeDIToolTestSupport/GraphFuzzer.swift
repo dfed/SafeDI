@@ -1889,6 +1889,10 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// Either read where `ReenteredSecondImpl` declares `reenteredTag` above the place, nearer the reader on every route.
 	/// Accepted.
 	case reenteredFillReadsPlaceFieldDeclaredInFill
+	/// `ReenteredRelay`, which the fill of `reenteredFirst` calls, binds `reenteredTag` before its call of `ReenteredSubB`,
+	/// and `ReenteredHost` binds it above its call of `ReenteredTop`, so the place carries `ReenteredHost`'s as a field while
+	/// the relay's copy of the hole binds the label nearer: both builds reject the read with `declarationBoundAfterSite`.
+	case reenteredFillReadsLabelPassingUpSeamBinds
 	/// `ReenteredFirstImpl`, the enclosing fill, holds a place of `ReenteredGadget` of its own.
 	case reenteredFillEnclosingFillHoldsPlace
 	/// `ReenteredSecondImpl` calls `ReenteredSubB` again, re-entering the fill that encloses the call.
@@ -2775,6 +2779,7 @@ enum GraphFuzzerGenerator {
 			passingUpCopyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.passingUpCopyRandomSeedMask)
 			reenteredFillRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredFillRandomSeedMask)
 			reenteredPlaceFieldRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredPlaceFieldRandomSeedMask)
+			reenteredRelayTagRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredRelayTagRandomSeedMask)
 			repeatedAncestorRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.repeatedAncestorRandomSeedMask)
 			guardedMockParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.guardedMockParameterRandomSeedMask)
 			differingPinsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.differingPinsRandomSeedMask)
@@ -3276,6 +3281,8 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingReenteredFillShapes`' choices of `reenteredTag`, which `ReenteredSubA` binds before the place whose
 		/// fill builds `ReenteredSubB` again: whether the graph reads it, and how.
 		private var reenteredPlaceFieldRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether `addingReenteredFillShapes` has `ReenteredRelay` bind `reenteredTag`.
+		private var reenteredRelayTagRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingRepeatedAncestorShapes`' choices: whether a graph gains `RepeatRoot`'s tree, in which a type is
 		/// built only beneath a cycle edge that repeats an ancestor, and every shape of that tree.
 		private var repeatedAncestorRandom: GraphFuzzerRandomNumberGenerator
@@ -9040,6 +9047,9 @@ enum GraphFuzzerGenerator {
 			let readsPlaceField = reenteredPlaceFieldRandom.percentChance(75)
 			let placeFieldReadIsRequired = reenteredPlaceFieldRandom.percentChance(40)
 			let placeFieldVariantRoll = reenteredPlaceFieldRandom.integer(in: 0...9)
+			// On a generator of its own, so that every shape above draws as it did: where the call is of `ReenteredRelay`, the
+			// relay binds `reenteredTag` before its call of `ReenteredSubB` in place of `ReenteredSubA`'s binding.
+			let relayBindsTagRoll = reenteredRelayTagRandom.percentChance(75)
 			guard !modulesOmittingPackageName.contains(.seamModule) else { return declarations }
 			// A graph with a hole draws the remedied read where a roll draws one of the reads the tool rejects by design, which
 			// would throw away the hole graph the rest of the draw has it accept: here and for the sibling read only one route
@@ -9055,12 +9065,16 @@ enum GraphFuzzerGenerator {
 				case boundAboveCall
 				case receivedBySeamBuiltAgain
 				case declaredInFill
+				/// `ReenteredRelay` binds the label before its call of `ReenteredSubB`, and `ReenteredHost` above its call of
+				/// `ReenteredTop`, while `ReenteredSubA` binds none: the relay's copy of the hole binds the label nearer the place
+				/// than the field `ReenteredHost`'s binding gives it, which both builds reject.
+				case boundByPassingUpSeam
 			}
 			// A required read needs a value on `ReenteredTop`'s own route too, which `ReenteredHost` binds above its call. The
 			// remedy takes the largest share, since the graph's other draws reject most graphs it lands in, and the corpus floors
 			// the graphs of it the tool accepts.
 			// In a graph with a hole, the remedy stands in for both rejected reads.
-			let placeFieldVariant: PlaceFieldVariant? = if !readsPlaceField {
+			let drawnPlaceFieldVariant: PlaceFieldVariant? = if !readsPlaceField {
 				nil
 			} else if placeFieldVariantRoll >= 7 {
 				.declaredInFill
@@ -9071,6 +9085,11 @@ enum GraphFuzzerGenerator {
 			} else {
 				.unremedied
 			}
+			// Three in four unremedied reads in a graph that calls `ReenteredRelay` are bound by the relay, in place of
+			// `ReenteredSubA`, and by `ReenteredHost` above its call of `ReenteredTop`,
+			// where no `@Sendable` fill makes the call: there `ReenteredHost`'s binding draws an error of its own beside the
+			// relay's, whose remedy leaves the relay's error, which the remedy oracle reads as a remedy that does not work.
+			let placeFieldVariant = (drawnPlaceFieldVariant == .boundAboveCall || drawnPlaceFieldVariant == .unremedied) && callThroughRelay && !relayCallInSendableFill && relayBindsTagRoll ? .boundByPassingUpSeam : drawnPlaceFieldVariant
 			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
 			let callInstantiator = switch sendability {
 			case .nonSendable: "Instantiator"
@@ -9112,7 +9131,7 @@ enum GraphFuzzerGenerator {
 				? PropertyDeclaration(attribute: "@Received", label: "reenteredTag", type: tag.name)
 				: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "reenteredTag", type: tag.name + "?")
 			let tagDeclaration = PropertyDeclaration(attribute: "@Instantiated", label: "reenteredTag", type: tag.name)
-			if placeFieldVariant != nil {
+			if placeFieldVariant != nil, placeFieldVariant != .boundByPassingUpSeam {
 				// Bound before the place whose fill builds `ReenteredSubB` again.
 				subA.properties.insert(tagDeclaration, at: subA.properties.count - 1)
 			}
@@ -9137,7 +9156,7 @@ enum GraphFuzzerGenerator {
 			top.additionalDeclarations.append("public protocol \(firstName)\(sendableSuffix) {}\npublic protocol \(secondName)\(sendableSuffix) {}")
 			// The seam the call builds: `ReenteredSubB`, or `ReenteredRelay`, which calls it and passes its place up, so the level
 			// function the call declares leads to the enclosing call's, which it reuses.
-			let relay = seam("ReenteredRelay", module: .seamDependency, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubB", type: subB.name)])
+			let relay = seam("ReenteredRelay", module: .seamDependency, properties: (placeFieldVariant == .boundByPassingUpSeam ? [tagDeclaration] : []) + [PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubB", type: subB.name)])
 			let calledSeam = callThroughRelay ? relay : subB
 			let calledLabel = callThroughRelay ? "reenteredRelay" : "reenteredSubB"
 			let seamCall = callThroughInstantiator
@@ -9189,7 +9208,7 @@ enum GraphFuzzerGenerator {
 				// A field of the label above the seam call, which lifts no rejection.
 				host.properties.insert(PropertyDeclaration(attribute: "@Instantiated", label: "reenteredMark", type: mark.name), at: 0)
 			}
-			if placeFieldVariant == .boundAboveCall || (placeFieldReadIsRequired && placeFieldVariant != nil) {
+			if placeFieldVariant == .boundAboveCall || placeFieldVariant == .boundByPassingUpSeam || (placeFieldReadIsRequired && placeFieldVariant != nil) {
 				// The value a required read gets on `ReenteredTop`'s own route, and, for any read, a field of the label above
 				// the seam call, which lifts no rejection.
 				host.properties.insert(tagDeclaration, at: 0)
@@ -9220,6 +9239,7 @@ enum GraphFuzzerGenerator {
 
 		private static let reenteredFillRandomSeedMask: UInt64 = 0x7265456E74657246
 		private static let reenteredPlaceFieldRandomSeedMask: UInt64 = 0x7265506C61636546
+		private static let reenteredRelayTagRandomSeedMask: UInt64 = 0x72656C6179546167
 
 		// MARK: Access proof extensions
 
@@ -10855,7 +10875,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				}
 			}
 			if let tagRead = gadgetProperties.first(where: { $0.label == "reenteredTag" }) {
-				if propertiesByType[prefix + "ReenteredSubB"]?.contains(where: { $0.label == "reenteredTag" }) == true {
+				if propertiesByType[prefix + "ReenteredRelay"]?.contains(where: { $0.label == "reenteredTag" }) == true {
+					features.insert(.reenteredFillReadsLabelPassingUpSeamBinds)
+				} else if propertiesByType[prefix + "ReenteredSubB"]?.contains(where: { $0.label == "reenteredTag" }) == true {
 					features.insert(.reenteredFillReadsPlaceFieldRemedied)
 				} else if propertiesByType[prefix + "ReenteredSecondImpl"]?.contains(where: { $0.label == "reenteredTag" }) == true {
 					features.insert(.reenteredFillReadsPlaceFieldDeclaredInFill)
