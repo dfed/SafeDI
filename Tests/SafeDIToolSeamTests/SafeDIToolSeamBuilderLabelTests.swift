@@ -1367,6 +1367,23 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == [
 			"Feature.swift": generatedFileHeader + """
 			extension Host {
+			    nonisolated public enum SafeDISendableScope_Service {
+			        nonisolated public struct service_Values: Sendable {}
+
+			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
+			            public let service: @Sendable (service_Values) -> SendableErasedInstantiator<Service.ForwardedProperties, __safeDI_Built>.Builder
+
+			            public init(service: @escaping @Sendable (service_Values) -> SendableErasedInstantiator<Service.ForwardedProperties, __safeDI_Built>.Builder) {
+			                self.service = service
+			            }
+
+			            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Service.ForwardedProperties, __safeDI_Built>.Builder) {
+			                self.service = { _ in __safeDI_builder }
+			            }
+			        }
+			    }
+
 			    nonisolated public enum SafeDISendableScope_ServiceSendable_Service {
 			        nonisolated public struct serviceSendableService_Values: Sendable {}
 
@@ -1401,35 +1418,18 @@ struct SafeDIToolSeamBuilderLabelTests: ~Copyable {
 			        }
 			    }
 
-			    nonisolated public enum SafeDISendableScope_Service_Service {
-			        nonisolated public struct service_Values: Sendable {}
-
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			            public let service: @Sendable (service_Values) -> SendableErasedInstantiator<Service.ForwardedProperties, __safeDI_Built>.Builder
-
-			            public init(service: @escaping @Sendable (service_Values) -> SendableErasedInstantiator<Service.ForwardedProperties, __safeDI_Built>.Builder) {
-			                self.service = service
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<Service.ForwardedProperties, __safeDI_Built>.Builder) {
-			                self.service = { _ in __safeDI_builder }
-			            }
-			        }
-			    }
-
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_serviceSendable_ServiceSendableBuilder: SafeDISendableScope_ServiceSendable_Service.__safeDI_Builder<ServiceSendable_Service>, __safeDI_serviceSendable_ServiceSendable_Builder: SafeDIScope_ServiceSendable_ServiceSendable_.__safeDI_Builder<ServiceSendable>, __safeDI_service_ServiceSendableBuilder: SafeDISendableScope_Service_Service.__safeDI_Builder<Service>) {
+			    public init(__safeDI_serviceSendableBuilder: SafeDISendableScope_Service.__safeDI_Builder<Service>, __safeDI_serviceSendable_ServiceSendableBuilder: SafeDISendableScope_ServiceSendable_Service.__safeDI_Builder<ServiceSendable_Service>, __safeDI_serviceSendable_ServiceSendable_Builder: SafeDIScope_ServiceSendable_ServiceSendable_.__safeDI_Builder<ServiceSendable>) {
 			        let serviceSendable: ServiceSendable = __safeDI_serviceSendable_ServiceSendable_Builder.serviceSendable(SafeDIScope_ServiceSendable_ServiceSendable_.serviceSendable_Values())
-			        let service = SendableInstantiator<Service>(__safeDI_service_ServiceSendableBuilder.service(SafeDISendableScope_Service_Service.service_Values()))
+			        let service = SendableInstantiator<Service>(__safeDI_serviceSendableBuilder.service(SafeDISendableScope_Service.service_Values()))
 			        let serviceSendableService = SendableInstantiator<ServiceSendable_Service>(__safeDI_serviceSendable_ServiceSendableBuilder.serviceSendableService(SafeDISendableScope_ServiceSendable_Service.serviceSendableService_Values()))
 			        self.init(serviceSendable: serviceSendable, service: service, serviceSendableService: serviceSendableService)
 			    }
 			}
 
 			extension Host {
-			    public enum __safeDI_Host_800310EB38858505 {}
+			    public enum __safeDI_Host_9F4A53A8938209B1 {}
 			}
 			""",
 		])

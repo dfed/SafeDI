@@ -656,7 +656,7 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesBothHoleTypesApart_whenAStemEqualsAnothersSendableLabel() async throws {
+	mutating func generate_namesApartOnlyTheStemWhosePlainLabelIsTaken_whenAStemEqualsAnothersSendableLabel() async throws {
 		let feature = [
 			Self.service,
 			"public protocol ServiceSendable {}",
@@ -665,6 +665,23 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		let output = try await compiledOutput(of: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature)])
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Host {
+		    nonisolated public enum SafeDIScope_Service {
+		        nonisolated public struct service_Values {}
+
+		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
+		            public let service: (service_Values) -> __safeDI_Built
+
+		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
+		                self.service = service
+		            }
+
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.service = { _ in __safeDI_builder() }
+		            }
+		        }
+		    }
+
 		    nonisolated public enum SafeDIScope_ServiceSendable_ServiceSendable {
 		        nonisolated public struct other_Values {
 		            public let service: any Service
@@ -684,34 +701,17 @@ struct SafeDIToolSeamNestedBuilderTests: ~Copyable {
 		        }
 		    }
 
-		    nonisolated public enum SafeDIScope_Service_Service {
-		        nonisolated public struct service_Values {}
-
-		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let service: (service_Values) -> __safeDI_Built
-
-		            public init(service: @escaping (service_Values) -> __safeDI_Built) {
-		                self.service = service
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.service = { _ in __safeDI_builder() }
-		            }
-		        }
-		    }
-
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_serviceSendable_ServiceSendableBuilder: SafeDIScope_ServiceSendable_ServiceSendable.__safeDI_Builder<any ServiceSendable>, __safeDI_service_ServiceBuilder: SafeDIScope_Service_Service.__safeDI_Builder<any Service>) {
-		        let service: any Service = __safeDI_service_ServiceBuilder.service(SafeDIScope_Service_Service.service_Values())
+		    public init(__safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>, __safeDI_serviceSendable_ServiceSendableBuilder: SafeDIScope_ServiceSendable_ServiceSendable.__safeDI_Builder<any ServiceSendable>) {
+		        let service: any Service = __safeDI_serviceBuilder.service(SafeDIScope_Service.service_Values())
 		        let other: any ServiceSendable = __safeDI_serviceSendable_ServiceSendableBuilder.other(SafeDIScope_ServiceSendable_ServiceSendable.other_Values(service: service))
 		        self.init(service: service, other: other)
 		    }
 		}
 
 		extension Host {
-		    public enum __safeDI_Host_DD50A7164CAB7140 {}
+		    public enum __safeDI_Host_4DE9401D0DBCFDC4 {}
 		}
 		"""])
 	}
