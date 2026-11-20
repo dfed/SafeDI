@@ -1849,16 +1849,15 @@ struct SafeDIToolMockConditionalCompilationTests: ~Copyable {
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        func __safeDI_service() -> Service {
-		            func __safeDI_defaultUserService_AnyUserServiceBuilder_Service(_ scope: Service.SafeDIMockScope_DefaultUserService_AnyUserService) -> AnyUserService {
-		                switch scope {
-		                case let .userService(scope):
+		            func __safeDI_defaultUserService_AnyUserServiceBuilder_Service() -> Service.SafeDIMockScope_DefaultUserService_AnyUserService.__safeDI_Builder<AnyUserService> {
+		                .init(userService: { scope in
 		                    let analytics = scope.analytics
 		                    let userService = AnyUserService(DefaultUserService.mock(analytics: analytics))
 		                    return userService
-		                }
+		                })
 		            }
-		            _ = Service.__safeDI_Service_mock_FF4B5A229FC0B047.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Service.mock(defaultUserService_AnyUserServiceBuilder: __safeDI_defaultUserService_AnyUserServiceBuilder_Service, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		            _ = Service.__safeDI_Service_mock_040B79113D51A243.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Service.__safeDI_mock(defaultUserService_AnyUserServiceBuilder: __safeDI_defaultUserService_AnyUserServiceBuilder_Service(), analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
 		        let service: Service = __safeDI_service()
 		        return Screen(analytics: analytics, service: service)
