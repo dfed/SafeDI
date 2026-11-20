@@ -1582,20 +1582,60 @@ extension DependencyTreeGenerator {
 			}
 		}
 		for root in generators {
-			// Each generator with what the calls inside every fill of its seam call hide from it, when it is such a fill, and
-			// the children of its parent, which are the fills of that call.
-			var generatorsToVisit = [(generator: root, hidden: FillReentryHidings?.none, fillsOfCall: [ScopeGenerator]())]
-			while let (generator, hidden, fillsOfCall) = generatorsToVisit.popLast() {
+			// Each generator with what the calls inside every fill of its seam call hide from it, when it is such a fill, the
+			// children of its parent, which are the fills of that call, and what the calls inside the fills of public mock calls
+			// enclosing it hide from the fills of public mock calls nested in those fills (`inheritedCalledCopyDeclarations`).
+			var generatorsToVisit = [(generator: root, hidden: FillReentryHidings?.none, fillsOfCall: [ScopeGenerator](), isFillOfPublicMockCall: false, inheritedCalledCopyDeclarations: [String: [SeamSignature.Hole.UncarriedDeclaration]]())]
+			while let (generator, hidden, fillsOfCall, isFillOfPublicMockCall, inheritedCalledCopyDeclarations) = generatorsToVisit.popLast() {
 				if let hole = generator.fillHole, let child = generator.children.first {
 					findingsOfFill(of: hole, child: child, fillsOfCall: fillsOfCall, hidden: hidden ?? FillReentryHidings(), requirement: AccessLevel.required(toConstructFrom: callerModule, declaredIn: hole.scopeSeamModule, isOwnFile: false), callerModule: callerModule).forEach(record)
 				}
-				// A seam call's children are its fills, which are judged against the calls inside any of them.
-				let hiddenByFillKey = generator.seamCall == nil ? [:] : hiddenByReenteringCalls(ofFillsOf: generator)
+				// A seam call's children are its fills, which are judged against the calls inside any of them. A public mock's call
+				// inside one of its fills that re-enters a level function the call declares hands it only what that call reads of its
+				// own scope (`PublicMockLevelFunctions.Reentry`), the nearest declaration inline reads, so the declarations on the path
+				// to it hide nothing; but the called mock's copy of the place leaves uncarried what that mock binds on its way to the
+				// place, which no scope of the caller holds, as the twin's seam call does.
+				let hiddenByFillKey: [String: FillReentryHidings] = if generator.seamCall != nil {
+					hiddenByReenteringCalls(ofFillsOf: generator)
+				} else if generator.publicMockCall != nil {
+					hiddenByReenteringCalls(ofFillsOf: generator).mapValues { FillReentryHidings(calledCopyDeclarations: $0.calledCopyDeclarations) }
+				} else {
+					[:]
+				}
 				if generator.seamCall != nil {
 					findingsOfCasesNestedByType(filledBy: generator.children, callerModule: callerModule).forEach(record)
 				}
+				// A public mock call nested in a fill of an enclosing public mock call hands its own fills what they read of the
+				// caller's scope from that enclosing fill's, which the calls inside the enclosing call's fills that re-enter it hand
+				// only the caller's values: so the fills of the nested call are hidden what the called mocks' copies of the
+				// re-entered place leave uncarried, as the enclosing fill is, of each label no scope between declares and their own
+				// calls hide nothing of: a fill declares the fields it binds, and any other scope what
+				// `declarationsBound(by:includingForwardedProperties:reason:)` says it binds.
+				var childInheritedCalledCopyDeclarations = inheritedCalledCopyDeclarations
+				if isFillOfPublicMockCall, let hidden {
+					for (label, declarations) in hidden.calledCopyDeclarations where childInheritedCalledCopyDeclarations[label] == nil {
+						childInheritedCalledCopyDeclarations[label] = declarations
+					}
+				}
+				let declaredLabels = if let fillHole = generator.fillHole {
+					// A field the fill takes of the caller's scope for a call inside it that re-enters the call is no declaration.
+					generator.fillBoundFields.map(\.property.label).filter { label in fillHole.fields.contains { $0.property.label == label } }
+				} else {
+					declarationsBound(by: generator, includingForwardedProperties: true, reason: .other).map(\.property.label)
+				}
+				for label in declaredLabels {
+					childInheritedCalledCopyDeclarations[label] = nil
+				}
 				generatorsToVisit.append(contentsOf: generator.children.reversed().map { child in
-					(child, child.fillKey.flatMap { hiddenByFillKey[$0] }, generator.children)
+					var childHidden = child.fillKey.flatMap { hiddenByFillKey[$0] }
+					if generator.publicMockCall != nil, child.fillHole != nil, !childInheritedCalledCopyDeclarations.isEmpty {
+						var merged = childHidden ?? FillReentryHidings()
+						for (label, declarations) in childInheritedCalledCopyDeclarations where merged.calledCopyDeclarations[label] == nil {
+							merged.calledCopyDeclarations[label] = declarations
+						}
+						childHidden = merged
+					}
+					return (child, childHidden, generator.children, generator.publicMockCall != nil && child.fillHole != nil, childInheritedCalledCopyDeclarations)
 				})
 			}
 		}
