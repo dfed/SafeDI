@@ -243,6 +243,9 @@ struct ModuleTestOutput {
 	let generateOutput: Generate.Output?
 	/// The DOT tree `generate` wrote (`--dot-file-output`), when the test asked for one under `.moduleInfo`.
 	var dotTree: String?
+	/// The lines of the list of unused inputs `generate` wrote (`--unused-inputs-list-output`), which `.moduleInfo` asks
+	/// for whenever the test passes `modulesBeneath`, as the Bazel rule always does.
+	var unusedInputs: [String]?
 }
 
 /// What `executeSafeDIToolMultiModuleTest` produced: each module's output and, when the modules were compiled,
@@ -473,6 +476,10 @@ func executeSafeDIToolMultiModuleTest(
 				arguments += ["--dot-file-output", outputDirectory.appendingPathComponent("\(moduleName).dot").path]
 			}
 			arguments.append("--compiler-receives-input-paths-unchanged")
+			let unusedInputsOutput = modulesBeneath == nil ? nil : outputDirectory.appendingPathComponent("\(moduleName)_unused_inputs.txt")
+			if let unusedInputsOutput {
+				arguments += ["--unused-inputs-list-output", unusedInputsOutput.path]
+			}
 			if !module.fixture.omitsModuleName {
 				arguments += ["--module-info-output", output.path, "--module-name", moduleName]
 				if viewsReferToModules {
@@ -634,6 +641,9 @@ func executeSafeDIToolMultiModuleTest(
 			generatedFiles: try generatedSwiftFiles(in: outputDirectory),
 			generateOutput: generateOutput,
 			dotTree: writesDOTTrees ? try String(contentsOf: outputDirectory.appendingPathComponent("\(moduleName).dot"), encoding: .utf8) : nil,
+			unusedInputs: integration == .moduleInfo && modulesBeneath != nil
+				? try String(contentsOf: outputDirectory.appendingPathComponent("\(moduleName)_unused_inputs.txt"), encoding: .utf8).split(separator: "\n").map(String.init)
+				: nil,
 		)
 	}
 
