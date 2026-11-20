@@ -2022,6 +2022,15 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 			        bBuilder: Instantiator<B>? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
+			        A.__safeDI_mock(aBuilder: aBuilder, bBuilder: bBuilder, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        aBuilder: Instantiator<A>? = nil,
+			        bBuilder: Instantiator<B>? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> A {
 			        func __safeDI_bBuilder() -> B {
 			            let aBuilder = if let aBuilder { aBuilder } else { Instantiator<A>(__safeDI_aBuilder) }
 			            return if let safeDIBuilder = safeDIOverrides.bBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
