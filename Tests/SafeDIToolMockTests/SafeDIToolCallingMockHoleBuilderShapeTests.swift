@@ -563,10 +563,28 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 		])
 	}
 
+	@Test(arguments: [Caller.public, .seamPublic])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_callsPublicMockItCouldBuildInlineWithRequiredBuilder_whenNoCallFillsPlaceOfItsHoleType(caller: Caller) async throws {
+		// No call fills a place of `any Api`, so the `.public` mock takes no optional builder of it to hand an inline place: it
+		// calls `G`'s public mock, whose tree it could build, and the call is handed the required builder.
+		let modules = Self.joinModules(caller: caller, buildsGInline: true, holdsH: false)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+
+		#expect(Self.mockParameterLines(of: output) == [
+			"apiBuilder: @escaping () -> any Api,",
+			"safeDIOverrides: SafeDIOverrides = .init()",
+		])
+		try await expectValues(of: output, modules: modules, pairs: [
+			("Root.mock(apiBuilder: { App.Fake() }).g.api is App.Fake", "true"),
+			("Root.mock(apiBuilder: { App.Fake() }).f.a.api is App.Fake", "true"),
+		])
+	}
+
 	/// The modules of the join: `F` holds `any Api` twice, beneath levels whose `log` differs, and `Live` reads `log` lazily,
 	/// so a pass-up gate passes `F`'s places up whole and `Root`'s mock takes `apiBuilder` required, and `H`'s one place is
 	/// filled. Where `buildsGInline`, `Root` also instantiates `G`, whose public initializer lets the mock build it inline.
-	private static func joinModules(caller: Caller, buildsGInline: Bool) -> [ModuleFixture] {
+	private static func joinModules(caller: Caller, buildsGInline: Bool, holdsH: Bool = true) -> [ModuleFixture] {
 		let feat = """
 		import SafeDI
 
@@ -651,15 +669,13 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 
 		\(caller.attribute)
 		public final class Root: Instantiable {
-		    public init(log: LazilyInstantiated<Log>, f: F, h: H\(buildsGInline ? ", g: G" : "")) {
+		    public init(log: LazilyInstantiated<Log>, f: F\(holdsH ? ", h: H" : "")\(buildsGInline ? ", g: G" : "")) {
 		        self.log = log
-		        self.f = f
-		        self.h = h\(buildsGInline ? "\n        self.g = g" : "")
+		        self.f = f\(holdsH ? "\n        self.h = h" : "")\(buildsGInline ? "\n        self.g = g" : "")
 		    }
 
 		    @Instantiated public let log: LazilyInstantiated<Log>
-		    @Instantiated public let f: F
-		    @Instantiated public let h: H\(buildsGInline ? "\n    @Instantiated public let g: G" : "")
+		    @Instantiated public let f: F\(holdsH ? "\n    @Instantiated public let h: H" : "")\(buildsGInline ? "\n    @Instantiated public let g: G" : "")
 		}
 		"""
 		let featForCaller = caller == .seamPublic ? feat
