@@ -12793,6 +12793,9 @@ struct GraphFuzzerFailure: Equatable {
 		/// Two builds of one type in a seam's tree bind other values before the same property (`SeamPlaceLevels.levelDisagreements()`):
 		/// the levels a scope enum would nest by type would depend on the path.
 		case placeLevelsDifferBetweenBuildsOfType = "two builds of one type in a seam's tree bind other values before the same property"
+		/// A place of a production body's walk holds other builder functions or closing edges than its kind holds
+		/// (`PlaceObservation.violations`).
+		case placeHoldsOtherThanItsKind = "a place of a production body holds other builder functions or closing edges than its kind holds"
 		/// A place's path in a seam's tree repeats a declaration (`GraphFuzzerPlaceFacts.chainRepeats`): a scope value's
 		/// chain would repeat one, which a build that closes a cycle, being the first build, never makes.
 		case placeChainRepeatsDeclaration = "a place's path in a seam's tree repeats a declaration"
@@ -13597,6 +13600,8 @@ struct GraphFuzzerToolRuns {
 	///   - placeLevelDisagreements: Each level of a place of a seam that one build of a type gives with other values than
 	///     another build of it, in the run of `firstOutcome` (`SeamPlaceLevels.levelDisagreements()`).
 	///   - placeFacts: The facts of the places of every seam's holes the run of `firstOutcome` computes.
+	///   - placeViolations: Each place of a production body the run of `firstOutcome` generates whose plan does not hold what
+	///     its kind holds (`PlaceObservation.violations`).
 	///   - withoutSecondPath: The run of the graph without its second path to a type that holds a place
 	///     (`GraphFuzzerGenerator.fixtureWithoutSecondPath(forSeed:features:)`), when it has one.
 	///   - remedyRuns: The outcome of each remedy the errors of a rejected base corpus graph state, applied to the graph
@@ -13621,6 +13626,7 @@ struct GraphFuzzerToolRuns {
 		withoutSecondHolePlaceOutcome: (place: String, outcome: GraphFuzzerToolOutcome)? = nil,
 		placeLevelDisagreements: [String] = [],
 		placeFacts: GraphFuzzerPlaceFacts = GraphFuzzerPlaceFacts(),
+		placeViolations: [String] = [],
 		withoutSecondPath: GraphFuzzerSecondPathRun? = nil,
 		remedyRuns: [GraphFuzzerRemedyRun] = [],
 		builderSurfaceRuns: [GraphFuzzerBuilderSurfaceRun] = [],
@@ -13631,6 +13637,7 @@ struct GraphFuzzerToolRuns {
 		self.withoutSecondHolePlaceOutcome = withoutSecondHolePlaceOutcome
 		self.placeLevelDisagreements = placeLevelDisagreements
 		self.placeFacts = placeFacts
+		self.placeViolations = placeViolations
 		self.withoutSecondPath = withoutSecondPath
 		self.remedyRuns = remedyRuns
 		self.fixture = fixture
@@ -13662,6 +13669,7 @@ struct GraphFuzzerToolRuns {
 	let withoutSecondHolePlaceOutcome: (place: String, outcome: GraphFuzzerToolOutcome)?
 	let placeLevelDisagreements: [String]
 	let placeFacts: GraphFuzzerPlaceFacts
+	let placeViolations: [String]
 	let withoutSecondPath: GraphFuzzerSecondPathRun?
 	let remedyRuns: [GraphFuzzerRemedyRun]
 	let builderSurfaceRuns: [GraphFuzzerBuilderSurfaceRun]
@@ -13746,6 +13754,19 @@ struct GraphFuzzerToolRuns {
 			seed: fixture.seed,
 			kind: .placeLevelsDifferBetweenBuildsOfType,
 			details: "\(placeLevelDisagreements.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)",
+		)
+	}
+
+	/// The failure of a graph a place of whose production bodies holds other builder functions or closing edges than its
+	/// kind holds, or `nil`: every place has exactly one function, two for a loop member whose function takes a lazy cycle's
+	/// parameters, one closing edge to an enclosing place's function for a scope that closes a cycle, or one hosted
+	/// statement of a seam's code with no place beneath it (`PlaceObservation.violations`).
+	var placeOracleFailure: GraphFuzzerFailure? {
+		guard !placeViolations.isEmpty else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .placeHoldsOtherThanItsKind,
+			details: "\(placeViolations.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)",
 		)
 	}
 
@@ -14434,7 +14455,7 @@ enum GraphFuzzerOracle {
 			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
 			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.publicMockOverridesOrderFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
-			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
+			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeOracleFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
 			// Whether a closure a level function returns keeps a level's values, read from the generated text, so it judges
 			// with compiles and without.
@@ -15136,8 +15157,11 @@ enum GraphFuzzerOracle {
 		// (`placeLevelsFailure`).
 		// The paths of the places the first run computes must repeat no declaration (`placeChainFailure`), and their cases
 		// must be the ones the generated scope enums declare (`scopeCaseFailures`).
-		let ((firstOutcome, placeLevelDisagreements), placeFacts) = try await collectingPlaceFacts(during: {
-			try await collectingPlaceLevelDisagreements(during: { try await toolOutcome(of: fixture) })
+		// Every place of a production body the first run generates must hold what its kind holds (`placeOracleFailure`).
+		let (((firstOutcome, placeLevelDisagreements), placeFacts), placeObservations) = try await collectingPlaceObservations(during: {
+			try await collectingPlaceFacts(during: {
+				try await collectingPlaceLevelDisagreements(during: { try await toolOutcome(of: fixture) })
+			})
 		})
 		// A graph with a seam is run again with no seam: a rejection inline does not make is either a seam's own error
 		// or a defect (`differentialFailure`), and an accepted graph must pass no receiver `nil` that inline passes a
@@ -15232,6 +15256,7 @@ enum GraphFuzzerOracle {
 			withoutSecondHolePlaceOutcome: withoutSecondHolePlaceOutcome,
 			placeLevelDisagreements: placeLevelDisagreements,
 			placeFacts: placeFacts,
+			placeViolations: placeObservations.flatMap(\.violations),
 			withoutSecondPath: withoutSecondPath,
 			remedyRuns: remedyRuns,
 			builderSurfaceRuns: builderSurfaceRuns,
