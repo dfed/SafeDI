@@ -331,11 +331,13 @@ struct GraphFuzzerMockMirrorModel {
 		}
 	}
 
-	/// A hand-written mock method: its name, the type it returns, and the label each of its parameters is passed by.
+	/// A hand-written mock method: its name, the type it returns, the label each of its parameters is passed by, and its
+	/// parameters, each as declared.
 	struct HandWrittenMock: Equatable {
 		let name: String
 		let returnTypeName: String
 		let parameterLabels: [String]
+		let parameters: [String]
 	}
 
 	struct TypeDeclaration {
@@ -429,7 +431,7 @@ struct GraphFuzzerMockMirrorModel {
 
 	/// Each static method of `fixture` written on one line as `static func <name>(<parameters>) -> <Type> {`.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private static func handWrittenMocks(in fixture: GraphFuzzerFixture) -> [HandWrittenMock] {
+	fileprivate static func handWrittenMocks(in fixture: GraphFuzzerFixture) -> [HandWrittenMock] {
 		fixture.swiftFileContent.flatMap { content in
 			content.split(separator: "\n").compactMap { line -> HandWrittenMock? in
 				guard let start = line.range(of: "static func "),
@@ -442,6 +444,7 @@ struct GraphFuzzerMockMirrorModel {
 					name: String(line[start.upperBound..<open]),
 					returnTypeName: String(line[close.upperBound...].dropLast(" {".count)),
 					parameterLabels: parameters.compactMap { parameter in parameter.split(separator: ":").first?.split(separator: " ").first.map(String.init) },
+					parameters: parameters,
 				)
 			}
 		}
@@ -1643,7 +1646,7 @@ struct GraphFuzzerValueOraclePlan {
 				      GraphFuzzerMirrorTypes.kindOrder(of: property.type) == 0,
 				      !property.isOptional
 				else { return nil }
-				return GraphFuzzerOverrideCandidate(label: property.label, builtTypeName: scopeTypeName)
+				return GraphFuzzerOverrideCandidate(label: property.label, builtTypeName: scopeTypeName, propertyTypeName: GraphFuzzerMockMirrorModel.unqualifiedName(of: property.type))
 			}
 		}
 		self.rootOverrideCandidates = rootOverrideCandidates
@@ -1653,6 +1656,26 @@ struct GraphFuzzerValueOraclePlan {
 			instantiateParametersByExtensionTypeName[typeName] = type.instantiateParameters
 		}
 		self.instantiateParametersByExtensionTypeName = instantiateParametersByExtensionTypeName
+		// The hand-written mock of each type that returns one of the type's additional types, matched by its name and the
+		// type it returns, as the model matches a mock that returns the type itself; none where two types' mocks match.
+		let handWrittenMocks = GraphFuzzerMockMirrorModel.handWrittenMocks(in: fixture)
+		var handWrittenMocksReturningAdditionalTypes = [String: GraphFuzzerMockMirrorModel.HandWrittenMock]()
+		for typeName in model.typeOrder {
+			guard let type = model.types[typeName] else { continue }
+			let mockName = type.customMockName ?? "mock"
+			let matches = handWrittenMocks.filter { mock in
+				mock.name == mockName && type.additionalTypes.contains { GraphFuzzerMockMirrorModel.unqualifiedName(of: $0) == mock.returnTypeName }
+			}
+			let claimedByAnotherType = model.typeOrder.contains { otherTypeName in
+				otherTypeName != typeName && matches.contains { mock in
+					model.types[otherTypeName]?.additionalTypes.contains { GraphFuzzerMockMirrorModel.unqualifiedName(of: $0) == mock.returnTypeName } == true
+				}
+			}
+			if matches.count == 1, !claimedByAnotherType {
+				handWrittenMocksReturningAdditionalTypes[typeName] = matches[0]
+			}
+		}
+		self.handWrittenMocksReturningAdditionalTypes = handWrittenMocksReturningAdditionalTypes
 	}
 
 	let fixture: GraphFuzzerFixture
@@ -1682,6 +1705,10 @@ struct GraphFuzzerValueOraclePlan {
 	let rootOverrideCandidates: [String: [GraphFuzzerOverrideCandidate]]
 	/// The parameters of each of the graph's extensions' `instantiate(…)`, each as declared, by the type it builds.
 	let instantiateParametersByExtensionTypeName: [String: [String]]
+	/// The hand-written mock of each type of the graph that returns one of the type's additional types, by the type: a
+	/// property of the type the mock returns is built with it (`mockReturnTypeIsCompatible`), so the builder of its
+	/// configuration takes the mock's parameters.
+	let handWrittenMocksReturningAdditionalTypes: [String: GraphFuzzerMockMirrorModel.HandWrittenMock]
 
 	/// The value-oracle fixture: `fixture`, or the same graph drawn storing every parameter, with `generateMock: true`
 	/// on every root and the mirrors' files after the graph's own, and, in the fixture the comparator compiles, the file
