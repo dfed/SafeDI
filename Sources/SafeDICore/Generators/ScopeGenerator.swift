@@ -2860,15 +2860,57 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) async throws -> GeneratedCode {
 		try await generateCode(
 			codeGeneration: codeGeneration,
-			unavailableProperties: unavailableProperties(
-				isGeneratedBefore: { _ in false },
-				propertiesGeneratedLater: [],
-			),
+			unavailableProperties: rootUnavailableProperties,
 			propertiesGeneratedLater: [],
 			builderFunctionNames: BuilderFunctionNames(),
 			leadingWhitespace: "",
 			// The root of what is generated is inside no fill an internal mock declares.
 			fillPlaceBindings: .none,
+		)
+	}
+
+	/// Generates this scope's code as the root of what is generated and caches its text in place of the plan
+	/// (`GeneratedCode.spelled(_:)`), so that a tree that holds this scope copies the text when it is spelled rather than
+	/// walking the plan again, and the plan is released. A scope that starts its code early
+	/// (`Scope.startCodeGeneration(of:spellsPlan:)`) spells it while the rest of the tree is still being generated. The
+	/// spelling is part of the task the cache holds while the code is generated, so a scope above that asks for the code
+	/// meanwhile is handed the text, never the plan, which it would otherwise keep beside the cached text and spell again.
+	func generateSpelledPlan() async throws {
+		let cacheKey = UnavailablePropertiesCacheKey(
+			unavailableProperties: rootUnavailableProperties,
+			propertiesGeneratedLater: [],
+			builderFunctionNames: BuilderFunctionNames(),
+			fillPlaceBindings: .none,
+		)
+		// A generator a construction memo shares between trees can be started by each, and its code may be asked for
+		// before it is started: either way its code is generated once, as it was first asked for.
+		guard unavailablePropertiesToGeneratedCode[cacheKey] == nil, unavailablePropertiesToGenerateCodeTask[cacheKey] == nil else {
+			return
+		}
+		let unavailableProperties = cacheKey.unavailableProperties
+		let generateCodeTask = Task {
+			let code = try await generatePropertyCode(
+				codeGeneration: .dependencyTree,
+				unavailableProperties: unavailableProperties,
+				propertiesGeneratedLater: [],
+				builderFunctionNames: BuilderFunctionNames(),
+				fillPlaceBindings: .none,
+			)
+			let spelledCode = GeneratedCode.spelled(code)
+			// As in `generateCode`, the cache keeps the finished code rather than the task.
+			unavailablePropertiesToGeneratedCode[cacheKey] = spelledCode
+			unavailablePropertiesToGenerateCodeTask[cacheKey] = nil
+			return spelledCode
+		}
+		unavailablePropertiesToGenerateCodeTask[cacheKey] = generateCodeTask
+		_ = try await generateCodeTask.value
+	}
+
+	/// This scope's unavailable properties as the root of what is generated, with nothing generated before it.
+	private var rootUnavailableProperties: Set<Property> {
+		unavailableProperties(
+			isGeneratedBefore: { _ in false },
+			propertiesGeneratedLater: [],
 		)
 	}
 

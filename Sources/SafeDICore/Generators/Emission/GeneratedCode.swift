@@ -25,7 +25,8 @@ import Foundation
 ///
 /// Each level of a tree used to indent its whole subtree's text again, so a place's text was copied once per level above
 /// it, and every scope's cache held its subtree's text. A level now holds its children's plans, and the root's plan is
-/// spelled once (`spelled()`), each line written with the indentation of every level around it. The bytes are the ones
+/// spelled once (`spelled()`), each line written with the indentation of every level around it. A small subtree started
+/// early is spelled while the rest of the tree is generated (`Node.spelled`), and the root's spelling copies its text. The bytes are the ones
 /// re-indenting at every level wrote (`GeneratedCodeText.indentingNonEmptyLines`), which `GeneratedCodeTests` checks.
 ///
 /// A plan can be as deep as the module has types, so everything that reads one walks it with a stack of its own, and
@@ -46,6 +47,8 @@ struct GeneratedCode: Sendable {
 		/// no line feed after the last, as `GeneratedCodeText.indentingNonEmptyLines(of:by:)` writes text. Empty
 		/// `indentation` writes `code` as it is: a scope generated with no leading whitespace keeps its empty lines.
 		case indented(GeneratedCode, by: String)
+		/// Code spelled while the rest of the tree was being generated, written as its text, with no plan kept.
+		case spelled(String)
 	}
 
 	/// Text, written as it is.
@@ -68,6 +71,11 @@ struct GeneratedCode: Sendable {
 		GeneratedCode(storage: .children(Children(.indented(indentation), [code])))
 	}
 
+	/// `code`'s text, which a writer writes as it is (`Node.spelled`). The plan is dropped once it is spelled.
+	static func spelled(_ code: GeneratedCode) -> GeneratedCode {
+		GeneratedCode(storage: .children(Children(.spelled(code.spelled()), [])))
+	}
+
 	/// The empty code.
 	static let empty = GeneratedCode.sequence([])
 
@@ -84,6 +92,8 @@ struct GeneratedCode: Sendable {
 				.lines(children.codes)
 			case let .indented(indentation):
 				.indented(children.codes[0], by: indentation)
+			case let .spelled(text):
+				.spelled(text)
 			}
 		}
 	}
@@ -107,6 +117,7 @@ struct GeneratedCode: Sendable {
 			case sequence
 			case lines
 			case indented(String)
+			case spelled(String)
 		}
 
 		init(_ kind: Kind, _ codes: [GeneratedCode]) {
@@ -170,7 +181,7 @@ private struct GeneratedCodeWriter {
 			switch next {
 			case let .code(code):
 				switch code.node {
-				case let .text(text):
+				case let .text(text), let .spelled(text):
 					write(text)
 				case let .sequence(pieces):
 					for piece in pieces.reversed() {

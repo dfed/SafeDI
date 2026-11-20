@@ -49,6 +49,12 @@ struct GeneratedCodeTests {
 	}
 
 	@Test
+	func spelled_writesSpelledTextInPlaceOfItsCode_whenPlanHoldsCodeSpelledBeforehand() {
+		let code = GeneratedCode.indented(.lines([.text("a"), .spelled(.indented(.text("b\n\nc"), by: "\t"))]), by: "  ")
+		#expect(code.spelled() == "  a\n  \tb\n  \tc")
+	}
+
+	@Test
 	func release_returnsWithoutNestingALevelsRelease_whenTaskDropsPlanAHundredThousandLevelsDeep() async {
 		// A concurrency thread's stack is half a megabyte on Apple platforms, which releasing a level from within the
 		// release of the level above it overflowed long before a hundred thousand levels.
@@ -97,12 +103,14 @@ struct GeneratedCodeTests {
 			indentation.isEmpty
 				? reindentingEveryLevel(code)
 				: GeneratedCodeText.indentingNonEmptyLines(of: reindentingEveryLevel(code), by: indentation)
+		case let .spelled(text):
+			text
 		}
 	}
 
 	private static func randomCode(depth: Int, using generator: inout SeededGenerator) -> GeneratedCode {
 		let tokens = ["x", "\n", "\r", "é", "\u{301}", " ", "\n\n", "\r\n"]
-		let kind = depth == 0 ? 0 : Int(generator.next() % 4)
+		let kind = depth == 0 ? 0 : Int(generator.next() % 5)
 		switch kind {
 		case 0:
 			let count = Int(generator.next() % 5)
@@ -110,9 +118,11 @@ struct GeneratedCodeTests {
 		case 1, 2:
 			let pieces = (0..<Int(generator.next() % 4)).map { _ in randomCode(depth: depth - 1, using: &generator) }
 			return kind == 1 ? .sequence(pieces) : .lines(pieces)
-		default:
+		case 3:
 			let indentations = ["", "\t", "    ", "\r"]
 			return .indented(randomCode(depth: depth - 1, using: &generator), by: indentations[Int(generator.next() % UInt64(indentations.count))])
+		default:
+			return .spelled(randomCode(depth: depth - 1, using: &generator))
 		}
 	}
 }
