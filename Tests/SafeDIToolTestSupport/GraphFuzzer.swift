@@ -14150,8 +14150,8 @@ struct GraphFuzzerToolRuns {
 
 	/// The failure of a graph whose run with no skip of a clean subtree in the validation walk gives other results than its
 	/// first run, which skipped one, or `nil`: a skipped subtree's walk along another path completed with an equal context and
-	/// found nothing, so walking it again would find nothing either (`cycle-validation.md`, "Clean subtrees"). Seeds 7, 10 and
-	/// 17 of the seam corpus fail it when the walk remembers a subtree whose walk raised `memoBlockingEventCount`.
+	/// found nothing, so walking it again would find nothing either (`cycle-validation.md`, "Clean subtrees"). Seeds 10 and 17
+	/// of the seam corpus fail it when the walk remembers a subtree whose walk raised `memoBlockingEventCount`.
 	var cleanSubtreeSkipFailure: GraphFuzzerFailure? {
 		guard let cleanSubtreeSkipOffOutcome, cleanSubtreeSkipOffOutcome != firstOutcome else { return nil }
 		return GraphFuzzerFailure(
