@@ -168,6 +168,12 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case holeBeneathInstantiator
 	case holeBeneathLazilyInstantiated
 	case holeBeneathSendableWrapper
+	/// On a stream of its own (`publicMockReceivedHoleHostRandomSeedMask`): `HoleHost` received by `HoleReceiver`, a type
+	/// `T6` instantiates – as itself, through an `Instantiator`, or through a `SendableInstantiator` – so that `T6`'s mock
+	/// promotes it to its root, and the hole's place is beneath a dependency `T6` does not declare (the adopter's M2).
+	case holeHostReceivedByValue
+	case holeHostReceivedThroughInstantiator
+	case holeHostReceivedThroughSendableInstantiator
 	/// The hole declared as `Instantiator<Hole>`, whose type conforms to `Instantiable` by hand, as `any HoleProtocol`, or
 	/// as an erasure of `HoleFill`, which only a consumer module may declare, to `AnyHole`: a constant or an
 	/// `ErasedInstantiator`.
@@ -236,6 +242,11 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case selfBuildingPublicMockPlaceBeneath
 	case selfBuildingPublicMockFillReadsToken
 	case selfBuildingPublicMockPassedUp
+	/// On a stream of its own (`publicMockSelfReceivesBuilderRandomSeedMask`): a type of `SelfNode`'s tree receives the builder
+	/// of `SelfNode` rather than instantiating it – `SelfStep`, `SelfPart`, which holds the place, or `SelfLink`, which holds
+	/// none – so that `SelfNode`'s mock promotes the builder to its root, and the places of the `SelfNode` it builds are
+	/// beneath a dependency `SelfNode` does not declare (the adopter's M2: `SelfPart` receiving a `SendableInstantiator`).
+	case selfBuildingPublicMockReceivesBuilder
 	/// On a stream of its own (`publicMockPlaceInFillRandomSeedMask`), a place inside a public mock's fill:
 	/// `PlaceInFillOuter`, a `.public` type of the declaring module, builds `PlaceInFillInner`, a `.public` type of the
 	/// module beneath it whose place of `PlaceInFillService` the declaring module fills with `PlaceInFillDefault`,
@@ -315,6 +326,17 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// which the called `mock()` takes `@escaping`; the oracle compiles a closure that passes it on
 	/// (`GraphFuzzerOracle.addingOverrideClosureCallers(to:of:)`).
 	case overrideClosureCallPlaceIsErasedInstantiator
+	/// On a stream of its own (`publicMockPromotedHoleRandomSeedMask`), a place beneath a received dependency a public mock
+	/// promotes to its root lazily: `PromoteNode`, a `.public` type, builds `PromoteLeaf`, which receives `PromoteOther`, the
+	/// holder of a place of `PromoteApi`, through a `LazilyInstantiated` or a `SendableLazilyInstantiated` that nothing in
+	/// `PromoteNode`'s tree provides, so the mock builds it at its root, and the place is a place of the mock's like any other
+	/// (adopter M2). `PromoteScreen`, a mocked consumer, builds `PromoteNode`, and `PromoteLive` fills the place, or nothing
+	/// does and its mock takes the builder.
+	case promotedHolePublicMock
+	case promotedHolePublicMockLazily
+	case promotedHolePublicMockSendableLazily
+	case promotedHolePublicMockPassedUp
+	case promotedHolePublicMockPublicConsumer
 
 	/// The shapes of `overrideClosureCall` whose call can hand an override closure no builder a person writes, so that the
 	/// consumer's overrides hold no member for it.
@@ -322,13 +344,13 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 
 	/// Whether one of the gating draws (`selfBuildingPublicMock…`, `placeInsidePublicMockFill…`,
 	/// `retentionPublicMockValueBeforeBuilder…`, `sharedConstructionPublicMock…`, `keywordLabeledPublicMock…`,
-	/// `overrideClosure…`, and `T6`'s mock isolated to the main actor or built with its hand-written mock in another public
-	/// mock) draws this shape, whose count in accepted graphs the public mock corpus pins too
-	/// (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
+	/// `overrideClosure…`, `promotedHolePublicMock…`, and `T6`'s mock isolated to the main actor or built with its
+	/// hand-written mock in another public mock) draws this shape, whose count in accepted graphs the public mock corpus pins
+	/// too (`acceptedPublicMockDrawFeatureCounts`), at least ten each.
 	var isCountedWhenAccepted: Bool {
 		rawValue.hasPrefix("selfBuildingPublicMock") || rawValue.hasPrefix("placeInsidePublicMockFill") || isRetentionShape
 			|| rawValue.hasPrefix("sharedConstructionPublicMock") || rawValue.hasPrefix("keywordLabeledPublicMock")
-			|| rawValue.hasPrefix("overrideClosureCall")
+			|| rawValue.hasPrefix("overrideClosureCall") || rawValue.hasPrefix("promotedHolePublicMock")
 			|| self == .holeMockIsolatedToMainActor || self == .holeHandWrittenMockBuiltInPublicMock
 	}
 
@@ -536,6 +558,7 @@ struct GraphFuzzerPublicMockDraw {
 		var holeLoopRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockHoleLoopRandomSeedMask)
 		var holeForwardingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockHoleForwardingRandomSeedMask)
 		var holeAttributesRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockHoleAttributesRandomSeedMask)
+		var receivedHoleHostRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockReceivedHoleHostRandomSeedMask)
 		drawsHoleForwardingValue = holeForwardingRandom.percentChance(60)
 		drawsHoleMockOnMainActor = holeAttributesRandom.percentChance(25)
 		drawsHoleHandWrittenMock = holeAttributesRandom.percentChance(30)
@@ -553,6 +576,7 @@ struct GraphFuzzerPublicMockDraw {
 			secondCalledMockRandom: &secondCalledMockRandom,
 			rootLevelRandom: &rootLevelRandom,
 			holeLoopRandom: &holeLoopRandom,
+			receivedHoleHostRandom: &receivedHoleHostRandom,
 		)
 		// Which files move beneath the declaring module: decided after the rest of the draw, from a stream of its own, so
 		// that a graph without it is drawn as before. Each file is read as the drawn graph writes it.
@@ -569,7 +593,8 @@ struct GraphFuzzerPublicMockDraw {
 		// The gating draws, each on a stream of its own and after the files that move beneath the declaring module have moved,
 		// so that a graph without them is drawn, and moved, as before.
 		var selfBuildRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockSelfBuildRandomSeedMask)
-		drawSelfBuildingPublicMock(random: &selfBuildRandom)
+		var selfReceivesBuilderRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockSelfReceivesBuilderRandomSeedMask)
+		drawSelfBuildingPublicMock(random: &selfBuildRandom, receivesBuilderRandom: &selfReceivesBuilderRandom)
 		var placeInFillRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockPlaceInFillRandomSeedMask)
 		drawPlaceInsidePublicMockFill(random: &placeInFillRandom)
 		var retentionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockRetentionRandomSeedMask)
@@ -580,6 +605,8 @@ struct GraphFuzzerPublicMockDraw {
 		drawKeywordLabeledPublicMock(random: &keywordLabelRandom)
 		var overrideClosureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockOverrideClosureRandomSeedMask)
 		drawOverrideClosurePublicMockCall(random: &overrideClosureRandom)
+		var promotedHoleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockPromotedHoleRandomSeedMask)
+		drawPromotedHolePublicMock(random: &promotedHoleRandom)
 	}
 
 	/// The files of the graph, each beginning with its module's marker: as drawn, or, for the known-right path of the
@@ -685,6 +712,13 @@ struct GraphFuzzerPublicMockDraw {
 	/// (`drawSelfBuildingPublicMock`): rolls added after the rest of the draw was pinned, so that its other shapes are
 	/// drawn as before.
 	static let publicMockSelfBuildRandomSeedMask: UInt64 = 0x7075626D6B73656C
+	/// Draws only whether the shape #702 fixed has a type in `SelfNode`'s tree receive the builder of `SelfNode` rather than
+	/// instantiate it (`drawSelfBuildingPublicMock`): a roll added after the rest of the draw was pinned, so that its other
+	/// shapes are drawn as before.
+	static let publicMockSelfReceivesBuilderRandomSeedMask: UInt64 = 0x7075626D6B737865
+	/// Draws only whether `T6` builds `HoleReceiver`, which receives `HoleHost`, rather than building `HoleHost` itself:
+	/// rolls added after the rest of the draw was pinned, so that its other shapes are drawn as before.
+	static let publicMockReceivedHoleHostRandomSeedMask: UInt64 = 0x7075626D6B727A6B
 	/// Draws only a place inside a public mock's fill (`drawPlaceInsidePublicMockFill`): rolls added after the rest of the
 	/// draw was pinned, so that its other shapes are drawn as before.
 	static let publicMockPlaceInFillRandomSeedMask: UInt64 = 0x7075626D6B706966
@@ -711,6 +745,9 @@ struct GraphFuzzerPublicMockDraw {
 	/// code calls beside the construction function of one name: rolls added after the rest of the draw was pinned, so that
 	/// its other shapes are drawn as before.
 	static let publicMockHoleAttributesRandomSeedMask: UInt64 = 0x7075626D6B617472
+	/// Draws only a place beneath a received dependency a public mock promotes to its root (`drawPromotedHolePublicMock`):
+	/// rolls added after the rest of the draw was pinned, so that its other shapes are drawn as before.
+	static let publicMockPromotedHoleRandomSeedMask: UInt64 = 0x7075626D6B70726F
 	/// What begins the comment in `T6`'s file that holds its hand-written caller's call, after the caller's module:
 	/// `// publicMockCaller in FuzzOther: S1_T6.mock(s1_HoleBuilder: …)`. `GraphFuzzerOracle.addingPublicMockCallers` reads it.
 	static let publicMockCallerMarker = "// publicMockCaller in "
@@ -875,37 +912,55 @@ struct GraphFuzzerPublicMockDraw {
 		case labelInTwoForms
 	}
 
-	/// Where `T6`'s tree instantiates its hole: on `T6`, or on the type `HoleHost` that `T6` instantiates as a wrapper.
+	/// Where `T6`'s tree instantiates its hole: on `T6`; on the type `HoleHost` that `T6` instantiates as a wrapper; or on
+	/// `HoleHost` that `HoleReceiver`, a type `T6` instantiates, receives – as itself, or as a wrapper – so that `T6`'s mock
+	/// promotes `HoleHost` to its root, a dependency `T6` itself does not declare.
 	private enum HolePosition {
 		case direct
 		case instantiator
 		case lazilyInstantiated
 		case sendableInstantiator
 		case sendableLazilyInstantiated
+		case receivedByValue
+		case receivedInstantiator
+		case receivedSendableInstantiator
 
 		var wrapperName: String {
 			switch self {
-			case .direct: ""
-			case .instantiator: "Instantiator"
+			case .direct, .receivedByValue: ""
+			case .instantiator, .receivedInstantiator: "Instantiator"
 			case .lazilyInstantiated: "LazilyInstantiated"
-			case .sendableInstantiator: "SendableInstantiator"
+			case .sendableInstantiator, .receivedSendableInstantiator: "SendableInstantiator"
 			case .sendableLazilyInstantiated: "SendableLazilyInstantiated"
 			}
 		}
 
-		/// The label `T6` holds the host under.
+		/// The type the host is held as: `HoleHost` itself, or its wrapper.
+		func hostType(_ hostName: String) -> String {
+			wrapperName.isEmpty ? hostName : "\(wrapperName)<\(hostName)>"
+		}
+
+		/// The label `T6`, or `HoleReceiver`, holds the host under.
 		var hostLabel: String {
 			switch self {
-			case .direct, .lazilyInstantiated, .sendableLazilyInstantiated: "holeHost"
-			case .instantiator, .sendableInstantiator: "holeHostBuilder"
+			case .direct, .lazilyInstantiated, .sendableLazilyInstantiated, .receivedByValue: "holeHost"
+			case .instantiator, .sendableInstantiator, .receivedInstantiator, .receivedSendableInstantiator: "holeHostBuilder"
 			}
 		}
 
 		/// Whether the hole is built inside a `@Sendable` builder function, whose place the public mock's `@Sendable` builder builds.
 		var isSendable: Bool {
 			switch self {
-			case .direct, .instantiator, .lazilyInstantiated: false
-			case .sendableInstantiator, .sendableLazilyInstantiated: true
+			case .direct, .instantiator, .lazilyInstantiated, .receivedByValue, .receivedInstantiator: false
+			case .sendableInstantiator, .sendableLazilyInstantiated, .receivedSendableInstantiator: true
+			}
+		}
+
+		/// Whether `HoleReceiver` receives the host, which `T6`'s mock then promotes to its root.
+		var isReceived: Bool {
+			switch self {
+			case .direct, .instantiator, .lazilyInstantiated, .sendableInstantiator, .sendableLazilyInstantiated: false
+			case .receivedByValue, .receivedInstantiator, .receivedSendableInstantiator: true
 			}
 		}
 	}
@@ -924,6 +979,7 @@ struct GraphFuzzerPublicMockDraw {
 		secondCalledMockRandom: inout GraphFuzzerRandomNumberGenerator,
 		rootLevelRandom: inout GraphFuzzerRandomNumberGenerator,
 		holeLoopRandom: inout GraphFuzzerRandomNumberGenerator,
+		receivedHoleHostRandom: inout GraphFuzzerRandomNumberGenerator,
 	) {
 		// Both rolls are made in every graph, so the stream is consumed the same way whatever the rest of the draw.
 		let declaresSpaceInFileOfItsOwn = namespaceRandom.percentChance(50)
@@ -1267,7 +1323,8 @@ struct GraphFuzzerPublicMockDraw {
 
 		// R7, on the hole stream: the `.public` type `T6`, whose tree instantiates a hole – a type no declaration of the
 		// module fulfills, proven `public` by a public initializer that takes it (`HoleProver`) – on itself, or on a type
-		// it builds beneath an `Instantiator`, a `LazilyInstantiated`, or a `Sendable` wrapper (`HoleHost`). The hole is
+		// it builds beneath an `Instantiator`, a `LazilyInstantiated`, or a `Sendable` wrapper (`HoleHost`), or that a type it
+		// builds receives (`HoleReceiver`), as itself, an `Instantiator` or a `SendableInstantiator`. The hole is
 		// declared as the public class `Hole`, as `Instantiator<Hole>` (the class then conforming to `Instantiable` by
 		// hand), as `any HoleProtocol`, or as an erasure of the type `HoleFill`, which only a consumer module may declare,
 		// to the eraser `AnyHole`, a constant or an `ErasedInstantiator` – the last always on `T6`, so that a fill that
@@ -1302,13 +1359,30 @@ struct GraphFuzzerPublicMockDraw {
 			// On `T6` half the time, else beneath a wrapper: a `Sendable` one only in a graph whose types are all `Sendable`,
 			// which alone may build a type inside a `@Sendable` builder.
 			let positionRoll = holeRandom.integer(in: 0...11)
-			let position: HolePosition = switch positionRoll {
+			let drawnPosition: HolePosition = switch positionRoll {
 			case _ where spelling == .erasedInstantiator: .direct
 			case 0..<6: .direct
 			case 6, 7: .instantiator
 			case 8, 9: .lazilyInstantiated
 			case 10: isSendableGraph ? .sendableInstantiator : .instantiator
 			default: isSendableGraph ? .sendableLazilyInstantiated : .lazilyInstantiated
+			}
+			// On a stream of its own, half the graphs whose hole is beneath `HoleHost` have `T6` build `HoleReceiver`, which
+			// receives `HoleHost` – as itself three times in ten, through an `Instantiator`, or, half the time in a graph whose
+			// types are all `Sendable`, through a `SendableInstantiator` – so that `T6`'s mock promotes `HoleHost` to its root,
+			// and the hole's place is beneath a dependency `T6` does not declare (the adopter's M2).
+			let receivesHostRoll = receivedHoleHostRandom.integer(in: 0...99)
+			let receivedFormRoll = receivedHoleHostRandom.integer(in: 0...9)
+			let position: HolePosition = if drawnPosition != .direct, receivesHostRoll < 50 {
+				if receivedFormRoll < 3 {
+					.receivedByValue
+				} else if receivedFormRoll < 5 || !isSendableGraph {
+					.receivedInstantiator
+				} else {
+					.receivedSendableInstantiator
+				}
+			} else {
+				drawnPosition
 			}
 			let holeLabel = spelling.isLazy ? "holeBuilder" : "hole"
 			if spelling.declaresProtocol {
@@ -1368,7 +1442,7 @@ struct GraphFuzzerPublicMockDraw {
 			// a fill can read a value of a level from.
 			let sessionName = name("HoleSession")
 			let draftName = name("HoleDraft")
-			let hostIsPlain = position == .instantiator || position == .lazilyInstantiated
+			let hostIsPlain = position != .direct && !position.isSendable
 			// A fifth to three tenths of the graphs draw none, so that fills reading nothing and consumers without the providers
 			// below stay in the corpus while each shape meets its floor: one label in two forms only where the host is plain.
 			let rootLevelRoll = rootLevelRandom.integer(in: 0...9)
@@ -1438,7 +1512,7 @@ struct GraphFuzzerPublicMockDraw {
 			switch position {
 			case .direct:
 				holeProperties.forEach { declaration.add($0) }
-			case .instantiator, .lazilyInstantiated, .sendableInstantiator, .sendableLazilyInstantiated:
+			case .instantiator, .lazilyInstantiated, .sendableInstantiator, .sendableLazilyInstantiated, .receivedByValue, .receivedInstantiator, .receivedSendableInstantiator:
 				let hostAccess: AccessLevel = holeRandom.percentChance(50) ? .public : .package
 				var host = instantiableClass("HoleHost", access: hostAccess)
 				host.properties = holeProperties
@@ -1446,7 +1520,8 @@ struct GraphFuzzerPublicMockDraw {
 					host.properties.insert(Property(attribute: "@Received", label: "holeSession", type: sessionName), at: 0)
 				}
 				// On a stream of its own: a loop around the hole, `HoleHost` building `HoleLoop` through the kind of builder that
-				// builds `HoleHost`, and `HoleLoop` building `HoleHost` again under the label and wrapper `T6` builds it with, so
+				// builds `HoleHost` (an `Instantiator` where `HoleReceiver` receives `HoleHost` itself), and `HoleLoop` building
+				// `HoleHost` again under the label and wrapper `T6` builds it, or `HoleReceiver` receives it, with, so
 				// that the loop closes on `HoleHost`, whose builder function holds the hole's scope values. Half the time
 				// `HoleLoop` declares `holeContext` again, which `T6` binds, so that a fill reading it would read `T6`'s at
 				// every level of the loop, where inline it reads the nearest `HoleLoop`'s: the public mock reports
@@ -1459,12 +1534,20 @@ struct GraphFuzzerPublicMockDraw {
 						declaresContextAgain
 							? Property(attribute: "@Instantiated", label: "holeContext", type: instantiable("HoleContext"))
 							: Property(attribute: "@Instantiated", label: "holeLoopMark", type: instantiable("HoleLoopMark")),
-						Property(attribute: "@Instantiated", label: position.hostLabel, type: "\(position.wrapperName)<\(host.name)>"),
+						Property(attribute: "@Instantiated", label: position.hostLabel, type: position.hostType(host.name)),
 					]
 					host.add(Property(attribute: "@Instantiated", label: "holeLoopBuilder", type: "\(position.isSendable ? "SendableInstantiator" : "Instantiator")<\(loop.name)>"))
 					declaringFiles.append(File(module: .seamModule, declarations: [Self.renderer(of: loop)]))
 				}
-				declaration.add(Property(attribute: "@Instantiated", label: position.hostLabel, type: "\(position.wrapperName)<\(host.name)>"))
+				if position.isReceived {
+					// `HoleReceiver`, which `T6` instantiates, receives the host, so that `T6`'s mock promotes it to its root.
+					var receiver = instantiableClass("HoleReceiver", access: hostAccess)
+					receiver.properties = [Property(attribute: "@Received", label: position.hostLabel, type: position.hostType(host.name))]
+					declaration.add(Property(attribute: "@Instantiated", label: "holeReceiver", type: receiver.name))
+					declaringFiles.append(File(module: .seamModule, declarations: [Self.renderer(of: receiver)]))
+				} else {
+					declaration.add(Property(attribute: "@Instantiated", label: position.hostLabel, type: position.hostType(host.name)))
+				}
 				declaration.names(hostAccess)
 				declaringFiles.append(File(module: .seamModule, declarations: [Self.renderer(of: host)]))
 			}
@@ -1939,8 +2022,12 @@ struct GraphFuzzerPublicMockDraw {
 	/// `SendableInstantiator` – so that its public mock's case on the way back to it holds its own enum. Its place is on it,
 	/// or beneath it on `SelfPart`; now and then it binds `selfToken` before the place, which the fill reads. `SelfScreen`,
 	/// a mocked consumer in one consumer module, builds it, and `SelfLive` beside it fills the place, or, one draw in five,
-	/// nothing does and its mock takes the builder. Every roll is made before any is read.
-	private mutating func drawSelfBuildingPublicMock(random: inout GraphFuzzerRandomNumberGenerator) {
+	/// nothing does and its mock takes the builder. On a stream of its own, half the time a type of `SelfNode`'s tree
+	/// receives the builder rather than instantiating it – `SelfStep` on its route, else `SelfPart` where it holds the place
+	/// and otherwise `SelfLink`, a type `SelfNode` builds that holds none – which `SelfNode`'s mock promotes to its root,
+	/// and a hand-written caller in the consumer module calls `SelfNode`'s public mock with a builder for each family of
+	/// the place's function, as `T6`'s caller does. Every roll is made before any is read.
+	private mutating func drawSelfBuildingPublicMock(random: inout GraphFuzzerRandomNumberGenerator, receivesBuilderRandom: inout GraphFuzzerRandomNumberGenerator) {
 		let drawsShape = random.percentChance(40)
 		let routeRoll = random.integer(in: 0...99)
 		let placeBeneath = random.percentChance(30)
@@ -1949,6 +2036,7 @@ struct GraphFuzzerPublicMockDraw {
 		let passesUp = random.percentChance(20)
 		let initializerRoll = random.integer(in: 0...7)
 		let consumerModuleRoll = random.integer(in: 0...1)
+		let receivesBuilder = receivesBuilderRandom.percentChance(50)
 		let consumerModules = consumerModules
 		guard drawsShape, !consumerModules.isEmpty, !hasDifferingMockCondition else { return }
 		let consumerModule = consumerModules[consumerModuleRoll % consumerModules.count]
@@ -1964,27 +2052,52 @@ struct GraphFuzzerPublicMockDraw {
 			node.properties.append(Property(attribute: "@Instantiated", label: "selfToken", type: tokenName))
 			declaringModuleDeclarations.append(Self.renderer(of: InstantiableClass(name: tokenName, conformances: conformances)))
 		}
+		let routesThroughStep = (55..<80).contains(routeRoll)
+		let builderType = routeRoll >= 80 && isSendableGraph ? "SendableInstantiator<\(nodeName)>" : "Instantiator<\(nodeName)>"
+		// The builder of `SelfNode`, instantiated by `SelfNode` or `SelfStep`, or received by the type that holds it.
+		let builder = Property(attribute: receivesBuilder ? "@Received" : "@Instantiated", label: "selfNodeBuilder", type: builderType)
 		let place = Property(attribute: "@Instantiated", label: "selfApi", type: "any \(apiName)")
 		if placeBeneath {
 			var part = InstantiableClass(name: name("SelfPart"), conformances: conformances)
 			part.properties = [place]
+			if receivesBuilder, !routesThroughStep {
+				part.properties.append(builder)
+			}
 			node.properties.append(Property(attribute: "@Instantiated", label: "selfPart", type: part.name))
 			declaringModuleDeclarations.append(Self.renderer(of: part))
 		} else {
 			node.properties.append(place)
 		}
-		switch routeRoll {
-		case 55..<80:
+		if routesThroughStep {
 			var step = InstantiableClass(name: name("SelfStep"), conformances: conformances)
-			step.properties = [Property(attribute: "@Instantiated", label: "selfNodeBuilder", type: "Instantiator<\(nodeName)>")]
+			step.properties = [builder]
 			node.properties.append(Property(attribute: "@Instantiated", label: "selfStep", type: step.name))
 			declaringModuleDeclarations.append(Self.renderer(of: step))
-		case 80... where isSendableGraph:
-			node.properties.append(Property(attribute: "@Instantiated", label: "selfNodeBuilder", type: "SendableInstantiator<\(nodeName)>"))
-		default:
-			node.properties.append(Property(attribute: "@Instantiated", label: "selfNodeBuilder", type: "Instantiator<\(nodeName)>"))
+		} else if !receivesBuilder {
+			node.properties.append(builder)
+		} else if !placeBeneath {
+			var link = InstantiableClass(name: name("SelfLink"), conformances: conformances)
+			link.properties = [builder]
+			node.properties.append(Property(attribute: "@Instantiated", label: "selfLink", type: link.name))
+			declaringModuleDeclarations.append(Self.renderer(of: link))
 		}
 		declaringModuleDeclarations.insert(Self.renderer(of: node), at: 1)
+		if receivesBuilder {
+			// The hand-written caller, in the consumer module, with a builder that ignores its scope for the place's plain
+			// family and, where `SelfNode` is built again inside a `@Sendable` function, its `@Sendable` one; the builder's
+			// value is `SelfStub`, a plain class of the declaring module that conforms to `SelfApi`.
+			let stubName = name("SelfStub")
+			declaringModuleDeclarations.append { rendering in
+				"\(rendering.modifier(.public))final class \(stubName): \(([apiName] + conformances).joined(separator: ", ")) {\n\t\(rendering.modifier(.public))init() {}\n}"
+			}
+			let builderLabel = Self.builderLabel(ofTypeNamed: apiName)
+			var builders = ["\(builderLabel): { _ in \(stubName)() }"]
+			if builderType.hasPrefix("Sendable") {
+				builders.append("\(builderLabel.dropLast("Builder".count))SendableBuilder: { _ in \(stubName)() }")
+			}
+			let call = "\(nodeName).mock(\(builders.joined(separator: ", ")))"
+			declaringModuleDeclarations.append { _ in "\(Self.publicMockCallerMarker)\(consumerModule.name): \(call)" }
+		}
 		var screen = InstantiableClass(name: name("SelfScreen"), conformances: conformances)
 		screen.mockGeneration = "true"
 		screen.properties = [Property(attribute: "@Instantiated", label: "selfNode", type: nodeName)]
@@ -2410,6 +2523,57 @@ struct GraphFuzzerPublicMockDraw {
 		files.append(File(module: consumerModule, declarations: consumerDeclarations))
 	}
 
+	/// A place beneath a received dependency a public mock promotes to its root lazily (adopter M2), in one graph in ten:
+	/// `PromoteNode`, a `.public` type of the declaring module, builds `PromoteLeaf`, which receives `PromoteOther` through a
+	/// `LazilyInstantiated`, or, in a graph whose types are all `Sendable`, now and then a `SendableLazilyInstantiated`,
+	/// which nothing in `PromoteNode`'s tree provides, so `PromoteNode`'s mock builds it at its root; `PromoteOther` holds a
+	/// place of `PromoteApi`, which no declaration of its module fulfills. The hole draw's `HoleReceiver` and the
+	/// self-building draw's received builder draw a promoted dependency by value and through an instantiator, so this draw
+	/// keeps only the lazy forms, which neither reaches; its rolls are those of the draw that also drew the other forms, so
+	/// each seed draws the lazy form it drew before. `PromoteOther`'s initializer is `internal` half the time, so no consumer
+	/// can build it and the mock's own tree builds it with the place, and otherwise `package` or `public`. `PromoteScreen`, a
+	/// mocked consumer in one consumer module, `true` or, one draw in three, `.public`, builds `PromoteNode`, and
+	/// `PromoteLive` beside it fills the place, or, one draw in five, nothing does and its mock takes the builder. Every roll
+	/// is made before any is read.
+	private mutating func drawPromotedHolePublicMock(random: inout GraphFuzzerRandomNumberGenerator) {
+		let drawsShape = random.percentChance(40)
+		let routeRoll = random.integer(in: 0...99)
+		let nodeInitializerRoll = random.integer(in: 0...7)
+		let otherInitializerRoll = random.integer(in: 0...3)
+		let consumerIsPublic = random.percentChance(33)
+		let passesUp = random.percentChance(20)
+		let consumerModuleRoll = random.integer(in: 0...1)
+		let consumerModules = consumerModules
+		guard drawsShape, routeRoll >= 75, !consumerModules.isEmpty, !hasDifferingMockCondition else { return }
+		let consumerModule = consumerModules[consumerModuleRoll % consumerModules.count]
+		let conformances = isSendableGraph ? ["@unchecked Sendable"] : []
+		let apiName = name("PromoteApi")
+		let nodeName = name("PromoteNode")
+		let otherName = name("PromoteOther")
+		var node = InstantiableClass(name: nodeName, conformances: conformances)
+		node.mockGeneration = ".public"
+		node.initializerAccess = nodeInitializerRoll < 4 ? .package : nodeInitializerRoll == 4 ? .internal : .public
+		node.properties = [Property(attribute: "@Instantiated", label: "promoteLeaf", type: name("PromoteLeaf"))]
+		var leaf = InstantiableClass(name: name("PromoteLeaf"), conformances: conformances)
+		let otherForm = routeRoll >= 90 && isSendableGraph ? "SendableLazilyInstantiated<\(otherName)>" : "LazilyInstantiated<\(otherName)>"
+		leaf.properties = [Property(attribute: "@Received", label: "promoteOther", type: otherForm)]
+		var other = InstantiableClass(name: otherName, conformances: conformances)
+		other.initializerAccess = otherInitializerRoll < 2 ? .internal : otherInitializerRoll == 2 ? .package : .public
+		other.properties = [Property(attribute: "@Instantiated", label: "promoteApi", type: "any \(apiName)")]
+		let declaringModuleDeclarations = [protocolDeclaration(apiName), Self.renderer(of: node), Self.renderer(of: leaf), Self.renderer(of: other)]
+		var screen = InstantiableClass(name: name("PromoteScreen"), conformances: conformances)
+		screen.mockGeneration = consumerIsPublic ? ".public" : "true"
+		screen.properties = [Property(attribute: "@Instantiated", label: "promoteNode", type: nodeName)]
+		var consumerDeclarations = [Self.renderer(of: screen)]
+		if !passesUp {
+			var live = InstantiableClass(name: name("PromoteLive"), conformances: [apiName] + conformances)
+			live.arguments = ["fulfillingAdditionalTypes: [\(apiName).self]"]
+			consumerDeclarations.append(Self.renderer(of: live))
+		}
+		files.append(File(module: .seamModule, declarations: declaringModuleDeclarations))
+		files.append(File(module: consumerModule, declarations: consumerDeclarations))
+	}
+
 	/// Declares `Logger`, its production type `ConsoleLogger`, which instantiates `Level`, and a fake: a class at `package`
 	/// or `internal` access in a file with no SafeDI content, as a macro expansion would declare it, extended by a
 	/// `mockOnly` extension spelling `package` or no access level, whose `mock` takes a defaulted parameter half the
@@ -2778,9 +2942,10 @@ extension GraphFuzzerOracle {
 	}
 
 	/// The differences of `comparison`, a `generateMockPublic` graph's, that are the shape matrix's two stated divergences,
-	/// each derived from a leaf call – a call of a `.public` type's mock (`<prefix>T<i>.mock(`, or `.__safeDI_mock(`) in the
-	/// generated mock of the probe's type, read from the graph's generated code – rather than from the difference's text
-	/// alone, so that any other value a leaf call builds still fails:
+	/// each derived from a leaf call – a call of a `.public` type's mock (`<prefix>T<i>.mock(` or `<prefix>PromoteNode.mock(`,
+	/// or `.__safeDI_mock(`; `leafCalls(ofMockedType:in:prefix:)`) in the generated mock of the probe's type, read from the
+	/// graph's generated code – rather than from the difference's text alone, so that any other value a leaf call builds
+	/// still fails:
 	/// - M8.32 (`isEarlyReadHeldInstance`): a leaf call that passes `<label>.instance` of a lazily instantiated dependency
 	///   its caller holds reads that instance before the probe's value is built. The leaf wraps the instance again, a
 	///   second wrapper where the known-right path shares the caller's, which the comparator compares by its instance, so
@@ -2809,10 +2974,10 @@ extension GraphFuzzerOracle {
 		}
 	}
 
-	/// A call, in a mocked type's generated mock, of a `.public` type's mock: the label the leaf is held under (`t<i>`, or
-	/// `anyT<i>` for a leaf held through its eraser, whose call the eraser wraps), the labels it passes a value – anything
-	/// but `nil` or the calling mock's own parameter that defaults to `nil` and that no binding of the mock shadows – and
-	/// those it passes a wrapper's `.instance`.
+	/// A call, in a mocked type's generated mock, of a `.public` type's mock: the label the leaf is held under (`t<i>`,
+	/// `anyT<i>` for a leaf held through its eraser, whose call the eraser wraps, or `promoteNode`), the labels it passes a
+	/// value – anything but `nil` or the calling mock's own parameter that defaults to `nil` and that no binding of the mock
+	/// shadows – and those it passes a wrapper's `.instance`.
 	struct PublicMockLeafCall: Equatable {
 		let leafLabel: String
 		let passedLabels: Set<String>
@@ -2820,10 +2985,14 @@ extension GraphFuzzerOracle {
 	}
 
 	/// Each call of a `.public` type's mock – `<prefix>T0` to `<prefix>T2` and `<prefix>T6`, held under `t0` to `t2` and
-	/// `t6`, or under `anyT<i>` through an eraser – in the generated mock of `typeName`, in any module: of its `mock(`, or of
-	/// the function only generated code calls, `__safeDI_mock(`, which a call of a mock that takes builders makes. A consumer
-	/// holds each leaf it reaches under one label, so a mock wraps either every call of a leaf in the leaf's eraser or none.
+	/// `t6`, or under `anyT<i>` through an eraser, and `<prefix>PromoteNode`, held under `promoteNode`, whose mock a consumer
+	/// that can build the `PromoteOther` it promotes hands that instance (`drawPromotedHolePublicMock`) – in the generated
+	/// mock of `typeName`, in any module: of its `mock(`, or of the function only generated code calls, `__safeDI_mock(`,
+	/// which a call of a mock that takes builders makes. A consumer holds each leaf it reaches under one label, so a mock
+	/// wraps either every call of a leaf in the leaf's eraser or none.
 	static func leafCalls(ofMockedType typeName: String, in generatedFiles: [String: String], prefix: String) -> [PublicMockLeafCall] {
+		let leaves = [0, 1, 2, 6].map { PublicMockLeaf(typeName: "\(prefix)T\($0)", label: "t\($0)", eraser: (typeName: "\(prefix)AnyT\($0)", label: "anyT\($0)")) }
+			+ [PublicMockLeaf(typeName: "\(prefix)PromoteNode", label: "promoteNode", eraser: nil)]
 		var calls = [PublicMockLeafCall]()
 		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName == "\(typeName)+SafeDIMock.swift" || fileName.hasSuffix("/\(typeName)+SafeDIMock.swift") {
 			// The calling mock's own parameters that default to `nil`, which the parameterless probe leaves `nil`, unless a
@@ -2832,14 +3001,16 @@ extension GraphFuzzerOracle {
 				expression.matches(in: contents, range: NSRange(contents.startIndex..., in: contents)).compactMap { Range($0.range(at: 1), in: contents).map { String(contents[$0]) } }
 			} ?? [])
 			let unpassedParameters = mockParametersDefaultingToNil(in: contents).subtracting(boundNames)
-			for index in [0, 1, 2, 6] {
+			for leaf in leaves {
 				let mockFunctionNames = ["mock", "__safeDI_mock"]
-				let isErased = mockFunctionNames.contains { contents.contains("\(prefix)AnyT\(index)(\(prefix)T\(index).\($0)(") }
+				let erasedLabel = leaf.eraser.flatMap { eraser in
+					mockFunctionNames.contains { contents.contains("\(eraser.typeName)(\(leaf.typeName).\($0)(") } ? eraser.label : nil
+				}
 				for mockFunctionName in mockFunctionNames {
-					for call in initializerCalls(of: "\(prefix)T\(index).\(mockFunctionName)", in: contents) {
+					for call in initializerCalls(of: "\(leaf.typeName).\(mockFunctionName)", in: contents) {
 						let arguments = call.filter { $0.label != "safeDIOverrides" }
 						calls.append(PublicMockLeafCall(
-							leafLabel: isErased ? "anyT\(index)" : "t\(index)",
+							leafLabel: erasedLabel ?? leaf.label,
 							passedLabels: Set(arguments.filter { $0.value != "nil" && !unpassedParameters.contains($0.value) }.map(\.label)),
 							instanceLabels: Set(arguments.filter { $0.value.hasSuffix(".instance") }.map(\.label)),
 						))
@@ -2848,6 +3019,14 @@ extension GraphFuzzerOracle {
 			}
 		}
 		return calls
+	}
+
+	/// A `.public` type whose mock's calls are leaf calls: its name, the label a consumer holds it under, and, where the draw
+	/// has a consumer wrap it in an eraser, the eraser's name and the label a consumer holds the erased leaf under.
+	private struct PublicMockLeaf {
+		let typeName: String
+		let label: String
+		let eraser: (typeName: String, label: String)?
 	}
 
 	/// The names of the parameters that default to `nil` of every `static func mock(` that `contents` declares.
@@ -3252,12 +3431,20 @@ extension GraphFuzzerPublicMockDraw {
 				}
 			}
 		}
-		// R7's hole, on `T6` or on the type `HoleHost` it instantiates beneath a wrapper, and its callers.
+		// R7's hole, on `T6` or on the type `HoleHost` it instantiates beneath a wrapper or `HoleReceiver` receives, and its
+		// callers.
 		let holeLeafName = "\(prefix)T6"
 		if let holeLeaf = types.declarations[holeLeafName] {
 			let hostName = "\(prefix)HoleHost"
 			let holeProperty = (holeLeaf.properties + (types.declarations[hostName]?.properties ?? [])).first { $0.label == "hole" || $0.label == "holeBuilder" }
-			if let hostProperty = holeLeaf.properties.first(where: { $0.type.hasSuffix("<\(hostName)>") }) {
+			let receiverName = "\(prefix)HoleReceiver"
+			if holeLeaf.properties.contains(where: { $0.type == receiverName }), let receivedHost = types.declarations[receiverName]?.properties.first(where: { $0.attribute == "@Received" }) {
+				if receivedHost.type == hostName {
+					features.insert(.holeHostReceivedByValue)
+				} else {
+					features.insert(receivedHost.type.hasPrefix("Sendable") ? .holeHostReceivedThroughSendableInstantiator : .holeHostReceivedThroughInstantiator)
+				}
+			} else if let hostProperty = holeLeaf.properties.first(where: { $0.type.hasSuffix("<\(hostName)>") }) {
 				if hostProperty.type.hasPrefix("Sendable") {
 					features.insert(.holeBeneathSendableWrapper)
 				} else {
@@ -3307,9 +3494,11 @@ extension GraphFuzzerPublicMockDraw {
 			if bindsContext {
 				features.insert(.holeScopeHoldsPublicValue)
 			}
-			if types.lines.contains(where: { $0.hasPrefix(GraphFuzzerPublicMockDraw.publicMockCallerMarker + GraphFuzzerModule.otherPackageCaller.name + ":") }) {
+			// `T6`'s caller, not the one the shape #702 fixed draws for `SelfNode`.
+			let holeLeafCall = " \(holeLeafName).mock("
+			if types.lines.contains(where: { $0.hasPrefix(GraphFuzzerPublicMockDraw.publicMockCallerMarker + GraphFuzzerModule.otherPackageCaller.name + ":") && $0.contains(holeLeafCall) }) {
 				features.insert(.holeCallerInOtherPackage)
-			} else if types.lines.contains(where: { $0.hasPrefix(GraphFuzzerPublicMockDraw.publicMockCallerMarker + GraphFuzzerModule.samePackageCaller.name + ":") }) {
+			} else if types.lines.contains(where: { $0.hasPrefix(GraphFuzzerPublicMockDraw.publicMockCallerMarker + GraphFuzzerModule.samePackageCaller.name + ":") && $0.contains(holeLeafCall) }) {
 				features.insert(.holeCallerInSamePackage)
 			}
 			// The consumer modules that reach `T6`, and the one that declares the fill.
@@ -3392,11 +3581,16 @@ extension GraphFuzzerPublicMockDraw {
 			if node.properties.contains(where: { $0.label == "selfStep" }) {
 				features.insert(.selfBuildingPublicMockThroughStep)
 			}
-			if node.properties.contains(where: { $0.type.hasPrefix("SendableInstantiator<") }) {
+			// The builder of `SelfNode`, on `SelfNode` or a type of its tree, instantiated or received.
+			let builders = (["SelfNode", "SelfStep", "SelfPart", "SelfLink"].compactMap { types.declarations["\(prefix)\($0)"] }).flatMap(\.properties).filter { $0.label == "selfNodeBuilder" }
+			if builders.contains(where: { $0.type.hasPrefix("SendableInstantiator<") }) {
 				features.insert(.selfBuildingPublicMockThroughSendableInstantiator)
 			}
-			if node.properties.contains(where: { $0.label == "selfPart" }) {
+			if types.declarations["\(prefix)SelfPart"]?.properties.contains(where: { $0.label == "selfApi" }) == true {
 				features.insert(.selfBuildingPublicMockPlaceBeneath)
+			}
+			if builders.contains(where: { $0.attribute == "@Received" }) {
+				features.insert(.selfBuildingPublicMockReceivesBuilder)
 			}
 			if let live = types.declarations["\(prefix)SelfLive"] {
 				if live.properties.contains(where: { $0.label == "selfToken" }) {
@@ -3489,6 +3683,20 @@ extension GraphFuzzerPublicMockDraw {
 			}
 			if features.isDisjoint(with: GraphFuzzerPublicMockDrawFeature.overrideClosureCannotHandShapes) {
 				features.insert(.overrideClosureCallCanHand)
+			}
+		}
+		if let leaf = types.declarations["\(prefix)PromoteLeaf"], let screen = types.declarations["\(prefix)PromoteScreen"] {
+			features.insert(.promotedHolePublicMock)
+			if leaf.properties.contains(where: { $0.type == "SendableLazilyInstantiated<\(prefix)PromoteOther>" }) {
+				features.insert(.promotedHolePublicMockSendableLazily)
+			} else {
+				features.insert(.promotedHolePublicMockLazily)
+			}
+			if types.declarations["\(prefix)PromoteLive"] == nil {
+				features.insert(.promotedHolePublicMockPassedUp)
+			}
+			if screen.arguments.contains("generateMock: .public") {
+				features.insert(.promotedHolePublicMockPublicConsumer)
 			}
 		}
 		return features
