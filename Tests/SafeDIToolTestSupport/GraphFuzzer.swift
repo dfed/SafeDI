@@ -9279,8 +9279,9 @@ enum GraphFuzzerGenerator {
 		/// hands the caller's own wrapper (`fillTakesSendableMemo`); a wrapper a seam on the route declares above its call is
 		/// reported at the reader (`declarationHiddenByField`); and a `SendableLazilyInstantiated` read beside `MixSeam`'s plain
 		/// memo is reported (`sendableWrapperReadBesidePlainMemo`), inside a `@Sendable` function too. The rejected
-		/// combinations are never drawn in a graph with a hole or another gating draw's root, whose other draws they would
-		/// throw away: it draws the accepted variant instead.
+		/// combinations are never drawn in a graph with a hole (`HoleSeam`'s or `CycleSeam`'s), whose other draws they would
+		/// throw away: it draws the accepted variant instead. A graph with another gating draw's root still draws them: nearly
+		/// every split graph has one, so sparing those graphs too drew none of the rejected combinations.
 		///
 		/// `wrapperMixRandom` draws only for this pass, which runs after `addingReenteredFillShapes` and only in a graph
 		/// another pass split, so that every graph in one module, and every other draw of a graph it draws in, draws as
@@ -9293,13 +9294,14 @@ enum GraphFuzzerGenerator {
 			let rootDeclaresSendableWrapper = wrapperMixRandom.percentChance(70)
 			let midBuildsWorkerToo = wrapperMixRandom.percentChance(60)
 			let readRoll = wrapperMixRandom.integer(in: 0...3)
-			let outerDeclaresWrapper = wrapperMixRandom.percentChance(20)
+			let outerDeclaresWrapper = wrapperMixRandom.percentChance(45)
 			let readerInSendableFunction = wrapperMixRandom.percentChance(40)
 			guard !modulesOmittingPackageName.contains(.seamModule), sendability != .sendable else { return declarations }
-			// A graph with a hole, or with the root of another gating draw, holds shapes the tool accepts that a rejection by
-			// design here would throw away, so it draws the accepted variant of each rejected roll instead.
-			let gatingRootNames = ["HoleSeam", "ForwardedRoot", "RetainRoot", "RetainLoopHome", "FillCallRoot", "CarriedRoot", "Copy1Root", "ReenteredRoot"].map { self.prefix + $0 }
-			let drawsOnlyAcceptedVariants = declarations.contains { gatingRootNames.contains($0.name) }
+			// A graph with a hole holds shapes the tool accepts that a rejection by design here would throw away, so it draws
+			// the accepted variant of each rejected roll instead. Sparing every graph with another gating draw's root as well
+			// left no graph to draw the rejected rolls in.
+			let holeSeamNames = ["HoleSeam", GraphFuzzerCycleNames.seam].map { self.prefix + $0 }
+			let drawsOnlyAcceptedVariants = declarations.contains { holeSeamNames.contains($0.name) }
 			// The value and the reader in two graphs in four, the reader alone in one, and the value alone in one.
 			let readsValue = readRoll != 2
 			let readsWrapper = readRoll != 3
