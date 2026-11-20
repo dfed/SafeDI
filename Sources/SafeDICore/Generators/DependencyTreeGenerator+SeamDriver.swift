@@ -112,6 +112,7 @@ extension DependencyTreeGenerator {
 		}
 		var computedModules = Set<String>()
 		var expandedModules = Set<String>()
+		var visibleDeclarationsByModuleName = [String: SeamResolution.VisibleDeclarations]()
 		var modulesToCompute = Array(foreignModules(reachedFrom: reachableTypeDescriptions, in: typeDescriptionToFulfillingInstantiableMap, seenBy: nil).reversed())
 		while let module = modulesToCompute.last {
 			guard !computedModules.contains(module.moduleName) else {
@@ -119,10 +120,32 @@ extension DependencyTreeGenerator {
 				continue
 			}
 			let moduleSeam = module.seams[0].seam
+			// A module info carries the signatures its module's own run computed, beside the declarations it computed them
+			// from and only once every validation passed, so a module whose every seam has one is read, never computed again.
+			// A foreign public mock's plan is computed again (`computePublicMockPlans`), a deliberate gap.
+			let storedSeamRoots = module.seams.compactMap { seam in
+				seam.seam.storedSignature.map { (type: seam.type, seamRoot: $0.signature.map { ScopeGenerator.SeamRoot(signature: $0) }) }
+			}
+			if storedSeamRoots.count == module.seams.count {
+				modulesToCompute.removeLast()
+				computedModules.insert(module.moduleName)
+				for (seamType, seamRoot) in storedSeamRoots {
+					seamRoots[seamType] = seamRoot
+				}
+				continue
+			}
+			// Resolved once per module, on its first visit.
+			let visible: SeamResolution.VisibleDeclarations
+			if let resolved = visibleDeclarationsByModuleName[module.moduleName] {
+				visible = resolved
+			} else {
+				visible = try moduleSeam.visibleDeclarations()
+				visibleDeclarationsByModuleName[module.moduleName] = visible
+			}
 			// A module's reached modules are pushed above it on its first visit only; on its second it is computed
 			// with the signatures found by then, so the loop ends whatever the module infos claim to reach.
 			if expandedModules.insert(module.moduleName).inserted {
-				let dependencies = foreignModules(reachedFrom: Set(module.seams.map(\.type)), in: moduleSeam.visibleInstantiables, seenBy: module.moduleName)
+				let dependencies = foreignModules(reachedFrom: Set(module.seams.map(\.type)), in: visible.instantiables, seenBy: module.moduleName)
 					.filter { !computedModules.contains($0.moduleName) }
 				if !dependencies.isEmpty {
 					modulesToCompute.append(contentsOf: dependencies.reversed())
@@ -138,8 +161,8 @@ extension DependencyTreeGenerator {
 			let computation = try Self.seamSignatures(
 				forSeams: Set(module.seams.map(\.type)),
 				construction: .foreignModule,
-				in: moduleSeam.visibleInstantiables,
-				plainTypeDeclarations: moduleSeam.visiblePlainTypeDeclarations,
+				in: visible.instantiables,
+				plainTypeDeclarations: visible.plainTypeDeclarations,
 				aliasDeclarationReferences: aliasDeclarationReferences,
 				fixedSignatures: seamRoots.compactMapValues(\.self),
 				callerModule: moduleSeam.declaringModule,
@@ -381,7 +404,7 @@ extension DependencyTreeGenerator {
 		validatedWorld: ValidatedWorld,
 		foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?],
 		unreadTypeComment: UnreadTypeComment?,
-	) throws -> (roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable]) {
+	) throws -> (roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable], storedSeamSignatures: [StoredSeamSignature]) {
 		let seamRoots = try computeSeamRoots(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots)
 		// The generated code ends each construction with the comment the validated scopes would carry, the call of a
 		// seam's tier included, whose construction the leaf's initializer at the tier's level describes.
@@ -460,7 +483,12 @@ extension DependencyTreeGenerator {
 				),
 			))
 		}
-		return (rootScopeGenerators, rootScopesToGenerate.rootsOfOtherModules)
+		// The signature of each seam this module generates, sorted by seam, which its module info carries for the modules
+		// that call the seams (`SeamResolution.ForeignSeam.storedSignature`).
+		let storedSeamSignatures = generatedSeamTypes.sorted().compactMap { seamType in
+			seamRoots[seamType].map { StoredSeamSignature(seamType: seamType, signature: $0?.signature) }
+		}
+		return (rootScopeGenerators, rootScopesToGenerate.rootsOfOtherModules, storedSeamSignatures)
 	}
 
 	/// The seam world's scopes, frozen, in which every reach of a seam with a signature calls its generated initializer.

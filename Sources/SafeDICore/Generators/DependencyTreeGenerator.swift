@@ -299,6 +299,10 @@ public actor DependencyTreeGenerator {
 		public let mocks: MockGenerationResult?
 		/// The DOT graph of the roots' and seams' trees, or `nil` when the request draws none.
 		public let dotTree: String?
+		/// The signature of each seam this module generates, sorted by seam, which its module info carries for the
+		/// modules that call the seams (`SeamResolution.ForeignSeam.storedSignature`); empty unless the request generates
+		/// dependency trees, so a module info written without them makes its callers compute the signatures.
+		public let storedSeamSignatures: [StoredSeamSignature]
 	}
 
 	/// Generates what `request` asks for, building each layer of the work once, in order, and handing it down as a value:
@@ -320,11 +324,13 @@ public actor DependencyTreeGenerator {
 		var generatedRoots = [GeneratedRoot]()
 		var warnings = [SourceDiagnostic]()
 		var dotTree: String?
+		var storedSeamSignatures = [StoredSeamSignature]()
 		if buildsDependencyTrees {
 			let trees = try dependencyTrees(unreadTypeComment: publicMockContext?.unreadTypeComment)
 			if request.generatesDependencyTrees {
 				generatedRoots = try await generatedCode(of: trees)
 				warnings = trees.warnings
+				storedSeamSignatures = trees.storedSeamSignatures
 			}
 			if request.generatesDOTTree {
 				// Drawn from the trees the code was generated from, before any mock is built, so that no tree outlives its
@@ -341,7 +347,7 @@ public actor DependencyTreeGenerator {
 				publicMockContext: declaresPublicMock ? publicMockContext : nil,
 			)
 		}
-		return GenerationResults(generatedRoots: generatedRoots, warnings: warnings, mocks: mocks, dotTree: dotTree)
+		return GenerationResults(generatedRoots: generatedRoots, warnings: warnings, mocks: mocks, dotTree: dotTree, storedSeamSignatures: storedSeamSignatures)
 	}
 
 	/// The code of each root and seam among `trees` this module generates, then a file for each root another module
@@ -510,6 +516,8 @@ public actor DependencyTreeGenerator {
 		let warnings: [SourceDiagnostic]
 		/// The roots another module declares, in type order, whose `init()` that module generates rather than this one.
 		let rootsOfOtherModules: [Instantiable]
+		/// See `GenerationResults.storedSeamSignatures`.
+		let storedSeamSignatures: [StoredSeamSignature]
 	}
 
 	/// Validates the dependency tree and builds the trees this module generates, computing the signatures of the seams
@@ -521,6 +529,7 @@ public actor DependencyTreeGenerator {
 		var inlineForeignSeamTrees = [ScopeGenerator]()
 		var validatedScopes = Set<Scope>()
 		var rootsOfOtherModules = [Instantiable]()
+		var storedSeamSignatures = [StoredSeamSignature]()
 		let rootScopeGenerators: [RootScopeInfo] = try {
 			// The roots' trees and the generated seams' trees build exactly the reachable types, the foreign seams
 			// their trees call included. First, before any seam signature is computed: a seam's parameters are keyed
@@ -600,13 +609,14 @@ public actor DependencyTreeGenerator {
 			}
 			let seamWorldRoots = try seamWorldRootScopeGenerators(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, unreadTypeComment: unreadTypeComment)
 			rootsOfOtherModules = seamWorldRoots.rootsOfOtherModules
+			storedSeamSignatures = seamWorldRoots.storedSeamSignatures
 			return seamWorldRoots.roots
 		}()
 		try Self.validateCycleLabelsArePassable(inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator) + inlineForeignSeamTrees)
 		for root in rootScopeGenerators {
 			GenerationLayerObservation.record(.dependencyTree(of: root.typeDescription), inRunOf: seams.currentModule.moduleName)
 		}
-		return DependencyTrees(roots: rootScopeGenerators, warnings: generateWarnings(validatedScopes: validatedScopes), rootsOfOtherModules: rootsOfOtherModules)
+		return DependencyTrees(roots: rootScopeGenerators, warnings: generateWarnings(validatedScopes: validatedScopes), rootsOfOtherModules: rootsOfOtherModules, storedSeamSignatures: storedSeamSignatures)
 	}
 
 	/// Rejects each label that a type a dependency cycle builds again, in the trees `generators` root, receives in forms
