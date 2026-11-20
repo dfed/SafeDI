@@ -3,7 +3,7 @@
                              [--timeout SECONDS] [--compile-every-shape] [--base-build DIRECTORY] [--swiftc PATH]
                              [--summary FILE]
                              BASE_TOOL HEAD_TOOL BUILD DIRECTORY
-       compile-time-check.py --lines [--baseline FILE] [--write-baseline] [--summary FILE] TOOL DIRECTORY
+       compile-time-check.py --lines [--baseline FILE] [--write-baseline] [--warn-only] [--summary FILE] TOOL DIRECTORY
        compile-time-check.py --self-test DIRECTORY
 
 Compares what two builds of `SafeDITool` generate for wide dependency graphs by what it costs to compile: the number
@@ -57,6 +57,9 @@ exits 1 when they are more than 5% under, so that a gain is recorded and cannot 
 file and the shapes do not name the same modules. A change that means to move a number runs it with `--write-baseline`,
 which rewrites FILE's numbers from TOOL, the tool of the commit under test, keeping the file's comments, and commits
 the file: the growth is then a line of the pull request's diff, with its reason in a comment above it.
+`--warn-only` reports the same table and prints each difference as a GitHub Actions warning, but exits 0 on a
+difference from the baseline; a tool that cannot generate a shape still exits 2. CI passes it while the generator's
+output is still being rewritten often, so that a change that moves the numbers on purpose is not stopped for it.
 
 --self-test DIRECTORY runs the comparison with stand-in tools and a stand-in compiler and checks each verdict above.
 """
@@ -323,7 +326,7 @@ def generated_lines(tool, directory):
     return counts
 
 
-def check_lines(tool, directory, baseline, write_baseline, summary):
+def check_lines(tool, directory, baseline, write_baseline, summary, warn_only=False):
     counts = generated_lines(tool, directory)
     if write_baseline:
         _, comments, trailing = read_baseline(baseline) if os.path.exists(baseline) else ({}, {}, [])
@@ -366,6 +369,10 @@ def check_lines(tool, directory, baseline, write_baseline, summary):
     if summary:
         with open(summary, "a") as handle:
             handle.write(text)
+    if warn_only:
+        for failure in failures:
+            print(f"::warning title=Generated lines differ from the baseline::{failure}")
+        return 0
     return 1 if failures else 0
 
 
@@ -477,6 +484,9 @@ def self_test(directory):
     for name, feat, expected in (("same", 1000, 0), ("a-little-over", 1040, 0), ("over", 1060, 1), ("a-little-under", 960, 0), ("under", 940, 1)):
         if check_lines(tool(f"lines-{name}", feat, lines=200), f"{directory}/lines-{name}", baseline, False, None) != expected:
             failures.append(f"lines: {name} did not exit {expected}")
+    # Warned about, not failed on.
+    if check_lines(tool("lines-over-warned", 1060, lines=200), f"{directory}/lines-over-warned", baseline, False, None, warn_only=True) != 0:
+        failures.append("lines: over the baseline with --warn-only did not exit 0")
     # A module the baseline lacks, and one the tool no longer generates a hundred lines for.
     write(baseline, "\n".join(line for line in written.splitlines() if line != "N1-40 App 200") + "\nN1-40 Gone 300\n")
     if check_lines(recorded, f"{directory}/lines-names", baseline, False, None) != 1:
@@ -503,6 +513,7 @@ def main(arguments):
     compile_every_shape = False
     lines_only = False
     write_baseline = False
+    warn_only = False
     while arguments:
         argument = arguments.pop(0)
         if argument == "--self-test":
@@ -511,6 +522,8 @@ def main(arguments):
             lines_only = True
         elif argument == "--write-baseline":
             write_baseline = True
+        elif argument == "--warn-only":
+            warn_only = True
         elif argument == "--compile-every-shape":
             compile_every_shape = True
         elif argument in options and arguments:
@@ -520,7 +533,7 @@ def main(arguments):
     shapes = options["--shapes"].split(",")
     unknown = [shape for shape in shapes if shape not in SHAPES]
     runs = int(options["--runs"])
-    if len(positional) != (1 if self_testing else 2 if lines_only else 4) or (write_baseline and not lines_only) or unknown or runs < 1:
+    if len(positional) != (1 if self_testing else 2 if lines_only else 4) or ((write_baseline or warn_only) and not lines_only) or unknown or runs < 1:
         print(__doc__.split("\n\n")[0] + (f"\nunknown shape(s): {', '.join(unknown)}; the shapes are {', '.join(SHAPES)}" if unknown else ""), file=sys.stderr)
         return 2
     directory = os.path.abspath(positional[-1])
@@ -531,7 +544,7 @@ def main(arguments):
         return self_test(directory)
     elif lines_only:
         try:
-            return check_lines(os.path.abspath(positional[0]), directory, options["--baseline"], write_baseline, options["--summary"])
+            return check_lines(os.path.abspath(positional[0]), directory, options["--baseline"], write_baseline, options["--summary"], warn_only)
         except Failure as failure:
             print(failure, file=sys.stderr)
             return 2
