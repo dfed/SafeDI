@@ -254,5 +254,192 @@ struct SafeDIToolSeamFillCycleTests: ~Copyable {
 		#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 })
 	}
 
+	// MARK: A cycle a fill closes on a value its seam's tree declares
+
+	// `SignedIn` instantiates `aBuilder` and the hole `router`, and `AScreen`, which `aBuilder` builds, receives `router`.
+	// Received only if available, the fill's `aBuilder` would be a value `SignedIn`’s tree binds after it calls the fill’s
+	// builder, which that builder’s values struct cannot carry: the cycle’s error states only the removal.
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCycleStatingOnlyRemoval_whenFillReceivesBuilderItsSeamDeclaresBesideTheHole() async {
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveRouter.swift"]):9:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<AScreen>` -> @Received `router: any Router` -> @Received `aBuilder: Instantiator<AScreen>`. `aBuilder: Instantiator<AScreen>` is received while it is still being instantiated. Remove this @Received property.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: Self.routerFeature,
+					app: [Self.fulfilling("LiveRouter", "Router", ["@Received public let aBuilder: Instantiator<AScreen>"]), Self.rootOfSignedIn],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCycleStatingOnlyRemoval_whenTypeTheFillBuildsReceivesBuilderItsSeamDeclaresBesideTheHole() async {
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["RouteLog.swift"]):9:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<AScreen>` -> @Received `router: any Router` -> @Received `aBuilder: Instantiator<AScreen>`. `aBuilder: Instantiator<AScreen>` is received while it is still being instantiated. Remove this @Received property.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: Self.routerFeature,
+					app: [
+						Self.fulfilling("LiveRouter", "Router", ["@Instantiated public let log: RouteLog"]),
+						seamFixtureType(named: "RouteLog", declarations: ["@Received public let aBuilder: Instantiator<AScreen>"]),
+						Self.rootOfSignedIn,
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsFill_whenFillNoLongerReceivesBuilderAsCycleErrorSays() async throws {
+		try await expectFillBuildsVisibleBuildsValues(
+			feature: Self.routerFeature,
+			fulfillers: [Self.fulfilling("LiveRouter", "Router")],
+			root: Self.rootOfSignedIn,
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCycleStatingBothRemedies_whenSeamsModuleDeclaresTheTypeThatReceivesBuilder() async {
+		// With `LiveRouter` in `Feature`, `router` is no hole: `SignedIn`’s own tree builds it, and either remedy works.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["LiveRouter.swift"]):7:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<AScreen>` -> @Received `router: any Router` -> @Received `aBuilder: Instantiator<AScreen>`. `aBuilder: Instantiator<AScreen>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: Self.routerFeature + [Self.fulfilling("LiveRouter", "Router", ["@Received public let aBuilder: Instantiator<AScreen>"])],
+					app: [Self.rootOfSignedIn],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsSeam_whenSeamsModuleDeclaresTypeThatReceivesBuilderOnlyIfAvailableAsCycleErrorSays() async throws {
+		try await expectFillBuildsVisibleBuildsValues(
+			feature: Self.routerFeature + [Self.fulfilling("LiveRouter", "Router", ["@Received(onlyIfAvailable: true) public let aBuilder: Instantiator<AScreen>?"])],
+			fulfillers: [],
+			root: Self.rootOfSignedIn,
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCycleStatingBothRemedies_whenFillsOwnTreeDeclaresTheBuilderItReceives() async {
+		// The cycle lies inside the fill, which declares `screenBuilder` itself: received only if available, it reads the
+		// fill's own value, which the fill's builder binds, so either remedy works.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["RouteLog.swift"]):9:5: error: Dependency cycle: @Instantiated `screenBuilder: Instantiator<RouteScreen>` -> @Received `log: RouteLog` -> @Received `screenBuilder: Instantiator<RouteScreen>`. `screenBuilder: Instantiator<RouteScreen>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: Self.routerFeature,
+					app: [
+						Self.fulfilling("LiveRouter", "Router", ["@Instantiated public let screenBuilder: Instantiator<RouteScreen>", "@Instantiated public let log: RouteLog"]),
+						seamFixtureType(named: "RouteScreen", declarations: ["@Received public let log: RouteLog"]),
+						seamFixtureType(named: "RouteLog", declarations: ["@Received public let screenBuilder: Instantiator<RouteScreen>"]),
+						Self.rootOfSignedIn,
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsFill_whenFillsOwnTreeReceivesBuilderItDeclaresOnlyIfAvailableAsCycleErrorSays() async throws {
+		try await expectFillBuildsVisibleBuildsValues(
+			feature: Self.routerFeature,
+			fulfillers: [
+				Self.fulfilling("LiveRouter", "Router", ["@Instantiated public let screenBuilder: Instantiator<RouteScreen>", "@Instantiated public let log: RouteLog"]),
+				seamFixtureType(named: "RouteScreen", declarations: ["@Received public let log: RouteLog"]),
+				seamFixtureType(named: "RouteLog", declarations: ["@Received(onlyIfAvailable: true) public let screenBuilder: Instantiator<RouteScreen>?"]),
+			],
+			root: Self.rootOfSignedIn,
+		)
+	}
+
+	// MARK: A cycle a fill closes on a value its caller declares
+
+	// `Root` instantiates `aBuilder` and `signedIn`, the fill of `SignedIn`’s `router` receives `aBuilder`, and `AScreen`,
+	// which `aBuilder` builds, receives `signedIn`. `SignedIn`’s tree declares no `aBuilder`, so the fill reads `Root`’s, as
+	// inline: received only if available, it is `nil` there as inline, and the cycle’s error keeps both remedies.
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCycleStatingBothRemedies_whenFillReceivesBuilderItsCallerDeclares() async {
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LiveRouter.swift"]):9:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<AScreen>` -> @Received `signedIn: SignedIn` -> @Received `aBuilder: Instantiator<AScreen>`. `aBuilder: Instantiator<AScreen>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: Self.signedInFeature,
+					app: [Self.fulfilling("LiveRouter", "Router", ["@Received public let aBuilder: Instantiator<AScreen>"]), Self.rootOfBuilderAndSignedIn],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsFill_whenFillReceivesBuilderItsCallerDeclaresOnlyIfAvailableAsCycleErrorSays() async throws {
+		try await expectFillBuildsVisibleBuildsValues(
+			feature: Self.signedInFeature,
+			fulfillers: [Self.fulfilling("LiveRouter", "Router", ["@Received(onlyIfAvailable: true) public let aBuilder: Instantiator<AScreen>?"])],
+			root: Self.rootOfBuilderAndSignedIn,
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsFill_whenFillNoLongerReceivesBuilderItsCallerDeclaresAsCycleErrorSays() async throws {
+		try await expectFillBuildsVisibleBuildsValues(
+			feature: Self.signedInFeature,
+			fulfillers: [Self.fulfilling("LiveRouter", "Router")],
+			root: Self.rootOfBuilderAndSignedIn,
+		)
+	}
+
+	private static let signedInFeature = [
+		"public protocol Router {}",
+		seamFixtureType(named: "AScreen", declarations: ["@Received public let signedIn: SignedIn"]),
+		seamFixtureType(named: "SignedIn", isSeam: true, declarations: ["@Instantiated public let router: any Router"]),
+	]
+	private static let rootOfBuilderAndSignedIn = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let aBuilder: Instantiator<AScreen>", "@Instantiated public let signedIn: SignedIn"])
+
+	private static let routerFeature = [
+		"public protocol Router {}",
+		seamFixtureType(named: "AScreen", declarations: ["@Received public let router: any Router"]),
+		seamFixtureType(named: "SignedIn", isSeam: true, declarations: ["@Instantiated public let aBuilder: Instantiator<AScreen>", "@Instantiated public let router: any Router"]),
+	]
+	private static let rootOfSignedIn = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated public let signedIn: SignedIn"])
+
 	private var filesToDelete: [URL]
 }
