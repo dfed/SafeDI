@@ -28,7 +28,7 @@ import Testing
 /// `Instantiable` stores its fields cannot change what a file holds.
 struct SafeDIToolInstantiableBytesTests {
 	@Test
-	func binaryWriter_writesPinnedBytes_whenDeclarationsSetEveryRarelySetField() throws {
+	func binaryWriter_writesPinnedBytes_whenDeclarationsSetEveryRarelySetField() {
 		let instantiables = declaredInstantiables()
 		var writer = BinaryWriter()
 		writer.write(instantiables)
@@ -37,7 +37,7 @@ struct SafeDIToolInstantiableBytesTests {
 	}
 
 	@Test
-	func binaryWriter_writesDeclarationsSettingEveryRarelySetField_whenFixtureIsWalked() throws {
+	func binaryWriter_writesDeclarationsSettingEveryRarelySetField_whenFixtureIsWalked() {
 		let instantiables = declaredInstantiables()
 
 		#expect(instantiables.map(\.customMockName) == ["fake", nil, nil])

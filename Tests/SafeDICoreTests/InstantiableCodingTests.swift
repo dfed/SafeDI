@@ -19,10 +19,10 @@
 // SOFTWARE.
 
 import Foundation
-@testable import SafeDICore
 import SwiftParser
 import SwiftSyntax
 import Testing
+@testable import SafeDICore
 
 struct InstantiableCodingTests {
 	@Test

@@ -130,6 +130,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public var enclosingExtensionAccess: AccessDeclaration? {
 		rarelySetFields?.fields.enclosingExtensionAccess
 	}
+
 	/// Attributes to add to the initializers SafeDI generates for this type (e.g. `"@MainActor"`) – a root's `init()`,
 	/// and each tier of a type with `generateDependencyTree: true`: the macro's
 	/// `generatedAttributes` when it is given, else its `generatedInitializerAttributes`. The declaration's own: a
@@ -161,6 +162,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public var mockGenerationArgumentRange: Dependency.SourceRange? {
 		rarelySetFields?.fields.mockGenerationArgumentRange
 	}
+
 	/// Where a diagnostic about the requested mock points: the `generateMock:` argument's value, else the declaration.
 	public var mockGenerationArgumentLocation: Dependency.DeclarationLocation? {
 		declarationLocation.map { declarationLocation in
@@ -177,18 +179,21 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		get { rarelySetFields?.fields.mockInitializer }
 		set { updateRarelySetFields { $0.mockInitializer = newValue } }
 	}
+
 	/// The return type of the user-defined `mock()` method, if one exists.
 	/// Used to determine whether to use the mock method or fall through to `init` based on the property type.
 	public var mockReturnType: TypeDescription? {
 		get { rarelySetFields?.fields.mockReturnType }
 		set { updateRarelySetFields { $0.mockReturnType = newValue } }
 	}
+
 	/// The name of the user's custom mock method. With `generateMock`, the generated `mock()` calls
 	/// through to this method. With `mockOnly`, SafeDI uses this method as the mock provider.
 	public var customMockName: String? {
 		get { rarelySetFields?.fields.customMockName }
 		set { updateRarelySetFields { $0.customMockName = newValue } }
 	}
+
 	/// Where the user-defined mock method begins in source: its first attribute or modifier. Travels with
 	/// `mockInitializer` when a `mockOnly` declaration's mock is merged into a production entry, so diagnostics
 	/// about the hand-written mock point at the method rather than at the production declaration.
@@ -196,6 +201,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		get { rarelySetFields?.fields.mockDeclarationLocation }
 		set { updateRarelySetFields { $0.mockDeclarationLocation = newValue } }
 	}
+
 	/// The access spelled on the declaration that declares the user-defined mock method: the declaration this
 	/// Instantiable was found on (the type, or the `@Instantiable` extension), or a `mockOnly` extension merged into it,
 	/// whose members default to it (`fileprivate` for a `private` extension). Travels with `mockInitializer` when a
@@ -204,6 +210,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		get { rarelySetFields?.fields.mockDeclarationAccess }
 		set { updateRarelySetFields { $0.mockDeclarationAccess = newValue } }
 	}
+
 	/// The module that declares the user-defined mock method, as `moduleName` names a module, or `nil` when there is no
 	/// user-defined mock or SafeDITool does not know the module. A `mockOnly` declaration in a module of its own, such as
 	/// a test-support module, declares a mock the production declaration's module does not, so this travels with
@@ -212,6 +219,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		get { rarelySetFields?.fields.mockDeclarationModuleName }
 		set { updateRarelySetFields { $0.mockDeclarationModuleName = newValue } }
 	}
+
 	/// The package of the module that declares the user-defined mock method, as `packageName` names a package, or `nil`
 	/// when there is no user-defined mock or SafeDITool does not know the package. Travels with `mockInitializer` as
 	/// `mockDeclarationModuleName` does.
@@ -219,6 +227,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		get { rarelySetFields?.fields.mockDeclarationPackageName }
 		set { updateRarelySetFields { $0.mockDeclarationPackageName = newValue } }
 	}
+
 	/// The module that declares this Instantiable: the name the compiler gives the module that compiles the declaration's
 	/// file. `nil` when SafeDITool does not know it, which is always the case for a declaration the visitors just walked:
 	/// SafeDITool records it when it reads a module, from what the build system tells it. `query` records instead the
