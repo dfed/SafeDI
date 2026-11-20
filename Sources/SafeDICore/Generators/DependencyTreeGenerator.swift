@@ -2397,7 +2397,7 @@ public actor DependencyTreeGenerator {
 				/// A tier of the generated initializer is wider than `hole`'s builder, which every tier takes, as far as the
 				/// proof of the builder's type (`Hole.accessCause`) goes. Not a `ParameterKind`: a builder is no member of
 				/// `SeamSignature.parameters`, whose labels are what `parameterLabels(namedBy:about:)` names.
-				case tierOmitsBuilder(hole: SeamSignature.Hole, builder: SeamSignature.Builder?, tier: AccessLevel)
+				case tierOmitsBuilder(hole: SeamSignature.Hole, builder: SeamSignature.Builder, tier: AccessLevel)
 				/// A builder narrower than a tier only because of an inner seam whose enum it holds.
 				case tierOmitsBuilderHoldingInnerSeam(builder: SeamSignature.Builder, innerSeam: TypeDescription, tier: AccessLevel)
 				/// `place` and `reference`, places of one builder, forward different values, so no one builder a person writes
@@ -2454,18 +2454,7 @@ public actor DependencyTreeGenerator {
 				switch kind {
 				case let .parameters(.parametersShareLabel(label, labelReceivers, remedy)):
 					receivers = labelReceivers
-					let forms = labelReceivers.map { "`\($0.property.asSource)` on `\($0.declaringType.asSource)`" }.joined(separator: " and ")
-					let remedyText = switch remedy {
-					case .rename:
-						"Rename one of the properties, or @\(Dependency.Source.instantiatedRawValue) one of them inside the tree."
-					case .receiveOneWrapperKind:
-						"Receive `\(label)` as one wrapper kind in every type of the tree."
-					case .receiveTheSameWay:
-						"Receive `\(label)` the same way in every type of the tree."
-					case let .declareProvidingForm(providingForm):
-						"Receive `\(label)` the same way in every type of the tree, or declare it on \(seamName) as the form that provides the others: `@\(Dependency.Source.receivedRawValue) let \(label): \(providingForm)`."
-					}
-					message = "SafeDI cannot generate the dependency tree of \(seamName): its tree receives `\(label)` as \(forms), and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. \(remedyText)"
+					message = Self.labelCollisionMessage(seamName: seamName, label: label, receivers: labelReceivers, remedy: remedy)
 				case let .parameters(.tierOmitsRequiredParameter(parameter, tier, parameterLevel, parameterReceivers, ownParameter, cause)):
 					receivers = parameterReceivers
 					let treeReceivers = parameterReceivers.filter { $0.declaringType != seam.concreteInstantiable }
@@ -2539,12 +2528,12 @@ public actor DependencyTreeGenerator {
 						neededLevel: tier,
 						parameterLevel: hole.tierAccess,
 						seam: seam.concreteInstantiable,
-						parameter: Property(label: builder?.label(inTierAt: tier) ?? hole.builderLabel(inTierAt: tier), typeDescription: builder?.readableParameterType ?? hole.builtType),
+						parameter: Property(label: builder.label(inTierAt: tier), typeDescription: builder.readableParameterType),
 						receivers: [],
 						parameterKind: .builder(fulfilledType: hole.instantiatedType, seamModuleName: seam.moduleName, isPassedUp: hole.innerSeamType != nil),
 						seamAccessIsRequiredByPublicMock: isRequiredByPublicMock,
 					)
-					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(builder?.label(inTierAt: tier) ?? hole.builderLabel(inTierAt: tier)): \((builder?.readableParameterType ?? hole.builtType).asSource)`, the builder for `\(hole.ownerType.asSource)`’s `\(hole.property.asSource)`, which no @Instantiable declaration that \(module) can see fulfills.\(publicMockRequirement)\(causeText) \(remedies)"
+					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(builder.label(inTierAt: tier)): \(builder.readableParameterType.asSource)`, the builder for `\(hole.ownerType.asSource)`’s `\(hole.property.asSource)`, which no @Instantiable declaration that \(module) can see fulfills.\(publicMockRequirement)\(causeText) \(remedies)"
 					declarationNotes = SeamAccessExplanation.declarationNotes(for: hole.accessCause, neededLevel: tier)
 				case let .placesForwardOtherValues(place, reference, isSendable):
 					receivers = []
@@ -2569,13 +2558,36 @@ public actor DependencyTreeGenerator {
 				// The notes follow the receivers in the order the tree declares them, which no name decides.
 				return [SourceDiagnostic(severity: .error, location: location, message: message)]
 					+ declarationNotes
-					+ receivers.map { receiver in
-						SourceDiagnostic(
-							severity: .note,
-							location: receiver.declarationLocation,
-							message: "`\(receiver.declaringType.asSource)` receives `\(receiver.property.asSource)` here.",
-						)
-					}
+					+ Self.receiverNotes(receivers)
+			}
+
+			/// The message of `parametersShareLabel`, which a caller also reports for a fill whose tree receives a parameter of
+			/// the seam in a form no one parameter takes together with the parameter's: the seam's tree, as the caller fills it,
+			/// receives `label` as `receivers` do.
+			static func labelCollisionMessage(seamName: String, label: String, receivers: [Receiver], remedy: LabelCollisionRemedy) -> String {
+				let forms = receivers.map { "`\($0.property.asSource)` on `\($0.declaringType.asSource)`" }.joined(separator: " and ")
+				let remedyText = switch remedy {
+				case .rename:
+					"Rename one of the properties, or @\(Dependency.Source.instantiatedRawValue) one of them inside the tree."
+				case .receiveOneWrapperKind:
+					"Receive `\(label)` as one wrapper kind in every type of the tree."
+				case .receiveTheSameWay:
+					"Receive `\(label)` the same way in every type of the tree."
+				case let .declareProvidingForm(providingForm):
+					"Receive `\(label)` the same way in every type of the tree, or declare it on \(seamName) as the form that provides the others: `@\(Dependency.Source.receivedRawValue) let \(label): \(providingForm)`."
+				}
+				return "SafeDI cannot generate the dependency tree of \(seamName): its tree receives `\(label)` as \(forms), and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. \(remedyText)"
+			}
+
+			/// A note at each of `receivers`, in their order.
+			static func receiverNotes(_ receivers: [Receiver]) -> [SourceDiagnostic] {
+				receivers.map { receiver in
+					SourceDiagnostic(
+						severity: .note,
+						location: receiver.declarationLocation,
+						message: "`\(receiver.declaringType.asSource)` receives `\(receiver.property.asSource)` here.",
+					)
+				}
 			}
 		}
 
@@ -5458,36 +5470,23 @@ public actor DependencyTreeGenerator {
 				))
 				continue
 			}
-			// A form the seam's own property of the label does not provide is a second parameter under the label.
-			guard !ownLabels.contains(label) else {
+			// A form the seam's own property of the label does not provide is a second parameter under the label, as is a form
+			// beside which no one parameter takes the others.
+			guard !ownLabels.contains(label), let providingForm = Self.providingForm(among: forms) else {
 				errors.append(labelCollision(label, among: receivers(ofLabel: label)))
 				continue
 			}
-			let wrappers = forms.filter { $0.typeDescription.unwrapped.lazilyInstantiatedInstanceType != nil }
-			let unwrappedWrappers = Set(wrappers.map(\.asUnwrappedProperty))
-			let unwrappedValues = Set(forms.filter { $0.typeDescription.unwrapped.lazilyInstantiatedInstanceType == nil }.map(\.asUnwrappedProperty))
 			let parameterProperty: Property
 			let isRequired: Bool
 			var deferral = SeamSignature.Parameter.Deferral.none
-			if let requiredWrapper = wrappers.filter({ !$0.typeDescription.isOptional }).sorted().first {
-				// A required non-optional wrapper (a wrapper received only if available is optional) provides every
-				// by-value form and the optional form of its kind; any other form is a second parameter.
-				guard unwrappedWrappers == [requiredWrapper],
-				      unwrappedValues.allSatisfy({ $0.typeDescription == requiredWrapper.typeDescription.lazilyInstantiatedInstanceType })
-				else {
-					errors.append(labelCollision(label, among: receivers(ofLabel: label)))
-					continue
-				}
+			switch providingForm {
+			case let .requiredWrapper(requiredWrapper):
 				parameterProperty = requiredWrapper
 				isRequired = true
-			} else if unwrappedWrappers.isEmpty {
+			case let .value(value):
 				// One by-value property and its optional form are one parameter: the unwrapped form where a receiver
 				// requires a non-optional form, and otherwise the optional type, required where some receiver requires
 				// it, since the property the caller's tree declares may be optional too (a forwarded `x: X?`).
-				guard unwrappedValues.count == 1, let value = unwrappedValues.first else {
-					errors.append(labelCollision(label, among: receivers(ofLabel: label)))
-					continue
-				}
 				let takesUnwrappedForm = requiredProperties.contains(value)
 				parameterProperty = takesUnwrappedForm ? value : Property(label: label, typeDescription: .optional(value.typeDescription))
 				isRequired = takesUnwrappedForm || forms.contains(where: requiredProperties.contains)
@@ -5497,13 +5496,7 @@ public actor DependencyTreeGenerator {
 				if parameterProperty.asUnwrappedProperty.propertyType.isConstant, parameterReads.reads(label) {
 					deferral = .deferred(isSendable: parameterReads.readsInsideSendableFunction(label))
 				}
-			} else {
-				// An optional wrapper provides nothing but itself: a by-value form or another kind beside it is a second
-				// parameter.
-				guard unwrappedValues.isEmpty, unwrappedWrappers.count == 1, let wrapper = unwrappedWrappers.first else {
-					errors.append(labelCollision(label, among: receivers(ofLabel: label)))
-					continue
-				}
+			case let .optionalWrapper(wrapper):
 				parameterProperty = Property(label: label, typeDescription: .optional(wrapper.typeDescription))
 				isRequired = requiredProperties.contains(parameterProperty)
 			}
@@ -5602,11 +5595,11 @@ public actor DependencyTreeGenerator {
 		// Every tier takes every builder, since a hole is required: a hole narrower than a tier is reported once per
 		// declaration of its property, however many sites the tree builds it at, at the widest tier that omits it.
 		var reportedHoleDeclarations = Set<OwnedHoleDeclaration>()
-		for hole in holes {
+		for (hole, builder) in shapedBuilders.holesWithBuilders {
 			guard let tier = tiers.first(where: { $0 > hole.tierAccess }),
 			      reportedHoleDeclarations.insert(OwnedHoleDeclaration(owner: hole.ownerType, property: hole.property)).inserted
 			else { continue }
-			errors.append(.seam(.init(seam: seam, kind: .tierOmitsBuilder(hole: hole, builder: shapedBuilders.builderBySite[hole.site], tier: tier))))
+			errors.append(.seam(.init(seam: seam, kind: .tierOmitsBuilder(hole: hole, builder: builder, tier: tier))))
 		}
 		// The places of one builder must forward one value, since the builder a person writes takes it: each place that forwards
 		// another value than the first by location is reported, wherever the builder's places are, an inner seam's included.
@@ -5704,7 +5697,7 @@ public actor DependencyTreeGenerator {
 	/// receive beside a wrapper, which the inlined validation accepts under no providing form (the wrapper's
 	/// instance is non-optional), are received the same way or declared on the seam as the form that provides the
 	/// others, spelled as the first receiver of that form spells it.
-	private static func labelCollisionRemedy(among forms: [Property], requiredProperties: Set<Property>) -> DependencyTreeGeneratorError.SeamError.LabelCollisionRemedy {
+	static func labelCollisionRemedy(among forms: [Property], requiredProperties: Set<Property>) -> DependencyTreeGeneratorError.SeamError.LabelCollisionRemedy {
 		func isWrapper(_ form: Property) -> Bool {
 			form.typeDescription.unwrapped.lazilyInstantiatedInstanceType != nil
 		}
@@ -5716,6 +5709,40 @@ public actor DependencyTreeGenerator {
 		guard wrapperKinds.isEmpty || !hasRequiredOptionalValue else { return .receiveTheSameWay }
 		let providingForm = forms.first(where: isWrapper) ?? forms[0]
 		return .declareProvidingForm(providingForm.typeDescription.unwrapped.asSource)
+	}
+
+	/// The one form that provides each of `forms`, the forms of one label a seam's tree receives from outside it that the
+	/// seam's own properties do not provide, each received only if available spelled optional, or `nil` where no one
+	/// parameter can take them all (`parametersShareLabel`). A required non-optional wrapper (a wrapper received only if
+	/// available is optional) provides every by-value form of its instance and the optional form of its kind, and any
+	/// other form beside it is a second parameter; one by-value type is one parameter with its optional form; an optional
+	/// wrapper provides nothing but itself, so a by-value form or another kind beside it is a second parameter.
+	static func providingForm(among forms: [Property]) -> ProvidingForm? {
+		let wrappers = forms.filter { $0.typeDescription.unwrapped.lazilyInstantiatedInstanceType != nil }
+		let unwrappedWrappers = Set(wrappers.map(\.asUnwrappedProperty))
+		let unwrappedValues = Set(forms.filter { $0.typeDescription.unwrapped.lazilyInstantiatedInstanceType == nil }.map(\.asUnwrappedProperty))
+		if let requiredWrapper = wrappers.filter({ !$0.typeDescription.isOptional }).sorted().first {
+			guard unwrappedWrappers == [requiredWrapper],
+			      unwrappedValues.allSatisfy({ $0.typeDescription == requiredWrapper.typeDescription.lazilyInstantiatedInstanceType })
+			else { return nil }
+			return .requiredWrapper(requiredWrapper)
+		} else if unwrappedWrappers.isEmpty {
+			guard unwrappedValues.count == 1, let value = unwrappedValues.first else { return nil }
+			return .value(value)
+		} else {
+			guard unwrappedValues.isEmpty, unwrappedWrappers.count == 1, let wrapper = unwrappedWrappers.first else { return nil }
+			return .optionalWrapper(wrapper)
+		}
+	}
+
+	/// The form that provides every form of one label a seam's tree receives (`providingForm(among:)`), unwrapped.
+	enum ProvidingForm {
+		/// A non-optional `LazilyInstantiated` or `SendableLazilyInstantiated` some receiver requires.
+		case requiredWrapper(Property)
+		/// A by-value property.
+		case value(Property)
+		/// A wrapper every receiver of which receives it only if available.
+		case optionalWrapper(Property)
 	}
 
 	/// The forms of `parameter`'s label that a seam parameter of that property provides to the seam's tree, which then

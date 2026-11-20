@@ -317,6 +317,46 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func seamSmokeSeeds_judgeLevelFunctionCaptures_withSameCountsWithAndWithoutCompiles() async throws {
+		// The level function capture check reads the generated text, so the call in `GraphFuzzerOracle.results(of:)` puts the
+		// same findings and counts on each accepted graph's result whether or not the run compiles: these literals hold in
+		// both modes.
+		let captures = try await seamSmokeResults.value.reduce(into: [UInt64: GraphFuzzerLevelFunctionCaptures]()) { captures, result in
+			captures[result.fixture.seed] = result.levelFunctionCaptures
+		}
+
+		#expect(captures == [
+			1: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
+			16: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
+			24: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 5, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 0),
+			68: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 17, namedMemberClosureCount: 4, conversionFunctionCount: 0, fillFunctionCount: 2),
+			78: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 19, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 0),
+			84: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 5, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
+			92: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 0, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
+			151: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 11, namedMemberClosureCount: 7, conversionFunctionCount: 0, fillFunctionCount: 3),
+			153: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 9, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 0),
+			164: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 13, namedMemberClosureCount: 1, conversionFunctionCount: 0, fillFunctionCount: 0),
+			215: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 12, namedMemberClosureCount: 4, conversionFunctionCount: 0, fillFunctionCount: 0),
+			227: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 15, namedMemberClosureCount: 7, conversionFunctionCount: 0, fillFunctionCount: 1),
+			277: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 27, namedMemberClosureCount: 4, conversionFunctionCount: 0, fillFunctionCount: 3),
+			304: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 55, namedMemberClosureCount: 9, conversionFunctionCount: 0, fillFunctionCount: 1),
+			309: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 17, namedMemberClosureCount: 4, conversionFunctionCount: 0, fillFunctionCount: 2),
+			347: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 17, namedMemberClosureCount: 7, conversionFunctionCount: 0, fillFunctionCount: 1),
+			594: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 20, namedMemberClosureCount: 14, conversionFunctionCount: 0, fillFunctionCount: 6),
+			605: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 36, namedMemberClosureCount: 13, conversionFunctionCount: 0, fillFunctionCount: 3),
+			609: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 9, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 0),
+			705: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 7, namedMemberClosureCount: 2, conversionFunctionCount: 0, fillFunctionCount: 0),
+			850: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 15, namedMemberClosureCount: 6, conversionFunctionCount: 0, fillFunctionCount: 0),
+			1_010: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 38, namedMemberClosureCount: 10, conversionFunctionCount: 0, fillFunctionCount: 2),
+			1_020: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 29, namedMemberClosureCount: 13, conversionFunctionCount: 0, fillFunctionCount: 2),
+			1_450: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 20, namedMemberClosureCount: 8, conversionFunctionCount: 0, fillFunctionCount: 2),
+			1_814: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 6, namedMemberClosureCount: 0, conversionFunctionCount: 0, fillFunctionCount: 0),
+			1_890: GraphFuzzerLevelFunctionCaptures(levelFunctionCount: 51, namedMemberClosureCount: 3, conversionFunctionCount: 0, fillFunctionCount: 3),
+		])
+	}
+
+	@Test
 	func seamSmokeKnownIssuesBeyondTheCorpus_listOnlySmokeSeedsBeyondTheCorpusOnce() {
 		let seeds = Self.seamSmokeKnownIssuesBeyondTheCorpus.flatMap(\.seeds)
 		#expect(seeds == seeds.sorted() && Set(seeds).count == seeds.count)
@@ -1104,6 +1144,15 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(Self.seamCorpusRetentionCounts.judgedHoldingForwardingWrapper["ErasedInstantiator", default: 0] >= Self.gatingDrawJudgedGraphFloor)
 		#expect(Self.publicMockCorpusRetentionCounts.judged >= Self.gatingDrawJudgedGraphFloor)
 		#expect(Self.publicMockCorpusRetentionCounts.judgedDrawingRetentionShape >= Self.gatingDrawJudgedGraphFloor)
+	}
+
+	@Test
+	func levelFunctionCaptureCounts_holdAtLeastTenGraphs_whereTheCheckJudges() {
+		// The level function capture check is the first signal of a kept level's values only while it judges at least ten
+		// graphs of the seam corpus with a level function, and ten with a member closure that names its parameter. The
+		// corpus runs pin each count exactly.
+		#expect(Self.seamCorpusLevelFunctionCaptureCounts.judged >= Self.gatingDrawJudgedGraphFloor)
+		#expect(Self.seamCorpusLevelFunctionCaptureCounts.judgedWithNamed >= Self.gatingDrawJudgedGraphFloor)
 	}
 
 	@Test
@@ -2270,6 +2319,17 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func finding_reportsLevelFunctionKeepsValues_whenEarlierKnownFailureListsTheSeed() {
+		// No known failure hides a level's values a kept closure holds: what a graph keeps alive does not depend on how its
+		// generated code fails to compile, and no known issue documents this check's findings.
+		let knownIssue = Self.compilerErrorKnownIssue
+		let compilerError = GraphFuzzerFailure(seed: knownIssue.seeds[0], kind: .generatedCodeDoesNotCompile, details: "Root+SafeDI.swift:3:5: error: invalid redeclaration of 'value'")
+		let captures = GraphFuzzerFailure(seed: knownIssue.seeds[0], kind: .levelFunctionKeepsValues, details: "App.swift:2: a closure or local function inside member `detailBuilder` of level function `__safeDI_apiBuilder_Home` refers to `values`, which holds a level's values, so what it builds keeps them alive")
+
+		#expect(GraphFuzzerFinding(failure: compilerError, laterFailures: [captures], knownIssue: knownIssue) == .failure(captures))
+	}
+
+	@Test
 	func finding_isFailure_whenKnownRenamedGraphDifferenceIsFollowedByRetentionFailureTheKnownIssueDoesNotDocument() {
 		let knownIssue = GraphFuzzerKnownIssue(
 			reason: "A mock's parameters are sorted by label",
@@ -2842,7 +2902,7 @@ struct SafeDIToolGraphFuzzerTests {
 			let buildFindings = findings(in: diagnostics)
 			findingsByBuild[build] = buildFindings
 			#expect(buildFindings.contains { $0.contains("carries from `\(prefix)ReenteredSubA`, and \(call)") }, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
-			#expect(buildFindings.contains { $0.contains("inside that `\(prefix)ReenteredSubB`, but") && $0.contains("` on `\(prefix)ReenteredSubB`, so the builder’s scope carries it") }, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
+			#expect(buildFindings.contains { $0.contains("inside that `\(prefix)ReenteredSubB`, but") && $0.contains("` on `\(prefix)ReenteredSubB`, so the builder’s values struct carries it") }, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
 			#expect(!buildFindings.contains { $0.contains("` on `\(prefix)ReenteredRelay`") }, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
 		}
 		#expect(findingsByBuild["hole"] == findingsByBuild["visible"])
@@ -4975,16 +5035,16 @@ struct SafeDIToolGraphFuzzerTests {
 		// renaming that moves type names across wrapper names reorders (seam corpus seed 566); the same places in another
 		// order are the same diagnostic, and another place is not.
 		func reenteringCallDiagnostics(places: String) -> GraphFuzzerToolOutcome {
-			.rejected(diagnostics: "/a/<fixture-directory>/S566_HoleImpl.swift:14:2: error: `S566_HoleImpl` receives `holeLogger: S566_HoleLogger`, which `S566_HoleSeam`’s tree builds where it instantiates `S566_HoleSeam` again, but that call passes the builder `S566_HoleSeam` takes for \(places) on unchanged, so the caller that fills it cannot hand it those values. Declare `@Received let holeLogger: S566_HoleLogger` on `S566_HoleSeam`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `S566_HoleService` in module `FuzzFeature` or a module it lists among its SafeDI dependencies, so `S566_HoleSeam` fills the builder itself.\n/a/<fixture-directory>/S566_HoleLoop.swift:11:2: note: `S566_HoleLoop` declares `holeLogger: S566_HoleLogger` here.")
+			.rejected(diagnostics: "/a/<fixture-directory>/S566_HoleImpl.swift:14:2: error: `S566_HoleImpl` receives `holeLogger: S566_HoleLogger`, which `S566_HoleSeam`’s tree builds where it instantiates `S566_HoleSeam` again, but that call passes the builder `S566_HoleSeam` takes for \(places) on unchanged, so the caller that fills it cannot hand it those values. Declare `@Received let holeLogger: S566_HoleLogger` on `S566_HoleSeam`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `S566_HoleService` in module `FuzzFeature` or a module it lists among its SafeDI dependencies, so `S566_HoleSeam` fills the builder itself.\n/a/<fixture-directory>/S566_HoleLoop.swift:11:2: note: `S566_HoleLoop` declares `holeLogger: S566_HoleLogger` here.")
 		}
 		func scopeDiagnostics(places: String) -> GraphFuzzerToolOutcome {
-			.rejected(diagnostics: "/a/<fixture-directory>/S1_Impl.swift:9:5: error: `S1_Impl` receives `theme: S1_Theme`, which `S1_Home` builds after `profile`, since `S1_Theme` receives `profile` only if available, so the scopes SafeDI hands the builders for \(places) do not carry it. Receive `profile` on `S1_Theme` some other way, or declare an @Instantiable type that fulfills `S1_Service` in module `FuzzFeature` or a module it lists among its SafeDI dependencies.")
+			.rejected(diagnostics: "/a/<fixture-directory>/S1_Impl.swift:9:5: error: `S1_Impl` receives `theme: S1_Theme`, which `S1_Home` builds after `profile`, since `S1_Theme` receives `profile` only if available, so the values structs SafeDI hands the builders for \(places) do not carry it. Receive `profile` on `S1_Theme` some other way, or declare an @Instantiable type that fulfills `S1_Service` in module `FuzzFeature` or a module it lists among its SafeDI dependencies.")
 		}
 		let ownerPlace = "`S566_HoleOwner`’s `holeService: any S566_HoleService`"
 		let ownerLazyPlace = "`S566_HoleOwner`’s `holeServiceLazy: LazilyInstantiated<any S566_HoleService>`"
 		let nestPlace = "`S566_HoleNestImpl`’s `holeService: any S566_HoleService`"
-		let firstSeamPlace = "`S1_Profile`’s `service: any S1_Service` (case `S1_Profile_Scope.service` of `serviceBuilder`) in `S1_SeamA`’s tree"
-		let secondSeamPlace = "`S1_Account`’s `service: any S1_Service` (case `S1_Account_Scope.service` of `serviceBuilder`) in `S1_SeamB`’s tree"
+		let firstSeamPlace = "`S1_Profile`’s `service: any S1_Service` (`service` of `serviceBuilder`) in `S1_SeamA`’s tree"
+		let secondSeamPlace = "`S1_Account`’s `service: any S1_Service` (`service` of `serviceBuilder`) in `S1_SeamB`’s tree"
 
 		#expect(GraphFuzzerToolOutcome.difference(between: reenteringCallDiagnostics(places: "\(nestPlace), \(ownerPlace), and \(ownerLazyPlace)"), and: reenteringCallDiagnostics(places: "\(ownerPlace), \(ownerLazyPlace), and \(nestPlace)")) == nil)
 		#expect(GraphFuzzerToolOutcome.difference(between: reenteringCallDiagnostics(places: "\(nestPlace) and \(ownerPlace)"), and: reenteringCallDiagnostics(places: "\(ownerPlace) and \(nestPlace)")) == nil)
@@ -5000,12 +5060,12 @@ struct SafeDIToolGraphFuzzerTests {
 		// type names, which moving type names across wrapper names reverses. The same items in another order are the same
 		// diagnostic; another called seam, a place under the other seam's tree, a remedy's other seam, or a fulfill remedy
 		// dropped is not.
-		let deepPlace = "`S116_HoleDeepImpl`’s `holeService: any S116_HoleService` (case `S116_HoleDeepImpl_Scope.holeService` of `s116_HoleServiceSendableBuilder`) in `S116_HoleSeam`’s tree"
-		let stagePlace = "`S116_HoleStageOwner`’s `holeService: any S116_HoleService` (case `S116_HoleStageOwner_Scope.holeService` of `s116_HoleServiceSendableBuilder`) in `S116_HoleStager`’s tree"
+		let deepPlace = "`S116_HoleDeepImpl`’s `holeService: any S116_HoleService` (`holeService` of `s116_HoleServiceSendableBuilder`) in `S116_HoleSeam`’s tree"
+		let stagePlace = "`S116_HoleStageOwner`’s `holeService: any S116_HoleService` (`holeService` of `s116_HoleServiceSendableBuilder`) in `S116_HoleStager`’s tree"
 		let serviceRemedy = "declare an @Instantiable type that fulfills `S116_HoleService` in module `FuzzFeature` or a module it lists among its SafeDI dependencies, so `S116_HoleOuter` fills the builders itself"
 		let gadgetRemedy = "declare an @Instantiable type that fulfills `S116_HoleGadget` in module `FuzzFeature` or a module it lists among its SafeDI dependencies, so `S116_HoleOuter` fills the builders itself"
 		func diagnostics(calledSeams: String, places: String, remedySeams: String = "`S116_HoleSeam` and `S116_HoleStager`", remedies: String = "\(serviceRemedy) and \(gadgetRemedy)") -> GraphFuzzerToolOutcome {
-			.rejected(diagnostics: "<fixture-directory>/shop/Sources/FuzzApp/S116_HoleImpl.swift:13:3: error: `S116_HoleNamespace.S116_HoleImpl` receives `holeLogger: S116_HoleLogger`, which `S116_HoleOuter` builds where it calls \(calledSeams), but `S116_HoleOuter` passes the builders for \(places) on from its own caller, which cannot hand them `S116_HoleOuter`’s values. Declare `@Received let holeLogger: S116_HoleLogger` on \(remedySeams), so the builders’ scopes carry it, or \(remedies).\n<fixture-directory>/shop/Sources/FuzzFeature/S116_HoleOuter.swift:11:2: note: `S116_HoleOuter` declares `holeLogger: S116_HoleLogger` here.")
+			.rejected(diagnostics: "<fixture-directory>/shop/Sources/FuzzApp/S116_HoleImpl.swift:13:3: error: `S116_HoleNamespace.S116_HoleImpl` receives `holeLogger: S116_HoleLogger`, which `S116_HoleOuter` builds where it calls \(calledSeams), but `S116_HoleOuter` passes the builders for \(places) on from its own caller, which cannot hand them `S116_HoleOuter`’s values. Declare `@Received let holeLogger: S116_HoleLogger` on \(remedySeams), so the builders’ values structs carry it, or \(remedies).\n<fixture-directory>/shop/Sources/FuzzFeature/S116_HoleOuter.swift:11:2: note: `S116_HoleOuter` declares `holeLogger: S116_HoleLogger` here.")
 		}
 		let original = diagnostics(calledSeams: "`S116_HoleSeam` and `S116_HoleStager`", places: "\(deepPlace) and \(stagePlace)")
 
@@ -5022,13 +5082,13 @@ struct SafeDIToolGraphFuzzerTests {
 		// per declaring type, in that order, which a renaming of the types or the files reverses. The same items and notes in
 		// another order are the same diagnostic; another call, a place of another builder, a declaring type renamed in the
 		// list, or a note dropped or changed is not.
-		let alphaClause = "`MiddleAlpha` declares on the paths from the builders for `Profile`’s `router: any Router` (case `Profile_Scope.router` of `routerBuilder`) and `Screen`’s `screenRouter: any Router` (case `Screen_Scope.screenRouter` of `routerBuilder`) to the call by which `MiddleAlpha` instantiates `Flow` again (`flowBuilder`)"
-		let reorderedAlphaClause = "`MiddleAlpha` declares on the paths from the builders for `Screen`’s `screenRouter: any Router` (case `Screen_Scope.screenRouter` of `routerBuilder`) and `Profile`’s `router: any Router` (case `Profile_Scope.router` of `routerBuilder`) to the call by which `MiddleAlpha` instantiates `Flow` again (`flowBuilder`)"
-		let zedClause = "`MiddleZed` declares on the path from the builder for `Profile`’s `router: any Router` (case `Profile_Scope.router` of `routerBuilder`) to the call by which `MiddleZed` instantiates `Flow` again (`flowBuilder`)"
+		let alphaClause = "`MiddleAlpha` declares on the paths from the builders for `Profile`’s `router: any Router` (`router` of `routerBuilder`) and `Screen`’s `screenRouter: any Router` (`screenRouter` of `routerBuilder`) to the call by which `MiddleAlpha` instantiates `Flow` again (`flowBuilder`)"
+		let reorderedAlphaClause = "`MiddleAlpha` declares on the paths from the builders for `Screen`’s `screenRouter: any Router` (`screenRouter` of `routerBuilder`) and `Profile`’s `router: any Router` (`router` of `routerBuilder`) to the call by which `MiddleAlpha` instantiates `Flow` again (`flowBuilder`)"
+		let zedClause = "`MiddleZed` declares on the path from the builder for `Profile`’s `router: any Router` (`router` of `routerBuilder`) to the call by which `MiddleZed` instantiates `Flow` again (`flowBuilder`)"
 		let alphaNote = "/a/<fixture-directory>/MiddleAlpha.swift:10:5: note: `MiddleAlpha` declares `logger: Logger` here."
 		let zedNote = "/a/<fixture-directory>/MiddleZed.swift:10:5: note: `MiddleZed` declares `logger: Logger` here."
 		func diagnostics(clauses: String, declaringTypes: String = "`MiddleAlpha`’s and `MiddleZed`’s", notes: [String] = [alphaNote, zedNote]) -> GraphFuzzerToolOutcome {
-			.rejected(diagnostics: (["/a/<fixture-directory>/DefaultRouter.swift:10:5: error: `DefaultRouter` receives `logger: Logger`, which \(clauses), but those calls pass the builder on as module `App` fills it, which cannot hand it \(declaringTypes) values. Declare `@Received let logger: Logger` on `Flow`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies."] + notes).joined(separator: "\n"))
+			.rejected(diagnostics: (["/a/<fixture-directory>/DefaultRouter.swift:10:5: error: `DefaultRouter` receives `logger: Logger`, which \(clauses), but those calls pass the builder on as module `App` fills it, which cannot hand it \(declaringTypes) values. Declare `@Received let logger: Logger` on `Flow`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Router` in module `Feature` or a module it lists among its SafeDI dependencies."] + notes).joined(separator: "\n"))
 		}
 		let original = diagnostics(clauses: "\(alphaClause) and \(zedClause)")
 
@@ -5049,7 +5109,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// A renaming reorders the lists of a fill's error about a value its seam, opened again, loses, which follow names. Another
 		// type, seam or call in one list still differs.
 		func outcome(_ first: String, _ second: String, call: String = "Builder") -> GraphFuzzerToolOutcome {
-			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `\(first)Owner`’s `service: any Service` and `\(second)Owner`’s `service: any Service` carries from `\(first)Screen` and `\(second)Screen`, and each of their fills instantiates `\(first)Seam` and `\(second)Seam` again (`\(first)\(call)` and `\(second)Builder`). Inline, `Impl` would read `\(first)Screen`’s or `\(second)Screen`’s `id` inside that `\(first)Seam` or `\(second)Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `\(first)Seam` and `\(second)Seam`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
+			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `\(first)Owner`’s `service: any Service` and `\(second)Owner`’s `service: any Service` carries from `\(first)Screen` and `\(second)Screen`, and each of their fills instantiates `\(first)Seam` and `\(second)Seam` again (`\(first)\(call)` and `\(second)Builder`). Inline, `Impl` would read `\(first)Screen`’s or `\(second)Screen`’s `id` inside that `\(first)Seam` or `\(second)Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `\(first)Seam` and `\(second)Seam`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
 		}
 
 		#expect(GraphFuzzerToolOutcome.differences(between: outcome("A", "B"), and: outcome("B", "A")) == [])
@@ -5057,7 +5117,7 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(GraphFuzzerToolOutcome.difference(between: outcome("A", "B"), and: outcome("B", "A", call: "Factory")) == "its diagnostics")
 		// Calls of seams that build the seam built again, named as written.
 		func relayOutcome(_ first: String, _ second: String) -> GraphFuzzerToolOutcome {
-			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `Owner`’s `service: any Service` carries from `Screen`, and that builder’s fill instantiates `\(first)Relay` and `\(second)Relay` (`\(first)Builder` and `\(second)Builder`), which instantiate `Seam` again. Inline, `Impl` would read `Screen`’s `id` inside that `Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `Seam`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
+			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `Owner`’s `service: any Service` carries from `Screen`, and that builder’s fill instantiates `\(first)Relay` and `\(second)Relay` (`\(first)Builder` and `\(second)Builder`), which instantiate `Seam` again. Inline, `Impl` would read `Screen`’s `id` inside that `Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `Seam`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
 		}
 		#expect(GraphFuzzerToolOutcome.differences(between: relayOutcome("A", "B"), and: relayOutcome("B", "A")) == [])
 		#expect(GraphFuzzerToolOutcome.difference(between: relayOutcome("A", "B"), and: relayOutcome("B", "C")) == "its diagnostics")
@@ -5068,7 +5128,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// A fill that opens the seam again both directly and through two seams that build it lists the direct call first, then
 		// the relays and their calls, which follow names. Another relay or call in that list still differs.
 		func outcome(_ first: String, _ second: String) -> GraphFuzzerToolOutcome {
-			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `Owner`’s `service: any Service` carries from `Screen`, and that builder’s fill instantiates `Seam` again (`seamBuilder`) and `\(first)Relay` and `\(second)Relay` (`\(first)Builder` and `\(second)Builder`), which instantiate `Seam` again. Inline, `Impl` would read `Screen`’s `id` inside that `Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `Seam`, so the builder’s scope carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
+			.rejected(diagnostics: "/F/Impl.swift:3:2: error: `Impl` receives `id: Int?`, which the builder for `Owner`’s `service: any Service` carries from `Screen`, and that builder’s fill instantiates `Seam` again (`seamBuilder`) and `\(first)Relay` and `\(second)Relay` (`\(first)Builder` and `\(second)Builder`), which instantiate `Seam` again. Inline, `Impl` would read `Screen`’s `id` inside that `Seam`, but those calls pass the builder on as module `App` fills it, whose scope there does not carry `id`, so `Impl` would get `nil` or another value. Declare `@Received(onlyIfAvailable: true) let id: Int?` on `Seam`, so the builder’s values struct carries it, or declare an @Instantiable type that fulfills `Service` in module `Feature`.")
 		}
 		#expect(GraphFuzzerToolOutcome.differences(between: outcome("A", "B"), and: outcome("B", "A")) == [])
 		#expect(GraphFuzzerToolOutcome.difference(between: outcome("A", "B"), and: outcome("B", "C")) == "its diagnostics")
@@ -5917,6 +5977,7 @@ struct SafeDIToolGraphFuzzerTests {
 		var valueOracleInspectedCount = 0
 		var valueOracleComparedCount = 0
 		var retentionCounts = GraphFuzzerRetentionCounts()
+		var levelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts()
 		// The graphs of each gating draw that the oracles after acceptance judged, by the draw's name.
 		var gatingDrawJudgedCounts = [String: Int]()
 		var readTwinGraphCount = 0
@@ -5981,6 +6042,7 @@ struct SafeDIToolGraphFuzzerTests {
 								valueOracle: results[index].valueOracle,
 								remedyRuns: results[index].remedyRuns,
 								builderSurfaceFloorKinds: results[index].builderSurfaceFloorKinds,
+								levelFunctionCaptures: results[index].levelFunctionCaptures,
 							)
 						}
 						for result in results {
@@ -6048,6 +6110,7 @@ struct SafeDIToolGraphFuzzerTests {
 								valueOracleComparedCount += 1
 							}
 							retentionCounts.add(result.retentionCounts)
+							levelFunctionCaptureCounts.add(result.levelFunctionCaptureCounts)
 							for draw in corpus.gatingDrawsJudged(by: result, knownIssue: knownIssuesBySeed[seed]) {
 								gatingDrawJudgedCounts[draw, default: 0] += 1
 							}
@@ -6123,6 +6186,9 @@ struct SafeDIToolGraphFuzzerTests {
 		// What the retention oracle judged, with the corpus's pins, which ci.yml's combine job adds up: a change that judges
 		// fewer graphs, or pairs fewer experiments, fails them.
 		report.append("retention \(corpus.name) \(retentionCounts.reportField) \(corpus.retentionCounts.reportField)")
+		// What the level function capture check judged, with the corpus's pins, which ci.yml's combine job adds up: a change
+		// that judges fewer graphs, or stops reaching fill functions, fails them.
+		report.append("level-captures \(corpus.name) \(levelFunctionCaptureCounts.reportField) \(corpus.levelFunctionCaptureCounts.reportField)")
 		// The graphs of each gating draw that the oracles after acceptance judged, with the floor, which ci.yml's combine
 		// job adds up: a draw gates nothing while fewer of its graphs are judged. The shapes each draw rolls are reported
 		// too, against no floor: a shape the draw rolls in few graphs shows how thinly the oracles judge it.
@@ -6206,6 +6272,9 @@ struct SafeDIToolGraphFuzzerTests {
 			}
 			if retentionCounts != corpus.retentionCounts {
 				reportProblem("The retention oracle judged, over the \(corpus.name) corpus, \(retentionCounts.reportField), but \(corpus.retentionCounts.reportField) is pinned (`retentionCounts`).")
+			}
+			if levelFunctionCaptureCounts != corpus.levelFunctionCaptureCounts {
+				reportProblem("The level function capture oracle judged, over the \(corpus.name) corpus, \(levelFunctionCaptureCounts.reportField), but \(corpus.levelFunctionCaptureCounts.reportField) is pinned (`levelFunctionCaptureCounts`).")
 			}
 			let thinGatingDraws = corpus.flooredGatingDrawNames.filter { gatingDrawJudgedCounts[$0, default: 0] < Self.gatingDrawJudgedGraphFloor }
 			if !thinGatingDraws.isEmpty {
@@ -6443,6 +6512,10 @@ struct SafeDIToolGraphFuzzerTests {
 		/// judged, those of them that draw its own shape, those whose hand-written builder's probe it judged, and the
 		/// experiments only one path ran.
 		var retentionCounts = GraphFuzzerRetentionCounts()
+		/// What the level function capture check judges over the whole corpus (`level-captures` in the report), pinned: the
+		/// graphs with a level function, those of them with a member closure that names its parameter, those member
+		/// closures, the conversion functions and the fill functions.
+		var levelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts()
 		/// The gating draws of the seam corpus (`isForwardedLabelAcrossSeamCallShape`, `isRetentionShape`), whose judged
 		/// graphs must reach `gatingDrawJudgedGraphFloor`.
 		var gatingSeamDrawFeatures = Set<GraphFuzzerSeamDrawFeature>()
@@ -6596,6 +6669,7 @@ struct SafeDIToolGraphFuzzerTests {
 		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,
+		levelFunctionCaptureCounts: seamCorpusLevelFunctionCaptureCounts,
 		gatingSeamDrawFeatures: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape }),
 		builderSurfaceFlooredKinds: [
 			"base-plain",
@@ -6635,6 +6709,10 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the retention oracle judges over the seam corpus (`Corpus.retentionCounts`). Pins: derived on CI.
 	static let seamCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 37, judgedDrawingRetentionShape: 31, judgedThroughHandWrittenBuilder: 23, unpairedExperiments: 0, judgedHoldingForwardingWrapper: ["ErasedInstantiator": 21, "SendableErasedInstantiator": 9, "Instantiator": 16, "SendableInstantiator": 5])
+
+	/// What the level function capture check judges over the seam corpus (`Corpus.levelFunctionCaptureCounts`). Pins:
+	/// derived on CI.
+	static let seamCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 0, judgedWithNamed: 0, named: 0, conversions: 0, fills: 0)
 
 	/// What the retention oracle judges over the public mock corpus (`Corpus.retentionCounts`). Pins: derived on CI.
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 567, judgedDrawingRetentionShape: 129, judgedThroughHandWrittenBuilder: 0, unpairedExperiments: 0)
@@ -6837,9 +6915,10 @@ struct SafeDIToolGraphFuzzerTests {
 	/// in the cycle (seed 1986); seeds 151, 309, 594 and 969 draw places inside a plain fill that spell their hole type
 	/// with and without `any`, seed 969 with no known issue, and seeds 68 and 84 the remedied read of a value one route
 	/// holds. Seeds 2006 and 3575 are a fill that builds its seam again and reads a value only the place it fills,
-	/// inside an inner seam's screen, carries, which the tool rejects (`fieldOfReenteringPlace`). Pinned by
-	/// `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 609, 705, 743, 850, 892, 969, 1_010, 1_020, 1_450, 1_814, 1_890, 1_986, 2_006, 3_575]
+	/// inside an inner seam's screen, carries, which the tool rejects (`fieldOfReenteringPlace`). Seeds 1815 and 4668
+	/// fill a hole whose fill receives a parameter of the seam in a form the parameter does not provide, which the tool
+	/// rejects as it rejects the seam whose own tree receives both forms. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 609, 705, 743, 850, 892, 969, 1_010, 1_020, 1_450, 1_814, 1_815, 1_890, 1_986, 2_006, 3_575, 4_668]
 
 	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x00D882B413AAA30B
 

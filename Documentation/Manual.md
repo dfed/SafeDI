@@ -1909,6 +1909,8 @@ Each of these errors says what to change.
 
 A hand-written call of a seam’s initializer creates every argument at the call. A generated call passes each value so that it is created where it would be inline, with two exceptions. First, say a hole’s implementation reads a value a generated call defers, and the implementation’s own tree builds the seam again beneath another declaration of that value’s label. The implementation then reads the value when the implementation is built, where inline its receiver reads it when that receiver is built. Second, where the implementation reads such a value inside a `@Sendable` function, or hands it to a seam that takes it `@Sendable`, the value is created when the implementation’s builder is called, since a `@Sendable` function cannot capture the deferred value.
 
+A builder keeps alive no more than the same tree keeps when it is built inline in one module. A builder you write takes only what its place forwards, so it keeps alive only what its own closure captures. A builder SafeDI generates is handed each value where the seam binds it, and keeps only the values its implementation reads.
+
 ### Generated imports
 
 The files SafeDI generates import the modules that your files declaring `@Instantiable` types or a `#SafeDIConfiguration` import. SafeDI also adds an import a generated file needs that none of those files has:
