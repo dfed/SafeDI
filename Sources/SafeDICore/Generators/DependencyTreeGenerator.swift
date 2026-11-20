@@ -369,6 +369,9 @@ public actor DependencyTreeGenerator {
 		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: rootScopeGenerators.map { ($0.instantiable, $0.scopeGenerator) })
 		try await validateNoSeamTierOmitsProvidedValue(inTreesRootedAt: rootScopeGenerators)
 
+		if let ordering = CodeTaskStart.ordering {
+			await ordering.runEveryStart()
+		}
 		let generatedRoots = try await withThrowingTaskGroup(
 			of: GeneratedRoot?.self,
 			returning: [GeneratedRoot].self,
