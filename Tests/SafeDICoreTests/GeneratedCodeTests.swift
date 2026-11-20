@@ -84,7 +84,7 @@ struct GeneratedCodeTests {
 		let kind = depth == 0 ? 0 : Int(generator.next() % 4)
 		switch kind {
 		case 0:
-			let count = Int(generator.next() % 4)
+			let count = Int(generator.next() % 5)
 			return .text((0..<count).map { _ in tokens[Int(generator.next() % UInt64(tokens.count))] }.joined())
 		case 1, 2:
 			let pieces = (0..<Int(generator.next() % 4)).map { _ in randomCode(depth: depth - 1, using: &generator) }
