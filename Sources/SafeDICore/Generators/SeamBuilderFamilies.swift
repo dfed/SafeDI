@@ -80,19 +80,20 @@ extension DependencyTreeGenerator {
 
 	/// What the scope types a seam or a public mock declares for its builders are named by, and how its builders spell them.
 	struct ScopeTypeNames {
-		/// The prefix of a plain enum's name.
+		/// The prefix of a plain enum's name, which the stem follows.
 		let plain: String
-		/// The prefix of a `@Sendable` enum's name.
+		/// The prefix of a `@Sendable` enum's name, which the stem follows.
 		let sendable: String
 		/// Whether a builder spells its own scope types qualified by the type that declares them: a public mock's builder
 		/// is spelled once for its own signature and for each module that calls it, as an internal mock's parameter.
 		let areQualified: Bool
 
-		/// A seam's: `SafeDIScope_` and `SafeDISendableScope_`, spelled inside its extension.
-		static let seam = ScopeTypeNames(plain: "SafeDIScope", sendable: "SafeDISendableScope", areQualified: false)
+		/// A seam's: `SafeDIScope_` and `SafeDISendableScope_`, spelled inside its extension. `ReservedName` spells the prefixes,
+		/// which a type a person names is rejected for beginning with.
+		static let seam = ScopeTypeNames(plain: ReservedName.seamScopeTypeNamePrefix, sendable: ReservedName.sendableSeamScopeTypeNamePrefix, areQualified: false)
 		/// A public mock's: `SafeDIMockScope_` and `SafeDISendableMockScope_`, apart from the seam's a mocked seam declares beside
 		/// them.
-		static let publicMock = ScopeTypeNames(plain: "SafeDIMockScope", sendable: "SafeDISendableMockScope", areQualified: true)
+		static let publicMock = ScopeTypeNames(plain: ReservedName.publicMockScopeTypeNamePrefix, sendable: ReservedName.sendablePublicMockScopeTypeNamePrefix, areQualified: true)
 	}
 
 	/// Shapes `holes`, every place of `seam`'s tree `generator` the seam's initializer must take a builder for, into builders.
@@ -246,7 +247,7 @@ extension DependencyTreeGenerator {
 		var internalNameByFamily = [SeamSignature.ScopeEnum.Key: String]()
 		for holeType in orderedHoleTypes {
 			let stem = stemByHoleType[holeType, default: ""]
-			let rootTypeNames = (plain: "\(scopeTypeNames.plain)_\(stem)".spelledAsIdentifier, sendable: "\(scopeTypeNames.sendable)_\(stem)".spelledAsIdentifier)
+			let rootTypeNames = (plain: "\(scopeTypeNames.plain)\(stem)".spelledAsIdentifier, sendable: "\(scopeTypeNames.sendable)\(stem)".spelledAsIdentifier)
 			let builtType = flatHoles.builtType(of: holeType)
 			// The enums, nested by type.
 			var byType = ScopeEnumsByType()
