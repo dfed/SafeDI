@@ -4000,7 +4000,8 @@ public actor DependencyTreeGenerator {
 	///   - isMock: Whether the tree is a mock's, which constructs each type it builds with its hand-written mock method
 	///     where that method returns a type the property accepts, as `ScopeGenerator` builds it.
 	///   - walksFillsOfPublicMockCalls: Whether a mock's tree is walked into the fills of the public mock calls it makes:
-	///     a mock root's tree, whose fills `holesFilled(byCallsOf:in:)` made without checking their constructions.
+	///     a mock root's tree in a build that compiles the generated mocks, whose fills `holesFilled(byCallsOf:in:)` made
+	///     without checking their constructions.
 	///   - emittingModule: The module the generated code compiles in, whose own files hold the dependencies that refer
 	///     to a construction.
 	///   - extendedTypes: The declarations the module reads, among which the declaration of a type an extension
@@ -9219,8 +9220,9 @@ public actor DependencyTreeGenerator {
 	/// build it (`fulfillingMockScope(of:in:)`: a hand-written mock or a `mockOnly` fake included), and the fill builds that
 	/// tree as the inline mock would, hand-written mock methods included. A construction in it this module cannot reach is
 	/// the access error production reports, which the mock root whose tree reaches the call reports too, in a build that
-	/// compiles the generated mocks; a build that does not passes such a place up. What the fill receives beside the values the place's scope struct carries is received from the calling
-	/// mock's tree, as production's fill receives it from the caller's: a value the tree provides is handed to the fill, one
+	/// compiles the generated mocks; a build that does not passes such a place up. What the fill receives beside the values
+	/// the place's scope struct carries is received from the calling mock's tree, as production's fill receives it from
+	/// the caller's: a value the tree provides is handed to the fill, one
 	/// nothing provides is a parameter of `mock()`, and one the called mock's tree binds where the fill cannot read it is the
 	/// error production reports (`validateFills`). Every other place is passed up: the calling mock takes it, through a case
 	/// of its own enum or as a parameter its caller passes. A place a route reaches without a value its fill reads is filled
