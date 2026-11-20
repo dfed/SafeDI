@@ -26,23 +26,74 @@
 /// spelled once (`spelled()`), each line written with the indentation of every level around it. The bytes are the ones
 /// re-indenting at every level wrote (`GeneratedCodeText.indentingNonEmptyLines`), which `GeneratedCodeTests` checks.
 ///
-/// A plan can be as deep as the module has types, so everything that reads one walks it with a stack of its own.
-indirect enum GeneratedCode: Sendable {
+/// A plan can be as deep as the module has types, so everything that reads one walks it with a stack of its own, and
+/// a level releases its children after its own release returns rather than within it (`Children`): a plan's last owner
+/// can be a temporary, and releasing a plan nested once per level from within each level's release overflowed the
+/// stack of a concurrency thread on a chain 1,500 types deep.
+struct GeneratedCode: Sendable {
+	/// What a level of the plan is, read from its storage.
+	enum Node {
+		/// Text, written as it is.
+		case text(String)
+		/// Pieces written one after another.
+		case sequence([GeneratedCode])
+		/// Pieces written one after another with a line feed between each two, as `joined(separator: "\n")` writes
+		/// strings.
+		case lines([GeneratedCode])
+		/// `code`, each of whose lines that is not empty is written after `indentation`, with the empty ones left out and
+		/// no line feed after the last, as `GeneratedCodeText.indentingNonEmptyLines(of:by:)` writes text. Empty
+		/// `indentation` writes `code` as it is: a scope generated with no leading whitespace keeps its empty lines.
+		case indented(GeneratedCode, by: String)
+		/// A place of the body's walk (`PlacePlan`), whose code is written as it is.
+		case place(PlacePlan)
+	}
+
 	/// Text, written as it is.
-	case text(String)
+	static func text(_ text: String) -> GeneratedCode {
+		GeneratedCode(storage: .text(text))
+	}
+
 	/// Pieces written one after another.
-	case sequence([GeneratedCode])
-	/// Pieces written one after another with a line feed between each two, as `joined(separator: "\n")` writes strings.
-	case lines([GeneratedCode])
-	/// `code`, each of whose lines that is not empty is written after `indentation`, with the empty ones left out and no line
-	/// feed after the last, as `GeneratedCodeText.indentingNonEmptyLines(of:by:)` writes text. Empty `indentation` writes
-	/// `code` as it is: a scope generated with no leading whitespace keeps its empty lines.
-	case indented(GeneratedCode, by: String)
-	/// A place of the body's walk (`PlacePlan`), whose code is written as it is.
-	case place(PlacePlan)
+	static func sequence(_ pieces: [GeneratedCode]) -> GeneratedCode {
+		GeneratedCode(storage: .children(Children(.sequence, pieces)))
+	}
+
+	/// Pieces written one after another with a line feed between each two.
+	static func lines(_ pieces: [GeneratedCode]) -> GeneratedCode {
+		GeneratedCode(storage: .children(Children(.lines, pieces)))
+	}
+
+	/// `code` with each of its lines that is not empty written after `indentation` (`Node.indented`).
+	static func indented(_ code: GeneratedCode, by indentation: String) -> GeneratedCode {
+		GeneratedCode(storage: .children(Children(.indented(indentation), [code])))
+	}
+
+	/// A place of the body's walk, whose code is written as it is.
+	static func place(_ plan: PlacePlan) -> GeneratedCode {
+		GeneratedCode(storage: .children(Children(.place(kind: plan.kind, functionNames: plan.functionNames, closedOnFunctionName: plan.closedOnFunctionName), [plan.code])))
+	}
 
 	/// The empty code.
 	static let empty = GeneratedCode.sequence([])
+
+	/// What this level of the plan is.
+	var node: Node {
+		switch storage {
+		case let .text(text):
+			.text(text)
+		case let .children(children):
+			switch children.kind {
+			case .sequence:
+				.sequence(children.codes)
+			case .lines:
+				.lines(children.codes)
+			case let .indented(indentation):
+				.indented(children.codes[0], by: indentation)
+			case let .place(kind, functionNames, closedOnFunctionName):
+				.place(PlacePlan(kind: kind, functionNames: functionNames, closedOnFunctionName: closedOnFunctionName, code: children.codes[0]))
+			}
+		}
+	}
 
 	/// The text of the code.
 	func spelled() -> String {
@@ -50,6 +101,45 @@ indirect enum GeneratedCode: Sendable {
 		writer.write(self)
 		return writer.text
 	}
+
+	// MARK: Private
+
+	private init(storage: Storage) {
+		self.storage = storage
+	}
+
+	private enum Storage: Sendable {
+		case text(String)
+		case children(Children)
+	}
+
+	/// The codes a level holds, which its release hands to `DeferredRelease` so that releasing a deep plan nests no
+	/// release per level.
+	private final class Children: Sendable {
+		enum Kind: Sendable {
+			case sequence
+			case lines
+			case indented(String)
+			case place(kind: PlaceKind, functionNames: [String], closedOnFunctionName: String?)
+		}
+
+		init(_ kind: Kind, _ codes: [GeneratedCode]) {
+			self.kind = kind
+			self.codes = codes
+		}
+
+		deinit {
+			var codes = [GeneratedCode]()
+			swap(&codes, &self.codes)
+			DeferredRelease.release(consume codes)
+		}
+
+		let kind: Kind
+		/// Mutated only by `deinit`, which has the only access.
+		nonisolated(unsafe) private(set) var codes: [GeneratedCode]
+	}
+
+	private let storage: Storage
 }
 
 /// What a body's plan holds for one place of its walk: the place's kind, its builder functions, and its code. A place is a
@@ -130,7 +220,7 @@ private struct GeneratedCodeWriter {
 		while let next = work.popLast() {
 			switch next {
 			case let .code(code):
-				switch code {
+				switch code.node {
 				case let .text(text):
 					write(text)
 				case let .sequence(pieces):

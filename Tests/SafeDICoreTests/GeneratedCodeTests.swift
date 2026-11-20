@@ -55,6 +55,29 @@ struct GeneratedCodeTests {
 	}
 
 	@Test
+	func release_returnsWithoutNestingALevelsRelease_whenTaskDropsPlanAHundredThousandLevelsDeep() async {
+		// A concurrency thread's stack is half a megabyte on Apple platforms, which releasing a level from within the
+		// release of the level above it overflowed long before a hundred thousand levels.
+		let spelled = await Task.detached {
+			var code = GeneratedCode.text("x")
+			for level in 0..<100_000 {
+				switch level % 4 {
+				case 0:
+					code = .indented(code, by: "")
+				case 1:
+					code = .sequence([code])
+				case 2:
+					code = .lines([code])
+				default:
+					code = .place(PlacePlan(kind: .alias, functionNames: [], closedOnFunctionName: nil, code: code))
+				}
+			}
+			return code.spelled()
+		}.value
+		#expect(spelled == "x")
+	}
+
+	@Test
 	func spelled_returnsWhatReindentingEveryLevelReturns_forTwentyThousandSeededPlans() {
 		var generator = SeededGenerator(seed: 0x5AFED1)
 		var mismatches = [String]()
@@ -71,7 +94,7 @@ struct GeneratedCodeTests {
 
 	/// The text the emitter wrote before plans: every level indents its whole code again.
 	private static func reindentingEveryLevel(_ code: GeneratedCode) -> String {
-		switch code {
+		switch code.node {
 		case let .text(text):
 			text
 		case let .sequence(pieces):
