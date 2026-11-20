@@ -1291,7 +1291,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	}
 
 	/// Whether a mock passes `nil` to a receive of `property` only if available, by `dependency` on `receivingType`, among
-	/// `nearestDeclarations` (see `NearestDeclarations.passesNil(to:receivedBy:on:)`), logged in `log`, `false` included: two
+	/// `nearestDeclarations` (see `NearestDeclarations.resolvingPassesNil(to:receivedBy:on:)`), logged in `log`, `false` included: two
 	/// mock roots can reach one place and differ only in this. Where no declaration enclosing the tree holds such a receive,
 	/// the answer is `false` at every place of the tree, which a construction memo's key holds, so nothing is logged.
 	private static func passesNil(to property: Property, receivedBy dependency: Dependency, on receivingType: TypeDescription, in nearestDeclarations: NearestDeclarations, log: inout ConstructionLog) -> Bool {
@@ -3165,15 +3165,10 @@ extension NearestDeclarations {
 
 	/// Whether a receive of `property` only if available, by `dependency` on `receivingType`, reads none of the forms
 	/// the nearest declaration of its label binds in this place, which a mock passes `nil` as production does: wherever
-	/// its type is built, or beneath a required receive of its label that pins the declaration to a form it cannot read.
-	/// Asked only where `mayPassNil`.
-	func passesNil(to property: Property, receivedBy dependency: Dependency, on receivingType: TypeDescription) -> Bool {
-		resolvingPassesNil(to: property, receivedBy: dependency, on: receivingType).passesNil
-	}
-
-	/// `passesNil(to:receivedBy:on:)`, with the depth of the scope that made the nearest declaration of `property`'s label
-	/// the nearest (see `resolving(_:)`). The answer reads that declaration alone, so a construction memo that asks it again
-	/// at that depth asks it of the declaration whole.
+	/// its type is built, or beneath a required receive of its label that pins the declaration to a form it cannot read;
+	/// with the depth of the scope that made the nearest declaration of `property`'s label the nearest (see
+	/// `resolving(_:)`). The answer reads that declaration alone, so a construction memo that asks it again at that depth
+	/// asks it of the declaration whole. Asked only where `mayPassNil`.
 	func resolvingPassesNil(to property: Property, receivedBy dependency: Dependency, on receivingType: TypeDescription) -> (passesNil: Bool, depth: Int) {
 		let (nearestDeclaration, depth) = resolving(property.label)
 		guard holdsReceivesPassedNil, let nearestDeclaration else { return (false, depth) }
