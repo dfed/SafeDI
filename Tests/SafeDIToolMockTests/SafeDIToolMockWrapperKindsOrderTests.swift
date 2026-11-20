@@ -42,10 +42,10 @@ struct SafeDIToolMockWrapperKindsOrderTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_declaresEveryPromotedWrapperBeforeByValueReceiver_whenTreeReceivesLabelInBothWrapperKinds() async throws {
-		// `C`'s tree receives `token` as a `LazilyInstantiated<Token>` (`Pinner`), as a `SendableLazilyInstantiated<Token>?`
-		// only if available (`Leaf`), and by value (`Source`), so the mock promotes a wrapper of each kind, both of which
-		// create the instance `Source` reads. `Source`, declared first, waits on both wrappers, whichever one its binding
-		// reads, so neither is read before it is declared.
+		// `C`'s tree requires `token` as a `LazilyInstantiated<Token>` (`Pinner`) and as a `SendableLazilyInstantiated<Token>`
+		// (`Leaf`), and receives it by value (`Source`), so the mock promotes a wrapper of each kind, both of which create
+		// the instance `Source` reads. `Source`, declared first, waits on both wrappers, whichever one its binding reads,
+		// so neither is read before it is declared.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -57,8 +57,8 @@ struct SafeDIToolMockWrapperKindsOrderTests: ~Copyable {
 				"""
 				@Instantiable
 				public final class Leaf: Instantiable {
-				    public init(token: SendableLazilyInstantiated<Token>?) { self.token = token }
-				    @Received(onlyIfAvailable: true) let token: SendableLazilyInstantiated<Token>?
+				    public init(token: SendableLazilyInstantiated<Token>) { self.token = token }
+				    @Received let token: SendableLazilyInstantiated<Token>
 				}
 				""",
 				"""
@@ -72,9 +72,8 @@ struct SafeDIToolMockWrapperKindsOrderTests: ~Copyable {
 				"""
 				@Instantiable
 				public final class Pinner: Instantiable {
-				    public init(token: LazilyInstantiated<Token>, source: Source) { self.token = token; self.source = source }
+				    public init(token: LazilyInstantiated<Token>) { self.token = token }
 				    @Received let token: LazilyInstantiated<Token>
-				    @Instantiated let source: Source
 				}
 				""",
 				"""
@@ -103,7 +102,7 @@ struct SafeDIToolMockWrapperKindsOrderTests: ~Copyable {
 		            token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)? = nil,
 		            token_LazilyInstantiated__Token: (() -> Token)? = nil,
 		            source: Source.SafeDIMockConfiguration = .init(),
-		            pinner: Pinner.SafeDIMockConfiguration = .init()
+		            pinner: ((LazilyInstantiated<Token>) -> Pinner)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                token_SendableLazilyInstantiated__Token: token_SendableLazilyInstantiated__Token,
@@ -116,7 +115,7 @@ struct SafeDIToolMockWrapperKindsOrderTests: ~Copyable {
 		        var token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)? { __safeDI_storage.token_SendableLazilyInstantiated__Token }
 		        var token_LazilyInstantiated__Token: (() -> Token)? { __safeDI_storage.token_LazilyInstantiated__Token }
 		        var source: Source.SafeDIMockConfiguration { __safeDI_storage.source }
-		        var pinner: Pinner.SafeDIMockConfiguration { __safeDI_storage.pinner }
+		        var pinner: ((LazilyInstantiated<Token>) -> Pinner)? { __safeDI_storage.pinner }
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -125,7 +124,7 @@ struct SafeDIToolMockWrapperKindsOrderTests: ~Copyable {
 		                token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)?,
 		                token_LazilyInstantiated__Token: (() -> Token)?,
 		                source: Source.SafeDIMockConfiguration,
-		                pinner: Pinner.SafeDIMockConfiguration
+		                pinner: ((LazilyInstantiated<Token>) -> Pinner)?
 		            ) {
 		                self.token_SendableLazilyInstantiated__Token = token_SendableLazilyInstantiated__Token
 		                self.token_LazilyInstantiated__Token = token_LazilyInstantiated__Token
@@ -136,7 +135,7 @@ struct SafeDIToolMockWrapperKindsOrderTests: ~Copyable {
 		            let token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)?
 		            let token_LazilyInstantiated__Token: (() -> Token)?
 		            let source: Source.SafeDIMockConfiguration
-		            let pinner: Pinner.SafeDIMockConfiguration
+		            let pinner: ((LazilyInstantiated<Token>) -> Pinner)?
 		        }
 		    }
 
@@ -155,7 +154,7 @@ struct SafeDIToolMockWrapperKindsOrderTests: ~Copyable {
 		        func __safeDI_source() -> Source {
 		            let token: LazilyInstantiated<Token> = token_LazilyInstantiated__Token
 		            func __safeDI_leaf() -> Leaf {
-		                let token: SendableLazilyInstantiated<Token>? = token_SendableLazilyInstantiated__Token
+		                let token: SendableLazilyInstantiated<Token> = token_SendableLazilyInstantiated__Token
 		                return if let safeDIBuilder = safeDIOverrides.source.leaf { safeDIBuilder(token) } else { Leaf(token: token) }
 		            }
 		            let leaf: Leaf = __safeDI_leaf()
@@ -164,13 +163,7 @@ struct SafeDIToolMockWrapperKindsOrderTests: ~Copyable {
 		        let source: Source = __safeDI_source()
 		        func __safeDI_pinner() -> Pinner {
 		            let token: LazilyInstantiated<Token> = token_LazilyInstantiated__Token
-		            func __safeDI_source() -> Source {
-		                let token: LazilyInstantiated<Token> = token_LazilyInstantiated__Token
-		                let leaf = if let safeDIBuilder = safeDIOverrides.pinner.source.leaf { safeDIBuilder(nil) } else { Leaf(token: nil) }
-		                return if let safeDIBuilder = safeDIOverrides.pinner.source.safeDIBuilder { safeDIBuilder(token.instance, leaf) } else { Source(token: token.instance, leaf: leaf) }
-		            }
-		            let source: Source = __safeDI_source()
-		            return if let safeDIBuilder = safeDIOverrides.pinner.safeDIBuilder { safeDIBuilder(token, source) } else { Pinner(token: token, source: source) }
+		            return if let safeDIBuilder = safeDIOverrides.pinner { safeDIBuilder(token) } else { Pinner(token: token) }
 		        }
 		        let pinner: Pinner = __safeDI_pinner()
 		        return C(source: source, pinner: pinner)
