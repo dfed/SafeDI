@@ -108,10 +108,28 @@ public struct Initializer: Codable, Hashable, Sendable {
 		if modifiers.contains(where: { $0.name.tokenKind == .keyword(.nonisolated) }) {
 			return "nonisolated"
 		}
-		return attributes.lazy
-			.compactMap { AttributeSyntax($0) }
-			.first { $0.arguments == nil && $0.attributeName.trimmedDescription.hasSuffix("Actor") }
-			.map { "@\($0.attributeName.trimmedDescription)" }
+		// A loop rather than a lazy sequence, whose generic iterators cost more than reading the attributes: nearly every
+		// declaration SafeDI reads has attributes and an initializer.
+		for case let .attribute(attribute) in attributes where attribute.arguments == nil && spelledName(of: attribute.attributeName).hasSuffix("Actor") {
+			return "@\(spelledName(of: attribute.attributeName))"
+		}
+		return nil
+	}
+
+	/// The text of `attributeName` without its leading and trailing trivia. A plain name, which nearly every attribute's
+	/// is, is its token's text: building the trimmed text of any other name copies its syntax tree, which costs a scan
+	/// more than the rest of reading the declaration does.
+	private static func spelledName(of attributeName: TypeSyntax) -> String {
+		if let identifierType = IdentifierTypeSyntax(attributeName),
+		   identifierType.genericArgumentClause == nil,
+		   identifierType.unexpectedBeforeName == nil,
+		   identifierType.unexpectedBetweenNameAndGenericArgumentClause == nil,
+		   identifierType.unexpectedAfterGenericArgumentClause == nil
+		{
+			identifierType.name.text
+		} else {
+			attributeName.trimmedDescription
+		}
 	}
 
 	public func isValid(forFulfilling dependencies: [Dependency]) -> Bool {
@@ -244,9 +262,15 @@ public struct Initializer: Codable, Hashable, Sendable {
 	}
 
 	func createDependencyAndArgumentBinding(given dependencies: [Dependency]) throws(GenerationError) -> [(dependency: Dependency, argument: Argument)] {
+		// Only a dependency of an argument's label can fulfill it, so the dependencies are looked up by label, keeping their
+		// order: searching every dependency for each argument makes a type of many dependencies quadratic.
+		var dependenciesByLabel = [String: [Dependency]]()
+		for dependency in dependencies {
+			dependenciesByLabel[dependency.property.label, default: []].append(dependency)
+		}
 		var bindings = [(dependency: Dependency, argument: Argument)]()
 		for argument in arguments {
-			guard let dependency = dependencies.first(where: argument.isFulfilled(by:)) else {
+			guard let dependency = dependenciesByLabel[argument.innerLabel]?.first(where: argument.isFulfilled(by:)) else {
 				guard argument.hasDefaultValue else {
 					throw GenerationError.unexpectedArgument(argument.asProperty.asSource)
 				}
