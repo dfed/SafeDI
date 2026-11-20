@@ -21,15 +21,19 @@
 import Foundation
 
 /// Replaces the references a view holds with the entries they refer to, each read from its module's own file: a file the
-/// run was given, or else one `--transitive-module-info-file-path` lists, all of which are read, without their views,
-/// the first time a reference names a module the given files do not describe.
+/// run was given, or else one `--transitive-module-info-file-path` lists. The first time a reference names a module the
+/// given files do not describe, the resolver reads the first fields of every listed file (`ModuleInfoFile.Head`) to learn
+/// which module each describes, and then reads whole, without its view, only each file a reference resolves to.
 actor ModuleReferenceResolver {
 	init(transitiveModuleInfoListPath: String?) {
 		self.transitiveModuleInfoListPath = transitiveModuleInfoListPath
 	}
 
-	/// Every file this resolver opened to find a referenced module, as the transitive list spells it.
+	/// Every file the resolver read whole to resolve a reference, as the transitive list spells it.
 	private(set) var openedPaths = Set<String>()
+	/// Every file of the transitive list whose first fields the resolver read to learn which module it describes, as the
+	/// list spells it. Its module name is all the run took from such a file.
+	private(set) var headReadPaths = Set<String>()
 
 	/// `files` with every reference in their views replaced by the entry it refers to.
 	/// - Throws: `UnresolvableModuleReferenceError` when no file describes a referenced module, and
@@ -47,22 +51,19 @@ actor ModuleReferenceResolver {
 				referringPathsByUnresolvedName[reference.moduleName, default: []].append(path)
 			}
 		}
-		if !referringPathsByUnresolvedName.isEmpty, !hasReadTransitiveFiles {
-			hasReadTransitiveFiles = true
-			if let transitiveModuleInfoListPath {
-				let paths = try Set(String(contentsOfFile: transitiveModuleInfoListPath, encoding: .utf8).parsedPathListCSV()).sorted()
-				// Every file opened counts as an input the run used, spelled as the list spells it, whether or not it
-				// resolves a reference: which module a file describes is known only once it is open.
-				for (listedPath, (file, path)) in try await zip(paths, Generate.loadSafeDIModuleInfo(at: paths, readingViews: false)) {
-					openedPaths.insert(listedPath)
-					if ownEntries[file.moduleName] == nil {
-						ownEntries[file.moduleName] = OwnEntry(file: file, path: path)
-					}
+		if !referringPathsByUnresolvedName.isEmpty {
+			let pathsByModuleName = try await transitivePathsByModuleName()
+			let pathsToRead = referringPathsByUnresolvedName.keys.compactMap { pathsByModuleName[$0] }.sorted()
+			for (listedPath, (file, path)) in try await zip(pathsToRead, Generate.loadSafeDIModuleInfo(at: pathsToRead, readingViews: false)) {
+				openedPaths.insert(listedPath)
+				if ownEntries[file.moduleName] == nil {
+					ownEntries[file.moduleName] = OwnEntry(file: file, path: path)
 				}
 			}
 		}
-		if let (moduleName, referringPaths) = referringPathsByUnresolvedName.min(by: { Array($0.key.utf8).lexicographicallyPrecedes(Array($1.key.utf8)) }),
-		   ownEntries[moduleName] == nil
+		if let (moduleName, referringPaths) = referringPathsByUnresolvedName
+			.filter({ ownEntries[$0.key] == nil })
+			.min(by: { Array($0.key.utf8).lexicographicallyPrecedes(Array($1.key.utf8)) })
 		{
 			throw UnresolvableModuleReferenceError(moduleName: moduleName, referringFilePaths: Set(referringPaths).sorted())
 		}
@@ -72,9 +73,8 @@ actor ModuleReferenceResolver {
 			}
 			var declarations = file.view.declarations
 			for reference in file.view.references {
-				guard let ownEntry = ownEntries[reference.moduleName] else {
-					throw UnresolvableModuleReferenceError(moduleName: reference.moduleName, referringFilePaths: [path])
-				}
+				// safedi-source-rule: allow forceUnwrap — every reference's module was resolved above, or the run threw.
+				let ownEntry = ownEntries[reference.moduleName]!
 				guard ownEntry.checksum == reference.checksum else {
 					throw ModuleInfoDisagreementError(moduleName: reference.moduleName, filePaths: [path, ownEntry.path])
 				}
@@ -92,7 +92,7 @@ actor ModuleReferenceResolver {
 	private struct OwnEntry {
 		init(file: ModuleInfoFile, path: String) {
 			entry = file.ownEntry
-			checksum = MergedModuleInfoView.encoded(entry).withUnsafeBytes(BinaryFile.checksum(of:))
+			checksum = file.ownEntryChecksum ?? entry.checksum
 			self.path = path
 		}
 
@@ -103,5 +103,39 @@ actor ModuleReferenceResolver {
 
 	private let transitiveModuleInfoListPath: String?
 	private var ownEntries = [String: OwnEntry]()
-	private var hasReadTransitiveFiles = false
+	private var cachedTransitivePathsByModuleName: [String: String]?
+
+	/// The path of each module's file among those the transitive list names, read once: the first in path order where two
+	/// files describe one module, as a module given twice is read once.
+	private func transitivePathsByModuleName() async throws -> [String: String] {
+		if let cachedTransitivePathsByModuleName {
+			return cachedTransitivePathsByModuleName
+		}
+		var pathsByModuleName = [String: String]()
+		if let transitiveModuleInfoListPath {
+			let paths = try Set(String(contentsOfFile: transitiveModuleInfoListPath, encoding: .utf8).parsedPathListCSV()).sorted()
+			let heads = try await withThrowingTaskGroup(of: (index: Int, head: ModuleInfoFile.Head).self) { taskGroup in
+				for (index, path) in paths.enumerated() {
+					taskGroup.addTask {
+						do {
+							return try (index, ModuleInfoFile.Head(moduleInfoData: Data(contentsOf: path.asFileURL)))
+						} catch let error as BinaryFileReadError {
+							throw UnreadableModuleInfoError(path: path.asFileURL.path, reason: error)
+						}
+					}
+				}
+				var heads = [(index: Int, head: ModuleInfoFile.Head)]()
+				for try await head in taskGroup {
+					heads.append(head)
+				}
+				return heads.sorted { $0.index < $1.index }
+			}
+			for (index, head) in heads where pathsByModuleName[head.moduleName] == nil {
+				pathsByModuleName[head.moduleName] = paths[index]
+			}
+			headReadPaths = Set(paths)
+		}
+		cachedTransitivePathsByModuleName = pathsByModuleName
+		return pathsByModuleName
+	}
 }

@@ -2454,10 +2454,12 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		}
 	}
 
-	/// What the module's `.safedi` holds, as `withoutFixtureRoot(_:module:)` gives it, with each reference's checksum
-	/// left out, since it covers the paths the fixture root is part of.
+	/// What the module's `.safedi` holds, as `withoutFixtureRoot(_:module:)` gives it, with each reference's checksum and
+	/// the file's own checksum left out, since they cover the paths the fixture root is part of.
 	private static func withoutFixtureRootOrChecksums(_ output: MultiModuleTestOutput, module moduleName: String) -> String? {
-		withoutFixtureRoot(output, module: moduleName)?.replacing(/checksum: UInt64\(\d+\)/, with: "checksum: UInt64(_)")
+		withoutFixtureRoot(output, module: moduleName)?
+			.replacing(/checksum: UInt64\(\d+\)/, with: "checksum: UInt64(_)")
+			.replacing(/ownEntryChecksum: Optional<UInt64>\(some: UInt64\(\d+\)\)/, with: "ownEntryChecksum: _")
 	}
 
 	/// The module's own entry, as a view holds it, with the test's fixture root removed from every path.
@@ -2477,7 +2479,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			guard let file = output.modules[reference.moduleName]?.moduleInfoFile else {
 				return false
 			}
-			return MergedModuleInfoView.encoded(file.ownEntry).withUnsafeBytes(BinaryFile.checksum(of:)) == reference.checksum
+			return file.ownEntryChecksum == reference.checksum && file.ownEntry.checksum == reference.checksum
 		}
 	}
 

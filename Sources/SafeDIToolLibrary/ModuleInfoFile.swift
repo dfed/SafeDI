@@ -36,6 +36,7 @@ import SafeDICore
 public struct ModuleInfoFile: Codable, Sendable {
 	init(
 		moduleName: String,
+		ownEntryChecksum: UInt64? = nil,
 		packageName: String?,
 		dependencyModuleNames: [String],
 		imports: [ImportStatement],
@@ -50,6 +51,7 @@ public struct ModuleInfoFile: Codable, Sendable {
 		view: ModuleInfoView,
 	) {
 		self.moduleName = moduleName
+		self.ownEntryChecksum = ownEntryChecksum
 		self.packageName = packageName
 		self.dependencyModuleNames = dependencyModuleNames
 		self.imports = imports
@@ -65,7 +67,9 @@ public struct ModuleInfoFile: Codable, Sendable {
 	}
 
 	/// The file of `module`, named `moduleName`, which a run that writes a module info file always knows.
-	public init(module: ModuleInfo, moduleName: String, seamSignatures: [StoredSeamSignature], view: ModuleInfoView) {
+	/// - Parameter storesOwnEntryChecksum: Whether the file stores the checksum of its own entry, which a view that refers to
+	///   the module holds: written by a run whose view refers to modules, so that every file a reference can name has it.
+	public init(module: ModuleInfo, moduleName: String, seamSignatures: [StoredSeamSignature], view: ModuleInfoView, storesOwnEntryChecksum: Bool = false) {
 		self.init(
 			moduleName: moduleName,
 			packageName: module.packageName,
@@ -81,10 +85,17 @@ public struct ModuleInfoFile: Codable, Sendable {
 			seamSignatures: seamSignatures,
 			view: view,
 		)
+		if storesOwnEntryChecksum {
+			ownEntryChecksum = ownEntry.checksum
+		}
 	}
 
 	/// The module the file describes.
 	let moduleName: String
+	/// The checksum of the bytes of `ownEntry`, which a view that refers to this module holds, when the run that wrote the
+	/// file stored it. Written right after `moduleName`, so a reader finds both without reading the rest of the file
+	/// (`ModuleInfoFile.Head`).
+	private(set) var ownEntryChecksum: UInt64?
 	/// See `ModuleInfo.packageName`.
 	let packageName: String?
 	/// See `ModuleInfo.dependencyModuleNames`.
@@ -143,6 +154,7 @@ public struct ModuleInfoFile: Codable, Sendable {
 	func replacingView(with view: ModuleInfoView) -> ModuleInfoFile {
 		ModuleInfoFile(
 			moduleName: moduleName,
+			ownEntryChecksum: ownEntryChecksum,
 			packageName: packageName,
 			dependencyModuleNames: dependencyModuleNames,
 			imports: imports,
@@ -223,6 +235,13 @@ public struct ModuleInfoView: Codable, Sendable {
 	public static let empty = ModuleInfoView(moduleGraph: [], declarations: [])
 }
 
+extension ViewedModule {
+	/// The checksum of the bytes this entry is written as, which a reference to its module holds.
+	var checksum: UInt64 {
+		MergedModuleInfoView.encoded(self).withUnsafeBytes(BinaryFile.checksum(of:))
+	}
+}
+
 /// A module whose declarations a view carries by reference: its name, and the checksum of the bytes of its own entry
 /// (`ModuleInfoFile.ownEntry`), which has no positions, so a position-only edit leaves it unchanged.
 struct ViewedModuleReference: Codable {
@@ -272,6 +291,25 @@ extension ModuleInfoFile {
 	/// Reads the module info file `data` holds.
 	public init(moduleInfoData data: Data) throws(BinaryFileReadError) {
 		self = try BinaryFile.value(.moduleInfo, from: data)
+	}
+
+	/// The fields a module info file writes first: the module it describes and, when stored, the checksum of its own
+	/// entry. Read without the body's checksum or any later field, so finding which file describes a module costs little
+	/// whatever the file holds; a file a reference resolves to is then read whole, which checks it.
+	struct Head {
+		let moduleName: String
+		let ownEntryChecksum: UInt64?
+
+		init(moduleInfoData data: Data) throws(BinaryFileReadError) {
+			self = try BinaryFile.value(.moduleInfo, from: data, checksBody: false) { (reader: inout BinaryReader) throws(BinaryDecodingError) in
+				try Head(moduleName: reader.read(), ownEntryChecksum: reader.read() as UInt64?)
+			}
+		}
+
+		private init(moduleName: String, ownEntryChecksum: UInt64?) {
+			self.moduleName = moduleName
+			self.ownEntryChecksum = ownEntryChecksum
+		}
 	}
 
 	/// Reads the module info file `data` holds without its view, which is left empty.

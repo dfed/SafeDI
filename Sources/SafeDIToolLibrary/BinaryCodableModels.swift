@@ -1296,6 +1296,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 		.structure(
 			fields: [
 				BinaryLayoutField("moduleName", \.moduleName),
+				BinaryLayoutField("ownEntryChecksum", \.ownEntryChecksum),
 				BinaryLayoutField("packageName", \.packageName),
 				BinaryLayoutField("dependencyModuleNames", \.dependencyModuleNames),
 				BinaryLayoutField("imports", \.imports),
@@ -1317,6 +1318,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 		let fileWithoutView = try ModuleInfoFile(readingAllButViewFrom: &reader)
 		try self.init(
 			moduleName: fileWithoutView.moduleName,
+			ownEntryChecksum: fileWithoutView.ownEntryChecksum,
 			packageName: fileWithoutView.packageName,
 			dependencyModuleNames: fileWithoutView.dependencyModuleNames,
 			imports: fileWithoutView.imports,
@@ -1337,6 +1339,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 	init(readingAllButViewFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
 			moduleName: reader.read(),
+			ownEntryChecksum: reader.read() as UInt64?,
 			packageName: reader.read() as String?,
 			dependencyModuleNames: reader.read(),
 			imports: reader.read(),
@@ -1354,6 +1357,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 
 	func write(to writer: inout BinaryWriter) {
 		writer.write(moduleName)
+		writer.write(ownEntryChecksum)
 		writer.write(packageName)
 		writer.write(dependencyModuleNames)
 		writer.write(imports)

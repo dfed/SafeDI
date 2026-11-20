@@ -844,7 +844,7 @@ public struct Generate: AsyncParsableCommand {
 		// read; and only when its bytes change, so a dependent whose build compares modification times reruns only when
 		// what the file describes changed.
 		if let moduleInfoDestination {
-			try await ModuleInfoFile(module: module, moduleName: moduleInfoDestination.moduleName, seamSignatures: generator.storedSignaturesOfGeneratedSeams().map { $0.withoutPositions() }, view: moduleInfoView.view)
+			try await ModuleInfoFile(module: module, moduleName: moduleInfoDestination.moduleName, seamSignatures: generator.storedSignaturesOfGeneratedSeams().map { $0.withoutPositions() }, view: moduleInfoView.view, storesOwnEntryChecksum: moduleInfoViewsReferToModules)
 				.moduleInfoData
 				.writeIfChanged(toPath: moduleInfoDestination.path)
 		}
