@@ -53,6 +53,40 @@ enum GraphFuzzerRemedyKind: String, CaseIterable, Comparable {
 	/// "or move the `mock` method inside `#if X`", the same error's other remedy, where it offers one: the mock's
 	/// `#if DEBUG` block moves to the end of the clause the error is at.
 	case moveMockIntoClause = "move-mock-into-clause"
+	/// "If it names one type, keep one, and remove `P` from the others’ `fulfillingAdditionalTypes`", for a type two
+	/// `@Instantiable` declarations fulfill: the declaration at the error's site keeps it, and every other declaration
+	/// that lists it loses it from its `fulfillingAdditionalTypes`. Each declaration reports the error, so each is kept in
+	/// turn, a remedy each.
+	case keepOneFulfiller = "keep-one-fulfiller"
+	/// "Decorate `X`, or an extension of it, with @Instantiable", for an `@Instantiated` property of a type no declaration
+	/// fulfills: the empty class the fixture declares gets `@Instantiable`, and the conformance and public initializer the
+	/// macro then requires of it, which the error does not state.
+	case decorateType = "decorate-type"
+	/// "Declare `x` on `T`, and this property, as `SendableInstantiator<X>` to fix.", for a receive inside a `@Sendable`
+	/// function of a wrapper that is not `Sendable`: the declaration the error names, and the receive where the error says
+	/// "and this property", take the `Sendable` wrapper it spells. Where the error names no declaring type ("where it is
+	/// declared and where it is received as `Instantiator<X>`"), every property of that label and type takes it, in every
+	/// type of the graph: more than the chain the error names where another branch declares the same label and type.
+	case declareAsSendableWrapper = "declare-as-sendable-wrapper"
+	/// "Declare `@Forwarded let x: X` on a type below `Root` in the chain, and pass the value to the `Instantiator` that
+	/// builds that type", for an unfulfilled receive of a type SafeDI cannot build as a constant: the receiver, a type
+	/// below the root, forwards the property in place of receiving it. A type that built the receiver as a constant, or
+	/// through an erased instantiator that took nothing, then reports the declaration that builds it instead ("Declare it
+	/// as `Instantiator<T>`."), which the remedy follows too, a run of the tool for each set of declarations the run
+	/// before it states (`GraphFuzzerRemedies.followingForwardedReceive`). Only a property whose new error states
+	/// "Declare it as `…`" is retyped; any other new error is left alone.
+	case forwardReceive = "forward-receive"
+	/// "Receive `x` the same way in every type of the tree, or declare it on `Seam` as the form that provides the others:
+	/// `@Received let x: X`.", for a seam whose tree receives one label in forms of one type: the seam declares the
+	/// property the error spells, in place of its own property of that label where it has one. The error's forms must each be received as an adopter would: one that is optional
+	/// is received only if available, since a required receive of an optional is not a shape anyone writes, so a site
+	/// whose error names such a form, or a form the oracle cannot read, gets no remedy.
+	case declareProvidingFormOnSeam = "declare-providing-form-on-seam"
+	/// "Give `x: Y` on `T` a different label to fix.", for a receive of `x` that a closer declaration of the label with
+	/// another type hides: `T`'s property takes the label `xRelabeled`, with its initializer parameter and assignment,
+	/// so the receive reaches the declaration above it. A hidden receive that is a required optional is not a shape anyone
+	/// writes, and gets no remedy; nor does a hiding declaration that `T` renames, or whose new label `T` already declares.
+	case relabelHidingDeclaration = "relabel-hiding-declaration"
 
 	/// The words a failure line of a remedy of this kind begins with (`GraphFuzzerRemedyRun.failureLine`), which a known
 	/// issue's signature reads.
@@ -102,11 +136,15 @@ struct GraphFuzzerRemedy: Equatable {
 struct GraphFuzzerRemedyRun {
 	let remedy: GraphFuzzerRemedy
 	let outcome: GraphFuzzerToolOutcome
+	/// The messages of the errors the remedy introduced and its follow-up runs left, at the declarations that build the
+	/// type of the remedy's site (`GraphFuzzerRemedies.errorsIntroducedByForwarding`): a `forwardReceive` remedy's, whose
+	/// own site, once it forwards, has no receive left for an error to be at.
+	var introducedErrors = [String]()
 
-	/// The messages of the errors the tool reports at the remedy's site in the remedied graph: none when the remedy fixes
-	/// what it answers and adds no error there.
+	/// The messages of the errors the tool reports at the remedy's site in the remedied graph, and of those the remedy
+	/// introduced elsewhere and left (`introducedErrors`): none when the remedy fixes what it answers and adds no error.
 	var errorsAtSite: [String] {
-		GraphFuzzerRemedies.errors(at: remedy.site, in: outcome, of: remedy.fixture)
+		GraphFuzzerRemedies.errors(at: remedy.site, in: outcome, of: remedy.fixture) + introducedErrors
 	}
 
 	/// The line a failure lists for this run, or `nil` when the remedy leaves no error at its site.
@@ -150,16 +188,24 @@ enum GraphFuzzerRemedies {
 		case instantiateAsInstantiator(hopLabels: [String])
 		case removeOrReceiveOptionallyIfAvailable
 		case defaultMockParameterOrMoveMock(typeName: String, mockName: String, parameter: GraphFuzzerRemedyProperty, offersMove: Bool)
+		case keepOneFulfiller(fulfilledType: String)
+		case decorateType(typeName: String)
+		/// `declaringType` is `nil`, and `receivedAs` the wrapper's type, where the error names no declaring type.
+		case declareAsSendableWrapper(label: String, declaringType: String?, sendableType: String, retypesReceive: Bool, receivedAs: String?)
+		case forwardReceive(label: String)
+		case declareProvidingFormOnSeam(collision: SeamLabelCollision, property: GraphFuzzerRemedyProperty)
+		case relabelHidingDeclaration(hiddenLabel: String, hidingProperty: GraphFuzzerRemedyProperty, declaringType: String)
 
 		/// The remedy `message` states, or `nil` for an error outside the families the oracle reads, or one whose remedy
-		/// the oracle cannot apply as stated: an erased instantiator whose fulfilling type the error leaves to the user, a
-		/// type built only through an `Instantiator`, or a cycle an alias received only if available closes.
+		/// the oracle cannot apply as stated: an erased instantiator whose fulfilling type the error leaves to the user, or a
+		/// cycle an alias received only if available closes.
 		init?(message: String) {
 			let unfulfilledPrefix = "@Received property `"
 			let unfulfilledMarker = "` is not @Instantiated or @Forwarded in chain: "
 			let onlyIfAvailableRemedy = " Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required."
 			if message.hasPrefix(unfulfilledPrefix), let markerRange = message.range(of: unfulfilledMarker) {
-				let receivedLabel = Self.property(spelled: message[message.index(message.startIndex, offsetBy: unfulfilledPrefix.count)..<markerRange.lowerBound], attribute: "@Received")?.label
+				let spelledReceivedProperty = message[message.index(message.startIndex, offsetBy: unfulfilledPrefix.count)..<markerRange.lowerBound]
+				let receivedLabel = Self.property(spelled: spelledReceivedProperty, attribute: "@Received")?.label
 				// Chain types spell no period followed by a space, so the hint begins after the first.
 				guard let receivedLabel, let hintStart = message[markerRange.upperBound...].range(of: ". ") else { return nil }
 				let hint = message[hintStart.upperBound...]
@@ -185,6 +231,86 @@ enum GraphFuzzerRemedies {
 					let root = hint[rootMarker.upperBound..<hint.index(hint.endIndex, offsetBy: -suffix.count)]
 					guard let property = Self.property(spelled: spelledProperty, attribute: "@Instantiated"), !root.contains("`") else { return nil }
 					self = .instantiateOnRoot(property: property, root: String(root), receivingOnlyIfAvailable: suffix == instantiateReceivingOnlyIfAvailableSuffix)
+				} else if hint.contains(" Declare `@Forwarded let \(spelledReceivedProperty)` on a type below `") {
+					// "… SafeDI builds it only through an `Instantiator` …" or "No @Instantiable declaration fulfills …", each
+					// followed by "Declare `@Forwarded let x: X` on a type below `Root` in the chain, and pass the value to the
+					// `Instantiator` that builds that type".
+					self = .forwardReceive(label: receivedLabel)
+				} else {
+					return nil
+				}
+			} else if let collision = SeamLabelCollision(message: message) {
+				// "SafeDI cannot generate the dependency tree of `S`: its tree receives `x` as … Receive `x` the same way in
+				// every type of the tree, or declare it on `S` as the form that provides the others: `@Received let x: X`."
+				let remedyPrefix = "Receive `\(collision.label)` the same way in every type of the tree, or declare it on `\(collision.seam)` as the form that provides the others: `@Received let \(collision.label): "
+				guard collision.remedy.hasPrefix(remedyPrefix), collision.remedy.hasSuffix("`.") else { return nil }
+				let type = collision.remedy.dropFirst(remedyPrefix.count).dropLast("`.".count)
+				guard !type.isEmpty, !type.contains("`") else { return nil }
+				self = .declareProvidingFormOnSeam(collision: collision, property: GraphFuzzerRemedyProperty(attribute: "@Received", label: collision.label, type: String(type)))
+			} else if message.hasPrefix(unfulfilledPrefix), let hiddenRange = message.range(of: Self.hiddenMarker) {
+				// "@Received property `x: X` is hidden in chain: … `T` declares `x: Y` with the same label, so the types below
+				// `T` receive `x: Y` instead. Give `x: Y` on `T` a different label to fix."
+				let spelledHiddenProperty = message[message.index(message.startIndex, offsetBy: unfulfilledPrefix.count)..<hiddenRange.lowerBound]
+				let givePrefix = " Give `"
+				let onMarker = "` on `"
+				let suffix = Self.hiddenSuffix
+				guard let hiddenLabel = Self.property(spelled: spelledHiddenProperty, attribute: "@Received")?.label,
+				      message.hasSuffix(suffix),
+				      let giveRange = message.range(of: givePrefix, options: .backwards),
+				      let onRange = message.range(of: onMarker, options: .backwards, range: giveRange.upperBound..<message.endIndex)
+				else { return nil }
+				let declaringType = message[onRange.upperBound..<message.index(message.endIndex, offsetBy: -suffix.count)]
+				guard let hidingProperty = Self.property(spelled: message[giveRange.upperBound..<onRange.lowerBound], attribute: ""),
+				      hidingProperty.label == hiddenLabel,
+				      !declaringType.contains("`")
+				else { return nil }
+				self = .relabelHidingDeclaration(hiddenLabel: hiddenLabel, hidingProperty: hidingProperty, declaringType: String(declaringType))
+			} else if message.hasPrefix(Self.multipleFulfillersPrefix) {
+				// "Found multiple @Instantiable types or extensions that fulfill `P`. … If it names one type, keep one, and
+				// remove `P` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable."
+				let named = message.dropFirst(Self.multipleFulfillersPrefix.count)
+				guard let nameEnd = named.range(of: "`. ") else { return nil }
+				let fulfilledType = named[..<nameEnd.lowerBound]
+				guard message.contains(" keep one, and remove `\(fulfilledType)` from the others’ `fulfillingAdditionalTypes`") else { return nil }
+				self = .keepOneFulfiller(fulfilledType: String(fulfilledType))
+			} else if message.hasPrefix(Self.unfulfilledInstantiatedTypePrefix) {
+				// "No @Instantiable type or extension fulfills `X`, which @Instantiated property `x: X` instantiates. Decorate
+				// `X`, or an extension of it, with @Instantiable, or …"
+				let named = message.dropFirst(Self.unfulfilledInstantiatedTypePrefix.count)
+				guard let nameEnd = named.range(of: "`, which ") else { return nil }
+				let typeName = named[..<nameEnd.lowerBound]
+				guard message.contains(" Decorate `\(typeName)`, or an extension of it, with @Instantiable") else { return nil }
+				self = .decorateType(typeName: String(typeName))
+			} else if message.contains(Self.sendableCaptureMarker) {
+				// "… Declare `x` on `T`, and this property, as `W` to fix. …", "… Declare `x` on `T` as `W` to fix. …", or
+				// "… Declare `x` as `W` where it is declared and where it is received as `V` to fix. …".
+				let declarePrefix = " Declare `"
+				guard let fixEnd = message.range(of: "` to fix. "),
+				      let fixStart = message.range(of: declarePrefix, options: .backwards, range: message.startIndex..<fixEnd.lowerBound)
+				else { return nil }
+				let fix = message[fixStart.upperBound..<fixEnd.lowerBound]
+				let onMarker = "` on `"
+				let asMarker = "` as `"
+				let andThisPropertyMarker = "`, and this property, as `"
+				let whereMarker = "` where it is declared and where it is received as `"
+				if let whereRange = fix.range(of: whereMarker), let asRange = fix.range(of: asMarker), asRange.upperBound <= whereRange.lowerBound {
+					self = .declareAsSendableWrapper(
+						label: String(fix[..<asRange.lowerBound]),
+						declaringType: nil,
+						sendableType: String(fix[asRange.upperBound..<whereRange.lowerBound]),
+						retypesReceive: true,
+						receivedAs: String(fix[whereRange.upperBound...]),
+					)
+				} else if let onRange = fix.range(of: onMarker) {
+					let label = String(fix[..<onRange.lowerBound])
+					let rest = fix[onRange.upperBound...]
+					if let andRange = rest.range(of: andThisPropertyMarker) {
+						self = .declareAsSendableWrapper(label: label, declaringType: String(rest[..<andRange.lowerBound]), sendableType: String(rest[andRange.upperBound...]), retypesReceive: true, receivedAs: nil)
+					} else if let asRange = rest.range(of: asMarker) {
+						self = .declareAsSendableWrapper(label: label, declaringType: String(rest[..<asRange.lowerBound]), sendableType: String(rest[asRange.upperBound...]), retypesReceive: false, receivedAs: nil)
+					} else {
+						return nil
+					}
 				} else {
 					return nil
 				}
@@ -228,6 +354,17 @@ enum GraphFuzzerRemedies {
 			}
 		}
 
+		/// What follows the property in the error of a receive a closer declaration of its label hides.
+		static let hiddenMarker = "` is hidden in chain: "
+		static let hiddenSuffix = "` a different label to fix."
+		/// What begins the error two `@Instantiable` declarations that fulfill one type each report.
+		static let multipleFulfillersPrefix = "Found multiple @Instantiable types or extensions that fulfill `"
+		/// What begins the error of an `@Instantiated` property whose type no declaration fulfills.
+		static let unfulfilledInstantiatedTypePrefix = "No @Instantiable type or extension fulfills `"
+		/// What follows the property in the error of a receive, inside a `@Sendable` function, of a wrapper that is not
+		/// `Sendable`.
+		static let sendableCaptureMarker = "` cannot be received inside a `@Sendable` function in chain: "
+
 		/// The items a list in backticks names: "`a: A`, `b: B`" or "`a: A`", or none when the list is spelled otherwise.
 		private static func backtickedItems(in list: Substring) -> [Substring] {
 			guard list.hasPrefix("`"), list.hasSuffix("`"), list.count > 1 else { return [] }
@@ -244,6 +381,60 @@ enum GraphFuzzerRemedies {
 		}
 	}
 
+	/// The error of a seam whose tree receives one label in forms its generated initializer cannot take as one parameter,
+	/// read from its message whatever remedy it states: the seam, the label, each form with the type that receives it, and
+	/// the remedy's sentences.
+	struct SeamLabelCollision: Equatable {
+		struct Form: Equatable {
+			let label: String
+			let type: String
+			let receivingType: String
+		}
+
+		let seam: String
+		let label: String
+		let forms: [Form]
+		let remedy: String
+
+		init?(message: String) {
+			let prefix = "SafeDI cannot generate the dependency tree of `"
+			let labelMarker = "`: its tree receives `"
+			let formsMarker = "` as "
+			let formsEnd = ", and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. "
+			guard message.hasPrefix(prefix),
+			      let labelRange = message.range(of: labelMarker),
+			      let formsRange = message.range(of: formsMarker, range: labelRange.upperBound..<message.endIndex),
+			      let formsEndRange = message.range(of: formsEnd, range: formsRange.upperBound..<message.endIndex)
+			else { return nil }
+			seam = String(message[message.index(message.startIndex, offsetBy: prefix.count)..<labelRange.lowerBound])
+			label = String(message[labelRange.upperBound..<formsRange.lowerBound])
+			remedy = String(message[formsEndRange.upperBound...])
+			// "`x: X?` on `A` and `x: X` on `B`"
+			let spelledForms = message[formsRange.upperBound..<formsEndRange.lowerBound]
+			guard spelledForms.hasPrefix("`"), spelledForms.hasSuffix("`") else { return nil }
+			var forms = [Form]()
+			for spelledForm in spelledForms.dropFirst().dropLast().components(separatedBy: "` and `") {
+				let parts = spelledForm.components(separatedBy: "` on `")
+				guard parts.count == 2, let separator = parts[0].range(of: ": "), parts[0][..<separator.lowerBound] == label else { return nil }
+				forms.append(Form(label: label, type: String(parts[0][separator.upperBound...]), receivingType: parts[1]))
+			}
+			guard forms.count >= 2, !seam.contains("`"), !label.contains("`") else { return nil }
+			self.forms = forms
+		}
+	}
+
+	/// Whether the oracle reads the errors of `fixture`: a base or seam corpus graph, in one module or split across
+	/// modules, whose files the remedies edit in place (`Files`), so that a remedied split graph keeps its module map. A
+	/// public mock corpus graph is not read.
+	static func reads(_ fixture: GraphFuzzerFixture) -> Bool {
+		switch GraphFuzzerGeneratorFeature.features(drawnIn: fixture) {
+		case [], [.generateDependencyTree]:
+			true
+		default:
+			false
+		}
+	}
+
 	/// The remedies the errors of `diagnostics` state for `fixture`, one per remedy of each site in the order the tool
 	/// reports the sites: every error the tool reports at a site must state the same remedy, or, for a receive no type in
 	/// its chain fulfills, the same declaration on its own root, which each root then declares. A site whose errors state
@@ -254,18 +445,36 @@ enum GraphFuzzerRemedies {
 
 	/// The number of sites of `diagnostics` whose errors are in a family the oracle reads – a receive no type in its chain
 	/// fulfills, or a cycle – and that get no remedy: the oracle's blind spot, which the long run reports.
+	///
+	/// An error of such a family at a line the oracle cannot place (`Files.site(of:)`: a declaration that is no `final
+	/// class`'s, or an attribute on two lines) counts as a site of its own, so that a draw the oracle cannot read shows
+	/// in the count.
 	static func unremediedSiteCount(of fixture: GraphFuzzerFixture, diagnostics: String) -> Int {
-		sites(of: fixture, diagnostics: diagnostics).count(where: { site in
-			site.remedies.isEmpty && site.errors.contains { error in
-				error.message.hasPrefix("Dependency cycle: ") || error.message.contains("` is not @Instantiated or @Forwarded in chain: ")
-			}
+		guard reads(fixture) else { return 0 }
+		func isOfAFamilyTheOracleReads(_ error: ReportedError) -> Bool {
+			error.message.hasPrefix("Dependency cycle: ")
+				|| error.message.contains("` is not @Instantiated or @Forwarded in chain: ")
+				|| error.message.hasPrefix(StatedRemedy.multipleFulfillersPrefix)
+				|| error.message.hasPrefix(StatedRemedy.unfulfilledInstantiatedTypePrefix)
+				|| error.message.contains(StatedRemedy.sendableCaptureMarker)
+				|| (error.message.hasPrefix("@Received property `") && error.message.contains(StatedRemedy.hiddenMarker) && error.message.hasSuffix(StatedRemedy.hiddenSuffix))
+				|| SeamLabelCollision(message: error.message) != nil
+		}
+		let unremediedCount = sites(of: fixture, diagnostics: diagnostics).count(where: { site in
+			site.remedies.isEmpty && site.errors.contains(where: isOfAFamilyTheOracleReads)
 		})
+		guard let files = Files(fixture) else { return unremediedCount }
+		let unplacedCount = diagnostics.split(separator: "\n").count(where: { diagnosticLine in
+			guard let error = ReportedError(diagnosticLine) else { return false }
+			return files.site(of: error) == nil && isOfAFamilyTheOracleReads(error)
+		})
+		return unremediedCount + unplacedCount
 	}
 
 	/// Each property declaration `diagnostics` reports an error at, in the order of its first error, with its errors and
 	/// the remedies they state.
 	private static func sites(of fixture: GraphFuzzerFixture, diagnostics: String) -> [(errors: [ReportedError], remedies: [GraphFuzzerRemedy])] {
-		guard let files = Files(fixture) else { return [] }
+		guard reads(fixture), let files = Files(fixture) else { return [] }
 		var sites = [GraphFuzzerRemedy.Site]()
 		var errorsBySite = [GraphFuzzerRemedy.Site: [ReportedError]]()
 		for diagnosticLine in diagnostics.split(separator: "\n") {
@@ -281,6 +490,68 @@ enum GraphFuzzerRemedies {
 		}
 	}
 
+	/// `remedy`, a `forwardReceive` remedy, with the declarations the errors of `diagnostics`, the tool's on the remedied
+	/// graph, state for what builds a type that now forwards a property: "… cannot build `T`, which has @Forwarded
+	/// properties that only an instantiator is passed. Declare it as `Instantiator<T>`.", and an erased instantiator's
+	/// "The first generic argument of … Declare it as `ErasedInstantiator<X, AnyT>`.". Each such property takes the type
+	/// its error states. An error `originalDiagnostics`, the tool's on the graph before the remedy, reports too is not the
+	/// remedy's to follow. Returns `nil` when no error states such a declaration, or one cannot be applied.
+	///
+	/// "New" is read from the message alone, so an error of either form that the remedy exposed without causing, at a
+	/// declaration that builds another type, is followed too; any other new error is left as it is.
+	static func followingForwardedReceive(_ remedy: GraphFuzzerRemedy, diagnostics: String, originalDiagnostics: String) -> GraphFuzzerRemedy? {
+		guard var files = Files(remedy.fixture) else { return nil }
+		let originalMessages = Set(originalDiagnostics.split(separator: "\n").compactMap { ReportedError($0)?.message })
+		let declarationMarker = " Declare it as `"
+		var declarations = [String]()
+		var retypedSites = Set<GraphFuzzerRemedy.Site>()
+		for diagnosticLine in diagnostics.split(separator: "\n") {
+			guard let error = ReportedError(diagnosticLine),
+			      !originalMessages.contains(error.message),
+			      isForwardedBuilderError(error.message),
+			      error.message.hasSuffix("`."),
+			      let declarationStart = error.message.range(of: declarationMarker, options: .backwards),
+			      let site = files.site(of: error),
+			      retypedSites.insert(site).inserted
+			else { continue }
+			let declaredType = String(error.message[declarationStart.upperBound...].dropLast("`.".count))
+			guard files.edit(typeNamed: site.typeName, { properties in
+				properties.map { $0.label == site.label ? GraphFuzzerRemedyProperty(attribute: $0.attribute, label: $0.label, type: declaredType) : $0 }
+			}) else { return nil }
+			declarations.append("declares \(site) as `\(declaredType)`")
+		}
+		guard !declarations.isEmpty else { return nil }
+		return GraphFuzzerRemedy(
+			kind: remedy.kind,
+			site: remedy.site,
+			answeredErrors: remedy.answeredErrors,
+			description: "\(remedy.description), and \(declarations.joined(separator: ", and "))",
+			fixture: GraphFuzzerFixture(seed: remedy.fixture.seed, swiftFileContent: files.contents),
+		)
+	}
+
+	/// Whether `message` is the error of a declaration that builds a type with `@Forwarded` properties otherwise than
+	/// through an instantiator that is passed them.
+	private static func isForwardedBuilderError(_ message: String) -> Bool {
+		message.contains(", which has @Forwarded properties that only an instantiator is passed.") || message.hasPrefix("The first generic argument of `")
+	}
+
+	/// The messages of the errors `outcome`, the last of a `forwardReceive` remedy's runs, still reports at a declaration
+	/// that builds the type of the remedy's site, and that `originalDiagnostics`, the tool's on the graph before the
+	/// remedy, did not report: what forwarding introduced and the declarations the tool stated did not clear.
+	static func errorsIntroducedByForwarding(_ remedy: GraphFuzzerRemedy, outcome: GraphFuzzerToolOutcome, originalDiagnostics: String) -> [String] {
+		guard case let .rejected(diagnostics) = outcome else { return [] }
+		let originalMessages = Set(originalDiagnostics.split(separator: "\n").compactMap { ReportedError($0)?.message })
+		return diagnostics.split(separator: "\n").compactMap { diagnosticLine in
+			guard let message = ReportedError(diagnosticLine)?.message,
+			      !originalMessages.contains(message),
+			      isForwardedBuilderError(message),
+			      message.contains(" cannot build `\(remedy.site.typeName)`, ") || message.contains(" properties of `\(remedy.site.typeName)`, which it builds.")
+			else { return nil }
+			return message
+		}
+	}
+
 	/// The messages of the errors `outcome` reports at `site` of `fixture`.
 	static func errors(at site: GraphFuzzerRemedy.Site, in outcome: GraphFuzzerToolOutcome, of fixture: GraphFuzzerFixture) -> [String] {
 		guard case let .rejected(diagnostics) = outcome, let files = Files(fixture) else { return [] }
@@ -290,12 +561,60 @@ enum GraphFuzzerRemedies {
 		}
 	}
 
+	/// Whether the advice to add `onlyIfAvailable: true` to a required receive of an optional goes unjudged in `fixture`'s
+	/// corpus: in the seam corpus, since that receive is not a shape anyone writes, so a remedy of it judges a graph no
+	/// adopter has. The base corpus judges it until its draws stop drawing the receive (plan I6).
+	private static func judgesNoRequiredOptionalReceive(in fixture: GraphFuzzerFixture) -> Bool {
+		GraphFuzzerGeneratorFeature.features(drawnIn: fixture) == [.generateDependencyTree]
+	}
+
 	private static func remedies(at site: GraphFuzzerRemedy.Site, answering errors: [ReportedError], in files: Files, of fixture: GraphFuzzerFixture) -> [GraphFuzzerRemedy] {
 		let statedRemedies = errors.map { StatedRemedy(message: $0.message) }
-		guard let firstStatedRemedy = statedRemedies.first.flatMap(\.self),
-		      let siteProperty = files.property(labeled: site.label, ofTypeNamed: site.typeName)
-		else { return [] }
+		guard let firstStatedRemedy = statedRemedies.first.flatMap(\.self) else { return [] }
 		let answeredErrors = errors.map(\.message)
+		if case let .keepOneFulfiller(fulfilledType) = firstStatedRemedy {
+			// The site is a declaration, not a property: the declaration keeps the type, and the others lose it.
+			var editedFiles = files
+			guard statedRemedies.allSatisfy({ $0 == firstStatedRemedy }),
+			      fulfilledType == site.label,
+			      editedFiles.removeFulfilledType(fulfilledType, fromEveryTypeBut: site.typeName)
+			else { return [] }
+			return [GraphFuzzerRemedy(
+				kind: .keepOneFulfiller,
+				site: site,
+				answeredErrors: answeredErrors,
+				description: "removes `\(fulfilledType)` from the `fulfillingAdditionalTypes` of every declaration but `\(site.typeName)`",
+				fixture: GraphFuzzerFixture(seed: fixture.seed, swiftFileContent: editedFiles.contents),
+			)]
+		}
+		if case let .declareProvidingFormOnSeam(collision, property) = firstStatedRemedy {
+			// The site is the seam's declaration, with the label: the seam declares the providing form, in place of its own
+			// form of the label where it declares one.
+			func isReceivedAsAnAdopterWould(_ form: SeamLabelCollision.Form) -> Bool {
+				guard form.type.hasSuffix("?") else { return true }
+				guard let receive = files.property(labeled: form.label, ofTypeNamed: form.receivingType) else { return false }
+				return receive.type == form.type && receive.attribute.hasPrefix("@Received(") && receive.attribute.contains("onlyIfAvailable: true")
+			}
+			func declaringProperty(_ properties: [GraphFuzzerRemedyProperty]) -> [GraphFuzzerRemedyProperty]? {
+				guard properties.contains(where: { $0.label == property.label }) else { return properties + [property] }
+				return properties.map { $0.label == property.label ? property : $0 }
+			}
+			var editedFiles = files
+			guard statedRemedies.allSatisfy({ $0 == firstStatedRemedy }),
+			      collision.seam == site.typeName,
+			      collision.label == site.label,
+			      collision.forms.allSatisfy(isReceivedAsAnAdopterWould),
+			      editedFiles.edit(typeNamed: collision.seam, declaringProperty)
+			else { return [] }
+			return [GraphFuzzerRemedy(
+				kind: .declareProvidingFormOnSeam,
+				site: site,
+				answeredErrors: answeredErrors,
+				description: "declares `\(property.attribute) let \(property.label): \(property.type)` on `\(collision.seam)`",
+				fixture: GraphFuzzerFixture(seed: fixture.seed, swiftFileContent: editedFiles.contents),
+			)]
+		}
+		guard let siteProperty = files.property(labeled: site.label, ofTypeNamed: site.typeName) else { return [] }
 		func remedy(_ kind: GraphFuzzerRemedyKind, _ description: String, label: String? = nil, editing edits: [(typeName: String, edit: ([GraphFuzzerRemedyProperty]) -> [GraphFuzzerRemedyProperty]?)]) -> GraphFuzzerRemedy? {
 			var editedFiles = files
 			for (typeName, edit) in edits {
@@ -328,6 +647,62 @@ enum GraphFuzzerRemedies {
 			)
 		}
 		switch firstStatedRemedy {
+		case .keepOneFulfiller, .declareProvidingFormOnSeam:
+			// Answered above: its site is no property.
+			return []
+		case let .decorateType(typeName):
+			guard statedRemedies.allSatisfy({ $0 == firstStatedRemedy }), siteProperty.attribute == "@Instantiated", siteProperty.type == typeName else { return [] }
+			return [mockRemedy(.decorateType, "decorates `\(typeName)` with `@Instantiable`") { files in
+				files.decorateEmptyClass(named: typeName)
+			}].compactMap(\.self)
+		case let .declareAsSendableWrapper(label, declaringType, sendableType, retypesReceive, receivedAs):
+			// The wrapper the error would have retyped is the `Sendable` wrapper without `Sendable`.
+			// An alias that receives the property names its type too (`ofType:`), and its own property and the aliases of
+			// it are typed after it: the error's "where it is received" covers them, which the oracle does not edit.
+			guard statedRemedies.allSatisfy({ $0 == firstStatedRemedy }),
+			      sendableType.hasPrefix("Sendable"),
+			      !files.contents.contains(where: { $0.contains("fulfilledByDependencyNamed: \"\(label)\"") })
+			else { return [] }
+			let wrapperType = receivedAs ?? String(sendableType.dropFirst("Sendable".count))
+			func retyping(_ properties: [GraphFuzzerRemedyProperty]) -> [GraphFuzzerRemedyProperty]? {
+				// The property keeps its attribute, and an optional receive stays optional.
+				guard properties.contains(where: { $0.label == label && [wrapperType, GraphFuzzerSpelling.optionalForm(of: wrapperType)].contains($0.type) }) else { return nil }
+				return properties.map { property in
+					guard property.label == label else { return property }
+					if property.type == wrapperType {
+						return GraphFuzzerRemedyProperty(attribute: property.attribute, label: label, type: sendableType)
+					} else if property.type == GraphFuzzerSpelling.optionalForm(of: wrapperType) {
+						return GraphFuzzerRemedyProperty(attribute: property.attribute, label: label, type: GraphFuzzerSpelling.optionalForm(of: sendableType))
+					} else {
+						return property
+					}
+				}
+			}
+			var typeNames: [String]
+			let description: String
+			if let declaringType {
+				typeNames = [declaringType]
+				if retypesReceive, site.typeName != declaringType {
+					guard label == site.label else { return [] }
+					typeNames.append(site.typeName)
+					description = "declares `\(label)` on `\(declaringType)`, and \(site), as `\(sendableType)`"
+				} else {
+					description = "declares `\(label)` on `\(declaringType)` as `\(sendableType)`"
+				}
+			} else {
+				typeNames = files.namesOfTypes(declaringPropertyLabeled: label, typed: [wrapperType, GraphFuzzerSpelling.optionalForm(of: wrapperType)])
+				guard typeNames.contains(site.typeName) else { return [] }
+				description = "declares `\(label)` as `\(sendableType)` on \(typeNames.map { "`\($0)`" }.joined(separator: ", ")), which declare or receive it as `\(wrapperType)`"
+			}
+			return [remedy(.declareAsSendableWrapper, description, editing: typeNames.map { ($0, retyping) })].compactMap(\.self)
+		case let .forwardReceive(label):
+			// Each error at the site may name another root; all state the same declaration, which the receiver takes.
+			guard statedRemedies.allSatisfy({ $0 == firstStatedRemedy }), label == site.label, siteProperty.attribute == "@Received" else { return [] }
+			return [remedy(
+				.forwardReceive,
+				"receives `\(label)` with `@Forwarded`",
+				editing: [(site.typeName, replacingSiteProperty(with: GraphFuzzerRemedyProperty(attribute: "@Forwarded", label: label, type: siteProperty.type)))],
+			)].compactMap(\.self)
 		case let .defaultMockParameterOrMoveMock(typeName, mockName, parameter, offersMove):
 			// One mock reports each of its parameters once, at the clause that declares its dependency.
 			guard errors.count == 1, let clauseLine = errors.first?.line, typeName == site.typeName, parameter.label == site.label else { return [] }
@@ -360,13 +735,28 @@ enum GraphFuzzerRemedies {
 			guard receivingOnlyIfAvailable else {
 				return [remedy(.instantiateOnRoot, description, editing: edits)].compactMap(\.self)
 			}
-			guard let attribute = onlyIfAvailableAttribute(of: siteProperty) else { return [] }
+			guard !judgesNoRequiredOptionalReceive(in: fixture), let attribute = onlyIfAvailableAttribute(of: siteProperty) else { return [] }
 			let receive = GraphFuzzerRemedyProperty(attribute: attribute, label: site.label, type: siteProperty.type)
 			description += " and decorates \(site) with `\(attribute)`"
 			edits.append((site.typeName, replacingSiteProperty(with: receive)))
 			return [remedy(.instantiateOnRootAndReceiveOnlyIfAvailable, description, editing: edits)].compactMap(\.self)
+		case let .relabelHidingDeclaration(hiddenLabel, hidingProperty, declaringType):
+			// Each error at the site may name another chain; all must name the same declaration.
+			let newLabel = "\(hiddenLabel)Relabeled"
+			guard statedRemedies.allSatisfy({ $0 == firstStatedRemedy }),
+			      hiddenLabel == site.label,
+			      siteProperty.attribute.hasPrefix("@Received"),
+			      !(siteProperty.type.hasSuffix("?") && !siteProperty.attribute.contains("onlyIfAvailable: true")),
+			      !files.contents.contains(where: { $0.contains("fulfilledByDependencyNamed: \"\(hiddenLabel)\"") })
+			else { return [] }
+			return [remedy(.relabelHidingDeclaration, "gives `\(hidingProperty.label): \(hidingProperty.type)` on `\(declaringType)` the label `\(newLabel)`", editing: [(declaringType, { properties in
+				guard properties.contains(where: { $0.label == hiddenLabel && $0.type == hidingProperty.type }),
+				      !properties.contains(where: { $0.label == newLabel })
+				else { return nil }
+				return properties.map { $0.label == hiddenLabel ? GraphFuzzerRemedyProperty(attribute: $0.attribute, label: newLabel, type: $0.type) : $0 }
+			})])].compactMap(\.self)
 		case let .receiveOnlyIfAvailable(label):
-			guard statedRemedies.allSatisfy({ $0 == firstStatedRemedy }), label == site.label, siteProperty.attribute == "@Received" else { return [] }
+			guard !judgesNoRequiredOptionalReceive(in: fixture), statedRemedies.allSatisfy({ $0 == firstStatedRemedy }), label == site.label, siteProperty.attribute == "@Received" else { return [] }
 			let property = GraphFuzzerRemedyProperty(attribute: "@Received(onlyIfAvailable: true)", label: label, type: siteProperty.type)
 			return [remedy(.receiveOnlyIfAvailable, "decorates \(site) with `\(property.attribute)`", editing: [(site.typeName, replacingSiteProperty(with: property))])].compactMap(\.self)
 		case let .receiveSuggestedProperty(label, suggestions):
@@ -422,8 +812,15 @@ enum GraphFuzzerRemedies {
 			self.fileNames = fileNames
 		}
 
-		/// The property declaration `error` is reported at, or `nil` for an error at any other line.
+		/// The property declaration `error` is reported at, or the declaration that fulfills a type another fulfills too
+		/// (`fulfillerSite(of:)`), or `nil` for an error at any other line.
 		func site(of error: ReportedError) -> GraphFuzzerRemedy.Site? {
+			if let fulfillerSite = fulfillerSite(of: error) {
+				return fulfillerSite
+			}
+			if let seamSite = seamSite(of: error) {
+				return seamSite
+			}
 			guard let fileIndex = fileNames.firstIndex(of: error.fileName) else { return nil }
 			let lines = Self.lines(of: contents[fileIndex])
 			let lineIndex = error.line - 1
@@ -441,6 +838,99 @@ enum GraphFuzzerRemedies {
 				return GraphFuzzerRemedy.Site(fileName: error.fileName, typeName: typeDeclaration.name, label: parameter.label)
 			} else {
 				return nil
+			}
+		}
+
+		/// The declaration `error` is reported at when it is the error of a type two declarations fulfill: the `final
+		/// class` whose `@Instantiable` attribute is on the error's line, with the fulfilled type as the site's label.
+		func fulfillerSite(of error: ReportedError) -> GraphFuzzerRemedy.Site? {
+			guard case let .keepOneFulfiller(fulfilledType)? = StatedRemedy(message: error.message),
+			      let fileIndex = fileNames.firstIndex(of: error.fileName)
+			else { return nil }
+			let lines = Self.lines(of: contents[fileIndex])
+			let lineIndex = error.line - 1
+			guard lines.indices.contains(lineIndex), lines[lineIndex].hasPrefix("@Instantiable"),
+			      let typeDeclaration = Self.typeDeclarations(in: lines).first(where: { $0.lines.lowerBound == lineIndex + 2 })
+			else { return nil }
+			return GraphFuzzerRemedy.Site(fileName: error.fileName, typeName: typeDeclaration.name, label: fulfilledType)
+		}
+
+		/// The seam's declaration `error` is reported at when it is the error of a seam whose tree receives one label in
+		/// forms its initializer cannot take as one parameter, whatever remedy the error states: the `final class` whose
+		/// `@Instantiable` attribute is on the error's line, with the label as the site's label, so that the error after a
+		/// remedy that leaves it, stating another remedy, is at the same site.
+		func seamSite(of error: ReportedError) -> GraphFuzzerRemedy.Site? {
+			guard let collision = SeamLabelCollision(message: error.message), let fileIndex = fileNames.firstIndex(of: error.fileName) else { return nil }
+			let lines = Self.lines(of: contents[fileIndex])
+			let lineIndex = error.line - 1
+			guard lines.indices.contains(lineIndex), lines[lineIndex].hasPrefix("@Instantiable"),
+			      let typeDeclaration = Self.typeDeclarations(in: lines).first(where: { $0.lines.lowerBound == lineIndex + 2 }),
+			      typeDeclaration.name == collision.seam
+			else { return nil }
+			return GraphFuzzerRemedy.Site(fileName: error.fileName, typeName: typeDeclaration.name, label: collision.label)
+		}
+
+		/// Removes `fulfillingAdditionalTypes: [fulfilledType.self]` from the `@Instantiable` attribute of every `final
+		/// class` but the one named `typeName`. Returns `false`, editing nothing, when no other declaration lists it so, or
+		/// the one named `typeName` does not.
+		mutating func removeFulfilledType(_ fulfilledType: String, fromEveryTypeBut typeName: String) -> Bool {
+			let argument = "fulfillingAdditionalTypes: [\(fulfilledType).self]"
+			var editedContents = contents
+			var keptCount = 0
+			var removedCount = 0
+			for fileIndex in contents.indices {
+				var lines = Self.lines(of: contents[fileIndex])
+				for typeDeclaration in Self.typeDeclarations(in: lines) {
+					let attributeIndex = typeDeclaration.lines.lowerBound - 2
+					guard attributeIndex >= 0, lines[attributeIndex].hasPrefix("@Instantiable("), lines[attributeIndex].hasSuffix(")") else { continue }
+					var arguments = GraphFuzzerOracle.topLevelParameters(String(lines[attributeIndex].dropFirst("@Instantiable(".count).dropLast()))
+						.map { $0.trimmingCharacters(in: .whitespaces) }
+					guard let argumentIndex = arguments.firstIndex(of: argument) else { continue }
+					guard typeDeclaration.name != typeName else {
+						keptCount += 1
+						continue
+					}
+					arguments.remove(at: argumentIndex)
+					lines[attributeIndex] = arguments.isEmpty ? "@Instantiable" : "@Instantiable(\(arguments.joined(separator: ", ")))"
+					removedCount += 1
+				}
+				editedContents[fileIndex] = lines.joined(separator: "\n")
+			}
+			guard keptCount == 1, removedCount > 0 else { return false }
+			contents = editedContents
+			return true
+		}
+
+		/// Makes the empty `final class` named `typeName`, which the fuzzer writes on one line, `@Instantiable`: the
+		/// attribute, the conformance, and a public initializer that takes nothing. Returns `false`, editing nothing, when
+		/// no file declares the class so.
+		mutating func decorateEmptyClass(named typeName: String) -> Bool {
+			for fileIndex in contents.indices {
+				var lines = Self.lines(of: contents[fileIndex])
+				for (declaration, conformances) in [("public final class \(typeName) {}", "Instantiable"), ("public final class \(typeName): Sendable {}", "Instantiable, Sendable")] {
+					guard let lineIndex = lines.firstIndex(of: declaration) else { continue }
+					lines.replaceSubrange(lineIndex...lineIndex, with: [
+						"@Instantiable",
+						"public final class \(typeName): \(conformances) {",
+						"\tpublic init() {}",
+						"}",
+					])
+					contents[fileIndex] = lines.joined(separator: "\n")
+					return true
+				}
+			}
+			return false
+		}
+
+		/// The names of the `final class`es that declare a property labeled `label` of one of `types`, in the files' order.
+		func namesOfTypes(declaringPropertyLabeled label: String, typed types: [String]) -> [String] {
+			contents.flatMap { content in
+				let lines = Self.lines(of: content)
+				return Self.typeDeclarations(in: lines).filter { typeDeclaration in
+					typeDeclaration.lines.contains { lineIndex in
+						Self.property(on: lines[lineIndex]).map { $0.label == label && types.contains($0.type) } ?? false
+					}
+				}.map(\.name)
 			}
 		}
 
@@ -606,14 +1096,36 @@ extension GraphFuzzerOracle {
 	/// name of the type and begins the clause.
 	static let guardedMockParameterErrorMarker = "` declares only inside `"
 
+	/// How many runs of the tool may follow a `forwardReceive` remedy, each applying the declarations the run before it
+	/// stated. The base corpus's graphs need three at most (a builder on each of three roots, a run each); a remedy that
+	/// still has an error to follow after these fails with it (`errorsIntroducedByForwarding`).
+	static let maximumForwardedReceiveFollowingRunCount = 6
+
 	/// Runs SafeDITool over each remedy the errors of `outcome` state for `fixture` (`GraphFuzzerRemedies`), when the tool
-	/// rejects a base corpus graph in one module: tool runs only, no compile. Remedies are not applied to a graph of
-	/// another corpus, whose seams, holes and public mocks spell declarations the remedies do not edit.
+	/// rejects a base or seam corpus graph, in one module or split across modules: tool runs only, no compile. A public
+	/// mock corpus graph gets none (`GraphFuzzerRemedies.reads(_:)`).
 	static func remedyRuns(of fixture: GraphFuzzerFixture, outcome: GraphFuzzerToolOutcome) async throws -> [GraphFuzzerRemedyRun] {
-		guard GraphFuzzerGeneratorFeature.features(drawnIn: fixture).isEmpty, fixture.modules == nil, case let .rejected(diagnostics) = outcome else { return [] }
+		guard GraphFuzzerRemedies.reads(fixture), case let .rejected(diagnostics) = outcome else { return [] }
 		var runs = [GraphFuzzerRemedyRun]()
 		for remedy in GraphFuzzerRemedies.remedies(of: fixture, diagnostics: diagnostics) {
-			try await runs.append(GraphFuzzerRemedyRun(remedy: remedy, outcome: toolOutcome(of: remedy.fixture)))
+			var remedy = remedy
+			var remedyOutcome = try await toolOutcome(of: remedy.fixture)
+			if remedy.kind == .forwardReceive {
+				// A type that now forwards a property is built only by an instantiator that is passed it, which the tool's
+				// next errors state for what built it otherwise. Each root reports the first error its own walk finds, so a
+				// run can state the declarations of some builders only, and the next run states more.
+				for _ in 0..<maximumForwardedReceiveFollowingRunCount {
+					guard case let .rejected(remediedDiagnostics) = remedyOutcome,
+					      let followingRemedy = GraphFuzzerRemedies.followingForwardedReceive(remedy, diagnostics: remediedDiagnostics, originalDiagnostics: diagnostics)
+					else { break }
+					remedy = followingRemedy
+					remedyOutcome = try await toolOutcome(of: remedy.fixture)
+				}
+			}
+			let introducedErrors = remedy.kind == .forwardReceive
+				? GraphFuzzerRemedies.errorsIntroducedByForwarding(remedy, outcome: remedyOutcome, originalDiagnostics: diagnostics)
+				: []
+			runs.append(GraphFuzzerRemedyRun(remedy: remedy, outcome: remedyOutcome, introducedErrors: introducedErrors))
 		}
 		return runs
 	}
