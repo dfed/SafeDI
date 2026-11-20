@@ -1839,8 +1839,12 @@ public struct Generate: AsyncParsableCommand {
 		listedPaths: [String],
 		ownModule: ModuleInfo,
 	) async throws -> [(file: ModuleInfoFile, path: String)] {
+		// A run given no modules beneath builds no selection, whose tables hold every declaration read.
+		guard let transitiveModuleInfoFilePath else {
+			return listedFiles
+		}
 		var selection = ModulesBeneathSelection(ownModule: ownModule, listedFiles: listedFiles.map(\.file))
-		guard transitiveModuleInfoFilePath != nil, selection.reachesTypeNothingReadDeclares() else {
+		guard selection.reachesTypeNothingReadDeclares() else {
 			return listedFiles
 		}
 		let otherPaths = try Set(moduleInfoPaths(listedIn: transitiveModuleInfoFilePath)).subtracting(listedPaths).sorted()
