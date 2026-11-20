@@ -10348,6 +10348,7 @@ public actor DependencyTreeGenerator {
 		var receivableProperties: Set<Property> {
 			enclosingReceivableProperties.subtracting(receivablePropertiesOfClosingProperty)
 		}
+
 		/// See `ScopeToValidate.receivableDepthByProperty`.
 		let receivableDepthByProperty: [Property: Int]
 	}
@@ -11577,8 +11578,7 @@ public actor DependencyTreeGenerator {
 				let closingReceive = Self.closingReceive(of: dependency, in: scope)
 				// `throwIfInvalidCycle` throws for an instantiation only when every property on the cycle, its own included, is
 				// constant, so an instantiation of an instantiator closes no cycle it could report.
-				guard closingReceive != nil || propertyForDependency.propertyType.isConstant else { continue }
-				guard let cycleIndex = Self.indexOfEntryClosedOn(
+				guard closingReceive != nil || propertyForDependency.propertyType.isConstant, let cycleIndex = Self.indexOfEntryClosedOn(
 					by: declaredPropertyForDependency,
 					of: scope,
 					receivedForms: [propertyForDependency],
