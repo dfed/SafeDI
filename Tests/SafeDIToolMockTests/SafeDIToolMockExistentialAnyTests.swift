@@ -2413,10 +2413,11 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 
 	@Test(arguments: ByValueAndLazilyInstantiatedSpellings.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_spellsFlatReceivedParameterAsReceiverByValueDeclaresIt_whenAnotherReceiverInTreeReceivesLazilyInstantiatedProtocol(spellings: ByValueAndLazilyInstantiatedSpellings) async throws {
+	mutating func mock_spellsFlatReceivedParameterAndWrapperWithAny_whenAnotherReceiverInTreeReceivesLazilyInstantiatedProtocolSpelledApart(spellings: ByValueAndLazilyInstantiatedSpellings) async throws {
 		// Twenty labels, each received by value and as a `LazilyInstantiated` spelled apart, so that a spelling chosen by
 		// the order of a set, which Swift seeds per process, gives this output on almost no run. Two digits each, so that the
-		// mock's label order is the order of declaration.
+		// mock's label order is the order of declaration. The by-value receive and the wrapper's instance are one value,
+		// which the mock spells one way, the more explicit; each receiver's override keeps its own spelling.
 		let labels = (10..<30).map { "service\($0)" }
 		var lazyReceiver = """
 		@Instantiable
@@ -2467,8 +2468,8 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 		var mockParameters = ""
 		var wrapperBindings = ""
 		for label in labels {
-			mockParameters.append("        \(label): \(spellings.byValueReceiver),\n")
-			wrapperBindings.append("        let \(label)_lazilyInstantiated = LazilyInstantiated<\(spellings.lazilyInstantiatedReceiver)> { \(label) }\n")
+			mockParameters.append("        \(label): any Service,\n")
+			wrapperBindings.append("        let \(label)_lazilyInstantiated = LazilyInstantiated<any Service> { \(label) }\n")
 		}
 		let wrapperArguments = labels.map { "\($0)_lazilyInstantiated" }.joined(separator: ", ")
 		let lazyReceiverArguments = labels.map { "\($0): \($0)_lazilyInstantiated" }.joined(separator: ", ")
@@ -2521,6 +2522,509 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			"Lone+SafeDIMock.swift": expectedMockFile,
 			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
 		], "Unexpected output \(output.generatedFiles ?? [:])")
+	}
+
+	// MARK: Tests – Receivers in the tree spell the protocol apart
+
+	@Test(arguments: TreeReceiverSpellings.allCases, InternalMockCaller.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_spellsPromotedReceiveWithAny_whenTwoReceiversInItsTreeSpellItApart(spellings: TreeReceiverSpellings, caller: InternalMockCaller) async throws {
+		// `Lone` receives `shared` in no form, so no spelling of its own decides: of its receivers' two, the more explicit.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [],
+			swiftFileContentByFilePath: caller.fixtureFiles(
+				Self.serviceFixture,
+				first: Self.receiverFixture(named: "First", sharedType: spellings.first),
+				second: Self.receiverFixture(named: "Second", sharedType: spellings.second),
+				lone: Self.twoReceiverLoneFixture(instantiableAttribute: caller.attribute),
+			),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Lone+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Lone {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            shared: (() -> any Service)? = nil,
+			            first: ((\(spellings.first)) -> First)? = nil,
+			            second: ((\(spellings.second)) -> Second)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                shared: shared,
+			                first: first,
+			                second: second
+			            )
+			        }
+
+			        var shared: (() -> any Service)? { __safeDI_storage.shared }
+			        var first: ((\(spellings.first)) -> First)? { __safeDI_storage.first }
+			        var second: ((\(spellings.second)) -> Second)? { __safeDI_storage.second }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                shared: (() -> any Service)?,
+			                first: ((\(spellings.first)) -> First)?,
+			                second: ((\(spellings.second)) -> Second)?
+			            ) {
+			                self.shared = shared
+			                self.first = first
+			                self.second = second
+			            }
+
+			            let shared: (() -> any Service)?
+			            let first: ((\(spellings.first)) -> First)?
+			            let second: ((\(spellings.second)) -> Second)?
+			        }
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Lone {
+			        let shared: any Service = if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { DefaultService() }
+			        let first = if let safeDIBuilder = safeDIOverrides.first { safeDIBuilder(shared) } else { First(shared: shared) }
+			        let second = if let safeDIBuilder = safeDIOverrides.second { safeDIBuilder(shared) } else { Second(shared: shared) }
+			        return Lone(first: first, second: second)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+		], "Unexpected output \(output.generatedFiles ?? [:])")
+	}
+
+	@Test(arguments: TreeReceiverSpellings.allCases, InternalMockCaller.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_spellsFlatReceivedParameterWithAny_whenTwoReceiversInItsTreeSpellItApart(spellings: TreeReceiverSpellings, caller: InternalMockCaller) async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [],
+			swiftFileContentByFilePath: caller.fixtureFiles(
+				Self.protocolFixture,
+				first: Self.receiverFixture(named: "First", sharedType: spellings.first),
+				second: Self.receiverFixture(named: "Second", sharedType: spellings.second),
+				lone: Self.twoReceiverLoneFixture(instantiableAttribute: caller.attribute),
+			),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Lone+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Lone {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            first: ((\(spellings.first)) -> First)? = nil,
+			            second: ((\(spellings.second)) -> Second)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                first: first,
+			                second: second
+			            )
+			        }
+
+			        var first: ((\(spellings.first)) -> First)? { __safeDI_storage.first }
+			        var second: ((\(spellings.second)) -> Second)? { __safeDI_storage.second }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                first: ((\(spellings.first)) -> First)?,
+			                second: ((\(spellings.second)) -> Second)?
+			            ) {
+			                self.first = first
+			                self.second = second
+			            }
+
+			            let first: ((\(spellings.first)) -> First)?
+			            let second: ((\(spellings.second)) -> Second)?
+			        }
+			    }
+
+			    static func mock(
+			        shared: any Service,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Lone {
+			        let first = if let safeDIBuilder = safeDIOverrides.first { safeDIBuilder(shared) } else { First(shared: shared) }
+			        let second = if let safeDIBuilder = safeDIOverrides.second { safeDIBuilder(shared) } else { Second(shared: shared) }
+			        return Lone(first: first, second: second)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+		], "Unexpected output \(output.generatedFiles ?? [:])")
+	}
+
+	@Test(arguments: TreeReceiverSpellings.allCases, InternalMockCaller.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_spellsOnlyIfAvailableOverrideWithAny_whenTwoReceiversInItsTreeSpellItApart(spellings: TreeReceiverSpellings, caller: InternalMockCaller) async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [],
+			swiftFileContentByFilePath: caller.fixtureFiles(
+				Self.protocolFixture,
+				first: Self.receiverFixture(named: "First", sharedType: spellings.firstOptional, receivedAttribute: "@Received(onlyIfAvailable: true)"),
+				second: Self.receiverFixture(named: "Second", sharedType: spellings.secondOptional, receivedAttribute: "@Received(onlyIfAvailable: true)"),
+				lone: Self.twoReceiverLoneFixture(instantiableAttribute: caller.attribute),
+			),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Lone+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Lone {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            first: ((\(spellings.firstOptional)) -> First)? = nil,
+			            second: ((\(spellings.secondOptional)) -> Second)? = nil,
+			            shared: (any Service)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                first: first,
+			                second: second
+			            )
+			            self.shared = shared
+			        }
+
+			        var first: ((\(spellings.firstOptional)) -> First)? { __safeDI_storage.first }
+			        var second: ((\(spellings.secondOptional)) -> Second)? { __safeDI_storage.second }
+			        let shared: (any Service)?
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                first: ((\(spellings.firstOptional)) -> First)?,
+			                second: ((\(spellings.secondOptional)) -> Second)?
+			            ) {
+			                self.first = first
+			                self.second = second
+			            }
+
+			            let first: ((\(spellings.firstOptional)) -> First)?
+			            let second: ((\(spellings.secondOptional)) -> Second)?
+			        }
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Lone {
+			        let shared: (any Service)? = safeDIOverrides.shared
+			        let first = if let safeDIBuilder = safeDIOverrides.first { safeDIBuilder(shared) } else { First(shared: shared) }
+			        let second = if let safeDIBuilder = safeDIOverrides.second { safeDIBuilder(shared) } else { Second(shared: shared) }
+			        return Lone(first: first, second: second)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+		], "Unexpected output \(output.generatedFiles ?? [:])")
+	}
+
+	@Test(arguments: TreeReceiverSpellings.allCases, InternalMockCaller.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_spellsFlatReceivedParameterWithAny_whenOneReceiverInItsTreeRequiresItAndAnotherReceivesItsOptionalFormOnlyIfAvailable(spellings: TreeReceiverSpellings, caller: InternalMockCaller) async throws {
+		// `First` requires `shared` and `Second` receives `shared: Service?` only if available: two forms of one value, which
+		// the mock spells one way.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [],
+			swiftFileContentByFilePath: caller.fixtureFiles(
+				Self.protocolFixture,
+				first: Self.receiverFixture(named: "First", sharedType: spellings.first),
+				second: Self.receiverFixture(named: "Second", sharedType: spellings.secondOptional, receivedAttribute: "@Received(onlyIfAvailable: true)"),
+				lone: Self.twoReceiverLoneFixture(instantiableAttribute: caller.attribute),
+			),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Lone+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Lone {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            first: ((\(spellings.first)) -> First)? = nil,
+			            second: ((\(spellings.secondOptional)) -> Second)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                first: first,
+			                second: second
+			            )
+			        }
+
+			        var first: ((\(spellings.first)) -> First)? { __safeDI_storage.first }
+			        var second: ((\(spellings.secondOptional)) -> Second)? { __safeDI_storage.second }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                first: ((\(spellings.first)) -> First)?,
+			                second: ((\(spellings.secondOptional)) -> Second)?
+			            ) {
+			                self.first = first
+			                self.second = second
+			            }
+
+			            let first: ((\(spellings.first)) -> First)?
+			            let second: ((\(spellings.secondOptional)) -> Second)?
+			        }
+			    }
+
+			    static func mock(
+			        shared: any Service,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Lone {
+			        let first = if let safeDIBuilder = safeDIOverrides.first { safeDIBuilder(shared) } else { First(shared: shared) }
+			        let second = if let safeDIBuilder = safeDIOverrides.second { safeDIBuilder(shared) } else { Second(shared: shared) }
+			        return Lone(first: first, second: second)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+		], "Unexpected output \(output.generatedFiles ?? [:])")
+	}
+
+	@Test(arguments: InternalMockCaller.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_spellsFlatReceivedParameterAsAliasesInItsTreeDeclareIt_whenEveryReceiverInItsTreeReceivesItThroughAliasOfBareOfType(caller: InternalMockCaller) async throws {
+		// Every declaration spells `any Service`: `Service.self` is an expression, which the `ExistentialAny` upcoming
+		// feature does not flag, so a `mock()` parameter spelled from it would be the only bare spelling in the module.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [],
+			swiftFileContentByFilePath: caller.fixtureFiles(
+				Self.protocolFixture,
+				first: Self.aliasingReceiverFixture(named: "First"),
+				second: Self.aliasingReceiverFixture(named: "Second"),
+				lone: Self.twoReceiverLoneFixture(instantiableAttribute: caller.attribute),
+			),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Lone+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Lone {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            first: ((any Service) -> First)? = nil,
+			            second: ((any Service) -> Second)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                first: first,
+			                second: second
+			            )
+			        }
+
+			        var first: ((any Service) -> First)? { __safeDI_storage.first }
+			        var second: ((any Service) -> Second)? { __safeDI_storage.second }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                first: ((any Service) -> First)?,
+			                second: ((any Service) -> Second)?
+			            ) {
+			                self.first = first
+			                self.second = second
+			            }
+
+			            let first: ((any Service) -> First)?
+			            let second: ((any Service) -> Second)?
+			        }
+			    }
+
+			    static func mock(
+			        shared: any Service,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Lone {
+			        func __safeDI_first() -> First {
+			            #sourceLocation(file: "\(output.fixtures["First.swift"])", line: 7)
+			            let other: any Service = shared
+			            #sourceLocation()
+			            return if let safeDIBuilder = safeDIOverrides.first { safeDIBuilder(other) } else { First(other: other) }
+			        }
+			        let first: First = __safeDI_first()
+			        func __safeDI_second() -> Second {
+			            #sourceLocation(file: "\(output.fixtures["Second.swift"])", line: 7)
+			            let other: any Service = shared
+			            #sourceLocation()
+			            return if let safeDIBuilder = safeDIOverrides.second { safeDIBuilder(other) } else { Second(other: other) }
+			        }
+			        let second: Second = __safeDI_second()
+			        return Lone(first: first, second: second)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+		], "Unexpected output \(output.generatedFiles ?? [:])")
+	}
+
+	@Test(arguments: TreeReceiverSpellings.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_spellsFlatReceivedParameterWithAny_whenMockIsPublicAndTwoReceiversInItsTreeSpellItApart(spellings: TreeReceiverSpellings) async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				Self.protocolFixture,
+				Self.receiverFixture(named: "First", sharedType: spellings.first),
+				Self.receiverFixture(named: "Second", sharedType: spellings.second),
+				Self.twoReceiverLoneFixture(instantiableAttribute: "@Instantiable(generateMock: .public)"),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.generatedFiles == [
+			"Lone+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Lone {
+			    /// Overrides for the mock dependency tree.
+			    nonisolated public struct SafeDIOverrides {
+			        public init(
+			            first: ((\(spellings.first)) -> First)? = nil,
+			            second: ((\(spellings.second)) -> Second)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                first: first,
+			                second: second
+			            )
+			        }
+
+			        public var first: ((\(spellings.first)) -> First)? { __safeDI_storage.first }
+			        public var second: ((\(spellings.second)) -> Second)? { __safeDI_storage.second }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                first: ((\(spellings.first)) -> First)?,
+			                second: ((\(spellings.second)) -> Second)?
+			            ) {
+			                self.first = first
+			                self.second = second
+			            }
+
+			            let first: ((\(spellings.first)) -> First)?
+			            let second: ((\(spellings.second)) -> Second)?
+			        }
+			    }
+
+			    public static func mock(
+			        shared: any Service,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Lone {
+			        let first = if let safeDIBuilder = safeDIOverrides.first { safeDIBuilder(shared) } else { First(shared: shared) }
+			        let second = if let safeDIBuilder = safeDIOverrides.second { safeDIBuilder(shared) } else { Second(shared: shared) }
+			        return Lone(first: first, second: second)
+			    }
+			}
+
+			extension Lone {
+			    public enum __safeDI_Lone_mock_5A94C95D789D83D1 {}
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+		], "Unexpected output \(output.generatedFiles ?? [:])")
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_spellsFlatReceivedParameterWithAny_whenReceiverInModuleItImportsSpellsItBare(integration: MultiModuleIntegration) async throws {
+		// `Core` spells `Service` without `any`, as a module that has not enabled `ExistentialAny` may, and `Feature`, which
+		// has, spells it with `any`: the mock, which `Feature` compiles, spells it with `any`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Core", packageName: "Core", swiftFileContentByFilePath: [
+					"Service.swift": "import SafeDI\n\n" + Self.protocolFixture,
+					"First.swift": "import SafeDI\n\n" + Self.receiverFixture(named: "First", sharedType: "Service"),
+				]),
+				ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContentByFilePath: [
+					"Second.swift": "import Core\nimport SafeDI\n\n" + Self.receiverFixture(named: "Second", sharedType: "any Service"),
+					"Lone.swift": "import Core\nimport SafeDI\n\n" + Self.twoReceiverLoneFixture(),
+				], dependencies: ["Core"]),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		let mockFile = generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Lone {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            first: ((Service) -> First)? = nil,
+		            second: ((any Service) -> Second)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                first: first,
+		                second: second
+		            )
+		        }
+
+		        var first: ((Service) -> First)? { __safeDI_storage.first }
+		        var second: ((any Service) -> Second)? { __safeDI_storage.second }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                first: ((Service) -> First)?,
+		                second: ((any Service) -> Second)?
+		            ) {
+		                self.first = first
+		                self.second = second
+		            }
+
+		            let first: ((Service) -> First)?
+		            let second: ((any Service) -> Second)?
+		        }
+		    }
+
+		    static func mock(
+		        shared: any Service,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Lone {
+		        let first = if let safeDIBuilder = safeDIOverrides.first { safeDIBuilder(shared) } else { First(shared: shared) }
+		        let second = if let safeDIBuilder = safeDIOverrides.second { safeDIBuilder(shared) } else { Second(shared: shared) }
+		        return Lone(first: first, second: second)
+		    }
+		}
+		#endif
+		"""
+		let featureFiles: [String: String] = output.modules["Feature"]?.generatedFiles ?? [:]
+		switch integration {
+		case .moduleInfo:
+			#expect(featureFiles == ["Feature.swift": mockFile], "Unexpected output \(featureFiles)")
+		case .swiftPackagePlugin:
+			let mockedFile: String? = featureFiles["Lone+SafeDIMock.swift"]
+			#expect(mockedFile == mockFile, "Unexpected output \(featureFiles)")
+		}
 	}
 
 	/// How one type in a mocked type's tree spells a protocol it receives by value, and another a `LazilyInstantiated` of
@@ -2603,8 +3107,54 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			}
 		}
 
-		private static func optional(_ type: String) -> String {
+		fileprivate static func optional(_ type: String) -> String {
 			type.hasPrefix("any ") ? "(\(type))?" : "\(type)?"
+		}
+	}
+
+	/// How two types in the mocked type's tree, `First` and `Second`, spell one protocol they receive and the mocked type
+	/// does not: one with `any`, the other without.
+	enum TreeReceiverSpellings: CaseIterable, CustomTestStringConvertible {
+		case firstSpellsAny
+		case secondSpellsAny
+
+		/// How `First` spells the protocol.
+		var first: String {
+			switch self {
+			case .firstSpellsAny:
+				"any Service"
+			case .secondSpellsAny:
+				"Service"
+			}
+		}
+
+		/// How `Second` spells the protocol.
+		var second: String {
+			switch self {
+			case .firstSpellsAny:
+				"Service"
+			case .secondSpellsAny:
+				"any Service"
+			}
+		}
+
+		/// How `First` spells the optional protocol.
+		var firstOptional: String {
+			ReceivedProtocolSpellings.optional(first)
+		}
+
+		/// How `Second` spells the optional protocol.
+		var secondOptional: String {
+			ReceivedProtocolSpellings.optional(second)
+		}
+
+		var testDescription: String {
+			switch self {
+			case .firstSpellsAny:
+				"first receiver spells any"
+			case .secondSpellsAny:
+				"second receiver spells any"
+			}
 		}
 	}
 
@@ -2637,6 +3187,26 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 			var files = [
 				"Service.swift": service,
 				"GrandChild.swift": grandChild,
+				"Lone.swift": lone,
+			]
+			switch self {
+			case .generateMock:
+				break
+			case .additionalMocksToGenerate:
+				files["SafeDIConfiguration.swift"] = """
+				#SafeDIConfiguration(additionalMocksToGenerate: ["Lone"])
+				"""
+			}
+			return files
+		}
+
+		/// The fixture's files for `Lone` with two receivers in its tree, named for the types they declare, with the
+		/// configuration that lists `Lone` where it is.
+		func fixtureFiles(_ service: String, first: String, second: String, lone: String) -> [String: String] {
+			var files = [
+				"Service.swift": service,
+				"First.swift": first,
+				"Second.swift": second,
 				"Lone.swift": lone,
 			]
 			switch self {
@@ -2698,6 +3268,51 @@ struct SafeDIToolMockExistentialAnyTests: ~Copyable {
 
 		    @Instantiated let grand: GrandChild
 		    @Received(fulfilledByDependencyNamed: "shared", ofType: \(ofType.hasPrefix("any ") ? "(\(ofType))" : ofType).self) let other: \(otherType)
+		}
+		"""
+	}
+
+	/// A type named `name` that receives `shared` as `sharedType` spells it.
+	private static func receiverFixture(named name: String, sharedType: String, receivedAttribute: String = "@Received") -> String {
+		"""
+		@Instantiable
+		public final class \(name): Instantiable {
+		    public init(shared: \(sharedType)) {
+		        self.shared = shared
+		    }
+
+		    \(receivedAttribute) let shared: \(sharedType)
+		}
+		"""
+	}
+
+	/// A type named `name` that receives `shared` as `other`, through an alias whose `ofType:` names `Service` without
+	/// `any` and whose type spells it with `any`.
+	private static func aliasingReceiverFixture(named name: String) -> String {
+		"""
+		@Instantiable
+		public final class \(name): Instantiable {
+		    public init(other: any Service) {
+		        self.other = other
+		    }
+
+		    @Received(fulfilledByDependencyNamed: "shared", ofType: Service.self) let other: any Service
+		}
+		"""
+	}
+
+	/// `Lone`, which instantiates `First` and then `Second`, and receives nothing itself.
+	private static func twoReceiverLoneFixture(instantiableAttribute: String = "@Instantiable(generateMock: true)") -> String {
+		"""
+		\(instantiableAttribute)
+		public final class Lone: Instantiable {
+		    public init(first: First, second: Second) {
+		        self.first = first
+		        self.second = second
+		    }
+
+		    @Instantiated let first: First
+		    @Instantiated let second: Second
 		}
 		"""
 	}

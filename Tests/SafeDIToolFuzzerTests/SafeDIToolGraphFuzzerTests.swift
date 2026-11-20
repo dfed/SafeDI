@@ -1187,6 +1187,16 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forTheAliasSpellingRoll() {
+		// An existential's rename naming the protocol without `any` in `ofType:`, met before every other receive of the value,
+		// stands in for unit tests of how a seam and a mock spell a value their tree's receivers spell apart only while it
+		// lands in at least ten graphs the tool accepts, which the corpus run pins exactly.
+		for feature in GraphFuzzerSeamDrawFeature.allCases where feature.isAliasSpellingRollShape {
+			#expect(Self.seamCorpusAcceptedDrawFeatureCounts[feature, default: 0] >= Self.gatingDrawJudgedGraphFloor, "\(feature.rawValue) is pinned in fewer than ten accepted graphs")
+		}
+	}
+
+	@Test
 	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forEachShapeReadThroughView() {
 		// The integrations' comparison (`integrationsDisagree`) checks what a caller computes from the seam's module's view
 		// – cell 5b's chain, and moved declarations – only in a graph whose caller lists the seam's module alone; it judges
@@ -7003,7 +7013,7 @@ struct SafeDIToolGraphFuzzerTests {
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
 		errorMarkers: seamCorpusErrorMarkers,
 		errorGraphCounts: seamCorpusErrorGraphCounts,
-		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isReadThroughViewShape || $0.isScreenPlaceShape || $0.isLazyRouteShape }),
+		drawFeaturesCountedWhenAccepted: Set(GraphFuzzerSeamDrawFeature.allCases.filter { $0.isAliasSpellingRollShape || $0.isCycleParameterShape || $0.isForwardedLabelAcrossSeamCallShape || $0.isRetentionShape || $0.isErasurePlaceShape || $0.isForwardingPlaceShape || $0.isPassedUpPlaceReadingPassingSeamsValueShape || $0.isFixedSeamCallDefectShape || $0.isReadThroughViewShape || $0.isScreenPlaceShape || $0.isLazyRouteShape }),
 		acceptedDrawFeatureCounts: seamCorpusAcceptedDrawFeatureCounts,
 		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 		retentionCounts: seamCorpusRetentionCounts,
@@ -7216,6 +7226,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.reenteredFillSendableCall: 10,
 		.seamDependencyChainReadThroughView: 11,
 		.seamDependencyReadThroughView: 46,
+		.spelledAliasNamingProtocolWithoutAny: 18,
 	]
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
 	/// with their read twin.
@@ -7305,6 +7316,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.renameOnSeamOrChild: 796,
 		.requiredWrapperProvidingByValueForm: 345,
 		.spelledAliasFulfillingProperty: 321,
+		.spelledAliasNamingProtocolWithoutAny: 65,
 		.spelledArray: 125,
 		.spelledClosure: 131,
 		.spelledClosureTakingExistential: 118,

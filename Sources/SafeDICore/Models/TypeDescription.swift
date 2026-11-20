@@ -316,7 +316,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	}
 
 	/// Whether this spelling comes before `other` in `mostExplicitSpelling(among:)`'s order.
-	private func isMoreExplicitSpelling(than other: TypeDescription) -> Bool {
+	func isMoreExplicitSpelling(than other: TypeDescription) -> Bool {
 		let shape = withNamesErased.asSource
 		let otherShape = other.withNamesErased.asSource
 		return if shape.count != otherShape.count {
