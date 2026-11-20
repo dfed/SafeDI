@@ -84,6 +84,36 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsHiddenErrorOfPathWhoseClosestDeclarationHides_whenEveryPathReceivablePropertiesAreEqual() async throws {
+		// Every path to `Shared` declares `x: X` and `x: Y`, `A`'s in the opposite order, so `Shared` is reached with the same
+		// receivable properties and the same stack on each; only the closest declaration of `x` differs. `B`'s path, walked
+		// first, is not keyed, and `C`'s is walked clean and kept, so `D`'s is skipped; `A`'s, where `A2`'s `x: Y` hides the
+		// `x: X` `Leaf` receives, must not be. With the key's closest declarations dropped, `A`'s walk is skipped and the
+		// error is lost.
+		let result = try await run(Self.closestDeclarationDiffersOnly, skippingCleanSubtrees: true)
+		let unskipped = try await run(Self.closestDeclarationDiffersOnly, skippingCleanSubtrees: false)
+		#expect(result.outcome == unskipped.outcome)
+		#expect(result.outcome == .error(Self.closestDeclarationDiffersOnlyError))
+		#expect(result.skippedSubtreeCount > 0)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsHiddenErrorOfPathWhoseFartherDeclarationIsHidden_whenEveryPathClosestDeclarationsAreEqual() async throws {
+		// Every path to `Shared` declares `y: Y` at the same depth, so `Shared` is reached with the same closest declarations
+		// and the same stack on each; only `A`'s path also declares `y: Z`, farther up, so only its receivable properties
+		// differ. `Leaf` receives `y: Z?` only if available: passed `nil` where nothing provides `y: Z`, and hidden by
+		// `A2`'s `y: Y` on `A`'s path. `B`'s path is not keyed, `C`'s is walked clean and kept, so `D`'s is skipped; `A`'s
+		// must not be. With the key's receivable properties dropped, `A`'s walk is skipped and the error is lost.
+		let result = try await run(Self.receivablePropertyDiffersOnly, skippingCleanSubtrees: true)
+		let unskipped = try await run(Self.receivablePropertyDiffersOnly, skippingCleanSubtrees: false)
+		#expect(result.outcome == unskipped.outcome)
+		#expect(result.outcome == .error(Self.receivablePropertyDiffersOnlyError))
+		#expect(result.skippedSubtreeCount > 0)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsSameHiddenError_whateverPathTheHidingDeclarationIsOn() async throws {
 		// Which path walks `Shared` first, and so which walk a later one is skipped after, follows the order of `Root`'s
 		// children; the error does not.
@@ -249,6 +279,51 @@ struct SafeDIToolCleanSubtreeTests: ~Copyable {
 			seamFixtureType(named: "Y", isFinalClass: true, declarations: []),
 		]
 	}
+
+	/// `Shared` beneath `B2`, beneath `B`, and beneath `A2`, beneath `A`, which `Root` builds after `B`: `A` declares `x: X`
+	/// and `A2` `x: Y`, while `B` declares `x: Y` and `B2` `x: X`, so only on `A`'s path does `x: Y` hide the `x: X` that
+	/// `Leaf`, beneath `Shared`, receives.
+	private static let closestDeclarationDiffersOnly = [
+		seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let bBuilder: Instantiator<B>", "@Instantiated let cBuilder: Instantiator<C>", "@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let dBuilder: Instantiator<D>"]),
+		seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let x: X", "@Instantiated let a2Builder: Instantiator<A2>"]),
+		seamFixtureType(named: "A2", isFinalClass: true, declarations: ["@Instantiated let x: Y", "@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+		seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let x: Y", "@Instantiated let b2Builder: Instantiator<B2>"]),
+		seamFixtureType(named: "B2", isFinalClass: true, declarations: ["@Instantiated let x: X", "@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+		seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Instantiated let x: Y", "@Instantiated let c2Builder: Instantiator<C2>"]),
+		seamFixtureType(named: "C2", isFinalClass: true, declarations: ["@Instantiated let x: X", "@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+		seamFixtureType(named: "D", isFinalClass: true, declarations: ["@Instantiated let x: Y", "@Instantiated let d2Builder: Instantiator<D2>"]),
+		seamFixtureType(named: "D2", isFinalClass: true, declarations: ["@Instantiated let x: X", "@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+		seamFixtureType(named: "Shared", isFinalClass: true, declarations: ["@Instantiated let leafBuilder: Instantiator<Leaf>"]),
+		seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received let x: X"]),
+		seamFixtureType(named: "X", isFinalClass: true, declarations: []),
+		seamFixtureType(named: "Y", isFinalClass: true, declarations: []),
+	]
+
+	private static let receivablePropertyDiffersOnly = [
+		seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let bBuilder: Instantiator<B>", "@Instantiated let cBuilder: Instantiator<C>", "@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let dBuilder: Instantiator<D>"]),
+		seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let y: Z", "@Instantiated let a2Builder: Instantiator<A2>"]),
+		seamFixtureType(named: "A2", isFinalClass: true, declarations: ["@Instantiated let y: Y", "@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+		seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let b2Builder: Instantiator<B2>"]),
+		seamFixtureType(named: "B2", isFinalClass: true, declarations: ["@Instantiated let y: Y", "@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+		seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Instantiated let c2Builder: Instantiator<C2>"]),
+		seamFixtureType(named: "C2", isFinalClass: true, declarations: ["@Instantiated let y: Y", "@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+		seamFixtureType(named: "D", isFinalClass: true, declarations: ["@Instantiated let d2Builder: Instantiator<D2>"]),
+		seamFixtureType(named: "D2", isFinalClass: true, declarations: ["@Instantiated let y: Y", "@Instantiated let sharedBuilder: Instantiator<Shared>"]),
+		seamFixtureType(named: "Shared", isFinalClass: true, declarations: ["@Instantiated let leafBuilder: Instantiator<Leaf>"]),
+		seamFixtureType(named: "Leaf", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let y: Z?"]),
+		seamFixtureType(named: "Y", isFinalClass: true, declarations: []),
+		seamFixtureType(named: "Z", isFinalClass: true, declarations: []),
+	]
+
+	private static let receivablePropertyDiffersOnlyError = """
+	Leaf.swift:7:5: error: @Received property `y: Z?` is hidden in chain: Root -> Instantiator<A> -> Instantiator<A2> -> Instantiator<Shared> -> Leaf. `A2` declares `y: Y` with the same label, so the types below `A2` receive `y: Y` instead. Give `y: Y` on `A2` a different label to fix.
+	A2.swift:8:5: note: `y: Y` is declared here
+	"""
+
+	private static let closestDeclarationDiffersOnlyError = """
+	Leaf.swift:7:5: error: @Received property `x: X` is hidden in chain: Root -> Instantiator<A> -> Instantiator<A2> -> Instantiator<Shared> -> Leaf. `A2` declares `x: Y` with the same label, so the types below `A2` receive `x: Y` instead. Give `x: Y` on `A2` a different label to fix.
+	A2.swift:8:5: note: `x: Y` is declared here
+	"""
 
 	private static let hiddenOnOnePathError = """
 	Leaf.swift:7:5: error: @Received property `x: X` is hidden in chain: Root -> Instantiator<B> -> Instantiator<Shared> -> Leaf. `B` declares `x: Y` with the same label, so the types below `B` receive `x: Y` instead. Give `x: Y` on `B` a different label to fix.
