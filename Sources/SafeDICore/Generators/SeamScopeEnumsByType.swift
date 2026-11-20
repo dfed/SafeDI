@@ -103,7 +103,6 @@ extension DependencyTreeGenerator {
 	///     reaches them.
 	///   - bindsReceivesAgain: Whether the tree is a public mock's, whose types' levels hold the receives it binds again
 	///     (`receivesBoundAgainOfAnyBuild(inTreeRootedAt:rootFields:namesApartAtRoot:)`).
-	///   - namesApartAtRoot: For a public mock, what its root binds only under names apart, which no level declares.
 	///   - reenteredFillsByKey: The fills a call inside a fill of the same call can re-enter
 	///     (`emittingFillsByKey(inTreeRootedAt:)`), found once for the tree.
 	///   - levels: What every hole type of the tree reads alike, found once for the tree, and each type's level
@@ -119,7 +118,6 @@ extension DependencyTreeGenerator {
 		holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole],
 		parameters: [SeamSignature.Parameter],
 		bindsReceivesAgain: Bool,
-		namesApartAtRoot _: PublicMockRootLevel.NamesApart,
 		reenteredFillsByKey: [String: ScopeGenerator],
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],

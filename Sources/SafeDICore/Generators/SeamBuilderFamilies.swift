@@ -271,7 +271,6 @@ extension DependencyTreeGenerator {
 					holesBySite: holesBySite,
 					parameters: parameters,
 					bindsReceivesAgain: bindsReceivesAgain,
-					namesApartAtRoot: namesApartAtRoot,
 					reenteredFillsByKey: reenteredFillsByKey,
 					proof: proof,
 					instantiables: instantiables,
