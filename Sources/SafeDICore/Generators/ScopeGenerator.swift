@@ -13387,7 +13387,7 @@ extension SeamSignature.Hole.Field {
 			deferral: memo.deferral,
 			bindsMemo: bindsMemo,
 			isSeamParameter: isSeamParameter,
-			seamParameterOrigin: seamParameterOrigin,
+			seamParameterOrigin: isBoundByPublicMockRoot ? nil : seamParameterOrigin,
 		)
 	}
 

@@ -1837,6 +1837,10 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// `CarriedWrapperReader`, which no seam's parameter provides beside the value: rejected by design, as the seam's tree
 	/// receiving `carriedToken` in two forms.
 	case carriedLevelFillReadsOptionalSendableWrapper
+	/// That read where `CarriedOuter`, which passes up the place whose fill builds `CarriedWorker`, receives the
+	/// `SendableLazilyInstantiated` `CarriedRoot` declares as its own property, which provides the read: rejected by design
+	/// too, as `CarriedInner`'s tree receiving `carriedToken` in two forms, where the fill once passed the reader `nil`.
+	case carriedLevelFillReadsOptionalSendableWrapperOuterReceives
 	/// `addingPassingUpCopyShapes`' tree: `Copy1Root` calls `Copy1Inner`, whose places in two files the roots' module fills,
 	/// each fill building a seam of its own that calls `Copy1Inner` again and passes both fills on.
 	case passingUpCopies
@@ -1935,13 +1939,14 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// the unremedied reads of a value one route holds, which `toolRuns_rejectBothBuildsWithDeclarationBoundOnPathToReenteringCall_whenFillReadsValueOnlyOneRouteHoldsUnremedied` judges,
 	/// and the unremedied reads of a field only the place whose fill builds the seam again carries, which
 	/// `toolRuns_rejectBothBuildsWithFieldOfReenteringPlace_whenCallerFillsPlaceInsideFillBuiltAgainUnremedied` judges, and
-	/// the optional wrapper a carried level's fill reads beside a plain memo, which
+	/// the optional wrapper a carried level's fill reads beside a plain memo, whether `CarriedOuter` declares, receives or
+	/// passes on the wrapper, which
 	/// `toolRuns_rejectBothBuildsWithEachDeferringSeamsTwoForms_whenCarriedLevelsFillReadsOptionalSendableWrapper` judges.
 	var isFixedSeamCallDefectShape: Bool {
 		switch self {
 		case .passingUpCopiesHideLabel, .reenteredFillReadsValueOfOneRoute, .reenteredFillReadsValueOfOneRouteBoundAboveCall,
 		     .reenteredFillReadsPlaceField, .reenteredFillReadsPlaceFieldBoundAboveCall, .reenteredFillRequiresPlaceField,
-		     .carriedLevelFillReadsOptionalSendableWrapper:
+		     .carriedLevelFillReadsOptionalSendableWrapper, .carriedLevelFillReadsOptionalSendableWrapperOuterReceives:
 			false
 		default:
 			["fillCallReadsOwnLevel", "carriedLevel", "passingUpCopies", "reenteredFill"].contains { rawValue.hasPrefix($0) }
@@ -8520,7 +8525,10 @@ enum GraphFuzzerGenerator {
 		/// tree, built in one module, receives the label in two forms, which the tool reports at that seam, as one module
 		/// does, rather than handing the reader `nil` where inline hands it the declared wrapper
 		/// (`carriedLevelFillReadsOptionalSendableWrapper`, rejected by design, so never drawn in a graph with a hole, whose
-		/// other draws it would throw away).
+		/// other draws it would throw away). Where `CarriedRoot` declares the wrapper there, in half of those graphs, drawn
+		/// last, `CarriedOuter` receives it as its own property, which provides the read: the place's field is then
+		/// `CarriedOuter`'s, beside `CarriedInner`'s memo, which the fill takes and which once handed the reader `nil` there too
+		/// (`carriedLevelFillReadsOptionalSendableWrapperOuterReceives`, rejected by design as `CarriedInner`'s two forms).
 		///
 		/// `carriedLevelRandom` draws only for this pass, which runs after `addingFillCallShapes` and only in a graph another
 		/// pass split, so that every graph in one module, and every other draw of a graph it draws in, draws as before. A
@@ -8538,6 +8546,8 @@ enum GraphFuzzerGenerator {
 			let gizmoReadsSendableWrapper = carriedLevelRandom.percentChance(50)
 			let gizmoReadsWrapperAlone = carriedLevelRandom.percentChance(50)
 			let gizmoReadsOptionalSendableWrapper = carriedLevelRandom.percentChance(65)
+			// Drawn last, so that every graph draws as before but where it is read.
+			let outerReceivesOptionallyReadWrapper = carriedLevelRandom.percentChance(50)
 			guard !modulesOmittingPackageName.contains(.seamModule), sendability != .sendable else { return declarations }
 			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
 			let prefix = prefix
@@ -8592,6 +8602,9 @@ enum GraphFuzzerGenerator {
 				if !rootDeclaresDeferredValue {
 					// `CarriedOuter`'s module lists `CarriedToken`'s, so it declares the value the roots' module otherwise does.
 					outer.properties.insert(PropertyDeclaration(attribute: "@Instantiated", label: "carriedToken", type: "\(tokenWrapper)<\(token.name)>"), at: 0)
+				} else if drawsOptionalWrapperReader, outerReceivesOptionallyReadWrapper {
+					// Or receives the wrapper `CarriedRoot` declares, as its own property, which provides the optional read.
+					outer.properties.insert(PropertyDeclaration(attribute: "@Received", label: "carriedToken", type: "\(tokenWrapper)<\(token.name)>"), at: 0)
 				}
 				let worker = instantiable("CarriedWorker", module: .seamModule, properties: [gizmoPlace])
 				gadgetImplementation.properties = [PropertyDeclaration(attribute: "@Instantiated", label: "carriedWorkerBuilder", type: "Instantiator<\(worker.name)>")]
@@ -10540,7 +10553,11 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					features.insert(.carriedLevelFillReadsDeferredValueFromTwoSeams)
 				}
 				if let readerProperties = propertiesByType[prefix + "CarriedWrapperReader"] {
-					features.insert(readerProperties.contains { $0.attribute.contains("onlyIfAvailable") } ? .carriedLevelFillReadsOptionalSendableWrapper : .carriedLevelFillReadsSendableWrapper)
+					let readsOnlyIfAvailable = readerProperties.contains { $0.attribute.contains("onlyIfAvailable") }
+					features.insert(readsOnlyIfAvailable ? .carriedLevelFillReadsOptionalSendableWrapper : .carriedLevelFillReadsSendableWrapper)
+					if readsOnlyIfAvailable, propertiesByType[prefix + "CarriedOuter"]?.contains(where: { $0.label == "carriedToken" && $0.attribute.hasPrefix("@Received") }) == true {
+						features.insert(.carriedLevelFillReadsOptionalSendableWrapperOuterReceives)
+					}
 				}
 			}
 		}
