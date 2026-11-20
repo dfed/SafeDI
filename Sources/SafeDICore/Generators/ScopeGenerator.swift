@@ -150,7 +150,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let declaration = property.map { BuiltDeclaration(property: $0, concreteType: instantiable.concreteInstantiable) }
 		self.declaration = declaration
 		self.propertiesToGenerate = propertiesToGenerate
+		fillFieldSelection = fill.flatMap { fill in
+			propertiesToGenerate.first.flatMap { child in
+				FillFieldSelection(hole: fill.hole, boundLabels: fill.boundLabels, fields: fill.fields, child: child)
+			}
+		}
 		// What the code generated for the call's dispatchers decides, from the fills its children generate.
+		let levelFunctions: PublicMockLevelFunctions?
 		if publicMockCall != nil, !fillDispatchers.isEmpty {
 			var fillParametersByKey = [String: [SeamSignature.Hole.Field]]()
 			var fillNames = Set<String>()
@@ -180,7 +186,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				else { continue }
 				callerReads[label] = form
 			}
-			publicMockLevelFunctions = PublicMockLevelFunctions(
+			levelFunctions = PublicMockLevelFunctions(
 				dispatchers: fillDispatchers,
 				fillParametersByKey: fillParametersByKey,
 				roots: builderCallArguments.compactMap { builderCallArgument in
@@ -193,8 +199,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				enclosingLevelCalls: enclosingLevelCalls,
 			)
 		} else {
-			publicMockLevelFunctions = nil
+			levelFunctions = nil
 		}
+		publicMockLevelFunctions = levelFunctions
+		publicMockOverrideBuilders = Self.publicMockOverrideBuilders(
+			publicMockCall: publicMockCall,
+			builderCallArguments: builderCallArguments,
+			builtInstantiable: fill == nil ? instantiable : nil,
+			publicMockLevelFunctions: levelFunctions,
+			children: propertiesToGenerate,
+		)
 		containsBuildSite = propertiesToGenerate.contains(where: \.containsBuildSite)
 		if containsBuildSite {
 			// A site's field of a label declared here reads this scope's declaration, or the site carries no field of it.
@@ -1218,6 +1232,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		builderCallArguments = []
 		fillDispatchers = []
 		publicMockLevelFunctions = nil
+		publicMockOverrideBuilders = nil
+		fillFieldSelection = nil
 		passedUpHoles = []
 		valuesBindings = []
 		memberCallsInsideFunction = []
@@ -1326,6 +1342,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		builderCallArguments = []
 		fillDispatchers = []
 		publicMockLevelFunctions = nil
+		publicMockOverrideBuilders = nil
+		fillFieldSelection = nil
 		passedUpHoles = []
 		valuesBindings = []
 		memberCallsInsideFunction = []
@@ -2667,7 +2685,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	let passedByPublicMockCalls: Set<Property>
 
 	/// The generators of this scope's children, in declaration order, for a walk of a seam's tree that reads what
-	/// its generators found. Every generator but the root's is a child of exactly one other.
+	/// its generators found. A generator the construction memo shares is a child of each place that reuses it, so a walk
+	/// that keys by a generator's identity reads one subtree at every such place (see `construction-memo.md`).
 	nonisolated var children: [ScopeGenerator] {
 		propertiesToGenerate
 	}
@@ -2937,7 +2956,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// The code tasks the generators of this scope's tree still hold (see `HeldCodeTasks`). Once the tree's code is
 	/// generated, each is a finished task, or one a scope started early for a context nothing asked for, still running.
-	/// The tree is walked with a stack, since it can be as deep as the module has types.
+	/// The tree is walked with a stack, since it can be as deep as the module has types. A generator a construction memo
+	/// shares between places is reached once for each place, so its tasks count once for each.
 	func codeTasksHeldInTree() async -> Int {
 		var generators = [self]
 		var heldTaskCount = 0
@@ -3142,6 +3162,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			propertiesGeneratedLater: [],
 			declarationsByLabel: declarationsByLabel,
 			enclosingCycleFunctions: [:],
+			visitNumber: 0,
 			referenceLocation: instantiable.declarationLocation,
 			isOwnFile: isOwnFile,
 		).judged()
@@ -3163,7 +3184,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		of instantiable: Instantiable,
 		propertiesGeneratedLater: Set<Property>,
 		declarationsByLabel: [String: [VisibleDeclaration]],
-		enclosingCycleFunctions: [BuiltDeclaration: ObjectIdentifier],
+		enclosingCycleFunctions: [BuiltDeclaration: Int],
+		visitNumber: Int,
 		referenceLocation: Dependency.DeclarationLocation?,
 		isOwnFile: @escaping @Sendable (String) -> Bool,
 	) async -> OmissionFindings<SeamTierOmission> {
@@ -3209,7 +3231,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var childDeclarationsByLabel = declarationsByLabel
 		childDeclarationsByLabel.merge(scopeDeclarationsByLabel) { _, scopeDeclarations in scopeDeclarations }
 
-		var findings = OmissionFindings<SeamTierOmission>()
+		var findings = OmissionFindings<SeamTierOmission>(nextVisitNumber: visitNumber + 1)
 		for child in orderedChildren {
 			guard case let .property(childInstantiable, _, _, _, isPropertyCycle, seamCall) = child.generator.scopeData else { continue }
 			if isPropertyCycle {
@@ -3246,13 +3268,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// This scope calls the child's builder function, which, when a lazy cycle closes on it and it takes parameters,
 				// it passes them as each cycle-closing scope does. The function's body reads its parameters, which hide every
 				// declaration of their labels where it is called, as generation's do.
-				let function = ObjectIdentifier(child.generator)
+				// The function is told apart by the walk's visit of the child, never by its generator, which several places of the
+				// tree can share (see `ConstructionMemo`): each place's calls are of a function of its own.
+				let function = findings.nextVisitNumber
 				findings.recordCalls(by: child, of: function, among: childDeclarationsByLabel)
 				await findings.append(contentsOf: child.generator.seamTierOmissions(
 					of: childInstantiable,
 					propertiesGeneratedLater: child.generator.bodyPropertiesGeneratedLater(child.propertiesGeneratedLater),
 					declarationsByLabel: child.generator.bodyDeclarations(function: function, enclosing: childDeclarationsByLabel),
 					enclosingCycleFunctions: child.generator.bodyEnclosingCycleFunctions(function: function, enclosing: enclosingCycleFunctions),
+					visitNumber: function,
 					referenceLocation: childReferenceLocation(of: child.generator.property),
 					isOwnFile: isOwnFile,
 				))
@@ -3288,7 +3313,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// a parameter of a builder function a lazy cycle closes on, the value is the one each call of the function passes
 	/// (see `OmissionFindings`).
 	func publicMockTierOmissions(ofTreeRootedAt instantiable: Instantiable) async -> [PublicMockTierOmission] {
-		await publicMockTierOmissions(of: .type(instantiable), propertiesGeneratedLater: [], declarationsByLabel: [:], enclosingCycleFunctions: [:], fillReferenceLocation: nil).judged()
+		await publicMockTierOmissions(of: .type(instantiable), propertiesGeneratedLater: [], declarationsByLabel: [:], enclosingCycleFunctions: [:], visitNumber: 0, fillReferenceLocation: nil).judged()
 	}
 
 	/// The scope a walk of `publicMockTierOmissions` visits: one that builds a type, or a fill of a builder that a call of
@@ -3308,7 +3333,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		of omissionScope: PublicMockTierOmissionScope,
 		propertiesGeneratedLater: Set<Property>,
 		declarationsByLabel: [String: [VisibleDeclaration]],
-		enclosingCycleFunctions: [BuiltDeclaration: ObjectIdentifier],
+		enclosingCycleFunctions: [BuiltDeclaration: Int],
+		visitNumber: Int,
 		fillReferenceLocation: Dependency.DeclarationLocation??,
 	) async -> OmissionFindings<PublicMockTierOmission> {
 		let declaringType: TypeDescription
@@ -3380,7 +3406,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var childDeclarationsByLabel = declarationsByLabel
 		childDeclarationsByLabel.merge(scopeDeclarationsByLabel) { _, scopeDeclarations in scopeDeclarations }
 
-		var findings = OmissionFindings<PublicMockTierOmission>()
+		var findings = OmissionFindings<PublicMockTierOmission>(nextVisitNumber: visitNumber + 1)
 		for child in orderedChildren {
 			guard case let .property(childInstantiable, childProperty, _, _, isPropertyCycle, _) = child.generator.scopeData else { continue }
 			if isPropertyCycle {
@@ -3415,11 +3441,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let callReferenceLocation = fillReferenceLocation ?? .some(declarationLocationByProperty[childProperty].flatMap(\.self) ?? scopeDeclarationLocation)
 				let fillsPropertiesGeneratedLater = child.generator.bodyPropertiesGeneratedLater(child.propertiesGeneratedLater)
 				for fill in child.generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: fillsPropertiesGeneratedLater) where fill.generator.fillHole != nil {
+					let fillVisitNumber = findings.nextVisitNumber
 					await findings.append(contentsOf: fill.generator.publicMockTierOmissions(
 						of: .fill(calledType: publicMockCall.type),
 						propertiesGeneratedLater: fill.propertiesGeneratedLater,
 						declarationsByLabel: childDeclarationsByLabel,
 						enclosingCycleFunctions: enclosingCycleFunctions,
+						visitNumber: fillVisitNumber,
 						fillReferenceLocation: callReferenceLocation,
 					))
 				}
@@ -3427,13 +3455,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// This scope calls the child's builder function, which, when a lazy cycle closes on it and it takes parameters,
 				// it passes them as each cycle-closing scope does. The function's body reads its parameters, which hide every
 				// declaration of their labels where it is called, as generation's do.
-				let function = ObjectIdentifier(child.generator)
+				// The function is told apart by the walk's visit of the child, never by its generator, which several places of the
+				// tree can share (see `ConstructionMemo`): each place's calls are of a function of its own.
+				let function = findings.nextVisitNumber
 				findings.recordCalls(by: child, of: function, among: childDeclarationsByLabel)
 				await findings.append(contentsOf: child.generator.publicMockTierOmissions(
 					of: .type(childInstantiable),
 					propertiesGeneratedLater: child.generator.bodyPropertiesGeneratedLater(child.propertiesGeneratedLater),
 					declarationsByLabel: child.generator.bodyDeclarations(function: function, enclosing: childDeclarationsByLabel),
 					enclosingCycleFunctions: child.generator.bodyEnclosingCycleFunctions(function: function, enclosing: enclosingCycleFunctions),
+					visitNumber: function,
 					fillReferenceLocation: fillReferenceLocation,
 				))
 			}
@@ -3567,7 +3598,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let sendableBuilderDepth: Int
 		/// For a parameter of a builder function a lazy cycle closes on, as a walk of omissions enters it in the function's
 		/// body (see `OmissionFindings`): the function. `nil` for every other declaration.
-		var cycleFunction: ObjectIdentifier?
+		var cycleFunction: Int?
 		/// Whether the declaration is a field of the struct a public mock hands a fill of its place, which the fill binds:
 		/// `declaringType`'s mock hands it the value, which its tree built or its own `mock()` was handed.
 		var isHandedToFill = false
@@ -3587,7 +3618,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// A call, in the body of a builder function a lazy cycle closes on, that omits a value of one of the function's
 		/// parameters: an omission at each declaration a call of the function passes that provides `unwrappedProperty`.
 		struct ParameterRead: Sendable {
-			let function: ObjectIdentifier
+			let function: Int
 			let label: String
 			/// The property the call's leaf receives, unwrapped.
 			let unwrappedProperty: Property
@@ -3598,14 +3629,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// A call of a builder function a lazy cycle closes on that passes its parameter of `label` a value: the
 		/// declarations of the label where the call is made.
 		struct Call: Sendable {
-			let function: ObjectIdentifier
+			let function: Int
 			let label: String
 			let declarations: [VisibleDeclaration]
 		}
 
+		/// The number the walk gives the next scope it visits, which tells apart the builder functions the walk enters.
+		private(set) var nextVisitNumber: Int
 		private(set) var omissions = [Omission]()
 		private(set) var parameterReads = [ParameterRead]()
 		private(set) var calls = [Call]()
+
+		/// The findings of a visit, whose first visit beneath it is numbered `nextVisitNumber`.
+		init(nextVisitNumber: Int) {
+			self.nextVisitNumber = nextVisitNumber
+		}
 
 		/// Records the omission of a value of `unwrappedProperty` that `provider`, the declaration the omitting call's leaf
 		/// would read, provides.
@@ -3620,14 +3658,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Records the call `child` makes of `function`, which it declares or closes a cycle on, with the declarations of
 		/// each parameter's label among `declarationsByLabel`, where the call is made, but for those it passes `nil`.
 		/// `function` is `nil` for a function that takes no parameters.
-		mutating func recordCalls(by child: OrderedChild, of function: ObjectIdentifier?, among declarationsByLabel: [String: [VisibleDeclaration]]) {
+		mutating func recordCalls(by child: OrderedChild, of function: Int?, among declarationsByLabel: [String: [VisibleDeclaration]]) {
 			guard let function else { return }
 			for parameter in child.generator.cycleParameters where !child.unavailableProperties.contains(parameter.property) {
 				calls.append(Call(function: function, label: parameter.property.label, declarations: declarationsByLabel[parameter.property.label, default: []]))
 			}
 		}
 
+		/// Adds the findings of a visit this visit made, which numbered the visits beneath it from this visit's
+		/// `nextVisitNumber`.
 		mutating func append(contentsOf findings: Self) {
+			nextVisitNumber = findings.nextVisitNumber
 			omissions.append(contentsOf: findings.omissions)
 			parameterReads.append(contentsOf: findings.parameterReads)
 			calls.append(contentsOf: findings.calls)
@@ -3638,7 +3679,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// at the calls of that function in turn.
 		func judged() -> [Omission] {
 			guard !parameterReads.isEmpty else { return omissions }
-			var callsByFunction = [ObjectIdentifier: [Call]]()
+			var callsByFunction = [Int: [Call]]()
 			for call in calls {
 				callsByFunction[call.function, default: []].append(call)
 			}
@@ -4341,12 +4382,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// A label the root dispatcher reads from the caller's scope on some route is a parameter of the form every route can
 	/// hand it (`fillCallerReads`).
 	nonisolated var fillParameterFields: [SeamSignature.Hole.Field] {
-		guard let enumPlace = fillHole?.enumPlace, let child = propertiesToGenerate.first else { return [] }
-		let carried = Set(enumPlace.values.map(\.property.label))
-		return fillBoundFields.compactMap { field in
-			guard !carried.contains(field.property.label), child.reads(field.property) || child.fieldsCarriedBySites.contains(field.property) else { return nil }
-			return fillCallerReads.parameterByLabel[field.property.label] ?? field
-		} + fillCallerReads.innerScopeParameters
+		guard let fillFieldSelection else { return [] }
+		var parameterFields = [SeamSignature.Hole.Field]()
+		appendParameterFields(of: fillFieldSelection, to: &parameterFields)
+		return parameterFields
 	}
 
 	/// What a level function's member hands a fill beside its case's payload (`fillParameterFields`), and, for a fill that
@@ -4359,17 +4398,69 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// What a level function's member hands a fill beside its case's payload (`fillParameterFields`), first, where
 	/// `takingPayloadFields`, the fields of the payload it binds, each by itself.
 	nonisolated func fillMemberParameterFields(takingPayloadFields: Bool) -> [SeamSignature.Hole.Field] {
-		guard takingPayloadFields, let enumPlace = fillHole?.enumPlace, let child = propertiesToGenerate.first else { return fillParameterFields }
-		// Each is the fill's own field of the payload's label, which says how the fill binds it, as its body reads it: a
-		// deferred parameter's memo where it `bindsMemo`, which the member hands it in place of the value.
-		let boundFields = fillBoundFields
-		return enumPlace.values.compactMap { value in
-			guard let field = boundFields.first(where: { $0.property.label == value.property.label }),
-			      child.reads(value.property) || child.fieldsCarriedBySites.contains(value.property)
-			else { return nil }
-			return field
-		} + fillParameterFields
+		guard let fillFieldSelection else { return [] }
+		var fields = [SeamSignature.Hole.Field]()
+		if takingPayloadFields {
+			// Each is the fill's own field of the payload's label, which says how the fill binds it, as its body reads it: a
+			// deferred parameter's memo where it `bindsMemo`, which the member hands it in place of the value.
+			fields.reserveCapacity(fillFieldSelection.payloadFieldIndices.count + fillFieldSelection.parameterFieldIndices.count)
+			for index in fillFieldSelection.payloadFieldIndices {
+				fields.append(fillFields[index])
+			}
+		}
+		appendParameterFields(of: fillFieldSelection, to: &fields)
+		return fields
 	}
+
+	/// Appends `fillParameterFields`: each field `selection` names, in the form the root dispatcher reads its label from the
+	/// caller's scope where it does (`fillCallerReads`), then the scopes the fill is handed.
+	nonisolated private func appendParameterFields(of selection: FillFieldSelection, to fields: inout [SeamSignature.Hole.Field]) {
+		for index in selection.parameterFieldIndices {
+			let field = fillFields[index]
+			fields.append(fillCallerReads.parameterByLabel[field.property.label] ?? field)
+		}
+		fields.append(contentsOf: fillCallerReads.innerScopeParameters)
+	}
+
+	/// For a fill of a place whose case is nested by type, which of its fields (by index into `fillFields`) it takes
+	/// (`fillParameterFields`, `fillMemberParameterFields(takingPayloadFields:)`), decided once, when the fill's generator is
+	/// built: whether the generator it builds its type with reads a field, which these decide, never changes, and a level
+	/// function's member asks for them once per call it makes. It holds indices, not fields, and no generator, so it keeps
+	/// alive nothing the fill's generator does not.
+	final class FillFieldSelection: Sendable {
+		init?(hole: SeamSignature.Hole, boundLabels: Set<String>, fields: [SeamSignature.Hole.Field], child: ScopeGenerator) {
+			guard let enumPlace = hole.enumPlace else { return nil }
+			let carried = Set(enumPlace.values.map(\.property.label))
+			var firstBoundIndexByLabel = [String: Int]()
+			var parameterFieldIndices = [Int]()
+			for (index, field) in fields.enumerated() where boundLabels.contains(field.property.label) {
+				if firstBoundIndexByLabel[field.property.label] == nil {
+					firstBoundIndexByLabel[field.property.label] = index
+				}
+				if !carried.contains(field.property.label), child.reads(field.property) || child.fieldsCarriedBySites.contains(field.property) {
+					parameterFieldIndices.append(index)
+				}
+			}
+			self.parameterFieldIndices = parameterFieldIndices
+			// A payload value's field is the first bound field of its label, as a search of the bound fields in order finds it.
+			payloadFieldIndices = enumPlace.values.compactMap { value in
+				guard let index = firstBoundIndexByLabel[value.property.label],
+				      child.reads(value.property) || child.fieldsCarriedBySites.contains(value.property)
+				else { return nil }
+				return index
+			}
+		}
+
+		/// The bound fields not carried by the case's payload that the fill's tree reads or a site inside it carries.
+		let parameterFieldIndices: [Int]
+		/// For each value of the case's payload the fill's tree reads or a site inside it carries, the fill's bound field of
+		/// its label.
+		let payloadFieldIndices: [Int]
+	}
+
+	/// For a fill of a place whose case is nested by type, the fields it takes (`FillFieldSelection`); `nil` for every other
+	/// generator.
+	private let fillFieldSelection: FillFieldSelection?
 
 	/// For a fill or a mock root, the labels among `labels` its tree reads inside a `@Sendable` function, or hands to a
 	/// nested seam that takes them `@Sendable`, where no declaration inside the tree hides them, as
@@ -4606,7 +4697,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///
 	/// A deliberate gap, commented where the member is typed (`MockParameterNode.offersOverrideClosure`): the closure could be
 	/// offered there by unwrapping the called mock's struct in generated code, a later addition that breaks nothing.
-	nonisolated var publicMockOverrideBuilders: [String: PublicMockOverrideBuilder]? {
+	///
+	/// Computed once, when the generator is built, from values that never change.
+	let publicMockOverrideBuilders: [String: PublicMockOverrideBuilder]?
+
+	nonisolated private static func publicMockOverrideBuilders(
+		publicMockCall: PublicMockCall?,
+		builderCallArguments: [BuilderCallArgument],
+		builtInstantiable: Instantiable?,
+		publicMockLevelFunctions: PublicMockLevelFunctions?,
+		children propertiesToGenerate: [ScopeGenerator],
+	) -> [String: PublicMockOverrideBuilder]? {
 		guard let publicMockCall, !publicMockCall.takesOverrides else { return nil }
 		let builderLabels = Set(builderCallArguments.map(\.label))
 		let parameterTypesByLabel = Dictionary(
@@ -4704,6 +4805,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fillCodeByPropertiesGeneratedLater[propertiesGeneratedLater, default: []]
 	}
 
+	/// Every argument of `generatePropertyCode` but `codeGeneration`, which is `.dependencyTree` wherever the key is made,
+	/// is in this key: a construction memo can share one generator between several
+	/// places, each emitting it with its own arguments, and the memo oracle compares construction only, so an emission
+	/// argument left out of the key would hand one place the code another place's arguments made.
 	private struct UnavailablePropertiesCacheKey: Hashable {
 		let unavailableProperties: Set<Property>
 		let propertiesGeneratedLater: Set<Property>
@@ -5266,14 +5371,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return sharedLabels
 	}
 
-	/// Whether `child` and `other`, two of this scope's children, are members of one loop of builders (see
-	/// `ReceivedBuilderLoops`).
-	nonisolated func areMembersOfOneLoop(_ child: ScopeGenerator, _ other: ScopeGenerator) -> Bool {
-		guard !receivedBuilderLoops.loopByChildIndex.isEmpty,
-		      let childIndex = propertiesToGenerate.firstIndex(where: { $0 === child }),
-		      let otherIndex = propertiesToGenerate.firstIndex(where: { $0 === other }),
-		      let loop = receivedBuilderLoops.loopByChildIndex[childIndex]
-		else { return false }
+	/// Whether the children at `childIndex` and `otherIndex` of `propertiesToGenerate` are members of one loop of builders
+	/// (see `ReceivedBuilderLoops`).
+	nonisolated func areMembersOfOneLoop(childAt childIndex: Int, _ otherIndex: Int) -> Bool {
+		guard let loop = receivedBuilderLoops.loopByChildIndex[childIndex] else { return false }
 		return receivedBuilderLoops.loopByChildIndex[otherIndex] == loop
 	}
 
@@ -5448,6 +5549,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// A child in `orderedPropertiesToGenerate`, with what it is generated with.
 	struct OrderedChild {
 		let generator: ScopeGenerator
+		/// The child's index in `propertiesToGenerate`, which tells it apart from its siblings: two children of one scope can
+		/// hold one generator (a construction memo can hand a place a generator a sibling holds).
+		let index: Int
 		/// The child's `unavailableProperties`, given the properties this scope generates before it.
 		let unavailableProperties: Set<Property>
 		/// The `propertiesGeneratedLater` to generate the child with (see `generateCode`).
@@ -5490,7 +5594,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) -> [OrderedChild] {
 		let propertiesNotGeneratedBefore = propertiesGeneratedLater
 		var orderedChildren = [OrderedChild]()
-		for (index, childGenerator) in orderedIndices.lazy.map({ self.propertiesToGenerate[$0] }).enumerated() {
+		for (index, childIndex) in orderedIndices.enumerated() {
+			let childGenerator = propertiesToGenerate[childIndex]
 			let childPropertiesGeneratedLater = Self.propertiesGeneratedLater(
 				thanChildAt: index,
 				receivedOnlyIfAvailableBy: childGenerator,
@@ -5506,6 +5611,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			)
 			orderedChildren.append(OrderedChild(
 				generator: childGenerator,
+				index: childIndex,
 				unavailableProperties: childUnavailableProperties,
 				propertiesGeneratedLater: childPropertiesGeneratedLater,
 			))
@@ -5641,7 +5747,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// `declarationsByLabel`, the declarations a walk of omissions (see `OmissionFindings`) sees where this scope's builder
 	/// function, `function`, is declared, as the function's body sees them: each parameter's label names the parameter.
-	nonisolated private func bodyDeclarations(function: ObjectIdentifier, enclosing declarationsByLabel: [String: [VisibleDeclaration]]) -> [String: [VisibleDeclaration]] {
+	nonisolated private func bodyDeclarations(function: Int, enclosing declarationsByLabel: [String: [VisibleDeclaration]]) -> [String: [VisibleDeclaration]] {
 		guard declaresCycleParameters else { return declarationsByLabel }
 		var bodyDeclarationsByLabel = declarationsByLabel
 		for parameter in cycleParameters {
@@ -5659,7 +5765,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// `enclosingCycleFunctions`, the builder functions that take parameters a lazy cycle needs and enclose where this
 	/// scope's builder function, `function`, which builds its `declaration`, is declared, as the function's body sees them.
-	nonisolated private func bodyEnclosingCycleFunctions(function: ObjectIdentifier, enclosing enclosingCycleFunctions: [BuiltDeclaration: ObjectIdentifier]) -> [BuiltDeclaration: ObjectIdentifier] {
+	nonisolated private func bodyEnclosingCycleFunctions(function: Int, enclosing enclosingCycleFunctions: [BuiltDeclaration: Int]) -> [BuiltDeclaration: Int] {
 		guard declaresCycleParameters, let declaration else { return enclosingCycleFunctions }
 		var bodyEnclosingCycleFunctions = enclosingCycleFunctions
 		bodyEnclosingCycleFunctions[declaration] = function
@@ -5848,12 +5954,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var boxedArgumentsByLoop = [Int: [String]]()
 		var loopLevelsNameByLoop = [Int: String]()
 		if !receivedBuilderLoops.loopByChildIndex.isEmpty {
-			let loopByGenerator = Dictionary(
-				receivedBuilderLoops.loopByChildIndex.map { (ObjectIdentifier(propertiesToGenerate[$0.key]), $0.value) },
-				uniquingKeysWith: { first, _ in first },
-			)
+			// A child is told apart from its siblings by its index, never by its generator, which a sibling can hold too.
+			let loopByChildIndex = receivedBuilderLoops.loopByChildIndex
 			for (index, child) in orderedChildren.enumerated() where !child.generator.isAlias {
-				guard let loop = loopByGenerator[ObjectIdentifier(child.generator)] else { continue }
+				guard let loop = loopByChildIndex[child.index] else { continue }
 				if boxedLoops[loop] != nil {
 					boxedArgumentsByLoop[loop, default: []] += child.generator.valuesBindingArguments
 				} else {
@@ -5868,11 +5972,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			var names = LoopMemberNames(reserving: namesReceivedFunctionsAvoid(
 				orderedChildren: orderedChildren,
 				childBuilderFunctionNames: childBuilderFunctionNames,
-				loopMembers: orderedChildren.compactMap { loopByGenerator[ObjectIdentifier($0.generator)] == nil ? nil : $0.generator },
+				loopMembers: orderedChildren.compactMap { loopByChildIndex[$0.index] == nil ? nil : $0.generator },
 				enclosingFunctionNames: enclosingFunctionNames,
 			))
 			for (index, child) in orderedChildren.enumerated() where !child.generator.isAlias {
-				guard let property = child.generator.property, let loop = loopByGenerator[ObjectIdentifier(child.generator)] else { continue }
+				guard let property = child.generator.property, let loop = loopByChildIndex[child.index] else { continue }
 				let childBuilderFunctionNames = childBuilderFunctionNames?[index] ?? nil
 				var functionName = if child.generator.closesPropertyCycle {
 					child.generator.closedOnFunctionName(builtFor: property, enclosingFunctionNames: childBuilderFunctionNames?.enclosingFunctionNames ?? [:])
@@ -5904,7 +6008,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// A rename this body declares of a member is rebound under its own label, wrapping the member's function.
 			for child in orderedChildren where child.generator.isAlias {
 				guard case let .alias(property, fulfillingProperty, _, _, _) = child.generator.scopeData,
-				      let loop = loopByGenerator[ObjectIdentifier(child.generator)],
+				      let loop = loopByChildIndex[child.index],
 				      let memberFunction = memberFunctionByProperty[fulfillingProperty],
 				      let declaration = child.generator.loopRebindingDeclaration(ofRenameOf: memberFunction)
 				else { continue }
@@ -6002,10 +6106,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var builderFunctionNames = body.childBuilderFunctionNames?[index].flatMap(\.self)
 			?? BuilderFunctionNames(fillIsSendable: buildsInSendableFunction(ofFill: child.generator))
 		builderFunctionNames.fillTakesPayloadFields = child.generator.fillKey.map(body.overrideFillKeys.contains) ?? false
-		if !body.loopMemberDeclarationsByLoop.isEmpty,
-		   let childIndex = propertiesToGenerate.firstIndex(where: { $0 === child.generator }),
-		   let loop = receivedBuilderLoops.loopByChildIndex[childIndex]
-		{
+		if !body.loopMemberDeclarationsByLoop.isEmpty, let loop = receivedBuilderLoops.loopByChildIndex[child.index] {
 			builderFunctionNames.loopMemberDeclarations = body.loopMemberDeclarationsByLoop[loop, default: [:]]
 			builderFunctionNames.receivedFunctionName = body.receivedFunctionNameByIndex[index]
 			if !child.generator.isAlias {
@@ -6927,7 +7028,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				let receivedFunctionParameters = forwardedProperties.isEmpty
 					? ""
-					: forwardedProperties.initializerFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping).map(\.description).joined()
+					: forwardedProperties.initializerFunctionParametersSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 				let callArguments = (forwardedProperties.map { CallArgument(label: $0.label, source: .binding(label: $0.label)).spelled } + cycleArguments).joined(separator: ", ")
 				let receivedFunctionDecorator = buildsInSendableFunction || property.propertyType.isSendable ? sendableFunctionDecorator : ""
 				let receivedFunctionDeclaration = """
@@ -10902,16 +11003,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var items = [MockTreeItem]()
 		// The loop of builders each child is on, and the members of loops on a mock root that nothing outside their loop
 		// reads (see `ReceivedBuilderLoops`). Nearly every scope holds no loop.
-		var loopByGenerator = [ObjectIdentifier: Int]()
-		var membersReadOnlyInsideTheirLoop = Set<ObjectIdentifier>()
-		if !receivedBuilderLoops.loopByChildIndex.isEmpty {
-			for (index, loop) in receivedBuilderLoops.loopByChildIndex {
-				loopByGenerator[ObjectIdentifier(propertiesToGenerate[index])] = loop
-			}
-			for index in loopMembersReadOnlyInsideTheirLoop() {
-				membersReadOnlyInsideTheirLoop.insert(ObjectIdentifier(propertiesToGenerate[index]))
-			}
-		}
+		// A child is told apart from its siblings by its index, never by its generator, which a sibling can hold too.
+		let loopByChildIndex = receivedBuilderLoops.loopByChildIndex
+		let membersReadOnlyInsideTheirLoop = loopByChildIndex.isEmpty ? [] : Set(loopMembersReadOnlyInsideTheirLoop())
 
 		// The position of each child in the inline build's order, by its index among `propertiesToGenerate`: the build's
 		// order without a child that holds a place starting after its siblings, which is the build's order itself where no
@@ -10952,7 +11046,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					declarationReference: declarationReference,
 					// An alias whose fulfilling property is unavailable is declared `nil`, as production declares it.
 					isBoundToNil: Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: childUnavailableProperties),
-					loop: loopByGenerator[ObjectIdentifier(childGenerator)],
+					loop: loopByChildIndex[child.index],
 				)))
 			} else if case let .property(childInstantiable, childProperty, _, erasedToConcreteExistential, isPropertyCycle, _) = childGenerator.scopeData {
 				let isInstantiator = !childProperty.propertyType.isConstant
@@ -11042,9 +11136,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					callSiteLazilyInstantiatedInstanceProperties: childGenerator.callSiteLazilyInstantiatedInstanceProperties,
 					buildsInSendableFunction: childGenerator.buildsInSendableFunction,
 					requiresSendable: childInsideSendable,
-					loop: loopByGenerator[ObjectIdentifier(childGenerator)],
+					loop: loopByChildIndex[child.index],
 					reboundProperties: childGenerator.reboundProperties,
-					isReadOutsideItsLoop: !membersReadOnlyInsideTheirLoop.contains(ObjectIdentifier(childGenerator)),
+					isReadOutsideItsLoop: !membersReadOnlyInsideTheirLoop.contains(child.index),
 				)))
 			}
 		}
@@ -12412,7 +12506,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						from: lazilyInstantiatedBindingNames,
 					)
 					let functionParameters = ownCycleParameters.map(\.property)
-					let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: node.typesDeclaredEscaping).map(\.description).joined()
+					let functionArguments = functionParameters.isEmpty ? "" : functionParameters.initializerFunctionParametersSource(amongTypesDeclaredEscaping: node.typesDeclaredEscaping)
 					let callArguments = mockCycleParameterArguments(
 						for: node,
 						flatParameterDisambiguationMap: flatParameterDisambiguationMap,
@@ -12931,7 +13025,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				let functionParameters = forwardedProperties.isEmpty
 					? ""
-					: forwardedProperties.initializerFunctionParameters(amongTypesDeclaredEscaping: node.typesDeclaredEscaping).map(\.description).joined()
+					: forwardedProperties.initializerFunctionParametersSource(amongTypesDeclaredEscaping: node.typesDeclaredEscaping)
 				let callArguments = (forwardedProperties.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" } + cycleArguments).joined(separator: ", ")
 				let functionIndent = String(indent.dropLast(ScopeGenerator.standardIndent.count))
 				let decorator = node.buildsInSendableFunction || node.property.propertyType.isSendable ? "@Sendable " : ""
@@ -13168,7 +13262,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let functionArguments = if functionParameters.isEmpty {
 			""
 		} else {
-			functionParameters.initializerFunctionParameters(amongTypesDeclaredEscaping: node.typesDeclaredEscaping).map(\.description).joined()
+			functionParameters.initializerFunctionParametersSource(amongTypesDeclaredEscaping: node.typesDeclaredEscaping)
 		}
 
 		// Build the forwarded arguments for the Instantiator closure call, followed by the bindings in scope here of the
