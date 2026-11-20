@@ -10081,16 +10081,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				instantiable.initializer
 			}
-			if let constructionInitializer {
-				constructionArguments = constructionInitializer.arguments
-				defaultParameters = MockParameterNode.DefaultParameter.defaultParameters(
+			constructionArguments = constructionInitializer?.arguments ?? []
+			defaultParameters = constructionInitializer.map { constructionInitializer in
+				MockParameterNode.DefaultParameter.defaultParameters(
 					of: constructionInitializer,
 					dependencies: instantiable.dependencies,
 				)
-			} else {
-				constructionArguments = []
-				defaultParameters = []
-			}
+			} ?? []
 			constructionIsolation = constructionInitializer?.spelledIsolation
 			isExtensionBased = instantiable.declarationType.isExtension
 			dependencies = instantiable.dependencies
