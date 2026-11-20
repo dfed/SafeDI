@@ -47,7 +47,8 @@ extension String {
 	/// `__safeDI_` + `` `my leaf` `` is `` `__safeDI_my leaf` ``. Joining names that need no backticks with
 	/// such text makes a name that needs none, so only text holding a backtick is spelled again.
 	var spelledAsJoinedIdentifier: String {
-		contains("`") ? spelledAsIdentifier : self
+		// A byte search: Foundation's `contains(_:)` of a string is many times slower, and a backtick is one byte.
+		utf8.contains(UInt8(ascii: "`")) ? spelledAsIdentifier : self
 	}
 
 	/// This name, in `spelledAsIdentifier` spelling, as a call spells it as an argument label. Swift takes every

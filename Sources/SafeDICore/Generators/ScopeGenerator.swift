@@ -9707,16 +9707,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			   let plan = await Self.mockBodyPlan(of: rootItems, labelMap: rootLabelMap, flatParameterDisambiguationMap: treeDisambiguationMap, context: context)
 			{
 				MockBodyRouting.record(routed: true)
-				bodyBindings = try await GeneratedCode.lines(generateProperties(
+				bodyBindings = try await GeneratedCodeText.nonBlankLines(of: GeneratedCode.lines(generateProperties(
 					codeGeneration: .overriding(plan),
 					propertiesGeneratedLater: [],
 					enclosingFunctionNames: [:],
 					leadingMemberWhitespace: bodyIndent,
 					fillPlaceBindings: .none,
 				))
-				.spelled()
-				.components(separatedBy: "\n")
-				.filter { !$0.allSatisfy(\.isWhitespace) }
+				.spelled())
 			} else {
 				MockBodyRouting.record(routed: false)
 				bodyBindings = await Self.generateMockBodyBindings(
@@ -11595,6 +11593,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
+	/// Whether `uncoveredInstantiatedDependencies(of:)` is not empty, without building the array: asked of every node of
+	/// every routed mock body.
+	private static func hasUncoveredInstantiatedDependency(_ node: MockParameterNode) -> Bool {
+		var childLabels: Set<String>?
+		for dependency in node.dependencies {
+			switch dependency.source {
+			case .instantiated:
+				if childLabels == nil {
+					childLabels = Set(node.propertyChildren.map(\.propertyLabel)).union(node.children.holeSiteProperties.map(\.label))
+				}
+				if childLabels?.contains(dependency.property.label) == false {
+					return true
+				}
+			case .received, .aliased, .forwarded:
+				continue
+			}
+		}
+		return false
+	}
+
 	/// The `@Instantiated` dependencies of `node`'s type that the mock cannot build, which `mock()` takes as
 	/// parameters: those no property child of the node builds.
 	private static func uncoveredInstantiatedDependencies(of node: MockParameterNode) -> [Dependency] {
@@ -12501,7 +12519,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			&& !node.useMockInitializer
 			&& node.valuesBindings.isEmpty
 			&& node.memberCallsInsideBuilderFunction.isEmpty
-			&& uncoveredInstantiatedDependencies(of: node).isEmpty
+			&& !hasUncoveredInstantiatedDependency(node)
 			// The walk binds a promoted optional node to a non-optional value.
 			&& !node.typeDescription.isOptional
 			// The walk spells an unlabeled argument bare, production `_:`.
@@ -12541,7 +12559,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		mergeSiblingDisambiguations(into: &combinedDisambiguationMap, for: propertyNodes, labelMap: labelMap)
 		for item in items {
 			if case let .alias(alias) = item {
-				guard alias.holeSite == nil, alias.loop == nil else { return nil }
+				// An erased rename only if available is mapped over its binding's optional form by the walk, whatever the
+				// binding, since a mock binds the value it renames from an optional override or parameter, which the production
+				// emitter's alias does not see (`fulfillingBindingIsOptional`), so the walk writes it.
+				guard alias.holeSite == nil, alias.loop == nil, !(alias.onlyIfAvailable && alias.erasedToConcreteExistential) else { return nil }
 				// The naming policy of a rename: the name apart a mock root binds it under, and the name its fulfilling
 				// property resolves to, as `emitAliasBinding` resolves it.
 				let bindingName = alias.declaredProperty.flatMap { $0.label == alias.property.label ? nil : alias.property.label }
@@ -13305,7 +13326,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		bindingNamesPassedByName: [String: String],
 	) -> [String] {
 		// Each label names one dependency: `validateDependencyLabelsAreDistinct` rejects a declaration in a generated tree that repeats one.
-		let dependenciesByLabel = Dictionary(grouping: node.dependencies, by: \.property.label).compactMapValues(\.first)
+		var dependenciesByLabel = [String: Dependency]()
+		for dependency in node.dependencies where dependenciesByLabel[dependency.property.label] == nil {
+			dependenciesByLabel[dependency.property.label] = dependency
+		}
 		let relativePath = GeneratedCodeText.overrideRelativePath(of: nodePath)
 		let argumentsToSurface = node.surfacedCallSiteArguments(
 			overrideReachable: overrideReachable,

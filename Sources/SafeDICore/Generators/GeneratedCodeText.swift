@@ -52,6 +52,44 @@ enum GeneratedCodeText {
 		return String(decoding: result, as: UTF8.self)
 	}
 
+	/// The lines of `code` that hold more than whitespace: the same strings as
+	/// `code.components(separatedBy: "\n").filter { !$0.allSatisfy(\.isWhitespace) }`. Code with a carriage return,
+	/// which forms one `Character` with a line feed after it, takes that expression itself.
+	static func nonBlankLines(of code: String) -> [String] {
+		let lineFeed = UInt8(ascii: "\n")
+		let carriageReturn = UInt8(ascii: "\r")
+		var code = code
+		return code.withUTF8 { bytes in
+			guard !bytes.contains(carriageReturn) else {
+				return String(decoding: bytes, as: UTF8.self)
+					.components(separatedBy: "\n")
+					.filter { !$0.allSatisfy(\.isWhitespace) }
+			}
+			var lines = [String]()
+			var lineStart = bytes.startIndex
+			for index in bytes.indices where bytes[index] == lineFeed {
+				appendIfNotBlank(UnsafeBufferPointer(rebasing: bytes[lineStart..<index]), to: &lines)
+				lineStart = index + 1
+			}
+			appendIfNotBlank(UnsafeBufferPointer(rebasing: bytes[lineStart...]), to: &lines)
+			return lines
+		}
+	}
+
+	/// Appends `line` to `lines` unless every `Character` of it is whitespace. A line of ASCII bytes is judged by its
+	/// bytes, the ASCII whitespace `Character.isWhitespace` accepts being the space and U+0009 to U+000D.
+	private static func appendIfNotBlank(_ line: UnsafeBufferPointer<UInt8>, to lines: inout [String]) {
+		let isASCII = line.allSatisfy { $0 < 0x80 }
+		let isBlank = if isASCII {
+			line.allSatisfy { $0 == UInt8(ascii: " ") || (0x09...0x0D).contains($0) }
+		} else {
+			String(decoding: line, as: UTF8.self).allSatisfy(\.isWhitespace)
+		}
+		if !isBlank {
+			lines.append(String(decoding: line, as: UTF8.self))
+		}
+	}
+
 	/// The name a mock gives what it reads from the override at `nodePath`, a path of labels below
 	/// `safeDIOverrides` joined by `.`: the path without each `safeDIOverrides.`, its labels joined by `_`. The same bytes
 	/// as Foundation’s replacing every `"safeDIOverrides."` with `""` and then every `"."` with `"_"`, unless a `.` forms
