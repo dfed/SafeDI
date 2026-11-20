@@ -538,7 +538,7 @@ extension Instantiable: BinarySchemaMember {
 			packageName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 		)
 		sourceFilePath = try reader.readOptional(flaggedIn: &fieldFlags) as String?
-		isInsideCompilerDecidedBlock = try fieldFlags.next()
+		isInsideCompilerDecidedBlock = fieldFlags.next()
 		dependencyLabelsInUnselectedClauses = try reader.read()
 		dependencyLabelsInsideConditionalBlocks = try reader.read()
 		try fieldFlags.finish()
