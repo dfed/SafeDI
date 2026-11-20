@@ -68,4 +68,20 @@ struct ConstructionOverride: Hashable, Sendable {
 /// The overrides of one configurable body, keyed by the scope whose construction each replaces.
 struct ConstructionOverrides: Sendable {
 	let byScope: [ObjectIdentifier: ConstructionOverride]
+	/// The body's naming policy: the names each scope binds and reads where they are not its labels.
+	var namesByScope: [ObjectIdentifier: ScopeNames] = [:]
+}
+
+/// The names one scope of a configurable body binds and reads where they differ from its labels: a body whose siblings
+/// share a label names them apart, and a receiver beneath reads the name its label resolves to.
+struct ScopeNames: Hashable, Sendable {
+	/// The name the scope binds its value under, where it is not the property's label.
+	var bindingName: String?
+	/// The lines that bind each label the scope reads again from the name it resolves to, at the top of its builder function.
+	var rebindingLines: [String] = []
+	/// The name the construction reads for each label it is passed by name.
+	var argumentNameByLabel: [String: String] = [:]
+	/// The lines before the scope's builder function: the reads of overrides into locals an outermost `@Sendable`
+	/// function captures in their place.
+	var preludeLines: [String] = []
 }
