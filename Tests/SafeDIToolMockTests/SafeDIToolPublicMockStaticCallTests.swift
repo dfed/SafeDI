@@ -2161,6 +2161,145 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsOverrideClosureBuildersThatTakeNothing_whenCalledMockTakesBuildersOfErasedInstantiatorsThatForwardNothing() async throws {
+		// `Host`’s `mock()` takes a builder that takes nothing for each erased instantiator of `()`, as for a plain place, so
+		// the override closure of `HostScreen`’s call is handed the fill of each place as a closure that calls the erased
+		// instantiator’s `Builder` the fill returns with `()`.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [
+				"""
+				import SafeDI
+
+				public protocol Service: Sendable {}
+
+				public struct AnyService: Service {
+				    public init(_ service: any Service) {
+				        self.service = service
+				    }
+
+				    public let service: any Service
+				}
+
+				@Instantiable(generateMock: .public)
+				public struct Host: Instantiable {
+				    package init(maker: ErasedInstantiator<(), AnyService>, sendableMaker: SendableErasedInstantiator<(), AnyService>) {
+				        self.maker = maker
+				        self.sendableMaker = sendableMaker
+				    }
+
+				    @Instantiated(fulfilledByType: "TapService", erasedToConcreteExistential: true) let maker: ErasedInstantiator<(), AnyService>
+				    @Instantiated(fulfilledByType: "TapService", erasedToConcreteExistential: true) let sendableMaker: SendableErasedInstantiator<(), AnyService>
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContent: [
+				"""
+				import Core
+				import SafeDI
+
+				@Instantiable
+				public struct TapService: Service, Instantiable {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: true)
+				public struct HostScreen: Instantiable {
+				    public init(host: Host) {
+				        self.host = host
+				    }
+
+				    @Instantiated let host: Host
+				}
+				""",
+				"""
+				import Core
+
+				func hostScreenBuildsHostThroughItsOverride() -> String {
+				    var calls = 0
+				    _ = HostScreen.mock(safeDIOverrides: .init(host: { maker, sendableMaker in
+				        calls += 1
+				        return Host.mock(tapService_AnyServiceBuilder: maker, tapService_AnyServiceSendableBuilder: sendableMaker)
+				    }))
+				    return "override called \\(calls)"
+				}
+				""",
+			], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension HostScreen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            host: ((@escaping () -> AnyService, @escaping @Sendable () -> AnyService) -> Host)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                host: host
+		            )
+		        }
+
+		        var host: ((@escaping () -> AnyService, @escaping @Sendable () -> AnyService) -> Host)? { __safeDI_storage.host }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                host: ((@escaping () -> AnyService, @escaping @Sendable () -> AnyService) -> Host)?
+		            ) {
+		                self.host = host
+		            }
+
+		            let host: ((@escaping () -> AnyService, @escaping @Sendable () -> AnyService) -> Host)?
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> HostScreen {
+		        func __safeDI_host() -> Host {
+		            func __safeDI_tapService_AnyServiceBuilder_Host_maker() -> ErasedInstantiator<(), AnyService>.Builder {
+		                func __safeDI_maker() -> TapService {
+		                    TapService()
+		                }
+		                return { _ in AnyService(__safeDI_maker()) }
+		            }
+		            @Sendable nonisolated func __safeDI_tapService_AnyServiceSendableBuilder_Host_sendableMaker() -> SendableErasedInstantiator<(), AnyService>.Builder {
+		                @Sendable nonisolated func __safeDI_sendableMaker() -> TapService {
+		                    TapService()
+		                }
+		                return { _ in AnyService(__safeDI_sendableMaker()) }
+		            }
+		            func __safeDI_tapService_AnyServiceBuilder_Host() -> Host.SafeDIMockScope_TapService_AnyService.__safeDI_Builder<AnyService> {
+		                .init(maker: { _ in __safeDI_tapService_AnyServiceBuilder_Host_maker() })
+		            }
+		            @Sendable nonisolated func __safeDI_tapService_AnyServiceSendableBuilder_Host() -> Host.SafeDISendableMockScope_TapService_AnyService.__safeDI_Builder<AnyService> {
+		                .init(sendableMaker: { _ in __safeDI_tapService_AnyServiceSendableBuilder_Host_sendableMaker() })
+		            }
+		            _ = Host.__safeDI_Host_mock_3255AE3778C05DDE.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return if let safeDIBuilder = safeDIOverrides.host { safeDIBuilder({ __safeDI_tapService_AnyServiceBuilder_Host_maker()(()) }, { __safeDI_tapService_AnyServiceSendableBuilder_Host_sendableMaker()(()) }) } else { Host.__safeDI_mock(tapService_AnyServiceBuilder: __safeDI_tapService_AnyServiceBuilder_Host(), tapService_AnyServiceSendableBuilder: __safeDI_tapService_AnyServiceSendableBuilder_Host()) }
+		        }
+		        let host: Host = __safeDI_host()
+		        return HostScreen(host: host)
+		    }
+		}
+		#endif
+		"""])
+		let description = try await DifferentialValueOracle.describe(DifferentialValuePath(output: output, modules: modules), probes: [DifferentialValueProbe("hostScreenBuildsHostThroughItsOverride()")], filesToDelete: &filesToDelete)
+		if compileVerificationIsEnabled {
+			#expect(description == "probe hostScreenBuildsHostThroughItsOverride()\nString \"override called 1\"\n")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_handsOverrideClosureFunctionOverCallersFill_whenCallerFillsCalledMocksPlace() async throws {
 		// `Detail`, a public mock that builds nothing but its place, receives `session` before its tree, so `Root`’s overrides
 		// hold a closure that builds `Detail` from the builder a person writes and the session. `Root` fills the place with

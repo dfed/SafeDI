@@ -68,14 +68,14 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                self.holeBuilder = holeBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.holeBuilder = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }
 
 		    public static func mock(
-		        holeFill_AnyHoleBuilder: @escaping ErasedInstantiator<(), AnyHole>.Builder
+		        holeFill_AnyHoleBuilder: @escaping () -> AnyHole
 		    ) -> Panel {
 		        Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder))
 		    }
@@ -107,14 +107,14 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                self.holeBuilder = holeBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.holeBuilder = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }
 
 		    public static func mock(
-		        holeFill_AnyHoleBuilder: @escaping ErasedInstantiator<(), AnyHole>.Builder
+		        holeFill_AnyHoleBuilder: @escaping () -> AnyHole
 		    ) -> PanelTwin {
 		        PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder))
 		    }
@@ -169,7 +169,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        holeFill_AnyHoleSendableBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder,
+		        holeFill_AnyHoleSendableBuilder: @escaping @Sendable () -> AnyHole,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder = safeDIOverrides.screenBuilder.panel
@@ -178,13 +178,13 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		        @Sendable func __safeDI_screenBuilder() -> Screen {
 		            _ = Panel.__safeDI_Panel_mock_E9531DCA567FCD91.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_panel() -> Panel {
-		                let holeFill_AnyHoleBuilder: ErasedInstantiator<(), AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+		                let holeFill_AnyHoleBuilder: () -> AnyHole = holeFill_AnyHoleSendableBuilder
 		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
 		            }
 		            let panel: Panel = __safeDI_panel()
 		            _ = PanelTwin.__safeDI_PanelTwin_mock_EF93364769284E49.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_panelTwin() -> PanelTwin {
-		                let holeFill_AnyHoleBuilder: ErasedInstantiator<(), AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+		                let holeFill_AnyHoleBuilder: () -> AnyHole = holeFill_AnyHoleSendableBuilder
 		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
 		            }
 		            let panelTwin: PanelTwin = __safeDI_panelTwin()
@@ -201,8 +201,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)? = nil,
-		            panelTwin: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)? = nil,
+		            panel: (@Sendable (@escaping () -> AnyHole) -> Panel)? = nil,
+		            panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)? = nil,
 		            _ safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
@@ -212,8 +212,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            )
 		        }
 
-		        var panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)? { __safeDI_storage.panel }
-		        var panelTwin: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)? { __safeDI_storage.panelTwin }
+		        var panel: (@Sendable (@escaping () -> AnyHole) -> Panel)? { __safeDI_storage.panel }
+		        var panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)? { __safeDI_storage.panelTwin }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        var safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)? { __safeDI_storage.safeDIBuilder }
 
@@ -221,8 +221,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 
 		        private final class __safeDI_Storage: Sendable {
 		            init(
-		                panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)?,
-		                panelTwin: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)?,
+		                panel: (@Sendable (@escaping () -> AnyHole) -> Panel)?,
+		                panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)?,
 		                safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)?
 		            ) {
 		                self.panel = panel
@@ -230,8 +230,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            let panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)?
-		            let panelTwin: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)?
+		            let panel: (@Sendable (@escaping () -> AnyHole) -> Panel)?
+		            let panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)?
 		            let safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)?
 		        }
 		    }
@@ -466,14 +466,14 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                self.holeBuilder = holeBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.holeBuilder = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }
 
 		    public static func mock(
-		        holeFill_AnyHoleBuilder: @escaping ErasedInstantiator<(), AnyHole>.Builder
+		        holeFill_AnyHoleBuilder: @escaping () -> AnyHole
 		    ) -> Panel {
 		        Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder))
 		    }
@@ -505,14 +505,14 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                self.holeBuilder = holeBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.holeBuilder = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }
 
 		    public static func mock(
-		        holeFill_AnyHoleBuilder: @escaping ErasedInstantiator<(), AnyHole>.Builder
+		        holeFill_AnyHoleBuilder: @escaping () -> AnyHole
 		    ) -> PanelTwin {
 		        PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder))
 		    }
@@ -567,7 +567,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        holeFill_AnyHoleSendableBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder,
+		        holeFill_AnyHoleSendableBuilder: @escaping @Sendable () -> AnyHole,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder = safeDIOverrides.screenBuilder.panel
@@ -575,7 +575,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		        @Sendable func __safeDI_screenBuilder() -> Screen {
 		            _ = Panel.__safeDI_Panel_mock_E9531DCA567FCD91.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_panel() -> Panel {
-		                let holeFill_AnyHoleBuilder: ErasedInstantiator<(), AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+		                let holeFill_AnyHoleBuilder: () -> AnyHole = holeFill_AnyHoleSendableBuilder
 		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
 		            }
 		            let panel: Panel = __safeDI_panel()
@@ -592,7 +592,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)? = nil,
+		            panel: (@Sendable (@escaping () -> AnyHole) -> Panel)? = nil,
 		            _ safeDIBuilder: (@Sendable (Panel) -> Screen)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
@@ -601,7 +601,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            )
 		        }
 
-		        var panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)? { __safeDI_storage.panel }
+		        var panel: (@Sendable (@escaping () -> AnyHole) -> Panel)? { __safeDI_storage.panel }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        var safeDIBuilder: (@Sendable (Panel) -> Screen)? { __safeDI_storage.safeDIBuilder }
 
@@ -609,14 +609,14 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 
 		        private final class __safeDI_Storage: Sendable {
 		            init(
-		                panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)?,
+		                panel: (@Sendable (@escaping () -> AnyHole) -> Panel)?,
 		                safeDIBuilder: (@Sendable (Panel) -> Screen)?
 		            ) {
 		                self.panel = panel
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            let panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)?
+		            let panel: (@Sendable (@escaping () -> AnyHole) -> Panel)?
 		            let safeDIBuilder: (@Sendable (Panel) -> Screen)?
 		        }
 		    }
@@ -652,14 +652,14 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                self.holeBuilder = holeBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.holeBuilder = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }
 
 		    public static func mock(
-		        holeFill_AnyHoleBuilder: @escaping ErasedInstantiator<(), AnyHole>.Builder
+		        holeFill_AnyHoleBuilder: @escaping () -> AnyHole
 		    ) -> Panel {
 		        Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder))
 		    }
@@ -691,14 +691,14 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                self.holeBuilder = holeBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.holeBuilder = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }
 
 		    public static func mock(
-		        holeFill_AnyHoleBuilder: @escaping ErasedInstantiator<(), AnyHole>.Builder
+		        holeFill_AnyHoleBuilder: @escaping () -> AnyHole
 		    ) -> PanelTwin {
 		        PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder))
 		    }
@@ -753,7 +753,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        holeFill_AnyHoleSendableBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder,
+		        holeFill_AnyHoleSendableBuilder: @escaping @Sendable () -> AnyHole,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder = safeDIOverrides.screenBuilder.panel
@@ -762,13 +762,13 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		        @Sendable func __safeDI_screenBuilder() -> Screen {
 		            _ = Panel.__safeDI_Panel_mock_E9531DCA567FCD91.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_panel() -> Panel {
-		                let holeFill_AnyHoleBuilder: ErasedInstantiator<(), AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+		                let holeFill_AnyHoleBuilder: () -> AnyHole = holeFill_AnyHoleSendableBuilder
 		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
 		            }
 		            let panel: Panel = __safeDI_panel()
 		            _ = PanelTwin.__safeDI_PanelTwin_mock_EF93364769284E49.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_panelTwin() -> PanelTwin {
-		                let holeFill_AnyHoleBuilder: ErasedInstantiator<(), AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+		                let holeFill_AnyHoleBuilder: () -> AnyHole = holeFill_AnyHoleSendableBuilder
 		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
 		            }
 		            let panelTwin: PanelTwin = __safeDI_panelTwin()
@@ -785,8 +785,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)? = nil,
-		            panelTwin: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)? = nil,
+		            panel: (@Sendable (@escaping () -> AnyHole) -> Panel)? = nil,
+		            panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)? = nil,
 		            _ safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
@@ -796,8 +796,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            )
 		        }
 
-		        var panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)? { __safeDI_storage.panel }
-		        var panelTwin: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)? { __safeDI_storage.panelTwin }
+		        var panel: (@Sendable (@escaping () -> AnyHole) -> Panel)? { __safeDI_storage.panel }
+		        var panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)? { __safeDI_storage.panelTwin }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        var safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)? { __safeDI_storage.safeDIBuilder }
 
@@ -805,8 +805,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 
 		        private final class __safeDI_Storage: Sendable {
 		            init(
-		                panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)?,
-		                panelTwin: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)?,
+		                panel: (@Sendable (@escaping () -> AnyHole) -> Panel)?,
+		                panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)?,
 		                safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)?
 		            ) {
 		                self.panel = panel
@@ -814,8 +814,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            let panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)?
-		            let panelTwin: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)?
+		            let panel: (@Sendable (@escaping () -> AnyHole) -> Panel)?
+		            let panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)?
 		            let safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)?
 		        }
 		    }
@@ -851,14 +851,14 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                self.holeBuilder = holeBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.holeBuilder = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }
 
 		    public static func mock(
-		        holeFill_AnyHoleBuilder: @escaping ErasedInstantiator<(), AnyHole>.Builder
+		        holeFill_AnyHoleBuilder: @escaping () -> AnyHole
 		    ) -> Panel {
 		        Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder))
 		    }
@@ -890,14 +890,14 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                self.holeBuilder = holeBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.holeBuilder = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }
 
 		    public static func mock(
-		        holeFill_AnyHoleBuilder: @escaping ErasedInstantiator<(), AnyHole>.Builder
+		        holeFill_AnyHoleBuilder: @escaping () -> AnyHole
 		    ) -> PanelTwin {
 		        PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder))
 		    }
@@ -942,7 +942,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                    self.panelTwin = panelTwin
 		                }
 
-		                public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
+		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
 		                    self.panel = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		                    self.panelTwin = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		                }
@@ -961,7 +961,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                self.screenBuilder = screenBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<(), __safeDI_Built>.Builder) {
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
 		                self.screenBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
 		            }
 		        }
@@ -993,7 +993,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		    }
 
 		    public static func mock(
-		        holeFill_AnyHoleSendableBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder,
+		        holeFill_AnyHoleSendableBuilder: @escaping @Sendable () -> AnyHole,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        Root.__safeDI_mock(holeFill_AnyHoleSendableBuilder: .init(__safeDI_noScope: holeFill_AnyHoleSendableBuilder), safeDIOverrides: safeDIOverrides)
@@ -1086,14 +1086,14 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                self.holeBuilder = holeBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.holeBuilder = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }
 
 		    public static func mock(
-		        holeFill_AnyHoleBuilder: @escaping ErasedInstantiator<(), AnyHole>.Builder
+		        holeFill_AnyHoleBuilder: @escaping () -> AnyHole
 		    ) -> Panel {
 		        Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder))
 		    }
@@ -1125,14 +1125,14 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                self.holeBuilder = holeBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.holeBuilder = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }
 
 		    public static func mock(
-		        holeFill_AnyHoleBuilder: @escaping ErasedInstantiator<(), AnyHole>.Builder
+		        holeFill_AnyHoleBuilder: @escaping () -> AnyHole
 		    ) -> PanelTwin {
 		        PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder))
 		    }
@@ -1200,7 +1200,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        holeFill_AnyHoleSendableBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder,
+		        holeFill_AnyHoleSendableBuilder: @escaping @Sendable () -> AnyHole,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder = safeDIOverrides.screenBuilder.panel
@@ -1209,13 +1209,13 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		        @Sendable func __safeDI_screenBuilder() -> Screen {
 		            _ = Panel.__safeDI_Panel_mock_E9531DCA567FCD91.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_panel() -> Panel {
-		                let holeFill_AnyHoleBuilder: ErasedInstantiator<(), AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+		                let holeFill_AnyHoleBuilder: () -> AnyHole = holeFill_AnyHoleSendableBuilder
 		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
 		            }
 		            let panel: Panel = __safeDI_panel()
 		            _ = PanelTwin.__safeDI_PanelTwin_mock_EF93364769284E49.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_panelTwin() -> PanelTwin {
-		                let holeFill_AnyHoleBuilder: ErasedInstantiator<(), AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+		                let holeFill_AnyHoleBuilder: () -> AnyHole = holeFill_AnyHoleSendableBuilder
 		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
 		            }
 		            let panelTwin: PanelTwin = __safeDI_panelTwin()
@@ -1232,8 +1232,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)? = nil,
-		            panelTwin: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)? = nil,
+		            panel: (@Sendable (@escaping () -> AnyHole) -> Panel)? = nil,
+		            panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)? = nil,
 		            _ safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
@@ -1243,8 +1243,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            )
 		        }
 
-		        var panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)? { __safeDI_storage.panel }
-		        var panelTwin: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)? { __safeDI_storage.panelTwin }
+		        var panel: (@Sendable (@escaping () -> AnyHole) -> Panel)? { __safeDI_storage.panel }
+		        var panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)? { __safeDI_storage.panelTwin }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        var safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)? { __safeDI_storage.safeDIBuilder }
 
@@ -1252,8 +1252,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 
 		        private final class __safeDI_Storage: Sendable {
 		            init(
-		                panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)?,
-		                panelTwin: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)?,
+		                panel: (@Sendable (@escaping () -> AnyHole) -> Panel)?,
+		                panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)?,
 		                safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)?
 		            ) {
 		                self.panel = panel
@@ -1261,8 +1261,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            let panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)?
-		            let panelTwin: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)?
+		            let panel: (@Sendable (@escaping () -> AnyHole) -> Panel)?
+		            let panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)?
 		            let safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)?
 		        }
 		    }
@@ -1299,14 +1299,14 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                self.holeBuilder = holeBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.holeBuilder = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }
 
 		    public static func mock(
-		        holeFill_AnyHoleSendableBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder
+		        holeFill_AnyHoleSendableBuilder: @escaping @Sendable () -> AnyHole
 		    ) -> Panel {
 		        Panel.__safeDI_mock(holeFill_AnyHoleSendableBuilder: .init(__safeDI_noScope: holeFill_AnyHoleSendableBuilder))
 		    }
@@ -1338,14 +1338,14 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                self.holeBuilder = holeBuilder
 		            }
 
-		            public init(__safeDI_noScope __safeDI_builder: @escaping SendableErasedInstantiator<(), __safeDI_Built>.Builder) {
-		                self.holeBuilder = { _ in __safeDI_builder }
+		            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+		                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
 		            }
 		        }
 		    }
 
 		    public static func mock(
-		        holeFill_AnyHoleSendableBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder
+		        holeFill_AnyHoleSendableBuilder: @escaping @Sendable () -> AnyHole
 		    ) -> PanelTwin {
 		        PanelTwin.__safeDI_mock(holeFill_AnyHoleSendableBuilder: .init(__safeDI_noScope: holeFill_AnyHoleSendableBuilder))
 		    }
@@ -1400,7 +1400,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        holeFill_AnyHoleSendableBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder,
+		        holeFill_AnyHoleSendableBuilder: @escaping @Sendable () -> AnyHole,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let __safeDI_holeFill_AnyHoleSendableBuilder = holeFill_AnyHoleSendableBuilder
@@ -1410,13 +1410,13 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		        @Sendable func __safeDI_screenBuilder() -> Screen {
 		            _ = Panel.__safeDI_Panel_mock_C648B5018F5B0366.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_panel() -> Panel {
-		                let holeFill_AnyHoleSendableBuilder: SendableErasedInstantiator<(), AnyHole>.Builder = __safeDI_holeFill_AnyHoleSendableBuilder
+		                let holeFill_AnyHoleSendableBuilder: @Sendable () -> AnyHole = __safeDI_holeFill_AnyHoleSendableBuilder
 		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleSendableBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleSendableBuilder: .init(__safeDI_noScope: holeFill_AnyHoleSendableBuilder)) }
 		            }
 		            let panel: Panel = __safeDI_panel()
 		            _ = PanelTwin.__safeDI_PanelTwin_mock_DC6B7BFF7D8BDEBA.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_panelTwin() -> PanelTwin {
-		                let holeFill_AnyHoleSendableBuilder: SendableErasedInstantiator<(), AnyHole>.Builder = __safeDI_holeFill_AnyHoleSendableBuilder
+		                let holeFill_AnyHoleSendableBuilder: @Sendable () -> AnyHole = __safeDI_holeFill_AnyHoleSendableBuilder
 		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleSendableBuilder) } else { PanelTwin.__safeDI_mock(holeFill_AnyHoleSendableBuilder: .init(__safeDI_noScope: holeFill_AnyHoleSendableBuilder)) }
 		            }
 		            let panelTwin: PanelTwin = __safeDI_panelTwin()
@@ -1433,8 +1433,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            panel: (@Sendable (@escaping SendableErasedInstantiator<(), AnyHole>.Builder) -> Panel)? = nil,
-		            panelTwin: (@Sendable (@escaping SendableErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)? = nil,
+		            panel: (@Sendable (@escaping @Sendable () -> AnyHole) -> Panel)? = nil,
+		            panelTwin: (@Sendable (@escaping @Sendable () -> AnyHole) -> PanelTwin)? = nil,
 		            _ safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
@@ -1444,8 +1444,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		            )
 		        }
 
-		        var panel: (@Sendable (@escaping SendableErasedInstantiator<(), AnyHole>.Builder) -> Panel)? { __safeDI_storage.panel }
-		        var panelTwin: (@Sendable (@escaping SendableErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)? { __safeDI_storage.panelTwin }
+		        var panel: (@Sendable (@escaping @Sendable () -> AnyHole) -> Panel)? { __safeDI_storage.panel }
+		        var panelTwin: (@Sendable (@escaping @Sendable () -> AnyHole) -> PanelTwin)? { __safeDI_storage.panelTwin }
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        var safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)? { __safeDI_storage.safeDIBuilder }
 
@@ -1453,8 +1453,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 
 		        private final class __safeDI_Storage: Sendable {
 		            init(
-		                panel: (@Sendable (@escaping SendableErasedInstantiator<(), AnyHole>.Builder) -> Panel)?,
-		                panelTwin: (@Sendable (@escaping SendableErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)?,
+		                panel: (@Sendable (@escaping @Sendable () -> AnyHole) -> Panel)?,
+		                panelTwin: (@Sendable (@escaping @Sendable () -> AnyHole) -> PanelTwin)?,
 		                safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)?
 		            ) {
 		                self.panel = panel
@@ -1462,8 +1462,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 		                self.safeDIBuilder = safeDIBuilder
 		            }
 
-		            let panel: (@Sendable (@escaping SendableErasedInstantiator<(), AnyHole>.Builder) -> Panel)?
-		            let panelTwin: (@Sendable (@escaping SendableErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)?
+		            let panel: (@Sendable (@escaping @Sendable () -> AnyHole) -> Panel)?
+		            let panelTwin: (@Sendable (@escaping @Sendable () -> AnyHole) -> PanelTwin)?
 		            let safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)?
 		        }
 		    }
@@ -1900,14 +1900,14 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 			                self.holeBuilder = holeBuilder
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-			                self.holeBuilder = { _ in __safeDI_builder }
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
 			            }
 			        }
 			    }
 
 			    public static func mock(
-			        holeFill_AnyHoleBuilder: @escaping ErasedInstantiator<(), AnyHole>.Builder
+			        holeFill_AnyHoleBuilder: @escaping () -> AnyHole
 			    ) -> Panel {
 			        Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder))
 			    }
@@ -1944,14 +1944,14 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 			                self.holeBuilder = holeBuilder
 			            }
 
-			            public init(__safeDI_noScope __safeDI_builder: @escaping ErasedInstantiator<(), __safeDI_Built>.Builder) {
-			                self.holeBuilder = { _ in __safeDI_builder }
+			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			                self.holeBuilder = { _ in { _ in __safeDI_builder() } }
 			            }
 			        }
 			    }
 
 			    public static func mock(
-			        holeFill_AnyHoleBuilder: @escaping ErasedInstantiator<(), AnyHole>.Builder
+			        holeFill_AnyHoleBuilder: @escaping () -> AnyHole
 			    ) -> PanelTwin {
 			        PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder))
 			    }
@@ -2015,7 +2015,7 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 			    }
 
 			    static func mock(
-			        holeFill_AnyHoleSendableBuilder: @escaping SendableErasedInstantiator<(), AnyHole>.Builder,
+			        holeFill_AnyHoleSendableBuilder: @escaping @Sendable () -> AnyHole,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder = safeDIOverrides.screenBuilder.panel
@@ -2024,13 +2024,13 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 			        @Sendable func __safeDI_screenBuilder() -> Screen {
 			            _ = Panel.__safeDI_Panel_mock_E9531DCA567FCD91.self // If this line does not compile, add the SafeDI plugin to the target that declares Panel.
 			            func __safeDI_panel() -> Panel {
-			                let holeFill_AnyHoleBuilder: ErasedInstantiator<(), AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+			                let holeFill_AnyHoleBuilder: () -> AnyHole = holeFill_AnyHoleSendableBuilder
 			                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panel_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { Panel.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
 			            }
 			            let panel: Panel = __safeDI_panel()
 			            _ = PanelTwin.__safeDI_PanelTwin_mock_EF93364769284E49.self // If this line does not compile, add the SafeDI plugin to the target that declares PanelTwin.
 			            func __safeDI_panelTwin() -> PanelTwin {
-			                let holeFill_AnyHoleBuilder: ErasedInstantiator<(), AnyHole>.Builder = holeFill_AnyHoleSendableBuilder
+			                let holeFill_AnyHoleBuilder: () -> AnyHole = holeFill_AnyHoleSendableBuilder
 			                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_panelTwin_safeDIBuilder { safeDIBuilder(holeFill_AnyHoleBuilder) } else { PanelTwin.__safeDI_mock(holeFill_AnyHoleBuilder: .init(__safeDI_noScope: holeFill_AnyHoleBuilder)) }
 			            }
 			            let panelTwin: PanelTwin = __safeDI_panelTwin()
@@ -2055,8 +2055,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 			    /// Configuration for how this type is constructed within a mock tree.
 			    struct SafeDIMockConfiguration {
 			        init(
-			            panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)? = nil,
-			            panelTwin: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)? = nil,
+			            panel: (@Sendable (@escaping () -> AnyHole) -> Panel)? = nil,
+			            panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)? = nil,
 			            _ safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)? = nil
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
@@ -2066,8 +2066,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 			            )
 			        }
 
-			        var panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)? { __safeDI_storage.panel }
-			        var panelTwin: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)? { __safeDI_storage.panelTwin }
+			        var panel: (@Sendable (@escaping () -> AnyHole) -> Panel)? { __safeDI_storage.panel }
+			        var panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)? { __safeDI_storage.panelTwin }
 			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 			        var safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)? { __safeDI_storage.safeDIBuilder }
 
@@ -2075,8 +2075,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 
 			        private final class __safeDI_Storage: Sendable {
 			            init(
-			                panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)?,
-			                panelTwin: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)?,
+			                panel: (@Sendable (@escaping () -> AnyHole) -> Panel)?,
+			                panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)?,
 			                safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)?
 			            ) {
 			                self.panel = panel
@@ -2084,8 +2084,8 @@ struct SafeDIToolPublicMockSendablePassedUpBuilderTests: ~Copyable {
 			                self.safeDIBuilder = safeDIBuilder
 			            }
 
-			            let panel: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> Panel)?
-			            let panelTwin: (@Sendable (@escaping ErasedInstantiator<(), AnyHole>.Builder) -> PanelTwin)?
+			            let panel: (@Sendable (@escaping () -> AnyHole) -> Panel)?
+			            let panelTwin: (@Sendable (@escaping () -> AnyHole) -> PanelTwin)?
 			            let safeDIBuilder: (@Sendable (Panel, PanelTwin) -> Screen)?
 			        }
 			    }
