@@ -2000,13 +2000,14 @@ jobs:
       # The lines the change's tool generates for wide graphs, against
       # Scripts/compile-time-baseline.txt: generated code that compiled 2.4
       # times slower passed the step above, which times `generate` alone.
-      # Nothing is compiled. Measured: 175 s with a debug build of the tool on
-      # four cores; the release tool this job builds is faster. Warns rather
+      # Nothing is compiled. Measured: 22 s with main's release tool on four
+      # cores (00da8b5, 2026-11-20); one minute is the least the limit can be
+      # set to in whole minutes. Warns rather
       # than fails (`--warn-only`) while the generator's output is still being
       # rewritten often; a tool that cannot generate a shape still fails.
       - name: Compare Generated Lines with the Baseline
         if: ${{ !cancelled() && hashFiles('.generate-time/head/SafeDITool') != '' }}
-        timeout-minutes: 6
+        timeout-minutes: 1
         run: |
           python3 -I Scripts/compile-time-check.py --lines --warn-only --summary "$GITHUB_STEP_SUMMARY" \
             .generate-time/head/SafeDITool "$RUNNER_TEMP/compile-time-lines"
