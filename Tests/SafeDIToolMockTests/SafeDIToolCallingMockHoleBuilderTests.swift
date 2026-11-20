@@ -82,10 +82,10 @@ struct SafeDIToolCallingMockHoleBuilderTests: ~Copyable {
 		}
 	}
 
-	@Test(arguments: Combination.allCases)
+	@Test(arguments: ["@Instantiable(generateMock: true)", "@Instantiable(generateMock: .public)"], Combination.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_buildsWhatInlineBuilds_whenCallingMockIsPassedBuilderOrOverrideOfFilledHole(combination: Combination) async throws {
-		let modules = Self.modules(rootAttribute: "@Instantiable(generateMock: true)")
+	mutating func mock_buildsWhatInlineBuilds_whenCallingMockIsPassedBuilderOrOverrideOfFilledHole(rootAttribute: String, combination: Combination) async throws {
+		let modules = Self.modules(rootAttribute: rootAttribute)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
 		guard compileVerificationIsEnabled else { return }
 		let compilation = try #require(output.compilation)
