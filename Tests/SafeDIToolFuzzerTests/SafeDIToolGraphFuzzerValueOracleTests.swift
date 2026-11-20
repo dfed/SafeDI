@@ -746,16 +746,16 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 		let rejected = GraphFuzzerKnownIssue(reason: "A fixture the tool rejects", signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain")], seeds: [5])
 		let rejectedAndRenamed = GraphFuzzerKnownIssue(reason: "A fixture the tool rejects, in a graph whose order changes", signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain"), .renamedGraphDiffers(.mockCode)], seeds: [6])
 		let renamed = GraphFuzzerKnownIssue(reason: "An order", signatures: [.renamedGraphDiffers(.mockCode)], seeds: [7])
-		// The remedy oracle, too, runs only in the base corpus.
+		// The remedy oracle runs in the seam corpus too, so its shapes are inherited.
 		let remedy = GraphFuzzerKnownIssue(reason: "A remedy that leaves its error", signatures: [.remedyLeavesErrorAtSite(.instantiateOnRoot, containing: "is not @Instantiated or @Forwarded")], seeds: [9])
 
-		#expect([doesNotCompile, rejected, rejectedAndRenamed, renamed, remedy].map(\.isBaseCorpusValueOracleShape) == [true, true, false, false, true])
+		#expect([doesNotCompile, rejected, rejectedAndRenamed, renamed, remedy].map(\.isBaseCorpusValueOracleShape) == [true, true, false, false, false])
 		#expect(SafeDIToolGraphFuzzerTests.seamKnownIssues.allSatisfy { knownIssue in
 			knownIssue.signatures.allSatisfy { signature in
 				switch signature {
-				case .mockBuildsOtherValuesThanProduction, .valueOracleFixtureDoesNotCompile, .valueOracleFixtureRejected, .remedyLeavesErrorAtSite:
+				case .mockBuildsOtherValuesThanProduction, .valueOracleFixtureDoesNotCompile, .valueOracleFixtureRejected:
 					false
-				case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .holeAcceptedWhereVisibleBuildRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .holeNamesChangeWithSecondPlace, .callingMockAcceptedWhereTwinReportsShapeError, .callingMockPassesUpUnclassifiedPlace:
+				case .remedyLeavesErrorAtSite, .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .holeAcceptedWhereVisibleBuildRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .seamBuildsOtherValuesThanInline, .holeBuildsOtherValuesThanVisibleBuild, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .publicMockBuildsOtherValuesThanKnownRight, .seamRetainsWhatInlineFrees, .publicMockRetainsWhatKnownRightFrees, .holeNamesChangeWithSecondPlace, .callingMockAcceptedWhereTwinReportsShapeError, .callingMockPassesUpUnclassifiedPlace:
 					true
 				case .builderSurface:
 					true
