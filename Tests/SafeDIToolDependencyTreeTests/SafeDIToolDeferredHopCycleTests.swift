@@ -87,20 +87,16 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_a() -> A {
-			            func __safeDI_b() -> B {
-			                func __safeDI_c() -> C {
-			                    func __safeDI_a() -> A {
-			                        let b: B = __safeDI_b()
-			                        return A(b: b)
-			                    }
-			                    let a = Instantiator<A>(__safeDI_a)
-			                    return C(a: a)
-			                }
-			                let c: C = __safeDI_c()
-			                return B(c: c)
-			            }
 			            let b: B = __safeDI_b()
 			            return A(b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            let c: C = __safeDI_c()
+			            return B(c: c)
+			        }
+			        func __safeDI_c() -> C {
+			            let a = Instantiator<A>(__safeDI_a)
+			            return C(a: a)
 			        }
 			        let a: A = __safeDI_a()
 			        self.init(a: a)
@@ -160,18 +156,18 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_a() -> A {
-			            func __safeDI_b() -> B {
-			                func __safeDI_cBuilder() -> C {
-			                    let a: A = __safeDI_a()
-			                    return C(a: a)
-			                }
-			                let cBuilder = ErasedInstantiator<(), AnyC> {
-			                    AnyC(__safeDI_cBuilder())
-			                }
-			                return B(cBuilder: cBuilder)
-			            }
 			            let b: B = __safeDI_b()
 			            return A(b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            let cBuilder = ErasedInstantiator<(), AnyC> {
+			                AnyC(__safeDI_cBuilder())
+			            }
+			            return B(cBuilder: cBuilder)
+			        }
+			        func __safeDI_cBuilder() -> C {
+			            let a: A = __safeDI_a()
+			            return C(a: a)
 			        }
 			        let a: A = __safeDI_a()
 			        self.init(a: a)
@@ -195,16 +191,16 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_a() -> A {
-			            func __safeDI_b() -> B {
-			                func __safeDI_cBuilder() -> C {
-			                    let a: any AProtocol = __safeDI_a()
-			                    return C(a: a)
-			                }
-			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                return B(cBuilder: cBuilder)
-			            }
 			            let b: B = __safeDI_b()
 			            return A(b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return B(cBuilder: cBuilder)
+			        }
+			        func __safeDI_cBuilder() -> C {
+			            let a: any AProtocol = __safeDI_a()
+			            return C(a: a)
 			        }
 			        let a: any AProtocol = __safeDI_a()
 			        self.init(a: a)
@@ -228,16 +224,16 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_a() -> Outer.A {
-			            func __safeDI_b() -> B {
-			                func __safeDI_cBuilder() -> C {
-			                    let a: Outer.A = __safeDI_a()
-			                    return C(a: a)
-			                }
-			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                return B(cBuilder: cBuilder)
-			            }
 			            let b: B = __safeDI_b()
 			            return Outer.A(b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return B(cBuilder: cBuilder)
+			        }
+			        func __safeDI_cBuilder() -> C {
+			            let a: Outer.A = __safeDI_a()
+			            return C(a: a)
 			        }
 			        let a: Outer.A = __safeDI_a()
 			        self.init(a: a)
@@ -261,16 +257,16 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_a() -> A {
-			            func __safeDI_b() -> B {
-			                func __safeDI_cBuilder() -> C {
-			                    let a: AAlias = __safeDI_a()
-			                    return C(a: a)
-			                }
-			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                return B(cBuilder: cBuilder)
-			            }
 			            let b: B = __safeDI_b()
 			            return A(b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return B(cBuilder: cBuilder)
+			        }
+			        func __safeDI_cBuilder() -> C {
+			            let a: AAlias = __safeDI_a()
+			            return C(a: a)
 			        }
 			        let a: AAlias = __safeDI_a()
 			        self.init(a: a)
@@ -294,18 +290,18 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_a() -> A {
-			            func __safeDI_b() -> B {
-			                func __safeDI_cBuilder(name: String) -> C {
-			                    let a: A = __safeDI_a()
-			                    return C(a: a, name: name)
-			                }
-			                let cBuilder = Instantiator<C> {
-			                    __safeDI_cBuilder(name: $0)
-			                }
-			                return B(cBuilder: cBuilder)
-			            }
 			            let b: B = __safeDI_b()
 			            return A(b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            let cBuilder = Instantiator<C> {
+			                __safeDI_cBuilder(name: $0)
+			            }
+			            return B(cBuilder: cBuilder)
+			        }
+			        func __safeDI_cBuilder(name: String) -> C {
+			            let a: A = __safeDI_a()
+			            return C(a: a, name: name)
 			        }
 			        let a: A = __safeDI_a()
 			        self.init(a: a)
@@ -335,33 +331,33 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_a() -> Other {
-			            func __safeDI_x() -> X {
-			                func __safeDI_a_A() -> A {
-			                    func __safeDI_b() -> B {
-			                        func __safeDI_cBuilder() -> C {
-			                            let a: A = __safeDI_a_A()
-			                            return C(a: a)
-			                        }
-			                        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                        return B(cBuilder: cBuilder)
-			                    }
-			                    let b: B = __safeDI_b()
-			                    return A(b: b)
-			                }
-			                let a: A = __safeDI_a_A()
-			                func __safeDI_z() -> Z {
-			                    func __safeDI_yBuilder() -> Y {
-			                        let a: Other = __safeDI_a()
-			                        return Y(a: a)
-			                    }
-			                    let yBuilder = Instantiator<Y>(__safeDI_yBuilder)
-			                    return Z(yBuilder: yBuilder)
-			                }
-			                let z: Z = __safeDI_z()
-			                return X(a: a, z: z)
-			            }
 			            let x: X = __safeDI_x()
 			            return Other(x: x)
+			        }
+			        func __safeDI_x() -> X {
+			            let a: A = __safeDI_a_()
+			            let z: Z = __safeDI_z()
+			            return X(a: a, z: z)
+			        }
+			        func __safeDI_z() -> Z {
+			            let yBuilder = Instantiator<Y>(__safeDI_yBuilder)
+			            return Z(yBuilder: yBuilder)
+			        }
+			        func __safeDI_yBuilder() -> Y {
+			            let a: Other = __safeDI_a()
+			            return Y(a: a)
+			        }
+			        func __safeDI_a_() -> A {
+			            let b: B = __safeDI_b()
+			            return A(b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return B(cBuilder: cBuilder)
+			        }
+			        func __safeDI_cBuilder() -> C {
+			            let a: A = __safeDI_a_()
+			            return C(a: a)
 			        }
 			        let a: Other = __safeDI_a()
 			        self.init(a: a)
@@ -388,16 +384,16 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_a() -> A {
-			            func __safeDI_b() -> B {
-			                func __safeDI_cBuilder() -> C {
-			                    let a = LazilyInstantiated<A>(__safeDI_a)
-			                    return C(a: a)
-			                }
-			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                return B(cBuilder: cBuilder)
-			            }
 			            let b: B = __safeDI_b()
 			            return A(b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return B(cBuilder: cBuilder)
+			        }
+			        func __safeDI_cBuilder() -> C {
+			            let a = LazilyInstantiated<A>(__safeDI_a)
+			            return C(a: a)
 			        }
 			        let a: A = __safeDI_a()
 			        self.init(a: a)
@@ -436,16 +432,16 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_a() -> A {
-			            func __safeDI_b() -> B {
-			                func __safeDI_cBuilder() -> C {
-			                    let a = LazilyInstantiated<A>(__safeDI_a)
-			                    return C(a: a)
-			                }
-			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                return B(cBuilder: cBuilder)
-			            }
 			            let b: B = __safeDI_b()
 			            return A(b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return B(cBuilder: cBuilder)
+			        }
+			        func __safeDI_cBuilder() -> C {
+			            let a = LazilyInstantiated<A>(__safeDI_a)
+			            return C(a: a)
 			        }
 			        let a = LazilyInstantiated<A>(__safeDI_a)
 			        self.init(a: a)
@@ -483,16 +479,16 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_a() -> A {
-			            func __safeDI_b() -> B {
-			                func __safeDI_cBuilder() -> C {
-			                    let a: A = __safeDI_a()
-			                    return C(a: a)
-			                }
-			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                return B(cBuilder: cBuilder)
-			            }
 			            let b: B = __safeDI_b()
 			            return A(b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return B(cBuilder: cBuilder)
+			        }
+			        func __safeDI_cBuilder() -> C {
+			            let a: A = __safeDI_a()
+			            return C(a: a)
 			        }
 			        let a = LazilyInstantiated<A>(__safeDI_a)
 			        self.init(a: a)
@@ -692,17 +688,17 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    public convenience init() {
 			        let session = Session()
 			        func __safeDI_a(session: Session) -> A {
-			            func __safeDI_b() -> B {
-			                func __safeDI_cBuilder() -> C {
-			                    let session = Session()
-			                    let a: A = __safeDI_a(session: session)
-			                    return C(session: session, a: a)
-			                }
-			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                return B(session: session, cBuilder: cBuilder)
-			            }
-			            let b: B = __safeDI_b()
+			            let b: B = __safeDI_b(session: session)
 			            return A(b: b)
+			        }
+			        func __safeDI_b(session: Session) -> B {
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return B(session: session, cBuilder: cBuilder)
+			        }
+			        func __safeDI_cBuilder() -> C {
+			            let session = Session()
+			            let a: A = __safeDI_a(session: session)
+			            return C(session: session, a: a)
 			        }
 			        let a: A = __safeDI_a(session: session)
 			        self.init(session: session, a: a)
@@ -918,19 +914,19 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    public convenience init() {
 			        let session = Session()
 			        func __safeDI_a(session: Session) -> A {
-			            func __safeDI_b() -> B {
-			                func __safeDI_cBuilder() -> C {
-			                    let session = Session()
-			                    let a = LazilyInstantiated<A> {
-			                        __safeDI_a(session: session)
-			                    }
-			                    return C(session: session, a: a)
-			                }
-			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                return B(session: session, cBuilder: cBuilder)
-			            }
-			            let b: B = __safeDI_b()
+			            let b: B = __safeDI_b(session: session)
 			            return A(b: b)
+			        }
+			        func __safeDI_b(session: Session) -> B {
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return B(session: session, cBuilder: cBuilder)
+			        }
+			        func __safeDI_cBuilder() -> C {
+			            let session = Session()
+			            let a = LazilyInstantiated<A> {
+			                __safeDI_a(session: session)
+			            }
+			            return C(session: session, a: a)
 			        }
 			        let a = LazilyInstantiated<A> {
 			            __safeDI_a(session: session)
@@ -1964,16 +1960,16 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        @Sendable func __safeDI_a() -> A {
-			            func __safeDI_b() -> B {
-			                @Sendable func __safeDI_cBuilder() -> C {
-			                    let a: A = __safeDI_a()
-			                    return C(a: a)
-			                }
-			                let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
-			                return B(cBuilder: cBuilder)
-			            }
 			            let b: B = __safeDI_b()
 			            return A(b: b)
+			        }
+			        @Sendable func __safeDI_b() -> B {
+			            let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
+			            return B(cBuilder: cBuilder)
+			        }
+			        @Sendable func __safeDI_cBuilder() -> C {
+			            let a: A = __safeDI_a()
+			            return C(a: a)
 			        }
 			        let a: A = __safeDI_a()
 			        self.init(a: a)
@@ -2084,16 +2080,16 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        @Sendable func __safeDI_a() -> A {
-			            func __safeDI_b() -> B {
-			                @Sendable func __safeDI_cBuilder() -> C {
-			                    let a = SendableLazilyInstantiated<A>(__safeDI_a)
-			                    return C(a: a)
-			                }
-			                let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
-			                return B(cBuilder: cBuilder)
-			            }
 			            let b: B = __safeDI_b()
 			            return A(b: b)
+			        }
+			        @Sendable func __safeDI_b() -> B {
+			            let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
+			            return B(cBuilder: cBuilder)
+			        }
+			        @Sendable func __safeDI_cBuilder() -> C {
+			            let a = SendableLazilyInstantiated<A>(__safeDI_a)
+			            return C(a: a)
 			        }
 			        let a: A = __safeDI_a()
 			        self.init(a: a)
@@ -2270,16 +2266,16 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        @Sendable func __safeDI_a() -> A {
-			            func __safeDI_b() -> B {
-			                @Sendable func __safeDI_cBuilder() -> C {
-			                    let a = SendableLazilyInstantiated<A>(__safeDI_a)
-			                    return C(a: a)
-			                }
-			                let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
-			                return B(cBuilder: cBuilder)
-			            }
 			            let b: B = __safeDI_b()
 			            return A(b: b)
+			        }
+			        @Sendable func __safeDI_b() -> B {
+			            let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
+			            return B(cBuilder: cBuilder)
+			        }
+			        @Sendable func __safeDI_cBuilder() -> C {
+			            let a = SendableLazilyInstantiated<A>(__safeDI_a)
+			            return C(a: a)
 			        }
 			        let a = SendableLazilyInstantiated<A>(__safeDI_a)
 			        self.init(a: a)
@@ -2574,16 +2570,16 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        @Sendable func __safeDI_a() -> A {
-			            func __safeDI_b() -> B {
-			                func __safeDI_cBuilder() -> C {
-			                    let a = SendableLazilyInstantiated<A>(__safeDI_a)
-			                    return C(a: a)
-			                }
-			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                return B(cBuilder: cBuilder)
-			            }
 			            let b: B = __safeDI_b()
 			            return A(b: b)
+			        }
+			        @Sendable func __safeDI_b() -> B {
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return B(cBuilder: cBuilder)
+			        }
+			        @Sendable func __safeDI_cBuilder() -> C {
+			            let a = SendableLazilyInstantiated<A>(__safeDI_a)
+			            return C(a: a)
 			        }
 			        let a: A = __safeDI_a()
 			        self.init(a: a)
@@ -2673,16 +2669,16 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        @Sendable func __safeDI_a() -> A {
-			            func __safeDI_b() -> B {
-			                func __safeDI_cBuilder() -> C {
-			                    let a = SendableLazilyInstantiated<A>(__safeDI_a)
-			                    return C(a: a)
-			                }
-			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                return B(cBuilder: cBuilder)
-			            }
 			            let b: B = __safeDI_b()
 			            return A(b: b)
+			        }
+			        @Sendable func __safeDI_b() -> B {
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return B(cBuilder: cBuilder)
+			        }
+			        @Sendable func __safeDI_cBuilder() -> C {
+			            let a = SendableLazilyInstantiated<A>(__safeDI_a)
+			            return C(a: a)
 			        }
 			        let a = LazilyInstantiated<A>(__safeDI_a)
 			        self.init(a: a)
@@ -2704,11 +2700,11 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_settingsBuilder() -> Settings {
+			            let flow: Flow = SettingsFlow()
+			            return Settings(flow: flow)
+			        }
 			        func __safeDI_flow() -> LoggedInFlow {
-			            func __safeDI_settingsBuilder() -> Settings {
-			                let flow: Flow = SettingsFlow()
-			                return Settings(flow: flow)
-			            }
 			            let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			            return LoggedInFlow(settingsBuilder: settingsBuilder)
 			        }
@@ -2815,11 +2811,11 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_settingsBuilder() -> Settings {
+			            let flow: Flow = SettingsFlow()
+			            return Settings(flow: flow)
+			        }
 			        func __safeDI_flow() -> LoggedInFlow {
-			            func __safeDI_settingsBuilder() -> Settings {
-			                let flow: Flow = SettingsFlow()
-			                return Settings(flow: flow)
-			            }
 			            let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			            return LoggedInFlow(settingsBuilder: settingsBuilder)
 			        }
@@ -3002,16 +2998,16 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
-			        func __safeDI_flowBuilder() -> LoggedInFlow {
-			            func __safeDI_settingsBuilder() -> Settings {
-			                func __safeDI_flowBuilder() -> SettingsFlow {
-			                    SettingsFlow()
-			                }
-			                let flowBuilder = ErasedInstantiator<(), AnyFlow> {
-			                    AnyFlow(__safeDI_flowBuilder())
-			                }
-			                return Settings(flowBuilder: flowBuilder)
+			        func __safeDI_settingsBuilder() -> Settings {
+			            let flowBuilder = ErasedInstantiator<(), AnyFlow> {
+			                AnyFlow(__safeDI_flowBuilder_())
 			            }
+			            return Settings(flowBuilder: flowBuilder)
+			        }
+			        func __safeDI_flowBuilder_() -> SettingsFlow {
+			            SettingsFlow()
+			        }
+			        func __safeDI_flowBuilder() -> LoggedInFlow {
 			            let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			            return LoggedInFlow(settingsBuilder: settingsBuilder)
 			        }
@@ -3047,14 +3043,14 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_settingsBuilder() -> Settings {
+			            let flow = LazilyInstantiated<Flow>(__safeDI_flow_)
+			            return Settings(flow: flow)
+			        }
+			        func __safeDI_flow_() -> SettingsFlow {
+			            SettingsFlow()
+			        }
 			        func __safeDI_flow() -> LoggedInFlow {
-			            func __safeDI_settingsBuilder() -> Settings {
-			                func __safeDI_flow() -> SettingsFlow {
-			                    SettingsFlow()
-			                }
-			                let flow = LazilyInstantiated<Flow>(__safeDI_flow)
-			                return Settings(flow: flow)
-			            }
 			            let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			            return LoggedInFlow(settingsBuilder: settingsBuilder)
 			        }
@@ -3083,16 +3079,16 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_flow() -> LoggedInFlow {
-			            func __safeDI_settingsBuilder() -> Settings {
-			                func __safeDI_flow_Flow() -> SettingsFlow {
-			                    let flow: Flow = __safeDI_flow()
-			                    return SettingsFlow(flow: flow)
-			                }
-			                let flow: Flow = __safeDI_flow_Flow()
-			                return Settings(flow: flow)
-			            }
 			            let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			            return LoggedInFlow(settingsBuilder: settingsBuilder)
+			        }
+			        func __safeDI_settingsBuilder() -> Settings {
+			            let flow: Flow = __safeDI_flow_()
+			            return Settings(flow: flow)
+			        }
+			        func __safeDI_flow_() -> SettingsFlow {
+			            let flow: Flow = __safeDI_flow()
+			            return SettingsFlow(flow: flow)
 			        }
 			        let flow: Flow = __safeDI_flow()
 			        self.init(flow: flow)
@@ -3310,16 +3306,16 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_flow() -> LoggedInFlow {
-			            func __safeDI_flow_Flow() -> SettingsFlow {
-			                func __safeDI_xBuilder() -> X {
-			                    let flow: Flow = __safeDI_flow()
-			                    return X(flow: flow)
-			                }
-			                let xBuilder = Instantiator<X>(__safeDI_xBuilder)
-			                return SettingsFlow(xBuilder: xBuilder)
-			            }
-			            let flow: Flow = __safeDI_flow_Flow()
+			            let flow: Flow = __safeDI_flow_()
 			            return LoggedInFlow(flow: flow)
+			        }
+			        func __safeDI_flow_() -> SettingsFlow {
+			            let xBuilder = Instantiator<X>(__safeDI_xBuilder)
+			            return SettingsFlow(xBuilder: xBuilder)
+			        }
+			        func __safeDI_xBuilder() -> X {
+			            let flow: Flow = __safeDI_flow()
+			            return X(flow: flow)
 			        }
 			        let flow: Flow = __safeDI_flow()
 			        self.init(flow: flow)
@@ -3356,16 +3352,16 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_flow() -> LoggedInFlow {
-			            func __safeDI_settingsBuilder() -> Settings {
-			                func __safeDI_flow_Flow() -> SettingsFlow {
-			                    let flow = LazilyInstantiated<Flow>(__safeDI_flow)
-			                    return SettingsFlow(flow: flow)
-			                }
-			                let flow: Flow = __safeDI_flow_Flow()
-			                return Settings(flow: flow)
-			            }
 			            let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			            return LoggedInFlow(settingsBuilder: settingsBuilder)
+			        }
+			        func __safeDI_settingsBuilder() -> Settings {
+			            let flow: Flow = __safeDI_flow_()
+			            return Settings(flow: flow)
+			        }
+			        func __safeDI_flow_() -> SettingsFlow {
+			            let flow = LazilyInstantiated<Flow>(__safeDI_flow)
+			            return SettingsFlow(flow: flow)
 			        }
 			        let flow: Flow = __safeDI_flow()
 			        self.init(flow: flow)
@@ -3417,20 +3413,20 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_flowBuilder() -> LoggedInFlow {
-			            func __safeDI_settingsBuilder() -> Settings {
-			                func __safeDI_flowBuilder_AnyFlow() -> SettingsFlow {
-			                    let flowBuilder = ErasedInstantiator<(), AnyFlow> {
-			                        AnyFlow(__safeDI_flowBuilder())
-			                    }
-			                    return SettingsFlow(flowBuilder: flowBuilder)
-			                }
-			                let flowBuilder = ErasedInstantiator<(), AnyFlow> {
-			                    AnyFlow(__safeDI_flowBuilder_AnyFlow())
-			                }
-			                return Settings(flowBuilder: flowBuilder)
-			            }
 			            let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			            return LoggedInFlow(settingsBuilder: settingsBuilder)
+			        }
+			        func __safeDI_settingsBuilder() -> Settings {
+			            let flowBuilder = ErasedInstantiator<(), AnyFlow> {
+			                AnyFlow(__safeDI_flowBuilder_())
+			            }
+			            return Settings(flowBuilder: flowBuilder)
+			        }
+			        func __safeDI_flowBuilder_() -> SettingsFlow {
+			            let flowBuilder = ErasedInstantiator<(), AnyFlow> {
+			                AnyFlow(__safeDI_flowBuilder())
+			            }
+			            return SettingsFlow(flowBuilder: flowBuilder)
 			        }
 			        let flowBuilder = ErasedInstantiator<(), AnyFlow> {
 			            AnyFlow(__safeDI_flowBuilder())
@@ -3477,17 +3473,17 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    public convenience init() {
 			        let session = Session()
 			        func __safeDI_flow(session: Session) -> LoggedInFlow {
-			            func __safeDI_settingsBuilder() -> Settings {
-			                let session = Session()
-			                func __safeDI_flow_Flow() -> SettingsFlow {
-			                    let flow: Flow = __safeDI_flow(session: session)
-			                    return SettingsFlow(flow: flow)
-			                }
-			                let flow: Flow = __safeDI_flow_Flow()
-			                return Settings(session: session, flow: flow)
-			            }
 			            let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
 			            return LoggedInFlow(session: session, settingsBuilder: settingsBuilder)
+			        }
+			        func __safeDI_settingsBuilder() -> Settings {
+			            let session = Session()
+			            let flow: Flow = __safeDI_flow_(session: session)
+			            return Settings(session: session, flow: flow)
+			        }
+			        func __safeDI_flow_(session: Session) -> SettingsFlow {
+			            let flow: Flow = __safeDI_flow(session: session)
+			            return SettingsFlow(flow: flow)
 			        }
 			        let flow: Flow = __safeDI_flow(session: session)
 			        self.init(session: session, flow: flow)
@@ -3526,17 +3522,17 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_a() -> A {
-			            func __safeDI_b() -> B {
-			                func __safeDI_cBuilder() -> C {
-			                    let a: A = __safeDI_a()
-			                    let d = D(a: a)
-			                    return C(a: a, d: d)
-			                }
-			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                return B(cBuilder: cBuilder)
-			            }
 			            let b: B = __safeDI_b()
 			            return A(b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return B(cBuilder: cBuilder)
+			        }
+			        func __safeDI_cBuilder() -> C {
+			            let a: A = __safeDI_a()
+			            let d = D(a: a)
+			            return C(a: a, d: d)
 			        }
 			        let a: A = __safeDI_a()
 			        self.init(a: a)
@@ -3573,11 +3569,11 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_bBuilder(a: A) -> B {
+			            let c = C(a: a)
+			            return B(a: a, c: c)
+			        }
 			        func __safeDI_a() -> A {
-			            func __safeDI_bBuilder(a: A) -> B {
-			                let c = C(a: a)
-			                return B(a: a, c: c)
-			            }
 			            let bBuilder = Instantiator<B> {
 			                __safeDI_bBuilder(a: $0)
 			            }
@@ -3754,17 +3750,17 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_cBuilder() -> C {
-			            func __safeDI_a() -> A {
-			                func __safeDI_b() -> B {
-			                    let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                    return B(cBuilder: cBuilder)
-			                }
-			                let b: B = __safeDI_b()
-			                return A(b: b)
-			            }
 			            let a: A = __safeDI_a()
 			            let d = D(a: a)
 			            return C(a: a, d: d)
+			        }
+			        func __safeDI_a() -> A {
+			            let b: B = __safeDI_b()
+			            return A(b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return B(cBuilder: cBuilder)
 			        }
 			        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			        self.init(cBuilder: cBuilder)
@@ -4027,13 +4023,13 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_aBuilder() -> A {
-			            func __safeDI_c() -> C {
-			                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			                let d = D(aBuilder: aBuilder)
-			                return C(aBuilder: aBuilder, d: d)
-			            }
 			            let c: C = __safeDI_c()
 			            return A(c: c)
+			        }
+			        func __safeDI_c() -> C {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            let d = D(aBuilder: aBuilder)
+			            return C(aBuilder: aBuilder, d: d)
 			        }
 			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			        self.init(aBuilder: aBuilder)
@@ -4059,17 +4055,17 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_a() -> A {
-			            func __safeDI_b() -> B {
-			                func __safeDI_cBuilder() -> C {
-			                    let a = LazilyInstantiated<A>(__safeDI_a)
-			                    let d = D(a: a.instance)
-			                    return C(a: a, d: d)
-			                }
-			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                return B(cBuilder: cBuilder)
-			            }
 			            let b: B = __safeDI_b()
 			            return A(b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return B(cBuilder: cBuilder)
+			        }
+			        func __safeDI_cBuilder() -> C {
+			            let a = LazilyInstantiated<A>(__safeDI_a)
+			            let d = D(a: a.instance)
+			            return C(a: a, d: d)
 			        }
 			        let a: A = __safeDI_a()
 			        self.init(a: a)
@@ -4098,21 +4094,21 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_a() -> A {
-			            func __safeDI_b() -> B {
-			                func __safeDI_cBuilder() -> C {
-			                    let a: A = __safeDI_a()
-			                    func __safeDI_d() -> D {
-			                        let e = E(a: a)
-			                        return D(a: a, e: e)
-			                    }
-			                    let d: D = __safeDI_d()
-			                    return C(a: a, d: d)
-			                }
-			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-			                return B(cBuilder: cBuilder)
-			            }
 			            let b: B = __safeDI_b()
 			            return A(b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return B(cBuilder: cBuilder)
+			        }
+			        func __safeDI_cBuilder() -> C {
+			            let a: A = __safeDI_a()
+			            let d: D = __safeDI_d(a: a)
+			            return C(a: a, d: d)
+			        }
+			        func __safeDI_d(a: A?) -> D {
+			            let e = E(a: a)
+			            return D(a: a, e: e)
 			        }
 			        let a: A = __safeDI_a()
 			        self.init(a: a)
@@ -4156,17 +4152,17 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_aBuilder() -> A {
-			            func __safeDI_c() -> C {
-			                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-			                func __safeDI_d() -> D {
-			                    let e = E(aBuilder: aBuilder)
-			                    return D(aBuilder: aBuilder, e: e)
-			                }
-			                let d: D = __safeDI_d()
-			                return C(aBuilder: aBuilder, d: d)
-			            }
 			            let c: C = __safeDI_c()
 			            return A(c: c)
+			        }
+			        func __safeDI_c() -> C {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            let d: D = __safeDI_d(aBuilder: aBuilder)
+			            return C(aBuilder: aBuilder, d: d)
+			        }
+			        func __safeDI_d(aBuilder: Instantiator<A>?) -> D {
+			            let e = E(aBuilder: aBuilder)
+			            return D(aBuilder: aBuilder, e: e)
 			        }
 			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			        self.init(aBuilder: aBuilder)
@@ -4298,16 +4294,16 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 	extension Root {
 	    public convenience init() {
 	        func __safeDI_a() -> A {
-	            func __safeDI_b() -> B {
-	                func __safeDI_cBuilder() -> C {
-	                    let a: A = __safeDI_a()
-	                    return C(a: a)
-	                }
-	                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-	                return B(cBuilder: cBuilder)
-	            }
 	            let b: B = __safeDI_b()
 	            return A(b: b)
+	        }
+	        func __safeDI_b() -> B {
+	            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+	            return B(cBuilder: cBuilder)
+	        }
+	        func __safeDI_cBuilder() -> C {
+	            let a: A = __safeDI_a()
+	            return C(a: a)
 	        }
 	        let a: A = __safeDI_a()
 	        self.init(a: a)
@@ -4321,16 +4317,16 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 	extension Root {
 	    public convenience init() {
 	        func __safeDI_cBuilder() -> C {
-	            func __safeDI_a() -> A {
-	                func __safeDI_b() -> B {
-	                    let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-	                    return B(cBuilder: cBuilder)
-	                }
-	                let b: B = __safeDI_b()
-	                return A(b: b)
-	            }
 	            let a: A = __safeDI_a()
 	            return C(a: a)
+	        }
+	        func __safeDI_a() -> A {
+	            let b: B = __safeDI_b()
+	            return A(b: b)
+	        }
+	        func __safeDI_b() -> B {
+	            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+	            return B(cBuilder: cBuilder)
 	        }
 	        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 	        self.init(cBuilder: cBuilder)
