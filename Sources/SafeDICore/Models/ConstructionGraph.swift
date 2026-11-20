@@ -95,6 +95,8 @@ struct ConstructionGraph: Sendable {
 				referenceCounts[index] += 1
 				lastReferrers[index] = referrer
 			}
+			// A fill place has no key and stores nothing, so counting its reference only keys, with nothing to hit, a scope
+			// the tree otherwise builds at one place. The count is kept so that one place means one reference of any kind.
 			for case let .fill(_, index) in node.holeArguments {
 				referenceCounts[index] += 1
 				lastReferrers[index] = referrer
