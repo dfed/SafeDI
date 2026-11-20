@@ -8461,7 +8461,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            x: (() -> Service)? = nil,
+		            x: (() -> any Service)? = nil,
 		            consumerA: ((any Service) -> ConsumerA)? = nil,
 		            consumerB: (((any Service)?) -> ConsumerB)? = nil
 		        ) {
@@ -8472,7 +8472,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		            )
 		        }
 
-		        var x: (() -> Service)? { __safeDI_storage.x }
+		        var x: (() -> any Service)? { __safeDI_storage.x }
 		        var consumerA: ((any Service) -> ConsumerA)? { __safeDI_storage.consumerA }
 		        var consumerB: (((any Service)?) -> ConsumerB)? { __safeDI_storage.consumerB }
 
@@ -8480,7 +8480,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 		        private final class __safeDI_Storage {
 		            init(
-		                x: (() -> Service)?,
+		                x: (() -> any Service)?,
 		                consumerA: ((any Service) -> ConsumerA)?,
 		                consumerB: (((any Service)?) -> ConsumerB)?
 		            ) {
@@ -8489,7 +8489,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		                self.consumerB = consumerB
 		            }
 
-		            let x: (() -> Service)?
+		            let x: (() -> any Service)?
 		            let consumerA: ((any Service) -> ConsumerA)?
 		            let consumerB: (((any Service)?) -> ConsumerB)?
 		        }
@@ -8498,7 +8498,7 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let x: Service = if let safeDIBuilder = safeDIOverrides.x { safeDIBuilder() } else { DefaultService() }
+		        let x: any Service = if let safeDIBuilder = safeDIOverrides.x { safeDIBuilder() } else { DefaultService() }
 		        let consumerA = if let safeDIBuilder = safeDIOverrides.consumerA { safeDIBuilder(x) } else { ConsumerA(x: x) }
 		        let consumerB = if let safeDIBuilder = safeDIOverrides.consumerB { safeDIBuilder(x) } else { ConsumerB(x: x) }
 		        return Root(consumerA: consumerA, consumerB: consumerB)
