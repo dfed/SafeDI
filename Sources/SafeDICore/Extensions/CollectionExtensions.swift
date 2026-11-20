@@ -75,18 +75,27 @@ extension Collection<Property> {
 	}
 
 	var initializerFunctionParameters: [FunctionParameterSyntax] {
-		initializerFunctionParameters(amongTypesDeclaredEscaping: [])
-	}
-
-	/// The parameters of a function generated code declares, spelling a property of one of `typesDeclaredEscaping`
-	/// `@escaping` (`TypeDescription.asFunctionParameter(amongTypesDeclaredEscaping:)`).
-	func initializerFunctionParameters(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> [FunctionParameterSyntax] {
-		map { $0.asFunctionParameterSyntax(amongTypesDeclaredEscaping: typesDeclaredEscaping) }
+		map(\.asFunctionParamterSyntax)
 			.transformUntilLast {
 				var node = $0
 				node.trailingComma = .commaToken(trailingTrivia: .space)
 				return node
 			}
+	}
+
+	/// The parameters of a function generated code declares, joined by commas, spelling a property of one of
+	/// `typesDeclaredEscaping` `@escaping` (`TypeDescription.asFunctionParameter(amongTypesDeclaredEscaping:)`): the text
+	/// `initializerFunctionParameters` prints, written without building syntax nodes, since a generated body declares a
+	/// builder function at every place.
+	func spelledAsFunctionParameters(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> String {
+		var text = ""
+		for (index, property) in enumerated() {
+			if index > 0 {
+				text += ", "
+			}
+			text += property.spelledAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)
+		}
+		return text
 	}
 }
 

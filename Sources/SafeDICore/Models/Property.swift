@@ -141,15 +141,34 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
-	/// `asFunctionParamterSyntax`, spelling a property of one of `typesDeclaredEscaping` `@escaping`
+	/// The text of `asFunctionParamterSyntax`, spelling a property of one of `typesDeclaredEscaping` `@escaping`
 	/// (`TypeDescription.asFunctionParameter(amongTypesDeclaredEscaping:)`).
-	func asFunctionParameterSyntax(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> FunctionParameterSyntax {
-		guard typesDeclaredEscaping.contains(typeDescription) else { return asFunctionParamterSyntax }
-		return FunctionParameterSyntax(
-			firstName: .identifier(label),
-			colon: .colonToken(trailingTrivia: .space),
-			type: IdentifierTypeSyntax(name: .identifier(typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)),
-		)
+	func spelledAsFunctionParameter(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> String {
+		if typesDeclaredEscaping.contains(typeDescription) {
+			"\(label): \(typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)"
+		} else {
+			switch typeDescription {
+			case .closure:
+				"\(label): @escaping \(typeDescription.asSource)"
+			case .attributed:
+				"\(label): \(typeDescription.asFunctionParameter.asSource)"
+			case .simple,
+			     .nested,
+			     .composition,
+			     .optional,
+			     .implicitlyUnwrappedOptional,
+			     .some,
+			     .any,
+			     .metatype,
+			     .array,
+			     .dictionary,
+			     .tuple,
+			     .unknown,
+			     .variadic,
+			     .void:
+				"\(label): \(typeDescription.asSource)"
+			}
+		}
 	}
 
 	public func asPropertyAssignment(withTrailingNewline trailingNewline: Bool = false) -> CodeBlockItemSyntax {
