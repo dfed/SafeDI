@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 import Foundation
+import SafeDICore
 import Testing
 
 // MARK: - Random number generator
@@ -2775,6 +2776,7 @@ enum GraphFuzzerGenerator {
 			repeatedAncestorRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.repeatedAncestorRandomSeedMask)
 			guardedMockParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.guardedMockParameterRandomSeedMask)
 			differingPinsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.differingPinsRandomSeedMask)
+			wrapperKindsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperKindsRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -2853,6 +2855,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingGuardedMockParameterShapes(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingTypeBuiltTwiceWithDifferingPins(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingLabelReceivedAsBothWrapperKinds(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3277,6 +3281,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingTypeBuiltTwiceWithDifferingPins`' choices: whether a graph gains `PinHost`'s tree, and every
 		/// shape of that tree.
 		private var differingPinsRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingLabelReceivedAsBothWrapperKinds`' choices: whether a graph gains `WrapKindsHost`'s tree, and
+		/// every shape of that tree.
+		private var wrapperKindsRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -7782,6 +7789,68 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let differingPinsRandomSeedMask: UInt64 = 0x64696666506E6E73
+
+		// MARK: One label received as both wrapper kinds
+
+		/// The base corpus's draw, in mixed graphs, of a mock whose tree receives one label as a `LazilyInstantiated` and
+		/// as a `SendableLazilyInstantiated`. `WrapKindsHost`, whose mock is generated, instantiates `WrapKindsSource` and
+		/// `WrapKindsPinner`, in either order. `WrapKindsSource` receives `wrapKindsToken: WrapKindsToken` by value and
+		/// instantiates `WrapKindsLeaf`, which receives the label as one wrapper kind, required or only if available;
+		/// `WrapKindsPinner` requires the other kind and, half the time where the leaf's receive is only if available,
+		/// instantiates `WrapKindsSource` again. Where the leaf requires its wrapper, the mock root promotes a wrapper of each
+		/// kind, both of which create the instance the source reads, so the source must be built after both: with the source
+		/// declared first, a mock that waited on one of them read the other before declaring it, which Swift 6.2.4 crashed
+		/// compiling (seeds 78 and 317); no root reaches the tree, and its mirror holds two forms of one label, so the compile
+		/// is the oracle. Where the leaf's receive is only if available, the pinner's wrapper provides the source's instance,
+		/// so the mock promotes no wrapper of the leaf's kind and passes the leaf `nil` where the pinner pins it, as
+		/// production does: a mock that promoted it fails the mirror model's count (seeds 9, 175 and 195).
+		/// `wrapperKindsRandom` draws only for this pass, after every other, and only in the base corpus.
+		private mutating func addingLabelReceivedAsBothWrapperKinds(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, wrapperKindsRandom.percentChance(16), sendability == .mixed else { return declarations }
+			var declarations = declarations
+			let pinnerRequiresSendable = wrapperKindsRandom.percentChance(50)
+			let sourceComesFirst = wrapperKindsRandom.percentChance(50)
+			let pinnerMayBuildSource = wrapperKindsRandom.percentChance(50)
+			// A leaf that requires its wrapper makes the mock promote both kinds; one that receives it only if available
+			// beside the pinner's required wrapper promotes one, and is passed `nil` where the pinner pins it. A required leaf
+			// beneath a pinner that requires the other kind is rejected as hidden, so the pinner then builds no source.
+			let leafRequiresWrapper = wrapperKindsRandom.percentChance(50)
+			let pinnerBuildsSource = pinnerMayBuildSource && !leafRequiresWrapper
+			func append(_ name: String, generatesMock: Bool = false, _ properties: [PropertyDeclaration]) {
+				declarations.append(TypeDeclaration(
+					name: name,
+					instantiableArguments: generatesMock ? ["generateMock: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: ["@unchecked Sendable"],
+				))
+			}
+			let tokenName = "\(prefix)WrapKindsToken"
+			let leafName = "\(prefix)WrapKindsLeaf"
+			let sourceName = "\(prefix)WrapKindsSource"
+			let pinnerName = "\(prefix)WrapKindsPinner"
+			let pinnedWrapper = pinnerRequiresSendable ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			let leafWrapper = pinnerRequiresSendable ? "LazilyInstantiated" : "SendableLazilyInstantiated"
+			let source = PropertyDeclaration(attribute: "@Instantiated", label: "wrapKindsSource", type: sourceName)
+			let pinner = PropertyDeclaration(attribute: "@Instantiated", label: "wrapKindsPinner", type: pinnerName)
+			append(tokenName, [])
+			append(leafName, [leafRequiresWrapper
+					? PropertyDeclaration(attribute: "@Received", label: "wrapKindsToken", type: "\(leafWrapper)<\(tokenName)>")
+					: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "wrapKindsToken", type: "\(leafWrapper)<\(tokenName)>?")])
+			append(sourceName, [
+				PropertyDeclaration(attribute: "@Received", label: "wrapKindsToken", type: tokenName),
+				PropertyDeclaration(attribute: "@Instantiated", label: "wrapKindsLeaf", type: leafName),
+			])
+			var pinnerProperties = [PropertyDeclaration(attribute: "@Received", label: "wrapKindsToken", type: "\(pinnedWrapper)<\(tokenName)>")]
+			if pinnerBuildsSource {
+				pinnerProperties.append(source)
+			}
+			append(pinnerName, pinnerProperties)
+			append("\(prefix)WrapKindsHost", generatesMock: true, sourceComesFirst ? [source, pinner] : [pinner, source])
+			return declarations
+		}
+
+		private static let wrapperKindsRandomSeedMask: UInt64 = 0x7772704B696E6473
 
 		// MARK: Cycle parameters
 
@@ -12664,6 +12733,9 @@ struct GraphFuzzerFailure: Equatable {
 		/// Generated code calls a function SafeDI generates for code people write – a generated `mock()` or a seam's plain
 		/// initializer – rather than the one only generated code calls (`GraphFuzzerOracle.callsOfEntriesMeantForPeople(in:)`).
 		case generatedCodeCallsEntryMeantForPeople = "generated code calls a generated mock() or plain initializer meant for code people write"
+		/// An initializer only generated code calls – a seam tier's, or a builder struct's – gives a parameter a default
+		/// (`GraphFuzzerGeneratedOnlyInitializerDefaults.parametersWithDefaults(in:)`).
+		case generatedOnlyInitializerTakesDefault = "an initializer only generated code calls gives a parameter a default"
 		/// A base corpus graph's generated mock builds a type that has a hand-written mock with the type's initializer,
 		/// where it calls the hand-written mock.
 		case generatedMockBypassesHandWrittenMock = "a generated mock builds a type with its initializer rather than its hand-written mock"
@@ -12824,8 +12896,12 @@ struct GraphFuzzerFailure: Equatable {
 		case callingMockAcceptedWhereTwinReportsShapeError = "a calling mock is accepted where its production twin reports a shape error"
 		/// A calling mock reports an error at other sites than its production twin's shape error.
 		case callingMockReportsOtherErrorThanTwin = "a calling mock reports another error than its production twin"
-		/// A calling mock is rejected where its production twin is accepted.
+		/// A calling mock is rejected where its production twin is accepted, but with the one error of its own its graph
+		/// states (`GraphFuzzerCallingMockGraph.expectedMockOwnErrorSite`).
 		case callingMockRejectsWhereTwinAccepts = "a calling mock is rejected where its production twin is accepted"
+		/// A calling mock is accepted, in a build that compiles the generated mocks, where its fill calls a hand-written mock
+		/// its module cannot reach, which its production twin does not call (contract rule 7).
+		case callingMockAcceptedWhereItsFillCallsMockItCannotReach = "a calling mock is accepted where its fill calls a hand-written mock its module cannot reach"
 		/// A calling mock is rejected in a build that leaves the mock condition inactive, where its graph's twin error is one
 		/// the tool checks only where the generated mocks compile (`GraphFuzzerCallingMockGraph.MockBuild`).
 		case callingMockRejectedWhereMockConditionIsInactive = "a calling mock is rejected in a build that leaves the mock condition inactive"
@@ -14464,7 +14540,7 @@ enum GraphFuzzerOracle {
 			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
 			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.storedSeamSignaturesDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.publicMockOverridesOrderFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
-			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
+			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
 			// Whether a closure a level function returns keeps a level's values, read from the generated text, so it judges
 			// with compiles and without.
@@ -15256,7 +15332,14 @@ enum GraphFuzzerOracle {
 		return try await GraphFuzzerToolRuns(
 			fixture: fixture,
 			firstOutcome: firstOutcome,
-			secondOutcome: toolOutcome(of: fixture),
+			// The second run creates the mock roots in reverse order, so that a construction memo shared between them
+			// carries other roots' generators to each, and shares generators between places by a schedule of its seed
+			// (`ConstructionSharingSchedule.sharingOracleSchedule(forGraphSeed:)`); it must still give the first run's outcome.
+			secondOutcome: ConstructionMemoOracle.$buildsMockRootsInReverseOrder.withValue(true) {
+				try await ConstructionSharingSchedule.$current.withValue(.sharingOracleSchedule(forGraphSeed: fixture.seed)) {
+					try await toolOutcome(of: fixture)
+				}
+			},
 			renamedOutcomes: renamedOutcomes,
 			inlineOutcome: inlineOutcome,
 			visibleOutcome: visibleOutcome,

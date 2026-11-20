@@ -362,6 +362,7 @@ extension DependencyTreeGenerator {
 		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
+		var constructionMemo = ConstructionMemo()
 		let mockRoot = try await createMockRoot(
 			for: instantiable,
 			scope: scope,
@@ -374,6 +375,7 @@ extension DependencyTreeGenerator {
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
+			constructionMemo: &constructionMemo,
 		)
 		let parameters = await mockRoot.mockRootParameters(instantiable: instantiable, mockDefaults: mockScopes.flatParameterMockDefaults)
 		return OwnPublicMockPlan(
