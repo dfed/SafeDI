@@ -25,7 +25,7 @@
 // statement kind, an expression kind or an argument source arrives with the first code that plans one.
 
 /// One generated body: its statements in the order the body writes them.
-struct BuilderFunctionGraph: Hashable, Sendable {
+struct BuilderFunctionGraph: Sendable {
 	let body: [Statement]
 
 	/// The body's code: each statement's, on lines of its own.
@@ -35,7 +35,7 @@ struct BuilderFunctionGraph: Hashable, Sendable {
 }
 
 /// One line, or one block, a body writes, with one spelling for each kind.
-indirect enum Statement: Hashable, Sendable {
+indirect enum Statement: Sendable {
 	/// The `func` block of a builder function, its closing line ended.
 	case function(BuilderNode)
 	/// `let label[: Type] = value`, and what ends its line.
@@ -56,7 +56,7 @@ indirect enum Statement: Hashable, Sendable {
 }
 
 /// One local function SafeDI writes: a builder function, which constructs the value of one place.
-struct BuilderNode: Hashable, Sendable {
+struct BuilderNode: Sendable {
 	/// The function's name, from its body's naming policy.
 	let name: String
 	/// Whether the function is written `@Sendable`.
