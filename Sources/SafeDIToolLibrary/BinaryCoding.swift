@@ -228,7 +228,7 @@ struct BinaryWriter {
 
 	/// Writes an optional field of a struct that writes its fields' flags: its presence as a flag, and then its value
 	/// only when it holds one.
-	mutating func writeOptional<Wrapped: BinaryCodable>(_ value: Wrapped?, flaggedIn flags: inout BinaryFieldFlags) {
+	mutating func writeOptional(_ value: (some BinaryCodable)?, flaggedIn flags: inout BinaryFieldFlags) {
 		if let value {
 			flags.append(true)
 			write(value)
