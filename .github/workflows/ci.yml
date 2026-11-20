@@ -1120,6 +1120,7 @@ jobs:
           path: .build
           key: ${{ steps.build-cache.outputs.cache-primary-key }}
       - name: Test Framework
+        id: tests
         timeout-minutes: 85
         env:
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
@@ -1127,14 +1128,18 @@ jobs:
           # shellcheck disable=SC2086 # The arguments are words to split.
           xcrun swift test --skip-build $SWIFT_TEST_ARGUMENTS
       # A run keeps in its branch's cache only the value comparison outputs it
-      # read or printed, since the restore adds other runs' outputs to the
-      # directory (.github/scripts/keep-value-outputs-used-in-run.sh says
-      # why). The cache only saves time, so this cannot fail the job.
+      # read or printed and those the newest artifacts of its identity hold,
+      # since the restore adds other runs' outputs to the directory, and keeps
+      # them all when its tests did not run to their end
+      # (.github/scripts/keep-value-outputs-used-in-run.sh says why). The
+      # cache only saves time, so this cannot fail the job.
       - name: Keep the Value Comparison Outputs This Run Used
         if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
         continue-on-error: true
         timeout-minutes: 5
-        run: .github/scripts/keep-value-outputs-used-in-run.sh .compile-check-cache "$GITHUB_RUN_ID"
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+        run: .github/scripts/keep-value-outputs-used-in-run.sh .compile-check-cache "$GITHUB_RUN_ID" "$TEST_OUTCOME"
       - name: Save Passed Compile Checks
         if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
         uses: actions/cache/save@v6
@@ -1352,20 +1357,25 @@ jobs:
       # skipped (run 43765011597); the 2.3.0 stack's suite took 34.9 (run
       # 44545790927), and run 44573505588 passed 40 still running.
       - name: Test
+        id: tests
         timeout-minutes: 70
         env:
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
           LLVM_PROFILE_FILE: ${{ runner.temp }}/unit-suite-profiles/unit-suite-%p.profraw
         run: .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing
       # A run keeps in its branch's cache only the value comparison outputs it
-      # read or printed, since the restore adds other runs' outputs to the
-      # directory (.github/scripts/keep-value-outputs-used-in-run.sh says
-      # why). The cache only saves time, so this cannot fail the job.
+      # read or printed and those the newest artifacts of its identity hold,
+      # since the restore adds other runs' outputs to the directory, and keeps
+      # them all when its tests did not run to their end
+      # (.github/scripts/keep-value-outputs-used-in-run.sh says why). The
+      # cache only saves time, so this cannot fail the job.
       - name: Keep the Value Comparison Outputs This Run Used
         if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
         continue-on-error: true
         timeout-minutes: 5
-        run: .github/scripts/keep-value-outputs-used-in-run.sh .compile-check-cache "$GITHUB_RUN_ID"
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+        run: .github/scripts/keep-value-outputs-used-in-run.sh .compile-check-cache "$GITHUB_RUN_ID" "$TEST_OUTCOME"
       - name: Save Passed Compile Checks
         if: ${{ always() && hashFiles('.compile-check-cache/passed.txt') != '' }}
         uses: actions/cache/save@v6
@@ -1966,6 +1976,12 @@ jobs:
       # workflow, another identity or an archive it cannot read.
       - name: Check the Passed Compile Checks Script Against Its Fixtures
         run: node .github/actions/restore-shared-compile-checks/restore-from-artifacts.js --self-test "$RUNNER_TEMP/restore-from-artifacts-self-test"
+      # .github/scripts/keep-value-outputs-used-in-run.sh decides which value
+      # comparison outputs a branch's cache keeps, so it proves on fixtures
+      # that it keeps what the newest artifacts hold and everything when the
+      # tests did not run to their end.
+      - name: Check the Value Comparison Outputs Script Against Its Fixtures
+        run: .github/scripts/keep-value-outputs-used-in-run.sh --self-test "$RUNNER_TEMP/keep-value-outputs-self-test"
       # A test job that failed, was cancelled or could not export uploads no
       # report, and the next step names the report that is missing, so a
       # download that finds nothing is not this step's failure.
