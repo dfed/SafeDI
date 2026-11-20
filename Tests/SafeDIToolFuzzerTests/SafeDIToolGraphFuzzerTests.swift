@@ -2941,6 +2941,40 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(errorsByBuild["hole"] == errorsByBuild["visible"])
 	}
 
+	@Test(arguments: [UInt64(609), 1_107])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func toolRuns_rejectBothBuildsWithDeferringSeamsTwoForms_whenCarriedOuterReceivesWrapperItsLevelsFillReadsOptionally(seed: UInt64) async throws {
+		// The graph of the test above where `CarriedOuter`, which passes up the place whose fill builds `CarriedWorker`,
+		// receives the `SendableLazilyInstantiated` `CarriedRoot` declares as its own property, which provides
+		// `CarriedWrapperReader`'s optional read: the place's field is `CarriedOuter`'s, and the fill of `CarriedGizmo` takes
+		// `CarriedInner`'s memo, which once gave the reader `nil` while inline passes it the declared wrapper. Built in one
+		// module, `CarriedInner`'s tree receives `carriedToken` in two forms, which both builds report, in the same words,
+		// at a seam that defers it. Neither graph declares `HoleSeam`.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
+		let drawFeatures = GraphFuzzerFeature.seamDrawFeatures(of: fixture)
+		#expect(drawFeatures.contains(.carriedLevelFillReadsOptionalSendableWrapperOuterReceives))
+		#expect(!drawFeatures.contains(.hole))
+		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [])
+		let prefix = fixture.typeNamePrefix
+		// Each error, without its location: the seams' files are in other modules.
+		func errors(in diagnostics: String) -> [String] {
+			diagnostics.split(separator: "\n").compactMap { line in
+				line.range(of: ": error: ").map { String(line[$0.upperBound...]) }
+			}
+		}
+		var errorsByBuild = [String: [String]]()
+		for (build, outcome) in [("hole", Optional(runs.firstOutcome)), ("visible", runs.visibleOutcome)] {
+			guard case let .rejected(diagnostics)? = outcome else {
+				Issue.record("Seed \(seed)’s \(build) build is not rejected")
+				continue
+			}
+			let buildErrors = errors(in: diagnostics)
+			errorsByBuild[build] = buildErrors
+			#expect(!buildErrors.isEmpty && buildErrors.allSatisfy { $0.hasPrefix("SafeDI cannot generate the dependency tree of `\(prefix)CarriedInner") && $0.contains("its tree receives `carriedToken` as ") && $0.contains("` on `\(prefix)CarriedWrapperReader`") && $0.hasSuffix(" as the form that provides the others: `@Received let carriedToken: SendableLazilyInstantiated<\(prefix)CarriedToken>`.") }, "Seed \(seed)’s \(build) build:\n\(diagnostics)")
+		}
+		#expect(errorsByBuild["hole"] == errorsByBuild["visible"])
+	}
+
 	@Test(arguments: [UInt64(80), 279, 306])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func toolRuns_rejectBothBuildsWithFieldOfReenteringPlace_whenCallerFillsPlaceInsideFillBuiltAgainUnremedied(seed: UInt64) async throws {
@@ -7374,6 +7408,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.carriedLevelFillReadsSendableWrapper: 0,
 		.carriedLevelFillReadsSendableWrapperAlone: 35,
 		.carriedLevelFillReadsOptionalSendableWrapper: 0,
+		.carriedLevelFillReadsOptionalSendableWrapperOuterReceives: 0,
 		.passingUpCopies: 507,
 		.passingUpCopiesFillReadsLabel: 260,
 		.passingUpCopiesSeamsBindLabel: 126,
