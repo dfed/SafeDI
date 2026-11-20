@@ -100,10 +100,6 @@ struct ConstructionMemo {
 		/// Whether a declaration enclosing the tree holds a receive a mock passes `nil`
 		/// (`NearestDeclarations.mayPassNil`): where none does, no place logs whether it passes one `nil`.
 		let mayPassNil: Bool
-		/// Whether a declaration enclosing the tree judges the places of a receive only if available against the required
-		/// receives above them (`NearestDeclarations.judgesPlacesPinnedFromAbove`): where none does, no scope records what its
-		/// required receives read, nor logs the declarations it would record them in.
-		let judgesPlacesPinnedFromAbove: Bool
 		/// The received properties in scope at the place only as the instance of a `LazilyInstantiated` property.
 		let lazilyInstantiatedInstanceProperties: Set<Property>
 		let reboundProperties: Set<Property>
@@ -126,7 +122,6 @@ struct ConstructionMemo {
 				validatesForwardedProperties: validatesForwardedProperties,
 				buildsWithHandWrittenMocks: buildsWithHandWrittenMocks,
 				mayPassNil: mayPassNil,
-				judgesPlacesPinnedFromAbove: judgesPlacesPinnedFromAbove,
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 				reboundProperties: reboundProperties,
 				spellings: spellings,
