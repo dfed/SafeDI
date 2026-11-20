@@ -585,6 +585,10 @@ func executeSafeDIToolMultiModuleTest(
 					try await tool.generate()
 				}
 			} catch {
+				// A run that read a stored seam signature and failed reports what a run computing every signature reports.
+				if !discardsStoredSeamSignatures {
+					try await expectErrorMatchesRunComputingEverySeamSignature(error, arguments: generateArguments, sourceLocation: sourceLocation)
+				}
 				var fixturesByModuleName = outputs.mapValues(\.fixtures)
 				fixturesByModuleName[moduleName] = fixtures
 				throw SafeDIToolMultiModuleTestError(
@@ -771,4 +775,40 @@ private func generatedSwiftFiles(in outputDirectory: URL) throws -> [String: Str
 		generatedFiles[fileName] = try String(contentsOf: outputDirectory.appendingPathComponent(fileName), encoding: .utf8)
 	}
 	return generatedFiles
+}
+
+/// Runs `generate` with `arguments` again over the module info files they list with every stored seam signature taken
+/// out, and expects it to throw `error`'s description: a run that reads the signatures and fails reruns computing them,
+/// so the two never differ. Each file is restored afterwards.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+private func expectErrorMatchesRunComputingEverySeamSignature(_ error: any Error, arguments: [String], sourceLocation: SourceLocation) async throws {
+	var moduleInfoPaths = [String]()
+	for (index, argument) in arguments.enumerated() where ["--dependent-module-info-file-path", "--transitive-module-info-file-path"].contains(argument) && arguments.indices.contains(index + 1) {
+		let listed = try String(contentsOfFile: arguments[index + 1], encoding: .utf8)
+		moduleInfoPaths += listed.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+	}
+	var originalBytesByPath = [String: Data]()
+	for path in Set(moduleInfoPaths).sorted() where FileManager.default.fileExists(atPath: path) {
+		let data = try Data(contentsOf: URL(fileURLWithPath: path))
+		let file = try ModuleInfoFile(moduleInfoData: data)
+		let withoutSignatures = try file.withoutSeamSignatures.moduleInfoData
+		if withoutSignatures != data {
+			originalBytesByPath[path] = data
+			try withoutSignatures.write(to: URL(fileURLWithPath: path))
+		}
+	}
+	guard !originalBytesByPath.isEmpty else { return }
+	defer {
+		for (path, data) in originalBytesByPath {
+			try? data.write(to: URL(fileURLWithPath: path))
+		}
+	}
+	let computingError: (any Error)?
+	do {
+		try await Generate.parse(arguments).generate()
+		computingError = nil
+	} catch {
+		computingError = error
+	}
+	#expect(computingError.map { "\($0)" } == "\(error)", "a run reading stored seam signatures reports what a run computing them reports", sourceLocation: sourceLocation)
 }
