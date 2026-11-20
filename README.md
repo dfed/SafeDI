@@ -11,7 +11,7 @@ Compile-time-safe dependency injection without the boilerplate. No containers. N
 ## Why teams choose SafeDI
 
 - **Dependency injection that feels natural.** Get the simplicity of manual dependency injection without ceremony.
-- **Compile-time graph validation.** If the code compiles, the dependency graph is valid. SafeDI checks the whole graph in under half a second, even in an app of 100 modules and 2,300 types, so a broken graph is reported quickly even when compiling your app is not.
+- **Compile-time graph validation.** If the code compiles, the dependency graph is valid. SafeDI validates even a 100-module graph in under half a second.
 - **Scoped runtime values.** Make your real logged-in `User` available non-optionally to any type in the subtree with just a single macro decoration.
 - **Full-graph mocks.** Generated from your real dependency graph, mocks let you override any of the graph’s objects for easy previews and tests.
 - **Architecture-independent.** SwiftUI or UIKit, coordinators or MVVM, one module or hundreds — SafeDI fits what you already have.
