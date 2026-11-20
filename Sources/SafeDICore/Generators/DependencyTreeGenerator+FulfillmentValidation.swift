@@ -103,8 +103,8 @@ extension DependencyTreeGenerator {
 	func validateCyclesFromRootsOfForeignSeamsWithHoles(
 		in typeDescriptionToScopeMap: [TypeDescription: Scope],
 		receivedPropertiesCache: inout ReceivedPropertiesCache,
-	) throws {
-		let seamTypesWithHoles = try foreignSeamTypesWithHoles()
+	) async throws {
+		let seamTypesWithHoles = try await foreignSeamTypesWithHoles()
 		guard !seamTypesWithHoles.isEmpty else { return }
 		let rootScopes = seamTypesWithHoles.compactMap { typeDescriptionToScopeMap[$0] }.map { scope in
 			var receivedFromOutside = Set<Property>()
@@ -210,9 +210,9 @@ extension DependencyTreeGenerator {
 	}
 
 	/// The foreign seams whose initializers take a builder, in type order.
-	private func foreignSeamTypesWithHoles() throws -> [TypeDescription] {
+	private func foreignSeamTypesWithHoles() async throws -> [TypeDescription] {
 		guard !seams.foreignSeams.isEmpty else { return [] }
-		let foreignSeamRoots = try foreignSeamRoots.get()
+		let foreignSeamRoots = try await foreignSeamRoots.get()
 		return foreignSeamRoots.keys.filter { (foreignSeamRoots[$0] ?? nil)?.signature.holes.isEmpty == false }.sorted()
 	}
 
@@ -223,8 +223,8 @@ extension DependencyTreeGenerator {
 	/// seam's own module, which cannot see the fill, judged the parameter without them. So a fill that receives the label
 	/// in a form no one parameter carries together with the forms the seam's tree receives is rejected as its inline build
 	/// is, with the same error. A hole this module does not fill has no scope, and its tree ends there.
-	func inlineTreesOfForeignSeamsWithHoles(in typeDescriptionToScopeMap: [TypeDescription: Scope]) throws -> [ScopeGenerator] {
-		try foreignSeamTypesWithHoles().compactMap { typeDescriptionToScopeMap[$0] }.map { scope in
+	func inlineTreesOfForeignSeamsWithHoles(in typeDescriptionToScopeMap: [TypeDescription: Scope]) async throws -> [ScopeGenerator] {
+		try await foreignSeamTypesWithHoles().compactMap { typeDescriptionToScopeMap[$0] }.map { scope in
 			try scope.createScopeGenerator(
 				for: nil,
 				lazilyInstantiatedInstanceProperties: [],

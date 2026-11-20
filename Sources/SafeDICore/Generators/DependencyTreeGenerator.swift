@@ -232,7 +232,7 @@ public actor DependencyTreeGenerator {
 	}
 
 	public func generatePerRootCodeTrees() async throws -> [GeneratedRoot] {
-		let rootScopeGenerators = try rootScopeGenerators
+		let rootScopeGenerators = try await rootScopeGenerators
 		try Self.validateFills(
 			inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator),
 			callerModule: seams.currentModule,
@@ -315,7 +315,7 @@ public actor DependencyTreeGenerator {
 	var memoizedPublicMockContext: PublicMockContext?
 
 	public func generateDOTTree() async throws -> String {
-		let rootScopeGenerators = try rootScopeGenerators
+		let rootScopeGenerators = try await rootScopeGenerators
 
 		let dependencyTree = try await withThrowingTaskGroup(
 			of: String.self,
@@ -379,10 +379,10 @@ public actor DependencyTreeGenerator {
 	var validatedScopes = Set<Scope>()
 
 	var rootScopeGenerators: [RootScopeInfo] {
-		get throws {
+		get async throws {
 			// The trees of the foreign seams with holes, built inline with the fills this module generates.
 			var inlineForeignSeamTrees = [ScopeGenerator]()
-			let rootScopeGenerators: [RootScopeInfo] = try {
+			let rootScopeGenerators: [RootScopeInfo] = try await {
 				// The roots' trees and the generated seams' trees build exactly the reachable types, the foreign seams
 				// their trees call included. First, before any seam signature is computed: a seam's parameters are keyed
 				// by property, so a seam that repeats a label is reported here rather than generating a tier that
@@ -394,8 +394,8 @@ public actor DependencyTreeGenerator {
 				try validateCalledSeamModulesShareMockCondition()
 				// A foreign seam's module info this run lacks is reported before the inlined trees, which reach that
 				// module's declarations, are found unfulfillable.
-				_ = try foreignSeamRoots.get()
-				try validateReachableTypeDescriptions()
+				_ = try await foreignSeamRoots.get()
+				try await validateReachableTypeDescriptions()
 
 				let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
 				var receivedPropertiesCache = ReceivedPropertiesCache()
@@ -414,14 +414,14 @@ public actor DependencyTreeGenerator {
 						cache: &receivedPropertiesCache,
 						validation: &childrenRequiringEachOtherValidation,
 					)
-					try validateCyclesFromRootsOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap, receivedPropertiesCache: &receivedPropertiesCache)
+					try await validateCyclesFromRootsOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap, receivedPropertiesCache: &receivedPropertiesCache)
 				} catch let error as DependencyTreeGeneratorError {
 					// The trees build each foreign seam inline with the fills of its holes, which the seam's module calls
 					// through its builders. Only membership in what each fill declares is read, so the seams' order is moot.
-					let foreignSeamHoles = try foreignSeamRoots.get().compactMapValues { $0?.signature.holes }
+					let foreignSeamHoles = try await foreignSeamRoots.get().compactMapValues { $0?.signature.holes }
 					throw error.markingCyclesClosedInSeamFills(DependencyTreeGeneratorError.SeamFillDeclarations.ofFills(ofHolesOf: foreignSeamHoles, in: typeDescriptionToScopeMap))
 				}
-				inlineForeignSeamTrees = try inlineTreesOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap)
+				inlineForeignSeamTrees = try await inlineTreesOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap)
 				self.validatedScopes = Set(typeDescriptionToScopeMap.values)
 				// A module whose declarations hold no seam generates from the validated scopes, as it always has.
 				// One that holds a seam generates from a second map, in which every reach of a seam is a call to
@@ -450,7 +450,7 @@ public actor DependencyTreeGenerator {
 						)
 					}
 				}
-				return try seamWorldRootScopeGenerators()
+				return try await seamWorldRootScopeGenerators()
 			}()
 			try Self.validateCycleLabelsArePassable(inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator) + inlineForeignSeamTrees)
 			return rootScopeGenerators
