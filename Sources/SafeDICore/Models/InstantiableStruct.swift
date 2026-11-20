@@ -190,8 +190,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// The name of the user's custom mock method. With `generateMock`, the generated `mock()` calls
 	/// through to this method. With `mockOnly`, SafeDI uses this method as the mock provider.
 	public var customMockName: String? {
-		get { rarelySetFields?.fields.customMockName }
-		set { updateRarelySetFields { $0.customMockName = newValue } }
+		rarelySetFields?.fields.customMockName
 	}
 
 	/// Where the user-defined mock method begins in source: its first attribute or modifier. Travels with
