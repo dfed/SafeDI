@@ -1676,7 +1676,7 @@ A module that uses types another module re-exports with `@_exported import` list
 
 ### Running SafeDITool yourself
 
-Your integration already has a `SafeDITool`; a [custom build system](#custom-build-system-integration) runs the one it downloads. Run it with `--help`, `scan --help`, or `generate --help` to see documentation of all supported arguments, `query needs --help` for the command that [reports what types need](#querying-what-a-type-needs) (in beta), and `dump --help` for the command that prints a `.safedi` file, or the cache `scan` writes beside its manifest, as JSON. Each integration’s `SafeDITool` is here:
+Your integration already has a `SafeDITool`; a [custom build system](#custom-build-system-integration) runs the one it downloads. Run it with `--help`, `scan --help`, or `generate --help` to see documentation of all supported arguments, `query needs --help` for the command that [reports what types need](#querying-what-a-type-needs) (in beta), `query graph --help` for the command that [exports the dependency graph](#exporting-the-dependency-graph) (in alpha), and `dump --help` for the command that prints a `.safedi` file, or the cache `scan` writes beside its manifest, as JSON. Each integration’s `SafeDITool` is here:
 
 - **Swift package:** `.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool` from the package’s directory, or `swift run SafeDITool` with the `sourceBuild` trait; writes no `.safedi` files.
 - **Xcode project:** `SourcePackages/artifacts/safedi/SafeDIToolBinary/…` in the project’s derived data, or `.safedi/<version>/safeditool` once [installed](#installing-the-prebuilt-safeditool-binary); writes no `.safedi` files.
@@ -2146,3 +2146,15 @@ For each type named, the query builds the type as its `mock()` does, with every 
 - The dependencies no `@Instantiable` declaration fulfills, which the project provides by hand, each with its reason.
 
 It then reports the same for the type’s mock. [The `query needs` report](QueryNeeds.md) describes which modules and which mock the report covers, how to name the types, and the JSON that `--json` prints for scripts.
+
+### Exporting the dependency graph
+
+> `query graph` is in alpha. Its options and JSON may change in any release; the JSON’s `formatVersion` is `0`.
+
+A tool or a coding agent that needs a question SafeDI has no command for – which types use a service, what a new type would receive, which declarations a feature is built from – can answer it from one JSON document. `SafeDITool query graph` exports every production `@Instantiable` declaration with its module, file and line, each of its dependencies with its kind, and the type that fulfills each type. It takes the modules as `query needs` takes them:
+
+```bash
+.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool query graph --include Sources/Foundations Sources/Services Sources/HomeFeature --output graph.json
+```
+
+Each type and dependency appears once, however many trees reach it, and the same inputs give the same bytes. `--output` writes the file only when its bytes change. [The `query graph` export](QueryGraph.md) describes the format, with recipes for common questions.
