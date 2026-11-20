@@ -21,7 +21,7 @@
 /// The statements a builder function's body writes before the value it returns, each the lines one statement writes: a
 /// child's code, a seam call's guard line, a member call, a fill place's binding, a loop member's rebinding. No statement
 /// is empty: every scope a body emits writes a line (`.claude/rules/emission-decisions.md`, "Empty chunks").
-struct BuilderBody: Hashable, Sendable {
+struct BuilderBody: Sendable {
 	let statements: [GeneratedCode]
 
 	/// Whether the body writes anything before its value. A constant whose body writes nothing is constructed in place,

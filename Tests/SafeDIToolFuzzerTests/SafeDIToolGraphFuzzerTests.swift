@@ -1896,6 +1896,30 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func placeOracleFailure_reportsEachViolation_whenAPlaceHoldsOtherThanItsKind() {
+		// Every place of a production body holds exactly what its kind holds, so a cycle closer that declares a function is a
+		// failure, naming the place.
+		let fixture = GraphFuzzerFixture(seed: 8, swiftFileContent: ["// module: FuzzFeature\n"])
+		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: [:], warnings: [])
+		let violation = "Place 1 (closesCycle) declares 1 builder functions [\"__safeDI_a\"], not 0"
+
+		let runs = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: outcome, secondOutcome: outcome, placeViolations: [violation])
+
+		#expect(runs.placeOracleFailure?.kind == .placeHoldsOtherThanItsKind)
+		#expect(runs.placeOracleFailure?.details.prefix { $0 != "\n" } == Substring(violation))
+	}
+
+	@Test
+	func placeOracleFailure_isNil_whenEveryPlaceHoldsWhatItsKindHolds() {
+		let fixture = GraphFuzzerFixture(seed: 8, swiftFileContent: ["// module: FuzzFeature\n"])
+		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: [:], warnings: [])
+
+		let runs = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: outcome, secondOutcome: outcome)
+
+		#expect(runs.placeOracleFailure == nil)
+	}
+
+	@Test
 	func placeLevelsFailure_isNil_whenEveryBuildOfATypeBindsTheSameValues() {
 		let fixture = GraphFuzzerFixture(seed: 8, swiftFileContent: ["// module: FuzzFeature\n"])
 		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: [:], warnings: [])

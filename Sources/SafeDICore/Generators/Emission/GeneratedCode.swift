@@ -19,15 +19,15 @@
 // SOFTWARE.
 
 /// The code a production body plans, as a tree whose levels share their children's code instead of copying it: text, pieces
-/// written one after another, and a child's code each level indents.
+/// written one after another, a child's code each level indents, and the places of the body's walk.
 ///
-/// Each level of a tree used to indent its whole subtree's text again, so a scope's text was copied once per level above
+/// Each level of a tree used to indent its whole subtree's text again, so a place's text was copied once per level above
 /// it, and every scope's cache held its subtree's text. A level now holds its children's plans, and the root's plan is
 /// spelled once (`spelled()`), each line written with the indentation of every level around it. The bytes are the ones
 /// re-indenting at every level wrote (`GeneratedCodeText.indentingNonEmptyLines`), which `GeneratedCodeTests` checks.
 ///
 /// A plan can be as deep as the module has types, so everything that reads one walks it with a stack of its own.
-indirect enum GeneratedCode: Hashable, Sendable {
+indirect enum GeneratedCode: Sendable {
 	/// Text, written as it is.
 	case text(String)
 	/// Pieces written one after another.
@@ -38,6 +38,8 @@ indirect enum GeneratedCode: Hashable, Sendable {
 	/// feed after the last, as `GeneratedCodeText.indentingNonEmptyLines(of:by:)` writes text. Empty `indentation` writes
 	/// `code` as it is: a scope generated with no leading whitespace keeps its empty lines.
 	case indented(GeneratedCode, by: String)
+	/// A place of the body's walk (`PlacePlan`), whose code is written as it is.
+	case place(PlacePlan)
 
 	/// The empty code.
 	static let empty = GeneratedCode.sequence([])
@@ -48,6 +50,45 @@ indirect enum GeneratedCode: Hashable, Sendable {
 		writer.write(self)
 		return writer.text
 	}
+}
+
+/// What a body's plan holds for one place of its walk: the place's kind, its builder functions, and its code. A place is a
+/// position in a root's tree that the body's ordered walk (ordered children, depth first) reaches: a scope that builds a
+/// property, closes a cycle, renames a value, or hosts a seam's code. Its identity is the index at which the walk first
+/// reaches it (`PlaceIdentity`, `GeneratedCode.places()`), never a scope's or a generator's identity, which two places can
+/// share: a scope's cached code is reached once for every place that holds it.
+struct PlacePlan: Sendable {
+	/// What the graph holds for the place, which the oracle checks against what each kind holds (`PlaceOracle`).
+	let kind: PlaceKind
+	/// The names of the builder functions the place declares, in the order it declares them.
+	let functionNames: [String]
+	/// The name of the function a cycle-closing place calls, the function of the place it repeats; `nil` for every other
+	/// place.
+	let closedOnFunctionName: String?
+	/// The place's code, which holds the plans of the places beneath it.
+	let code: GeneratedCode
+}
+
+/// The kinds of place a production body's walk reaches, each holding a fixed number of builder functions and closing
+/// edges (`.claude/rules/emission-decisions.md`, "Places").
+public enum PlaceKind: CaseIterable, Hashable, Sendable {
+	/// A property built by a builder function of its own: one function.
+	case builtByFunction
+	/// A member of a loop of builders whose function takes the parameters a lazy cycle needs: two functions, its own and its
+	/// `_received` function.
+	case loopMemberWithCycleParameters
+	/// A constant built in place, whose function would write nothing but its value: no function, one binding.
+	case constantBuiltInPlace
+	/// A scope that closes a cycle: no function, and one closing edge to the function of an enclosing place.
+	case closesCycle
+	/// A member of a loop of builders that closes a cycle: one function, the `_received` function that wraps again the
+	/// functions of the loop's members its tree receives, and one closing edge to the function of an enclosing place.
+	case loopMemberClosingCycle
+	/// A rename of a value: no function.
+	case alias
+	/// A seam call's fill, or a seam's hole site, hosted as the text the seam emitter writes until seam bodies are planned:
+	/// no function the graph holds, and no place beneath it.
+	case hostedSeamCode
 }
 
 /// Writes a plan's text, keeping for each level around the current piece whether its current line has begun, so each line
@@ -110,6 +151,8 @@ private struct GeneratedCodeWriter {
 						work.append(.endOfLevel)
 						work.append(.code(code))
 					}
+				case let .place(plan):
+					work.append(.code(plan.code))
 				}
 			case .lineFeed:
 				write(.lineFeed(level: levels.count - 1))
