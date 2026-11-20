@@ -1295,16 +1295,16 @@ public struct Service: Instantiable {
 Each parameter of a public `mock()` is as visible as the types it names. So, like a seam’s initializer, the mock has one [tier](#generating-a-dependency-tree-per-module) per access level among its parameters: a `public` tier that code in any module can call, and a narrower tier that also takes the narrower parameters ([Access of generated parameters](#access-of-generated-parameters)):
 
 ```swift
-public static func mock(retries: Int? = nil, analytics: Analytics? = nil, safeDIOverrides: SafeDIOverrides = .init()) -> Service {
+public static func mock(retries: Int? = nil, analytics: LazilyInstantiated<Analytics>? = nil, safeDIOverrides: SafeDIOverrides = .init()) -> Service {
     Service.mock(retries: retries, analytics: analytics, session: nil, safeDIOverrides: safeDIOverrides)
 }
 
-package static func mock(retries: Int? = nil, analytics: Analytics? = nil, session: Session? = nil, safeDIOverrides: SafeDIOverrides = .init()) -> Service {
+package static func mock(retries: Int? = nil, analytics: LazilyInstantiated<Analytics>? = nil, session: Session? = nil, safeDIOverrides: SafeDIOverrides = .init()) -> Service {
     // …builds the tree…
 }
 ```
 
-`Service.mock()` builds the whole tree; `Service.mock(analytics: Analytics())` hands the mock a value; `Service.mock(safeDIOverrides: .init(tokenCache: .init(capacity: 5)))` configures a type in the tree.
+`Service.mock()` builds the whole tree; `Service.mock(analytics: LazilyInstantiated { Analytics() })` hands the mock a value; `Service.mock(safeDIOverrides: .init(tokenCache: .init(capacity: 5)))` configures a type in the tree.
 
 The parameters come in this order: `@Forwarded` properties; default-valued initializer parameters; the received dependencies the mock cannot build; hole builders; the received dependencies it builds and those received only if available, by label; and `safeDIOverrides`.
 
@@ -1317,7 +1317,7 @@ The parameters come in this order: `@Forwarded` properties; default-valued initi
 
 **Received dependencies.**
 
-- A received dependency the mock builds is `T? = nil`: pass `nil` to have the mock build it, or a value to use instead. A lazily instantiated one is taken by value, as `analytics` is above.
+- A received dependency the mock builds is `T? = nil`: pass `nil` to have the mock build it, or a value to use instead. A lazily instantiated one is taken as the wrapper the type receives, as `analytics` is above, and so is one the mock cannot build, `analytics: LazilyInstantiated<Analytics>`: nothing builds the value until the tree reads it. The mock takes the value itself instead where its tree receives it as both a `LazilyInstantiated` and a `SendableLazilyInstantiated`, or only if available and also by value, or where the type forwards a property of the same label.
 - A parameter an internal mock [defaults to a hand-written mock](#dependency-kinds-in-the-generated-mock) is `T? = nil` too, and `nil` calls that mock.
 - `SafeDIOverrides` is `public`, with each member as visible as the types it names, and an initializer for each access its members have.
 
@@ -1348,10 +1348,7 @@ func makeFeedScreen() -> FeedScreen {
 
 **Generate both modules’ mocks under one `mockConditionalCompilation`**, unless the declaring module’s mocks are unconditional. Under the Swift package plugin, a module that calls another module’s seam must share that module’s `mockConditionalCompilation` too.
 
-A mock that another module generates also calls a public mock when its tree reaches the type. It builds the type inline when it can construct the type’s whole tree, and otherwise calls the type’s public mock, at the narrowest tier its module can reach. Values your mock already holds are shared with the public mock: the call passes what the calling tree holds for that tier’s parameters, `nil` for the rest, and your overrides of the type as `safeDIOverrides`. A dependency the called mocks build that the calling module can construct is built once by the calling mock, and passed to every call, including each call an `Instantiator` makes. Two kinds are not shared:
-
-- A dependency the calling module cannot construct is built by each public mock that builds it, and is `nil` in one that receives it only if available. To share one of a `public` type, declare it with `generateMock: .public` too: the calling mock then builds it once, through its public mock, and passes it to every call.
-- A lazily instantiated dependency is passed by value, so it is created when the public mock is called, where a generated call of a seam defers it.
+A mock that another module generates also calls a public mock when its tree reaches the type. It builds the type inline when it can construct the type’s whole tree, and otherwise calls the type’s public mock, at the narrowest tier its module can reach. Values your mock already holds are shared with the public mock: the call passes what the calling tree holds for that tier’s parameters, `nil` for the rest, and your overrides of the type as `safeDIOverrides`. A dependency the called mocks build that the calling module can construct is built once by the calling mock, and passed to every call, including each call an `Instantiator` makes. A lazily instantiated dependency is passed as the wrapper your mock holds, so nothing creates it before the called type reads it, unless the public mock takes the value itself, as [Public mocks](#public-mocks) lists: then the call reads the wrapper’s value. One kind is not shared: a dependency the calling module cannot construct is built by each public mock that builds it, and is `nil` in one that receives it only if available. To share one of a `public` type, declare it with `generateMock: .public` too: the calling mock then builds it once, through its public mock, and passes it to every call.
 
 Also:
 
