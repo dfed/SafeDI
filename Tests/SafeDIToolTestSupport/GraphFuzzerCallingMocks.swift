@@ -113,7 +113,8 @@ enum GraphFuzzerCallingMockShape: String, CaseIterable, Comparable {
 	/// or `package`, where it is in another (`GraphFuzzerCallingMockDraw.UnreachableConstruction`). Production reports the
 	/// access error, so the calling mock reports it at the same declarations in a build that compiles the generated mocks;
 	/// a build that leaves the mock condition inactive never compiles the fill, so there the mock is accepted and passes the
-	/// place up.
+	/// place up. In some graphs only the type's hand-written mock is out of reach: production, which calls the initializer,
+	/// is accepted, and the calling mock, whose fill calls the mock, reports that mock's access instead (contract rule 7).
 	case fillConstructsTypeCallerModuleCannotReach
 
 	static func < (lhs: Self, rhs: Self) -> Bool {
@@ -478,6 +479,10 @@ struct GraphFuzzerCallingMockDraw {
 			case internalInCallersPackage
 			/// `package`, with the outer module in a package of its own: production asks for `public`.
 			case packageInAnotherPackage
+			/// `public`, with a `public` initializer and an `internal` hand-written mock, with the outer module in the caller's
+			/// package: production calls the initializer and is accepted, and the calling mock, whose fill calls the mock,
+			/// asks for `package` on the mock.
+			case internalMockInCallersPackage
 
 			/// What the type's declaration and its initializer spell before `final class` and `init`.
 			var modifier: String {
@@ -486,6 +491,19 @@ struct GraphFuzzerCallingMockDraw {
 					""
 				case .packageInAnotherPackage:
 					"package "
+				case .internalMockInCallersPackage:
+					"public "
+				}
+			}
+
+			/// Whether production reports an access error: where the type or its initializer is out of reach, not only its
+			/// hand-written mock.
+			var twinReportsError: Bool {
+				switch self {
+				case .internalInCallersPackage, .packageInAnotherPackage:
+					true
+				case .internalMockInCallersPackage:
+					false
 				}
 			}
 		}
@@ -501,7 +519,7 @@ struct GraphFuzzerCallingMockDraw {
 		/// The package of the outer module, which declares the type.
 		var outerModulePackageName: String {
 			switch access {
-			case .internalInCallersPackage:
+			case .internalInCallersPackage, .internalMockInCallersPackage:
 				GraphFuzzerCallingMockGraph.packageName
 			case .packageInAnotherPackage:
 				"Elsewhere"
@@ -513,6 +531,17 @@ struct GraphFuzzerCallingMockDraw {
 			"\(access.modifier)final class \(typeName): \(protocolName), Instantiable {"
 		}
 
+		/// The line that declares the type's hand-written mock, where the calling mock reports its error, or `nil` where the
+		/// type has none.
+		var mockMethodLine: String? {
+			switch access {
+			case .internalInCallersPackage, .packageInAnotherPackage:
+				nil
+			case .internalMockInCallersPackage:
+				"static func mock() -> \(typeName) { \(typeName)() }"
+			}
+		}
+
 		/// The outer module's declarations of the protocol and the type.
 		var declarations: String {
 			"""
@@ -520,7 +549,7 @@ struct GraphFuzzerCallingMockDraw {
 
 			@Instantiable(fulfillingAdditionalTypes: [\(protocolName).self])
 			\(typeDeclarationLine)
-			    \(access.modifier)init() {}
+			    \(access.modifier)init() {}\(mockMethodLine.map { "\n    \($0)" } ?? "")
 			}
 			"""
 		}
@@ -528,6 +557,13 @@ struct GraphFuzzerCallingMockDraw {
 
 	/// The type the fill's tree constructs that the caller's module cannot reach, for the shape that draws one, or `nil`.
 	let unreachableConstruction: UnreachableConstruction?
+
+	/// Whether production rejects the graph with an error of its own: the shape's `twinRejects`, but where only the
+	/// hand-written mock of the type the fill's tree builds is out of the caller's module's reach, which production does
+	/// not call.
+	var twinRejects: Bool {
+		cell.shape.twinRejects && unreachableConstruction?.access.twinReportsError != false
+	}
 
 	/// How the third module's type, which the fill of the shape that holds a builder of the enclosing called type builds,
 	/// holds that called type.
@@ -674,6 +710,9 @@ struct GraphFuzzerCallingMockDraw {
 			expectedTwinInitializerLabels: expectedTwinInitializerLabels,
 			expectedPassUpLabels: expectedPassUpLabels,
 			expectedTwinErrorSite: expectedTwinErrorSite,
+			expectedMockOwnErrorSite: unreachableConstruction.flatMap { construction in
+				construction.mockMethodLine.map { ("\(names.outerModuleName)/\(names.outerModuleName)Types.swift", $0) }
+			},
 			valueProbes: valueProbes,
 			mockBuild: mockBuild,
 			twinErrorIsCheckedOnlyWhereMocksCompile: twinErrorIsCheckedOnlyWhereMocksCompile,
@@ -776,7 +815,8 @@ struct GraphFuzzerCallingMockDraw {
 	/// Whether the twin's error is one the tool checks in the mock only where the generated mocks compile: the fill's
 	/// implementation is a plain type, so the type it instantiates that no declaration can fulfill is in no tree but the
 	/// mock's. Where it is a seam, its own tree, which every build generates, reports the error. A construction in the fill's
-	/// tree that the caller's module cannot reach is in no tree but the mock's too.
+	/// tree that the caller's module cannot reach is in no tree but the mock's too, and so is the call of a hand-written
+	/// mock the twin does not call, whose error is the mock's own (`GraphFuzzerCallingMockGraph.expectedMockOwnErrorSite`).
 	var twinErrorIsCheckedOnlyWhereMocksCompile: Bool {
 		switch cell.shape {
 		case .fillConstructsTypeCallerModuleCannotReach:
@@ -1123,8 +1163,8 @@ struct GraphFuzzerCallingMockDraw {
 			// The seam's tree receives the label in two forms, which production reports at the called type's declaration.
 			return ("\(names.innerModuleName)/\(names.innerModuleName)Types.swift", "@Instantiable(generateDependencyTree: true, generateMock: .public)")
 		case .fillConstructsTypeCallerModuleCannotReach:
-			// The type's declaration, in the outer module's file.
-			return unreachableConstruction.map { ("\(names.outerModuleName)/\(names.outerModuleName)Types.swift", $0.typeDeclarationLine) }
+			// The type's declaration, in the outer module's file, where production reports an error at all.
+			return unreachableConstruction.flatMap { $0.access.twinReportsError ? ("\(names.outerModuleName)/\(names.outerModuleName)Types.swift", $0.typeDeclarationLine) : nil }
 		case .callersOwnValue, .noVisibleImplementation, .implementationReceivesWhatNothingProvides, .fillInstantiatesWhatNothingFulfills, .seamCallerFillSharesBuilder, .fillReceivesValueOnlyInnerMockRequires, .calledTypesReceivedValueInSendablePlace, .fillReceivesCallersLazyValueBelowCalledRoot, .fillHoldsBuilderOfEnclosingCalledType, .fillCallsMockTakingGuardedValueWhereMockConditionIsInactive:
 			return nil
 		}
@@ -2290,6 +2330,12 @@ struct GraphFuzzerCallingMockGraph {
 	/// Where production reports the graph's shape error, as the module's file and the declaration's line, or `nil` when
 	/// production accepts the graph.
 	let expectedTwinErrorSite: (file: String, declaration: String)?
+	/// Where the calling mock reports an error of its own where production is accepted, as the module's file and the
+	/// declaration's line, or `nil`: the access of a hand-written mock its fill calls, which the twin, calling the type's
+	/// initializer, does not (contract rule 7). The tool checks it only where the generated mocks compile, so the graph
+	/// also sets `twinErrorIsCheckedOnlyWhereMocksCompile`, and a build that leaves the mock condition inactive passes the
+	/// place up (`mockSkipsTwinsError`).
+	let expectedMockOwnErrorSite: (file: String, declaration: String)?
 	/// What the differential value comparator describes where the mock passes up no place without a reason and mirrors its
 	/// twin: each probe's expression calls the calling mock, and its known-right expression the twin's seam initializer
 	/// where the twin is accepted, or the caller's root initializer in `inlineModules` where the twin reports that a seam
@@ -2314,7 +2360,8 @@ struct GraphFuzzerCallingMockGraph {
 
 	/// Whether the tool skips the twin's error in the mock: the error is one it checks only where the generated mocks
 	/// compile, and `mockBuild` leaves the mock condition inactive. The mock must then be accepted, passing up
-	/// `expectedPassUpLabels`, where its twin reports the error.
+	/// `expectedPassUpLabels`, where its twin reports the error, or, with `expectedMockOwnErrorSite`, where it would report
+	/// its own.
 	var mockSkipsTwinsError: Bool {
 		twinErrorIsCheckedOnlyWhereMocksCompile && !mockBuild.compilesGeneratedMocks
 	}
@@ -2421,6 +2468,7 @@ struct GraphFuzzerCallingMockGraph {
 		expectedTwinInitializerLabels: [String]? = nil,
 		expectedPassUpLabels: [String] = [],
 		expectedTwinErrorSite: (file: String, declaration: String)?,
+		expectedMockOwnErrorSite: (file: String, declaration: String)? = nil,
 		valueProbes: [DifferentialValueProbe]? = nil,
 		mockBuild: MockBuild = .compilesGeneratedMocks,
 		twinErrorIsCheckedOnlyWhereMocksCompile: Bool = false,
@@ -2450,6 +2498,7 @@ struct GraphFuzzerCallingMockGraph {
 			expectedTwinInitializerLabels: expectedTwinInitializerLabels,
 			expectedPassUpLabels: expectedPassUpLabels,
 			expectedTwinErrorSite: expectedTwinErrorSite,
+			expectedMockOwnErrorSite: expectedMockOwnErrorSite,
 			valueProbes: valueProbes,
 			mockBuild: mockBuild,
 			twinErrorIsCheckedOnlyWhereMocksCompile: twinErrorIsCheckedOnlyWhereMocksCompile,
@@ -2470,6 +2519,7 @@ struct GraphFuzzerCallingMockGraph {
 		expectedTwinInitializerLabels: [String]?,
 		expectedPassUpLabels: [String],
 		expectedTwinErrorSite: (file: String, declaration: String)?,
+		expectedMockOwnErrorSite: (file: String, declaration: String)? = nil,
 		valueProbes: [DifferentialValueProbe]? = nil,
 		mockBuild: MockBuild = .compilesGeneratedMocks,
 		twinErrorIsCheckedOnlyWhereMocksCompile: Bool = false,
@@ -2487,6 +2537,7 @@ struct GraphFuzzerCallingMockGraph {
 		self.expectedTwinInitializerLabels = expectedTwinInitializerLabels
 		self.expectedPassUpLabels = expectedPassUpLabels
 		self.expectedTwinErrorSite = expectedTwinErrorSite
+		self.expectedMockOwnErrorSite = expectedMockOwnErrorSite
 		self.valueProbes = valueProbes
 		self.mockBuild = mockBuild
 		self.twinErrorIsCheckedOnlyWhereMocksCompile = twinErrorIsCheckedOnlyWhereMocksCompile
@@ -2602,7 +2653,8 @@ enum GraphFuzzerCallingMockCheck {
 	/// the tool skips the twin's error in the mock (`mockSkipsTwinsError`: an error it checks only where the generated mocks
 	/// compile, in a build that leaves the mock condition inactive), the mock must be accepted, and the places it passes up
 	/// are classified as that build's. Where the graph `comparesValuesWithInline`, an accepted twin's mock is compared with
-	/// the same types built inline too, rather than with the twin.
+	/// the same types built inline too, rather than with the twin. Where the graph states `expectedMockOwnErrorSite`, the
+	/// mock reports that one error where the twin is accepted, in a build that compiles the generated mocks.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	static func run(_ graph: GraphFuzzerCallingMockGraph, seed: UInt64, comparesValues: Bool = true) async throws -> GraphFuzzerCallingMockResult {
 		let twin = try await toolRun(of: graph, .twin)
@@ -2656,10 +2708,20 @@ enum GraphFuzzerCallingMockCheck {
 				details: "\(graph.name): the calling mock is accepted where the twin reports \(twinSites)",
 			)
 		} else if twinSites == nil, let mockDiagnostics = mock.diagnostics {
+			if let expected = graph.expectedMockOwnErrorSite, let mockSites, mockSites.count == 1, let site = mockSites.first, site.severity == "error", site.file == expected.file, site.declaration == expected.declaration {
+				nil
+			} else {
+				GraphFuzzerFailure(
+					seed: seed,
+					kind: .callingMockRejectsWhereTwinAccepts,
+					details: "\(graph.name): the twin is accepted and the calling mock reports \(mockDiagnostics)",
+				)
+			}
+		} else if let expected = graph.expectedMockOwnErrorSite, graph.mockBuild.compilesGeneratedMocks {
 			GraphFuzzerFailure(
 				seed: seed,
-				kind: .callingMockRejectsWhereTwinAccepts,
-				details: "\(graph.name): the twin is accepted and the calling mock reports \(mockDiagnostics)",
+				kind: .callingMockAcceptedWhereItsFillCallsMockItCannotReach,
+				details: "\(graph.name): the calling mock is accepted where its fill calls the hand-written mock at \(expected.file) `\(expected.declaration)`, which its module cannot reach",
 			)
 		} else if case let unclassified = passUps.filter({ $0.reason == nil }), !unclassified.isEmpty {
 			GraphFuzzerFailure(

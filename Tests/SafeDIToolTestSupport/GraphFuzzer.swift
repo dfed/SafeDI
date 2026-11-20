@@ -12821,8 +12821,12 @@ struct GraphFuzzerFailure: Equatable {
 		case callingMockAcceptedWhereTwinReportsShapeError = "a calling mock is accepted where its production twin reports a shape error"
 		/// A calling mock reports an error at other sites than its production twin's shape error.
 		case callingMockReportsOtherErrorThanTwin = "a calling mock reports another error than its production twin"
-		/// A calling mock is rejected where its production twin is accepted.
+		/// A calling mock is rejected where its production twin is accepted, but with the one error of its own its graph
+		/// states (`GraphFuzzerCallingMockGraph.expectedMockOwnErrorSite`).
 		case callingMockRejectsWhereTwinAccepts = "a calling mock is rejected where its production twin is accepted"
+		/// A calling mock is accepted, in a build that compiles the generated mocks, where its fill calls a hand-written mock
+		/// its module cannot reach, which its production twin does not call (contract rule 7).
+		case callingMockAcceptedWhereItsFillCallsMockItCannotReach = "a calling mock is accepted where its fill calls a hand-written mock its module cannot reach"
 		/// A calling mock is rejected in a build that leaves the mock condition inactive, where its graph's twin error is one
 		/// the tool checks only where the generated mocks compile (`GraphFuzzerCallingMockGraph.MockBuild`).
 		case callingMockRejectedWhereMockConditionIsInactive = "a calling mock is rejected in a build that leaves the mock condition inactive"
