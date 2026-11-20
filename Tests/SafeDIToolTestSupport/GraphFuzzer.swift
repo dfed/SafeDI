@@ -9279,7 +9279,8 @@ enum GraphFuzzerGenerator {
 		/// hands the caller's own wrapper (`fillTakesSendableMemo`); a wrapper a seam on the route declares above its call is
 		/// reported at the reader (`declarationHiddenByField`); and a `SendableLazilyInstantiated` read beside `MixSeam`'s plain
 		/// memo is reported (`sendableWrapperReadBesidePlainMemo`), inside a `@Sendable` function too. The rejected
-		/// combinations are never drawn in a graph with a hole, whose other draws they would throw away.
+		/// combinations are never drawn in a graph with a hole or another gating draw's root, whose other draws they would
+		/// throw away: it draws the accepted variant instead.
 		///
 		/// `wrapperMixRandom` draws only for this pass, which runs after `addingReenteredFillShapes` and only in a graph
 		/// another pass split, so that every graph in one module, and every other draw of a graph it draws in, draws as
@@ -9295,18 +9296,19 @@ enum GraphFuzzerGenerator {
 			let outerDeclaresWrapper = wrapperMixRandom.percentChance(20)
 			let readerInSendableFunction = wrapperMixRandom.percentChance(40)
 			guard !modulesOmittingPackageName.contains(.seamModule), sendability != .sendable else { return declarations }
-			let declaresHole = declarations.contains { $0.name == "\(self.prefix)HoleSeam" }
-			// `MixSeamB` alone in two graphs in four, beside `MixSeam` in one, and `MixSeam` alone in one.
-			let holdsSeam = routeRoll >= 2
-			let holdsSeamB = routeRoll != 3
+			// A graph with a hole, or with the root of another gating draw, holds shapes the tool accepts that a rejection by
+			// design here would throw away, so it draws the accepted variant of each rejected roll instead.
+			let gatingRootNames = ["HoleSeam", "ForwardedRoot", "RetainRoot", "RetainLoopHome", "FillCallRoot", "CarriedRoot", "Copy1Root", "ReenteredRoot"].map { self.prefix + $0 }
+			let drawsOnlyAcceptedVariants = declarations.contains { gatingRootNames.contains($0.name) }
 			// The value and the reader in two graphs in four, the reader alone in one, and the value alone in one.
 			let readsValue = readRoll != 2
 			let readsWrapper = readRoll != 3
-			// A `SendableLazilyInstantiated` read beside `MixSeam`'s plain memo, and a wrapper `MixOuter` declares above its
-			// calls, are rejected by design: never in a graph with a hole.
-			let readsWrapperBesidePlainMemo = readsWrapper && holdsSeam
-			let declaresWrapperOnOuter = outerDeclaresWrapper && readsWrapper && !holdsSeam
-			guard !declaresHole || (!readsWrapperBesidePlainMemo && !declaresWrapperOnOuter) else { return declarations }
+			// `MixSeamB` alone in two graphs in four, beside `MixSeam` in one, and `MixSeam` alone in one. A
+			// `SendableLazilyInstantiated` read beside `MixSeam`'s plain memo, a wrapper `MixOuter` declares above its calls,
+			// and a root's plain wrapper beside the `Sendable` read are rejected by design.
+			let holdsSeam = routeRoll >= 2 && !(drawsOnlyAcceptedVariants && readsWrapper)
+			let holdsSeamB = routeRoll != 3 || !holdsSeam
+			let declaresWrapperOnOuter = outerDeclaresWrapper && readsWrapper && !holdsSeam && !drawsOnlyAcceptedVariants
 			let conformances = ["@unchecked Sendable"]
 			let prefix = prefix
 			func instantiable(_ suffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
@@ -9336,7 +9338,7 @@ enum GraphFuzzerGenerator {
 			// A reader built in a `@Sendable` function beside a root's plain wrapper is rejected with advice to receive the
 			// plain wrapper there, which that function cannot capture: a remedy shape `fuzzer-remedy-oracle.md` records, which
 			// this draw does not repeat.
-			let tokenWrapper = rootDeclaresSendableWrapper || (readsWrapper && readerInSendableFunction) ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			let tokenWrapper = rootDeclaresSendableWrapper || (readsWrapper && (readerInSendableFunction || drawsOnlyAcceptedVariants)) ? "SendableLazilyInstantiated" : "LazilyInstantiated"
 			var outerProperties = [PropertyDeclaration]()
 			if declaresWrapperOnOuter {
 				outerProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "mixToken", type: "SendableLazilyInstantiated<\(token.name)>"))
