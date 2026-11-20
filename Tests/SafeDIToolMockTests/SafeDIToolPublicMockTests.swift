@@ -13532,17 +13532,14 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            wrapperBuilder: Wrapper.SafeDIMockConfiguration = .init(),
-		            theme: Theme? = nil
+		            wrapperBuilder: Wrapper.SafeDIMockConfiguration = .init()
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                wrapperBuilder: wrapperBuilder
 		            )
-		            self.theme = theme
 		        }
 
 		        var wrapperBuilder: Wrapper.SafeDIMockConfiguration { __safeDI_storage.wrapperBuilder }
-		        let theme: Theme?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -13560,7 +13557,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Board {
-		        let theme: Theme? = safeDIOverrides.theme
 		        let __safeDI_wrapperBuilder__wrapperBuilder_analytics_safeDIBuilder = safeDIOverrides.wrapperBuilder.analytics
 		        let __safeDI_wrapperBuilder__wrapperBuilder_service_safeDIBuilder = safeDIOverrides.wrapperBuilder.service
 		        let __safeDI_wrapperBuilder__safeDIBuilder = safeDIOverrides.wrapperBuilder.safeDIBuilder
@@ -13570,7 +13566,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		            }
 		            let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		            _ = Service.__safeDI_Service_mock_8D69AB86D0326E72.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let service = Service.__safeDI_mock(analytics: analytics, theme: theme, safeDIOverrides: __safeDI_wrapperBuilder__wrapperBuilder_service_safeDIBuilder?() ?? .init())
+		            let service = Service.__safeDI_mock(analytics: analytics, theme: nil, safeDIOverrides: __safeDI_wrapperBuilder__wrapperBuilder_service_safeDIBuilder?() ?? .init())
 		            return if let safeDIBuilder = __safeDI_wrapperBuilder__safeDIBuilder { safeDIBuilder(analytics, service) } else { Wrapper(analytics: analytics, service: service) }
 		        }
 		        let wrapperBuilder = SendableInstantiator<Wrapper>(__safeDI_wrapperBuilder)

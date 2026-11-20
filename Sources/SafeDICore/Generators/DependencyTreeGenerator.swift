@@ -6862,6 +6862,19 @@ public actor DependencyTreeGenerator {
 			)
 		}
 		var generator = try mockRootGenerator(builders: nil)
+		// An internal mock binds no override for a value only the calls of other modules' public mocks receive where a call
+		// reads it inside a `@Sendable` function (`ScopeGenerator.passedByPublicMockCallLabelsReadInsideSendableFunctions(of:)`,
+		// a deliberate gap): which calls read it there is decided by the tree the generator holds, so a tree with one is built
+		// again without binding the value, and its calls pass `nil`.
+		if !surfacedByPublicMockCalls.isEmpty {
+			let labelsReadInsideSendableFunctions = generator.passedByPublicMockCallLabelsReadInsideSendableFunctions(of: instantiable)
+			if !labelsReadInsideSendableFunctions.isEmpty {
+				for property in surfacedByPublicMockCalls where labelsReadInsideSendableFunctions.contains(property.label) {
+					allReceived.remove(property)
+				}
+				generator = try mockRootGenerator(builders: nil)
+			}
+		}
 		if instantiable.generateMock == .public, allReceived.contains(where: \.propertyType.isLazilyInstantiated) {
 			// A public mock takes a value its tree receives lazily as the wrapper (`ScopeGenerator.publicMockWrapperParameters`),
 			// which a type of the tree that receives the value by value reads the instance of. Which values it takes so is
