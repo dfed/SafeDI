@@ -1462,7 +1462,7 @@ public struct InstantiableMacro: MemberMacro {
 		{
 			let label = parameter.firstName
 			if let reservation = ReservedName(reserving: label.text) {
-				let error = FixableInstantiableError.reservedName(name: label.text, reservation: reservation)
+				let error = FixableInstantiableError.reservedName(name: label.text.spelledWithoutBackticks, reservation: reservation)
 				let labelsInUse = dependencyLabels.union(
 					parameters.lazy
 						.filter { $0.id != parameter.id }
@@ -1511,7 +1511,7 @@ public struct InstantiableMacro: MemberMacro {
 			return nil
 		case .builderFunctionName:
 			let label = parameter.firstName
-			let newLabel = ReservedName.removingBuilderFunctionNamePrefix(from: label.text)
+			let newLabel = ReservedName.removingBuilderFunctionNamePrefix(from: label.text.spelledWithoutBackticks)
 			guard newLabel.isValidSwiftIdentifier(for: .variableName),
 			      ReservedName(reserving: newLabel) == nil,
 			      !labelsInUse.contains(newLabel)
