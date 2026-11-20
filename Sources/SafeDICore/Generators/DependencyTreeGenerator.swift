@@ -6560,6 +6560,10 @@ public actor DependencyTreeGenerator {
 				&& !isProvidedByMockedTypeAlias(receivedProperty)
 				&& !instancePropertiesOfLazilyInstantiatedProperties.contains(receivedProperty.asUnwrappedProperty)
 		}
+		// A promoted dependency the mocked type receives takes its spelling, in the override and the binding. A deliberate gap,
+		// as in `ScopeGenerator.mockRootParameters`: where two receivers in the tree spell a dependency the mocked type does not
+		// receive apart, the mocked type declares no spelling to prefer, and the promoted dependency takes one of theirs.
+		let mockedTypeSpellings = ScopeGenerator.MockedTypeSpellings(of: instantiable)
 		var promotedPropertiesToGenerate = [Scope.PropertyToGenerate]()
 		for receivedProperty in propertiesToPromote.sorted()
 			where receivedProperty.asUnwrappedProperty == receivedProperty || !propertiesToPromote.contains(receivedProperty.asUnwrappedProperty)
@@ -6568,7 +6572,7 @@ public actor DependencyTreeGenerator {
 				continue
 			}
 			promotedPropertiesToGenerate.append(.instantiated(
-				receivedProperty,
+				mockedTypeSpellings.spelling(of: receivedProperty),
 				receivedScope,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 			))

@@ -1304,32 +1304,32 @@ struct SafeDIToolFulfillerImportTests: ~Copyable {
 			    /// Overrides for the mock dependency tree.
 			    struct SafeDIOverrides {
 			        init(
-			            thing: (() -> Thing)? = nil
+			            thing: (() -> any Thing)? = nil
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
 			                thing: thing
 			            )
 			        }
 
-			        var thing: (() -> Thing)? { __safeDI_storage.thing }
+			        var thing: (() -> any Thing)? { __safeDI_storage.thing }
 
 			        private let __safeDI_storage: __safeDI_Storage
 
 			        private final class __safeDI_Storage {
 			            init(
-			                thing: (() -> Thing)?
+			                thing: (() -> any Thing)?
 			            ) {
 			                self.thing = thing
 			            }
 
-			            let thing: (() -> Thing)?
+			            let thing: (() -> any Thing)?
 			        }
 			    }
 
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Feature {
-			        let thing: Thing = if let safeDIBuilder = safeDIOverrides.thing { safeDIBuilder() } else { DefaultThing() }
+			        let thing: any Thing = if let safeDIBuilder = safeDIOverrides.thing { safeDIBuilder() } else { DefaultThing() }
 			        return Feature(thing: thing)
 			    }
 			}

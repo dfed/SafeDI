@@ -7574,6 +7574,87 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
+	/// How a mocked type spells each dependency it receives, directly or through an alias, which its mock declares wherever
+	/// it binds a form of that dependency it does not build itself: a promoted dependency
+	/// (`DependencyTreeGenerator.createMockRootScopeGenerator`), a flat `mock()` parameter, and an `onlyIfAvailable` override
+	/// or parameter (`mockRootParameters`). `==` reads `any P` and `P` as one type, so the properties a mock's tree receives
+	/// hold whichever spelling a walk met first, often a receiver's deep in the tree, and a protocol the mocked type spells
+	/// with `any` would lose it in its own mock, which warns in a module that enables the `ExistentialAny` upcoming feature.
+	///
+	/// A deliberate gap, commented where the closure types are built (`MockParameterNode.init`) and where the arguments are
+	/// bound (`emitReceiverBindings`): the override closure of a type the mock builds, and the bindings of its arguments in
+	/// that type's builder function, take that type's initializer's parameters as they are declared.
+	struct MockedTypeSpellings {
+		init(of instantiable: Instantiable) {
+			// An alias spells the dependency as its property's type does, where that type is the one `ofType:` names, and never
+			// as `ofType:` does: `Service.self` is an expression, which the `ExistentialAny` upcoming feature does not flag.
+			// A direct receive decides over an alias, whichever the type declares first; of two of one kind, the first decides.
+			var aliasSpelledInstanceProperties = [Property: Property]()
+			for dependency in instantiable.dependencies {
+				switch dependency.source {
+				case .received:
+					let instanceProperty = Self.instanceProperty(of: dependency.property)
+					if spelledInstanceProperties[instanceProperty] == nil {
+						spelledInstanceProperties[instanceProperty] = instanceProperty
+					}
+				case let .aliased(fulfillingProperty, _, _):
+					let instanceProperty = Self.instanceProperty(of: fulfillingProperty)
+					let declaredInstanceProperty = Self.instanceProperty(of: Property(label: fulfillingProperty.label, typeDescription: dependency.property.typeDescription))
+					if declaredInstanceProperty == instanceProperty, aliasSpelledInstanceProperties[instanceProperty] == nil {
+						aliasSpelledInstanceProperties[instanceProperty] = declaredInstanceProperty
+					}
+				case .instantiated, .forwarded:
+					continue
+				}
+			}
+			spelledInstanceProperties.merge(aliasSpelledInstanceProperties) { directlyReceivedProperty, _ in directlyReceivedProperty }
+		}
+
+		/// `property` with the mocked type's spelling of the dependency it is a form of: its optional, its unwrapped form,
+		/// and a `LazilyInstantiated` or `SendableLazilyInstantiated` of its instance are each a form of one dependency,
+		/// which the mock binds once. `property` itself when the mocked type receives no form of it.
+		func spelling(of property: Property) -> Property {
+			guard !spelledInstanceProperties.isEmpty,
+			      let spelledInstanceProperty = spelledInstanceProperties[Self.instanceProperty(of: property)]
+			else { return property }
+			return Property(label: property.label, typeDescription: Self.typeDescription(property.typeDescription, spellingInstanceAs: spelledInstanceProperty.typeDescription))
+		}
+
+		/// `properties`, each spelled as `spelling(of:)` spells it.
+		func spellings(of properties: Set<Property>) -> Set<Property> {
+			if spelledInstanceProperties.isEmpty {
+				properties
+			} else {
+				Set(properties.lazy.map(spelling(of:)))
+			}
+		}
+
+		/// The mocked type's own spelling of the instance of each dependency it receives (`instanceProperty(of:)`), keyed by
+		/// that instance.
+		private var spelledInstanceProperties = [Property: Property]()
+
+		/// The instance of the dependency `property` is a form of: `property` unwrapped, and the instance of a lazily
+		/// instantiated property that creates a non-optional one.
+		private static func instanceProperty(of property: Property) -> Property {
+			let unwrappedProperty = property.asUnwrappedProperty
+			return unwrappedProperty.asLazilyInstantiatedInstanceProperty ?? unwrappedProperty
+		}
+
+		/// `typeDescription` with the instance `instanceProperty(of:)` reads spelled `instanceType`.
+		private static func typeDescription(_ typeDescription: TypeDescription, spellingInstanceAs instanceType: TypeDescription) -> TypeDescription {
+			if case let .optional(wrappedType) = typeDescription {
+				.optional(Self.typeDescription(wrappedType, spellingInstanceAs: instanceType))
+			} else if case let .simple(name, generics) = typeDescription,
+			          let lazilyInstantiatedInstanceType = typeDescription.lazilyInstantiatedInstanceType,
+			          !lazilyInstantiatedInstanceType.isOptional
+			{
+				.simple(name: name, generics: [instanceType] + generics.dropFirst())
+			} else {
+				instanceType
+			}
+		}
+	}
+
 	/// The parameters this scope's `mock()` takes as a mock root. See `MockRootParameters`.
 	/// - Parameter mockDefaults: The hand-written mock a flat parameter of each type defaults to.
 	func mockRootParameters(instantiable: Instantiable, mockDefaults: [TypeDescription: FlatParameterMockDefault]) async -> MockRootParameters {
@@ -7587,7 +7668,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			passedByPublicMockCalls: passedByPublicMockCalls,
 			mockedType: instantiable,
 		)
-		let receivedProperties = receivedProperties.subtracting(receivedOnlyByPublicMockCallsLeftOut)
+		// Each in the mocked type's own spelling where it receives the dependency, which the flat parameters and the
+		// `onlyIfAvailable` overrides and parameters declare. A deliberate gap, as in
+		// `DependencyTreeGenerator.createMockRootScopeGenerator`: where two receivers in the tree spell a dependency the mocked
+		// type does not receive apart, the mocked type declares no spelling to prefer, and the mock takes one of theirs.
+		let receivedProperties = MockedTypeSpellings(of: instantiable).spellings(of: receivedProperties.subtracting(receivedOnlyByPublicMockCallsLeftOut))
 		let onlyIfAvailableUnwrappedReceivedProperties = receivedOnlyByPublicMockCalls.isEmpty
 			? onlyIfAvailableUnwrappedReceivedProperties
 			: onlyIfAvailableUnwrappedReceivedProperties.filter { property in
@@ -8686,6 +8771,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///
 	/// A dependency whose label is in `bindingNamesPassedByName` is not rebound: its receiver is passed the binding by
 	/// name (`receivedBindingNamesPassedByName(to:flatParameterDisambiguationMap:lazilyInstantiatedBindingNames:)`).
+	///
+	/// A deliberate gap beside `MockedTypeSpellings`, as in `MockParameterNode.init`: each binding is spelled as the
+	/// receiving type declares the dependency, so a protocol it spells without `any`, which the mocked type spells with it,
+	/// warns here in a module that enables the `ExistentialAny` upcoming feature.
 	fileprivate static func emitReceiverBindings(
 		for dependencies: [Dependency],
 		unavailableProperties: Set<Property>,
@@ -8889,6 +8978,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Used for the builder closure's return type, disambiguation keys, and
 		/// cycle detection. Configuration struct nesting uses `concreteType` instead.
 		let instantiatedTypeDescription: TypeDescription
+		/// `instantiatedTypeDescription` as the property spells it, `any` kept, which code that declares a value of it spells.
+		var instantiatedTypeSpelledAsDeclared: TypeDescription {
+			typeDescription.asInstantiatedTypeSpelledAsDeclared
+		}
+
 		/// Whether this property is an Instantiator/ErasedInstantiator/Sendable variant.
 		let isInstantiator: Bool
 		/// Whether the concrete type uses extension-based `instantiate(...)` instead of `init(...)`.
@@ -9133,6 +9227,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// a function spelled as a name, such as an erased instantiator's `Builder`, is handed `@escaping` where the called
 			// mock takes it so (`PublicMockCall.typesDeclaredEscaping`).
 			let builderTypesDeclaredEscaping = publicMockCall?.typesDeclaredEscaping ?? []
+			// A deliberate gap beside `MockedTypeSpellings`, which spells what the mock root binds as the mocked type does:
+			// the closure takes each argument as the initializer declares it, so a protocol the type spells without `any`,
+			// which the mocked type spells with it, warns here in a module that enables the `ExistentialAny` upcoming
+			// feature. The argument reads whichever declaration of its label is nearest above the node, which a type between
+			// the node and the mock root can declare in a spelling of its own, and which the node is not told. The bindings of
+			// the arguments in the type's builder function share the gap (`emitReceiverBindings`).
 			builderParameterTypes = callSiteArguments.map { argument in
 				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription).asFunctionParameter(amongTypesDeclaredEscaping: builderTypesDeclaredEscaping).implicitlyUnwrappedOptionalSpelledAsOptional
 			}
@@ -9262,7 +9362,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let parameterTypes = builderParameterTypes
 				.map(\.asSource)
 				.joined(separator: ", ")
-			return "(\(parameterTypes)) -> \(instantiatedTypeDescription.asSource)"
+			return "(\(parameterTypes)) -> \(instantiatedTypeSpelledAsDeclared.asSource)"
 		}
 
 		/// What this node's construction reads from its `SafeDIMockConfiguration` struct. Every node of
@@ -9414,7 +9514,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if defaultBranchType == instantiatedTypeDescription {
 				return ""
 			} else {
-				return ": \(instantiatedTypeDescription.asSource)"
+				return ": \(instantiatedTypeSpelledAsDeclared.asSource)"
 			}
 		}
 
@@ -10080,7 +10180,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// as `@escaping` — matching the `rootDefaultParameters` and
 				// flat-received emission conventions. Idempotent for non-closures.
 				typeSources.append(property.propertyType.isConstant
-					? property.typeDescription.asInstantiatedType.asFunctionParameter.asSource
+					? property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asFunctionParameter.asSource
 					: property.typeDescription.asFunctionParameter.asSource)
 				instantiatedTypes.append(dependency.asInstantiatedType)
 			}
@@ -11336,7 +11436,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 						lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
 					).joined(separator: ", ")
-					lines.append("\(indent)let \(outerBindingName): \(node.instantiatedTypeDescription.asSource) = \(functionName)(\(closerArguments))")
+					lines.append("\(indent)let \(outerBindingName): \(node.instantiatedTypeSpelledAsDeclared.asSource) = \(functionName)(\(closerArguments))")
 				} else if node.requiresFunctionWrapper
 					|| hasDisambiguatedReceiver(node, flatParameterDisambiguationMap: combinedDisambiguationMap)
 					|| !sendableAutoclosureBindings.isEmpty
@@ -11350,7 +11450,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// function scope keeps child bindings from colliding with siblings'
 					// child bindings that share the same property label and gives these
 					// receiver bindings a place to live.
-					let propertyTypeName = node.instantiatedTypeDescription.asSource
+					let propertyTypeName = node.instantiatedTypeSpelledAsDeclared.asSource
 					let innerIndent = "\(indent)\(standardIndent)"
 					// The node's own receives have labels of their own, which neither its declarations nor its uncovered
 					// dependencies share.
@@ -11874,7 +11974,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let callArguments = (forwardedProperties.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" } + cycleArguments).joined(separator: ", ")
 				let functionIndent = String(indent.dropLast(ScopeGenerator.standardIndent.count))
 				let decorator = node.buildsInSendableFunction || node.property.propertyType.isSendable ? "@Sendable " : ""
-				var lines = ["\(functionIndent)\(decorator)func \(receivedFunctionName)(\(functionParameters)) -> \(node.instantiatedTypeDescription.asSource) {"]
+				var lines = ["\(functionIndent)\(decorator)func \(receivedFunctionName)(\(functionParameters)) -> \(node.instantiatedTypeSpelledAsDeclared.asSource) {"]
 				lines.append(contentsOf: memberLines)
 				lines.append("\(indent)\(memberLines.isEmpty ? "" : "return ")\(functionName)(\(callArguments))")
 				lines.append("\(functionIndent)}")
@@ -12209,7 +12309,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				functionConstructionArguments = arguments
 			}
 
-			let functionReturnType = node.instantiatedTypeDescription.asSource
+			let functionReturnType = node.instantiatedTypeSpelledAsDeclared.asSource
 			// The payloads of the cases on the routes to the places beneath this function, bound before it. A loop's members
 			// each bind theirs in a `let`, which every member's function captures, here and in the mock's fills
 			// (`SeamHoles.holdsLoopPayloadsInBoxes`), where a seam's tree holds a loop's in one box (`ScopeGenerator.boxedLoops`):
