@@ -25,6 +25,11 @@ jobs:
         # Not measured on macOS yet; the same probes compile in under a minute on Linux.
         timeout-minutes: 5
         run: Scratch/rt1-v3/mac-check/iso.sh
+      - name: probes7 (24 isolation cells, retention, formation key)
+        # Not measured on macOS yet; on 4-vCPU Linux the 24 cells, the retention build and the two
+        # type checks took about 2 minutes.
+        timeout-minutes: 5
+        run: Scratch/rt1-v3/mac-check/probes7.sh
       - name: Runtime cells (chain, E24, E32, N1-40, N1-200; inline, ccl, C)
         # Not measured on macOS yet. On a 4-vCPU Linux machine the builds took about 20 minutes, E32's inline
         # caller alone about 7.5 (444 s), and the interleaved runs about 15, so about twice the total.
