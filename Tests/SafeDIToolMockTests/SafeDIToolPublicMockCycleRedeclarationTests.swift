@@ -347,7 +347,7 @@ struct SafeDIToolPublicMockCycleRedeclarationTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        _ = Home.__safeDI_Home_mock_51799E6AA5E7B634.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let home = Home.mock(safeDIOverrides: safeDIOverrides.home)
+		        let home = Home.__safeDI_mock(safeDIOverrides: safeDIOverrides.home)
 		        return Root(home: home)
 		    }
 		}

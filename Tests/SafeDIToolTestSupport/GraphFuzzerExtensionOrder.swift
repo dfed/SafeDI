@@ -33,8 +33,8 @@ enum GraphFuzzerExtensionOrder {
 	///   after it.
 	/// - A public mock's module-level configuration: its struct, documented `/// Configuration for how …`, with the
 	///   extension right after it and that extension's forwarders, as one unit, which may take the place of an extension.
-	/// - Such a struct with no extension after it, as decomposing a module's combined output leaves it, which may take
-	///   the place only of another such struct.
+	/// - Such a struct with no extension after it, as decomposing a module's combined output leaves it, with the
+	///   forwarders of its defaults after it, which may take the place only of another such struct.
 	///
 	/// Only whitespace may separate the declarations of a run, and any other declaration or comment ends it, except that a
 	/// run goes on from a top-level `#if` block with no other clause into the first clause of the next block, when only
@@ -187,11 +187,19 @@ enum GraphFuzzerExtensionOrder {
 			position = offset
 		}
 
-		/// Whether `statement` is on the line right after the extension or configuration that ends at `position`.
+		/// Whether `statement` is on the line right after the extension or configuration that ends at `position`, or
+		/// follows a configuration's struct with no extension after it across only whitespace: decomposing a module's
+		/// combined output files the forwarders of a configuration's defaults after its struct, apart from the extension
+		/// they followed, each a block of its own.
 		private func canExtendLastDeclaration(with statement: CodeBlockItemSyntax) -> Bool {
-			run.last?.kind == .extensionOrConfiguration
-				&& run.last?.range.upperBound == position
-				&& source[position..<start(of: statement)].elementsEqual([Self.newline])
+			guard let last = run.last, last.range.upperBound == position else { return false }
+			let gap = source[position..<start(of: statement)]
+			switch last.kind {
+			case .extensionOrConfiguration:
+				return gap.elementsEqual([Self.newline])
+			case .configurationStruct:
+				return gap.allSatisfy(Self.isWhitespace)
+			}
 		}
 
 		private func isForwarder(_ statement: CodeBlockItemSyntax) -> Bool {
