@@ -246,23 +246,32 @@ struct FrozenScopeMap {
 
 	/// The table of one signature pass, from this base, frozen once from a seam world in which every seam of the declaration
 	/// map is built and not called: each record of a type that is no seam depends on the declarations alone, so it is the
-	/// base's; the record of each seam the pass calls is the pass's own, made from `passScopeMap`'s scope that calls it, its
-	/// fills found by `fulfillingKey`, then looked up among the pass map's keys alone (`ScopeTable.reachableKeys`), since a
-	/// place whose fulfilling type the pass does not reach is passed up. A key the pass map lacks names no record.
-	/// The overlay oracle checks, over the seam corpus, that each key's record equals the record frozen from the pass's map.
+	/// base's; the record of each seam call the pass's seams reach from `rootScopes` is the pass's own, made from
+	/// `passScopeMap`'s scope that calls it, its fills found by `fulfillingKey`, then looked up among the pass map's keys
+	/// alone (`ScopeTable.reachableKeys`), since a place whose fulfilling type the pass does not reach is passed up. A key
+	/// the pass map lacks names no record. Construction reaches a record only through the identifiers of the records above
+	/// it, from a seam's root down its instantiated children and the fills of its calls (`scopesReached(from:…)`), so a
+	/// call the pass's seams do not reach keeps the base's record, which nothing of the pass reads: the pass map of a seam
+	/// that calls a chain of seams holds the call of every seam down the chain, and recording each again made a chain's
+	/// passes grow with the cube of its length.
+	/// The overlay oracle checks, over the seam corpus, that each reached key's record equals the record frozen from the
+	/// pass's map.
 	func overlaying(
 		passScopeMap: [TypeDescription: Scope],
+		rootScopes: [Scope],
 		fulfillingKey: (SeamSignature.Hole) -> TypeDescription?,
 	) -> FrozenScopeMap {
 		var frozenScopeMap = self
 		frozenScopeMap.table.reachableKeys = Set(passScopeMap.keys)
-		var callScopeByID = [ScopeID: Scope]()
 		for (key, scope) in passScopeMap {
 			if let id = table.storage.idByKey[key] {
 				frozenScopeMap.addedIDByScope[ObjectIdentifier(scope)] = id
-				if scope.seamCall != nil {
-					callScopeByID[id] = scope
-				}
+			}
+		}
+		var callScopeByID = [ScopeID: Scope]()
+		for scope in Self.scopesReached(from: rootScopes, passScopeMap: passScopeMap, fulfillingKey: fulfillingKey) where scope.seamCall != nil {
+			if let id = frozenScopeMap.addedIDByScope[ObjectIdentifier(scope)] {
+				callScopeByID[id] = scope
 			}
 		}
 		// The pass's scopes are held for as long as their identifiers name positions.
@@ -277,8 +286,42 @@ struct FrozenScopeMap {
 			}
 			frozenScopeMap.table.overlaidRecords[Int(id.index)] = frozenScopeMap.record(freezing: scope, holeArguments: holeArguments)
 		}
+		if let overlaidCallRecords = ScopeTableObservation.overlaidCallRecords {
+			overlaidCallRecords(callScopeByID.values.map(\.instantiable.concreteInstantiable.asSource).sorted())
+		}
 		frozenScopeMap.freezePendingScopes()
 		return frozenScopeMap
+	}
+
+	/// Every scope construction can reach from `rootScopes` in a pass: each instantiated child, and, from a seam call, the
+	/// pass map's scope of each place's fulfilling type, which the call's record names as a fill. Walked with an explicit
+	/// stack, since a tree can be as deep as the module has types; each scope once.
+	static func scopesReached(
+		from rootScopes: [Scope],
+		passScopeMap: [TypeDescription: Scope],
+		fulfillingKey: (SeamSignature.Hole) -> TypeDescription?,
+	) -> [Scope] {
+		var reached = [Scope]()
+		var visited = Set<ObjectIdentifier>()
+		var stack = rootScopes
+		while let scope = stack.popLast() {
+			guard visited.insert(ObjectIdentifier(scope)).inserted else { continue }
+			reached.append(scope)
+			for propertyToGenerate in scope.propertiesToGenerate {
+				switch propertyToGenerate {
+				case let .instantiated(_, childScope, _):
+					stack.append(childScope)
+				case .hole, .aliased:
+					break
+				}
+			}
+			for hole in scope.seamCall?.holes ?? [] {
+				if let key = fulfillingKey(hole), let fillScope = passScopeMap[key] {
+					stack.append(fillScope)
+				}
+			}
+		}
+		return reached
 	}
 
 	/// The record of `scope` – a mock root's or a seam's root, which is in no map, or a root the map holds – frozen against
@@ -450,6 +493,9 @@ public enum ScopeTableObservation {
 	/// and the pass's overlay, differs from the record frozen from the pass's own map (by `ScopeTable.projectionByKey`), and
 	/// each key outside the pass's map that names a record: the overlay oracle. Empty when the two agree.
 	@TaskLocal public static var overlayOracle: (@Sendable (_ mismatches: [String]) -> Void)?
+	/// Called once per seam signature pass with the types, by `asSource` in sorted order, of the seam calls whose records
+	/// the pass's table takes from the pass's map rather than the base's (`FrozenScopeMap.overlaying`).
+	@TaskLocal public static var overlaidCallRecords: (@Sendable (_ calledTypes: [String]) -> Void)?
 }
 
 extension TypeDescription {
