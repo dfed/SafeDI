@@ -1088,6 +1088,14 @@ extension TypeDescription: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		if reader.sharesTypeDescriptions {
+			self = try reader.readSharedByBytes { reader throws(BinaryDecodingError) in try Self(readingUnsharedFrom: &reader) }
+		} else {
+			try self.init(readingUnsharedFrom: &reader)
+		}
+	}
+
+	private init(readingUnsharedFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		self = try reader.readNested { reader throws(BinaryDecodingError) in
 			switch try reader.readTag() as Tag {
 			case .void:
@@ -1127,6 +1135,14 @@ extension TypeDescription: BinarySchemaMember {
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		if writer.sharesTypeDescriptions {
+			writer.writeSharedByBytes { writeUnshared(to: &$0) }
+		} else {
+			writeUnshared(to: &writer)
+		}
+	}
+
+	private func writeUnshared(to writer: inout BinaryWriter) {
 		writer.writeNested { writer in
 			writeCase(to: &writer)
 		}
@@ -1307,7 +1323,8 @@ extension ModuleInfoFile: BinarySchemaMember {
 				BinaryLayoutField("conditionalCompilationDecisions", \.conditionalCompilationDecisions),
 				BinaryLayoutField("instantiableTypeNamesInAnyClause", \.instantiableTypeNamesInAnyClause),
 				BinaryLayoutField("plainTypeDeclarations", \.plainTypeDeclarations),
-				BinaryLayoutField("seamSignatures", \.seamSignatures),
+				// A signature names the same few types at many places.
+				BinaryLayoutField("seamSignatures", \.seamSignaturesSharingTypeDescriptions),
 				BinaryLayoutField("view", \.view),
 			],
 			unwrittenProperties: [],
@@ -1348,7 +1365,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 			conditionalCompilationDecisions: reader.read(),
 			instantiableTypeNamesInAnyClause: reader.read(),
 			plainTypeDeclarations: reader.read(),
-			seamSignatures: reader.read(),
+			seamSignatures: (reader.read() as BinarySharingTypeDescriptions<[StoredSeamSignature]>).value,
 			view: .empty,
 		)
 	}
@@ -1365,8 +1382,12 @@ extension ModuleInfoFile: BinarySchemaMember {
 		writer.write(conditionalCompilationDecisions)
 		writer.write(instantiableTypeNamesInAnyClause)
 		writer.write(plainTypeDeclarations)
-		writer.write(seamSignatures)
+		writer.write(seamSignaturesSharingTypeDescriptions)
 		writer.write(view)
+	}
+
+	private var seamSignaturesSharingTypeDescriptions: BinarySharingTypeDescriptions<[StoredSeamSignature]> {
+		BinarySharingTypeDescriptions(seamSignatures)
 	}
 }
 
@@ -1430,7 +1451,7 @@ extension ViewedModule: BinarySchemaMember {
 				BinaryLayoutField("mockImports", \.mockImports),
 				BinaryLayoutField("instantiables", \.instantiables),
 				BinaryLayoutField("plainTypeDeclarations", \.plainTypeDeclarations),
-				BinaryLayoutField("seamSignatures", \.seamSignatures),
+				BinaryLayoutField("seamSignatures", \.seamSignaturesSharingTypeDescriptions),
 			],
 			unwrittenProperties: [],
 		)
@@ -1443,7 +1464,7 @@ extension ViewedModule: BinarySchemaMember {
 			mockImports: reader.read(),
 			instantiables: reader.read(),
 			plainTypeDeclarations: reader.read(),
-			seamSignatures: reader.read(),
+			seamSignatures: (reader.read() as BinarySharingTypeDescriptions<[StoredSeamSignature]>).value,
 		)
 	}
 
@@ -1453,6 +1474,10 @@ extension ViewedModule: BinarySchemaMember {
 		writer.write(mockImports)
 		writer.write(instantiables)
 		writer.write(plainTypeDeclarations)
-		writer.write(seamSignatures)
+		writer.write(seamSignaturesSharingTypeDescriptions)
+	}
+
+	private var seamSignaturesSharingTypeDescriptions: BinarySharingTypeDescriptions<[StoredSeamSignature]> {
+		BinarySharingTypeDescriptions(seamSignatures)
 	}
 }

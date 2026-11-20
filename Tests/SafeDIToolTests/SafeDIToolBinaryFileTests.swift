@@ -154,6 +154,64 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func binaryWriter_writesEachTypeDescriptionOnce_whenSharingTypeDescriptionsAndKeepsSpellingsEqualityIgnores() throws {
+		// `==` calls `any Service` and `Service` equal, but each reads back as written.
+		let types: [TypeDescription] = [
+			.any(.simple(name: "Service")),
+			.simple(name: "Service"),
+			.any(.simple(name: "Service")),
+			.simple(name: "Service"),
+		]
+		var writer = BinaryWriter()
+		writer.write(BinarySharingTypeDescriptions(types))
+		let encoded = writer.encoded
+
+		let readTypes = try encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let readTypes: BinarySharingTypeDescriptions<[TypeDescription]> = try reader.read()
+			try reader.finish()
+			return readTypes.value
+		}
+
+		#expect(readTypes.map(\.asSource) == ["any Service", "Service", "any Service", "Service"])
+		// The string table, then four elements: two written in full, then a reference to each.
+		#expect(encoded.count == Self.encoded(Array(types.prefix(2))).count + 2 + 2)
+	}
+
+	@Test
+	func binaryReader_readsRepeatedPlaces_whenPlacesHoldTypeDescriptionNotSeenBefore() throws {
+		// The first list of places is the first to name `Service`, so its type is read, and takes its index, before the
+		// list does. The second list refers to the first.
+		let site = SeamSignature.Hole.Site(seamType: .simple(name: "Service"), path: [])
+		let places = [BinaryShared([site]), BinaryShared([site])]
+		var writer = BinaryWriter()
+		writer.write(BinarySharingTypeDescriptions(places))
+
+		let readPlaces = try writer.encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let readPlaces: BinarySharingTypeDescriptions<[BinaryShared<[SeamSignature.Hole.Site]>]> = try reader.read()
+			try reader.finish()
+			return readPlaces.value
+		}
+
+		#expect(readPlaces.map(\.value) == [[site], [site]])
+	}
+
+	@Test
+	func binaryReader_throws_whenSharedTypeDescriptionReferenceComesBeforeTheType() {
+		// An empty string table, then one element whose type refers to the first shared value, which no value before it
+		// holds.
+		let bytes: [UInt8] = [0, 1, 1]
+
+		#expect(throws: BinaryDecodingError.sharedValueReferenceOutOfRange(reference: 1, offset: 2)) {
+			try bytes.withUnsafeBytes { bytes in
+				var reader = try BinaryReader(bytes: bytes)
+				let _: BinarySharingTypeDescriptions<[TypeDescription]> = try reader.read()
+			}
+		}
+	}
+
+	@Test
 	func binaryFileReadError_explains_whenBodyRefersToSharedValueNotYetRead() {
 		let error = BinaryFileReadError(kind: .moduleInfo, reason: .malformedBody(.sharedValueReferenceOutOfRange(reference: 3, offset: 12)))
 
@@ -858,7 +916,6 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			label: "serviceBuilder",
 			internalName: "serviceBuilder",
 			parameterType: .simple(name: "Service"),
-			parameterTypeWithoutAny: .simple(name: "Service"),
 			readableParameterType: .simple(name: "Service"),
 			takesBuilderStruct: false,
 			tierAccess: .open,
@@ -1575,6 +1632,12 @@ extension Bool: BinarySample {
 extension Optional: BinarySample where Wrapped: BinarySample {
 	fileprivate static func sample(isDistinct: Bool) throws -> Wrapped? {
 		isDistinct ? try Wrapped.sample(isDistinct: false) : nil
+	}
+}
+
+extension BinarySharingTypeDescriptions: BinarySample where Value: BinarySample {
+	fileprivate static func sample(isDistinct: Bool) throws -> BinarySharingTypeDescriptions<Value> {
+		try BinarySharingTypeDescriptions(Value.sample(isDistinct: isDistinct))
 	}
 }
 

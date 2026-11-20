@@ -1351,12 +1351,12 @@ public struct SeamSignature: Sendable {
 
 	/// A builder of the generated initializer, over a root scope enum.
 	public struct Builder: Codable, Sendable {
-		public init(enumKey: ScopeEnum.Key, label: String, internalName: String, parameterType: TypeDescription, parameterTypeWithoutAny: TypeDescription, readableParameterType: TypeDescription, takesBuilderStruct: Bool, tierAccess: AccessLevel, accessCause: TypeAccessProof.Cause?, narrowingInnerSeam: TypeDescription?, narrowerTierLabels: [AccessLevel: String] = [:]) {
+		public init(enumKey: ScopeEnum.Key, label: String, internalName: String, parameterType: TypeDescription, readableParameterType: TypeDescription, takesBuilderStruct: Bool, tierAccess: AccessLevel, accessCause: TypeAccessProof.Cause?, narrowingInnerSeam: TypeDescription?, narrowerTierLabels: [AccessLevel: String] = [:]) {
 			self.enumKey = enumKey
 			self.label = label
 			self.internalName = internalName
 			self.parameterType = parameterType
-			self.parameterTypeWithoutAny = parameterTypeWithoutAny
+			parameterTypeWithoutAny = parameterType.withoutAny
 			self.readableParameterType = readableParameterType
 			self.takesBuilderStruct = takesBuilderStruct
 			self.tierAccess = tierAccess
@@ -1413,7 +1413,6 @@ public struct SeamSignature: Sendable {
 				label: label(inTierAt: tier),
 				internalName: internalName,
 				parameterType: parameterType,
-				parameterTypeWithoutAny: parameterTypeWithoutAny,
 				readableParameterType: readableParameterType,
 				takesBuilderStruct: takesBuilderStruct,
 				tierAccess: tierAccess,

@@ -174,7 +174,7 @@ enum BinaryFile {
 	/// because describing the schema reflects on every member's type, and reflection scans the runtime's
 	/// protocol conformance tables: computing it took most of a small module's `generate`. A test computes it
 	/// and fails, giving the new value, when a stored type's layout changes.
-	static let schemaFingerprint: UInt64 = 0x50F89214E07A17A9
+	static let schemaFingerprint: UInt64 = 0x0C8CC15A75730148
 
 	/// The format version and every schema member's layout, one member per line: the name and type of each
 	/// field a struct writes, and the name and payload types of each case an enum writes, in the order written.

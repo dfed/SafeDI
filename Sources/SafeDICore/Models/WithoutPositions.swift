@@ -331,7 +331,7 @@ extension SeamSignature.ScopeEnum {
 
 extension SeamSignature.Builder {
 	func withoutPositions() -> SeamSignature.Builder {
-		SeamSignature.Builder(enumKey: enumKey, label: label, internalName: internalName, parameterType: parameterType, parameterTypeWithoutAny: parameterTypeWithoutAny, readableParameterType: readableParameterType, takesBuilderStruct: takesBuilderStruct, tierAccess: tierAccess, accessCause: accessCause?.withoutPositions(), narrowingInnerSeam: narrowingInnerSeam, narrowerTierLabels: narrowerTierLabels)
+		SeamSignature.Builder(enumKey: enumKey, label: label, internalName: internalName, parameterType: parameterType, readableParameterType: readableParameterType, takesBuilderStruct: takesBuilderStruct, tierAccess: tierAccess, accessCause: accessCause?.withoutPositions(), narrowingInnerSeam: narrowingInnerSeam, narrowerTierLabels: narrowerTierLabels)
 	}
 }
 
