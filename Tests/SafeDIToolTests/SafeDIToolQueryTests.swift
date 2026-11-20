@@ -1862,6 +1862,36 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_throwsHiddenReceiveOfLaterTypeNamed_whenOnlyItsTreeHidesIt() async {
+		// Only the query of `Top` walks the tree that hides `service`, so the error comes from validating `Top`'s tree
+		// after the map was built for `Cache`.
+		await assertThrowsQueryError(diagnostics: Self.hiddenServiceDiagnostics) {
+			try await executeSafeDIToolQuery(
+				typeName: "Cache",
+				additionalTypeNames: ["Top"],
+				modules: Self.hiddenServiceModules(topIsRoot: false),
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_throwsHiddenReceiveOfLaterRootNamed_whenOnlyItsTreeHidesIt() async {
+		// A root's tree, validated as a production root while the map is built, binds nothing a mock's would, so the hidden
+		// receive is found only when `Top` is validated as the root of its own query.
+		await assertThrowsQueryError(diagnostics: Self.hiddenServiceDiagnostics) {
+			try await executeSafeDIToolQuery(
+				typeName: "Cache",
+				additionalTypeNames: ["Top"],
+				modules: Self.hiddenServiceModules(topIsRoot: true),
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func query_buildsMockScopesOncePerView_whenThreeTypesAreNamed() async throws {
 		let (stream, continuation) = AsyncStream.makeStream(of: String.self)
 		let output = try await GenerationLayerObservation.$observer.withValue({ _, layer in
@@ -1930,8 +1960,14 @@ struct SafeDIToolQueryTests: ~Copyable {
 		]
 		let featureOutput = try await executeSafeDIToolQuery(typeName: "Feature", modules: modules, filesToDelete: &filesToDelete)
 		let settingsOutput = try await executeSafeDIToolQuery(typeName: "Settings", modules: modules, filesToDelete: &filesToDelete)
-		#expect(featureOutput.formatted.contains("Required @Forwarded parameters of `Feature.mock()`:\n  config: Config"))
-		#expect(settingsOutput.formatted.contains("Defaulted @Forwarded parameters of `Settings.mock()`:\n  config: Config = Config.mock()"))
+		guard case let .mock(featureMock) = featureOutput.result.mockReport,
+		      case let .mock(settingsMock) = settingsOutput.result.mockReport
+		else {
+			Issue.record("Expected both types to have a mock")
+			return
+		}
+		#expect(featureMock.forwardedParameters == [TypeReport.ForwardedParameter(label: "config", type: "Config", defaultExpression: nil)])
+		#expect(settingsMock.forwardedParameters == [TypeReport.ForwardedParameter(label: "config", type: "Config", defaultExpression: "Config.mock()")])
 
 		let settingsFirst = try await executeSafeDIToolQuery(typeName: "Settings", additionalTypeNames: ["Feature"], modules: modules, filesToDelete: &filesToDelete)
 		let featureFirst = try await executeSafeDIToolQuery(typeName: "Feature", additionalTypeNames: ["Settings"], modules: modules, filesToDelete: &filesToDelete)
@@ -3317,6 +3353,61 @@ struct SafeDIToolQueryTests: ~Copyable {
 	}
 
 	/// A feature that instantiates a service and receives a logger, across three modules.
+	/// A module in which `Middle` declares `service`, which hides the `service` that `Leaf`, beneath it, receives.
+	private static func hiddenServiceModules(topIsRoot: Bool) -> [QueryTestModule] {
+		[
+			QueryTestModule("HiddenModule", [
+				"""
+				@Instantiable
+				public final class Cache: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable\(topIsRoot ? "(isRoot: true)" : "")
+				public final class Top: Instantiable {
+				    public init(middle: Middle) { self.middle = middle }
+				    @Instantiated let middle: Middle
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Middle: Instantiable {
+				    public init(service: ServiceA, leaf: Leaf) { self.service = service; self.leaf = leaf }
+				    @Instantiated let service: ServiceA
+				    @Instantiated let leaf: Leaf
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Leaf: Instantiable {
+				    public init(service: ServiceB) { self.service = service }
+				    @Received let service: ServiceB
+				}
+				""",
+				"""
+				@Instantiable
+				public final class ServiceA: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class ServiceB: Instantiable {
+				    public init() {}
+				}
+				""",
+			]),
+		]
+	}
+
+	private static func hiddenServiceDiagnostics(_ moduleFiles: [String: [URL]]) -> String {
+		"""
+		\(moduleFiles["HiddenModule"]![3].path):4:5: error: @Received property `service: ServiceB` is hidden in chain: Top -> Middle -> Leaf. `Middle` declares `service: ServiceA` with the same label, so the types below `Middle` receive `service: ServiceA` instead. Give `service: ServiceA` on `Middle` a different label to fix.
+		\(moduleFiles["HiddenModule"]![2].path):4:5: note: `service: ServiceA` is declared here
+		"""
+	}
+
 	private static let featureModules = [
 		QueryTestModule("FeatureModule", [
 			"""
