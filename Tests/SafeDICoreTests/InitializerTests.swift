@@ -29,6 +29,9 @@ struct InitializerTests {
 		("nonisolated init() {}", "nonisolated"),
 		("@MainActor init() {}", "@MainActor"),
 		("@available(iOS 17, *) init() {}", nil),
+		("@MainActor /* isolated */ init() {}", "@MainActor"),
+		("@Space.CustomActor init() {}", "@Space.CustomActor"),
+		("@Space.Other init() {}", nil),
 	] as [(String, String?)])
 	func init_recordsSpelledIsolation_whenInitializerSpellsModifierOrGlobalActor(source: String, spelledIsolation: String?) throws {
 		// A public mock's construction function mirrors the isolation the initializer it calls spells.
