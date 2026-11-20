@@ -25,8 +25,9 @@ public actor DependencyTreeGenerator {
 	///   - importStatements: The imports generated dependency-tree code needs.
 	///   - mockImportStatements: The imports generated mock code needs.
 	///   - compilesGeneratedMocks: Whether the build compiles the generated mocks
-	///     (`ConditionalCompilationEvaluator.compilesGeneratedMocks`). A call of a hand-written mock that a build compiles
-	///     no generated mock in is never compiled, so it is checked only where they are compiled.
+	///     (`ConditionalCompilationEvaluator.compilesGeneratedMocks`). A call of a hand-written mock, or a calling mock's
+	///     fill of a place it cannot fill, that a build compiles no generated mock in is never compiled, so each is checked
+	///     only where they are compiled.
 	///   - emittingModule: The module the generated code compiles in, which decides what access each declaration the
 	///     generated code constructs needs, or `nil` to check no access, as `SafeDITool query` does.
 	///   - seams: The seams among the declarations – the types declared with `generateDependencyTree: true` – whose
@@ -1042,8 +1043,12 @@ public actor DependencyTreeGenerator {
 			typeDescriptionToScopeMap = createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCalls)
 			let fills = holesFilled(byCallsOf: publicMockCalls, in: typeDescriptionToScopeMap)
 			// A fill whose tree instantiates a type no declaration fulfills, spelled as no hole can be, is production's error
-			// where a mock's tree reaches the call.
-			try validateFillsInstantiateOnlyWhatCanBeFulfilled(fills.typesNoDeclarationCanFulfillByCalledType, additionalMocksToGenerate: additionalMocksToGenerate)
+			// where a mock's tree reaches the call, in a build that compiles the generated mocks: the mocks are under the
+			// module's mock condition, so a build that leaves it inactive never compiles the place the mock cannot fill, as
+			// `validateHandWrittenMocksTakeOnlyFulfilledParameters` is checked only there.
+			if compilesGeneratedMocks {
+				try validateFillsInstantiateOnlyWhatCanBeFulfilled(fills.typesNoDeclarationCanFulfillByCalledType, additionalMocksToGenerate: additionalMocksToGenerate)
+			}
 			// A call that fills a builder declares no dependency for it, so the map is built again with the fills.
 			if !fills.filledHoles.isEmpty {
 				for (calledType, holes) in fills.filledHoles {
