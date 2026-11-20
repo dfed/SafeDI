@@ -190,26 +190,15 @@ extension DependencyTreeGenerator {
 		// references the type, so the annotation has to agree, and each root's emission reads the union.
 		let mockDeclarationLocations = mockDeclarationLocationsOfTypesWithHandWrittenMocks()
 		let concreteTypesWithHandWrittenMocks = Set(mockDeclarationLocations.keys)
-		let summaries = await withTaskGroup(
-			of: (index: Int, summary: ScopeGenerator.MockTreeSummary).self,
-			returning: [ScopeGenerator.MockTreeSummary].self,
-		) { taskGroup in
-			for (index, (instantiable, mockRoot)) in mockRoots.enumerated() {
-				taskGroup.addTask {
-					await (index: index, summary: mockRoot.mockTreeSummary(
-						isPublicMock: instantiable.generateMock == .public,
-						handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
-						concreteTypesWithHandWrittenMocks: concreteTypesWithHandWrittenMocks,
-						mockRoot: instantiable.concreteInstantiable,
-						cycleEdges: cycleEdges,
-					))
-				}
-			}
-			var summaries = [ScopeGenerator.MockTreeSummary?](repeating: nil, count: mockRoots.count)
-			for await result in taskGroup {
-				summaries[result.index] = result.summary
-			}
-			return summaries.compactMap(\.self)
+		let summaries = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
+			let (instantiable, mockRoot) = instantiableAndMockRoot
+			await mockRoot.mockTreeSummary(
+				isPublicMock: instantiable.generateMock == .public,
+				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+				concreteTypesWithHandWrittenMocks: concreteTypesWithHandWrittenMocks,
+				mockRoot: instantiable.concreteInstantiable,
+				cycleEdges: cycleEdges,
+			)
 		}
 		let sendableConfigurationTypeNames = summaries.reduce(into: Set<String>()) { union, summary in
 			union.formUnion(summary.sendableConfigurationTypeNames)
@@ -225,43 +214,32 @@ extension DependencyTreeGenerator {
 		}
 
 		// Generate each root's mock code.
-		let generatedRoots = try await withThrowingTaskGroup(
-			of: GeneratedMockRoot.self,
-			returning: [GeneratedMockRoot].self,
-		) { taskGroup in
-			for ((instantiable, mockRoot), summary) in zip(mockRoots, summaries) {
-				taskGroup.addTask {
-					async let code = mockRoot.generateCode(
-						codeGeneration: .mock(ScopeGenerator.MockContext(
-							mockConditionalCompilation: mockConditionalCompilation,
-							flatParameterMockDefaults: flatParameterMockDefaults,
-							cycleEdges: cycleEdges,
-							handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
-							sendableConfigurationTypeNames: sendableConfigurationTypeNames,
-							publicMockContext: publicMockContext,
-						)),
-					)
-					async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
-					let generatedRoot = try await GeneratedMockRoot(
-						root: GeneratedRoot(
-							typeDescription: instantiable.concreteInstantiable,
-							sourceFilePath: instantiable.sourceFilePath,
-							code: code,
-							fulfillers: fulfillers,
-						),
-						configurationTypes: summary.configurationTypes,
-						isPublicMock: instantiable.generateMock == .public,
-						publicConstructionNodes: summary.publicConstructionNodes,
-					)
-					await mockRoot.releaseRootMockParameterTree()
-					return generatedRoot
-				}
-			}
-			var results = [GeneratedMockRoot]()
-			for try await result in taskGroup {
-				results.append(result)
-			}
-			return results
+		let generatedRoots = try await BoundedConcurrency.map(Array(zip(mockRoots, summaries)), width: BoundedConcurrency.mockRootWidth) { mockRootAndSummary, _ in
+			let ((instantiable, mockRoot), summary) = mockRootAndSummary
+			async let code = mockRoot.generateCode(
+				codeGeneration: .mock(ScopeGenerator.MockContext(
+					mockConditionalCompilation: mockConditionalCompilation,
+					flatParameterMockDefaults: flatParameterMockDefaults,
+					cycleEdges: cycleEdges,
+					handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+					sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+					publicMockContext: publicMockContext,
+				)),
+			)
+			async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
+			let generatedRoot = try await GeneratedMockRoot(
+				root: GeneratedRoot(
+					typeDescription: instantiable.concreteInstantiable,
+					sourceFilePath: instantiable.sourceFilePath,
+					code: code,
+					fulfillers: fulfillers,
+				),
+				configurationTypes: summary.configurationTypes,
+				isPublicMock: instantiable.generateMock == .public,
+				publicConstructionNodes: summary.publicConstructionNodes,
+			)
+			await mockRoot.releaseRootMockParameterTree()
+			return generatedRoot
 		}
 
 		let nodesReadingConfiguration = try configurationValidation.get()
