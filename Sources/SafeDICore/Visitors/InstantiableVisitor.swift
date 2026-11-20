@@ -836,13 +836,14 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		}
 	}
 
-	/// Reports that `name`, which generated code binds or refers to, collides with `reservation`.
+	/// Reports that `name`, which generated code binds or refers to, collides with `reservation`, naming it without the
+	/// backticks it was written with, as prose names it.
 	/// No fix-it is offered: SafeDI matches dependencies by label, so a new name could fulfill, or be fulfilled
 	/// by, a different dependency without any error, and nothing this visitor sees can rule that out.
 	private func diagnose(_ name: String, reservedAs reservation: ReservedName, at node: some SyntaxProtocol) {
 		diagnostics.append(Diagnostic(
 			node: node,
-			message: FixableInstantiableError.reservedName(name: name, reservation: reservation).diagnostic,
+			message: FixableInstantiableError.reservedName(name: name.spelledWithoutBackticks, reservation: reservation).diagnostic,
 		))
 	}
 
