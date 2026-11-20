@@ -6192,7 +6192,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The declaration of this scope's instantiator, which hands its wrapper the function named `functionName`, called
 	/// with `forwardedArguments`: the function itself when it takes no arguments and erases nothing, and otherwise a
 	/// closure that calls it. Empty for a scope that builds no instantiator, which no caller asks.
-	nonisolated private func instantiatorDeclaration(handing functionName: String, forwardedArguments: String, bindingName: String? = nil) -> String {
+	nonisolated private func instantiatorDeclaration(handing functionName: String, forwardedArguments: String, bindingName: String? = nil, erasesBuiltValue: Bool? = nil) -> String {
 		guard case let .property(instantiable, declaredProperty, _, _, _, _) = scopeData else { return "" }
 		let property = bindingName.map { Property(label: $0, typeDescription: declaredProperty.typeDescription) } ?? declaredProperty
 		// A type constructed by annotation spells its generic arguments only in the declaration.
@@ -6204,12 +6204,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			property: property,
 			rule: .instantiator(isExtension: instantiable.declarationType.isExtension, constructionSpellsPropertyType: property.typeDescription.asSource == unwrappedTypeDescription),
 		)
-		return "\(propertyDeclaration.spelled) = \(instantiatorExpression(handing: functionName, forwardedArguments: forwardedArguments))"
+		return "\(propertyDeclaration.spelled) = \(instantiatorExpression(handing: functionName, forwardedArguments: forwardedArguments, erasesBuiltValue: erasesBuiltValue))"
 	}
 
 	/// The wrapper `instantiatorDeclaration(handing:forwardedArguments:)` declares.
-	nonisolated private func instantiatorExpression(handing functionName: String, forwardedArguments: String) -> String {
-		guard case let .property(_, property, _, erasedToConcreteExistential, _, _) = scopeData else { return "" }
+	nonisolated private func instantiatorExpression(handing functionName: String, forwardedArguments: String, erasesBuiltValue: Bool? = nil) -> String {
+		guard case let .property(_, property, _, declaredErasure, _, _) = scopeData else { return "" }
+		// A construction a mock overrides is erased inside its builder function, where the override replaces the erased value.
+		let erasedToConcreteExistential = erasesBuiltValue ?? declaredErasure
 		let unwrappedTypeDescription = property
 			.typeDescription
 			.unwrapped
@@ -6847,7 +6849,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			? builderCallArguments.map { "\($0.label): \($0.value)" }
 			: []
 		let constructionArguments = holeArgumentList.isEmpty ? argumentList : ([argumentList].filter { !$0.isEmpty } + holeArgumentList).joined(separator: ", ")
-		let construction = Expression.construction(constructionTarget, arguments: constructionArguments).overridden(by: constructionOverride)
+		// An overridable construction has its override's type: the override replaces the value the property holds, erased
+		// where the property is, so the builder function returns the type the property builds and nothing erases the value
+		// again.
+		let builtType = declaredProperty.propertyType.isConstant ? property.typeDescription.asInstantiatedTypeSpelledAsDeclared : property.typeDescription.unwrapped.asInstantiatedTypeSpelledAsDeclared
+		let erasureType = declaredProperty.propertyType.isConstant ? property.typeDescription : property.typeDescription.unwrapped.asInstantiatedType
+		let erasesConstructedValue = erasedToConcreteExistential && constructionOverride == nil
+		let construction = constructionOverride.map {
+			Expression.construction(constructionTarget, arguments: constructionArguments).erasedAndOverridden(by: $0, to: erasureType, where: erasedToConcreteExistential)
+		} ?? .construction(constructionTarget, arguments: constructionArguments)
+		let builderFunctionReturnType = constructionOverride == nil ? instantiable.concreteInstantiable : builtType
 		// The payloads of the cases on the routes to the places beneath this scope, bound before its builder function, where
 		// the scope's parent binds its labels: each field read as the parent's receivers read it.
 		let valuesBindingLines = (scopeNames?.preludeLines.map { "\($0)\n" }.joined() ?? "") + (builderFunctionNames.loopValuesBindingLines ?? valuesBindingLines)
@@ -6962,7 +6973,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					isNonisolated: fillReturnsWrapperBuilder || sendableFunctionsAreNonisolated,
 					parameters: functionParameters,
 					typesDeclaredEscaping: typesDeclaredEscaping,
-					returnType: instantiable.concreteInstantiable,
+					returnType: builderFunctionReturnType,
 					body: BuilderBody(statements: generatedProperties),
 					value: construction,
 					lineEnd: constructionLineEnd,
@@ -7021,7 +7032,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					)),
 				]))
 			}
-			return place(code: .sequence([.text(valuesBindingLines), functionDeclaration, .text(instantiatorDeclaration(handing: functionName, forwardedArguments: forwardedArguments, bindingName: scopeNames?.bindingName))]))
+			return place(code: .sequence([.text(valuesBindingLines), functionDeclaration, .text(instantiatorDeclaration(handing: functionName, forwardedArguments: forwardedArguments, bindingName: scopeNames?.bindingName, erasesBuiltValue: erasesConstructedValue))]))
 		case .lazilyInstantiated,
 		     .sendableLazilyInstantiated:
 			// The builder function is the one a constant with children declares. A constant calls it
@@ -7038,7 +7049,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				isNonisolated: sendableFunctionsAreNonisolated,
 				parameters: cycleParameters.map(\.property),
 				typesDeclaredEscaping: typesDeclaredEscaping,
-				returnType: instantiable.concreteInstantiable,
+				returnType: builderFunctionReturnType,
 				body: BuilderBody(statements: generatedProperties),
 				value: construction,
 				lineEnd: constructionLineEnd,
@@ -7046,7 +7057,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let lastLine = if isBuiltByFill {
 				"return \(Expression.call(function: functionName, arguments: cycleArguments).erased(to: property.typeDescription.asInstantiatedType, where: erasedToConcreteExistential).spelled)"
 			} else {
-				"\(BindingDeclaration(property: property, rule: .lazilyInstantiated).spelled) = \(Self.lazilyInstantiatedInstantiation(of: property, callingFunctionNamed: functionName, cycleArguments: cycleArguments, erasedToConcreteExistential: erasedToConcreteExistential))"
+				"\(BindingDeclaration(property: property, rule: .lazilyInstantiated).spelled) = \(Self.lazilyInstantiatedInstantiation(of: property, callingFunctionNamed: functionName, cycleArguments: cycleArguments, erasedToConcreteExistential: erasesConstructedValue))"
 			}
 
 			return PlacePlan(kind: .builtByFunction, functionNames: [functionName], closedOnFunctionName: nil, code: function.spelled(after: valuesBindingLines, followedBy: lastLine))
@@ -7055,13 +7066,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let generatedProperties = memberCallCode + seamGuardLines + fillPlaceBindingLines + nameRebindingLines + childCode
 			let body = BuilderBody(statements: generatedProperties)
 			let hasGeneratedContent = body.hasStatements
+			// An overridden construction holds its override's type, which a branch erased inside it shares with the other.
 			let propertyDeclaration = BindingDeclaration(
-				property: property,
+				property: constructionOverride == nil ? property : Property(label: property.label, typeDescription: builtType),
 				rule: .constant(
-					isErased: erasedToConcreteExistential,
-					constructedTypeIsPropertyType: concreteTypeName == property.typeDescription.asSource,
+					isErased: erasesConstructedValue,
+					constructedTypeIsPropertyType: concreteTypeName == property.typeDescription.asSource || (constructionOverride != nil && erasedToConcreteExistential),
 					hasBuilderFunction: hasGeneratedContent,
-					isExtension: instantiable.declarationType.isExtension,
+					// An erased value is the property's type, however the type it erases is declared.
+					isExtension: instantiable.declarationType.isExtension && !erasedToConcreteExistential,
 				),
 			)
 
@@ -7078,16 +7091,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					isNonisolated: sendableFunctionsAreNonisolated,
 					parameters: cycleParameters.map(\.property),
 					typesDeclaredEscaping: typesDeclaredEscaping,
-					returnType: instantiable.concreteInstantiable,
+					returnType: builderFunctionReturnType,
 					body: body,
 					value: construction,
 					lineEnd: constructionLineEnd,
 				)).spelled
 			}
 			let binding = if !hasGeneratedContent {
-				Statement.binding(propertyDeclaration, construction.erased(to: property.typeDescription, where: erasedToConcreteExistential), lineEnd: constructionLineEnd)
+				Statement.binding(propertyDeclaration, construction.erased(to: property.typeDescription, where: erasesConstructedValue), lineEnd: constructionLineEnd)
 			} else {
-				Statement.binding(propertyDeclaration, Expression.call(function: functionName, arguments: callArguments).erased(to: property.typeDescription, where: erasedToConcreteExistential), lineEnd: "")
+				Statement.binding(propertyDeclaration, Expression.call(function: functionName, arguments: callArguments).erased(to: property.typeDescription, where: erasesConstructedValue), lineEnd: "")
 			}
 
 			// The payloads a seam's tree binds before building a scope that leads to a place.
@@ -12106,14 +12119,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			&& node.fillingGenerator == nil
 			&& node.defaultParameters.isEmpty
 			&& !node.useMockInitializer
-			&& !node.erasedToConcreteExistential
 			&& node.valuesBindings.isEmpty
 			&& node.memberCallsInsideBuilderFunction.isEmpty
 			&& uncoveredInstantiatedDependencies(of: node).isEmpty
-			// The walk binds a promoted optional node to a non-optional value, and its builder function returns the property's
-			// type where production's returns the concrete type.
+			// The walk binds a promoted optional node to a non-optional value.
 			&& !node.typeDescription.isOptional
-			&& node.concreteType.asSource == node.instantiatedTypeSpelledAsDeclared.asSource
 			// The walk spells an unlabeled argument bare, production `_:`.
 			&& !node.constructionArguments.contains { $0.outerLabel == "_" }
 	}
@@ -12252,7 +12262,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				scopeNames.preludeLines = startedSendableOverrideExtractor.extractions.map { "let \($0.localName) = \($0.expression)" }
 			}
 			if let overrideExpression {
-				overrides[generatorIdentifier] = ConstructionOverride(expression: overrideExpression, arguments: overrideArguments)
+				overrides[generatorIdentifier] = ConstructionOverride(expression: overrideExpression, arguments: overrideArguments, returnsConstructedType: node.needsConfigurationStruct)
 			}
 			if scopeNames != ScopeNames() {
 				names[generatorIdentifier] = scopeNames

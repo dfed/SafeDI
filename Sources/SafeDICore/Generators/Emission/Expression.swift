@@ -28,8 +28,10 @@ indirect enum Expression: Hashable, Sendable {
 	/// declared as, or the type an erased wrapper builds.
 	case erasure(Expression, as: TypeDescription)
 	/// `expression`, unless the optional builder `override` holds a function, which is then called with `arguments`: the
-	/// one hook through which a body that can be configured (a `mock()`) replaces a construction.
-	case overridable(Expression, override: String, arguments: String)
+	/// one hook through which a body that can be configured (a `mock()`) replaces a construction. The expression has the
+	/// override's type: a builder that returns the constructed type is wrapped in `overrideErasure`'s eraser where the
+	/// property is erased, as `expression` is.
+	case overridable(Expression, override: String, arguments: String, overrideErasure: TypeDescription?)
 
 	/// How generated code spells the expression.
 	var spelled: String {
@@ -40,15 +42,25 @@ indirect enum Expression: Hashable, Sendable {
 			"\(function)(\(arguments))"
 		case let .erasure(expression, erasedType):
 			"\(erasedType.asSource)(\(expression.spelled))"
-		case let .overridable(expression, override, arguments):
-			"if let \(ReservedName.configurationBuilderPropertyName) = \(override) { \(ReservedName.configurationBuilderPropertyName)(\(arguments)) } else { \(expression.spelled) }"
+		case let .overridable(expression, override, arguments, overrideErasure):
+			"if let \(ReservedName.configurationBuilderPropertyName) = \(override) { \(Expression.call(function: ReservedName.configurationBuilderPropertyName, arguments: arguments).erased(to: overrideErasure).spelled) } else { \(expression.spelled) }"
 		}
 	}
 
-	/// This expression, replaced where `override` holds a builder.
-	func overridden(by override: ConstructionOverride?) -> Expression {
-		guard let override else { return self }
-		return .overridable(self, override: override.expression, arguments: override.arguments)
+	/// This expression, replaced where `override` holds a builder: a value the property holds, erased to `erasedType` where
+	/// `isErased`, which a builder that returns the constructed type is erased to as well.
+	func erasedAndOverridden(by override: ConstructionOverride, to erasedType: TypeDescription, where isErased: Bool) -> Expression {
+		.overridable(
+			erased(to: erasedType, where: isErased),
+			override: override.expression,
+			arguments: override.arguments,
+			overrideErasure: isErased && override.returnsConstructedType ? erasedType : nil,
+		)
+	}
+
+	/// This expression wrapped in the eraser of `erasedType`, where there is one.
+	private func erased(to erasedType: TypeDescription?) -> Expression {
+		erasedType.map { .erasure(self, as: $0) } ?? self
 	}
 
 	/// This expression wrapped in the eraser of `erasedType` where `isErased`, and otherwise itself.
@@ -63,6 +75,9 @@ struct ConstructionOverride: Hashable, Sendable {
 	let expression: String
 	/// The builder's arguments, spelled as the call's argument list.
 	let arguments: String
+	/// Whether the builder returns the constructed type rather than the value the property holds: a configuration's
+	/// builder, whose result is erased as the construction's is.
+	var returnsConstructedType = false
 }
 
 /// The overrides of one configurable body, keyed by the scope whose construction each replaces.
