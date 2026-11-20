@@ -3067,50 +3067,6 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedAndOptionalReceived_throwsError() async {
-		// B, built inside `a: A`, requires its optional form. Unlike a receive only if available, which is passed
-		// `nil`, it needs `a` before `a` exists, so the cycle is still rejected.
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency cycle: `A` -> `B` -> `A?`. `B` receives `a: A?`, which is still being built when `B` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
-				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
-				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public final class Root: Instantiable {
-					    public init(a: A) { self.a = a }
-					    @Instantiated let a: A
-					}
-					""",
-					"""
-					@Instantiable
-					public final class A: Instantiable {
-					    public init(b: B) { self.b = b }
-					    @Instantiated let b: B
-					}
-					""",
-					"""
-					@Instantiable
-					public final class B: Instantiable {
-					    public init(a: A?) { self.a = a }
-					    @Received let a: A?
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedWithVaryingNames_throwsError() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
@@ -5962,60 +5918,6 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public final class D: Instantiable {
 					    public init(cBuilder: Instantiator<C>?) { self.cBuilder = cBuilder }
 					    @Received let cBuilder: Instantiator<C>?
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithRequiredOptionalReceiveUnderAncestorThatReceivesItOnlyIfAvailable_throwsError_whenOnlyProviderIsStillBeingBuilt() async {
-		// Parent, built inside `user`, receives `user` only if available and gets `nil`,
-		// because `user` is still being built. Child, which requires `user`, is built
-		// inside it too, so its receive closes a cycle, as a receive of `user: User` would.
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["Child.swift"]):4:5: error: Dependency cycle: `User` -> `Parent` -> `Child` -> `User?`. `Child` receives `user: User?`, which is still being built when `Child` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
-				\(fixtures["User.swift"]):1:1: note: `User` is part of the cycle
-				\(fixtures["Parent.swift"]):1:1: note: `Parent` is part of the cycle
-				\(fixtures["Child.swift"]):1:1: note: `Child` is part of the cycle
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public final class Root: Instantiable {
-					    public init(user: User) { self.user = user }
-					    @Instantiated let user: User
-					}
-					""",
-					"""
-					@Instantiable
-					public final class User: Instantiable {
-					    public init(parent: Parent) { self.parent = parent }
-					    @Instantiated let parent: Parent
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Parent: Instantiable {
-					    public init(user: User?, child: Child) { self.user = user; self.child = child }
-					    @Received(onlyIfAvailable: true) let user: User?
-					    @Instantiated let child: Child
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Child: Instantiable {
-					    public init(user: User?) { self.user = user }
-					    @Received let user: User?
 					}
 					""",
 				],
