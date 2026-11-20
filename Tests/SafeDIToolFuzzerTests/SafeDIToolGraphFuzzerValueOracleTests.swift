@@ -974,6 +974,58 @@ struct SafeDIToolGraphFuzzerValueOracleTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func overrideProbes_passSentinelThroughHandWrittenMock_whenConfigurationBuildsPropertyWithMockReturningAdditionalType() async throws {
+		// `screen` is of the type `S1_Screen`'s hand-written mock returns, so the tool builds it with that mock, and the
+		// configuration's builder takes the mock's one parameter rather than the initializer's two.
+		let runs = try await Self.valueOracleToolRuns(of: Self.fixture([
+			Self.type("S1_Root", arguments: "isRoot: true", properties: ["@Instantiated let screen: S1_ScreenProtocol"]),
+			"""
+			public protocol S1_ScreenProtocol {}
+
+			@Instantiable(fulfillingAdditionalTypes: [S1_ScreenProtocol.self])
+			public final class S1_Screen: S1_ScreenProtocol, Instantiable {
+				public init(detail: S1_Detail, badge: S1_Badge) {
+					self.detail = detail
+					self.badge = badge
+				}
+
+				@Instantiated let detail: S1_Detail
+				@Instantiated let badge: S1_Badge
+			}
+
+			@Instantiable(fulfillingAdditionalTypes: [S1_ScreenProtocol.self], mockOnly: true)
+			extension S1_Screen {
+				public static func mock(detail: S1_Detail = S1_Detail()) -> S1_ScreenProtocol {
+					S1_Screen(detail: detail, badge: S1_Badge())
+				}
+			}
+
+			""",
+			Self.type("S1_Detail", properties: []),
+			Self.type("S1_Badge", properties: []),
+		]))
+
+		let probes = try #require(runs.valueOracle).overrideProbes
+		#expect(probes.map(\.fieldKind) == [.configuration])
+		#expect(probes.map(\.pair.featureExpression) == [
+			"{ S1_ZOverrideSentinel.value = nil; let value = S1_Root.mock(safeDIOverrides: .init(screen: .init({ S1_ZOverrideSentinel.recorded(S1_Screen.mock(detail: $0) as! S1_Screen) }))); return (value, S1_ZOverrideSentinel.value) }()",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func overrideProbes_passSentinelThroughRepeatScreensHandWrittenMock_whenCorpusSeedDrawsRepeatedAncestorShapeWhoseMockOmitsBadge() async throws {
+		// Base corpus seed 355 draws issue #720's shape, whose `RepeatScreen` mock takes `repeatFlow` and not `repeatBadge`.
+		let runs = try await Self.valueOracleToolRuns(of: GraphFuzzerGenerator.fixture(forSeed: 355))
+
+		let probes = try #require(runs.valueOracle).overrideProbes.filter { $0.mockedTypeName == "S355_RepeatRoot" }
+		#expect(probes.map(\.pair.featureExpression) == [
+			"{ S355_ZOverrideSentinel.value = nil; let value = S355_RepeatRoot.mock(safeDIOverrides: .init(repeatScreen: .init({ S355_ZOverrideSentinel.recorded(S355_RepeatScreen.mock(repeatFlow: $0) as! S355_RepeatScreen) }))); return (value, S355_ZOverrideSentinel.value) }()",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func overrideProbes_omitField_whenItBuildsAProtocolOrAWrapper() async throws {
 		// A fulfilled-by-type protocol's field returns the protocol, which the built type's initializer does not, and an
 		// instantiator's builds an instance per call.
