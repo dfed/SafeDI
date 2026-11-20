@@ -938,7 +938,921 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 		)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutEachTypeOnce_whenTreeReachesEachTypeOnManyPaths() async throws {
+		// Four layers of three types, each instantiating the three of the layer beneath. The 81 places of the last layer build
+		// constants in place, so 3 + 9 + 27 = 39 places have a builder function. The construction memo builds them with one
+		// generator per type, 9, and the type key lays them out as one class per type, 9. R1b §2a lays the body out over the
+		// generators, so the work it counts falls from 39 to 9.
+		let letters = ["A", "B", "C"]
+		var fixture = [Self.type("Root", isRoot: true, "@Instantiated let l1a: L1A", "@Instantiated let l1b: L1B", "@Instantiated let l1c: L1C")]
+		for layer in 1...4 {
+			for letter in letters {
+				let declarations = layer < 4 ? letters.map { "@Instantiated let l\(layer + 1)\($0.lowercased()): L\(layer + 1)\($0)" } : []
+				fixture.append(seamFixtureType(named: "L\(layer)\(letter)", isFinalClass: true, declarations: declarations))
+			}
+		}
+		let (stream, continuation) = AsyncStream.makeStream(of: TypeKeyClassObservation.Classes.self)
+		_ = try await TypeKeyClassObservation.$observer.withValue({ continuation.yield($0) }) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete, skipCompileVerification: true)
+		}
+		continuation.finish()
+		var counts = [[Int]]()
+		for await classes in stream {
+			counts.append([classes.typeKey.count - 1, Set(classes.memo.dropFirst()).count, Set(classes.typeKey.dropFirst()).count])
+		}
+		#expect(counts == [[39, 9, 9]])
+	}
+
+	// MARK: Tests of merge order (R1b §2a)
+
+	// Each cell below takes a cell whose places the construction memo keeps apart and the type key merges, and builds it at
+	// twenty places, or beneath six parents, that the root declares in an order that is neither their names' order nor its
+	// reverse, so that a merge taken in any order but the walk's changes the output.
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_typesParameterOptional_whenTwentyPlacesDeclareItOptionalOrNot() async throws {
+		try await expectTypeKeyTree(of: Self.twentyParents(
+			rootDeclaration: { index in index.isMultiple(of: 2) ? "@Instantiated let p\(index)Builder: Instantiator<P\(index)>" : "@Instantiated let p\(index): P\(index)" },
+			parentDeclarations: { index in index.isMultiple(of: 2) ? ["@Forwarded let x: X?", "@Instantiated let leafBuilder: Instantiator<Leaf>"] : ["@Instantiated let x: X", "@Instantiated let leafBuilder: Instantiator<Leaf>"] },
+		) + [Self.type("Leaf", "@Received(onlyIfAvailable: true) let x: X?"), Self.type("X")], equals: """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_leafBuilder(x: X?) -> Leaf {
+		            Leaf(x: x)
+		        }
+		        func __safeDI_p13() -> P13 {
+		            let x = X()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P13(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p13: P13 = __safeDI_p13()
+		        func __safeDI_p4Builder(x: X?) -> P4 {
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P4(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p4Builder = Instantiator<P4> {
+		            __safeDI_p4Builder(x: $0)
+		        }
+		        func __safeDI_p17() -> P17 {
+		            let x = X()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P17(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p17: P17 = __safeDI_p17()
+		        func __safeDI_p0Builder(x: X?) -> P0 {
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P0(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p0Builder = Instantiator<P0> {
+		            __safeDI_p0Builder(x: $0)
+		        }
+		        func __safeDI_p9() -> P9 {
+		            let x = X()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P9(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p9: P9 = __safeDI_p9()
+		        func __safeDI_p2Builder(x: X?) -> P2 {
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P2(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p2Builder = Instantiator<P2> {
+		            __safeDI_p2Builder(x: $0)
+		        }
+		        func __safeDI_p19() -> P19 {
+		            let x = X()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P19(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p19: P19 = __safeDI_p19()
+		        func __safeDI_p6Builder(x: X?) -> P6 {
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P6(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p6Builder = Instantiator<P6> {
+		            __safeDI_p6Builder(x: $0)
+		        }
+		        func __safeDI_p11() -> P11 {
+		            let x = X()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P11(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p11: P11 = __safeDI_p11()
+		        func __safeDI_p15() -> P15 {
+		            let x = X()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P15(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p15: P15 = __safeDI_p15()
+		        func __safeDI_p1() -> P1 {
+		            let x = X()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P1(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p1: P1 = __safeDI_p1()
+		        func __safeDI_p8Builder(x: X?) -> P8 {
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P8(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p8Builder = Instantiator<P8> {
+		            __safeDI_p8Builder(x: $0)
+		        }
+		        func __safeDI_p18Builder(x: X?) -> P18 {
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P18(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p18Builder = Instantiator<P18> {
+		            __safeDI_p18Builder(x: $0)
+		        }
+		        func __safeDI_p3() -> P3 {
+		            let x = X()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P3(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p3: P3 = __safeDI_p3()
+		        func __safeDI_p12Builder(x: X?) -> P12 {
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P12(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p12Builder = Instantiator<P12> {
+		            __safeDI_p12Builder(x: $0)
+		        }
+		        func __safeDI_p7() -> P7 {
+		            let x = X()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P7(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p7: P7 = __safeDI_p7()
+		        func __safeDI_p16Builder(x: X?) -> P16 {
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P16(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p16Builder = Instantiator<P16> {
+		            __safeDI_p16Builder(x: $0)
+		        }
+		        func __safeDI_p5() -> P5 {
+		            let x = X()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P5(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p5: P5 = __safeDI_p5()
+		        func __safeDI_p10Builder(x: X?) -> P10 {
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P10(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p10Builder = Instantiator<P10> {
+		            __safeDI_p10Builder(x: $0)
+		        }
+		        func __safeDI_p14Builder(x: X?) -> P14 {
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(x: x)
+		            }
+		            return P14(x: x, leafBuilder: leafBuilder)
+		        }
+		        let p14Builder = Instantiator<P14> {
+		            __safeDI_p14Builder(x: $0)
+		        }
+		        self.init(p13: p13, p4Builder: p4Builder, p17: p17, p0Builder: p0Builder, p9: p9, p2Builder: p2Builder, p19: p19, p6Builder: p6Builder, p11: p11, p15: p15, p1: p1, p8Builder: p8Builder, p18Builder: p18Builder, p3: p3, p12Builder: p12Builder, p7: p7, p16Builder: p16Builder, p5: p5, p10Builder: p10Builder, p14Builder: p14Builder)
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_declaresOneParameterPerLabel_whenTwentyPlacesOfSharedSubtreeReadLabelInTwoForms() async throws {
+		try await expectTypeKeyTree(of: Self.twentyParents(
+			rootDeclaration: { index in "@Instantiated let p\(index): P\(index)" },
+			parentDeclarations: { index in index.isMultiple(of: 3) ? ["@Instantiated let x: X", "@Instantiated let nBuilder: Instantiator<N>"] : ["@Instantiated let nBuilder: Instantiator<N>"] },
+		) + [
+			Self.type("N", "@Instantiated let k1: K1", "@Instantiated let k2: K2"),
+			Self.type("K1", "@Received(onlyIfAvailable: true) let x: Instantiator<X>?"),
+			Self.type("K2", "@Received(onlyIfAvailable: true) let x: X?"),
+			Self.type("X"),
+		], equals: """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_nBuilder(x: X?) -> N {
+		            let k1 = K1(x: nil)
+		            let k2 = K2(x: x)
+		            return N(k1: k1, k2: k2)
+		        }
+		        func __safeDI_p13() -> P13 {
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: nil)
+		            }
+		            return P13(nBuilder: nBuilder)
+		        }
+		        let p13: P13 = __safeDI_p13()
+		        func __safeDI_p4() -> P4 {
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: nil)
+		            }
+		            return P4(nBuilder: nBuilder)
+		        }
+		        let p4: P4 = __safeDI_p4()
+		        func __safeDI_p17() -> P17 {
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: nil)
+		            }
+		            return P17(nBuilder: nBuilder)
+		        }
+		        let p17: P17 = __safeDI_p17()
+		        func __safeDI_p0() -> P0 {
+		            let x = X()
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: x)
+		            }
+		            return P0(x: x, nBuilder: nBuilder)
+		        }
+		        let p0: P0 = __safeDI_p0()
+		        func __safeDI_p9() -> P9 {
+		            let x = X()
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: x)
+		            }
+		            return P9(x: x, nBuilder: nBuilder)
+		        }
+		        let p9: P9 = __safeDI_p9()
+		        func __safeDI_p2() -> P2 {
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: nil)
+		            }
+		            return P2(nBuilder: nBuilder)
+		        }
+		        let p2: P2 = __safeDI_p2()
+		        func __safeDI_p19() -> P19 {
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: nil)
+		            }
+		            return P19(nBuilder: nBuilder)
+		        }
+		        let p19: P19 = __safeDI_p19()
+		        func __safeDI_p6() -> P6 {
+		            let x = X()
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: x)
+		            }
+		            return P6(x: x, nBuilder: nBuilder)
+		        }
+		        let p6: P6 = __safeDI_p6()
+		        func __safeDI_p11() -> P11 {
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: nil)
+		            }
+		            return P11(nBuilder: nBuilder)
+		        }
+		        let p11: P11 = __safeDI_p11()
+		        func __safeDI_p15() -> P15 {
+		            let x = X()
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: x)
+		            }
+		            return P15(x: x, nBuilder: nBuilder)
+		        }
+		        let p15: P15 = __safeDI_p15()
+		        func __safeDI_p1() -> P1 {
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: nil)
+		            }
+		            return P1(nBuilder: nBuilder)
+		        }
+		        let p1: P1 = __safeDI_p1()
+		        func __safeDI_p8() -> P8 {
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: nil)
+		            }
+		            return P8(nBuilder: nBuilder)
+		        }
+		        let p8: P8 = __safeDI_p8()
+		        func __safeDI_p18() -> P18 {
+		            let x = X()
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: x)
+		            }
+		            return P18(x: x, nBuilder: nBuilder)
+		        }
+		        let p18: P18 = __safeDI_p18()
+		        func __safeDI_p3() -> P3 {
+		            let x = X()
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: x)
+		            }
+		            return P3(x: x, nBuilder: nBuilder)
+		        }
+		        let p3: P3 = __safeDI_p3()
+		        func __safeDI_p12() -> P12 {
+		            let x = X()
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: x)
+		            }
+		            return P12(x: x, nBuilder: nBuilder)
+		        }
+		        let p12: P12 = __safeDI_p12()
+		        func __safeDI_p7() -> P7 {
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: nil)
+		            }
+		            return P7(nBuilder: nBuilder)
+		        }
+		        let p7: P7 = __safeDI_p7()
+		        func __safeDI_p16() -> P16 {
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: nil)
+		            }
+		            return P16(nBuilder: nBuilder)
+		        }
+		        let p16: P16 = __safeDI_p16()
+		        func __safeDI_p5() -> P5 {
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: nil)
+		            }
+		            return P5(nBuilder: nBuilder)
+		        }
+		        let p5: P5 = __safeDI_p5()
+		        func __safeDI_p10() -> P10 {
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: nil)
+		            }
+		            return P10(nBuilder: nBuilder)
+		        }
+		        let p10: P10 = __safeDI_p10()
+		        func __safeDI_p14() -> P14 {
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(x: nil)
+		            }
+		            return P14(nBuilder: nBuilder)
+		        }
+		        let p14: P14 = __safeDI_p14()
+		        self.init(p13: p13, p4: p4, p17: p17, p0: p0, p9: p9, p2: p2, p19: p19, p6: p6, p11: p11, p15: p15, p1: p1, p8: p8, p18: p18, p3: p3, p12: p12, p7: p7, p16: p16, p5: p5, p10: p10, p14: p14)
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesOptionalParameter_whenTwentyPlacesReadNilOrAValue() async throws {
+		try await expectTypeKeyTree(of: Self.twentyParents(
+			rootDeclaration: { index in "@Instantiated let p\(index): P\(index)" },
+			parentDeclarations: { index in index % 3 == 1 ? ["@Instantiated let leafBuilder: Instantiator<Leaf>"] : ["@Instantiated let cache: Cache", "@Instantiated let leafBuilder: Instantiator<Leaf>"] },
+		) + [Self.type("Leaf", "@Received(onlyIfAvailable: true) let cache: Cache?"), Self.type("Cache")], equals: """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_leafBuilder(cache: Cache?) -> Leaf {
+		            Leaf(cache: cache)
+		        }
+		        func __safeDI_p13() -> P13 {
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: nil)
+		            }
+		            return P13(leafBuilder: leafBuilder)
+		        }
+		        let p13: P13 = __safeDI_p13()
+		        func __safeDI_p4() -> P4 {
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: nil)
+		            }
+		            return P4(leafBuilder: leafBuilder)
+		        }
+		        let p4: P4 = __safeDI_p4()
+		        func __safeDI_p17() -> P17 {
+		            let cache = Cache()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: cache)
+		            }
+		            return P17(cache: cache, leafBuilder: leafBuilder)
+		        }
+		        let p17: P17 = __safeDI_p17()
+		        func __safeDI_p0() -> P0 {
+		            let cache = Cache()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: cache)
+		            }
+		            return P0(cache: cache, leafBuilder: leafBuilder)
+		        }
+		        let p0: P0 = __safeDI_p0()
+		        func __safeDI_p9() -> P9 {
+		            let cache = Cache()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: cache)
+		            }
+		            return P9(cache: cache, leafBuilder: leafBuilder)
+		        }
+		        let p9: P9 = __safeDI_p9()
+		        func __safeDI_p2() -> P2 {
+		            let cache = Cache()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: cache)
+		            }
+		            return P2(cache: cache, leafBuilder: leafBuilder)
+		        }
+		        let p2: P2 = __safeDI_p2()
+		        func __safeDI_p19() -> P19 {
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: nil)
+		            }
+		            return P19(leafBuilder: leafBuilder)
+		        }
+		        let p19: P19 = __safeDI_p19()
+		        func __safeDI_p6() -> P6 {
+		            let cache = Cache()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: cache)
+		            }
+		            return P6(cache: cache, leafBuilder: leafBuilder)
+		        }
+		        let p6: P6 = __safeDI_p6()
+		        func __safeDI_p11() -> P11 {
+		            let cache = Cache()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: cache)
+		            }
+		            return P11(cache: cache, leafBuilder: leafBuilder)
+		        }
+		        let p11: P11 = __safeDI_p11()
+		        func __safeDI_p15() -> P15 {
+		            let cache = Cache()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: cache)
+		            }
+		            return P15(cache: cache, leafBuilder: leafBuilder)
+		        }
+		        let p15: P15 = __safeDI_p15()
+		        func __safeDI_p1() -> P1 {
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: nil)
+		            }
+		            return P1(leafBuilder: leafBuilder)
+		        }
+		        let p1: P1 = __safeDI_p1()
+		        func __safeDI_p8() -> P8 {
+		            let cache = Cache()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: cache)
+		            }
+		            return P8(cache: cache, leafBuilder: leafBuilder)
+		        }
+		        let p8: P8 = __safeDI_p8()
+		        func __safeDI_p18() -> P18 {
+		            let cache = Cache()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: cache)
+		            }
+		            return P18(cache: cache, leafBuilder: leafBuilder)
+		        }
+		        let p18: P18 = __safeDI_p18()
+		        func __safeDI_p3() -> P3 {
+		            let cache = Cache()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: cache)
+		            }
+		            return P3(cache: cache, leafBuilder: leafBuilder)
+		        }
+		        let p3: P3 = __safeDI_p3()
+		        func __safeDI_p12() -> P12 {
+		            let cache = Cache()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: cache)
+		            }
+		            return P12(cache: cache, leafBuilder: leafBuilder)
+		        }
+		        let p12: P12 = __safeDI_p12()
+		        func __safeDI_p7() -> P7 {
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: nil)
+		            }
+		            return P7(leafBuilder: leafBuilder)
+		        }
+		        let p7: P7 = __safeDI_p7()
+		        func __safeDI_p16() -> P16 {
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: nil)
+		            }
+		            return P16(leafBuilder: leafBuilder)
+		        }
+		        let p16: P16 = __safeDI_p16()
+		        func __safeDI_p5() -> P5 {
+		            let cache = Cache()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: cache)
+		            }
+		            return P5(cache: cache, leafBuilder: leafBuilder)
+		        }
+		        let p5: P5 = __safeDI_p5()
+		        func __safeDI_p10() -> P10 {
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: nil)
+		            }
+		            return P10(leafBuilder: leafBuilder)
+		        }
+		        let p10: P10 = __safeDI_p10()
+		        func __safeDI_p14() -> P14 {
+		            let cache = Cache()
+		            let leafBuilder = Instantiator<Leaf> {
+		                __safeDI_leafBuilder(cache: cache)
+		            }
+		            return P14(cache: cache, leafBuilder: leafBuilder)
+		        }
+		        let p14: P14 = __safeDI_p14()
+		        self.init(p13: p13, p4: p4, p17: p17, p0: p0, p9: p9, p2: p2, p19: p19, p6: p6, p11: p11, p15: p15, p1: p1, p8: p8, p18: p18, p3: p3, p12: p12, p7: p7, p16: p16, p5: p5, p10: p10, p14: p14)
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesSharedFunctionFromFirstReachedLabel_whenTwentyPlacesUseDifferentLabels() async throws {
+		try await expectTypeKeyTree(of: Self.twentyParents(
+			rootDeclaration: { index in "@Instantiated let p\(index): P\(index)" },
+			parentDeclarations: { index in ["@Instantiated let \(Self.labels[index]): Instantiator<Leaf>"] },
+		) + [Self.type("Leaf", "@Instantiated let itemBuilder: Instantiator<Item>"), Self.type("Item")], equals: """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_hotel() -> Leaf {
+		            let itemBuilder = Instantiator<Item>(__safeDI_itemBuilder)
+		            return Leaf(itemBuilder: itemBuilder)
+		        }
+		        func __safeDI_itemBuilder() -> Item {
+		            Item()
+		        }
+		        func __safeDI_p13() -> P13 {
+		            let hotel = Instantiator<Leaf>(__safeDI_hotel)
+		            return P13(hotel: hotel)
+		        }
+		        let p13: P13 = __safeDI_p13()
+		        func __safeDI_p4() -> P4 {
+		            let oscar = Instantiator<Leaf>(__safeDI_hotel)
+		            return P4(oscar: oscar)
+		        }
+		        let p4: P4 = __safeDI_p4()
+		        func __safeDI_p17() -> P17 {
+		            let foxtrot = Instantiator<Leaf>(__safeDI_hotel)
+		            return P17(foxtrot: foxtrot)
+		        }
+		        let p17: P17 = __safeDI_p17()
+		        func __safeDI_p0() -> P0 {
+		            let kilo = Instantiator<Leaf>(__safeDI_hotel)
+		            return P0(kilo: kilo)
+		        }
+		        let p0: P0 = __safeDI_p0()
+		        func __safeDI_p9() -> P9 {
+		            let golf = Instantiator<Leaf>(__safeDI_hotel)
+		            return P9(golf: golf)
+		        }
+		        let p9: P9 = __safeDI_p9()
+		        func __safeDI_p2() -> P2 {
+		            let tango = Instantiator<Leaf>(__safeDI_hotel)
+		            return P2(tango: tango)
+		        }
+		        let p2: P2 = __safeDI_p2()
+		        func __safeDI_p19() -> P19 {
+		            let juliet = Instantiator<Leaf>(__safeDI_hotel)
+		            return P19(juliet: juliet)
+		        }
+		        let p19: P19 = __safeDI_p19()
+		        func __safeDI_p6() -> P6 {
+		            let romeo = Instantiator<Leaf>(__safeDI_hotel)
+		            return P6(romeo: romeo)
+		        }
+		        let p6: P6 = __safeDI_p6()
+		        func __safeDI_p11() -> P11 {
+		            let charlie = Instantiator<Leaf>(__safeDI_hotel)
+		            return P11(charlie: charlie)
+		        }
+		        let p11: P11 = __safeDI_p11()
+		        func __safeDI_p15() -> P15 {
+		            let india = Instantiator<Leaf>(__safeDI_hotel)
+		            return P15(india: india)
+		        }
+		        let p15: P15 = __safeDI_p15()
+		        func __safeDI_p1() -> P1 {
+		            let alpha = Instantiator<Leaf>(__safeDI_hotel)
+		            return P1(alpha: alpha)
+		        }
+		        let p1: P1 = __safeDI_p1()
+		        func __safeDI_p8() -> P8 {
+		            let xray = Instantiator<Leaf>(__safeDI_hotel)
+		            return P8(xray: xray)
+		        }
+		        let p8: P8 = __safeDI_p8()
+		        func __safeDI_p18() -> P18 {
+		            let november = Instantiator<Leaf>(__safeDI_hotel)
+		            return P18(november: november)
+		        }
+		        let p18: P18 = __safeDI_p18()
+		        func __safeDI_p3() -> P3 {
+		            let delta = Instantiator<Leaf>(__safeDI_hotel)
+		            return P3(delta: delta)
+		        }
+		        let p3: P3 = __safeDI_p3()
+		        func __safeDI_p12() -> P12 {
+		            let papa = Instantiator<Leaf>(__safeDI_hotel)
+		            return P12(papa: papa)
+		        }
+		        let p12: P12 = __safeDI_p12()
+		        func __safeDI_p7() -> P7 {
+		            let echo = Instantiator<Leaf>(__safeDI_hotel)
+		            return P7(echo: echo)
+		        }
+		        let p7: P7 = __safeDI_p7()
+		        func __safeDI_p16() -> P16 {
+		            let mike = Instantiator<Leaf>(__safeDI_hotel)
+		            return P16(mike: mike)
+		        }
+		        let p16: P16 = __safeDI_p16()
+		        func __safeDI_p5() -> P5 {
+		            let bravo = Instantiator<Leaf>(__safeDI_hotel)
+		            return P5(bravo: bravo)
+		        }
+		        let p5: P5 = __safeDI_p5()
+		        func __safeDI_p10() -> P10 {
+		            let lima = Instantiator<Leaf>(__safeDI_hotel)
+		            return P10(lima: lima)
+		        }
+		        let p10: P10 = __safeDI_p10()
+		        func __safeDI_p14() -> P14 {
+		            let sierra = Instantiator<Leaf>(__safeDI_hotel)
+		            return P14(sierra: sierra)
+		        }
+		        let p14: P14 = __safeDI_p14()
+		        self.init(p13: p13, p4: p4, p17: p17, p0: p0, p9: p9, p2: p2, p19: p19, p6: p6, p11: p11, p15: p15, p1: p1, p8: p8, p18: p18, p3: p3, p12: p12, p7: p7, p16: p16, p5: p5, p10: p10, p14: p14)
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsSharedTypeInOneFunction_whenSixParentsReachTypeInsideAndOutsideCycle() async throws {
+		try await expectTypeKeyTree(of: Self.sixParents(
+			rootDeclarations: ["@Instantiated let t: T", "@Instantiated let nBuilder: Instantiator<N>"],
+			parentDeclarations: { index in index.isMultiple(of: 2) ? ["@Instantiated let t: T"] : ["@Instantiated let nBuilder: Instantiator<N>"] },
+		) + [
+			Self.type("T", "@Instantiated let a: A", "@Instantiated let dep: Dep"),
+			Self.type("A", "@Instantiated let nBuilder: Instantiator<N>"),
+			Self.type("N", "@Received(onlyIfAvailable: true) let dep: Dep?", "@Instantiated let tBuilder: Instantiator<T>"),
+			Self.type("Dep"),
+		], equals: """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_t() -> T {
+		            let dep = Dep()
+		            let a: A = __safeDI_a(dep: dep)
+		            return T(a: a, dep: dep)
+		        }
+		        func __safeDI_a(dep: Dep?) -> A {
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(dep: dep)
+		            }
+		            return A(nBuilder: nBuilder)
+		        }
+		        func __safeDI_nBuilder(dep: Dep?) -> N {
+		            let tBuilder = Instantiator<T>(__safeDI_t)
+		            return N(dep: dep, tBuilder: tBuilder)
+		        }
+		        let t: T = __safeDI_t()
+		        let nBuilder = Instantiator<N> {
+		            __safeDI_nBuilder(dep: nil)
+		        }
+		        func __safeDI_w3() -> W3 {
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(dep: nil)
+		            }
+		            return W3(nBuilder: nBuilder)
+		        }
+		        let w3: W3 = __safeDI_w3()
+		        func __safeDI_w0() -> W0 {
+		            let t: T = __safeDI_t()
+		            return W0(t: t)
+		        }
+		        let w0: W0 = __safeDI_w0()
+		        func __safeDI_w5() -> W5 {
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(dep: nil)
+		            }
+		            return W5(nBuilder: nBuilder)
+		        }
+		        let w5: W5 = __safeDI_w5()
+		        func __safeDI_w1() -> W1 {
+		            let nBuilder = Instantiator<N> {
+		                __safeDI_nBuilder(dep: nil)
+		            }
+		            return W1(nBuilder: nBuilder)
+		        }
+		        let w1: W1 = __safeDI_w1()
+		        func __safeDI_w4() -> W4 {
+		            let t: T = __safeDI_t()
+		            return W4(t: t)
+		        }
+		        let w4: W4 = __safeDI_w4()
+		        func __safeDI_w2() -> W2 {
+		            let t: T = __safeDI_t()
+		            return W2(t: t)
+		        }
+		        let w2: W2 = __safeDI_w2()
+		        self.init(t: t, nBuilder: nBuilder, w3: w3, w0: w0, w5: w5, w1: w1, w4: w4, w2: w2)
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsEachLoopMemberInOneFunction_whenSixParentsEnterInstantiatorLoop() async throws {
+		try await expectTypeKeyTree(of: Self.sixParents(
+			rootDeclarations: ["@Instantiated let screenBuilder: Instantiator<Screen>", "@Instantiated let stepBuilder: Instantiator<Step>"],
+			parentDeclarations: { index in index.isMultiple(of: 2) ? ["@Instantiated let screenBuilder: Instantiator<Screen>"] : ["@Instantiated let stepBuilder: Instantiator<Step>"] },
+		) + [
+			Self.type("Screen", "@Instantiated let stepBuilder: Instantiator<Step>"),
+			Self.type("Step", "@Instantiated let screenBuilder: Instantiator<Screen>"),
+		], equals: """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_screenBuilder() -> Screen {
+		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
+		            return Screen(stepBuilder: stepBuilder)
+		        }
+		        func __safeDI_stepBuilder() -> Step {
+		            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		            return Step(screenBuilder: screenBuilder)
+		        }
+		        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		        let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
+		        func __safeDI_w3() -> W3 {
+		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
+		            return W3(stepBuilder: stepBuilder)
+		        }
+		        let w3: W3 = __safeDI_w3()
+		        func __safeDI_w0() -> W0 {
+		            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		            return W0(screenBuilder: screenBuilder)
+		        }
+		        let w0: W0 = __safeDI_w0()
+		        func __safeDI_w5() -> W5 {
+		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
+		            return W5(stepBuilder: stepBuilder)
+		        }
+		        let w5: W5 = __safeDI_w5()
+		        func __safeDI_w1() -> W1 {
+		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
+		            return W1(stepBuilder: stepBuilder)
+		        }
+		        let w1: W1 = __safeDI_w1()
+		        func __safeDI_w4() -> W4 {
+		            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		            return W4(screenBuilder: screenBuilder)
+		        }
+		        let w4: W4 = __safeDI_w4()
+		        func __safeDI_w2() -> W2 {
+		            let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
+		            return W2(screenBuilder: screenBuilder)
+		        }
+		        let w2: W2 = __safeDI_w2()
+		        self.init(screenBuilder: screenBuilder, stepBuilder: stepBuilder, w3: w3, w0: w0, w5: w5, w1: w1, w4: w4, w2: w2)
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesCloserItsOwnNearestDeclaration_whenSixParentsReachClosingEdge() async throws {
+		try await expectTypeKeyTree(of: Self.sixParents(
+			rootDeclarations: ["@Instantiated let x: X", "@Instantiated let e: E"],
+			parentDeclarations: { index in index.isMultiple(of: 2) ? ["@Instantiated let e: E"] : ["@Instantiated let x: X", "@Instantiated let e: E"] },
+		) + [
+			Self.type("E", "@Instantiated let k: K", "@Instantiated let p: P"),
+			Self.type("K", "@Received let x: X"),
+			Self.type("P", "@Instantiated let x: X", "@Instantiated let sBuilder: Instantiator<S>"),
+			Self.type("S", "@Instantiated let eBuilder: Instantiator<E>"),
+			Self.type("X"),
+		], equals: """
+		extension Root {
+		    public convenience init() {
+		        let x = X()
+		        func __safeDI_e(x: X) -> E {
+		            let k = K(x: x)
+		            let p: P = __safeDI_p()
+		            return E(k: k, p: p)
+		        }
+		        func __safeDI_p() -> P {
+		            let x = X()
+		            let sBuilder = Instantiator<S> {
+		                __safeDI_sBuilder(x: x)
+		            }
+		            return P(x: x, sBuilder: sBuilder)
+		        }
+		        func __safeDI_sBuilder(x: X) -> S {
+		            let eBuilder = Instantiator<E> {
+		                __safeDI_e(x: x)
+		            }
+		            return S(eBuilder: eBuilder)
+		        }
+		        let e: E = __safeDI_e(x: x)
+		        func __safeDI_w3() -> W3 {
+		            let x = X()
+		            let e: E = __safeDI_e(x: x)
+		            return W3(x: x, e: e)
+		        }
+		        let w3: W3 = __safeDI_w3()
+		        func __safeDI_w0() -> W0 {
+		            let e: E = __safeDI_e(x: x)
+		            return W0(e: e)
+		        }
+		        let w0: W0 = __safeDI_w0()
+		        func __safeDI_w5() -> W5 {
+		            let x = X()
+		            let e: E = __safeDI_e(x: x)
+		            return W5(x: x, e: e)
+		        }
+		        let w5: W5 = __safeDI_w5()
+		        func __safeDI_w1() -> W1 {
+		            let x = X()
+		            let e: E = __safeDI_e(x: x)
+		            return W1(x: x, e: e)
+		        }
+		        let w1: W1 = __safeDI_w1()
+		        func __safeDI_w4() -> W4 {
+		            let e: E = __safeDI_e(x: x)
+		            return W4(e: e)
+		        }
+		        let w4: W4 = __safeDI_w4()
+		        func __safeDI_w2() -> W2 {
+		            let e: E = __safeDI_e(x: x)
+		            return W2(e: e)
+		        }
+		        let w2: W2 = __safeDI_w2()
+		        self.init(x: x, e: e, w3: w3, w0: w0, w5: w5, w1: w1, w4: w4, w2: w2)
+		    }
+		}
+		""")
+	}
+
 	// MARK: Private
+
+	/// The order the root declares the twenty parents of a merge-order cell in: neither their names' order nor its reverse.
+	private static let twentyParentOrder = [13, 4, 17, 0, 9, 2, 19, 6, 11, 15, 1, 8, 18, 3, 12, 7, 16, 5, 10, 14]
+
+	/// The order the root declares the six parents of a merge-order cell in.
+	private static let sixParentOrder = [3, 0, 5, 1, 4, 2]
+
+	/// Twenty labels whose order is neither the parents' order nor the order the root declares them in.
+	private static let labels = ["kilo", "alpha", "tango", "delta", "oscar", "bravo", "romeo", "echo", "xray", "golf", "lima", "charlie", "papa", "hotel", "sierra", "india", "mike", "foxtrot", "november", "juliet"]
+
+	/// A root declaring `P0` to `P19` in `twentyParentOrder`, each declared by `rootDeclaration` and holding `parentDeclarations`.
+	private static func twentyParents(rootDeclaration: (Int) -> String, parentDeclarations: (Int) -> [String]) -> [String] {
+		[seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: twentyParentOrder.map(rootDeclaration))]
+			+ (0..<20).map { seamFixtureType(named: "P\($0)", isFinalClass: true, declarations: parentDeclarations($0)) }
+	}
+
+	/// A root holding `rootDeclarations` and `W0` to `W5`, declared in `sixParentOrder`, each holding `parentDeclarations`.
+	private static func sixParents(rootDeclarations: [String], parentDeclarations: (Int) -> [String]) -> [String] {
+		[seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: rootDeclarations + sixParentOrder.map { "@Instantiated let w\($0): W\($0)" })]
+			+ (0..<6).map { seamFixtureType(named: "W\($0)", isFinalClass: true, declarations: parentDeclarations($0)) }
+	}
 
 	private var filesToDelete: [URL]
 
