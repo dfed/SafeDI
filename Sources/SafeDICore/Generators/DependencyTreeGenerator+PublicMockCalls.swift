@@ -138,13 +138,29 @@ extension DependencyTreeGenerator {
 			// place its own module cannot fill: the `.public` mock takes the builder of that place's hole type as a struct with a
 			// member for each place its calls hold, and none for a place it builds inline, so only a call honors the builder a
 			// caller passes. Its values are those of the tree built inline.
-			let isCalledToHonorPublicMocksBuilders = if typesReachedByOwnPublicMocks.contains(type) {
+			// Only where each such place's fill receives from the type's tree nothing that the tree declares – only what the
+			// type's caller hands the tree: a fill that receives a value the tree declares could read one the call cannot hand
+			// it – declared outside a `@Sendable` function that builds the place, say – where the tree built inline hands it
+			// every value, so such a type stays built inline, and the `.public` mock fills the place itself, as it fills every
+			// place it builds inline.
+			let isCalledToHonorPublicMocksBuilders: Bool
+			if typesReachedByOwnPublicMocks.contains(type) {
 				// Resolved only for a type a `.public` mock reaches.
-				try constructions.contains(where: { [instantiables = foreignPublicMock.visibleDeclarations().instantiables] construction in
-					instantiables[construction.instantiable.concreteInstantiable] == nil
-				})
+				let instantiables = try foreignPublicMock.visibleDeclarations().instantiables
+				let receivedFromTheCaller = Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache).received
+				var fillsAPlace = false
+				var fillReceivesFromTheTree = false
+				for construction in constructions where instantiables[construction.instantiable.concreteInstantiable] == nil {
+					fillsAPlace = true
+					if let fillScope = typeDescriptionToScopeMap[construction.instantiable.concreteInstantiable],
+					   !Self.collectReceivedProperties(from: fillScope, cache: &receivedPropertiesCache).received.isSubset(of: receivedFromTheCaller)
+					{
+						fillReceivesFromTheTree = true
+					}
+				}
+				isCalledToHonorPublicMocksBuilders = fillsAPlace && !fillReceivesFromTheTree
 			} else {
-				false
+				isCalledToHonorPublicMocksBuilders = false
 			}
 			guard isCalledToHonorPublicMocksBuilders || !Self.inaccessibleConstructions(constructions, from: emittingModule, extendedTypes: extendedTypeDeclarations).isEmpty else { continue }
 			calledTypes.append((type, foreignPublicMock))

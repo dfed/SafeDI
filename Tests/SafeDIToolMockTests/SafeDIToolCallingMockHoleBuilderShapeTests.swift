@@ -581,6 +581,83 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsPublicMockInlineAndFillsItsPlace_whenFillReceivesValueItsTreeDeclaresOutsideSendableBuilder() async throws {
+		// `Live` fills `Host`'s place of `any Api` and receives `context`, which `G` declares outside the `@Sendable` function
+		// that builds `hostBuilder`: a call of `G`'s public mock could not hand the fill `context`, so the `.public` mock builds
+		// `G` inline, as its tree hands the fill every value, fills the place itself, and takes no builder of it.
+		let feat = """
+		import SafeDI
+
+		public protocol Api: Sendable {}
+
+		@Instantiable
+		public final class Context: Instantiable, Sendable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public final class Host: Instantiable, Sendable {
+		    public init(api: any Api) {
+		        self.api = api
+		    }
+
+		    @Instantiated public let api: any Api
+		}
+
+		@Instantiable
+		public final class Unused: Instantiable {
+		    init() {}
+		}
+
+		@Instantiable(generateMock: .public)
+		public final class G: Instantiable, Sendable {
+		    public init(context: Context, hostBuilder: SendableInstantiator<Host>) {
+		        self.context = context
+		        self.hostBuilder = hostBuilder
+		    }
+
+		    @Instantiated public let context: Context
+		    @Instantiated public let hostBuilder: SendableInstantiator<Host>
+		}
+		"""
+		let app = """
+		import Feat
+		import SafeDI
+
+		@Instantiable(fulfillingAdditionalTypes: [Api.self])
+		public final class Live: Api, Instantiable {
+		    public init(context: Context) {
+		        self.context = context
+		    }
+
+		    @Received public let context: Context
+		}
+
+		@Instantiable(generateMock: .public)
+		public final class Root: Instantiable {
+		    public init(g: G) {
+		        self.g = g
+		    }
+
+		    @Instantiated public let g: G
+		}
+		"""
+		let modules = [
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: ["FeatTypes.swift": feat]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": app], dependencies: ["Feat"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+
+		#expect(Self.mockParameterLines(of: output) == [
+			"safeDIOverrides: SafeDIOverrides = .init()",
+		])
+		try await expectValues(of: output, modules: modules, pairs: [
+			("{ let g = Root.mock().g; return (g.hostBuilder.instantiate().api as? App.Live)?.context === g.context }()", "true"),
+		])
+	}
+
 	/// The modules of the join: `F` holds `any Api` twice, beneath levels whose `log` differs, and `Live` reads `log` lazily,
 	/// so a pass-up gate passes `F`'s places up whole and `Root`'s mock takes `apiBuilder` required, and `H`'s one place is
 	/// filled. Where `buildsGInline`, `Root` also instantiates `G`, whose public initializer lets the mock build it inline.
