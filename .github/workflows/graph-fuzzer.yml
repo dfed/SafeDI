@@ -495,6 +495,18 @@ jobs:
           path: reports
       - name: Combine Shard Reports
         run: python3 .github/scripts/combine-graph-fuzzer-reports.py "$RUNNER_TEMP/graph-fuzzer-corpus.md" reports/*/report.txt
+      # Prints what the shards' reports say the pins should be, for a session
+      # that cannot download this run's artifacts: the analysis's report, then
+      # its pins.json as lines that
+      # .claude/skills/apply-fuzzer-pins/apply-fuzzer-pins.py reads back from
+      # a saved copy of this job's log. It runs when the step above fails,
+      # which is when pins moved, and it never fails the job.
+      - name: Print the Pins the Reports Derive
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: .github/scripts/report-graph-fuzzer-pins.sh reports
 
   # With `release_acceptance`, release-acceptance.yml's jobs, in this run:
   # they build the older release and this commit and compare the two.
