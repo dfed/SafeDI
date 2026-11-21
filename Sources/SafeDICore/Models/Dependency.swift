@@ -224,3 +224,25 @@ extension Dependency.Source {
 		}
 	}
 }
+
+extension Dependency {
+	/// Whether the dependency receives an instantiator of any kind, received or through an alias, which a loop of builders
+	/// can rebind (`ReceivedBuilderLoops`).
+	var receivesInstantiator: Bool {
+		let receivedProperty: Property
+		switch source {
+		case .received:
+			receivedProperty = property
+		case let .aliased(fulfillingProperty, _, _):
+			receivedProperty = fulfillingProperty
+		case .instantiated, .forwarded:
+			return false
+		}
+		switch receivedProperty.propertyType {
+		case .instantiator, .erasedInstantiator, .sendableInstantiator, .sendableErasedInstantiator:
+			return true
+		case .constant, .lazilyInstantiated, .sendableLazilyInstantiated:
+			return false
+		}
+	}
+}
