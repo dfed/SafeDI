@@ -118,6 +118,38 @@ public struct ProjectFilePath: Hashable, Comparable, Sendable {
 	fileprivate let normalizedPath: NormalizedFilePath
 }
 
+/// A set of a project's files that answers whether a path, as a declaration records it, names one of them, spelling the
+/// path for comparison only when its file name is one of theirs. Spelling a path for comparison changes its directories,
+/// never its last component, unless that component is `.` or `..` or empty, so a path whose last component is none of
+/// those and no file's name in the set names none of them.
+public struct ProjectFileSet: Sendable {
+	/// - Parameters:
+	///   - files: The files, spelled for comparison.
+	///   - filePaths: How the paths asked about are spelled for comparison.
+	public init(_ files: Set<ProjectFilePath>, spelledBy filePaths: ProjectFilePaths) {
+		self.files = files
+		self.filePaths = filePaths
+		fileNames = Set(files.map { Self.lastComponent(of: $0.path) })
+	}
+
+	/// Whether `path`, absolute or relative to the reported project root, names one of the files.
+	public func contains(filePathAsRecorded path: String) -> Bool {
+		let lastComponent = Self.lastComponent(of: path)
+		guard fileNames.contains(lastComponent) || lastComponent.isEmpty || lastComponent == "." || lastComponent == ".." else {
+			return false
+		}
+		return files.contains(filePaths.projectFilePath(of: path))
+	}
+
+	private let files: Set<ProjectFilePath>
+	private let filePaths: ProjectFilePaths
+	private let fileNames: Set<Substring>
+
+	private static func lastComponent(of path: String) -> Substring {
+		path.lastIndex(of: "/").map { path[path.index(after: $0)...] } ?? path[...]
+	}
+}
+
 /// How SafeDI spells the paths of one project's files for each consumer, given the project root as a build system
 /// reported it.
 ///

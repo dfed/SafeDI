@@ -425,11 +425,53 @@ extension DependencyTreeGenerator {
 		return TypeAccessProof.ModuleReach(viewer: viewer, instantiables: instantiables.values, plainTypeDeclarations: plainTypeDeclarations, modulesReadByRunOfModule: modulesReadByRunOfModule)
 	}
 
-	/// The context every public mock of the module shares: one proof of every type's access over the module's
-	/// declarations, the module of each type, and the names of the module-level configurations; and the comment the
-	/// `public` declarations this module generates carry, naming the types they name that it reads no declaration of, or
-	/// `nil` when the run writes none (`SeamResolution.carriesUnreadTypeComment`). Made once by each call that needs it.
-	func makePublicMockContext() -> PublicMockContext {
+	/// The one proof of every type's access over the module's declarations, as this run's module mentions them, which a
+	/// call that needs it makes once and hands to each reader: the public mock context, and the signatures of the seams
+	/// this module generates. It is built the first time a reader asks for it, so a run whose module generates no seam
+	/// and declares no public mock builds none.
+	func ownAccessProof() -> OwnAccessProof {
+		OwnAccessProof(
+			instantiables: typeDescriptionToFulfillingInstantiableMap,
+			plainTypeDeclarations: plainTypeDeclarations,
+			emittingModule: emittingModule,
+			runModuleName: seams.currentModule.moduleName,
+		)
+	}
+
+	/// The proof of every type's access over a run's own declarations, built once, when first read (`ownAccessProof()`).
+	/// A local of the call that makes it, never stored on the generator, and read only on the generator's actor.
+	final class OwnAccessProof {
+		init(instantiables: [TypeDescription: Instantiable], plainTypeDeclarations: [PlainTypeDeclaration], emittingModule: EmittingModule?, runModuleName: String?) {
+			self.instantiables = instantiables
+			self.plainTypeDeclarations = plainTypeDeclarations
+			self.emittingModule = emittingModule
+			self.runModuleName = runModuleName
+		}
+
+		/// The proof, over the declarations the module sees, with the module's own files and the modules each module
+		/// reads as the run's module tells them.
+		private(set) lazy var proof: TypeAccessProof = {
+			GenerationLayerObservation.record(.accessProof(ofModule: runModuleName, inCallersView: false), inRunOf: runModuleName)
+			return TypeAccessProof(
+				instantiables: instantiables,
+				plainTypeDeclarations: plainTypeDeclarations,
+				isOwnFile: emittingModule?.isOwnFile,
+				reach: DependencyTreeGenerator.moduleReach(viewedFrom: emittingModule?.identity, instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, modulesReadByRunOfModule: emittingModule?.modulesReadByRunOfModule),
+			)
+		}()
+
+		private let instantiables: [TypeDescription: Instantiable]
+		private let plainTypeDeclarations: [PlainTypeDeclaration]
+		private let emittingModule: EmittingModule?
+		private let runModuleName: String?
+	}
+
+	/// The context every public mock of the module shares: the proof of every type's access over the module's
+	/// declarations (`ownAccessProof()`), the module of each type, and the names of the module-level configurations; and
+	/// the comment the `public` declarations this module generates carry, naming the types they name that it reads no
+	/// declaration of, or `nil` when the run writes none (`SeamResolution.carriesUnreadTypeComment`). Made once by each
+	/// call that needs it.
+	func makePublicMockContext(proof: TypeAccessProof) -> PublicMockContext {
 		var moduleNameByType = [TypeDescription: String]()
 		for instantiable in typeDescriptionToFulfillingInstantiableMap.values {
 			if let moduleName = instantiable.moduleName {
@@ -437,12 +479,6 @@ extension DependencyTreeGenerator {
 			}
 		}
 		let moduleName = emittingModule?.identity.moduleName
-		let proof = TypeAccessProof(
-			instantiables: typeDescriptionToFulfillingInstantiableMap,
-			plainTypeDeclarations: plainTypeDeclarations,
-			isOwnFile: emittingModule?.isOwnFile,
-			reach: Self.moduleReach(viewedFrom: emittingModule?.identity, instantiables: typeDescriptionToFulfillingInstantiableMap, plainTypeDeclarations: plainTypeDeclarations, modulesReadByRunOfModule: emittingModule?.modulesReadByRunOfModule),
-		)
 		return PublicMockContext(
 			proof: proof,
 			unreadTypeComment: seams.carriesUnreadTypeComment ? UnreadTypeComment(proof: proof, mentioningModule: .generatedCode(ofModuleNamed: moduleName, isRunsOwnModule: true)) : nil,

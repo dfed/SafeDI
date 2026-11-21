@@ -315,10 +315,13 @@ public actor DependencyTreeGenerator {
 	public func generate(_ request: GenerationRequest) async throws -> GenerationResults {
 		let buildsDependencyTrees = request.generatesDependencyTrees || request.generatesDOTTree
 		let declaresPublicMock = typeDescriptionToFulfillingInstantiableMap.values.contains(where: { $0.generateMock == .public })
+		// The proof of every type's access over the module's declarations, which the public mock context and the
+		// signatures of the module's own seams share, built once, when the first of them reads it.
+		let ownAccessProof = ownAccessProof()
 		// The context the module's public mocks share, whose comment the initializers of its seams carry too, made once
 		// when either is generated.
 		let publicMockContext: PublicMockContext? = if (declaresPublicMock && request.mocks != nil) || (buildsDependencyTrees && !seams.isEmpty && !generatedSeamTypes.isEmpty) {
-			makePublicMockContext()
+			makePublicMockContext(proof: ownAccessProof.proof)
 		} else {
 			nil
 		}
@@ -327,7 +330,7 @@ public actor DependencyTreeGenerator {
 		var dotTree: String?
 		var storedSeamSignatures = [StoredSeamSignature]()
 		if buildsDependencyTrees {
-			let trees = try dependencyTrees(unreadTypeComment: publicMockContext?.unreadTypeComment)
+			let trees = try dependencyTrees(unreadTypeComment: publicMockContext?.unreadTypeComment, ownAccessProof: ownAccessProof)
 			if request.generatesDependencyTrees {
 				generatedRoots = try await generatedCode(of: trees)
 				warnings = trees.warnings
@@ -525,7 +528,9 @@ public actor DependencyTreeGenerator {
 	/// this module calls or generates once, here, and handing them down.
 	/// - Parameter unreadTypeComment: The comment the `public` initializers of the seams this module generates carry
 	///   (`PublicMockContext.unreadTypeComment`).
-	private func dependencyTrees(unreadTypeComment: UnreadTypeComment?) throws -> DependencyTrees {
+	/// - Parameter ownAccessProof: The proof of every type's access over the module's declarations, which the signatures
+	///   of the seams this module generates read (`ownAccessProof()`).
+	private func dependencyTrees(unreadTypeComment: UnreadTypeComment?, ownAccessProof: OwnAccessProof) throws -> DependencyTrees {
 		// The trees of the foreign seams with holes, built inline with the fills this module generates.
 		var inlineForeignSeamTrees = [ScopeGenerator]()
 		var validatedScopes = Set<Scope>()
@@ -608,7 +613,7 @@ public actor DependencyTreeGenerator {
 				}
 				return roots
 			}
-			let seamWorldRoots = try seamWorldRootScopeGenerators(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, unreadTypeComment: unreadTypeComment)
+			let seamWorldRoots = try seamWorldRootScopeGenerators(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, unreadTypeComment: unreadTypeComment, ownAccessProof: ownAccessProof)
 			rootsOfOtherModules = seamWorldRoots.rootsOfOtherModules
 			storedSeamSignatures = seamWorldRoots.storedSeamSignatures
 			return seamWorldRoots.roots
