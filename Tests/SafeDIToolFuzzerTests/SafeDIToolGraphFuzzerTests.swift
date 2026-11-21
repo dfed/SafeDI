@@ -8775,7 +8775,7 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [
 				3, 33, 99, 104, 112, 194, 213, 265, 289, 301, 302, 542, 561, 566, 572, 574, 583, 598, 612, 616, 618, 649,
-				653, 677, 697, 825, 832, 833, 884, 897, 907, 909, 944, 946,
+				653, 677, 697, 825, 832, 833, 884, 907, 909, 944, 946,
 			],
 		),
 		// A shape the corpus first compiled once SafeDI proved a type's access from its plain declaration (2026-11-03):
@@ -8791,7 +8791,14 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockBuilderOrderReason,
 			signatures: [.renamedGraphDiffers(.mockCode)],
-			seeds: [176, 455, 685, 799],
+			seeds: [176, 429, 455, 543, 685, 799],
+		),
+		// As above, with the optional builder of a hole type a calling mock's calls fill, which is listed among the flat
+		// parameters by label as a required builder is; and a lazy cycle's configuration field.
+		GraphFuzzerKnownIssue(
+			reason: "\(publicMockBuilderOrderReason); and \(lazyCycleConfigurationFieldReason)",
+			signatures: [.renamedGraphDiffers(.mockCode), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
+			seeds: [897],
 		),
 		// The design's output stability: an internal consumer that passes up the places of two public mocks of one hole
 		// type names the builders it takes for them apart, after each called type, so `T6Twin`'s call renames `T6`'s.
