@@ -18,7 +18,9 @@ nothing, are skipped: Codecov drops those from its counts (checked against its r
 llvm-cov gives a zero to the closing brace after a `return`, which no test can execute. Under GitHub Actions each line
 also gets an error annotation; --summary FILE appends a Markdown table of them to FILE.
 
-Exits 2 when the reports cannot be trusted, so the check never passes on missing or partial data:
+Exits 2 when the reports cannot be trusted, so the check never passes on missing or partial data. It reports every
+such problem it finds, and the unexecuted lines too whenever both reports can be read, before it exits, so one run
+shows everything a commit has to fix:
 - the platforms given are not exactly linux and macos, each once;
 - a report, its root, its commit or its platform is missing, the commit is not SHA, or the platform is not the one
   the directory is given for;
@@ -31,8 +33,13 @@ Exits 2 when the reports cannot be trusted, so the check never passes on missing
 - a file that list names is recorded by a report, or is not a Swift file under Sources/ or Plugins/ once symbolic
   links resolve.
 
+A report that cannot be read (the first four refusals) leaves no union to take, so the unexecuted lines are not
+listed then, and neither are the files no report records; the other platform's report, the symbolic links and the
+list are still checked.
+
 --self-test DIRECTORY writes a fixture checkout and fixture reports into DIRECTORY, which must not exist, and checks
-the union, the symbolic links, the annotations and each refusal above. Exit 0 when every expectation holds.
+the union, the symbolic links, the annotations, each refusal above, and that refusals of several kinds are reported
+together with the unexecuted lines. Exit 0 when every expectation holds.
 """
 import collections
 import contextlib
@@ -215,48 +222,61 @@ def read_report(platform, directory, checkout, commit):
 
 
 def load_reports(platform_directories, checkout, commit):
-    """{platform: {repository path: {line: execution count}}} for `platform_directories`, a list of (platform,
-    directory), once every refusal in the module's docstring has been checked."""
+    """(reports, problems) for `platform_directories`, a list of (platform, directory). `reports` is {platform:
+    {repository path: {line: execution count}}}, or None when a report cannot be read. `problems` holds every refusal
+    in the module's docstring that applies, so the check fails when it is not empty; the reports are still returned
+    beside it when both can be read, so their unexecuted lines can be listed in the same run."""
     platforms = [platform for platform, _ in platform_directories]
     repeated = sorted({platform for platform in platforms if platforms.count(platform) > 1})
     if repeated:
-        raise UntrustworthyReport(f"{', '.join(repeated)} is given more than once")
+        return None, [f"{', '.join(repeated)} is given more than once"]
     if sorted(platforms) != sorted(REQUIRED_PLATFORMS):
-        raise UntrustworthyReport(
+        return None, [
             f"the check needs exactly the platforms {' and '.join(REQUIRED_PLATFORMS)}, not {', '.join(sorted(platforms))}"
-        )
+        ]
+    problems = []
     reports = {}
     recorded_by = collections.defaultdict(list)
     for platform, directory in sorted(platform_directories):
-        reports[platform], recorded_files = read_report(platform, directory, checkout, commit)
+        try:
+            reports[platform], recorded_files = read_report(platform, directory, checkout, commit)
+        except UntrustworthyReport as error:
+            problems.append(str(error))
+            continue
         for path in recorded_files:
             recorded_by[path].append(platform)
-    unmeasured = read_unmeasured_files(checkout)
-    files = measured_files(checkout)
-    problems = [
+    every_report_was_read = len(reports) == len(platform_directories)
+    problems.extend(
         f"{link} is a symbolic link to {target}, outside Sources/ and Plugins/, so no report of it would be checked;"
         " move the file it names under Sources/ or Plugins/ and link to it from where it is needed"
         for link, target in links_leaving_measurement(checkout)
-    ]
-    for path in sorted(unmeasured):
-        if path not in files:
-            problems.append(
-                f"{UNMEASURED_FILES_LIST} lists {path}, which is not a Swift file under Sources/ or Plugins/ once"
-                " symbolic links resolve; list the file it resolves to, or remove it"
-            )
-        elif path in recorded_by:
-            problems.append(
-                f"{UNMEASURED_FILES_LIST} lists {path}, which the {' and '.join(recorded_by[path])} report records;"
-                " remove it from the list"
-            )
-    for path in sorted(files - set(recorded_by) - set(unmeasured)):
-        problems.append(
-            f"no report records {path}, so no test target compiles it and this check cannot see it; compile it into"
-            f" a test target, or list it in {UNMEASURED_FILES_LIST} with the reason no test can"
-        )
-    if problems:
-        raise UntrustworthyReport("\n".join(problems))
-    return reports
+    )
+    try:
+        unmeasured = read_unmeasured_files(checkout)
+    except UntrustworthyReport as error:
+        problems.append(str(error))
+        unmeasured = None
+    if unmeasured is not None:
+        files = measured_files(checkout)
+        for path in sorted(unmeasured):
+            if path not in files:
+                problems.append(
+                    f"{UNMEASURED_FILES_LIST} lists {path}, which is not a Swift file under Sources/ or Plugins/ once"
+                    " symbolic links resolve; list the file it resolves to, or remove it"
+                )
+            elif path in recorded_by:
+                problems.append(
+                    f"{UNMEASURED_FILES_LIST} lists {path}, which the {' and '.join(recorded_by[path])} report records;"
+                    " remove it from the list"
+                )
+        # A file one report does not record may be recorded by the report that could not be read.
+        if every_report_was_read:
+            for path in sorted(files - set(recorded_by) - set(unmeasured)):
+                problems.append(
+                    f"no report records {path}, so no test target compiles it and this check cannot see it; compile"
+                    f" it into a test target, or list it in {UNMEASURED_FILES_LIST} with the reason no test can"
+                )
+    return (reports if every_report_was_read else None), problems
 
 
 def unexecuted_lines(reports):
@@ -298,17 +318,19 @@ def check(arguments, checkout, annotate):
     if commit is None:
         print(__doc__, file=sys.stderr)
         return 64
-    try:
-        reports = load_reports(platform_arguments, checkout, commit)
-    except UntrustworthyReport as error:
-        for message in str(error).split("\n"):
-            print(f"::error::{escape_annotation_data(message)}" if annotate else message)
+    reports, problems = load_reports(platform_arguments, checkout, commit)
+    for problem in problems:
+        print(f"::error::{escape_annotation_data(problem)}" if annotate else problem)
+    if reports is None:
+        if summary_path is not None:
+            write_problems_summary(summary_path, problems)
         return 2
     for platform in sorted(reports):
         files = sum(1 for line_counts in reports[platform].values() if line_counts)
         lines = sum(len(line_counts) for line_counts in reports[platform].values())
         print(f"{platform}: {lines} lines recorded in {files} files under Sources/ and Plugins/")
-    print(f"{len(read_unmeasured_files(checkout))} files are listed in {UNMEASURED_FILES_LIST} as unmeasured")
+    with contextlib.suppress(UntrustworthyReport):
+        print(f"{len(read_unmeasured_files(checkout))} files are listed in {UNMEASURED_FILES_LIST} as unmeasured")
     entries, unexecuted = unexecuted_lines(reports)
     rows = []
     source_lines_by_path = {}
@@ -328,6 +350,8 @@ def check(arguments, checkout, annotate):
     print(f"{len(unexecuted)} of {len(entries)} recorded lines no test executes on {' or '.join(REQUIRED_PLATFORMS)}"
           f" ({100 * executed / len(entries):.2f}% executed)")
     if summary_path is not None:
+        if problems:
+            write_problems_summary(summary_path, problems)
         with open(summary_path, "a", encoding="utf-8") as summary:
             summary.write(f"### Line coverage: {executed} of {len(entries)} lines executed\n\n")
             if rows:
@@ -337,7 +361,16 @@ def check(arguments, checkout, annotate):
                     summary.write(f"| `{path}:{line}` | `{escaped}` | {records} |\n")
             else:
                 summary.write("Every recorded line under Sources/ and Plugins/ is executed.\n")
+    if problems:
+        return 2
     return 1 if unexecuted else 0
+
+
+def write_problems_summary(summary_path, problems):
+    with open(summary_path, "a", encoding="utf-8") as summary:
+        summary.write("### Line coverage: the reports cannot be trusted\n\n")
+        summary.writelines(f"- {problem}\n" for problem in problems)
+        summary.write("\n")
 
 
 def self_test(directory):
@@ -405,15 +438,18 @@ def self_test(directory):
     failures = []
 
     def expect_refusal(name, platform_directories, refusal):
-        try:
-            load_reports(platform_directories, checkout, commit)
+        _, problems = load_reports(platform_directories, checkout, commit)
+        if not problems:
             failures.append(f"{name}: read without the refusal '{refusal}'")
-        except UntrustworthyReport as error:
-            if refusal not in str(error):
-                failures.append(f"{name}: refused with '{error}', expected '{refusal}'")
+        elif not any(refusal in problem for problem in problems):
+            failures.append(f"{name}: refused with {problems}, expected '{refusal}'")
 
     both = [("linux", linux), ("macos", macos)]
-    _, unexecuted = unexecuted_lines(load_reports(both, checkout, commit))
+    reports, problems = load_reports(both, checkout, commit)
+    if reports is None or problems:
+        failures.append(f"the fixture reports were refused with {problems}")
+        reports = {}
+    _, unexecuted = unexecuted_lines(reports)
     found = [(path, line) for path, line, _ in unexecuted]
     expected = [("Plugins/B,%.swift", 2), ("Sources/Core/A.swift", 3), ("Sources/Core/A.swift", 4)]
     if found != expected:
@@ -473,6 +509,46 @@ def self_test(directory):
         (f"{linux_root}/Sources/Core/A.swift", [(1, 1)]),
         (f"{linux_root}/Sources/Core/New.swift", []),
     ]), "no report records Sources/Core/New.swift")
+
+    # Everything a commit has to fix is reported in one run: a file no report records, a listed file that is gone, a
+    # link that leaves the measured directories, and the lines no test executes.
+    write(UNMEASURED_FILES_LIST, sources[UNMEASURED_FILES_LIST] + "Plugins/Gone.swift: deleted\n")
+    write("Shared/Hidden.swift", "let hidden = 1\n")
+    os.symlink("../../Shared/Hidden.swift", os.path.join(checkout, "Sources/Core/Hidden.swift"))
+    summary_path = os.path.join(directory, "summary.md")
+    expected_together = [
+        "::error::Sources/Core/Hidden.swift is a symbolic link to Shared/Hidden.swift",
+        f"::error::{UNMEASURED_FILES_LIST} lists Plugins/Gone.swift, which is not a Swift file",
+        "::error::no report records Sources/Core/New.swift",
+        expected_annotation,
+        "Sources/Core/A.swift:3: let a3 = 3    [linux 0, macos 0]",
+    ]
+
+    def expect_together(name, arguments, status, expected_lines, unexpected_text=None):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            found_status = check(["--commit", commit] + arguments, checkout, annotate=True)
+        printed = output.getvalue().split("\n")
+        missing = [line for line in expected_lines if not any(found.startswith(line) for found in printed)]
+        if found_status != status or missing:
+            failures.append(f"{name}: exited {found_status}, expected {status}, without {missing}, and printed:\n"
+                            f"{output.getvalue()}")
+        if unexpected_text is not None and unexpected_text in output.getvalue():
+            failures.append(f"{name}: printed '{unexpected_text}':\n{output.getvalue()}")
+
+    expect_together("problems of every kind", ["--summary", summary_path, f"linux={linux}", f"macos={macos}"], 2,
+                    expected_together)
+    with open(summary_path, encoding="utf-8") as summary_file:
+        summary = summary_file.read()
+    for expected_text in ("- no report records Sources/Core/New.swift", "| `Sources/Core/A.swift:3` |"):
+        if expected_text not in summary:
+            failures.append(f"the summary of problems of every kind lacks '{expected_text}':\n{summary}")
+    # With one report missing there is no union, so no line and no unrecorded file is named, and the rest still is.
+    expect_together("a missing report beside other problems", [f"linux={directory}/missing", f"macos={macos}"], 2,
+                    ["::error::linux: ", expected_together[0], expected_together[1]],
+                    unexpected_text="no report records")
+    os.remove(os.path.join(checkout, "Sources/Core/Hidden.swift"))
+    write(UNMEASURED_FILES_LIST, sources[UNMEASURED_FILES_LIST])
     os.remove(os.path.join(checkout, "Sources/Core/New.swift"))
 
     # A symbolic link that leaves Sources/ and Plugins/ would take what it names out of the check.
