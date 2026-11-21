@@ -85,12 +85,13 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_startsOneTaskForEachGroupOfSmallSubtrees_whenRootHasManySmallSubtrees() async throws {
-		// The root instantiates 30 children of three scopes each, 91 scopes in all, so its subtree is large and each child's
-		// is small. The children start in groups of at least 64 scopes: the first 22 (66 scopes) on one task and the last
-		// 8 on another, beside the root's own. One task for each child, as before, ran 30 children's code together: 31.
+		// The root is a seam, since a root of the dependency tree starts no code early. It instantiates 30 children of three
+		// scopes each, 91 scopes in all, so its subtree is large and each child's is small. The children start in groups of
+		// at least 64 scopes: the first 22 (66 scopes) on one task and the last 8 on another, beside the root's own. One task
+		// for each child, as before, ran 30 children's code together: 31.
 		let children = (0..<30).map { "Child\($0)" }
 		let fixture = [
-			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: children.map { "@Instantiated let \($0.lowercased()): \($0)" }),
+			seamFixtureType(named: "Root", isSeam: true, isFinalClass: true, declarations: children.map { "@Instantiated let \($0.lowercased()): \($0)" }),
 			seamFixtureType(named: "LeafA", isFinalClass: true, declarations: []),
 			seamFixtureType(named: "LeafB", isFinalClass: true, declarations: []),
 		] + children.map { child in
