@@ -3107,13 +3107,7 @@ struct NearestDeclarations: Sendable {
 		init(declarations: [String: NearestDeclaration], depth: Int, enclosingLayer: Layer?) {
 			self.declarations = declarations
 			self.depth = depth
-			enclosingLayers = enclosingLayer.map { [$0] } ?? []
-		}
-
-		deinit {
-			var enclosingLayers = [Layer]()
-			swap(&enclosingLayers, &self.enclosingLayers)
-			DeferredRelease.release(consume enclosingLayers)
+			enclosingLayers = DeferredReleaseSlot(enclosingLayer.map { [$0] } ?? [])
 		}
 
 		let declarations: [String: NearestDeclaration]
@@ -3122,12 +3116,11 @@ struct NearestDeclarations: Sendable {
 
 		/// The layer this one is enclosed by, if any.
 		var enclosingLayer: Layer? {
-			enclosingLayers.first
+			enclosingLayers.value.first
 		}
 
-		/// `enclosingLayer`, held in an array `deinit` hands to `DeferredRelease`. Mutated only by `deinit`, which has the
-		/// only access.
-		nonisolated(unsafe) private var enclosingLayers: [Layer]
+		/// `enclosingLayer`, held in an array, which the slot releases after the release that freed this layer returns.
+		private let enclosingLayers: DeferredReleaseSlot<[Layer]>
 	}
 
 	/// The declarations shared with the scopes above, nearest first.
