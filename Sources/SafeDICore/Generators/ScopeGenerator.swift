@@ -6522,18 +6522,107 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Only each child's code is awaited here: what the body decides around it is decided by the synchronous functions
 		// below, as a property's scope is (`generatePropertyCode`).
 		var body = bodyChildren(propertiesGeneratedLater: propertiesGeneratedLater, enclosingFunctionNames: enclosingFunctionNames)
-		for index in body.orderedChildren.indices where body.orderedChildren[index].generator.fillEmitsCode {
-			let code = try await body.orderedChildren[index].generator.generateCode(
-				codeGeneration: codeGeneration,
+		let requests = body.orderedChildren.indices.filter { body.orderedChildren[$0].generator.fillEmitsCode }.map { index in
+			ChildCodeRequest(
+				index: index,
+				generator: body.orderedChildren[index].generator,
 				unavailableProperties: body.orderedChildren[index].unavailableProperties,
 				propertiesGeneratedLater: body.orderedChildren[index].propertiesGeneratedLater,
 				builderFunctionNames: builderFunctionNamesOfChild(at: index, in: body),
-				leadingWhitespace: leadingMemberWhitespace,
-				fillPlaceBindings: fillPlaceBindings,
 			)
-			append(code, ofChildAt: index, to: &body, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
+		}
+		let codes: [GeneratedCode] = switch codeGeneration {
+		case .dependencyTree:
+			try await Self.dependencyTreeCode(of: requests, leadingWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
+		case .mock:
+			try await Self.code(of: requests, codeGeneration: codeGeneration, leadingWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
+		}
+		for (request, code) in zip(requests, codes) {
+			append(code, ofChildAt: request.index, to: &body, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
 		}
 		return statements(of: consume body, leadingMemberWhitespace: leadingMemberWhitespace)
+	}
+
+	/// What a body asks of one child's code: the child's generator, which is an actor of its own, and the context the body
+	/// decided for it before awaiting any child's code. A child's context never depends on another child's code.
+	private struct ChildCodeRequest: Sendable {
+		/// The child's position among the body's ordered children.
+		let index: Int
+		let generator: ScopeGenerator
+		let unavailableProperties: Set<Property>
+		let propertiesGeneratedLater: Set<Property>
+		let builderFunctionNames: BuilderFunctionNames
+	}
+
+	/// The dependency tree code of each of `requests`, in their order. A root of the dependency tree, which starts no code
+	/// early, plans each of its body's children on a task of its own, at most `ConcurrentChildCode.maximumChildrenAtOnce`
+	/// at a time, and the code comes back in the body's order of its children, never in the order the tasks finish. Beneath
+	/// those children, and in every other tree, which starts its large subtrees' code early, a body plans one child after
+	/// another. A child's error is thrown as the roots' task group throws one
+	/// (`DependencyTreeGenerator.plannedCode(of:rootsOfOtherModules:)`).
+	private static func dependencyTreeCode(
+		of requests: [ChildCodeRequest],
+		leadingWhitespace: String,
+		fillPlaceBindings: FillPlaceBindings,
+	) async throws -> [GeneratedCode] {
+		guard ConcurrentChildCode.plansChildrenAtOnce, requests.count > 1 else {
+			return try await code(of: requests, codeGeneration: .dependencyTree, leadingWhitespace: leadingWhitespace, fillPlaceBindings: fillPlaceBindings)
+		}
+		ConcurrentChildCode.record(childCount: requests.count)
+		let maximumChildrenAtOnce = ConcurrentChildCode.maximumChildrenAtOnce
+		return try await withThrowingTaskGroup(
+			of: (Int, GeneratedCode).self,
+			returning: [GeneratedCode].self,
+		) { taskGroup in
+			var codesByPosition = [GeneratedCode?](repeating: nil, count: requests.count)
+			for (position, request) in requests.enumerated() {
+				// A child that waits for a task to finish holds no frame, so the children planned at once never hold more memory
+				// than `maximumChildrenAtOnce` plans do.
+				if position >= maximumChildrenAtOnce, let (finishedPosition, code) = try await taskGroup.next() {
+					codesByPosition[finishedPosition] = code
+				}
+				taskGroup.addTask {
+					// The child's own body plans its children one after another: planning every body's children at once
+					// costs more processor time than it saves.
+					try await ConcurrentChildCode.$plansChildrenAtOnce.withValue(false) {
+						try await (position, request.generator.generateCode(
+							codeGeneration: .dependencyTree,
+							unavailableProperties: request.unavailableProperties,
+							propertiesGeneratedLater: request.propertiesGeneratedLater,
+							builderFunctionNames: request.builderFunctionNames,
+							leadingWhitespace: leadingWhitespace,
+							fillPlaceBindings: fillPlaceBindings,
+						))
+					}
+				}
+			}
+			for try await (position, code) in taskGroup {
+				codesByPosition[position] = code
+			}
+			// Every position holds its child's code once the group is done.
+			return codesByPosition.compactMap(\.self)
+		}
+	}
+
+	/// The code of each of `requests`, generated one after another in their order.
+	private static func code(
+		of requests: [ChildCodeRequest],
+		codeGeneration: CodeGeneration,
+		leadingWhitespace: String,
+		fillPlaceBindings: FillPlaceBindings,
+	) async throws -> [GeneratedCode] {
+		var codes = [GeneratedCode]()
+		for request in requests {
+			try await codes.append(request.generator.generateCode(
+				codeGeneration: codeGeneration,
+				unavailableProperties: request.unavailableProperties,
+				propertiesGeneratedLater: request.propertiesGeneratedLater,
+				builderFunctionNames: request.builderFunctionNames,
+				leadingWhitespace: leadingWhitespace,
+				fillPlaceBindings: fillPlaceBindings,
+			))
+		}
+		return codes
 	}
 
 	/// What a body decides of its children before it awaits their code, and what it has written of them since: the
@@ -7292,12 +7381,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					))
 				}
 				guard let rootInitializer = try Self.rootInitializer(of: instantiable) else { return .empty }
-				let childCode = try await generateProperties(
-					propertiesGeneratedLater: propertiesGeneratedLater,
-					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
-					leadingMemberWhitespace: "        ",
-					fillPlaceBindings: fillPlaceBindings,
-				)
+				// A root of the dependency tree starts no code early, so its body plans its children at once.
+				let childCode = try await ConcurrentChildCode.$plansChildrenAtOnce.withValue(true) {
+					try await generateProperties(
+						propertiesGeneratedLater: propertiesGeneratedLater,
+						enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
+						leadingMemberWhitespace: "        ",
+						fillPlaceBindings: fillPlaceBindings,
+					)
+				}
 				return Self.rootCode(of: rootInitializer, writing: consume childCode)
 			case let .mock(context):
 				return try await .text(generateMockRootCode(
