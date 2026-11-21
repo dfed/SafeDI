@@ -15368,11 +15368,10 @@ enum GraphFuzzerOracle {
 				}
 				// A function that reaches itself again is shared, which this guard also answers while the walk is inside it.
 				isShared[declaration] = true
-				let result: Bool
-				if referencingBodies[declaration].count == 1, let referencingBody = referencingBodies[declaration][0] {
-					result = shared(referencingBody)
+				let result: Bool = if referencingBodies[declaration].count == 1, let referencingBody = referencingBodies[declaration][0] {
+					shared(referencingBody)
 				} else {
-					result = referencingBodies[declaration].count != 1
+					referencingBodies[declaration].count != 1
 				}
 				let enclosing = Self.enclosingDeclaration(at: declarations[declaration].start, among: declarations)
 				isShared[declaration] = result || enclosing.map(shared) == true
