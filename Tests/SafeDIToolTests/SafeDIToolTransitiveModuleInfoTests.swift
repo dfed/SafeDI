@@ -1406,87 +1406,87 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_next() -> Link02Type {
+		            let next: Link03Type = __safeDI_next_()
+		            return Link02Type(next: next)
+		        }
+		        func __safeDI_next_() -> Link03Type {
+		            let next: Link04Type = __safeDI_next__()
+		            return Link03Type(next: next)
+		        }
+		        func __safeDI_next__() -> Link04Type {
+		            let next: Link05Type = __safeDI_next___()
+		            return Link04Type(next: next)
+		        }
+		        func __safeDI_next___() -> Link05Type {
+		            let next: Link06Type = __safeDI_next____()
+		            return Link05Type(next: next)
+		        }
+		        func __safeDI_next____() -> Link06Type {
+		            let next: Link07Type = __safeDI_next_____()
+		            return Link06Type(next: next)
+		        }
+		        func __safeDI_next_____() -> Link07Type {
+		            let next: Link08Type = __safeDI_next______()
+		            return Link07Type(next: next)
+		        }
+		        func __safeDI_next______() -> Link08Type {
+		            let next: Link09Type = __safeDI_next_______()
+		            return Link08Type(next: next)
+		        }
+		        func __safeDI_next_______() -> Link09Type {
+		            let next: Link10Type = __safeDI_next________()
+		            return Link09Type(next: next)
+		        }
+		        func __safeDI_next________() -> Link10Type {
+		            let next: Link11Type = __safeDI_next_________()
+		            return Link10Type(next: next)
+		        }
+		        func __safeDI_next_________() -> Link11Type {
+		            let next: Link12Type = __safeDI_next__________()
+		            return Link11Type(next: next)
+		        }
+		        func __safeDI_next__________() -> Link12Type {
+		            let next: Link13Type = __safeDI_next___________()
+		            return Link12Type(next: next)
+		        }
+		        func __safeDI_next___________() -> Link13Type {
+		            let next: Link14Type = __safeDI_next____________()
+		            return Link13Type(next: next)
+		        }
+		        func __safeDI_next____________() -> Link14Type {
+		            let next: Link15Type = __safeDI_next_____________()
+		            return Link14Type(next: next)
+		        }
+		        func __safeDI_next_____________() -> Link15Type {
+		            let next: Link16Type = __safeDI_next______________()
+		            return Link15Type(next: next)
+		        }
+		        func __safeDI_next______________() -> Link16Type {
+		            let next: Link17Type = __safeDI_next_______________()
+		            return Link16Type(next: next)
+		        }
+		        func __safeDI_next_______________() -> Link17Type {
+		            let next: Link18Type = __safeDI_next________________()
+		            return Link17Type(next: next)
+		        }
+		        func __safeDI_next________________() -> Link18Type {
+		            let next: Link19Type = __safeDI_next_________________()
+		            return Link18Type(next: next)
+		        }
+		        func __safeDI_next_________________() -> Link19Type {
+		            let next: Link20Type = __safeDI_next__________________()
+		            return Link19Type(next: next)
+		        }
+		        func __safeDI_next__________________() -> Link20Type {
+		            let next: Link21Type = __safeDI_next___________________()
+		            return Link20Type(next: next)
+		        }
+		        func __safeDI_next___________________() -> Link21Type {
+		            let next = Link22Type()
+		            return Link21Type(next: next)
+		        }
 		        func __safeDI_first() -> Link01Type {
-		            func __safeDI_next() -> Link02Type {
-		                func __safeDI_next() -> Link03Type {
-		                    func __safeDI_next() -> Link04Type {
-		                        func __safeDI_next() -> Link05Type {
-		                            func __safeDI_next() -> Link06Type {
-		                                func __safeDI_next() -> Link07Type {
-		                                    func __safeDI_next() -> Link08Type {
-		                                        func __safeDI_next() -> Link09Type {
-		                                            func __safeDI_next() -> Link10Type {
-		                                                func __safeDI_next() -> Link11Type {
-		                                                    func __safeDI_next() -> Link12Type {
-		                                                        func __safeDI_next() -> Link13Type {
-		                                                            func __safeDI_next() -> Link14Type {
-		                                                                func __safeDI_next() -> Link15Type {
-		                                                                    func __safeDI_next() -> Link16Type {
-		                                                                        func __safeDI_next() -> Link17Type {
-		                                                                            func __safeDI_next() -> Link18Type {
-		                                                                                func __safeDI_next() -> Link19Type {
-		                                                                                    func __safeDI_next() -> Link20Type {
-		                                                                                        func __safeDI_next() -> Link21Type {
-		                                                                                            let next = Link22Type()
-		                                                                                            return Link21Type(next: next)
-		                                                                                        }
-		                                                                                        let next: Link21Type = __safeDI_next()
-		                                                                                        return Link20Type(next: next)
-		                                                                                    }
-		                                                                                    let next: Link20Type = __safeDI_next()
-		                                                                                    return Link19Type(next: next)
-		                                                                                }
-		                                                                                let next: Link19Type = __safeDI_next()
-		                                                                                return Link18Type(next: next)
-		                                                                            }
-		                                                                            let next: Link18Type = __safeDI_next()
-		                                                                            return Link17Type(next: next)
-		                                                                        }
-		                                                                        let next: Link17Type = __safeDI_next()
-		                                                                        return Link16Type(next: next)
-		                                                                    }
-		                                                                    let next: Link16Type = __safeDI_next()
-		                                                                    return Link15Type(next: next)
-		                                                                }
-		                                                                let next: Link15Type = __safeDI_next()
-		                                                                return Link14Type(next: next)
-		                                                            }
-		                                                            let next: Link14Type = __safeDI_next()
-		                                                            return Link13Type(next: next)
-		                                                        }
-		                                                        let next: Link13Type = __safeDI_next()
-		                                                        return Link12Type(next: next)
-		                                                    }
-		                                                    let next: Link12Type = __safeDI_next()
-		                                                    return Link11Type(next: next)
-		                                                }
-		                                                let next: Link11Type = __safeDI_next()
-		                                                return Link10Type(next: next)
-		                                            }
-		                                            let next: Link10Type = __safeDI_next()
-		                                            return Link09Type(next: next)
-		                                        }
-		                                        let next: Link09Type = __safeDI_next()
-		                                        return Link08Type(next: next)
-		                                    }
-		                                    let next: Link08Type = __safeDI_next()
-		                                    return Link07Type(next: next)
-		                                }
-		                                let next: Link07Type = __safeDI_next()
-		                                return Link06Type(next: next)
-		                            }
-		                            let next: Link06Type = __safeDI_next()
-		                            return Link05Type(next: next)
-		                        }
-		                        let next: Link05Type = __safeDI_next()
-		                        return Link04Type(next: next)
-		                    }
-		                    let next: Link04Type = __safeDI_next()
-		                    return Link03Type(next: next)
-		                }
-		                let next: Link03Type = __safeDI_next()
-		                return Link02Type(next: next)
-		            }
 		            let next: Link02Type = __safeDI_next()
 		            return Link01Type(next: next)
 		        }
@@ -1569,16 +1569,16 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_child() -> Outer.Child {
+		            let inner: Outer.Inner = __safeDI_inner()
+		            let token = Token()
+		            return Outer.Child(inner: inner, token: token)
+		        }
+		        func __safeDI_inner() -> Outer.Inner {
+		            let leaf = Leaf()
+		            return Outer.Inner(leaf: leaf)
+		        }
 		        func __safeDI_screen() -> Screen {
-		            func __safeDI_child() -> Outer.Child {
-		                func __safeDI_inner() -> Outer.Inner {
-		                    let leaf = Leaf()
-		                    return Outer.Inner(leaf: leaf)
-		                }
-		                let inner: Outer.Inner = __safeDI_inner()
-		                let token = Token()
-		                return Outer.Child(inner: inner, token: token)
-		            }
 		            let child: Outer.Child = __safeDI_child()
 		            return Screen(child: child)
 		        }
