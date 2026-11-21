@@ -105,15 +105,15 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_two() -> Two {
+		            let three: Three = __safeDI_three()
+		            return Two(three: three)
+		        }
+		        func __safeDI_three() -> Three {
+		            let four = Four()
+		            return Three(four: four)
+		        }
 		        func __safeDI_one() -> One {
-		            func __safeDI_two() -> Two {
-		                func __safeDI_three() -> Three {
-		                    let four = Four()
-		                    return Three(four: four)
-		                }
-		                let three: Three = __safeDI_three()
-		                return Two(three: three)
-		            }
 		            let two: Two = __safeDI_two()
 		            return One(two: two)
 		        }
@@ -268,11 +268,11 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_clockBuilder() -> Clock {
+		            Clock()
+		        }
 		        func __safeDI_feedScreen() -> FeedScreen {
 		            let sink: any Sink = ConsoleSink()
-		            func __safeDI_clockBuilder() -> Clock {
-		                Clock()
-		            }
 		            let clockBuilder = Instantiator<Clock>(__safeDI_clockBuilder)
 		            return FeedScreen(sink: sink, clockBuilder: clockBuilder)
 		        }
@@ -673,11 +673,11 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 
 			extension Root {
 			    public init() {
+			        func __safeDI_feedScreen() -> FeedScreen {
+			            let clock = Clock()
+			            return FeedScreen(clock: clock)
+			        }
 			        func __safeDI_screen() -> Screen {
-			            func __safeDI_feedScreen() -> FeedScreen {
-			                let clock = Clock()
-			                return FeedScreen(clock: clock)
-			            }
 			            let feedScreen: FeedScreen = __safeDI_feedScreen()
 			            return Screen(feedScreen: feedScreen)
 			        }
@@ -1032,15 +1032,15 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 
 		extension Root {
 		    public init() {
+		        func __safeDI_feedScreen() -> FeedScreen {
+		            let innerScreen: InnerScreen = __safeDI_innerScreen()
+		            return FeedScreen(innerScreen: innerScreen)
+		        }
+		        func __safeDI_innerScreen() -> InnerScreen {
+		            let clock = Clock()
+		            return InnerScreen(clock: clock)
+		        }
 		        func __safeDI_screen() -> Screen {
-		            func __safeDI_feedScreen() -> FeedScreen {
-		                func __safeDI_innerScreen() -> InnerScreen {
-		                    let clock = Clock()
-		                    return InnerScreen(clock: clock)
-		                }
-		                let innerScreen: InnerScreen = __safeDI_innerScreen()
-		                return FeedScreen(innerScreen: innerScreen)
-		            }
 		            let feedScreen: FeedScreen = __safeDI_feedScreen()
 		            return Screen(feedScreen: feedScreen)
 		        }

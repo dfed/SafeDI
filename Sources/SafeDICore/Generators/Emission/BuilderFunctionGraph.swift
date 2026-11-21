@@ -25,39 +25,38 @@
 // statement kind, an expression kind or an argument source arrives with the first code that plans one.
 
 /// One generated body: its statements in the order the body writes them.
-struct BuilderFunctionGraph: Hashable, Sendable {
+struct BuilderFunctionGraph: Sendable {
 	let body: [Statement]
 
-	/// The body's text: each statement's, on lines of its own. The graph is consumed, so its statements, which can hold the
-	/// text of a whole tree, are released once their text is joined, before the caller writes anything around it.
-	consuming func spelled() -> String {
-		body.map(\.spelled).joined(separator: "\n")
+	/// The body's code: each statement's, on lines of its own.
+	var spelled: GeneratedCode {
+		.lines(body.map(\.spelled))
 	}
 }
 
 /// One line, or one block, a body writes, with one spelling for each kind.
-indirect enum Statement: Hashable, Sendable {
+indirect enum Statement: Sendable {
 	/// The `func` block of a builder function, its closing line ended.
 	case function(BuilderNode)
 	/// `let label[: Type] = value`, and what ends its line.
 	case binding(BindingDeclaration, Expression, lineEnd: String)
-	/// Text an emitter that is not planned yet generated, hosted in a planned body as it is.
-	case verbatim(String)
+	/// Code an emitter that is not planned yet generated, hosted in a planned body as it is.
+	case verbatim(GeneratedCode)
 
-	var spelled: String {
+	var spelled: GeneratedCode {
 		switch self {
 		case let .function(node):
 			node.spelled()
 		case let .binding(declaration, value, lineEnd):
-			"\(declaration.spelled) = \(value.spelled)\(lineEnd)"
-		case let .verbatim(text):
-			text
+			.text("\(declaration.spelled) = \(value.spelled)\(lineEnd)")
+		case let .verbatim(code):
+			code
 		}
 	}
 }
 
 /// One local function SafeDI writes: a builder function, which constructs the value of one place.
-struct BuilderNode: Hashable, Sendable {
+struct BuilderNode: Sendable {
 	/// The function's name, from its body's naming policy.
 	let name: String
 	/// Whether the function is written `@Sendable`.
@@ -80,17 +79,15 @@ struct BuilderNode: Hashable, Sendable {
 	/// The `func` block, its closing line ended, between `prefix` and `suffix`. A body without statements still writes the
 	/// line they would take, as builder functions always have: the scope above drops it where it indents the block.
 	///
-	/// One interpolation writes the whole text, the code around the block included: the block holds the text of its scope's
-	/// whole subtree, so adding a line or a prefix to the block afterwards would copy that subtree once more at every level.
-	func spelled(after prefix: String = "", followedBy suffix: String = "") -> String {
+	/// The block holds its statements' code, which holds its scope's whole subtree, as it is: no text of the subtree is
+	/// copied to write the block.
+	func spelled(after prefix: String = "", followedBy suffix: String = "") -> GeneratedCode {
 		let parameterList = parameters.isEmpty ? "" : parameters.initializerFunctionParametersSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
-		return """
-		\(prefix)\(ScopeGenerator.localFunctionPrefix(isSendable: isSendable, isNonisolated: isNonisolated))func \(name)(\(parameterList)) -> \(returnType.asSource) {
-		\(body.statements.joined(separator: "\n"))
-		\(ScopeGenerator.standardIndent)\(body.returnKeyword)\(value.spelled)\(lineEnd)
-		}
-		\(suffix)
-		"""
+		return .sequence([
+			.text("\(prefix)\(ScopeGenerator.localFunctionPrefix(isSendable: isSendable, isNonisolated: isNonisolated))func \(name)(\(parameterList)) -> \(returnType.asSource) {\n"),
+			.lines(body.statements),
+			.text("\n\(ScopeGenerator.standardIndent)\(body.returnKeyword)\(value.spelled)\(lineEnd)\n}\n\(suffix)"),
+		])
 	}
 }
 
