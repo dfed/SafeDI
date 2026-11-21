@@ -588,6 +588,93 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_namesDeclarationsEnclosingFunctionsCallsPass_whenLazyCycleCallPassesParameterOfEnclosingFunction() async throws {
+		// `B`'s builder function takes `theme`, which `Mid` declares before closing the cycle on it, and is declared in the body
+		// of `A`'s, which takes `theme` too, since `X` declares it before closing the cycle on `A`: `A`'s function passes its
+		// parameter on to `B`'s, so `B` is handed what `Shell` and `X`'s cycle-closing scope pass `A`'s, and what `Mid` passes.
+		let report = try await graph(of: [
+			"A.swift": """
+			@Instantiable
+			public final class A: Instantiable {
+			    public init(bBuilder: Instantiator<B>, xBuilder: Instantiator<X>) {
+			        self.bBuilder = bBuilder
+			        self.xBuilder = xBuilder
+			    }
+
+			    @Instantiated let bBuilder: Instantiator<B>
+			    @Instantiated let xBuilder: Instantiator<X>
+			}
+			""",
+			"B.swift": """
+			@Instantiable
+			public final class B: Instantiable {
+			    public init(theme: Theme, midBuilder: Instantiator<Mid>) {
+			        self.theme = theme
+			        self.midBuilder = midBuilder
+			    }
+
+			    @Received let theme: Theme
+			    @Instantiated let midBuilder: Instantiator<Mid>
+			}
+			""",
+			"Mid.swift": """
+			@Instantiable
+			public final class Mid: Instantiable {
+			    public init(theme: Theme, bBuilder: Instantiator<B>) {
+			        self.theme = theme
+			        self.bBuilder = bBuilder
+			    }
+
+			    @Forwarded let theme: Theme
+			    @Instantiated let bBuilder: Instantiator<B>
+			}
+			""",
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(shellBuilder: Instantiator<Shell>) {
+			        self.shellBuilder = shellBuilder
+			    }
+
+			    @Instantiated let shellBuilder: Instantiator<Shell>
+			}
+			""",
+			"Shell.swift": """
+			@Instantiable
+			public final class Shell: Instantiable {
+			    public init(theme: Theme, aBuilder: Instantiator<A>) {
+			        self.theme = theme
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Forwarded let theme: Theme
+			    @Instantiated let aBuilder: Instantiator<A>
+			}
+			""",
+			"Theme.swift": """
+			public struct Theme {}
+			""",
+			"X.swift": """
+			@Instantiable
+			public final class X: Instantiable {
+			    public init(theme: Theme, aBuilder: Instantiator<A>) {
+			        self.theme = theme
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Forwarded let theme: Theme
+			    @Instantiated let aBuilder: Instantiator<A>
+			}
+			""",
+		])
+
+		#expect(Self.supplies(in: report) == [
+			"App.B.theme": "App.Mid.theme, App.Shell.theme, App.X.theme",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func graph_marksReceivesNil_whenLazyCyclePassesNilFromOneCall() async throws {
 		// The app declares no session, so its call of the screen's builder function passes `nil`; the step's passes its own.
 		let report = try await graph(of: [
