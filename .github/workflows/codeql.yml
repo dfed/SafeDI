@@ -10,6 +10,10 @@ on:
   pull_request:
     branches: [ "main" ]
     paths-ignore: [ "**.md" ]
+    # `ready_for_review` beside the defaults, since a draft's runs leave
+    # out the Swift analysis (the matrix below says why) and the pull
+    # request gets it when it is marked ready.
+    types: [ opened, synchronize, reopened, ready_for_review ]
   schedule:
     - cron: '35 2 * * 0'
 
@@ -29,16 +33,30 @@ jobs:
       actions: read
       contents: read
 
+    # One Swift analysis of a pull request at a time, in the whole
+    # repository: the next waits for the runner instead of taking another.
+    # The account runs five macOS jobs at once and a CI run needs three of
+    # them, so on 2026-11-21 four pull requests' Swift analyses, started by
+    # one round of pushes beside a CI run on main, kept CI run
+    # 44869429244's macOS jobs waiting 20 minutes for a runner. GitHub keeps one waiting job per group and
+    # cancels an older one that waits, so of several pushed together the
+    # first and the last are analyzed; the others are analyzed on their
+    # next push, and every commit that lands is analyzed on main, which
+    # this group leaves out. Every other job gets a group of its own.
+    concurrency:
+      group: ${{ (matrix.language == 'swift' && github.event_name == 'pull_request') && 'codeql-swift-pull-requests' || format('codeql-{0}-{1}', matrix.language, github.run_id) }}
+      cancel-in-progress: false
+
     strategy:
       fail-fast: false
       matrix:
-        include:
-        - language: actions
-          build-mode: none
-          runs-on: ubuntu-latest
-        - language: swift
-          build-mode: manual
-          runs-on: macos-26
+        # A draft pull request gets the Actions-workflow analysis only.
+        # The Swift analysis takes a macOS runner for its traced build, a
+        # draft is pushed many times before anyone reviews it, and it is
+        # analyzed when it is marked ready and on every push after that.
+        # As one JSON list per case, because a job's `if` cannot read the
+        # matrix: GitHub evaluates it before it expands the matrix.
+        include: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.draft) && '[{"language":"actions","build-mode":"none","runs-on":"ubuntu-latest"}]' || '[{"language":"actions","build-mode":"none","runs-on":"ubuntu-latest"},{"language":"swift","build-mode":"manual","runs-on":"macos-26"}]') }}
         # CodeQL supports the following values keywords for 'language': 'actions', 'c-cpp', 'csharp', 'go', 'java-kotlin', 'javascript-typescript', 'python', 'ruby', 'rust', 'swift'
         # Use `c-cpp` to analyze code written in C, C++ or both
         # Use 'java-kotlin' to analyze code written in Java, Kotlin or both
