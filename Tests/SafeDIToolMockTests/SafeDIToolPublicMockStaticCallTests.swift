@@ -3175,8 +3175,8 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
-		        let mainSession = if let safeDIBuilder = safeDIOverrides.mainSession { safeDIBuilder() } else { Session.instantiate() }
+		        let session: Session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
+		        let mainSession: Session = if let safeDIBuilder = safeDIOverrides.mainSession { safeDIBuilder() } else { Session.instantiate() }
 		        func __safeDI_detail() -> Detail {
 		            func __safeDI_apiBuilder_Detail() -> Detail.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 		                .init(api: { scope in

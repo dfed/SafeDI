@@ -556,7 +556,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		        onTap: @escaping () -> Void,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
-		        let screen = if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(onTap) } else { Screen.instantiate(onTap: onTap) }
+		        let screen: Screen = if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(onTap) } else { Screen.instantiate(onTap: onTap) }
 		        return Parent(onTap: onTap, screen: screen)
 		    }
 		}
@@ -634,7 +634,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_parentBuilder(onTap: @escaping () -> Void) -> Parent {
-		            let screen = if let safeDIBuilder = safeDIOverrides.parentBuilder.screen { safeDIBuilder(onTap) } else { Screen.instantiate(onTap: onTap) }
+		            let screen: Screen = if let safeDIBuilder = safeDIOverrides.parentBuilder.screen { safeDIBuilder(onTap) } else { Screen.instantiate(onTap: onTap) }
 		            return if let safeDIBuilder = safeDIOverrides.parentBuilder.safeDIBuilder { safeDIBuilder(onTap, screen) } else { Parent(onTap: onTap, screen: screen) }
 		        }
 		        let parentBuilder = Instantiator<Parent> {
@@ -754,7 +754,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		        onTap: @escaping OnTap,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
-		        let screen = if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(onTap) } else { Screen.instantiate(onTap: onTap) }
+		        let screen: Screen = if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(onTap) } else { Screen.instantiate(onTap: onTap) }
 		        return Parent(onTap: onTap, screen: screen)
 		    }
 		}
@@ -832,7 +832,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_parentBuilder(onTap: @escaping OnTap) -> Parent {
-		            let screen = if let safeDIBuilder = safeDIOverrides.parentBuilder.screen { safeDIBuilder(onTap) } else { Screen.instantiate(onTap: onTap) }
+		            let screen: Screen = if let safeDIBuilder = safeDIOverrides.parentBuilder.screen { safeDIBuilder(onTap) } else { Screen.instantiate(onTap: onTap) }
 		            return if let safeDIBuilder = safeDIOverrides.parentBuilder.safeDIBuilder { safeDIBuilder(onTap, screen) } else { Parent(onTap: onTap, screen: screen) }
 		        }
 		        let parentBuilder = Instantiator<Parent> {

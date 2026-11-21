@@ -52,6 +52,79 @@ enum GeneratedCodeText {
 		return String(decoding: result, as: UTF8.self)
 	}
 
+	/// The lines of the UTF-8 `code` that hold more than whitespace, joined by line feeds: the same bytes as
+	/// `code.components(separatedBy: "\n").filter { !$0.allSatisfy(\.isWhitespace) }.joined(separator: "\n")`, written
+	/// into one string of `code`'s size rather than a string per line, which a mock body as large as the module's mocks
+	/// would hold beside the text they are joined into. It reads the bytes a plan was spelled into, so the spelled text is
+	/// never decoded into a string of its own first. Code with a carriage return, which forms one `Character` with a line
+	/// feed after it, takes that expression itself.
+	static func nonBlankLinesJoined(ofUTF8 bytes: UnsafeBufferPointer<UInt8>) -> String {
+		let lineFeed = UInt8(ascii: "\n")
+		guard !bytes.contains(UInt8(ascii: "\r")) else {
+			return String(decoding: bytes, as: UTF8.self)
+				.components(separatedBy: "\n")
+				.filter { !$0.allSatisfy(\.isWhitespace) }
+				.joined(separator: "\n")
+		}
+		// Written straight into the string's storage, reserved at the code's size, which no line it drops makes too small:
+		// a buffer of bytes decoded into a string afterwards would hold the text twice.
+		return String(unsafeUninitializedCapacity: bytes.count) { result in
+			var count = 0
+			var lineStart = bytes.startIndex
+			for index in bytes.indices where bytes[index] == lineFeed {
+				appendIfNotBlank(UnsafeBufferPointer(rebasing: bytes[lineStart..<index]), to: result, count: &count)
+				lineStart = index + 1
+			}
+			appendIfNotBlank(UnsafeBufferPointer(rebasing: bytes[lineStart...]), to: result, count: &count)
+			return count
+		}
+	}
+
+	/// Writes `line` into `result` after its first `count` bytes, after a line feed where `result` holds a line already,
+	/// unless every `Character` of it is whitespace. A line of ASCII bytes is judged by its bytes, the ASCII whitespace
+	/// `Character.isWhitespace` accepts being the space and U+0009 to U+000D.
+	private static func appendIfNotBlank(_ line: UnsafeBufferPointer<UInt8>, to result: UnsafeMutableBufferPointer<UInt8>, count: inout Int) {
+		let isASCII = line.allSatisfy { $0 < 0x80 }
+		let isBlank = if isASCII {
+			line.allSatisfy { $0 == UInt8(ascii: " ") || (0x09...0x0D).contains($0) }
+		} else {
+			String(decoding: line, as: UTF8.self).allSatisfy(\.isWhitespace)
+		}
+		if !isBlank {
+			if count > 0 {
+				result[count] = UInt8(ascii: "\n")
+				count += 1
+			}
+			_ = UnsafeMutableBufferPointer(rebasing: result[count..<(count + line.count)]).initialize(from: line)
+			count += line.count
+		}
+	}
+
+	/// `lines` joined by line feeds, between `#if <condition>` and `#endif` where there is a condition: the bytes of
+	/// `lines.joined(separator: "\n")` so wrapped, written into one string reserved at its size, since a module's mocks
+	/// can be tens of megabytes, which a join that grows its string by doubling would hold twice over.
+	static func joined(_ lines: [String], wrappedInConditionalCompilation condition: String?) -> String {
+		var size = lines.reduce(lines.count) { $0 + $1.utf8.count }
+		if let condition {
+			size += "#if \(condition)\n\n#endif".utf8.count
+		}
+		var result = ""
+		result.reserveCapacity(size)
+		if let condition {
+			result += "#if \(condition)\n"
+		}
+		for (index, line) in lines.enumerated() {
+			if index > 0 {
+				result += "\n"
+			}
+			result += line
+		}
+		if condition != nil {
+			result += "\n#endif"
+		}
+		return result
+	}
+
 	/// The name a mock gives what it reads from the override at `nodePath`, a path of labels below
 	/// `safeDIOverrides` joined by `.`: the path without each `safeDIOverrides.`, its labels joined by `_`. The same bytes
 	/// as Foundation’s replacing every `"safeDIOverrides."` with `""` and then every `"."` with `"_"`, unless a `.` forms

@@ -334,11 +334,14 @@ func executeSafeDIToolTest(
 		}
 		let generateOutput: Generate.Output
 		do {
-			// Every place's levels must hold its scope struct's fields (`SeamPlaceLevels.pathStructMismatches`).
-			// Every tree must hold the same data on every path with the construction memo and without it (`ConstructionMemoChecks`).
+			// Every place's levels must hold its scope struct's fields (`SeamPlaceLevels.pathStructMismatches`), every place of a
+			// production body what its kind holds (`PlaceObservation.violations`), and every tree the same data on every path with
+			// the construction memo and without it (`ConstructionMemoChecks`).
 			generateOutput = try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
 				try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
-					try await tool.generate()
+					try await PlaceObservation.$observer.withValue(PlaceObservation.checkingPlaces(handingOn: PlaceObservation.observer)) {
+						try await tool.generate()
+					}
 				}
 			}
 		} catch {

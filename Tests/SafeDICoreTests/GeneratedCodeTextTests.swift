@@ -65,6 +65,46 @@ struct GeneratedCodeTextTests {
 	}
 
 	@Test
+	func nonBlankLinesJoined_dropsLinesOfWhitespace_whenCodeHasBlankAndIndentedLines() {
+		let code = "\n\tlet a = A()\n  \t\n\u{0B}\nlet b = B()\n"
+		#expect(Self.nonBlankLinesJoined(of: code) == "\tlet a = A()\nlet b = B()")
+	}
+
+	@Test
+	func nonBlankLinesJoined_returnsWhatSplittingFilteringAndJoiningReturns_forEveryStringOfUpToSixTokens() {
+		// Every string of up to six of these tokens: a line feed, a carriage return that forms `"\r\n"` with a line feed
+		// beside it, a multi-byte character, a non-ASCII whitespace character, ASCII whitespace, and plain text.
+		let tokens = ["x", "\n", "\r", "\u{A0}", "\t", " "]
+		let codes = Self.strings(of: tokens, upToLength: 6)
+		let mismatches = codes.filter { code in
+			let expected = code
+				.components(separatedBy: "\n")
+				.filter { !$0.allSatisfy(\.isWhitespace) }
+				.joined(separator: "\n")
+			return Array(Self.nonBlankLinesJoined(of: code).utf8) != Array(expected.utf8)
+		}
+		#expect(codes.count == 55_987)
+		#expect(mismatches.map { Array($0.unicodeScalars) } == [])
+	}
+
+	private static func nonBlankLinesJoined(of code: String) -> String {
+		var code = code
+		return code.withUTF8(GeneratedCodeText.nonBlankLinesJoined(ofUTF8:))
+	}
+
+	@Test
+	func joined_returnsWhatJoiningReturnsWrappedInCondition_whenGivenACondition() {
+		let lines = ["struct A {", "", "\tlet a = 1", "}"]
+		#expect(GeneratedCodeText.joined(lines, wrappedInConditionalCompilation: "DEBUG") == "#if DEBUG\n\(lines.joined(separator: "\n"))\n#endif")
+	}
+
+	@Test
+	func joined_returnsWhatJoiningReturns_whenGivenNoCondition() {
+		let lines = ["struct A {", "", "\tlet a = 1", "}"]
+		#expect(GeneratedCodeText.joined(lines, wrappedInConditionalCompilation: nil) == lines.joined(separator: "\n"))
+	}
+
+	@Test
 	func overrideRelativePath_dropsOverridesPrefixAndJoinsLabelsWithUnderscores_whenPathIsNested() {
 		#expect(GeneratedCodeText.overrideRelativePath(of: "safeDIOverrides.child.grandchild") == "child_grandchild")
 	}

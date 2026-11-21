@@ -618,7 +618,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service() }
-		        let child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(service) } else { Child.customMock(service: service) }
+		        let child: Child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(service) } else { Child.customMock(service: service) }
 		        return Parent(child: child)
 		    }
 		}
@@ -713,7 +713,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Parent {
 		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service() }
-		        let child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(service) } else { Child.customMock(service: service) }
+		        let child: Child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(service) } else { Child.customMock(service: service) }
 		        return Parent(child: child)
 		    }
 		}
@@ -1950,7 +1950,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        func __safeDI_childServiceBuilder() -> ChildServiceProtocol {
 		            if let safeDIBuilder = safeDIOverrides.childServiceBuilder { safeDIBuilder(engine) } else { ChildService.customMock(engine: engine) }
 		        }
-		        let childServiceBuilder = ErasedInstantiator<Void, ChildServiceProtocol>(__safeDI_childServiceBuilder)
+		        let childServiceBuilder: ErasedInstantiator<Void, ChildServiceProtocol> = ErasedInstantiator<Void, ChildServiceProtocol>(__safeDI_childServiceBuilder)
 		        return Root(childServiceBuilder: childServiceBuilder, engine: engine)
 		    }
 		}
@@ -2049,7 +2049,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        @Sendable func __safeDI_childServiceBuilder() -> ChildServiceProtocol {
 		            if let safeDIBuilder = __safeDI_childServiceBuilder__safeDIBuilder { safeDIBuilder(engine) } else { ChildService.customMock(engine: engine) }
 		        }
-		        let childServiceBuilder = SendableErasedInstantiator<Void, ChildServiceProtocol>(__safeDI_childServiceBuilder)
+		        let childServiceBuilder: SendableErasedInstantiator<Void, ChildServiceProtocol> = SendableErasedInstantiator<Void, ChildServiceProtocol>(__safeDI_childServiceBuilder)
 		        return Root(childServiceBuilder: childServiceBuilder, engine: engine)
 		    }
 		}
@@ -2224,7 +2224,7 @@ struct SafeDIToolMockGenerationCustomMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let engine = if let safeDIBuilder = safeDIOverrides.engine { safeDIBuilder() } else { Engine() }
-		        let childService = if let safeDIBuilder = safeDIOverrides.childService { safeDIBuilder(engine) } else { ChildService.instantiate(engine: engine) }
+		        let childService: ChildService = if let safeDIBuilder = safeDIOverrides.childService { safeDIBuilder(engine) } else { ChildService.instantiate(engine: engine) }
 		        return Root(childService: childService, engine: engine)
 		    }
 		}

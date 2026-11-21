@@ -42,18 +42,13 @@ struct RootInitializer: Hashable, Sendable {
 	}
 
 	/// The extension declaring the initializer, whose body writes `body` before it calls the root's own initializer. The
-	/// body holds the text of the root's whole tree, the largest text `generate` builds, so it is consumed as it is spelled:
-	/// its statements are released before the extension is written around their text.
-	func spelled(writing body: consuming BuilderFunctionGraph) -> String {
+	/// body holds the code of the root's whole tree, which the extension holds as it is.
+	func spelled(writing body: BuilderFunctionGraph) -> GeneratedCode {
 		let attributesPrefix = attributes.isEmpty ? "" : "\(attributes) "
-		let statements = body.spelled()
-		return """
-		extension \(extendedType.asSource) {
-		    \(attributesPrefix)public \(isConvenience ? "convenience " : "")init() {
-		\(statements)
-		        self.init(\(argumentList))
-		    }
-		}
-		"""
+		return .sequence([
+			.text("extension \(extendedType.asSource) {\n    \(attributesPrefix)public \(isConvenience ? "convenience " : "")init() {\n"),
+			body.spelled,
+			.text("\n        self.init(\(argumentList))\n    }\n}"),
+		])
 	}
 }

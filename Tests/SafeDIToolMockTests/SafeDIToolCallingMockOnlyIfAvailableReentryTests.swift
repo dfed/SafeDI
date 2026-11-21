@@ -717,7 +717,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
+			        let session: Session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: Session?) -> ErasedInstantiator<Int, AnyHole>.Builder {
 			                func __safeDI_holeBuilder(ticket: Int) -> Fill {
@@ -793,7 +793,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			    public static func __safeDI_mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
-			        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
+			        let session: Session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.instantiate() }
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: Session?) -> ErasedInstantiator<Int, AnyHole>.Builder {
 			                func __safeDI_holeBuilder(ticket: Int) -> Fill {
