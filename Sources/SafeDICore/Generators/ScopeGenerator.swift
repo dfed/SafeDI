@@ -10169,11 +10169,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for (fillingGenerator, propertiesGeneratedLater) in rootItems.fillingGenerators {
 				try await fillingGenerator.prepareFillCode(propertiesGeneratedLater: propertiesGeneratedLater, fillPlaceBindings: fillBindings)
 			}
+			var ancestorTypes = Set<String>()
 			let bodyBindings = await Self.generateMockBodyBindings(
 				items: rootItems,
 				propertyNodeLabelMap: rootLabelMap,
 				parentPath: ReservedName.mockOverridesParameterName,
 				indent: bodyIndent,
+				ancestorTypes: &ancestorTypes,
 				flatParameterDisambiguationMap: treeDisambiguationMap,
 				lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNameMap,
 				uncoveredDependencyNames: uncoveredDependencyNameMap,
@@ -10230,8 +10232,29 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lines.append("}")
 		}
 
-		let code = lines.joined(separator: "\n")
-		return wrapInConditionalCompilation(code, mockConditionalCompilation: context.mockConditionalCompilation)
+		return Self.mockCode(releasingLines: &lines, mockConditionalCompilation: context.mockConditionalCompilation)
+	}
+
+	/// `lines` joined by line breaks and wrapped as `wrapInConditionalCompilation(_:mockConditionalCompilation:)` wraps
+	/// code, the same text, written once into a string of its exact size, each line released once it is copied.
+	///
+	/// A mock's text can be tens of megabytes, as a deep chain's indentation grows with its depth, and joining the lines
+	/// grew a copy by doubling beside them, which the wrap copied again: three copies of the text at once.
+	private static func mockCode(releasingLines lines: inout [String], mockConditionalCompilation: String?) -> String {
+		let prefix = mockConditionalCompilation.map { "#if \($0)\n" } ?? ""
+		let suffix = mockConditionalCompilation == nil ? "" : "\n#endif"
+		var code = ""
+		code.reserveCapacity(prefix.utf8.count + lines.reduce(0) { $0 + $1.utf8.count } + max(lines.count - 1, 0) + suffix.utf8.count)
+		code += prefix
+		for index in lines.indices {
+			if index > lines.startIndex {
+				code += "\n"
+			}
+			code += lines[index]
+			lines[index] = ""
+		}
+		code += suffix
+		return code
 	}
 
 	/// Generates the labeled argument list for the return statement in the mock body.
@@ -12528,15 +12551,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var result = [MockParameterNode]()
 		var nodesBeneathRepeatedAncestors = [MockParameterNode]()
 
-		func walk(_ node: MockParameterNode, ancestorTypes: Set<String>, isBeneathRepeatedAncestor: Bool) async {
+		// The types of the nodes above the one walked, which each level adds its own type to and takes it out of again,
+		// rather than copying the set at every level, which would hold the square of the tree's depth.
+		var ancestorTypes = Set<String>()
+		func walk(_ node: MockParameterNode, isBeneathRepeatedAncestor: Bool) async {
 			let key = node.concreteType.asSource
-			let repeatsAncestor = ancestorTypes.contains(key)
-			var childAncestors = ancestorTypes
-			childAncestors.insert(key)
+			let repeatsAncestor = !ancestorTypes.insert(key).inserted
 			// Process children first (depth-first). Only property children
 			// produce configuration structs; aliases are plain `let` bindings.
 			for child in node.propertyChildren {
-				await walk(child, ancestorTypes: childAncestors, isBeneathRepeatedAncestor: isBeneathRepeatedAncestor || repeatsAncestor)
+				await walk(child, isBeneathRepeatedAncestor: isBeneathRepeatedAncestor || repeatsAncestor)
+			}
+			if !repeatsAncestor {
+				ancestorTypes.remove(key)
 			}
 			// Skip leaf nodes that don't need a SafeDIMockConfiguration struct, and nodes whose type repeats an ancestor's,
 			// such as a cycle-closer (isPropertyCycle == true), whose property appears earlier in the stack.
@@ -12562,7 +12589,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		for node in nodes {
-			await walk(node, ancestorTypes: [], isBeneathRepeatedAncestor: false)
+			await walk(node, isBeneathRepeatedAncestor: false)
 		}
 		// A type the tree also records above every repeated ancestor is generated from that node.
 		var seenConstructions = Set<ConstructedType>()
@@ -12945,7 +12972,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		propertyNodeLabelMap: [String: [TypeDescription: String]]? = nil,
 		parentPath: String,
 		indent: String,
-		ancestorTypes: Set<String> = [],
+		ancestorTypes: inout Set<String>,
 		sendableOverrideExtractor: SendableOverrideExtractor? = nil,
 		flatParameterDisambiguationMap: [String: [TypeDescription: String]] = [:],
 		enclosingFunctionNames: [BuiltDeclaration: String] = [:],
@@ -13223,8 +13250,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// function because they may depend on forwarded properties that are
 					// only available as function parameters. This mirrors the production
 					// code which builds the entire subtree inside the builder function.
-					var childAncestors = ancestorTypes
-					childAncestors.insert(nodeTypeKey)
+					let insertedAncestor = ancestorTypes.insert(nodeTypeKey).inserted
 					let loopMemberEmission = loopMembers?.emission(of: node, atPropertyNodeIndex: propertyNodeIndex - 1, functionName: functionName, flatParameterDisambiguationMap: flatParameterDisambiguationMap, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)
 					let bindingLines = await generateInstantiatorBinding(
 						for: node,
@@ -13236,7 +13262,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						arguments: arguments,
 						sendableAutoclosureBindings: sendableAutoclosureBindings,
 						indent: indent,
-						ancestorTypes: childAncestors,
+						ancestorTypes: &ancestorTypes,
 						sendableOverrideExtractor: sendableOverrideExtractor,
 						flatParameterDisambiguationMap: combinedDisambiguationMap,
 						lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
@@ -13254,6 +13280,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						bindingNamesPassedByName: bindingNamesPassedByName,
 						enclosingBindingNamesPassedByName: enclosingBindingNamesPassedByName,
 					)
+					if insertedAncestor {
+						ancestorTypes.remove(nodeTypeKey)
+					}
 					if let loop = node.loop {
 						appendToLoopUnit(loop, bindingLines)
 					} else {
@@ -13331,13 +13360,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					} else {
 						nil
 					}
-					var childAncestors = ancestorTypes
-					childAncestors.insert(nodeTypeKey)
+					let insertedAncestor = ancestorTypes.insert(nodeTypeKey).inserted
 					let childBindings = await generateMockBodyBindings(
 						items: node.children,
 						parentPath: nodePath,
 						indent: innerIndent,
-						ancestorTypes: childAncestors,
+						ancestorTypes: &ancestorTypes,
 						sendableOverrideExtractor: sendableOverrideExtractor ?? startedSendableOverrideExtractor,
 						flatParameterDisambiguationMap: functionDisambiguationMap,
 						enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
@@ -13352,6 +13380,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						publicMock: publicMock?.beneathRoot,
 						enclosingBindingNamesPassedByName: bindingNamesPassedByName,
 					)
+					if insertedAncestor {
+						ancestorTypes.remove(nodeTypeKey)
+					}
 
 					let functionConstructionExpression = if let startedSendableOverrideExtractor {
 						// The caller read this node's own override and arguments outside any `@Sendable` function; the
@@ -14005,7 +14036,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		arguments: [String],
 		sendableAutoclosureBindings: [String],
 		indent: String,
-		ancestorTypes: Set<String>,
+		ancestorTypes: inout Set<String>,
 		sendableOverrideExtractor: SendableOverrideExtractor?,
 		flatParameterDisambiguationMap: [String: [TypeDescription: String]],
 		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
@@ -14103,16 +14134,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				nil
 			}
 
-			// Generate children's bindings inside the function body.
-			// Include this node's type in ancestors so self-referencing
-			// cycles (e.g., Instantiator<Self>) are detected.
-			var functionAncestors = ancestorTypes
-			functionAncestors.insert(node.cycleNodeKey)
+			// Generate children's bindings inside the function body. `ancestorTypes` already holds this node's type, which
+			// the caller adds before calling, so self-referencing cycles (e.g., Instantiator<Self>) are detected.
 			let childBindings = await generateMockBodyBindings(
 				items: node.children,
 				parentPath: nodePath,
 				indent: innerIndent,
-				ancestorTypes: functionAncestors,
+				ancestorTypes: &ancestorTypes,
 				sendableOverrideExtractor: sendableOverrideExtractor ?? startedSendableOverrideExtractor,
 				flatParameterDisambiguationMap: builderDisambiguationMap,
 				enclosingFunctionNames: enclosingFunctionNames,
