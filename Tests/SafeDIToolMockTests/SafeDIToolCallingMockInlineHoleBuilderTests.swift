@@ -213,6 +213,20 @@ struct SafeDIToolCallingMockInlineHoleBuilderTests: ~Copyable {
 		])
 	}
 
+	@Test(arguments: Self.inlineBuildingRootAttributes, WrappedPlace.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsWrappedPlaceOfPublicMockBuiltInlineInsideFillWithBuilder_whenBuilderIsPassed(rootAttribute: String, place: WrappedPlace) async throws {
+		let modules = Self.wrappedPlaceInsideFillModules(rootAttribute: rootAttribute, place: place)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+
+		let builder = "\(place.builderLabel): \(place.closure(building: "Fake"))"
+		try await expectValues(of: output, modules: modules, pairs: [
+			("\(place.read(from: "(App.Root.mock().f.shell as! App.Shell).g")) is App.Live", "true"),
+			("\(place.read(from: "(App.Root.mock(\(builder)).f.shell as! App.Shell).g")) is App.Fake", "true"),
+			("\(place.read(from: "App.Root.mock(\(builder)).h")) is App.Fake", "true"),
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -356,6 +370,91 @@ struct SafeDIToolCallingMockInlineHoleBuilderTests: ~Copyable {
 
 				public final class FakeStore: Store {
 				    public init() {}
+				}
+
+				\(rootAttribute)
+				public final class Root: Instantiable {
+				    public init(f: F, h: H) {
+				        self.f = f
+				        self.h = h
+				    }
+
+				    @Instantiated public let f: F
+				    @Instantiated public let h: H
+				}
+				""",
+			], dependencies: ["Feat"]),
+		]
+	}
+
+	/// `Root`, in module `App`, calls the public mocks of `F` and `H` of module `Feat`. `F`'s place of `any Container` is
+	/// filled with `App`'s `Shell`, which instantiates `G`, whose public initializer lets the fill build it inline. `G` and
+	/// `H` each hold `api` in `place`'s form, which only `App`'s `Live` fulfills: `H`'s call fills it, so `mock()` takes the
+	/// builder of its hole type, which `G`'s place inside the fill reads too. `G` also holds a `Clock` its own module builds,
+	/// so the fill asks twice what `Feat` sees.
+	private static func wrappedPlaceInsideFillModules(rootAttribute: String, place: WrappedPlace) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: [
+				"FeatTypes.swift": """
+				import SafeDI
+
+				public protocol Api {}
+
+				public protocol Container {}
+
+				@Instantiable
+				public final class Clock: Instantiable {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: .public)
+				public final class F: Instantiable {
+				    init(shell: any Container) {
+				        self.shell = shell
+				    }
+
+				    @Instantiated public let shell: any Container
+				}
+
+				@Instantiable(generateMock: .public)
+				public final class G: Instantiable {
+				    public init(clock: Clock, \(place.parameter)) {
+				        self.clock = clock
+				        self.api = api
+				    }
+
+				    @Instantiated public let clock: Clock
+				    \(place.declaration)
+				}
+
+				@Instantiable(generateMock: .public)
+				public final class H: Instantiable {
+				    init(\(place.parameter)) {
+				        self.api = api
+				    }
+
+				    \(place.declaration)
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: [
+				"AppTypes.swift": """
+				import Feat
+				import SafeDI
+
+				\(place.live)
+
+				public final class Fake: Api, Sendable {
+				    public init(id: Int) {}
+				}
+
+				@Instantiable(fulfillingAdditionalTypes: [Container.self])
+				public final class Shell: Container, Instantiable {
+				    public init(g: G) {
+				        self.g = g
+				    }
+
+				    @Instantiated public let g: G
 				}
 
 				\(rootAttribute)

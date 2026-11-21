@@ -4238,7 +4238,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let publicMockContext: PublicMockContext?
 		/// The public mocks other modules generate, by type, whose declarations decide which places of one the mock builds
 		/// inline are holes of its module (`ScopeGenerator.holeBuildersByInlinePlace(in:buildersByFamily:foreignPublicMocks:)`).
-		var foreignPublicMocks = [TypeDescription: SeamResolution.ForeignPublicMock]()
+		let foreignPublicMocks: [TypeDescription: SeamResolution.ForeignPublicMock]
 	}
 
 	private let scopeData: ScopeData
