@@ -10051,7 +10051,10 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// reserved name that is a value rather than a function – a binding (`let __safeDI_x = …`) or a parameter
 	/// (`__safeDI_x: @…`), such as a `@Sendable` autoclosure a mock reads or a builder a seam's initializer takes – is
 	/// never a builder function, and neither is a member called on a type (`X.__safeDI_init(…)`). A seam's generated-only
-	/// argument label (`__safeDI_x: x`) names no value: a builder function of that name can sit beside it.
+	/// argument label (`__safeDI_x: x`) names no value: a builder function of that name can sit beside it. The type key
+	/// declares every builder function in the root's body, so a function further out is a cycle's only when the call is
+	/// inside it or the function reaches, through the functions it calls or wraps, one the call is inside
+	/// (`BuilderFunctionCycles`).
 	static func closesCycleWithConstantOrLazilyInstantiatedDependency(_ generatedCode: String) -> Bool {
 		let builderFunctionNamePrefix = "__safeDI_"
 		let lazilyInstantiatedWrapperPrefixes = ["LazilyInstantiated<", "SendableLazilyInstantiated<"]
@@ -10073,19 +10076,24 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				rest = after
 			}
 		}
+		let cycles = BuilderFunctionCycles(of: generatedCode)
 		// The builder functions declared at each indentation of the bodies the line being read is in.
 		var declaredFunctionNamesByIndentation = [Int: Set<Substring>]()
 		// The indentation of a binding to a lazily instantiated wrapper whose closure, on the lines that follow, calls the
 		// function.
 		var wrapperClosureBindingIndentation: Int?
-		for line in generatedCode.split(separator: "\n") {
+		var lineStart = 0
+		for line in generatedCode.split(separator: "\n", omittingEmptySubsequences: false) {
+			let location = lineStart
+			lineStart += line.utf16.count + 1
+			guard !line.isEmpty else { continue }
 			let indentation = line.prefix { $0 == " " }.count
 			let content = line.dropFirst(indentation)
 			declaredFunctionNamesByIndentation = declaredFunctionNamesByIndentation.filter { $0.key <= indentation }
 			if let bindingIndentation = wrapperClosureBindingIndentation {
 				wrapperClosureBindingIndentation = nil
 				let call = content.range(of: builderFunctionNamePrefix).map { content[$0.lowerBound...] }
-				if let name = call.flatMap(builderFunctionName(startingWith:)), !valueNames.contains(name), !declaredFunctionNamesByIndentation[bindingIndentation, default: []].contains(name) {
+				if let name = call.flatMap(builderFunctionName(startingWith:)), !valueNames.contains(name), !declaredFunctionNamesByIndentation[bindingIndentation, default: []].contains(name), cycles.callCloses(name, at: location + indentation) {
 					return true
 				}
 			}
@@ -10119,11 +10127,67 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 			if lazilyInstantiatedWrapperPrefixes.contains(where: value.hasPrefix), value.hasSuffix(" {") {
 				wrapperClosureBindingIndentation = indentation
-			} else if let calledName, !valueNames.contains(calledName), !declaredFunctionNamesByIndentation[indentation, default: []].contains(calledName) {
+			} else if let calledName, !valueNames.contains(calledName), !declaredFunctionNamesByIndentation[indentation, default: []].contains(calledName), cycles.callCloses(calledName, at: location + indentation) {
 				return true
 			}
 		}
 		return false
+	}
+
+	/// The builder functions of one generated file and the functions each reaches, read from its text: a function reaches
+	/// each function its body calls or wraps, and each function those reach.
+	struct BuilderFunctionCycles {
+		init(of contents: String) {
+			let source = contents as NSString
+			let whole = NSRange(location: 0, length: source.length)
+			// The expressions are this file's own.
+			let declarationExpression = try! NSRegularExpression(pattern: #"\bfunc (__safeDI_[A-Za-z0-9_]+)\("#)
+			let referenceExpression = try! NSRegularExpression(pattern: #"(?<![A-Za-z0-9_.])(__safeDI_[A-Za-z0-9_]+)(?=\s*[(),])"#)
+			declarations = declarationExpression.matches(in: contents, range: whole).compactMap { match -> (name: String, start: Int, nameLocation: Int, body: NSRange)? in
+				let parametersEnd = GraphFuzzerOracle.closingDelimiterEnd(in: source, after: match.range.location + match.range.length)
+				let bodyStart = source.range(of: "{", range: NSRange(location: parametersEnd, length: source.length - parametersEnd)).location
+				guard bodyStart != NSNotFound else { return nil }
+				let bodyEnd = GraphFuzzerOracle.closingDelimiterEnd(in: source, after: bodyStart + 1)
+				return (source.substring(with: match.range(at: 1)), match.range.location, match.range(at: 1).location, NSRange(location: bodyStart + 1, length: max(0, bodyEnd - bodyStart - 2)))
+			}
+			var calls = [Set<Int>](repeating: [], count: declarations.count)
+			for match in referenceExpression.matches(in: contents, range: whole) where !declarations.contains(where: { $0.nameLocation == match.range.location }) {
+				guard let target = declaration(named: source.substring(with: match.range(at: 1)), at: match.range.location) else { continue }
+				for caller in declarations.indices where NSLocationInRange(match.range.location, declarations[caller].body) {
+					calls[caller].insert(target)
+				}
+			}
+			reached = declarations.indices.map { start in
+				var reached = Set<Int>()
+				var pending = Array(calls[start])
+				while let next = pending.popLast() {
+					guard reached.insert(next).inserted else { continue }
+					pending.append(contentsOf: calls[next])
+				}
+				return reached
+			}
+		}
+
+		/// Whether a call of `name` at `location` closes a cycle: the function it reaches is one the call is inside, or
+		/// reaches one the call is inside.
+		func callCloses(_ name: Substring, at location: Int) -> Bool {
+			guard let target = declaration(named: String(name), at: location) else { return false }
+			return declarations.indices.contains { enclosing in
+				NSLocationInRange(location, declarations[enclosing].body) && (enclosing == target || reached[target].contains(enclosing))
+			}
+		}
+
+		private let declarations: [(name: String, start: Int, nameLocation: Int, body: NSRange)]
+		private var reached = [Set<Int>]()
+
+		/// The declaration a reference to `name` at `location` reaches: the one of its name whose body holds it, else the
+		/// last one before it, else the first after it.
+		private func declaration(named name: String, at location: Int) -> Int? {
+			let namesakes = declarations.indices.filter { declarations[$0].name == name }
+			return namesakes.last(where: { NSLocationInRange(location, declarations[$0].body) })
+				?? namesakes.last(where: { declarations[$0].start < location })
+				?? namesakes.first
+		}
 	}
 
 	static func features(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerFeature> {
@@ -12874,9 +12938,6 @@ struct GraphFuzzerFailure: Equatable {
 		/// Two builds of one type in a seam's tree bind other values before the same property (`SeamPlaceLevels.levelDisagreements()`):
 		/// the levels a scope enum would nest by type would depend on the path.
 		case placeLevelsDifferBetweenBuildsOfType = "two builds of one type in a seam's tree bind other values before the same property"
-		/// A place of a production body's walk holds other builder functions or closing edges than its kind holds
-		/// (`PlaceObservation.violations`).
-		case placeHoldsOtherThanItsKind = "a place of a production body holds other builder functions or closing edges than its kind holds"
 		/// A place's path in a seam's tree repeats a declaration (`GraphFuzzerPlaceFacts.chainRepeats`): a scope value's
 		/// chain would repeat one, which a build that closes a cycle, being the first build, never makes.
 		case placeChainRepeatsDeclaration = "a place's path in a seam's tree repeats a declaration"
@@ -13697,8 +13758,6 @@ struct GraphFuzzerToolRuns {
 	///   - placeLevelDisagreements: Each level of a place of a seam that one build of a type gives with other values than
 	///     another build of it, in the run of `firstOutcome` (`SeamPlaceLevels.levelDisagreements()`).
 	///   - placeFacts: The facts of the places of every seam's holes the run of `firstOutcome` computes.
-	///   - placeViolations: Each place of a production body the run of `firstOutcome` generates whose plan does not hold what
-	///     its kind holds (`PlaceObservation.violations`).
 	///   - withoutSecondPath: The run of the graph without its second path to a type that holds a place
 	///     (`GraphFuzzerGenerator.fixtureWithoutSecondPath(forSeed:features:)`), when it has one.
 	///   - remedyRuns: The outcome of each remedy the errors of a rejected base corpus graph state, applied to the graph
@@ -13725,7 +13784,6 @@ struct GraphFuzzerToolRuns {
 		withoutSecondHolePlaceOutcome: (place: String, outcome: GraphFuzzerToolOutcome)? = nil,
 		placeLevelDisagreements: [String] = [],
 		placeFacts: GraphFuzzerPlaceFacts = GraphFuzzerPlaceFacts(),
-		placeViolations: [String] = [],
 		withoutSecondPath: GraphFuzzerSecondPathRun? = nil,
 		remedyRuns: [GraphFuzzerRemedyRun] = [],
 		builderSurfaceRuns: [GraphFuzzerBuilderSurfaceRun] = [],
@@ -13736,7 +13794,6 @@ struct GraphFuzzerToolRuns {
 		self.withoutSecondHolePlaceOutcome = withoutSecondHolePlaceOutcome
 		self.placeLevelDisagreements = placeLevelDisagreements
 		self.placeFacts = placeFacts
-		self.placeViolations = placeViolations
 		self.withoutSecondPath = withoutSecondPath
 		self.remedyRuns = remedyRuns
 		self.fixture = fixture
@@ -13775,7 +13832,6 @@ struct GraphFuzzerToolRuns {
 	let withoutSecondHolePlaceOutcome: (place: String, outcome: GraphFuzzerToolOutcome)?
 	let placeLevelDisagreements: [String]
 	let placeFacts: GraphFuzzerPlaceFacts
-	let placeViolations: [String]
 	let withoutSecondPath: GraphFuzzerSecondPathRun?
 	let remedyRuns: [GraphFuzzerRemedyRun]
 	let builderSurfaceRuns: [GraphFuzzerBuilderSurfaceRun]
@@ -13860,19 +13916,6 @@ struct GraphFuzzerToolRuns {
 			seed: fixture.seed,
 			kind: .placeLevelsDifferBetweenBuildsOfType,
 			details: "\(placeLevelDisagreements.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)",
-		)
-	}
-
-	/// The failure of a graph a place of whose production bodies holds other builder functions or closing edges than its
-	/// kind holds, or `nil`: every place has exactly one function, two for a loop member whose function takes a lazy cycle's
-	/// parameters, one closing edge to an enclosing place's function for a scope that closes a cycle, or one hosted
-	/// statement of a seam's code with no place beneath it (`PlaceObservation.violations`).
-	var placeOracleFailure: GraphFuzzerFailure? {
-		guard !placeViolations.isEmpty else { return nil }
-		return GraphFuzzerFailure(
-			seed: fixture.seed,
-			kind: .placeHoldsOtherThanItsKind,
-			details: "\(placeViolations.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)",
 		)
 	}
 
@@ -14195,6 +14238,10 @@ struct GraphFuzzerToolRuns {
 	/// for a label – a cycle parameter of a function a lazy cycle closes on – counts at each construction in the function's
 	/// body that passes the parameter on by name (`GraphFuzzerOracle.nilArgumentCountsThroughBuilderFunctions`), on both
 	/// sides: inline's `nil` reaches those constructions through the parameter, where a seam's fill can write it at each.
+	/// Where inline passes an argument `nil` in a shared builder function, whose code stands for places its text does not
+	/// count (`GraphFuzzerOracle.nilArgumentKeysInSharedBuilderFunctions`), only a seam that passes it `nil` where inline
+	/// never does fails; the value oracle compares what each place builds. The seam's count is the number of times its
+	/// text passes `nil`, which is at most its number of places, so comparing it with an exact inline count is sound.
 	var nilArgumentFailure: GraphFuzzerFailure? {
 		guard case let .accepted(seamFiles, _) = firstOutcome, case let .accepted(inlineFiles, _) = inlineOutcome else { return nil }
 		let seamTypeNames = Set(fixture.swiftFileContent.flatMap { content -> [String] in
@@ -14221,7 +14268,9 @@ struct GraphFuzzerToolRuns {
 				uniquingKeysWith: +,
 			)
 		}
-		let differences = GraphFuzzerOracle.nilArgumentCountsExceeding(counts(in: seamFiles), counts(in: inlineFiles))
+		let inlineSharedKeys = GraphFuzzerOracle.nilArgumentKeysInSharedBuilderFunctions(in: inlineFiles, typeNamePrefix: fixture.typeNamePrefix, excluding: seamTypeNames)
+		let inlineCounts = counts(in: inlineFiles)
+		let differences = GraphFuzzerOracle.nilArgumentCountsExceeding(counts(in: seamFiles).filter { !inlineSharedKeys.contains($0.key) }, inlineCounts)
 		guard !differences.isEmpty else { return nil }
 		return GraphFuzzerFailure(
 			seed: fixture.seed,
@@ -14586,7 +14635,7 @@ enum GraphFuzzerOracle {
 			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
 			var failures = [runs.runsDifferFailure, runs.cleanSubtreeSkipFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.storedSeamSignaturesDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.publicMockOverridesOrderFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
-			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeOracleFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
+			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
 			// Whether a closure a level function returns keeps a level's values, read from the generated text, so it judges
 			// with compiles and without.
@@ -14988,7 +15037,7 @@ enum GraphFuzzerOracle {
 				      ?? namesakes.first
 				else { continue }
 				for construction in calls(in: source.substring(with: declaration.body), calleeExpression: constructionExpression(typeNamePrefix: typeNamePrefix)) where !excludedTypeNames.contains(construction.callee) {
-					for argument in construction.arguments where labels.contains(argument.label) && argument.value == argument.label {
+					for argument in construction.arguments where labels.contains(argument.label) && handsOn(argument.value, argument.label) {
 						counts["\(construction.callee)(\(argument.label):)", default: 0] += 1
 					}
 				}
@@ -14997,15 +15046,144 @@ enum GraphFuzzerOracle {
 		return counts
 	}
 
+	/// The keys, as `nilArgumentCounts(in:typeNamePrefix:excluding:)` keys them, that the code in `generatedFiles` passes a
+	/// `nil` to in a shared builder function (`SharedBuilderFunctions`), literally or through a call that hands the
+	/// function a `nil`, as `nilArgumentCountsThroughBuilderFunctions(in:typeNamePrefix:excluding:)` follows one, and on
+	/// through each function that function hands it to by the same label. Such code stands for
+	/// as many places as reach it, which its text does not show, so its count is no count of places. The oracle's own seam
+	/// callers are not generated code and are skipped.
+	static func nilArgumentKeysInSharedBuilderFunctions(in generatedFiles: [String: String], typeNamePrefix: String, excluding excludedTypeNames: Set<String>) -> Set<String> {
+		var keys = Set<String>()
+		for (fileName, contents) in generatedFiles where !fileName.hasSuffix("+SafeDISeamCaller.swift") {
+			let shared = SharedBuilderFunctions(of: contents)
+			for call in calls(in: contents, calleeExpression: constructionExpression(typeNamePrefix: typeNamePrefix)) where !excludedTypeNames.contains(call.callee) && shared.isShared(at: call.location) {
+				for argument in call.arguments where argument.value == "nil" {
+					keys.insert("\(call.callee)(\(argument.label):)")
+				}
+			}
+			// A function hands on a `nil` it is given to the functions it calls with `label: label`, so the walk follows each
+			// such call to the constructions at its end.
+			let builderCallExpression = #"(?<![A-Za-z0-9_.])(__safeDI_[A-Za-z0-9_]+)\("#
+			var pending = calls(in: contents, calleeExpression: builderCallExpression).compactMap { call -> (callee: String, location: Int, labels: Set<String>)? in
+				let labels = Set(call.arguments.filter { $0.value == "nil" }.map(\.label))
+				return labels.isEmpty ? nil : (call.callee, call.location, labels)
+			}
+			var visited = Set<String>()
+			while let (callee, location, labels) = pending.popLast() {
+				guard let declaration = shared.declaration(calledBy: callee, at: location) else { continue }
+				let body = (contents as NSString).substring(with: declaration.body)
+				for label in labels.sorted() where visited.insert("\(declaration.body.location) \(label)").inserted {
+					for construction in calls(in: body, calleeExpression: constructionExpression(typeNamePrefix: typeNamePrefix)) where !excludedTypeNames.contains(construction.callee) && shared.isShared(at: declaration.body.location + construction.location) {
+						for argument in construction.arguments where argument.label == label && handsOn(argument.value, label) {
+							keys.insert("\(construction.callee)(\(label):)")
+						}
+					}
+					for call in calls(in: body, calleeExpression: builderCallExpression) where call.arguments.contains(where: { $0.label == label && handsOn($0.value, label) }) {
+						pending.append((call.callee, declaration.body.location + call.location, [label]))
+					}
+				}
+			}
+		}
+		return keys
+	}
+
+	/// The builder functions of one generated file whose code stands for more than one place, read from its text: the type
+	/// key builds a type that several places build alike in one function, which each of those places calls, and the path
+	/// key calls the function of an earlier place to close a cycle. A function is shared unless it is referenced exactly
+	/// once, from the root's body or from a function that is not shared; code in a function declared inside a shared one is
+	/// shared too, as each place of the outer function declares it again.
+	struct SharedBuilderFunctions {
+		struct Declaration {
+			let name: String
+			let start: Int
+			let nameRange: NSRange
+			let body: NSRange
+		}
+
+		init(of contents: String) {
+			let source = contents as NSString
+			let whole = NSRange(location: 0, length: source.length)
+			// The expressions are this file's own.
+			let declarationExpression = try! NSRegularExpression(pattern: #"\bfunc (__safeDI_[A-Za-z0-9_]+)\("#)
+			let declarations = declarationExpression.matches(in: contents, range: whole).compactMap { match -> Declaration? in
+				let parametersEnd = GraphFuzzerOracle.closingDelimiterEnd(in: source, after: match.range.location + match.range.length)
+				let bodyStart = source.range(of: "{", range: NSRange(location: parametersEnd, length: source.length - parametersEnd)).location
+				guard bodyStart != NSNotFound else { return nil }
+				let bodyEnd = GraphFuzzerOracle.closingDelimiterEnd(in: source, after: bodyStart + 1)
+				return Declaration(name: source.substring(with: match.range(at: 1)), start: match.range.location, nameRange: match.range(at: 1), body: NSRange(location: bodyStart + 1, length: max(0, bodyEnd - bodyStart - 2)))
+			}
+			self.declarations = declarations
+			// A reference calls the function or passes it: a name followed by an argument list, or by the end of the one it is
+			// passed in. A generated-only argument label, `__safeDI_<label>:`, is no reference.
+			let referenceExpression = try! NSRegularExpression(pattern: #"(?<![A-Za-z0-9_.])(__safeDI_[A-Za-z0-9_]+)(?=\s*[(),])"#)
+			var referencingBodies = [[Int?]](repeating: [], count: declarations.count)
+			for match in referenceExpression.matches(in: contents, range: whole) where !declarations.contains(where: { $0.nameRange.location == match.range.location }) {
+				guard let target = Self.declaration(named: source.substring(with: match.range(at: 1)), at: match.range.location, among: declarations) else { continue }
+				referencingBodies[target].append(Self.enclosingDeclaration(at: match.range.location, among: declarations))
+			}
+			var isShared = [Bool?](repeating: nil, count: declarations.count)
+			func shared(_ declaration: Int) -> Bool {
+				if let known = isShared[declaration] {
+					return known
+				}
+				// A function that reaches itself again is shared, which this guard also answers while the walk is inside it.
+				isShared[declaration] = true
+				let result: Bool = if referencingBodies[declaration].count == 1, let referencingBody = referencingBodies[declaration][0] {
+					shared(referencingBody)
+				} else {
+					referencingBodies[declaration].count != 1
+				}
+				let enclosing = Self.enclosingDeclaration(at: declarations[declaration].start, among: declarations)
+				isShared[declaration] = result || enclosing.map(shared) == true
+				return isShared[declaration] ?? true
+			}
+			self.isShared = declarations.indices.map(shared)
+		}
+
+		/// Whether the code at `location` is in a shared function.
+		func isShared(at location: Int) -> Bool {
+			Self.enclosingDeclaration(at: location, among: declarations).map { isShared[$0] } ?? false
+		}
+
+		/// The declaration a call of `name` at `location` reaches: the one of its name whose body holds it, else the last
+		/// one before it, else the first after it.
+		func declaration(calledBy name: String, at location: Int) -> Declaration? {
+			Self.declaration(named: name, at: location, among: declarations).map { declarations[$0] }
+		}
+
+		private let declarations: [Declaration]
+		private let isShared: [Bool]
+
+		private static func declaration(named name: String, at location: Int, among declarations: [Declaration]) -> Int? {
+			let namesakes = declarations.indices.filter { declarations[$0].name == name }
+			return namesakes.last(where: { NSLocationInRange(location, declarations[$0].body) })
+				?? namesakes.last(where: { declarations[$0].start < location })
+				?? namesakes.first
+		}
+
+		/// The innermost declaration whose body holds `location`.
+		private static func enclosingDeclaration(at location: Int, among declarations: [Declaration]) -> Int? {
+			declarations.indices
+				.filter { NSLocationInRange(location, declarations[$0].body) }
+				.min { declarations[$0].body.length < declarations[$1].body.length }
+		}
+	}
+
+	/// Whether an argument whose value is `value` hands on the parameter `label` a builder function takes: by name, or,
+	/// for a lazy cycle's optional wrapper, by the instance it holds, `label?.instance`.
+	private static func handsOn(_ value: String, _ label: String) -> Bool {
+		value == label || value == label + "?.instance"
+	}
+
 	/// The expression whose first capture is the callee of a construction of a type whose name begins with
 	/// `typeNamePrefix`, which the call's arguments follow.
-	private static func constructionExpression(typeNamePrefix: String) -> String {
+	fileprivate static func constructionExpression(typeNamePrefix: String) -> String {
 		"(?<![A-Za-z0-9_.])(" + NSRegularExpression.escapedPattern(for: typeNamePrefix) + "[A-Za-z0-9_]+)\\("
 	}
 
 	/// Each call in `contents` whose callee `calleeExpression` matches, the callee its first capture and the call's
 	/// arguments after it: the callee, where the call begins, and each top-level argument's label and value.
-	private static func calls(in contents: String, calleeExpression: String) -> [(callee: String, location: Int, arguments: [(label: String, value: String)])] {
+	fileprivate static func calls(in contents: String, calleeExpression: String) -> [(callee: String, location: Int, arguments: [(label: String, value: String)])] {
 		// The expressions are this file's, built from escaped names.
 		let expression = try! NSRegularExpression(pattern: calleeExpression)
 		let source = contents as NSString
@@ -15024,7 +15202,7 @@ enum GraphFuzzerOracle {
 
 	/// The location just past the delimiter that closes the one opened just before `start` in `source`, or the end of
 	/// `source`.
-	private static func closingDelimiterEnd(in source: NSString, after start: Int) -> Int {
+	fileprivate static func closingDelimiterEnd(in source: NSString, after start: Int) -> Int {
 		var depth = 1
 		var end = start
 		while end < source.length, depth > 0 {
@@ -15292,19 +15470,16 @@ enum GraphFuzzerOracle {
 		// must be the ones the generated scope enums declare (`scopeCaseFailures`).
 		// The validation walk skips a subtree whose walk along an equal context completed and found nothing. A graph whose
 		// first run skipped one is run again with no skip, which must give the same outcome (`cleanSubtreeSkipFailure`).
-		// Every place of a production body the first run generates must hold what its kind holds (`placeOracleFailure`).
 		let (skippedSubtrees, skippedSubtreesContinuation) = AsyncStream.makeStream(of: Void.self)
-		let (((firstOutcome, placeLevelDisagreements), placeFacts), placeObservations) = try await collectingPlaceObservations(during: {
-			try await collectingPlaceFacts(during: {
-				try await collectingPlaceLevelDisagreements(during: {
-					try await ValidationWalkObservation.$observer.withValue({ observation in
-						if case .skippedCleanSubtree = observation {
-							skippedSubtreesContinuation.yield()
-						}
-					}) {
-						try await toolOutcome(of: fixture)
+		let ((firstOutcome, placeLevelDisagreements), placeFacts) = try await collectingPlaceFacts(during: {
+			try await collectingPlaceLevelDisagreements(during: {
+				try await ValidationWalkObservation.$observer.withValue({ observation in
+					if case .skippedCleanSubtree = observation {
+						skippedSubtreesContinuation.yield()
 					}
-				})
+				}) {
+					try await toolOutcome(of: fixture)
+				}
 			})
 		})
 		skippedSubtreesContinuation.finish()
@@ -15423,7 +15598,6 @@ enum GraphFuzzerOracle {
 			withoutSecondHolePlaceOutcome: withoutSecondHolePlaceOutcome,
 			placeLevelDisagreements: placeLevelDisagreements,
 			placeFacts: placeFacts,
-			placeViolations: placeObservations.flatMap(\.violations),
 			withoutSecondPath: withoutSecondPath,
 			remedyRuns: remedyRuns,
 			builderSurfaceRuns: builderSurfaceRuns,

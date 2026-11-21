@@ -2925,9 +2925,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		codeGeneration: CodeGeneration = .dependencyTree,
 	) async throws -> String {
 		// The tree's code is spelled once, here: each level holds its children's code rather than a copy of its text.
-		let code = try await generatePlan(codeGeneration: codeGeneration)
-		PlaceObservation.record(code)
-		return code.spelled()
+		try await generatePlan(codeGeneration: codeGeneration).spelled()
 	}
 
 	/// The plan of this scope's code as the root of what is generated, with nothing generated before it, which
@@ -5992,8 +5990,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Whether this scope's place is written with nothing the type key does not plan: no payload, loop or fill binding, no
 	/// seam call, and no member call.
 	nonisolated private func isPlannedByTypeKey(builderFunctionNames: BuilderFunctionNames, fillPlaceBindings: FillPlaceBindings) -> Bool {
-		ProductionBodyKey.current == .type
-			&& valuesBindingLines.isEmpty
+		valuesBindingLines.isEmpty
 			&& builderFunctionNames.loopValuesBindingLines == nil
 			&& builderFunctionNames.loopLevelsName == nil
 			&& builderFunctionNames.receivedFunctionName == nil
@@ -6033,18 +6030,107 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Only each child's code is awaited here: what the body decides around it is decided by the synchronous functions
 		// below, as a property's scope is (`generatePropertyCode`).
 		var body = bodyChildren(propertiesGeneratedLater: propertiesGeneratedLater, enclosingFunctionNames: enclosingFunctionNames)
-		for index in body.orderedChildren.indices where body.orderedChildren[index].generator.fillEmitsCode {
-			let code = try await body.orderedChildren[index].generator.generateCode(
-				codeGeneration: codeGeneration,
+		let requests = body.orderedChildren.indices.filter { body.orderedChildren[$0].generator.fillEmitsCode }.map { index in
+			ChildCodeRequest(
+				index: index,
+				generator: body.orderedChildren[index].generator,
 				unavailableProperties: body.orderedChildren[index].unavailableProperties,
 				propertiesGeneratedLater: body.orderedChildren[index].propertiesGeneratedLater,
 				builderFunctionNames: builderFunctionNamesOfChild(at: index, in: body),
-				leadingWhitespace: leadingMemberWhitespace,
-				fillPlaceBindings: fillPlaceBindings,
 			)
-			append(code, ofChildAt: index, to: &body, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
+		}
+		let codes: [GeneratedCode] = switch codeGeneration {
+		case .dependencyTree:
+			try await Self.dependencyTreeCode(of: requests, leadingWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
+		case .mock:
+			try await Self.code(of: requests, codeGeneration: codeGeneration, leadingWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
+		}
+		for (request, code) in zip(requests, codes) {
+			append(code, ofChildAt: request.index, to: &body, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
 		}
 		return statements(of: consume body, leadingMemberWhitespace: leadingMemberWhitespace)
+	}
+
+	/// What a body asks of one child's code: the child's generator, which is an actor of its own, and the context the body
+	/// decided for it before awaiting any child's code. A child's context never depends on another child's code.
+	private struct ChildCodeRequest: Sendable {
+		/// The child's position among the body's ordered children.
+		let index: Int
+		let generator: ScopeGenerator
+		let unavailableProperties: Set<Property>
+		let propertiesGeneratedLater: Set<Property>
+		let builderFunctionNames: BuilderFunctionNames
+	}
+
+	/// The dependency tree code of each of `requests`, in their order. A root of the dependency tree, which starts no code
+	/// early, plans each of its body's children on a task of its own, at most `ConcurrentChildCode.maximumChildrenAtOnce`
+	/// at a time, and the code comes back in the body's order of its children, never in the order the tasks finish. Beneath
+	/// those children, and in every other tree, which starts its large subtrees' code early, a body plans one child after
+	/// another. A child's error is thrown as the roots' task group throws one
+	/// (`DependencyTreeGenerator.plannedCode(of:rootsOfOtherModules:)`).
+	private static func dependencyTreeCode(
+		of requests: [ChildCodeRequest],
+		leadingWhitespace: String,
+		fillPlaceBindings: FillPlaceBindings,
+	) async throws -> [GeneratedCode] {
+		guard ConcurrentChildCode.plansChildrenAtOnce, requests.count > 1 else {
+			return try await code(of: requests, codeGeneration: .dependencyTree, leadingWhitespace: leadingWhitespace, fillPlaceBindings: fillPlaceBindings)
+		}
+		ConcurrentChildCode.record(childCount: requests.count)
+		let maximumChildrenAtOnce = ConcurrentChildCode.maximumChildrenAtOnce
+		return try await withThrowingTaskGroup(
+			of: (Int, GeneratedCode).self,
+			returning: [GeneratedCode].self,
+		) { taskGroup in
+			var codesByPosition = [GeneratedCode?](repeating: nil, count: requests.count)
+			for (position, request) in requests.enumerated() {
+				// A child that waits for a task to finish holds no frame, so the children planned at once never hold more memory
+				// than `maximumChildrenAtOnce` plans do.
+				if position >= maximumChildrenAtOnce, let (finishedPosition, code) = try await taskGroup.next() {
+					codesByPosition[finishedPosition] = code
+				}
+				taskGroup.addTask {
+					// The child's own body plans its children one after another: planning every body's children at once
+					// costs more processor time than it saves.
+					try await ConcurrentChildCode.$plansChildrenAtOnce.withValue(false) {
+						try await (position, request.generator.generateCode(
+							codeGeneration: .dependencyTree,
+							unavailableProperties: request.unavailableProperties,
+							propertiesGeneratedLater: request.propertiesGeneratedLater,
+							builderFunctionNames: request.builderFunctionNames,
+							leadingWhitespace: leadingWhitespace,
+							fillPlaceBindings: fillPlaceBindings,
+						))
+					}
+				}
+			}
+			for try await (position, code) in taskGroup {
+				codesByPosition[position] = code
+			}
+			// Every position holds its child's code once the group is done.
+			return codesByPosition.compactMap(\.self)
+		}
+	}
+
+	/// The code of each of `requests`, generated one after another in their order.
+	private static func code(
+		of requests: [ChildCodeRequest],
+		codeGeneration: CodeGeneration,
+		leadingWhitespace: String,
+		fillPlaceBindings: FillPlaceBindings,
+	) async throws -> [GeneratedCode] {
+		var codes = [GeneratedCode]()
+		for request in requests {
+			try await codes.append(request.generator.generateCode(
+				codeGeneration: codeGeneration,
+				unavailableProperties: request.unavailableProperties,
+				propertiesGeneratedLater: request.propertiesGeneratedLater,
+				builderFunctionNames: request.builderFunctionNames,
+				leadingWhitespace: leadingWhitespace,
+				fillPlaceBindings: fillPlaceBindings,
+			))
+		}
+		return codes
 	}
 
 	/// What a body decides of its children before it awaits their code, and what it has written of them since: the
@@ -6790,12 +6876,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					))
 				}
 				guard let rootInitializer = try Self.rootInitializer(of: instantiable) else { return .empty }
-				let childCode = try await generateProperties(
-					propertiesGeneratedLater: propertiesGeneratedLater,
-					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
-					leadingMemberWhitespace: "        ",
-					fillPlaceBindings: fillPlaceBindings,
-				)
+				// A root of the dependency tree starts no code early, so its body plans its children at once.
+				let childCode = try await ConcurrentChildCode.$plansChildrenAtOnce.withValue(true) {
+					try await generateProperties(
+						propertiesGeneratedLater: propertiesGeneratedLater,
+						enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
+						leadingMemberWhitespace: "        ",
+						fillPlaceBindings: fillPlaceBindings,
+					)
+				}
 				return Self.rootCode(of: rootInitializer, writing: consume childCode)
 			case let .mock(context):
 				return try await .text(generateMockRootCode(
@@ -6821,22 +6910,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				builderFunctionNames: builderFunctionNames,
 			) {
 				let closedOnFunctionName = closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames)
-				return .place(PlacePlan(
-					kind: .closesCycle,
-					functionNames: [],
-					closedOnFunctionName: closedOnFunctionName,
-					code: .text(closingCode),
-					record: closingRecord(
-						of: property,
-						instantiable: instantiable,
-						forwardedProperties: [],
-						erasedToConcreteExistential: erasedToConcreteExistential,
-						closedOnFunctionName: closedOnFunctionName,
-						unavailableProperties: unavailableProperties,
-						builderFunctionNames: builderFunctionNames,
-						fillPlaceBindings: fillPlaceBindings,
-					),
-				))
+				return .place(PlacePlan(code: .text(closingCode),
+				                        record: closingRecord(
+				                        	of: property,
+				                        	instantiable: instantiable,
+				                        	forwardedProperties: [],
+				                        	erasedToConcreteExistential: erasedToConcreteExistential,
+				                        	closedOnFunctionName: closedOnFunctionName,
+				                        	unavailableProperties: unavailableProperties,
+				                        	builderFunctionNames: builderFunctionNames,
+				                        	fillPlaceBindings: fillPlaceBindings,
+				                        )))
 			}
 			let childCode = try await generateProperties(
 				codeGeneration: codeGeneration,
@@ -6861,12 +6945,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		case let .hole(property, _, site):
 			// A tree built only to compute the seam's signature has no site, and generates nothing.
 			guard let site else { return .empty }
-			return .place(PlacePlan(
-				kind: .hostedSeamCode,
-				functionNames: [],
-				closedOnFunctionName: nil,
-				code: .text(Self.buildSiteCode(of: property, at: site, functionName: builderFunctionNames.functionName, readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties, isNonisolated: sendableFunctionsAreNonisolated)),
-			))
+			return .place(PlacePlan(code: .text(Self.buildSiteCode(of: property, at: site, functionName: builderFunctionNames.functionName, readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties, isNonisolated: sendableFunctionsAreNonisolated))))
 		case let .fill(hole, functionName):
 			// A fill is hosted as its text until fills are planned (`.claude/rules/emission-decisions.md`).
 			let fillCode = try await generateFillCode(
@@ -6879,7 +6958,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 				fillPlaceBindings: fillPlaceBindings,
 			)
-			return .place(PlacePlan(kind: .hostedSeamCode, functionNames: [], closedOnFunctionName: nil, code: .text(fillCode)))
+			return .place(PlacePlan(code: .text(fillCode)))
 		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
 			let aliasCode = aliasCode(
 				of: property,
@@ -6889,7 +6968,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				declarationReference: declarationReference,
 				unavailableProperties: unavailableProperties,
 			)
-			let record: PlaceRecord? = if fulfillingExpression == nil, ProductionBodyKey.current == .type {
+			let record: PlaceRecord? = if fulfillingExpression == nil {
 				.alias(AliasPlaceRecord(
 					property: property,
 					fulfillingProperty: Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: unavailableProperties) ? nil : fulfillingProperty,
@@ -6898,7 +6977,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				nil
 			}
-			return .place(PlacePlan(kind: .alias, functionNames: [], closedOnFunctionName: nil, code: .text(aliasCode), record: record))
+			return .place(PlacePlan(code: .text(aliasCode), record: record))
 		}
 	}
 
@@ -6912,13 +6991,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The extension `rootInitializer` declares, writing `childCode`, the code of the root's children.
 	@inline(never)
 	private static func rootCode(of rootInitializer: RootInitializer, writing childCode: consuming [GeneratedCode]) -> GeneratedCode {
-		let pathCode = rootInitializer.spelled(writing: BuilderFunctionGraph(body: childCode.map(Statement.verbatim)))
-		// The type key lays the body out again from the path key's plan, which the place oracle keeps reading.
-		guard ProductionBodyKey.current == .type, let statements = TypeKeyBody.statements(ofRootBody: childCode) else { return pathCode }
-		return .laidOut(
-			spelled: rootInitializer.spelled(writing: BuilderFunctionGraph(body: statements.map(Statement.verbatim))),
-			places: pathCode,
-		)
+		// The type key lays the body out again from the path key's plan, or keeps the path key's body where it cannot.
+		guard let statements = TypeKeyBody.statements(ofRootBody: childCode) else {
+			return rootInitializer.spelled(writing: BuilderFunctionGraph(body: childCode.map(Statement.verbatim)))
+		}
+		return rootInitializer.spelled(writing: BuilderFunctionGraph(body: statements.map(Statement.verbatim)))
 	}
 
 	/// The declaration of the alias `property`, which `fulfillingProperty` fulfills.
@@ -7191,21 +7268,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			// A scope that closes a cycle declares no function of its own and calls the one it repeats, though a loop member that
 			// closes one declares its `_received` function; every other declares its own.
-			func place(declaring additionalFunctionNames: [String] = [], code: GeneratedCode) -> PlacePlan {
+			func place(declaring _: [String] = [], code: GeneratedCode) -> PlacePlan {
 				if isPropertyCycle {
-					PlacePlan(
-						kind: additionalFunctionNames.isEmpty ? .closesCycle : .loopMemberClosingCycle,
-						functionNames: additionalFunctionNames,
-						closedOnFunctionName: functionName,
-						code: code,
-					)
+					PlacePlan(code: code)
 				} else {
-					PlacePlan(
-						kind: additionalFunctionNames.isEmpty ? .builtByFunction : .loopMemberWithCycleParameters,
-						functionNames: [functionName] + additionalFunctionNames,
-						closedOnFunctionName: nil,
-						code: code,
-					)
+					PlacePlan(code: code)
 				}
 			}
 			let rebindingLines = reboundProperties.compactMap { reboundProperty in
@@ -7359,13 +7426,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				"\(BindingDeclaration(property: property, rule: .lazilyInstantiated).spelled) = \(Self.lazilyInstantiatedInstantiation(of: property, callingFunctionNamed: functionName, cycleArguments: cycleArguments, erasedToConcreteExistential: erasedToConcreteExistential))"
 			}
 
-			return PlacePlan(
-				kind: .builtByFunction,
-				functionNames: [functionName],
-				closedOnFunctionName: nil,
-				code: function.spelled(after: valuesBindingLines, followedBy: lastLine),
-				record: builtRecord(functionName: functionName, isNonisolated: sendableFunctionsAreNonisolated, hasFunction: true),
-			)
+			return PlacePlan(code: function.spelled(after: valuesBindingLines, followedBy: lastLine),
+			                 record: builtRecord(functionName: functionName, isNonisolated: sendableFunctionsAreNonisolated, hasFunction: true))
 		case .constant:
 			let callArguments = cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", ")
 			let generatedProperties = memberCallCode + seamGuardLines + fillPlaceBindingLines + childCode
@@ -7407,13 +7469,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 
 			// The payloads a seam's tree binds before building a scope that leads to a place.
-			return PlacePlan(
-				kind: hasGeneratedContent ? .builtByFunction : .constantBuiltInPlace,
-				functionNames: hasGeneratedContent ? [functionName] : [],
-				closedOnFunctionName: nil,
-				code: .sequence([.text(valuesBindingLines), functionDeclaration, binding.spelled, .text("\n")]),
-				record: builtRecord(functionName: functionName, isNonisolated: sendableFunctionsAreNonisolated, hasFunction: hasGeneratedContent),
-			)
+			return PlacePlan(code: .sequence([.text(valuesBindingLines), functionDeclaration, binding.spelled, .text("\n")]),
+			                 record: builtRecord(functionName: functionName, isNonisolated: sendableFunctionsAreNonisolated, hasFunction: hasGeneratedContent))
 		}
 	}
 
