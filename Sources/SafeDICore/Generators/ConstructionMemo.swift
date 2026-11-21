@@ -599,13 +599,20 @@ struct ConstructionLog {
 	/// only. It lives as long as the memo entry or the log of a place above that refers to it: for one pass, and for the
 	/// memo shared by the mock roots, as long as that memo.
 	private final class Segment: Sendable {
-		let parts: [Part]
+		/// The parts of this segment, in order. A part refers to the segment of a place beneath, so segments form a chain
+		/// as deep as the tree, which the slot releases one level at a time (`DeferredReleaseSlot`).
+		var parts: [Part] {
+			partsSlot.value
+		}
+
+		private let partsSlot: DeferredReleaseSlot<[Part]>
+
 		/// The shallowest depth that answered a read of `parts`, `Int.max` for none, so a walk that leaves out every read
 		/// answered at or below a depth skips a segment that holds none above it.
 		let shallowestDepth: Int
 
 		init(parts: [Part]) {
-			self.parts = parts
+			partsSlot = DeferredReleaseSlot(parts)
 			var shallowestDepth = Int.max
 			for part in parts {
 				switch part {
