@@ -1931,18 +1931,26 @@ public struct Generate: AsyncParsableCommand {
 		try await Self.loadSafeDIModuleInfo(at: paths, readingViews: readingViews)
 	}
 
+	/// One module info file's read, as a task of `loadSafeDIModuleInfo` returns it. A struct, not a tuple: release builds
+	/// of Swift 6.3 with `-Osize`, 6.4.1 and 6.4.2 on Linux, and 2.3.1's published macOS binary, miscompiled a task group
+	/// whose element is a tuple holding a `Result` with an existential error (see `QueryNeeds.ModuleRead`).
+	private struct ModuleInfoFileRead: Sendable {
+		let index: Int
+		let read: Result<ModuleInfoFile, any Error>
+	}
+
 	static func loadSafeDIModuleInfo(at paths: [String], readingViews: Bool = true) async throws -> [(file: ModuleInfoFile, path: String)] {
 		let moduleInfoURLs = paths.map(\.asFileURL)
 		let reads = await withTaskGroup(
-			of: (index: Int, read: Result<ModuleInfoFile, any Error>).self,
-			returning: [(index: Int, read: Result<ModuleInfoFile, any Error>)].self,
+			of: ModuleInfoFileRead.self,
+			returning: [ModuleInfoFileRead].self,
 		) { taskGroup in
 			for (index, moduleInfoURL) in moduleInfoURLs.enumerated() {
 				taskGroup.addTask {
-					(index: index, read: Result { try UnreadableModuleInfoError.reading(moduleInfoURL, readingViews: readingViews) })
+					ModuleInfoFileRead(index: index, read: Result { try UnreadableModuleInfoError.reading(moduleInfoURL, readingViews: readingViews) })
 				}
 			}
-			var reads = [(index: Int, read: Result<ModuleInfoFile, any Error>)]()
+			var reads = [ModuleInfoFileRead]()
 			for await read in taskGroup {
 				reads.append(read)
 			}
