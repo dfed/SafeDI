@@ -163,12 +163,12 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			.simple(name: "Service"),
 		]
 		var writer = BinaryWriter()
-		writer.write(BinarySharingTypeDescriptions(types))
+		writer.write(BinarySharingSignatureValues(types))
 		let encoded = writer.encoded
 
 		let readTypes = try encoded.withUnsafeBytes { bytes in
 			var reader = try BinaryReader(bytes: bytes)
-			let readTypes: BinarySharingTypeDescriptions<[TypeDescription]> = try reader.read()
+			let readTypes: BinarySharingSignatureValues<[TypeDescription]> = try reader.read()
 			try reader.finish()
 			return readTypes.value
 		}
@@ -179,17 +179,45 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func binaryWriter_writesEachHoleFieldOnce_whenSharingSignatureValues() throws {
+		let fields = try [false, true, false, true].map { isDistinct in try SeamSignature.Hole.Field.sample(isDistinct: isDistinct) }
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(fields))
+		let encoded = writer.encoded
+
+		let readFields: BinarySharingSignatureValues<[SeamSignature.Hole.Field]> = try read(encoded)
+
+		#expect(Self.encoded(readFields.value) == Self.encoded(fields))
+		// The string table, then four elements: two written in full, then a reference to each.
+		#expect(encoded.count == Self.encoded(Array(fields.prefix(2))).count + 2 + 2)
+	}
+
+	@Test
+	func binaryWriter_writesEachUncarriedDeclarationReasonOnce_whenSharingSignatureValues() throws {
+		let reasons = try [false, true, false, true].map { isDistinct in try SeamSignature.Hole.UncarriedDeclaration.Reason.sample(isDistinct: isDistinct) }
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(reasons))
+		let encoded = writer.encoded
+
+		let readReasons: BinarySharingSignatureValues<[SeamSignature.Hole.UncarriedDeclaration.Reason]> = try read(encoded)
+
+		#expect(Self.encoded(readReasons.value) == Self.encoded(reasons))
+		// The string table, then four elements: two written in full, then a reference to each.
+		#expect(encoded.count == Self.encoded(Array(reasons.prefix(2))).count + 2 + 2)
+	}
+
+	@Test
 	func binaryReader_readsRepeatedPlaces_whenPlacesHoldTypeDescriptionNotSeenBefore() throws {
 		// The first list of places is the first to name `Service`, so its type is read, and takes its index, before the
 		// list does. The second list refers to the first.
 		let site = SeamSignature.Hole.Site(seamType: .simple(name: "Service"), path: [])
 		let places = [BinaryShared([site]), BinaryShared([site])]
 		var writer = BinaryWriter()
-		writer.write(BinarySharingTypeDescriptions(places))
+		writer.write(BinarySharingSignatureValues(places))
 
 		let readPlaces = try writer.encoded.withUnsafeBytes { bytes in
 			var reader = try BinaryReader(bytes: bytes)
-			let readPlaces: BinarySharingTypeDescriptions<[BinaryShared<[SeamSignature.Hole.Site]>]> = try reader.read()
+			let readPlaces: BinarySharingSignatureValues<[BinaryShared<[SeamSignature.Hole.Site]>]> = try reader.read()
 			try reader.finish()
 			return readPlaces.value
 		}
@@ -206,7 +234,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		#expect(throws: BinaryDecodingError.sharedValueReferenceOutOfRange(reference: 1, offset: 2)) {
 			try bytes.withUnsafeBytes { bytes in
 				var reader = try BinaryReader(bytes: bytes)
-				let _: BinarySharingTypeDescriptions<[TypeDescription]> = try reader.read()
+				let _: BinarySharingSignatureValues<[TypeDescription]> = try reader.read()
 			}
 		}
 	}
@@ -650,10 +678,10 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func dumpScanCache_explains_whenFormatVersionDiffers() async throws {
 		try await assertDumpThrows(
-			"The scan cache is in format version 2, but this SafeDITool reads format version 1.",
+			"The scan cache is in format version 3, but this SafeDITool reads format version 2.",
 			whenCacheIs: { cache in
 				var cache = cache
-				cache[cache.startIndex + 4] = 2
+				cache[cache.startIndex + 4] = 3
 				return cache
 			},
 		)
@@ -1675,9 +1703,9 @@ extension Optional: BinarySample where Wrapped: BinarySample {
 	}
 }
 
-extension BinarySharingTypeDescriptions: BinarySample where Value: BinarySample {
-	fileprivate static func sample(isDistinct: Bool) throws -> BinarySharingTypeDescriptions<Value> {
-		try BinarySharingTypeDescriptions(Value.sample(isDistinct: isDistinct))
+extension BinarySharingSignatureValues: BinarySample where Value: BinarySample {
+	fileprivate static func sample(isDistinct: Bool) throws -> BinarySharingSignatureValues<Value> {
+		try BinarySharingSignatureValues(Value.sample(isDistinct: isDistinct))
 	}
 }
 

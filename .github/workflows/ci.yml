@@ -1739,7 +1739,9 @@ jobs:
   # both measured in this job, on this runner, in alternating runs
   # (Scripts/generate-time-check.py). It fails when a graph takes twice as
   # long, because a generator that slowed down several times over passed
-  # every other check and was found only by a benchmark run by hand.
+  # every other check and was found only by a benchmark run by hand. It also
+  # fails when a module's `.safedi` file is twice the base's size, because
+  # storing seam signatures once made one 400 times its size unnoticed.
   # The base is the main commit a pull request branched from, and for a push
   # to main the commit before the push. Its tool comes from the cache the
   # push to main that built it saved; when the cache has none, the job builds

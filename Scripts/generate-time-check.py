@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-"""Usage: generate-time-check.py [--runs N] [--limit RATIO] [--shapes NAME,…] [--summary FILE] BASE_TOOL HEAD_TOOL DIRECTORY
+"""Usage: generate-time-check.py [--runs N] [--limit RATIO] [--size-limit RATIO] [--shapes NAME,…] [--summary FILE] BASE_TOOL HEAD_TOOL DIRECTORY
        generate-time-check.py --self-test DIRECTORY
 
 Compares how long two builds of `SafeDITool` take to `generate` synthetic dependency graphs, and exits 1 when
 HEAD_TOOL takes RATIO (default 2) times as long as BASE_TOOL, or longer, on any of them. "Check Generate Time on Linux"
 in ci.yml runs it with main's tool as BASE_TOOL and the change's as HEAD_TOOL, so a change that makes generation several
 times slower is seen before it lands, not when an adopter's build slows down.
+
+It also compares the size of each module's `.safedi` file, which every build system that runs `generate` per module
+stores, uploads to its cache and reads back for each module above it, and exits 1 when a module's file from HEAD_TOOL
+is RATIO (`--size-limit`, default 2) times the size of BASE_TOOL's, or larger, and also more than 4 KB larger, since a
+few bytes more of a small file are not what the check is for. Storing seam signatures in the module info once made
+E24-fill's `Feature.safedi` 400 times the size it had been, and no check saw it.
 
 DIRECTORY, which must not exist, receives the shapes' sources and each run's output; keep it out of the system
 temporary directory. Each shape is generated as Bazel and Tuist generate: `generate --combined-output
@@ -47,7 +53,8 @@ that the time is the processes starting, not the generator.
 A shape the base tool cannot generate (a new attribute, say) is reported and not compared. A shape the head tool cannot
 generate fails the check: the shapes are valid SafeDI, so either the change broke them or they need updating with it.
 
-Exit status: 0 no shape at or over the limit; 1 one is, or the head tool failed on one; 2 usage, or DIRECTORY exists.
+Exit status: 0 no shape or module at or over a limit; 1 one is, or the head tool failed on one; 2 usage, or DIRECTORY
+exists.
 
 --self-test DIRECTORY runs the comparison with stand-in tools (one of which sleeps) and checks each verdict above.
 """
@@ -58,6 +65,7 @@ import sys
 import time
 
 NOISE_FLOOR_SECONDS = 0.1
+SIZE_NOISE_FLOOR_BYTES = 4096
 
 
 # MARK: Shapes
@@ -215,6 +223,10 @@ def generate(tool, modules, sources, output):
     return wall, cpu
 
 
+def module_info_sizes(modules, output):
+    return [os.path.getsize(f"{output}/{name}.safedi") for name, _, _ in modules]
+
+
 def generated_code(modules, output):
     code = []
     for name, _, _ in modules:
@@ -226,9 +238,10 @@ def generated_code(modules, output):
 # MARK: Comparing
 
 
-def compare(base_tool, head_tool, directory, shapes, runs, limit):
-    """Returns (the table's rows, the failures)."""
+def compare(base_tool, head_tool, directory, shapes, runs, limit, size_limit):
+    """Returns (the time table's rows, the size table's rows, the failures)."""
     rows = []
+    size_rows = []
     failures = []
     for shape in shapes:
         modules = SHAPES[shape]()
@@ -238,10 +251,12 @@ def compare(base_tool, head_tool, directory, shapes, runs, limit):
         tools = {"base": base_tool, "head": head_tool}
         samples = {"base": [], "head": []}
         code = {}
+        sizes = {}
         try:
             for label in ("base", "head"):
                 generate(tools[label], modules, sources, f"{directory}/{shape}/{label}-warm-up")
                 code[label] = generated_code(modules, f"{directory}/{shape}/{label}-warm-up")
+                sizes[label] = module_info_sizes(modules, f"{directory}/{shape}/{label}-warm-up")
         except Failure as failure:
             if label == "base":
                 rows.append(f"| {shape} | did not generate | | | | not compared |")
@@ -254,6 +269,13 @@ def compare(base_tool, head_tool, directory, shapes, runs, limit):
                 rows.append(f"| {shape} | | did not generate | | | **failed** |")
                 failures.append(f"{shape}: the head tool did not generate it: {failure}")
             continue
+        for (name, _, _), base_size, head_size in zip(modules, sizes["base"], sizes["head"]):
+            size_ratio = head_size / base_size if base_size else float("inf") if head_size else 1.0
+            size_over = size_ratio >= size_limit and head_size - base_size > SIZE_NOISE_FLOOR_BYTES
+            if size_over:
+                failures.append(f"{shape}: module {name}'s `.safedi` file is {size_ratio:.2f} times the base tool's ({head_size} bytes against {base_size}); the limit is {size_limit:g}")
+            size_rows.append(f"| {shape} | {name} | {base_size} | {head_size} | {size_ratio:.2f} | {'**over the limit**' if size_over else 'within the limit'} |")
+            print(f"{shape}: module {name}'s `.safedi` file, base {base_size} bytes, head {head_size} bytes, ratio {size_ratio:.2f}", flush=True)
         for run in range(runs):
             for label in ("base", "head"):
                 samples[label].append(generate(tools[label], modules, sources, f"{directory}/{shape}/{label}-{run}"))
@@ -265,12 +287,14 @@ def compare(base_tool, head_tool, directory, shapes, runs, limit):
         figure = lambda label: f"{median[label][0]:.3f} s / {median[label][1]:.3f} s"
         rows.append(f"| {shape} | {figure('base')} | {figure('head')} | {ratio:.2f} | {'identical' if code['base'] == code['head'] else 'differs'} | {'**over the limit**' if over else 'within the limit'} |")
         print(f"{shape}: base {figure('base')}, head {figure('head')} (wall / CPU), ratio {ratio:.2f}", flush=True)
-    return rows, failures
+    return rows, size_rows, failures
 
 
-def report(rows, failures, runs, limit, summary):
+def report(rows, size_rows, failures, runs, limit, size_limit, summary):
     lines = [f"`generate` time, head against base: median of {runs} alternating runs; a shape fails at {limit:g} times the base's wall time.", "",
              "| Shape | Base wall / CPU | Head wall / CPU | Head / base (wall) | Generated code | Verdict |", "|---|---|---|---|---|---|"] + rows
+    lines += ["", f"`.safedi` size, head against base: a module fails at {size_limit:g} times the base's bytes.", "",
+              "| Shape | Module | Base bytes | Head bytes | Head / base | Verdict |", "|---|---|---|---|---|---|"] + size_rows
     lines += [""] + [f"- {failure}" for failure in failures]
     text = "\n".join(lines) + "\n"
     print(text)
@@ -293,23 +317,23 @@ if {refuses!r} and option("--module-name") == "App":
     sys.exit("stand-in: refused")
 time.sleep({sleep!r})
 open(option("--combined-output"), "w").write("// generated\\n")
-open(option("--module-info-output"), "w").write("")
+open(option("--module-info-output"), "w").write("x" * {module_info_size!r})
 """
 
 
 def self_test(directory):
     failures = []
 
-    def tool(name, sleep, refuses=False):
+    def tool(name, sleep, refuses=False, module_info_size=10000):
         path = f"{directory}/tools/{name}"
-        write(path, STAND_IN.format(sleep=sleep, refuses=refuses))
+        write(path, STAND_IN.format(sleep=sleep, refuses=refuses, module_info_size=module_info_size))
         os.chmod(path, 0o755)
         return path
 
-    def expect(name, base, head, expected_failures, expected_row):
-        rows, found = compare(base, head, f"{directory}/{name}", ["E16-seam"], 3, 2.0)
-        if len(found) != expected_failures or expected_row not in rows[0]:
-            failures.append(f"{name}: expected {expected_failures} failure(s) and a row with {expected_row!r}, got {found} and {rows}")
+    def expect(name, base, head, expected_failures, expected_row, expected_size_row=None):
+        rows, size_rows, found = compare(base, head, f"{directory}/{name}", ["E16-seam"], 3, 2.0, 2.0)
+        if len(found) != expected_failures or expected_row not in rows[0] or (expected_size_row and expected_size_row not in size_rows[0]):
+            failures.append(f"{name}: expected {expected_failures} failure(s), a row with {expected_row!r} and a size row with {expected_size_row!r}, got {found}, {rows} and {size_rows}")
 
     fast = tool("fast", 0.0)
     expect("same", fast, fast, 0, "within the limit")
@@ -321,6 +345,11 @@ def self_test(directory):
     expect("head-refuses", fast, tool("head-refuses", 0.0, refuses=True), 1, "**failed**")
     expect("base-refuses", tool("base-refuses", 0.0, refuses=True), fast, 0, "not compared")
     expect("both-refuse", tool("refuses", 0.0, refuses=True), tool("refuses-too", 0.0, refuses=True), 1, "not compared")
+    # Each of the shape's two modules writes a file twice the base's and 10 KB larger: both over the limit.
+    expect("larger-module-info", fast, tool("larger-module-info", 0.0, module_info_size=20000), 2, "within the limit", "**over the limit**")
+    expect("smaller-module-info", fast, tool("smaller-module-info", 0.0, module_info_size=100), 0, "within the limit", "within the limit")
+    # Twice the size but only 3 KB larger is under the floor.
+    expect("module-info-under-the-floor", tool("small-module-info", 0.0, module_info_size=3000), tool("small-module-info-doubled", 0.0, module_info_size=6000), 0, "within the limit", "within the limit")
     for name, build in SHAPES.items():
         modules = build()
         seen = set()
@@ -337,6 +366,7 @@ def self_test(directory):
 def main(arguments):
     runs = 5
     limit = 2.0
+    size_limit = 2.0
     shapes = list(SHAPES)
     summary = None
     positional = []
@@ -345,12 +375,14 @@ def main(arguments):
         argument = arguments.pop(0)
         if argument == "--self-test":
             self_testing = True
-        elif argument in ("--runs", "--limit", "--shapes", "--summary") and arguments:
+        elif argument in ("--runs", "--limit", "--size-limit", "--shapes", "--summary") and arguments:
             value = arguments.pop(0)
             if argument == "--runs":
                 runs = int(value)
             elif argument == "--limit":
                 limit = float(value)
+            elif argument == "--size-limit":
+                size_limit = float(value)
             elif argument == "--shapes":
                 shapes = value.split(",")
             else:
@@ -368,8 +400,8 @@ def main(arguments):
     if self_testing:
         return self_test(directory)
     else:
-        rows, failures = compare(os.path.abspath(positional[0]), os.path.abspath(positional[1]), directory, shapes, runs, limit)
-        report(rows, failures, runs, limit, summary)
+        rows, size_rows, failures = compare(os.path.abspath(positional[0]), os.path.abspath(positional[1]), directory, shapes, runs, limit, size_limit)
+        report(rows, size_rows, failures, runs, limit, size_limit, summary)
         return 1 if failures else 0
 
 

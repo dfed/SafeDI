@@ -82,7 +82,7 @@ enum BinaryFile {
 
 	/// The version of the layout of the header and of the primitives in ``BinaryCodable``. Changes to how a
 	/// stored type is laid out change ``schemaFingerprint`` instead.
-	static let formatVersion: UInt16 = 1
+	static let formatVersion: UInt16 = 2
 
 	/// Every struct and enum a file holds.
 	static var schemaMembers: [any BinarySchemaMember.Type] {
@@ -174,7 +174,7 @@ enum BinaryFile {
 	/// because describing the schema reflects on every member's type, and reflection scans the runtime's
 	/// protocol conformance tables: computing it took most of a small module's `generate`. A test computes it
 	/// and fails, giving the new value, when a stored type's layout changes.
-	static let schemaFingerprint: UInt64 = 0x0C8CC15A75730148
+	static let schemaFingerprint: UInt64 = 0xD768FDB0FD6180E4
 
 	/// The format version and every schema member's layout, one member per line: the name and type of each
 	/// field a struct writes, and the name and payload types of each case an enum writes, in the order written.
