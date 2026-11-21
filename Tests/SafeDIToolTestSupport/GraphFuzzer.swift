@@ -14800,13 +14800,145 @@ enum GraphFuzzerOracle {
 	static func nilArgumentCounts(in generatedFiles: [String: String], typeNamePrefix: String, excluding excludedTypeNames: Set<String>) -> [String: Int] {
 		var counts = [String: Int]()
 		for (fileName, contents) in generatedFiles where !fileName.hasSuffix("+SafeDISeamCaller.swift") {
+			let places = BuilderFunctionPlaces(of: contents)
 			for call in calls(in: contents, calleeExpression: constructionExpression(typeNamePrefix: typeNamePrefix)) where !excludedTypeNames.contains(call.callee) {
 				for argument in call.arguments where argument.value == "nil" {
-					counts["\(call.callee)(\(argument.label):)", default: 0] += 1
+					counts["\(call.callee)(\(argument.label):)", default: 0] += places.count(at: call.location)
 				}
 			}
 		}
 		return counts
+	}
+
+	/// How many places of a tree the code at each location of one generated file stands for. A construction in the
+	/// root's body stands for one place. One in the body of a builder function stands for as many places as the
+	/// references that reach the function from outside its own loop: the type key builds a type that several places
+	/// build alike in one function, which each of those places calls, where the path key wrote the type's code at each
+	/// place. A reference from inside the function's strongly connected component closes a cycle on the function and
+	/// adds no place.
+	struct BuilderFunctionPlaces {
+		init(of contents: String) {
+			let source = contents as NSString
+			// The expressions are this file's own.
+			let declarationExpression = try! NSRegularExpression(pattern: #"\bfunc (__safeDI_[A-Za-z0-9_]+)\("#)
+			let declarations = declarationExpression.matches(in: contents, range: NSRange(location: 0, length: source.length)).compactMap { match -> Declaration? in
+				let parametersEnd = GraphFuzzerOracle.closingDelimiterEnd(in: source, after: match.range.location + match.range.length)
+				let bodyStart = source.range(of: "{", range: NSRange(location: parametersEnd, length: source.length - parametersEnd)).location
+				guard bodyStart != NSNotFound else { return nil }
+				let bodyEnd = GraphFuzzerOracle.closingDelimiterEnd(in: source, after: bodyStart + 1)
+				return Declaration(name: source.substring(with: match.range(at: 1)), start: match.range.location, nameRange: match.range(at: 1), body: NSRange(location: bodyStart + 1, length: max(0, bodyEnd - bodyStart - 2)))
+			}
+			// A reference calls the function or passes it: a name followed by an argument list, or by the end of the one it is
+			// passed in. A generated-only argument label, `__safeDI_<label>:`, is no reference.
+			let referenceExpression = try! NSRegularExpression(pattern: #"(?<![A-Za-z0-9_.])(__safeDI_[A-Za-z0-9_]+)(?=\s*[(),])"#)
+			var callers = [[Int?]](repeating: [], count: declarations.count)
+			var callees = [[Int]](repeating: [], count: declarations.count)
+			for match in referenceExpression.matches(in: contents, range: NSRange(location: 0, length: source.length)) {
+				let name = source.substring(with: match.range(at: 1))
+				let location = match.range.location
+				guard !declarations.contains(where: { $0.nameRange.location == location }) else { continue }
+				let namesakes = declarations.indices.filter { declarations[$0].name == name }
+				guard let target = namesakes.last(where: { NSLocationInRange(location, declarations[$0].body) })
+					?? namesakes.last(where: { declarations[$0].start < location })
+					?? namesakes.first
+				else { continue }
+				let enclosing = Self.enclosingDeclaration(at: location, among: declarations)
+				callers[target].append(enclosing)
+				if let enclosing {
+					callees[enclosing].append(target)
+				}
+			}
+			let components = Self.stronglyConnectedComponents(of: callees)
+			var counts = [Int?](repeating: nil, count: declarations.count)
+			func count(of declaration: Int) -> Int {
+				if let known = counts[declaration] {
+					return known
+				}
+				// Guards a reference cycle the components did not join, which the sum below never follows.
+				counts[declaration] = 0
+				let component = components[declaration]
+				var total = 0
+				for member in declarations.indices where components[member] == component {
+					for caller in callers[member] {
+						guard let caller else {
+							total += 1
+							continue
+						}
+						if components[caller] != component {
+							total += count(of: caller)
+						}
+					}
+				}
+				counts[declaration] = total
+				return total
+			}
+			let placeCounts = declarations.indices.map(count(of:))
+			self.declarations = declarations
+			self.placeCounts = placeCounts
+		}
+
+		/// The number of places the code at `location` stands for.
+		func count(at location: Int) -> Int {
+			Self.enclosingDeclaration(at: location, among: declarations).map { placeCounts[$0] } ?? 1
+		}
+
+		private struct Declaration {
+			let name: String
+			let start: Int
+			let nameRange: NSRange
+			let body: NSRange
+		}
+
+		private let declarations: [Declaration]
+		private let placeCounts: [Int]
+
+		/// The innermost declaration whose body holds `location`.
+		private static func enclosingDeclaration(at location: Int, among declarations: [Declaration]) -> Int? {
+			declarations.indices
+				.filter { NSLocationInRange(location, declarations[$0].body) }
+				.min { declarations[$0].body.length < declarations[$1].body.length }
+		}
+
+		/// Each declaration's component, numbered by Tarjan's algorithm over `callees`.
+		private static func stronglyConnectedComponents(of callees: [[Int]]) -> [Int] {
+			var index = 0
+			var indices = [Int?](repeating: nil, count: callees.count)
+			var lowLinks = [Int](repeating: 0, count: callees.count)
+			var onStack = [Bool](repeating: false, count: callees.count)
+			var stack = [Int]()
+			var components = [Int](repeating: -1, count: callees.count)
+			var componentCount = 0
+			func visit(_ node: Int) {
+				indices[node] = index
+				lowLinks[node] = index
+				index += 1
+				stack.append(node)
+				onStack[node] = true
+				for callee in callees[node] {
+					if let calleeIndex = indices[callee] {
+						if onStack[callee] {
+							lowLinks[node] = min(lowLinks[node], calleeIndex)
+						}
+					} else {
+						visit(callee)
+						lowLinks[node] = min(lowLinks[node], lowLinks[callee])
+					}
+				}
+				guard lowLinks[node] == indices[node] else { return }
+				while let member = stack.popLast() {
+					onStack[member] = false
+					components[member] = componentCount
+					if member == node {
+						break
+					}
+				}
+				componentCount += 1
+			}
+			for node in callees.indices where indices[node] == nil {
+				visit(node)
+			}
+			return components
+		}
 	}
 
 	/// How many constructions in the code in `generatedFiles` a literal `nil` reaches through a builder function it
@@ -14822,6 +14954,7 @@ enum GraphFuzzerOracle {
 		let declarationExpression = try! NSRegularExpression(pattern: #"\bfunc (__safeDI_[A-Za-z0-9_]+)\("#)
 		for (fileName, contents) in generatedFiles where !fileName.hasSuffix("+SafeDISeamCaller.swift") {
 			let source = contents as NSString
+			let places = BuilderFunctionPlaces(of: contents)
 			let declarations = declarationExpression.matches(in: contents, range: NSRange(location: 0, length: source.length)).compactMap { match -> (name: String, start: Int, body: NSRange)? in
 				let parametersEnd = closingDelimiterEnd(in: source, after: match.range.location + match.range.length)
 				let bodyStart = source.range(of: "{", range: NSRange(location: parametersEnd, length: source.length - parametersEnd)).location
@@ -14837,9 +14970,10 @@ enum GraphFuzzerOracle {
 				      ?? namesakes.last(where: { $0.start < call.location })
 				      ?? namesakes.first
 				else { continue }
+				let callPlaces = places.count(at: call.location)
 				for construction in calls(in: source.substring(with: declaration.body), calleeExpression: constructionExpression(typeNamePrefix: typeNamePrefix)) where !excludedTypeNames.contains(construction.callee) {
 					for argument in construction.arguments where labels.contains(argument.label) && argument.value == argument.label {
-						counts["\(construction.callee)(\(argument.label):)", default: 0] += 1
+						counts["\(construction.callee)(\(argument.label):)", default: 0] += callPlaces
 					}
 				}
 			}
