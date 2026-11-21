@@ -1452,7 +1452,7 @@ extension DependencyTreeGenerator {
 					fillsBindingLabels: childFillsBindingLabels,
 				))
 			}
-			generatorsToVisit[firstChildIndex...].reverse()
+			generatorsToVisit.reverseElements(from: firstChildIndex)
 		}
 		return (receivers, parameterReads)
 	}
