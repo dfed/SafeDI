@@ -59,6 +59,20 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_writesDependencyTree_whenFifteenHundredFeaturesEachInstantiateTheNextThroughAnInstantiator() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.featureChain(depth: 1_500, rootAttribute: "@Instantiable(isRoot: true)", featuresAreConstant: false),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			// The time the compiler takes for nested builder functions grows exponentially with their depth, so the chain of twenty below is compiled instead.
+			skipCompileVerification: true,
+		)
+
+		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == Self.instantiatorChainDependencyTree(depth: 1_500))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesDependencyTreeThatCompiles_whenTwentyFeaturesEachInstantiateTheNextThroughAnInstantiator() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: Self.featureChain(depth: 20, rootAttribute: "@Instantiable(isRoot: true)", featuresAreConstant: false),
