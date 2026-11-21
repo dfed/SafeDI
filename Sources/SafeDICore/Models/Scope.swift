@@ -2220,6 +2220,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		let fillNames = holeArguments.isEmpty ? [:] : GenerationWork.taking(enclosingFillsOfThisCall, by: .gatheringFillsOfACall)
 		let builtGenerator = ScopeGenerator(
 			instantiable: scope.instantiable,
+			sharedInstantiable: scope.sharedInstantiable,
 			property: property,
 			propertiesToGenerate: childGenerators,
 			// A scope that closes a cycle creates no children.

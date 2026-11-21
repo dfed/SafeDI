@@ -36,6 +36,10 @@ struct ConstructionScope: Sendable {
 		record.instantiable
 	}
 
+	var sharedInstantiable: SharedInstantiable {
+		record.sharedInstantiable
+	}
+
 	var builtInlineSeamComment: String? {
 		record.builtInlineSeamComment
 	}

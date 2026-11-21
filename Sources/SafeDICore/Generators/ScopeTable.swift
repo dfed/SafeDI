@@ -52,7 +52,12 @@ final class ScopeRecord: Sendable {
 	}
 
 	/// See `Scope.instantiable`.
-	let instantiable: Instantiable
+	var instantiable: Instantiable {
+		sharedInstantiable.instantiable
+	}
+
+	/// `instantiable`, held once for every generator built for this scope.
+	let sharedInstantiable: SharedInstantiable
 	/// See `Scope.builtInlineSeamComment`.
 	let builtInlineSeamComment: String?
 	/// See `Scope.seamCall`.
@@ -102,7 +107,7 @@ final class ScopeRecord: Sendable {
 	}
 
 	fileprivate init(freezing scope: Scope, propertiesToGenerate: [PropertyToGenerate], holeArguments: [HoleArgument]) {
-		instantiable = scope.instantiable
+		sharedInstantiable = SharedInstantiable(scope.instantiable)
 		builtInlineSeamComment = scope.builtInlineSeamComment
 		seamCall = scope.seamCall
 		publicMockCall = scope.publicMockCall
