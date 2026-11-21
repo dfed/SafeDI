@@ -82,6 +82,8 @@ KNOWN_WORDS = {
     "shard", "corpus", "corpora", "features", "inspected", "compared", "retention", "gating", "gating-shapes",
     "read-twins", "omitted-values", "spellings", "draws", "errors", "outputs", "value-oracle", "remedies", "partitions",
     "cpu", "builder-surface", "seam-mock-builders", "level-captures", "failure", "stale", "misfiled", "known", "renamed", "multimodule", "problem", "seed", "finished", "completed",
+    # Counted against no pin, so nothing is derived from it.
+    "clean-subtree-skips",
 }
 
 NOT_DERIVED = [
@@ -797,6 +799,9 @@ def self_test(root):
     os.makedirs(os.path.join(reports, "graph-fuzzer-report-base-0"))
     with open(os.path.join(reports, "graph-fuzzer-report-base-0", "report.txt"), "w") as file:
         file.write("seed 0\n")
+    with open(os.path.join(root, "words.txt"), "w") as file:
+        file.write("seed 0\nclean-subtree-skips 5 base\nseed zero\nunheard-of 1 base\n")
+    expect("the lines a report leaves unparsed", Report(os.path.join(root, "words.txt"), "run/artifact/words.txt").unparsed, ["seed zero", "unheard-of 1 base"])
     environment = {"PINS_EVENT": "push", "PINS_HEAD_SHA": head, "PINS_RUN_ID": "12"}
     out = os.path.join(root, "out")
     expect("filling", fill(out, reports, checkout, environment), None)
