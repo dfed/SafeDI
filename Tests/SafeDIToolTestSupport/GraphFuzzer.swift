@@ -15247,8 +15247,9 @@ enum GraphFuzzerOracle {
 	/// root's body stands for one place. One in the body of a builder function stands for as many places as the
 	/// references that reach the function from outside its own loop: the type key builds a type that several places
 	/// build alike in one function, which each of those places calls, where the path key wrote the type's code at each
-	/// place. A reference from inside the function's strongly connected component closes a cycle on the function and
-	/// adds no place.
+	/// place. A reference from inside the function's strongly connected component closes a cycle on the function: under
+	/// a label that a reference from outside the component binds, it adds no place, and under any other label it adds one
+	/// at each place the component stands for, as the path key wrote the loop once more before a label repeated.
 	struct BuilderFunctionPlaces {
 		init(of contents: String) {
 			let source = contents as NSString
@@ -15264,7 +15265,9 @@ enum GraphFuzzerOracle {
 			// A reference calls the function or passes it: a name followed by an argument list, or by the end of the one it is
 			// passed in. A generated-only argument label, `__safeDI_<label>:`, is no reference.
 			let referenceExpression = try! NSRegularExpression(pattern: #"(?<![A-Za-z0-9_.])(__safeDI_[A-Za-z0-9_]+)(?=\s*[(),])"#)
-			var callers = [[Int?]](repeating: [], count: declarations.count)
+			// The label of the property or argument a reference binds the function to, as the line before it spells it.
+			let labelExpression = try! NSRegularExpression(pattern: #"(?:\blet ([A-Za-z0-9_]+)\s*(?::[^=]*)?=|\b([A-Za-z0-9_]+):\s)"#)
+			var callers = [[(caller: Int?, label: String?)]](repeating: [], count: declarations.count)
 			var callees = [[Int]](repeating: [], count: declarations.count)
 			for match in referenceExpression.matches(in: contents, range: NSRange(location: 0, length: source.length)) {
 				let name = source.substring(with: match.range(at: 1))
@@ -15276,7 +15279,11 @@ enum GraphFuzzerOracle {
 					?? namesakes.first
 				else { continue }
 				let enclosing = Self.enclosingDeclaration(at: location, among: declarations)
-				callers[target].append(enclosing)
+				let lineStart = source.lineRange(for: NSRange(location: location, length: 0)).location
+				let label = labelExpression.matches(in: contents, range: NSRange(location: lineStart, length: location - lineStart)).last.map { match in
+					source.substring(with: match.range(at: 1).location != NSNotFound ? match.range(at: 1) : match.range(at: 2))
+				}
+				callers[target].append((enclosing, label))
 				if let enclosing {
 					callees[enclosing].append(target)
 				}
@@ -15291,17 +15298,26 @@ enum GraphFuzzerOracle {
 				counts[declaration] = 0
 				let component = components[declaration]
 				var total = 0
+				var outsideLabels = Set<String>()
+				var insideLabels = Set<String>()
 				for member in declarations.indices where components[member] == component {
-					for caller in callers[member] {
+					for (caller, label) in callers[member] {
 						guard let caller else {
 							total += 1
+							label.map { outsideLabels.insert($0) }
 							continue
 						}
 						if components[caller] != component {
 							total += count(of: caller)
+							label.map { outsideLabels.insert($0) }
+						} else {
+							label.map { insideLabels.insert($0) }
 						}
 					}
 				}
+				// A reference from inside the loop under a label no reference from outside it binds is one more place at each
+				// place the loop stands for: the path key closes a cycle only where a label repeats.
+				total *= 1 + insideLabels.subtracting(outsideLabels).count
 				counts[declaration] = total
 				return total
 			}

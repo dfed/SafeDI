@@ -1879,13 +1879,17 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func nilArgumentFailure_countsANilInABuilderFunctionOnce_whenOnlyTheFunctionItselfCallsItAgain() {
-		// A reference from inside a builder function's own loop closes a cycle on it and stands for no further place, as
-		// a generated-only argument label that spells `__safeDI_` is no reference at all.
-		let inlineFiles = [
-			"S7_Root+SafeDI.swift": "func __safeDI_S7_Reader(__safeDI_mark: S7_Mark?) -> S7_Reader {\n    let mark = S7_Mark(token: nil)\n    return S7_Reader(mark: mark, next: { __safeDI_S7_Reader(__safeDI_mark: mark) })\n}\nlet first = __safeDI_S7_Reader(__safeDI_mark: nil)",
-		]
-		#expect(GraphFuzzerOracle.nilArgumentCounts(in: inlineFiles, typeNamePrefix: "S7_", excluding: []) == ["S7_Mark(token:)": 1])
+	func nilArgumentFailure_countsANilInABuilderFunctionOncePerLabelItsLoopBindsItTo_whenTheFunctionBindsItselfAgain() {
+		// The type key closes a type's loop on the type's own function, where the path key wrote the loop once more until a
+		// label repeated: a reference from inside the function under a new label is one more place, and one under a label
+		// a reference from outside binds, or a generated-only argument label that spells `__safeDI_`, is none.
+		func counts(innerLabel: String) -> [String: Int] {
+			GraphFuzzerOracle.nilArgumentCounts(in: [
+				"S7_Root+SafeDI.swift": "func __safeDI_t1Builder(__safeDI_mark: S7_Mark?) -> S7_T1 {\n    let \(innerLabel) = Instantiator<S7_T1>({ __safeDI_t1Builder(__safeDI_mark: nil) })\n    return S7_T1(\(innerLabel): \(innerLabel), lazyT4: nil)\n}\nlet t1Builder = Instantiator<S7_T1>({ __safeDI_t1Builder(__safeDI_mark: nil) })",
+			], typeNamePrefix: "S7_", excluding: [])
+		}
+		#expect(counts(innerLabel: "t2Builder") == ["S7_T1(lazyT4:)": 2])
+		#expect(counts(innerLabel: "t1Builder") == ["S7_T1(lazyT4:)": 1])
 	}
 
 	/// A seam's generated file whose plain enum holds `cases`, each `case <name>(<name>_Values)`, and whose initializer
