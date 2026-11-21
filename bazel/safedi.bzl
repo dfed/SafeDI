@@ -211,6 +211,11 @@ def _safedi_compile_impl(ctx):
         # this rule writes to the CSV, so the generated `#sourceLocation`
         # directives can name them and stay free of machine-specific paths.
         "--compiler-receives-input-paths-unchanged",
+        # Every action is given the `.safedi` of every module beneath it
+        # (`module_infos_beneath`), so a view can name the modules it
+        # carries instead of copying their declarations: each reader finds
+        # them in the modules' own files.
+        "--module-info-views-refer-to-modules",
         "--unused-inputs-list-output",
         unused_inputs.path,
     ]

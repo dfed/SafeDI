@@ -324,7 +324,11 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			module: project.scannedModuleInfo.moduleInfo,
 			moduleName: "Sink",
 			seamSignatures: [],
-			view: ModuleInfoView(moduleGraph: [moduleInfoFile.ownIdentity], declarations: [moduleInfoFile.ownEntry]),
+			view: ModuleInfoView(
+				moduleGraph: [moduleInfoFile.ownIdentity],
+				declarations: [moduleInfoFile.ownEntry],
+				references: [ViewedModuleReference(moduleName: "Kitchen", checksum: 1)],
+			),
 		)
 		var foundTypeNames = Set<String>()
 		for value in Self.cachedStructuresAndEnumerations(in: project.scannedModuleInfo) + Self.cachedStructuresAndEnumerations(in: moduleInfoFileWithView) {
@@ -1617,6 +1621,12 @@ extension Int: BinarySample {
 	}
 }
 
+extension UInt64: BinarySample {
+	fileprivate static func sample(isDistinct: Bool) -> UInt64 {
+		isDistinct ? 1 : 0
+	}
+}
+
 extension Int64: BinarySample {
 	fileprivate static func sample(isDistinct: Bool) -> Int64 {
 		isDistinct ? 1 : 0
@@ -1677,6 +1687,7 @@ extension ModuleInfoFile: BinarySample {}
 extension ModuleInfoView: BinarySample {}
 extension ViewedModuleIdentity: BinarySample {}
 extension ViewedModule: BinarySample {}
+extension ViewedModuleReference: BinarySample {}
 extension ImportStatement: BinarySample {}
 extension FileVisitor.ImportSegment: BinarySample {}
 extension ConditionalCompilationDecision: BinarySample {}
