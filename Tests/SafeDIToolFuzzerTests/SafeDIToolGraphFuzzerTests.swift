@@ -8849,8 +8849,8 @@ struct SafeDIToolGraphFuzzerTests {
 			seeds: [137],
 		),
 		GraphFuzzerKnownIssue(
-			reason: "\(publicMockFormsNamedApartOrderReason); and a public mock's parameters are sorted by label (`Property.precedesInMockOrder`), so reversing the labels reorders a `.public` consumer's `mock()`; and \(lazyCycleConfigurationFieldReason)",
-			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockParameterAndFieldOrder), .renamedGraphDiffers(.mockConfigurationFieldPresence)],
+			reason: "\(publicMockFormsNamedApartOrderReason); and a public mock's parameters are sorted by label (`Property.precedesInMockOrder`), so reversing the labels reorders a `.public` consumer's `mock()`; and \(lazyCycleConfigurationFieldReason); and a `__safeDI_mock` call's arguments are a label-sorted list the comparator doesn't yet move, so where `T7` calls `T6`'s public mock to honor its builders the same reorderings read as a change of the mock's code (Intended: an oracle limit; a later pull request teaches the comparator and deletes this)",
+			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockConfigurationFieldPresence), .renamedGraphDiffers(.mockCode)],
 			seeds: [708],
 		),
 		// The lazy cycle around `T6`'s hole that the stale-value draw adds (`HoleHost` and `HoleLoop`), whose back-edge's override the move across wrapper names moves, in `T6`'s mock in its dependency tree file.
