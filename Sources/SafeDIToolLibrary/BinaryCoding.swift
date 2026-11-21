@@ -62,6 +62,10 @@ extension BinarySchemaMember {
 }
 
 /// The tag a case of a cached enum is written as. Its cases are the enum's cases in the schema.
+/// A line and column in a source file, which a module info file writes as absent where a declaration another module
+/// records is read without positions (``BinaryWriter/writingPositionsAsAbsent(_:)``).
+protocol BinaryPosition: BinaryCodable {}
+
 protocol BinaryTag: RawRepresentable, CaseIterable where RawValue == UInt8 {}
 
 /// How a ``BinarySchemaMember`` is written.
@@ -183,6 +187,19 @@ struct BinaryWriter {
 
 	mutating func write(_ value: some BinaryCodable) {
 		value.write(to: &self)
+	}
+
+	/// Whether every optional ``BinaryPosition`` is written as absent, as inside ``writingPositionsAsAbsent(_:)``.
+	private(set) var writesPositionsAsAbsent = false
+
+	/// Runs `write` with every optional ``BinaryPosition`` it writes written as absent. Every position a value holds is
+	/// optional, and its `withoutPositions()` makes each one absent, so `write` writes what it would write of the values'
+	/// `withoutPositions()`, without making that copy.
+	mutating func writingPositionsAsAbsent(_ write: (inout BinaryWriter) -> Void) {
+		let wasWritingPositionsAsAbsent = writesPositionsAsAbsent
+		writesPositionsAsAbsent = true
+		write(&self)
+		writesPositionsAsAbsent = wasWritingPositionsAsAbsent
 	}
 
 	mutating func writeTag(_ tag: some BinaryTag) {
@@ -594,7 +611,7 @@ extension Optional: BinaryCodable where Wrapped: BinaryCodable {
 	}
 
 	func write(to writer: inout BinaryWriter) {
-		if let self {
+		if let self, !(writer.writesPositionsAsAbsent && Wrapped.self is any BinaryPosition.Type) {
 			writer.write(true)
 			writer.write(self)
 		} else {

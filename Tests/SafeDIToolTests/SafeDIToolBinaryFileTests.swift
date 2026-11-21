@@ -344,6 +344,46 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func moduleInfoDataWritingSeamSignaturesWithoutPositions_writesWhatModuleInfoDataWritesOfTheSignaturesWithoutPositions_whenTheSignaturesCarryPositions() throws {
+		// A run writes the signatures it computed, which carry their declarations' positions, without making their
+		// copies without positions: the bytes must be those of the copies.
+		// A distinct sample holds a value in each optional field it declares, so its hole and receiver carry positions.
+		var signatureWriter = BinaryWriter()
+		try signatureWriter.write(TypeDescription.sample(isDistinct: true))
+		try signatureWriter.write([SeamSignature.Parameter(property: Property.sample(isDistinct: true), isPassThrough: false, access: .public, isOnlyIfAvailable: false, receivers: [SeamSignature.Receiver.sample(isDistinct: true)])])
+		signatureWriter.write([AccessLevel]())
+		signatureWriter.write([SeamSignature.Parameter]())
+		try signatureWriter.write([SeamSignature.Hole.sample(isDistinct: true)])
+		signatureWriter.write([SeamSignature.Builder]())
+		signatureWriter.write([SeamSignature.ScopeEnum]())
+		signatureWriter.write([SeamSignature.CallRoute]())
+		signatureWriter.write(Set<TypeDescription>())
+		let signature: SeamSignature = try read(signatureWriter.encoded)
+		let signatures = try [StoredSeamSignature(seamType: TypeDescription.sample(isDistinct: true), signature: signature), StoredSeamSignature.sample(isDistinct: false)]
+		func file(holding seamSignatures: [StoredSeamSignature]) -> ModuleInfoFile {
+			ModuleInfoFile(
+				moduleName: "Module",
+				packageName: nil,
+				dependencyModuleNames: [],
+				imports: [],
+				mockImports: [],
+				instantiables: [],
+				configurations: [],
+				filesWithUnexpectedNodes: nil,
+				conditionalCompilationDecisions: [],
+				instantiableTypeNamesInAnyClause: [],
+				plainTypeDeclarations: [],
+				seamSignatures: seamSignatures,
+				view: .empty,
+			)
+		}
+		let fileWithoutPositions = try file(holding: signatures.map { $0.withoutPositions() }).moduleInfoData
+		// The samples carry positions, so writing them as they are writes other bytes.
+		#expect(try file(holding: signatures).moduleInfoData != fileWithoutPositions)
+		#expect(try file(holding: signatures).moduleInfoDataWritingSeamSignaturesWithoutPositions == fileWithoutPositions)
+	}
+
+	@Test
 	func seamSignatureSchema_listsEveryStoredPropertyOfEverySignatureStruct() throws {
 		// A stored property added to a type a seam's signature holds without being listed in its `binaryLayout` fails
 		// here: every module that calls the seam reads the signature its module's run wrote, so a property left

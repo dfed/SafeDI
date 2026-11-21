@@ -188,8 +188,15 @@ enum BinaryFile {
 	/// - Throws: When `value` holds an instantiable whose declaration names a type that nests more deeply than a
 	///   ``BinaryReader`` reads.
 	static func data(_ kind: Kind, holding value: some BinaryCodable) throws(BinaryFileWriteError) -> Data {
+		try data(kind) { writer in writer.write(value) }
+	}
+
+	/// A file of `kind` that holds what `write` writes.
+	/// - Throws: When `write` writes an instantiable whose declaration names a type that nests more deeply than a
+	///   ``BinaryReader`` reads.
+	static func data(_ kind: Kind, writing write: (inout BinaryWriter) -> Void) throws(BinaryFileWriteError) -> Data {
 		var writer = BinaryWriter()
-		writer.write(value)
+		write(&writer)
 		if let valueNestedTooDeeply = writer.valueNestedTooDeeply {
 			throw BinaryFileWriteError(kind: kind, instantiableNestedTooDeeply: valueNestedTooDeeply)
 		} else {
