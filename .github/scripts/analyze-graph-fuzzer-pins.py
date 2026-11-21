@@ -13,7 +13,14 @@ decides nothing: it lists what moved, and whoever reads it judges whether the ch
 OUT from REPORTS (the directory the shard reports were downloaded into) and from the checkout, writes context.json
 from the environment (`PINS_EVENT`, `PINS_HEAD_SHA`, `PINS_BASE_REF`, `PINS_BASE_SHA`, `PINS_MERGE_SHA`,
 `PINS_VALID_FOR_HEAD` as `true`, `false` or `unknown`, `PINS_RUN_ID`, `PINS_RUN_URL`), and then analyzes OUT.
-`--self-test` checks that filling and the statuses of missing inputs, in a new directory it removes afterwards.
+`--self-test` checks that filling, the statuses of missing inputs, and the analysis itself over a recorded run, in a
+new directory it removes afterwards. The recorded run is `fixtures/graph-fuzzer-pins-run-44871895586.tar.xz` beside
+this script: the 22 shard reports of one Verify run whose corpora moved one pin, its context.json, and what the
+analysis wrote for it then (`expected/pins.json`, and report.md's section (a) as `expected/pins-that-differ.md`). The
+self-test analyzes those reports with the checkout's own combine script and Swift sources and expects exactly that
+section and that pins.json, so it fails when a change to this script, to the combine script, or to how the test
+sources hold a pin changes what the analysis derives. When such a change is meant (a pinned constant renamed, say),
+replace the two expected files with what the analysis now writes, and say why in the change.
 
 Inputs, all inside OUT:
   reports/**/report.txt      the shard reports (untrusted data: only read, never run)
@@ -67,6 +74,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 
 MASK = (1 << 64) - 1
 
@@ -700,6 +708,7 @@ SWIFT_SOURCES = ("Tests/SafeDIToolFuzzerTests/SafeDIToolGraphFuzzerTests.swift",
 SWIFT_SOURCE_DIRECTORY = "Tests/SafeDIToolTestSupport"
 SWIFT_SOURCE_PREFIX = "GraphFuzzer"
 COMBINE_SCRIPT = ".github/scripts/combine-graph-fuzzer-reports.py"
+RECORDED_RUN = "fixtures/graph-fuzzer-pins-run-44871895586.tar.xz"
 
 
 def context_of(environment):
@@ -808,6 +817,38 @@ def self_test(root):
     finally:
         sys.stderr.close()
         sys.stderr = saved
+    # The analysis itself, over a recorded run's reports and this checkout's combine script and Swift sources.
+    script_directory = os.path.dirname(os.path.abspath(__file__))
+    repository = os.path.dirname(os.path.dirname(script_directory))
+    recorded = os.path.join(root, "recorded")
+    with tarfile.open(os.path.join(script_directory, RECORDED_RUN)) as archive:
+        for member in archive.getmembers():
+            parts = member.name.split("/")
+            if not member.isfile() or member.name.startswith("/") or ".." in parts:
+                failures.append("the recorded run holds %s, which is not a plain file inside it" % member.name)
+                continue
+            os.makedirs(os.path.join(recorded, *parts[:-1]), exist_ok=True)
+            with open(os.path.join(recorded, *parts), "wb") as file:
+                file.write(archive.extractfile(member).read())
+    with open(os.path.join(recorded, "context.json")) as file:
+        recorded_context = json.load(file)
+    analyzed = os.path.join(root, "analyzed")
+    expect("filling from the recorded run", fill(analyzed, os.path.join(recorded, "reports"), repository, {"PINS_EVENT": "workflow_dispatch", "PINS_HEAD_SHA": recorded_context["commit"]}), None)
+    shutil.copyfile(os.path.join(recorded, "context.json"), os.path.join(analyzed, "context.json"))
+    expect("the recorded run's status", analyze(analyzed), 1)
+    with open(os.path.join(analyzed, "report.md"), encoding="utf-8") as file:
+        report = file.read()
+    with open(os.path.join(recorded, "expected", "pins-that-differ.md"), encoding="utf-8") as file:
+        expected_section = file.read()
+    start, end = report.find("## (a) "), report.find("## (b) ")
+    expect("the recorded run's pins that differ", report[start:end] if 0 <= start < end else report[:200], expected_section)
+    with open(os.path.join(analyzed, "pins.json"), encoding="utf-8") as file:
+        actual_document = json.load(file)
+    with open(os.path.join(recorded, "expected", "pins.json"), encoding="utf-8") as file:
+        expected_document = json.load(file)
+    for key in sorted(set(actual_document) | set(expected_document)):
+        if actual_document.get(key) != expected_document.get(key):
+            failures.append("the recorded run's pins.json differs at `%s`: %s, expected %s" % (key, json.dumps(actual_document.get(key))[:300], json.dumps(expected_document.get(key))[:300]))
     for failure in failures:
         sys.stderr.write("self-test: %s\n" % failure)
     print("self-test: %d failures" % len(failures))
