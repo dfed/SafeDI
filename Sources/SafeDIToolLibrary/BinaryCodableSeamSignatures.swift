@@ -94,6 +94,8 @@ extension SeamSignature: BinarySchemaMember {
 }
 
 extension SeamSignature.Receiver: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -109,27 +111,34 @@ extension SeamSignature.Receiver: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			property: reader.read(),
 			declaringType: reader.read(),
-			declarationLocation: reader.read() as Dependency.DeclarationLocation?,
+			declarationLocation: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?,
 			access: reader.read(),
-			aliasProperty: reader.read() as Property?,
-			isInstantiateMethodParameter: reader.read(),
+			aliasProperty: reader.readOptional(flaggedIn: &fieldFlags) as Property?,
+			isInstantiateMethodParameter: fieldFlags.next(),
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(property)
 		writer.write(declaringType)
-		writer.write(declarationLocation)
+		writer.writeOptional(declarationLocation, flaggedIn: &fieldFlags)
 		writer.write(access)
-		writer.write(aliasProperty)
-		writer.write(isInstantiateMethodParameter)
+		writer.writeOptional(aliasProperty, flaggedIn: &fieldFlags)
+		fieldFlags.append(isInstantiateMethodParameter)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
 extension SeamSignature.NestedSeamCall: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -146,29 +155,36 @@ extension SeamSignature.NestedSeamCall: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			seamType: reader.read(),
-			seamModuleName: reader.read() as String?,
+			seamModuleName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 			tier: reader.read(),
 			requirement: reader.read(),
-			callerModuleName: reader.read() as String?,
-			parameterTierAccess: reader.read() as AccessLevel?,
+			callerModuleName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
+			parameterTierAccess: reader.readOptional(flaggedIn: &fieldFlags) as AccessLevel?,
 			receivingTypes: reader.read(),
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(seamType)
-		writer.write(seamModuleName)
+		writer.writeOptional(seamModuleName, flaggedIn: &fieldFlags)
 		writer.write(tier)
 		writer.write(requirement)
-		writer.write(callerModuleName)
-		writer.write(parameterTierAccess)
+		writer.writeOptional(callerModuleName, flaggedIn: &fieldFlags)
+		writer.writeOptional(parameterTierAccess, flaggedIn: &fieldFlags)
 		writer.write(receivingTypes)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
 extension SeamSignature.Parameter: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -190,39 +206,46 @@ extension SeamSignature.Parameter: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			storing: reader.read(),
-			isPassThrough: reader.read(),
+			isPassThrough: fieldFlags.next(),
 			access: reader.read(),
-			accessCause: reader.read() as TypeAccessProof.Cause?,
+			accessCause: reader.readOptional(flaggedIn: &fieldFlags) as TypeAccessProof.Cause?,
 			tierAccess: reader.read(),
-			isOnlyIfAvailable: reader.read(),
-			requiredThroughAlias: reader.read(),
+			isOnlyIfAvailable: fieldFlags.next(),
+			requiredThroughAlias: fieldFlags.next(),
 			receivers: reader.read(),
-			nestedSeamCall: reader.read() as SeamSignature.NestedSeamCall?,
+			nestedSeamCall: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.NestedSeamCall?,
 			deferral: reader.read(),
 			internalName: reader.read(),
 			otherInitializerArgumentsAccess: reader.read(),
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(property)
-		writer.write(isPassThrough)
+		fieldFlags.append(isPassThrough)
 		writer.write(access)
-		writer.write(accessCause)
+		writer.writeOptional(accessCause, flaggedIn: &fieldFlags)
 		writer.write(tierAccess)
-		writer.write(isOnlyIfAvailable)
-		writer.write(requiredThroughAlias)
+		fieldFlags.append(isOnlyIfAvailable)
+		fieldFlags.append(requiredThroughAlias)
 		writer.write(receivers)
-		writer.write(nestedSeamCall)
+		writer.writeOptional(nestedSeamCall, flaggedIn: &fieldFlags)
 		writer.write(deferral)
 		writer.write(internalName)
 		writer.write(otherInitializerArgumentsAccess)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
 extension SeamSignature.Hole.Field: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -244,39 +267,46 @@ extension SeamSignature.Hole.Field: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			property: reader.read(),
 			access: reader.read(),
-			accessCause: reader.read() as TypeAccessProof.Cause?,
+			accessCause: reader.readOptional(flaggedIn: &fieldFlags) as TypeAccessProof.Cause?,
 			declaringType: reader.read(),
-			declarationLocation: reader.read() as Dependency.DeclarationLocation?,
-			isReceivedOnlyIfAvailable: reader.read(),
-			parameterTakingType: reader.read() as TypeDescription?,
+			declarationLocation: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?,
+			isReceivedOnlyIfAvailable: fieldFlags.next(),
+			parameterTakingType: reader.readOptional(flaggedIn: &fieldFlags) as TypeDescription?,
 			deferral: reader.read(),
-			bindsMemo: reader.read(),
-			isSeamParameter: reader.read(),
-			isBoundByPublicMockRoot: reader.read(),
-			seamParameterOrigin: reader.read() as SeamSignature.Hole.Field.SeamParameterOrigin?,
+			bindsMemo: fieldFlags.next(),
+			isSeamParameter: fieldFlags.next(),
+			isBoundByPublicMockRoot: fieldFlags.next(),
+			seamParameterOrigin: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Hole.Field.SeamParameterOrigin?,
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(property)
 		writer.write(access)
-		writer.write(accessCause)
+		writer.writeOptional(accessCause, flaggedIn: &fieldFlags)
 		writer.write(declaringType)
-		writer.write(declarationLocation)
-		writer.write(isReceivedOnlyIfAvailable)
-		writer.write(parameterTakingType)
+		writer.writeOptional(declarationLocation, flaggedIn: &fieldFlags)
+		fieldFlags.append(isReceivedOnlyIfAvailable)
+		writer.writeOptional(parameterTakingType, flaggedIn: &fieldFlags)
 		writer.write(deferral)
-		writer.write(bindsMemo)
-		writer.write(isSeamParameter)
-		writer.write(isBoundByPublicMockRoot)
-		writer.write(seamParameterOrigin)
+		fieldFlags.append(bindsMemo)
+		fieldFlags.append(isSeamParameter)
+		fieldFlags.append(isBoundByPublicMockRoot)
+		writer.writeOptional(seamParameterOrigin, flaggedIn: &fieldFlags)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
 extension SeamSignature.Hole.Field.SeamParameterOrigin: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -290,23 +320,30 @@ extension SeamSignature.Hole.Field.SeamParameterOrigin: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			seamType: reader.read(),
-			seamDeclarationLocation: reader.read() as Dependency.DeclarationLocation?,
-			isPassThrough: reader.read(),
+			seamDeclarationLocation: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?,
+			isPassThrough: fieldFlags.next(),
 			receivers: reader.read(),
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(seamType)
-		writer.write(seamDeclarationLocation)
-		writer.write(isPassThrough)
+		writer.writeOptional(seamDeclarationLocation, flaggedIn: &fieldFlags)
+		fieldFlags.append(isPassThrough)
 		writer.write(receivers)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
 extension SeamSignature.Hole.UncarriedDeclaration: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -328,33 +365,38 @@ extension SeamSignature.Hole.UncarriedDeclaration: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			storing: reader.read(),
 			declaringType: reader.read(),
-			declarationLocation: reader.read() as Dependency.DeclarationLocation?,
-			parameterTakingType: reader.read() as TypeDescription?,
-			builtAfter: reader.read() as Property?,
+			declarationLocation: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?,
+			parameterTakingType: reader.readOptional(flaggedIn: &fieldFlags) as TypeDescription?,
+			builtAfter: reader.readOptional(flaggedIn: &fieldFlags) as Property?,
 			reason: reader.read(),
-			isBoundFromCallersArgument: reader.read(),
-			isBuildableAboveSeam: reader.read(),
+			isBoundFromCallersArgument: fieldFlags.next(),
+			isBuildableAboveSeam: fieldFlags.next(),
 			labelsHeldAboveSeam: reader.read(),
 			placesInTree: (reader.read() as BinaryShared<[SeamSignature.Hole.Site]>).value,
-			holdsPlaceFilledElsewhere: reader.read(),
+			holdsPlaceFilledElsewhere: fieldFlags.next(),
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(property)
 		writer.write(declaringType)
-		writer.write(declarationLocation)
-		writer.write(parameterTakingType)
-		writer.write(builtAfter)
+		writer.writeOptional(declarationLocation, flaggedIn: &fieldFlags)
+		writer.writeOptional(parameterTakingType, flaggedIn: &fieldFlags)
+		writer.writeOptional(builtAfter, flaggedIn: &fieldFlags)
 		writer.write(reason)
-		writer.write(isBoundFromCallersArgument)
-		writer.write(isBuildableAboveSeam)
+		fieldFlags.append(isBoundFromCallersArgument)
+		fieldFlags.append(isBuildableAboveSeam)
 		writer.write(labelsHeldAboveSeam)
 		writer.write(sharedPlacesInTree)
-		writer.write(holdsPlaceFilledElsewhere)
+		fieldFlags.append(holdsPlaceFilledElsewhere)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 
 	private var sharedPlacesInTree: BinaryShared<[SeamSignature.Hole.Site]> {
@@ -387,6 +429,8 @@ extension SeamSignature.Hole.UncarriedDeclaration.AliasOrigin: BinarySchemaMembe
 }
 
 extension SeamSignature.Hole.UncarriedDeclaration.CycleParameterOrigin: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -401,25 +445,32 @@ extension SeamSignature.Hole.UncarriedDeclaration.CycleParameterOrigin: BinarySc
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			takingType: reader.read(),
 			property: reader.read(),
 			declaringType: reader.read(),
-			declarationLocation: reader.read() as Dependency.DeclarationLocation?,
-			isForwarded: reader.read(),
+			declarationLocation: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?,
+			isForwarded: fieldFlags.next(),
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(takingType)
 		writer.write(property)
 		writer.write(declaringType)
-		writer.write(declarationLocation)
-		writer.write(isForwarded)
+		writer.writeOptional(declarationLocation, flaggedIn: &fieldFlags)
+		fieldFlags.append(isForwarded)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
 extension SeamSignature.Hole.UncarriedDeclaration.PresentedPlace: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -436,29 +487,36 @@ extension SeamSignature.Hole.UncarriedDeclaration.PresentedPlace: BinarySchemaMe
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			storing: reader.read(),
 			ownerType: reader.read(),
 			property: reader.read(),
 			instantiatedType: reader.read(),
 			builderLabel: reader.read(),
-			caseName: reader.read() as String?,
-			isBuiltBySendableBuilder: reader.read(),
+			caseName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
+			isBuiltBySendableBuilder: fieldFlags.next(),
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(seamType)
 		writer.write(ownerType)
 		writer.write(property)
 		writer.write(instantiatedType)
 		writer.write(builderLabel)
-		writer.write(caseName)
-		writer.write(isBuiltBySendableBuilder)
+		writer.writeOptional(caseName, flaggedIn: &fieldFlags)
+		fieldFlags.append(isBuiltBySendableBuilder)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
 extension SeamSignature.Hole.CycleReentryDeclaration: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -476,27 +534,32 @@ extension SeamSignature.Hole.CycleReentryDeclaration: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			property: reader.read(),
 			declaringType: reader.read(),
-			declarationLocation: reader.read() as Dependency.DeclarationLocation?,
-			parameterTakingType: reader.read() as TypeDescription?,
+			declarationLocation: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?,
+			parameterTakingType: reader.readOptional(flaggedIn: &fieldFlags) as TypeDescription?,
 			closedOnProperty: reader.read(),
 			closedOnBuiltType: reader.read(),
 			closedOnDeclaringType: reader.read(),
 			reenteringType: reader.read(),
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(property)
 		writer.write(declaringType)
-		writer.write(declarationLocation)
-		writer.write(parameterTakingType)
+		writer.writeOptional(declarationLocation, flaggedIn: &fieldFlags)
+		writer.writeOptional(parameterTakingType, flaggedIn: &fieldFlags)
 		writer.write(closedOnProperty)
 		writer.write(closedOnBuiltType)
 		writer.write(closedOnDeclaringType)
 		writer.write(reenteringType)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
@@ -666,6 +729,8 @@ extension SeamSignature.Hole.PathType: BinarySchemaMember {
 }
 
 extension SeamSignature.Hole: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -705,13 +770,14 @@ extension SeamSignature.Hole: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			storing: reader.read(),
 			declaringModuleNames: reader.read(),
 			property: reader.read(),
 			instantiatedType: reader.read(),
-			declarationLocation: reader.read() as Dependency.DeclarationLocation?,
-			erasedToConcreteExistential: reader.read(),
+			declarationLocation: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?,
+			erasedToConcreteExistential: fieldFlags.next(),
 			sitePath: reader.read(),
 			declaredSitePath: reader.read(),
 			fillPropertyStack: reader.read(),
@@ -723,29 +789,32 @@ extension SeamSignature.Hole: BinarySchemaMember {
 			scopeSeamModule: reader.read(),
 			typesToOwner: reader.read(),
 			scopeTypeName: reader.read(),
-			enumPlace: reader.read() as SeamSignature.Hole.EnumPlace?,
-			wrapperFunctionName: reader.read() as String?,
+			enumPlace: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Hole.EnumPlace?,
+			wrapperFunctionName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 			fields: reader.read(),
 			tierAccess: reader.read(),
-			accessCause: reader.read() as TypeAccessProof.Cause?,
+			accessCause: reader.readOptional(flaggedIn: &fieldFlags) as TypeAccessProof.Cause?,
 			uncarriedDeclarations: reader.read(),
 			cycleReentryDeclarations: reader.read(),
 			reenteringCallDeclarations: reader.read(),
 			reenteringPlaceFields: reader.read(),
 			declarationsHiddenByFields: reader.read(),
-			innerSeamType: reader.read() as TypeDescription?,
+			innerSeamType: reader.readOptional(flaggedIn: &fieldFlags) as TypeDescription?,
 			passedUpRoute: reader.read(),
-			isSendable: reader.read(),
+			isSendable: fieldFlags.next(),
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(ownerType)
 		writer.write(declaringModuleNames)
 		writer.write(property)
 		writer.write(instantiatedType)
-		writer.write(declarationLocation)
-		writer.write(erasedToConcreteExistential)
+		writer.writeOptional(declarationLocation, flaggedIn: &fieldFlags)
+		fieldFlags.append(erasedToConcreteExistential)
 		writer.write(sitePath)
 		writer.write(declaredSitePath)
 		writer.write(fillPropertyStack)
@@ -757,23 +826,26 @@ extension SeamSignature.Hole: BinarySchemaMember {
 		writer.write(scopeSeamModule)
 		writer.write(typesToOwner)
 		writer.write(scopeTypeName)
-		writer.write(enumPlace)
-		writer.write(wrapperFunctionName)
+		writer.writeOptional(enumPlace, flaggedIn: &fieldFlags)
+		writer.writeOptional(wrapperFunctionName, flaggedIn: &fieldFlags)
 		writer.write(fields)
 		writer.write(tierAccess)
-		writer.write(accessCause)
+		writer.writeOptional(accessCause, flaggedIn: &fieldFlags)
 		writer.write(uncarriedDeclarations)
 		writer.write(cycleReentryDeclarations)
 		writer.write(reenteringCallDeclarations)
 		writer.write(reenteringPlaceFields)
 		writer.write(declarationsHiddenByFields)
-		writer.write(innerSeamType)
+		writer.writeOptional(innerSeamType, flaggedIn: &fieldFlags)
 		writer.write(passedUpRoute)
-		writer.write(isSendable)
+		fieldFlags.append(isSendable)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
 extension SeamSignature.Hole.EnumPlace: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -791,31 +863,38 @@ extension SeamSignature.Hole.EnumPlace: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			nestedByTypeIn: reader.read(),
-			rootEnumTypeName: reader.read() as String?,
+			rootEnumTypeName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 			caseName: reader.read(),
-			valuesTypeName: reader.read() as String?,
-			memberValuesTypeName: reader.read() as String?,
-			isBuiltBySendableBuilder: reader.read(),
+			valuesTypeName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
+			memberValuesTypeName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
+			isBuiltBySendableBuilder: fieldFlags.next(),
 			route: reader.read(),
 			values: reader.read(),
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(enumTypeName)
-		writer.write(rootEnumTypeName)
+		writer.writeOptional(rootEnumTypeName, flaggedIn: &fieldFlags)
 		writer.write(caseName)
-		writer.write(valuesTypeName)
-		writer.write(memberValuesTypeName)
-		writer.write(isBuiltBySendableBuilder)
+		writer.writeOptional(valuesTypeName, flaggedIn: &fieldFlags)
+		writer.writeOptional(memberValuesTypeName, flaggedIn: &fieldFlags)
+		fieldFlags.append(isBuiltBySendableBuilder)
 		writer.write(route)
 		writer.write(values)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
 extension SeamSignature.Hole.RouteStep: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -830,21 +909,26 @@ extension SeamSignature.Hole.RouteStep: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			caseName: reader.read(),
-			values: reader.read() as SeamSignature.Hole.RouteStep.Values?,
-			innerScope: reader.read() as SeamSignature.Hole.RouteStep.InnerScope?,
-			leadsIntoFill: reader.read(),
-			member: reader.read() as SeamSignature.Hole.RouteStep.Member?,
+			values: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Hole.RouteStep.Values?,
+			innerScope: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Hole.RouteStep.InnerScope?,
+			leadsIntoFill: fieldFlags.next(),
+			member: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.Hole.RouteStep.Member?,
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(caseName)
-		writer.write(values)
-		writer.write(innerScope)
-		writer.write(leadsIntoFill)
-		writer.write(member)
+		writer.writeOptional(values, flaggedIn: &fieldFlags)
+		writer.writeOptional(innerScope, flaggedIn: &fieldFlags)
+		fieldFlags.append(leadsIntoFill)
+		writer.writeOptional(member, flaggedIn: &fieldFlags)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
@@ -948,6 +1032,8 @@ extension SeamSignature.Hole.RouteStep.InnerScope: BinarySchemaMember {
 }
 
 extension SeamSignature.Hole.DeclaredProperty: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -960,17 +1046,22 @@ extension SeamSignature.Hole.DeclaredProperty: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			property: reader.read(),
-			declaringType: reader.read() as TypeDescription?,
-			declarationLocation: reader.read() as Dependency.DeclarationLocation?,
+			declaringType: reader.readOptional(flaggedIn: &fieldFlags) as TypeDescription?,
+			declarationLocation: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?,
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(property)
-		writer.write(declaringType)
-		writer.write(declarationLocation)
+		writer.writeOptional(declaringType, flaggedIn: &fieldFlags)
+		writer.writeOptional(declarationLocation, flaggedIn: &fieldFlags)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
@@ -999,6 +1090,8 @@ extension SeamSignature.Hole.Site: BinarySchemaMember {
 }
 
 extension SeamSignature.CallRoute: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -1016,27 +1109,32 @@ extension SeamSignature.CallRoute: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			sitePath: reader.read(),
 			innerKey: reader.read(),
 			rootKey: reader.read(),
 			route: reader.read(),
 			caseName: reader.read(),
-			memberValuesType: reader.read() as TypeDescription?,
-			handsFillLevelStruct: reader.read(),
-			reentersEnclosingFill: reader.read(),
+			memberValuesType: reader.readOptional(flaggedIn: &fieldFlags) as TypeDescription?,
+			handsFillLevelStruct: fieldFlags.next(),
+			reentersEnclosingFill: fieldFlags.next(),
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(sitePath)
 		writer.write(innerKey)
 		writer.write(rootKey)
 		writer.write(route)
 		writer.write(caseName)
-		writer.write(memberValuesType)
-		writer.write(handsFillLevelStruct)
-		writer.write(reentersEnclosingFill)
+		writer.writeOptional(memberValuesType, flaggedIn: &fieldFlags)
+		fieldFlags.append(handsFillLevelStruct)
+		fieldFlags.append(reentersEnclosingFill)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
@@ -1098,6 +1196,8 @@ extension SeamSignature.ScopeEnum: BinarySchemaMember {
 }
 
 extension SeamSignature.ScopeEnum.Key: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -1111,19 +1211,24 @@ extension SeamSignature.ScopeEnum.Key: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			seamType: reader.read(),
 			holeType: reader.read(),
-			isSendable: reader.read(),
-			describedType: reader.read() as TypeDescription?,
+			isSendable: fieldFlags.next(),
+			describedType: reader.readOptional(flaggedIn: &fieldFlags) as TypeDescription?,
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(seamType)
 		writer.write(holeType)
-		writer.write(isSendable)
-		writer.write(describedType)
+		fieldFlags.append(isSendable)
+		writer.writeOptional(describedType, flaggedIn: &fieldFlags)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
@@ -1155,6 +1260,8 @@ extension SeamSignature.ScopeEnum.Values: BinarySchemaMember {
 }
 
 extension SeamSignature.ScopeEnum.Case: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -1168,23 +1275,30 @@ extension SeamSignature.ScopeEnum.Case: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			storing: reader.read(),
 			kind: reader.read(),
-			values: reader.read() as SeamSignature.ScopeEnum.Values?,
-			memberValuesTypeName: reader.read() as String?,
+			values: reader.readOptional(flaggedIn: &fieldFlags) as SeamSignature.ScopeEnum.Values?,
+			memberValuesTypeName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(name)
 		writer.write(kind)
-		writer.write(values)
-		writer.write(memberValuesTypeName)
+		writer.writeOptional(values, flaggedIn: &fieldFlags)
+		writer.writeOptional(memberValuesTypeName, flaggedIn: &fieldFlags)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
 extension SeamSignature.Builder: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -1205,35 +1319,42 @@ extension SeamSignature.Builder: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			enumKey: reader.read(),
 			label: reader.read(),
 			internalName: reader.read(),
 			parameterType: reader.read(),
 			readableParameterType: reader.read(),
-			takesBuilderStruct: reader.read(),
+			takesBuilderStruct: fieldFlags.next(),
 			tierAccess: reader.read(),
-			accessCause: reader.read() as TypeAccessProof.Cause?,
-			narrowingInnerSeam: reader.read() as TypeDescription?,
+			accessCause: reader.readOptional(flaggedIn: &fieldFlags) as TypeAccessProof.Cause?,
+			narrowingInnerSeam: reader.readOptional(flaggedIn: &fieldFlags) as TypeDescription?,
 			narrowerTierLabels: reader.read(),
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(enumKey)
 		writer.write(label)
 		writer.write(internalName)
 		writer.write(parameterType)
 		writer.write(readableParameterType)
-		writer.write(takesBuilderStruct)
+		fieldFlags.append(takesBuilderStruct)
 		writer.write(tierAccess)
-		writer.write(accessCause)
-		writer.write(narrowingInnerSeam)
+		writer.writeOptional(accessCause, flaggedIn: &fieldFlags)
+		writer.writeOptional(narrowingInnerSeam, flaggedIn: &fieldFlags)
 		writer.write(narrowerTierLabels)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
 extension TypeAccessProof.Prover: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -1249,27 +1370,34 @@ extension TypeAccessProof.Prover: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			carrier: reader.read(),
 			member: reader.read(),
 			argumentLabels: reader.read(),
 			level: reader.read(),
-			location: reader.read() as Dependency.DeclarationLocation?,
-			cap: reader.read() as TypeAccessProof.Cause?,
+			location: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?,
+			cap: reader.readOptional(flaggedIn: &fieldFlags) as TypeAccessProof.Cause?,
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(carrier)
 		writer.write(member)
 		writer.write(argumentLabels)
 		writer.write(level)
-		writer.write(location)
-		writer.write(cap)
+		writer.writeOptional(location, flaggedIn: &fieldFlags)
+		writer.writeOptional(cap, flaggedIn: &fieldFlags)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
 extension ModuleIdentity: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -1281,15 +1409,20 @@ extension ModuleIdentity: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
-			moduleName: reader.read() as String?,
-			packageName: reader.read() as String?,
+			moduleName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
+			packageName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
-		writer.write(moduleName)
-		writer.write(packageName)
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
+		writer.writeOptional(moduleName, flaggedIn: &fieldFlags)
+		writer.writeOptional(packageName, flaggedIn: &fieldFlags)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
