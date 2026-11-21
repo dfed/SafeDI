@@ -845,12 +845,14 @@ public struct Generate: AsyncParsableCommand {
 					let pieces = writes.filter { $0.pieces.count > 1 || $0.pieces.first?.isEmpty == false }.flatMap(\.pieces)
 					// The header reads the dependency-tree code apart from the mock code, which compiles only under the mock
 					// condition. It reads the code only where its imports spell levels, so each text is joined only then.
-					let dependencyTreePieces = writes.filter { !$0.holdsMockCode }.map(\.pieces)
-					let mockPieces = writes.filter(\.holdsMockCode).map(\.pieces)
+					// Each text is its writes' bodies joined by a blank line, an empty body included: a write with no piece reads as
+					// one empty piece, so joining every piece by a blank line gives the same text.
+					let dependencyTreePieces = writes.filter { !$0.holdsMockCode }.flatMap { $0.pieces.isEmpty ? [""] : $0.pieces }
+					let mockPieces = writes.filter(\.holdsMockCode).flatMap { $0.pieces.isEmpty ? [""] : $0.pieces }
 					let combinedContent: DependencyTreeGenerator.GeneratedFileContent = if hasAnyMockGeneration {
 						.dependencyTreeAndMock(
-							dependencyTreeCode: { UnreadTypeComment.resolvingMarkers(in: String(joiningBodiesOf: dependencyTreePieces, separator: "\n\n")) },
-							mockCode: { UnreadTypeComment.resolvingMarkers(in: String(joiningBodiesOf: mockPieces, separator: "\n\n")) },
+							dependencyTreeCode: { UnreadTypeComment.resolvingMarkers(in: String(joining: dependencyTreePieces, separator: "\n\n")) },
+							mockCode: { UnreadTypeComment.resolvingMarkers(in: String(joining: mockPieces, separator: "\n\n")) },
 							mockConditionalCompilation: mockConditionalCompilation,
 						)
 					} else {
