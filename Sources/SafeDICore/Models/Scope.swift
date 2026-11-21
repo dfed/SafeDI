@@ -2330,7 +2330,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 				if generatorsToStart != nil {
 					generatorsToStart?.append(group)
 				} else {
-					Self.startCodeGeneration(of: group)
+					Self.startCodeGeneration(of: group, spellsPlans: group.first !== scopeGenerator)
 				}
 			}
 		}
@@ -2361,25 +2361,42 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		return groups
 	}
 
-	/// Kicks off the generation of the code of each of `scopeGenerators`, one after another on one task, which a later
-	/// request for the code reads from its cache.
-	static func startCodeGeneration(of scopeGenerators: [ScopeGenerator]) {
+	/// Kicks off the generation of the plan of each of `scopeGenerators`, one after another on one task, which a later
+	/// request for the code reads from its cache. Where `spellsPlans`, each plan is spelled too, while the rest of the tree
+	/// is still being generated, and the cache keeps it with its text (`ScopeGenerator.generateSpelledPlan()`): a large
+	/// subtree passes it for each group of small subtrees directly beneath it, whose text the root's spelling then copies,
+	/// and never for itself, since a large subtree can hold another, whose text it would copy again. A later pass of a
+	/// tree's construction starts its generators without spelling them: nearly every tree takes one pass.
+	static func startCodeGeneration(of scopeGenerators: [ScopeGenerator], spellsPlans: Bool = false) {
 		CodeTaskStart.record()
+		let generate: @Sendable () async throws -> Void = {
+			for scopeGenerator in scopeGenerators {
+				if spellsPlans {
+					try await scopeGenerator.generateSpelledPlan()
+				} else {
+					_ = try await scopeGenerator.generatePlan()
+				}
+			}
+		}
 		// A detached task inherits no task-local, so the work observer of the task that starts the code is handed on: the
 		// code a later request reads from the cache then counts its work whichever task asks for it first.
-		if let observer = GenerationWork.observer {
+		if let ordering = CodeTaskStart.ordering {
+			// A test forces the order in which the early starts finish, to show the code does not depend on it.
+			ordering.registerStart()
+			_ = Task.detached {
+				let turn = await ordering.waitForTurn()
+				try? await generate()
+				await ordering.finish(turn)
+			}
+		} else if let observer = GenerationWork.observer {
 			_ = Task.detached {
 				try await GenerationWork.$observer.withValue(observer) {
-					for scopeGenerator in scopeGenerators {
-						_ = try await scopeGenerator.generateCode()
-					}
+					try await generate()
 				}
 			}
 		} else {
 			_ = Task.detached {
-				for scopeGenerator in scopeGenerators {
-					_ = try await scopeGenerator.generateCode()
-				}
+				try await generate()
 			}
 		}
 	}
@@ -3107,13 +3124,7 @@ struct NearestDeclarations: Sendable {
 		init(declarations: [String: NearestDeclaration], depth: Int, enclosingLayer: Layer?) {
 			self.declarations = declarations
 			self.depth = depth
-			enclosingLayers = enclosingLayer.map { [$0] } ?? []
-		}
-
-		deinit {
-			var enclosingLayers = [Layer]()
-			swap(&enclosingLayers, &self.enclosingLayers)
-			DeferredRelease.release(consume enclosingLayers)
+			enclosingLayers = DeferredReleaseSlot(enclosingLayer.map { [$0] } ?? [])
 		}
 
 		let declarations: [String: NearestDeclaration]
@@ -3122,12 +3133,11 @@ struct NearestDeclarations: Sendable {
 
 		/// The layer this one is enclosed by, if any.
 		var enclosingLayer: Layer? {
-			enclosingLayers.first
+			enclosingLayers.value.first
 		}
 
-		/// `enclosingLayer`, held in an array `deinit` hands to `DeferredRelease`. Mutated only by `deinit`, which has the
-		/// only access.
-		nonisolated(unsafe) private var enclosingLayers: [Layer]
+		/// `enclosingLayer`, held in an array, which the slot releases after the release that freed this layer returns.
+		private let enclosingLayers: DeferredReleaseSlot<[Layer]>
 	}
 
 	/// The declarations shared with the scopes above, nearest first.
