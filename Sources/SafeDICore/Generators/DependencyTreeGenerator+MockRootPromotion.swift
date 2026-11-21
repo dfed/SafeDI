@@ -468,7 +468,6 @@ extension DependencyTreeGenerator {
 		func mockRootGenerator(builders: ShapedBuilders?, constructionMemo: inout ConstructionMemo) throws -> ScopeGenerator {
 			try mockRootRecord.createScopeGenerator(
 				in: mockRootTable,
-				for: nil,
 				// The mock root binds every received property it does not promote, which encloses its whole tree.
 				nearestDeclarations: .binding(allReceived, passingNilTo: receivesPassedNil),
 				lazilyInstantiatedInstanceProperties: instancesReadThroughWrapperParameters,

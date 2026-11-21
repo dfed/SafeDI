@@ -231,7 +231,6 @@ extension DependencyTreeGenerator {
 			let (table, record) = validatedWorld.frozenScopeMap.freezing(rootScope: scope)
 			try generators.append(record.createScopeGenerator(
 				in: table,
-				for: nil,
 				lazilyInstantiatedInstanceProperties: [],
 				erasedToConcreteExistential: false,
 				startsCodeGeneration: false,

@@ -270,28 +270,12 @@ struct ConstructionMemo {
 
 /// The context a place of a tree inherits from the scopes above it, which its subtree reads (see `ConstructionMemo`).
 struct ConstructionContext {
-	/// The properties being built above the place, innermost first.
-	let propertyStack: [Property]
-	/// The concrete types the properties of `propertyStack` are built for, beside it.
-	let concreteTypeStack: [TypeDescription]
-	/// The depth in the tree of the scope that put each entry of `propertyStack` on it, beside it.
-	let depthStack: [Int]
+	/// The declarations being built above the place.
+	let contextStack: ContextStack
+	/// What the IDs of `contextStack` and of the reads project.
+	let interner: ConstructionInterner
 	let nearestDeclarations: NearestDeclarations
 	let cycleParameterContexts: [ScopeGenerator.BuiltDeclaration: CycleParameterContext]
-
-	/// The declaration a scope that builds `property` for `concreteType` repeats, when it closes a cycle, with its index on
-	/// `propertyStack` and the depth of the scope that built it: the innermost entry of the same property as cycle
-	/// validation sees it (a lazily instantiated property as the constant it stands for), built for the same concrete type,
-	/// and, where that entry is a lazily instantiated declaration's instance, the declaration, which the same scope put on
-	/// the stack just outside it.
-	func declarationClosedOn(by property: Property, concreteType: TypeDescription) -> (declaration: ScopeGenerator.BuiltDeclaration, index: Int, depth: Int)? {
-		let validatedProperty = property.asValidatedForDependencyCycles
-		guard let entryIndex = propertyStack.indices.first(where: {
-			propertyStack[$0].asValidatedForDependencyCycles == validatedProperty && concreteTypeStack[$0] == concreteType
-		}) else { return nil }
-		let index = propertyStack.indices.contains(entryIndex + 1) && propertyStack[entryIndex + 1].asLazilyInstantiatedInstanceProperty == propertyStack[entryIndex] ? entryIndex + 1 : entryIndex
-		return (ScopeGenerator.BuiltDeclaration(property: propertyStack[index], concreteType: concreteType), index, depthStack[index])
-	}
 
 	/// The answer `context` gives `read`, with the depth of the scope whose declaration gives it.
 	func answer(_ read: ConstructionLog.Read) -> (answer: ConstructionLog.Answer, depth: Int) {
@@ -303,8 +287,8 @@ struct ConstructionContext {
 			let (binding, depth) = nearestDeclarations.resolvingBinding(of: property)
 			return (.binding(binding), depth)
 		case let .declarationClosedOn(property, concreteType):
-			let closedOn = declarationClosedOn(by: property, concreteType: concreteType)
-			return (.declarationClosedOn(closedOn?.declaration), closedOn?.depth ?? -1)
+			let closedOn = contextStack.entryClosedOn(byPropertyID: property, concreteTypeID: concreteType, interner: interner)
+			return (.declarationClosedOn(closedOn?.entry.propertyID), closedOn?.entry.depth ?? -1)
 		case let .cycleParameterContext(declaration):
 			let context = cycleParameterContexts[declaration]
 			return (.cycleParameterContext(context?.parameters), context?.depth ?? -1)
@@ -323,8 +307,8 @@ struct ConstructionLog {
 		case nearestDeclaration(String)
 		/// The binding a receive of a property only if available reads (`NearestDeclarations.binding(of:)`).
 		case binding(Property)
-		/// The declaration a scope building a property for a concrete type closes a cycle on, if any.
-		case declarationClosedOn(Property, TypeDescription)
+		/// The declaration a scope building a property for a concrete type closes a cycle on, if any, by their IDs.
+		case declarationClosedOn(PropertyID, TypeID)
 		/// The parameters of the builder function built for a declaration that a lazy cycle closes on, if any.
 		case cycleParameterContext(ScopeGenerator.BuiltDeclaration)
 		/// Whether a mock passes `nil` to a receive of a property only if available, by a dependency on a concrete type
@@ -349,7 +333,9 @@ struct ConstructionLog {
 	enum Answer: Equatable {
 		case nearestDeclaration(NearestDeclaration?)
 		case binding(Property?)
-		case declarationClosedOn(ScopeGenerator.BuiltDeclaration?)
+		/// The ID of the declaration's property: the declaration is built for the concrete type the read names, and an ID
+		/// is one spelling, so equal IDs are alike.
+		case declarationClosedOn(PropertyID?)
 		case cycleParameterContext([CycleParameter]?)
 		case passesNil(Bool)
 
@@ -371,11 +357,6 @@ struct ConstructionLog {
 				guard case let .binding(otherProperty) = other else { return false }
 				guard let property, let otherProperty else { return true }
 				return property.isSpelledAlike(otherProperty)
-			case let .declarationClosedOn(declaration):
-				guard case let .declarationClosedOn(otherDeclaration) = other else { return false }
-				guard let declaration, let otherDeclaration else { return true }
-				return declaration.property.isSpelledAlike(otherDeclaration.property)
-					&& declaration.concreteType.isSpelledAlike(otherDeclaration.concreteType)
 			case let .cycleParameterContext(parameters):
 				guard case let .cycleParameterContext(otherParameters) = other else { return false }
 				guard let parameters, let otherParameters else { return true }
@@ -390,8 +371,9 @@ struct ConstructionLog {
 						&& parameter.requiredAliasFulfillingForms.isSpelledAlike(otherParameter.requiredAliasFulfillingForms)
 						&& parameter.onlyIfAvailableUnwrappedForms.isSpelledAlike(otherParameter.onlyIfAvailableUnwrappedForms)
 				}
-			case .passesNil:
-				// `==` holds, so the other answer passes `nil` exactly when this one does.
+			case .declarationClosedOn, .passesNil:
+				// `==` holds, so the other answer names the same ID, which is one spelling, or passes `nil` exactly when this
+				// one does.
 				return true
 			}
 		}
