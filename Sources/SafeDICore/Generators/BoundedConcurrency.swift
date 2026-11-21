@@ -41,11 +41,12 @@ import Foundation
 /// - **Nesting.** A job is handed the width it was granted, its cost, so a call it makes inside takes that as its width
 ///   and the nested calls never run more jobs at once than the outer call's width.
 enum BoundedConcurrency {
-	/// How many of a module's mock roots `generateMockCode` reads at once: one per processor the process may run on, so the
-	/// processors stay busy while only that many roots' parameter trees are alive, each of which holds a node per path.
-	static var mockRootWidth: Int {
-		max(1, ProcessInfo.processInfo.activeProcessorCount)
-	}
+	/// How many of a module's mock roots `generateMockCode` reads at once. Only that many roots' parameter trees are alive
+	/// at a time, each of which holds a node per path, so each root more in flight raises peak memory: on issue #646's
+	/// 12-screen mock graph, by about 10 MB. A measured constant, not the processor count, which would let a machine with
+	/// many cores hold more trees than 2.2.0's peak allows. On 4 processors, reading 1, 2 and 4 roots at once took
+	/// 8.4 s, 6.6 s and 5.6 s of wall time, at 275, 304 and 326 MB of peak memory.
+	static let mockRootWidth = 4
 
 	/// What became of one job.
 	enum Outcome<Transformed: Sendable>: Sendable {
@@ -183,7 +184,7 @@ enum BoundedConcurrency {
 
 /// A job `BoundedConcurrency` starts, with the jobs of the same call then running. Each of a module's mock roots holds its
 /// whole parameter tree while its job runs, so starting every root's job at once held every root's tree together, and peak
-/// memory grew with the mock roots. The tests check that the jobs running never exceed the processors. Handed to
+/// memory grew with the mock roots. The tests check that the jobs running never exceed the bound. Handed to
 /// `observer`, which the tests set, never the tool.
 public enum BoundedTaskStart {
 	/// Called each time a job starts, with the jobs then running, when set: by the tests, never by the tool.

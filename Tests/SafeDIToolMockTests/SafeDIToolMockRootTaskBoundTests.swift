@@ -19,7 +19,7 @@
 // SOFTWARE.
 
 import Foundation
-import SafeDICore
+@testable import SafeDICore
 import Testing
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
@@ -44,8 +44,8 @@ struct SafeDIToolMockRootTaskBoundTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_readsNoMoreMockRootsAtOnceThanProcessors_whenModuleGeneratesManyMocks() async throws {
-		let mockRootCount = 4 * Self.processorCount
+	mutating func generate_readsNoMoreMockRootsAtOnceThanItsBound_whenModuleGeneratesManyMocks() async throws {
+		let mockRootCount = 4 * BoundedConcurrency.mockRootWidth
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
 		try await BoundedTaskStart.$observer.withValue({ continuation.yield($0) }) {
 			_ = try await executeSafeDIToolTest(
@@ -71,14 +71,10 @@ struct SafeDIToolMockRootTaskBoundTests: ~Copyable {
 		}
 		// Every root's job starts through the bound, once in each phase that reads the roots.
 		#expect(startCount >= mockRootCount, "\(startCount) bounded starts for \(mockRootCount) mock roots: some roots' jobs start unbounded")
-		#expect(mostJobsRunning <= Self.processorCount, "\(mostJobsRunning) mock roots read at once on \(Self.processorCount) processors")
+		#expect(mostJobsRunning <= BoundedConcurrency.mockRootWidth, "\(mostJobsRunning) mock roots read at once, over the bound of \(BoundedConcurrency.mockRootWidth)")
 	}
 
 	// MARK: Private
 
 	private var filesToDelete: [URL]
-
-	private static var processorCount: Int {
-		max(1, ProcessInfo.processInfo.activeProcessorCount)
-	}
 }

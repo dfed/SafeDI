@@ -191,10 +191,10 @@ extension DependencyTreeGenerator {
 				)
 			}
 
-		// Each root's tree is built, read and released in one task, at most one root per processor at once, so that the
-		// trees are not all alive together: a tree holds a node per path, and every root's tree held until the module's
-		// mocks were generated was most of the generator's peak memory. What the module generates after the roots is kept
-		// in nodes that hold their children and nothing beneath them (`ScopeGenerator.MockTreeSummary`).
+		// Each root's tree is built, read and released in one task, at most `BoundedConcurrency.mockRootWidth` roots at once,
+		// so that the trees are not all alive together: a tree holds a node per path, and every root's tree held until the
+		// module's mocks were generated was most of the generator's peak memory. What the module generates after the roots is
+		// kept in nodes that hold their children and nothing beneath them (`ScopeGenerator.MockTreeSummary`).
 		//
 		// The sendable configuration types are unioned across every root before any root's code is generated: a struct is
 		// shared across every root that references the type, so the annotation has to agree, and each root's emission
