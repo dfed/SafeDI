@@ -4172,6 +4172,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// A configurable body on the production emitter: each scope's construction is replaced where its override holds a
 		/// builder.
 		case overriding(ConstructionOverrides)
+
+		/// The generation of the child at `childIndex` among the `propertiesToGenerate` of the scope this generates: a
+		/// configurable body's overrides of that child's place, since one generator can sit at several places.
+		func descending(toChildAt childIndex: Int) -> CodeGeneration {
+			switch self {
+			case .dependencyTree, .mock:
+				self
+			case let .overriding(overrides):
+				.overriding(overrides.child(at: childIndex))
+			}
+		}
 	}
 
 	/// Context for mock code generation, consumed by the mock root when emitting the
@@ -5964,7 +5975,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var body = bodyChildren(propertiesGeneratedLater: propertiesGeneratedLater, enclosingFunctionNames: enclosingFunctionNames)
 		for index in body.orderedChildren.indices where body.orderedChildren[index].generator.fillEmitsCode {
 			let code = try await body.orderedChildren[index].generator.generateCode(
-				codeGeneration: codeGeneration,
+				codeGeneration: codeGeneration.descending(toChildAt: body.orderedChildren[index].index),
 				unavailableProperties: body.orderedChildren[index].unavailableProperties,
 				propertiesGeneratedLater: body.orderedChildren[index].propertiesGeneratedLater,
 				builderFunctionNames: builderFunctionNamesOfChild(at: index, in: body),
@@ -6753,12 +6764,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				fillPlaceBindings: fillPlaceBindings,
 			)
 			let constructionOverride: ConstructionOverride? = if case let .overriding(overrides) = codeGeneration {
-				overrides.byScope[ObjectIdentifier(self)]
+				overrides.construction
 			} else {
 				nil
 			}
 			let scopeNames: ScopeNames? = if case let .overriding(overrides) = codeGeneration {
-				overrides.namesByScope[ObjectIdentifier(self)]
+				overrides.names
 			} else {
 				nil
 			}
@@ -6805,7 +6816,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return .place(PlacePlan(kind: .hostedSeamCode, functionNames: [], closedOnFunctionName: nil, code: .text(fillCode)))
 		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
 			let scopeNames: ScopeNames? = if case let .overriding(overrides) = codeGeneration {
-				overrides.namesByScope[ObjectIdentifier(self)]
+				overrides.names
 			} else {
 				nil
 			}
@@ -10337,11 +10348,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// that only the members of its loop receive is not read outside it: the mock declares its builder function, which
 		/// the loop's wrappers hand, and no binding of its wrapper, which Swift would report unused.
 		let isReadOutsideItsLoop: Bool
-		/// The scope this node was built from, whose construction the production emitter replaces where it builds the body.
+		/// The scope this node was built from, set where the production emitter can replace its construction; read only as
+		/// whether it can, since one generator can sit at several places (`childIndex` names the place).
 		let generatorIdentifier: ObjectIdentifier?
+		/// The node's index among the `propertiesToGenerate` of the scope that holds it (`OrderedChild.index`), which names
+		/// its place beneath that scope's.
+		let childIndex: Int
 
 		init(
 			generatorIdentifier: ObjectIdentifier? = nil,
+			childIndex: Int,
 			propertyLabel: String,
 			inlineOrderPosition: Int,
 			typeDescription: TypeDescription,
@@ -10430,6 +10446,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			self.reboundProperties = reboundProperties
 			self.isReadOutsideItsLoop = isReadOutsideItsLoop
 			self.generatorIdentifier = generatorIdentifier
+			self.childIndex = childIndex
 			// Generation reads these for every node many times, so they are worked out once here.
 			let dependencyInnerLabels = Set(dependencies.map(\.property.label))
 			self.dependencyInnerLabels = dependencyInnerLabels
@@ -10949,6 +10966,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Represented directly as a tree item so mock emission can interleave
 	/// aliases with property bindings using production's topological order.
 	struct MockAliasNode: Sendable {
+		/// The alias's index among the `propertiesToGenerate` of the scope that holds it (`OrderedChild.index`), which names
+		/// its place beneath that scope's: one generator can sit at several places, so it names none.
+		let childIndex: Int
 		/// The alias property as declared (e.g., `userNetworkService: NetworkService`).
 		let property: Property
 		/// Whether the fulfilling dependency is wrapped in the alias property's type.
@@ -10981,7 +11001,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// For a site of a hole, the properties its owner holds only as a `LazilyInstantiated` property's instance, which
 		/// the site's payload reads as the owner's receivers do.
 		var holeSiteLazilyInstantiatedInstanceProperties = Set<Property>()
-		/// The scope this alias was built from, whose declaration the production emitter names where it builds the body.
+		/// The scope this alias was built from, set where the production emitter can name its declaration; read only as
+		/// whether it can, since one generator can sit at several places (`childIndex` names the place).
 		var generatorIdentifier: ObjectIdentifier?
 	}
 
@@ -11259,6 +11280,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if case let .hole(property, erasedToConcreteExistential, site?) = childGenerator.scopeData {
 				// A site of a hole binds its property from the public mock's builder, as an alias binds its own.
 				items.append(.alias(MockAliasNode(
+					childIndex: child.index,
 					property: property,
 					erasedToConcreteExistential: erasedToConcreteExistential,
 					onlyIfAvailable: false,
@@ -11271,6 +11293,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				)))
 			} else if case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference) = childGenerator.scopeData {
 				items.append(.alias(MockAliasNode(
+					childIndex: child.index,
 					property: property,
 					erasedToConcreteExistential: erasedToConcreteExistential,
 					onlyIfAvailable: onlyIfAvailable,
@@ -11332,6 +11355,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 				items.append(.property(MockParameterNode(
 					generatorIdentifier: ObjectIdentifier(childGenerator),
+					childIndex: child.index,
 					propertyLabel: childProperty.label,
 					inlineOrderPosition: inlineOrderPositionByIndex[childIndex],
 					typeDescription: childProperty.typeDescription,
@@ -12396,16 +12420,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// This method and `generateInstantiatorBinding` call one another for each level of the
 	/// tree, which can be as deep as the module has types. They are `async` so that their frames
 	/// are allocated with the task rather than on the thread's stack, which could not hold them.
-	/// The plan of a mock body the production emitter writes: each node's override and the body's naming policy, keyed by
-	/// the scope each node was built from; `nil` where the body holds a node of a feature not routed yet.
+	/// The plan of a mock body the production emitter writes: each node's override and the body's naming policy, at the
+	/// node's place, which the emitter reaches by child index as it descends; `nil` where the body holds a node of a
+	/// feature not routed yet. A place is never keyed by its scope's generator, which several places can share.
 	private static func mockBodyPlan(
 		of items: [MockTreeItem],
 		labelMap: [String: [TypeDescription: String]],
 		flatParameterDisambiguationMap: [String: [TypeDescription: String]],
 		context: MockContext,
 	) async -> ConstructionOverrides? {
-		var names = [ObjectIdentifier: ScopeNames]()
-		guard let overrides = await planMockBody(
+		await planMockBody(
 			of: items,
 			labelMap: labelMap,
 			parentPath: ReservedName.mockOverridesParameterName,
@@ -12413,10 +12437,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			parentConcreteType: nil,
 			overridePathReachable: true,
 			flatParameterDisambiguationMap: flatParameterDisambiguationMap,
-			names: &names,
 			context: context,
-		) else { return nil }
-		return ConstructionOverrides(byScope: overrides, namesByScope: names)
+		)
 	}
 
 	/// Whether the production emitter writes `node` as the per-path walk does: a node of a feature not routed yet, or one
@@ -12450,12 +12472,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		overridePathReachable: Bool,
 		flatParameterDisambiguationMap: [String: [TypeDescription: String]] = [:],
 		sendableOverrideExtractor: SendableOverrideExtractor? = nil,
-		names: inout [ObjectIdentifier: ScopeNames],
 		context: MockContext,
-	) async -> [ObjectIdentifier: ConstructionOverride]? {
+	) async -> ConstructionOverrides? {
 		let propertyNodes = items.propertyNodes
 		let labelMap = labelMap ?? disambiguatePropertyLabels(for: propertyNodes)
-		var overrides = [ObjectIdentifier: ConstructionOverride]()
+		var level = ConstructionOverrides()
 		// The names of this level, from which an outermost `@Sendable` function started here claims its locals, as the
 		// per-path body claims them.
 		let builderFunctionNamesDeclaredHere = Set(propertyNodes.filter { !$0.isPropertyCycle }.map { Self.functionName(toBuildPropertyNamed: disambiguatedLabel(for: $0, labelMap: labelMap)) })
@@ -12482,15 +12503,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let fulfillingName = alias.fulfillingPropertyIsLazilyInstantiatedInstance
 					? disambiguatedLazilyInstantiatedBinding(named: alias.fulfillingLabel, withInstanceOfType: alias.fulfillingTypeDescription.unwrapped, disambiguationMap: combinedDisambiguationMap)?.name
 					: combinedDisambiguationMap[alias.fulfillingLabel]?[alias.fulfillingTypeDescription]
-				if let generatorIdentifier = alias.generatorIdentifier, bindingName != nil || fulfillingName != nil {
-					names[generatorIdentifier] = ScopeNames(bindingName: bindingName, argumentNameByLabel: fulfillingName.map { [alias.fulfillingLabel: $0] } ?? [:])
+				if alias.generatorIdentifier != nil, bindingName != nil || fulfillingName != nil {
+					level.children[alias.childIndex, default: ConstructionOverrides()].names = ScopeNames(bindingName: bindingName, argumentNameByLabel: fulfillingName.map { [alias.fulfillingLabel: $0] } ?? [:])
 				}
 				continue
 			}
-			guard case let .property(node) = item,
-			      let generatorIdentifier = node.generatorIdentifier,
-			      isRouted(node)
-			else { return nil }
+			guard case let .property(node) = item, isRouted(node) else { return nil }
 			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
 			let nodeTypeKey = node.cycleNodeKey
 			let isBackEdge = parentConcreteType.map { context.cycleEdges.contains(CycleEdge(parent: $0, child: node.concreteType.asSource)) } ?? false
@@ -12554,7 +12572,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			var childAncestors = ancestorTypes
 			childAncestors.insert(nodeTypeKey)
-			guard let childOverrides = await planMockBody(
+			guard var place = await planMockBody(
 				of: node.children,
 				labelMap: nil,
 				parentPath: nodePath,
@@ -12563,10 +12581,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				overridePathReachable: reachable,
 				flatParameterDisambiguationMap: functionDisambiguationMap,
 				sendableOverrideExtractor: sendableOverrideExtractor ?? startedSendableOverrideExtractor,
-				names: &names,
 				context: context,
 			) else { return nil }
-			overrides.merge(childOverrides) { first, _ in first }
 			if let startedSendableOverrideExtractor {
 				if isOverridden {
 					overrideArguments = arguments(readThrough: startedSendableOverrideExtractor)
@@ -12576,13 +12592,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				scopeNames.preludeLines = startedSendableOverrideExtractor.extractions.map { "let \($0.localName) = \($0.expression)" }
 			}
 			if let overrideExpression {
-				overrides[generatorIdentifier] = ConstructionOverride(expression: overrideExpression, arguments: overrideArguments, returnsConstructedType: node.needsConfigurationStruct)
+				place.construction = ConstructionOverride(expression: overrideExpression, arguments: overrideArguments, returnsConstructedType: node.needsConfigurationStruct)
 			}
 			if scopeNames != ScopeNames() {
-				names[generatorIdentifier] = scopeNames
+				place.names = scopeNames
 			}
+			level.children[node.childIndex] = place
 		}
-		return overrides
+		return level
 	}
 
 	private static func generateMockBodyBindings(
@@ -13146,6 +13163,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			bindingNames[alias.property.label, default: [:]][alias.property.typeDescription] = bindingName
 			return .alias(MockAliasNode(
+				childIndex: alias.childIndex,
 				property: Property(label: bindingName, typeDescription: alias.property.typeDescription),
 				erasedToConcreteExistential: alias.erasedToConcreteExistential,
 				onlyIfAvailable: alias.onlyIfAvailable,
