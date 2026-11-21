@@ -13767,10 +13767,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				nil
 			}
 
-			// Generate children's bindings inside the function body.
-			// Include this node's type in ancestors so self-referencing
-			// cycles (e.g., Instantiator<Self>) are detected.
-			let insertedAncestor = ancestorTypes.insert(node.cycleNodeKey).inserted
+			// Generate children's bindings inside the function body. `ancestorTypes` already holds this node's type, which
+			// the caller adds before calling, so self-referencing cycles (e.g., Instantiator<Self>) are detected.
 			let childBindings = await generateMockBodyBindings(
 				items: node.children,
 				parentPath: nodePath,
@@ -13790,9 +13788,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				publicMock: publicMock?.beneathRoot,
 				enclosingBindingNamesPassedByName: bindingNamesPassedByName,
 			)
-			if insertedAncestor {
-				ancestorTypes.remove(node.cycleNodeKey)
-			}
 
 			let nodeHandWrittenMockDefaultParameters = handWrittenMockDefaultParameters[node.concreteType, default: []]
 			let functionOverrideExpression: String?
