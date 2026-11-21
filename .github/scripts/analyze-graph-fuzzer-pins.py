@@ -15,12 +15,12 @@ from the environment (`PINS_EVENT`, `PINS_HEAD_SHA`, `PINS_BASE_REF`, `PINS_BASE
 `PINS_VALID_FOR_HEAD` as `true`, `false` or `unknown`, `PINS_RUN_ID`, `PINS_RUN_URL`), and then analyzes OUT.
 `--self-test` checks that filling, the statuses of missing inputs, and the analysis itself over a recorded run, in a
 new directory it removes afterwards. The recorded run is `fixtures/graph-fuzzer-pins-run-44871895586.tar.xz` beside
-this script: the 22 shard reports of one Verify run whose corpora moved one pin, its context.json, and what the
-analysis wrote for it then (`expected/pins.json`, and report.md's section (a) as `expected/pins-that-differ.md`). The
-self-test analyzes those reports with the checkout's own combine script and Swift sources and expects exactly that
-section and that pins.json, so it fails when a change to this script, to the combine script, or to how the test
-sources hold a pin changes what the analysis derives. When such a change is meant (a pinned constant renamed, say),
-replace the two expected files with what the analysis now writes, and say why in the change.
+this script: everything the analysis read for one Verify run whose corpora moved one pin (its 22 shard reports, its
+context.json, and tools/, the combine script and Swift sources of the commit the run built), and what the analysis
+wrote for it then (`expected/pins.json`, and report.md's section (a) as `expected/pins-that-differ.md`). The self-test
+analyzes it and expects exactly that section and that pins.json, so it checks this script's rules and nothing else: a
+pin that moves in the repository's own sources does not touch it. A change that teaches the analysis a new shape of
+pin adds a second recorded run that holds it.
 
 Inputs, all inside OUT:
   reports/**/report.txt      the shard reports (untrusted data: only read, never run)
@@ -817,24 +817,19 @@ def self_test(root):
     finally:
         sys.stderr.close()
         sys.stderr = saved
-    # The analysis itself, over a recorded run's reports and this checkout's combine script and Swift sources.
-    script_directory = os.path.dirname(os.path.abspath(__file__))
-    repository = os.path.dirname(os.path.dirname(script_directory))
+    # The analysis itself, over a recorded run: its reports, its context, and its commit's combine script and sources.
+    analyzed = os.path.join(root, "analyzed")
     recorded = os.path.join(root, "recorded")
-    with tarfile.open(os.path.join(script_directory, RECORDED_RUN)) as archive:
+    with tarfile.open(os.path.join(os.path.dirname(os.path.abspath(__file__)), RECORDED_RUN)) as archive:
         for member in archive.getmembers():
             parts = member.name.split("/")
             if not member.isfile() or member.name.startswith("/") or ".." in parts:
                 failures.append("the recorded run holds %s, which is not a plain file inside it" % member.name)
                 continue
-            os.makedirs(os.path.join(recorded, *parts[:-1]), exist_ok=True)
-            with open(os.path.join(recorded, *parts), "wb") as file:
+            directory = recorded if parts[0] == "expected" else analyzed
+            os.makedirs(os.path.join(directory, *parts[:-1]), exist_ok=True)
+            with open(os.path.join(directory, *parts), "wb") as file:
                 file.write(archive.extractfile(member).read())
-    with open(os.path.join(recorded, "context.json")) as file:
-        recorded_context = json.load(file)
-    analyzed = os.path.join(root, "analyzed")
-    expect("filling from the recorded run", fill(analyzed, os.path.join(recorded, "reports"), repository, {"PINS_EVENT": "workflow_dispatch", "PINS_HEAD_SHA": recorded_context["commit"]}), None)
-    shutil.copyfile(os.path.join(recorded, "context.json"), os.path.join(analyzed, "context.json"))
     expect("the recorded run's status", analyze(analyzed), 1)
     with open(os.path.join(analyzed, "report.md"), encoding="utf-8") as file:
         report = file.read()
