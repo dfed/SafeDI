@@ -6331,6 +6331,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// The graphs of each gating draw that the oracles after acceptance judged, by the draw's name.
 		var gatingDrawJudgedCounts = [String: Int]()
 		var readTwinGraphCount = 0
+		var cleanSubtreeSkipOffGraphCount = 0
 		var builderSurfaceCounts = [String: Int]()
 		var acceptedSpellingDrawFeatures = Set<GraphFuzzerSeamDrawFeature>()
 		var omittedValueGraphCount = 0
@@ -6391,6 +6392,7 @@ struct SafeDIToolGraphFuzzerTests {
 								isComparedAcrossIntegrations: results[index].isComparedAcrossIntegrations,
 								isComparedWithRecomputedSignatures: results[index].isComparedWithRecomputedSignatures,
 								isComparedWithReadTwin: results[index].isComparedWithReadTwin,
+								isComparedWithCleanSubtreeSkipOff: results[index].isComparedWithCleanSubtreeSkipOff,
 								retentionCounts: results[index].retentionCounts,
 								valueOracle: results[index].valueOracle,
 								remedyRuns: results[index].remedyRuns,
@@ -6478,6 +6480,9 @@ struct SafeDIToolGraphFuzzerTests {
 							if result.isComparedWithReadTwin {
 								readTwinGraphCount += 1
 							}
+							if result.isComparedWithCleanSubtreeSkipOff {
+								cleanSubtreeSkipOffGraphCount += 1
+							}
 							if let valueOracle = result.valueOracle {
 								valueOracleCounts.add(valueOracle, isCompared: result.isComparedByValueOracle)
 							}
@@ -6557,6 +6562,9 @@ struct SafeDIToolGraphFuzzerTests {
 		// The graphs the oracle compared with their read twin, with the pin, which ci.yml's combine job adds up: an oracle
 		// that stops running the twins fails it.
 		report.append("read-twins \(readTwinGraphCount) \(corpus.readTwinGraphCount) \(corpus.name)")
+		// The graphs the oracle ran again with no skip of a clean subtree in the validation walk, against no pin: a run of the
+		// whole corpus checks the floor below.
+		report.append("clean-subtree-skips \(cleanSubtreeSkipOffGraphCount) \(corpus.name)")
 		// The accepted graphs whose seam's own internal mock takes a builder as a closure that takes nothing, which ci.yml's
 		// combine job adds up and checks against a floor of ten: the only count of that shape the corpus draws.
 		if corpus.features.contains(.generateDependencyTree) {
@@ -6630,6 +6638,9 @@ struct SafeDIToolGraphFuzzerTests {
 			}
 			if let pinnedValueOracleCounts = corpus.valueOracleCounts, valueOracleCounts != pinnedValueOracleCounts {
 				reportProblem("The value oracle compared and skipped, over the \(corpus.name) corpus, \(valueOracleCounts.reportField), but \(pinnedValueOracleCounts.reportField) is pinned (`corpusValueOracleCounts`).")
+			}
+			if cleanSubtreeSkipOffGraphCount < Self.cleanSubtreeSkipOffGraphFloor {
+				reportProblem("The oracle ran \(cleanSubtreeSkipOffGraphCount) graphs of the \(corpus.name) corpus again with no skip of a clean subtree in the validation walk, fewer than \(Self.cleanSubtreeSkipOffGraphFloor): the oracle that compares the two runs judges too few graphs to stand in for unit tests.")
 			}
 			if readTwinGraphCount != corpus.readTwinGraphCount {
 				reportProblem("The oracle compared \(readTwinGraphCount) graphs of the \(corpus.name) corpus with their read twin, but \(corpus.readTwinGraphCount) are pinned.")
@@ -7087,6 +7098,10 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `retentionCounts` pins but the unpaired experiments, that a corpus must hold for the check to gate: ten graphs per
 	/// draw.
 	static let gatingDrawJudgedGraphFloor = 10
+
+	/// The fewest graphs of a corpus the oracle must run again with no skip of a clean subtree in the validation walk
+	/// (`GraphFuzzerToolRuns.cleanSubtreeSkipFailure`) for that comparison to stand in for unit tests.
+	static let cleanSubtreeSkipOffGraphFloor = 10
 
 	/// What the retention oracle judges over the seam corpus (`Corpus.retentionCounts`). Pins: derived on CI.
 	static let seamCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 116, judgedDrawingRetentionShape: 96, judgedThroughHandWrittenBuilder: 70, unpairedExperiments: 0, judgedHoldingForwardingWrapper: ["ErasedInstantiator": 77, "SendableErasedInstantiator": 22, "Instantiator": 73, "SendableInstantiator": 21])
