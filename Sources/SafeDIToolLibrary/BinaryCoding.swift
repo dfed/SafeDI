@@ -193,8 +193,8 @@ struct BinaryWriter {
 	private(set) var writesPositionsAsAbsent = false
 
 	/// Runs `write` with every optional ``BinaryPosition`` it writes written as absent. Every position a value holds is
-	/// optional, and its `withoutPositions()` makes each one absent, so `write` writes what it would write of the values'
-	/// `withoutPositions()`, without making that copy.
+	/// optional, so `write` writes what it would write of a copy of the values with every position `nil`, without making
+	/// that copy.
 	mutating func writingPositionsAsAbsent(_ write: (inout BinaryWriter) -> Void) {
 		let wasWritingPositionsAsAbsent = writesPositionsAsAbsent
 		writesPositionsAsAbsent = true
