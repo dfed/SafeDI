@@ -2069,6 +2069,11 @@ jobs:
           command: command -v python3 >/dev/null || { apt-get update && apt-get install -y --no-install-recommends python3; }
       - name: Check the Script
         run: python3 -I Scripts/generate-time-check.py --self-test "$RUNNER_TEMP/generate-time-self-test"
+      # Scripts/compile-time-check.py imports this job's script, and its timed
+      # comparison is run by hand, so a change to either that breaks it fails
+      # here. About 40 s.
+      - name: Check the Compile Time Script
+        run: python3 -I Scripts/compile-time-check.py --self-test "$RUNNER_TEMP/compile-time-self-test"
       # For the reason "Build Tests on Linux" gives. The builds below stamp
       # again after each checkout of another commit, with this copy of the
       # script, which the checkout of the base commit cannot change.
@@ -2172,6 +2177,20 @@ jobs:
         run: |
           python3 -I Scripts/generate-time-check.py --summary "$GITHUB_STEP_SUMMARY" \
             .generate-time/base/SafeDITool .generate-time/head/SafeDITool "$RUNNER_TEMP/generate-time"
+      # The lines the change's tool generates for wide graphs, against
+      # Scripts/compile-time-baseline.txt: generated code that compiled 2.4
+      # times slower passed the step above, which times `generate` alone.
+      # Nothing is compiled. Measured: 22 s with main's release tool on four
+      # cores (00da8b5, 2026-11-20); one minute is the least the limit can be
+      # set to in whole minutes. Warns rather
+      # than fails (`--warn-only`) while the generator's output is still being
+      # rewritten often; a tool that cannot generate a shape still fails.
+      - name: Compare Generated Lines with the Baseline
+        if: ${{ !cancelled() && hashFiles('.generate-time/head/SafeDITool') != '' }}
+        timeout-minutes: 1
+        run: |
+          python3 -I Scripts/compile-time-check.py --lines --warn-only --summary "$GITHUB_STEP_SUMMARY" \
+            .generate-time/head/SafeDITool "$RUNNER_TEMP/compile-time-lines"
       # Main's tool, for the pull requests that branch from this commit. Saved
       # whatever the comparison found: the tool is this commit's either way.
       - name: Stage This Commit's SafeDITool
