@@ -29,11 +29,39 @@ extension String {
 	/// spelling, so `` `thing` `` and `thing` name one property, and `default` and `` `default` `` another.
 	var spelledAsIdentifier: String {
 		let name = spelledWithoutBackticks
-		return if name.isValidSwiftIdentifier(for: .variableName) {
+		return if name.isValidVariableName {
 			name
 		} else {
 			"`\(name)`"
 		}
+	}
+
+	/// Whether Swift takes this name as a variable’s name without backticks, as `isValidSwiftIdentifier(for: .variableName)`
+	/// decides. That check parses a declaration, which costs more than SafeDI’s reading of the declaration the name is in,
+	/// so a word of ASCII letters, digits, and underscores that begins with a letter, or with an underscore and holds more,
+	/// is decided by whether it is a keyword the lexer reserves: Swift lexes every other such word as an identifier.
+	var isValidVariableName: Bool {
+		guard isPlainASCIIWord else {
+			return isValidSwiftIdentifier(for: .variableName)
+		}
+		return !keywordsVariableNamesCannotSpell.contains(self)
+	}
+
+	/// Whether this text is a word of ASCII letters, digits, and underscores that begins with a letter, or with an
+	/// underscore and holds more: a lone underscore is the wildcard, never a name.
+	private var isPlainASCIIWord: Bool {
+		var bytes = utf8.makeIterator()
+		guard let firstByte = bytes.next(),
+		      firstByte.isASCIILetter || (firstByte == UInt8(ascii: "_") && utf8.count > 1)
+		else {
+			return false
+		}
+		while let byte = bytes.next() {
+			guard byte.isASCIILetter || byte == UInt8(ascii: "_") || (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(byte) else {
+				return false
+			}
+		}
+		return true
 	}
 
 	/// This name without the backticks it was written with, as prose names it: `` `inout` `` is `inout`.
@@ -47,7 +75,8 @@ extension String {
 	/// `__safeDI_` + `` `my leaf` `` is `` `__safeDI_my leaf` ``. Joining names that need no backticks with
 	/// such text makes a name that needs none, so only text holding a backtick is spelled again.
 	var spelledAsJoinedIdentifier: String {
-		// A byte search: Foundation's `contains(_:)` of a string is many times slower, and a backtick is one byte.
+		// A byte search: emission joins a name for every builder function, and `contains(_:)` of a `String` searches
+		// through Foundation.
 		utf8.contains(UInt8(ascii: "`")) ? spelledAsIdentifier : self
 	}
 
@@ -111,5 +140,23 @@ extension TokenSyntax {
 	/// The name this token gives a parameter, in `spelledAsIdentifier` spelling, or `_` for a wildcard.
 	var spelledAsParameterName: String {
 		tokenKind == .wildcard ? text : text.spelledAsIdentifier
+	}
+}
+
+/// The keywords Swift does not take as a variable’s name without backticks, which the lexer reserves
+/// (`IdentifierSpellingTests` checks that these are exactly the keywords `isValidSwiftIdentifier(for: .variableName)`
+/// rejects).
+let keywordsVariableNamesCannotSpell: Set<String> = [
+	"Any", "Self", "as", "associatedtype", "break", "case", "catch", "class", "continue", "default", "defer",
+	"deinit", "do", "else", "enum", "extension", "fallthrough", "false", "fileprivate", "for", "func", "guard",
+	"if", "import", "in", "init", "inout", "internal", "is", "let", "nil", "operator", "precedencegroup",
+	"private", "protocol", "public", "repeat", "rethrows", "return", "self", "static", "struct", "subscript",
+	"super", "switch", "throw", "throws", "true", "try", "typealias", "var", "where", "while",
+]
+
+extension UInt8 {
+	/// Whether this byte is an ASCII letter.
+	fileprivate var isASCIILetter: Bool {
+		(UInt8(ascii: "a")...UInt8(ascii: "z")).contains(self) || (UInt8(ascii: "A")...UInt8(ascii: "Z")).contains(self)
 	}
 }

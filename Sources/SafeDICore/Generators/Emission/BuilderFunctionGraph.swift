@@ -82,7 +82,7 @@ struct BuilderNode: Sendable {
 	/// The block holds its statements' code, which holds its scope's whole subtree, as it is: no text of the subtree is
 	/// copied to write the block.
 	func spelled(after prefix: String = "", followedBy suffix: String = "") -> GeneratedCode {
-		let parameterList = parameters.isEmpty ? "" : parameters.spelledAsFunctionParameters(amongTypesDeclaredEscaping: typesDeclaredEscaping)
+		let parameterList = parameters.isEmpty ? "" : parameters.initializerFunctionParametersSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 		return .sequence([
 			.text("\(prefix)\(ScopeGenerator.localFunctionPrefix(isSendable: isSendable, isNonisolated: isNonisolated))func \(name)(\(parameterList)) -> \(returnType.asSource) {\n"),
 			.lines(body.statements),

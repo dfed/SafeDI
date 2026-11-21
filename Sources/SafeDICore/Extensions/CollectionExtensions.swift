@@ -83,19 +83,17 @@ extension Collection<Property> {
 			}
 	}
 
-	/// The parameters of a function generated code declares, joined by commas, spelling a property of one of
-	/// `typesDeclaredEscaping` `@escaping` (`TypeDescription.asFunctionParameter(amongTypesDeclaredEscaping:)`): the text
-	/// `initializerFunctionParameters` prints, written without building syntax nodes, since a generated body declares a
-	/// builder function at every place.
-	func spelledAsFunctionParameters(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> String {
-		var text = ""
+	/// The parameters of a function generated code declares, spelling a property of one of `typesDeclaredEscaping`
+	/// `@escaping` (`TypeDescription.asFunctionParameter(amongTypesDeclaredEscaping:)`), each followed by `, ` but the last.
+	func initializerFunctionParametersSource(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> String {
+		var source = ""
 		for (index, property) in enumerated() {
 			if index > 0 {
-				text += ", "
+				source += ", "
 			}
-			text += property.spelledAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)
+			source += property.functionParameterSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 		}
-		return text
+		return source
 	}
 }
 
@@ -113,5 +111,20 @@ extension Collection {
 extension Collection<String> {
 	public func removingEmpty() -> [Element] {
 		filter { !$0.isEmpty }
+	}
+}
+
+extension Array {
+	/// Reverses, in place, the elements from `index` to the end. A walk with an explicit stack pushes a scope's children and
+	/// reverses them so that the first is walked next; reversing the slice instead (`self[index...].reverse()`) copies the
+	/// whole array through the slice's setter whenever it runs.
+	mutating func reverseElements(from index: Int) {
+		var low = index
+		var high = endIndex - 1
+		while low < high {
+			swapAt(low, high)
+			low += 1
+			high -= 1
+		}
 	}
 }

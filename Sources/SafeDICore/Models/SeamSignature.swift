@@ -38,7 +38,7 @@
 public struct SeamSignature: Sendable {
 	/// A receive inside a seam's tree that a pass-through parameter fulfills: what a seam that passes the parameter
 	/// on reports when a tier of its own cannot take it.
-	public struct Receiver: Sendable {
+	public struct Receiver: Codable, Sendable {
 		public init(property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, access: AccessLevel, aliasProperty: Property? = nil, isInstantiateMethodParameter: Bool = false) {
 			self.property = property
 			self.declaringType = declaringType
@@ -69,7 +69,7 @@ public struct SeamSignature: Sendable {
 
 	/// The call of a nested seam's tier that omits a parameter on no tier of the seam whose tree makes the call, which
 	/// an error about a caller holding a value for that parameter names.
-	public struct NestedSeamCall: Sendable {
+	public struct NestedSeamCall: Codable, Sendable {
 		public init(seamType: TypeDescription, seamModuleName: String?, tier: AccessLevel, requirement: AccessRequirement, callerModuleName: String?, parameterTierAccess: AccessLevel?, receivingTypes: [TypeDescription]) {
 			self.seamType = seamType
 			self.seamModuleName = seamModuleName
@@ -97,7 +97,23 @@ public struct SeamSignature: Sendable {
 	}
 
 	/// A parameter of the generated initializer.
-	public struct Parameter: Sendable {
+	public struct Parameter: Codable, Sendable {
+		/// A value holding each stored property as given, which a module info file reads back.
+		public init(storing property: Property, isPassThrough: Bool, access: AccessLevel, accessCause: TypeAccessProof.Cause?, tierAccess: AccessLevel, isOnlyIfAvailable: Bool, requiredThroughAlias: Bool, receivers: [Receiver], nestedSeamCall: NestedSeamCall?, deferral: Deferral, internalName: String, otherInitializerArgumentsAccess: AccessLevel) {
+			self.property = property
+			self.isPassThrough = isPassThrough
+			self.access = access
+			self.accessCause = accessCause
+			self.tierAccess = tierAccess
+			self.isOnlyIfAvailable = isOnlyIfAvailable
+			self.requiredThroughAlias = requiredThroughAlias
+			self.receivers = receivers
+			self.nestedSeamCall = nestedSeamCall
+			self.deferral = deferral
+			self.internalName = internalName
+			self.otherInitializerArgumentsAccess = otherInitializerArgumentsAccess
+		}
+
 		public init(property: Property, isPassThrough: Bool, access: AccessLevel, tierAccess: AccessLevel? = nil, isOnlyIfAvailable: Bool, requiredThroughAlias: Bool = false, deferral: Deferral = .none, internalName: String? = nil, receivers: [Receiver] = [], accessCause: TypeAccessProof.Cause? = nil, nestedSeamCall: NestedSeamCall? = nil, otherInitializerArgumentsAccess: AccessLevel = .public) {
 			self.property = property
 			self.isPassThrough = isPassThrough
@@ -165,7 +181,7 @@ public struct SeamSignature: Sendable {
 		public let internalName: String
 
 		/// How the generated initializer takes a parameter.
-		public enum Deferral: Hashable, Sendable {
+		public enum Deferral: Codable, Hashable, Sendable {
 			/// Taken by value, as spelled.
 			case none
 			/// Taken by generated code as `@autoclosure @escaping () -> T`, held in a `LazilyInstantiated<T>` the tree reads
@@ -185,7 +201,7 @@ public struct SeamSignature: Sendable {
 		func plainSpelling(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> String {
 			// The closure of the initializer only generated code calls captures a deferred parameter, so a function type is
 			// `@escaping` here even though that initializer takes it behind an `@autoclosure`.
-			property.spelledAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)
+			property.functionParameterSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 		}
 
 		/// The parameter as the initializer only generated code calls declares it: under `generatedOnlyArgumentLabel`, a
@@ -194,7 +210,7 @@ public struct SeamSignature: Sendable {
 		func generatedOnlySpelling(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> String {
 			switch deferral {
 			case .none:
-				"\(generatedOnlyArgumentLabel) \(property.spelledAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping))"
+				"\(generatedOnlyArgumentLabel) \(property.functionParameterSource(amongTypesDeclaredEscaping: typesDeclaredEscaping))"
 			case let .deferred(isSendable):
 				"\(internalName == generatedOnlyArgumentLabel ? internalName : "\(generatedOnlyArgumentLabel) \(internalName)"): @autoclosure @escaping\(isSendable ? " @Sendable" : "") () -> \(property.typeDescription.asSource)"
 			}
@@ -215,9 +231,43 @@ public struct SeamSignature: Sendable {
 	/// declaration the seam's module can see fulfills, or one an inner seam's tree holds that this seam passes up: the
 	/// generated initializer takes a builder for it, which a caller that can see a fulfilling declaration fills. Each
 	/// site is its own hole, with its own builder and scope struct, never grouped with another site of the property.
-	public struct Hole: Sendable {
+	public struct Hole: Codable, Sendable {
+		/// A value holding each stored property as given, which a module info file reads back.
+		public init(storing ownerType: TypeDescription, declaringModuleNames: [String], property: Property, instantiatedType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, erasedToConcreteExistential: Bool, sitePath: [Property], declaredSitePath: [DeclaredProperty], fillPropertyStack: [Property], fillConcreteTypeStack: [TypeDescription], builderLabel: String, narrowerTierBuilderLabels: [AccessLevel: String], internalName: String, scopeSeamType: TypeDescription, scopeSeamModule: ModuleIdentity, typesToOwner: [PathType], scopeTypeName: String, enumPlace: EnumPlace?, wrapperFunctionName: String?, fields: [Field], tierAccess: AccessLevel, accessCause: TypeAccessProof.Cause?, uncarriedDeclarations: [UncarriedDeclaration], cycleReentryDeclarations: [CycleReentryDeclaration], reenteringCallDeclarations: [ReenteringCallDeclaration], reenteringPlaceFields: [ReenteringPlaceField], declarationsHiddenByFields: [DeclarationHiddenByField], innerSeamType: TypeDescription?, passedUpRoute: [DeclaredProperty], isSendable: Bool) {
+			self.ownerType = ownerType
+			self.declaringModuleNames = declaringModuleNames
+			self.property = property
+			self.instantiatedType = instantiatedType
+			self.declarationLocation = declarationLocation
+			self.erasedToConcreteExistential = erasedToConcreteExistential
+			self.sitePath = sitePath
+			self.declaredSitePath = declaredSitePath
+			self.fillPropertyStack = fillPropertyStack
+			self.fillConcreteTypeStack = fillConcreteTypeStack
+			self.builderLabel = builderLabel
+			self.narrowerTierBuilderLabels = narrowerTierBuilderLabels
+			self.internalName = internalName
+			self.scopeSeamType = scopeSeamType
+			self.scopeSeamModule = scopeSeamModule
+			self.typesToOwner = typesToOwner
+			self.scopeTypeName = scopeTypeName
+			self.enumPlace = enumPlace
+			self.wrapperFunctionName = wrapperFunctionName
+			self.fields = fields
+			self.tierAccess = tierAccess
+			self.accessCause = accessCause
+			self.uncarriedDeclarations = uncarriedDeclarations
+			self.cycleReentryDeclarations = cycleReentryDeclarations
+			self.reenteringCallDeclarations = reenteringCallDeclarations
+			self.reenteringPlaceFields = reenteringPlaceFields
+			self.declarationsHiddenByFields = declarationsHiddenByFields
+			self.innerSeamType = innerSeamType
+			self.passedUpRoute = passedUpRoute
+			self.isSendable = isSendable
+		}
+
 		/// A value in scope at the site, which the scope struct the builder is handed carries.
-		public struct Field: Sendable {
+		public struct Field: Codable, Sendable {
 			public init(property: Property, access: AccessLevel, accessCause: TypeAccessProof.Cause? = nil, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool = false, parameterTakingType: TypeDescription? = nil, deferral: Parameter.Deferral = .none, bindsMemo: Bool = false, isSeamParameter: Bool = false, isBoundByPublicMockRoot: Bool = false, seamParameterOrigin: SeamParameterOrigin? = nil) {
 				self.property = property
 				self.isBoundByPublicMockRoot = isBoundByPublicMockRoot
@@ -240,7 +290,7 @@ public struct SeamSignature: Sendable {
 			/// that seam, whose parameter the field still is. A fill whose tree receives the label in a form no one parameter
 			/// takes together with the parameter's gives that seam's tree the label in two forms, which the seam reports
 			/// where it sees both.
-			public struct SeamParameterOrigin: Sendable {
+			public struct SeamParameterOrigin: Codable, Sendable {
 				public init(seamType: TypeDescription, seamDeclarationLocation: Dependency.DeclarationLocation?, isPassThrough: Bool, receivers: [Receiver]) {
 					self.seamType = seamType
 					self.seamDeclarationLocation = seamDeclarationLocation
@@ -333,7 +383,22 @@ public struct SeamSignature: Sendable {
 		/// A declaration on the site's path whose label a fill cannot read from the scope struct: the nearest declaration
 		/// of its label is bound after the site. A fill whose tree receives such a label is an error, since inline the
 		/// receive reads that declaration.
-		public struct UncarriedDeclaration: Sendable {
+		public struct UncarriedDeclaration: Codable, Sendable {
+			/// A value holding each stored property as given, which a module info file reads back.
+			public init(storing property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, parameterTakingType: TypeDescription?, builtAfter: Property?, reason: Reason, isBoundFromCallersArgument: Bool, isBuildableAboveSeam: Bool, labelsHeldAboveSeam: Set<String>, placesInTree: [Site], holdsPlaceFilledElsewhere: Bool) {
+				self.property = property
+				self.declaringType = declaringType
+				self.declarationLocation = declarationLocation
+				self.parameterTakingType = parameterTakingType
+				self.builtAfter = builtAfter
+				self.reason = reason
+				self.isBoundFromCallersArgument = isBoundFromCallersArgument
+				self.isBuildableAboveSeam = isBuildableAboveSeam
+				self.labelsHeldAboveSeam = labelsHeldAboveSeam
+				self.placesInTree = placesInTree
+				self.holdsPlaceFilledElsewhere = holdsPlaceFilledElsewhere
+			}
+
 			public init(property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, parameterTakingType: TypeDescription? = nil, builtAfter: Property?, reason: Reason, isBoundFromCallersArgument: Bool = false) {
 				self.property = property
 				self.declaringType = declaringType
@@ -345,7 +410,7 @@ public struct SeamSignature: Sendable {
 			}
 
 			/// Why the declaration is bound after the site.
-			public enum Reason: Sendable {
+			public enum Reason: Codable, Sendable {
 				/// Its type receives `builtAfter`, the scope on the site's path, only if available.
 				case receivesPathScopeOnlyIfAvailable(type: TypeDescription)
 				/// Its type requires `carrier`, a sibling that holds another site.
@@ -369,7 +434,7 @@ public struct SeamSignature: Sendable {
 			}
 
 			/// The `@Sendable` function a place is built inside, which decides whether a value can be forwarded into it.
-			public enum SendableFunction: Sendable {
+			public enum SendableFunction: Codable, Sendable {
 				/// The builder function of an instantiator, which builds `builtType` and takes its forwarded properties.
 				case instantiator(builtType: TypeDescription)
 				/// The builder function of a `SendableLazilyInstantiated`, which builds `builtType`, and would take its forwarded
@@ -384,7 +449,12 @@ public struct SeamSignature: Sendable {
 
 			/// An alias that binds a label to another property than the one of its own label: `fulfillingProperty`, the
 			/// caller's where `isSeams`, the seam's own alias, and otherwise a property of the seam's tree.
-			public struct AliasOrigin: Sendable {
+			public struct AliasOrigin: Codable, Sendable {
+				public init(fulfillingProperty: Property, isSeams: Bool) {
+					self.fulfillingProperty = fulfillingProperty
+					self.isSeams = isSeams
+				}
+
 				public let fulfillingProperty: Property
 				public let isSeams: Bool
 			}
@@ -392,7 +462,15 @@ public struct SeamSignature: Sendable {
 			/// A parameter of the builder function of `takingType` that a lazy cycle closes on: a cycle inside `takingType`'s
 			/// tree passes it the `property` that `declaringType` declares, or forwards where `isForwarded`, at
 			/// `declarationLocation`.
-			public struct CycleParameterOrigin: Sendable {
+			public struct CycleParameterOrigin: Codable, Sendable {
+				public init(takingType: TypeDescription, property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isForwarded: Bool) {
+					self.takingType = takingType
+					self.property = property
+					self.declaringType = declaringType
+					self.declarationLocation = declarationLocation
+					self.isForwarded = isForwarded
+				}
+
 				public let takingType: TypeDescription
 				public let property: Property
 				public let declaringType: TypeDescription
@@ -402,7 +480,18 @@ public struct SeamSignature: Sendable {
 
 			/// The place a call presents whose builder a seam passes up, which a message about a declaration bound on the path
 			/// to that call names: a place inside a fill inherits what the place the fill fills does not carry.
-			public struct PresentedPlace: Sendable {
+			public struct PresentedPlace: Codable, Sendable {
+				/// A value holding each stored property as given, which a module info file reads back.
+				public init(storing seamType: TypeDescription, ownerType: TypeDescription, property: Property, instantiatedType: TypeDescription, builderLabel: String, caseName: String?, isBuiltBySendableBuilder: Bool) {
+					self.seamType = seamType
+					self.ownerType = ownerType
+					self.property = property
+					self.instantiatedType = instantiatedType
+					self.builderLabel = builderLabel
+					self.caseName = caseName
+					self.isBuiltBySendableBuilder = isBuiltBySendableBuilder
+				}
+
 				init(_ hole: Hole) {
 					seamType = hole.scopeSeamType
 					ownerType = hole.ownerType
@@ -457,12 +546,12 @@ public struct SeamSignature: Sendable {
 			public internal(set) var isBuildableAboveSeam = false
 			/// Where `isBuildableAboveSeam`, the labels a type above the seam would hold for the declaration's tree: those the
 			/// seam receives from its caller, and the declaration's own, which that type would then declare.
-			var labelsHeldAboveSeam = Set<String>()
+			public internal(set) var labelsHeldAboveSeam = Set<String>()
 			/// Where `isBuildableAboveSeam`, the sites of the places the declaration's tree holds or passes up.
-			var placesInTree = [Site]()
+			public internal(set) var placesInTree = [Site]()
 			/// Whether a module whose fill the reading module does not see fills one of `placesInTree`
 			/// (`resolvingBuildabilityAboveSeam(fillsOfCall:)`), so that no remedy moves the declaration.
-			var holdsPlaceFilledElsewhere = false
+			public internal(set) var holdsPlaceFilledElsewhere = false
 		}
 
 		/// A declaration a cycle in the seam's tree hands the site's owner when it builds it again: the site lies in the body
@@ -470,7 +559,18 @@ public struct SeamSignature: Sendable {
 		/// declares the label, while the label's nearest declaration at the site is outside the function. Inline, the type
 		/// built again receives that declaration through the function's parameter; a fill, which reads the scope struct or
 		/// the caller's scope, reads the same value at every level of the cycle.
-		public struct CycleReentryDeclaration: Sendable {
+		public struct CycleReentryDeclaration: Codable, Sendable {
+			public init(property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, parameterTakingType: TypeDescription?, closedOnProperty: Property, closedOnBuiltType: TypeDescription, closedOnDeclaringType: TypeDescription, reenteringType: TypeDescription) {
+				self.property = property
+				self.declaringType = declaringType
+				self.declarationLocation = declarationLocation
+				self.parameterTakingType = parameterTakingType
+				self.closedOnProperty = closedOnProperty
+				self.closedOnBuiltType = closedOnBuiltType
+				self.closedOnDeclaringType = closedOnDeclaringType
+				self.reenteringType = reenteringType
+			}
+
 			/// The declaration between the function and the cycle-closing scope, or, where a scope between takes the label as
 			/// a parameter of a builder function a cycle nested inside closes on, the declaration that cycle passes it.
 			public let property: Property
@@ -496,7 +596,20 @@ public struct SeamSignature: Sendable {
 		/// no field of, nor any scope between that fill's root and the place declares. A field of the label bound above the
 		/// seam call does not lift it, a deliberate loss of a shape inline builds correctly, until each route is handed its own
 		/// value.
-		public struct ReenteringCallDeclaration: Sendable {
+		public struct ReenteringCallDeclaration: Codable, Sendable {
+			public init(property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, pathPlace: UncarriedDeclaration.PresentedPlace, callingType: TypeDescription, callProperty: Property, calledSeam: TypeDescription, reenteredPlace: UncarriedDeclaration.PresentedPlace, reenteredSeamModule: ModuleIdentity, fillingModule: ModuleIdentity) {
+				self.property = property
+				self.declaringType = declaringType
+				self.declarationLocation = declarationLocation
+				self.pathPlace = pathPlace
+				self.callingType = callingType
+				self.callProperty = callProperty
+				self.calledSeam = calledSeam
+				self.reenteredPlace = reenteredPlace
+				self.reenteredSeamModule = reenteredSeamModule
+				self.fillingModule = fillingModule
+			}
+
 			/// The declaration, by the type that declares it, and where.
 			public let property: Property
 			public let declaringType: TypeDescription
@@ -518,7 +631,14 @@ public struct SeamSignature: Sendable {
 		/// A field, not bound from a seam parameter, of the place whose fill makes a call that builds the filled seam again and
 		/// passes a fill of the same seam call on, with that call: inline, the seam built again sits beneath that place, so a
 		/// read of the label the passed fill makes from the caller's scope finds the field.
-		public struct FieldOfReenteringPlace: Sendable {
+		public struct FieldOfReenteringPlace: Codable, Sendable {
+			public init(field: Field, reenteringPlace: UncarriedDeclaration.PresentedPlace, callProperty: Property, calledSeam: TypeDescription) {
+				self.field = field
+				self.reenteringPlace = reenteringPlace
+				self.callProperty = callProperty
+				self.calledSeam = calledSeam
+			}
+
 			public let field: Field
 			/// The place whose fill makes the call.
 			public let reenteringPlace: UncarriedDeclaration.PresentedPlace
@@ -534,7 +654,14 @@ public struct SeamSignature: Sendable {
 		/// field, cycle re-entry or uncarried declaration of, that no scope between that fill's root and the place declares, and
 		/// that no declaration on the path to the call hides (`ReenteringCallDeclaration`, which the visible build reports
 		/// first). A field of the label bound above the seam call does not lift it, as for `ReenteringCallDeclaration`.
-		public struct ReenteringPlaceField: Sendable {
+		public struct ReenteringPlaceField: Codable, Sendable {
+			public init(carried: FieldOfReenteringPlace, reenteredPlace: UncarriedDeclaration.PresentedPlace, reenteredSeamModule: ModuleIdentity, fillingModule: ModuleIdentity) {
+				self.carried = carried
+				self.reenteredPlace = reenteredPlace
+				self.reenteredSeamModule = reenteredSeamModule
+				self.fillingModule = fillingModule
+			}
+
 			public let carried: FieldOfReenteringPlace
 			/// The place of the fill the call is passed, which holds this place, and the module of its seam.
 			public let reenteredPlace: UncarriedDeclaration.PresentedPlace
@@ -549,7 +676,15 @@ public struct SeamSignature: Sendable {
 		/// struct's field, nearer the place. Inline, a receive of the declaration's form beneath the place reads the declaration;
 		/// the struct carries only the field, so a fill of this place that reads that form finds no value of the declaration's
 		/// (`declarationHiddenByField`). Kept apart from `uncarriedDeclarations`, which a field of the same label lifts.
-		public struct DeclarationHiddenByField: Sendable {
+		public struct DeclarationHiddenByField: Codable, Sendable {
+			public init(property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, calledSeam: TypeDescription, receivingSeam: TypeDescription) {
+				self.property = property
+				self.declaringType = declaringType
+				self.declarationLocation = declarationLocation
+				self.calledSeam = calledSeam
+				self.receivingSeam = receivingSeam
+			}
+
 			public let property: Property
 			public let declaringType: TypeDescription
 			public let declarationLocation: Dependency.DeclarationLocation?
@@ -560,7 +695,7 @@ public struct SeamSignature: Sendable {
 		}
 
 		/// A type on the way from the seam that takes a hole's builder to the hole's owner, with the module that declares it.
-		public struct PathType: Sendable {
+		public struct PathType: Codable, Sendable {
 			public init(type: TypeDescription, moduleName: String?) {
 				self.type = type
 				self.moduleName = moduleName
@@ -662,7 +797,7 @@ public struct SeamSignature: Sendable {
 		public internal(set) var builderLabel: String
 		/// The label each narrower tier takes the place's builder under, where it differs from `builderLabel`
 		/// (`Builder.narrowerTierLabels`).
-		var narrowerTierBuilderLabels = [AccessLevel: String]()
+		public internal(set) var narrowerTierBuilderLabels = [AccessLevel: String]()
 		/// The name the generated initializer binds the builder to.
 		public internal(set) var internalName: String
 		/// The seam whose extension declares the scope struct: this seam, or the inner seam a passed-up hole is from.
@@ -719,8 +854,8 @@ public struct SeamSignature: Sendable {
 		public internal(set) var isSendable: Bool
 
 		/// Where a scope enum carries a place.
-		public struct EnumPlace: Sendable {
-			init(nestedByTypeIn enumTypeName: String, rootEnumTypeName: String?, caseName: String, valuesTypeName: String?, memberValuesTypeName: String? = nil, isBuiltBySendableBuilder: Bool, route: [RouteStep], values: [Field]) {
+		public struct EnumPlace: Codable, Sendable {
+			public init(nestedByTypeIn enumTypeName: String, rootEnumTypeName: String?, caseName: String, valuesTypeName: String?, memberValuesTypeName: String? = nil, isBuiltBySendableBuilder: Bool, route: [RouteStep], values: [Field]) {
 				self.enumTypeName = enumTypeName
 				self.caseName = caseName
 				self.valuesTypeName = valuesTypeName
@@ -769,8 +904,8 @@ public struct SeamSignature: Sendable {
 
 		/// A case on the way from a root enum nested by type to a place, which wraps the next: its name, and what it carries
 		/// before the value it wraps.
-		public struct RouteStep: Sendable {
-			init(caseName: String, values: Values?, innerScope: InnerScope? = nil, leadsIntoFill: Bool = false, member: Member? = nil) {
+		public struct RouteStep: Codable, Sendable {
+			public init(caseName: String, values: Values?, innerScope: InnerScope? = nil, leadsIntoFill: Bool = false, member: Member? = nil) {
 				self.caseName = caseName
 				self.values = values
 				self.innerScope = innerScope
@@ -788,10 +923,10 @@ public struct SeamSignature: Sendable {
 			/// bound outside that function.
 			public let innerScope: InnerScope?
 			/// Whether the case is a call's for a builder it fills, which leads into what the fill builds.
-			let leadsIntoFill: Bool
+			public let leadsIntoFill: Bool
 			/// The call of the case's member of the enum's builder struct the seam's tree makes, whose result the next step's
 			/// call, or the place's, is made on.
-			let member: Member?
+			public let member: Member?
 
 			/// The call of a case's member on a route: the name the seam's tree binds the struct it returns under, the type of
 			/// the struct it is handed, as the seam's extension spells it, that struct's fields, the type of the struct it
@@ -799,20 +934,29 @@ public struct SeamSignature: Sendable {
 			/// whether it is made at the top of that property's own builder function rather than just before it: a member of a
 			/// `@Sendable` enum whose property is built in a `@Sendable` function, since what it returns can be a plain struct,
 			/// which that function could not capture.
-			struct Member: Sendable {
-				let bindingName: String
-				let valuesType: TypeDescription
-				let fields: [Field]
-				let levelType: TypeDescription
-				let bindingPath: [Property]
-				let isCalledInsideFunction: Bool
+			public struct Member: Codable, Sendable {
+				public init(bindingName: String, valuesType: TypeDescription, fields: [Field], levelType: TypeDescription, bindingPath: [Property], isCalledInsideFunction: Bool) {
+					self.bindingName = bindingName
+					self.valuesType = valuesType
+					self.fields = fields
+					self.levelType = levelType
+					self.bindingPath = bindingPath
+					self.isCalledInsideFunction = isCalledInsideFunction
+				}
+
+				public let bindingName: String
+				public let valuesType: TypeDescription
+				public let fields: [Field]
+				public let levelType: TypeDescription
+				public let bindingPath: [Property]
+				public let isCalledInsideFunction: Bool
 			}
 
 			/// A case's payload on a route: the name the seam's tree binds it under, before the case's property is built, the
 			/// type of its struct, as the seam's extension spells it, and its fields, what the case's type binds before its
 			/// property.
-			public struct Values: Sendable {
-				init(bindingName: String, type: TypeDescription, fields: [Field], bindingPath: [Property] = []) {
+			public struct Values: Codable, Sendable {
+				public init(bindingName: String, type: TypeDescription, fields: [Field], bindingPath: [Property] = []) {
 					self.bindingName = bindingName
 					self.type = type
 					self.fields = fields
@@ -823,18 +967,26 @@ public struct SeamSignature: Sendable {
 				public let type: TypeDescription
 				public let fields: [Field]
 				/// The path, from the seam's root, of the property the seam's tree binds the payload just before building.
-				let bindingPath: [Property]
+				public let bindingPath: [Property]
 			}
 
 			/// The scope value an inner seam hands a fill its caller declares, as a place inside the fill's tree reads it: the
 			/// call's path, the inner seam's root enum the builder the fill is passed for is handed, and the name of the
 			/// parameter the fill, and each dispatcher that leads to it, take the value under.
-			public struct InnerScope: Sendable {
-				let callPath: [Property]
-				let innerKey: ScopeEnum.Key
-				let enumType: TypeDescription
+			public struct InnerScope: Codable, Sendable {
+				public init(callPath: [Property], innerKey: ScopeEnum.Key, enumType: TypeDescription, builderLabel: String, name: String) {
+					self.callPath = callPath
+					self.innerKey = innerKey
+					self.enumType = enumType
+					self.builderLabel = builderLabel
+					self.name = name
+				}
+
+				public let callPath: [Property]
+				public let innerKey: ScopeEnum.Key
+				public let enumType: TypeDescription
 				/// The label of the builder the fill is passed for, which the name is made from.
-				let builderLabel: String
+				public let builderLabel: String
 				public let name: String
 			}
 
@@ -874,7 +1026,7 @@ public struct SeamSignature: Sendable {
 
 		/// A property on the way to a site, the type that declares it, and where, when that is known. For a property of a
 		/// protocol's fulfiller, the type is the fulfiller, which the property's type does not name.
-		public struct DeclaredProperty: Sendable {
+		public struct DeclaredProperty: Codable, Sendable {
 			public init(property: Property, declaringType: TypeDescription?, declarationLocation: Dependency.DeclarationLocation?) {
 				self.property = property
 				self.declaringType = declaringType
@@ -888,7 +1040,12 @@ public struct SeamSignature: Sendable {
 
 		/// What identifies a hole: its site, by the seam whose tree holds it and its path there, which a passed-up hole
 		/// keeps. A seam takes one builder per site, whatever route presents it.
-		public struct Site: Hashable, Sendable {
+		public struct Site: Codable, Hashable, Sendable {
+			public init(seamType: TypeDescription, path: [Property]) {
+				self.seamType = seamType
+				self.path = path
+			}
+
 			public let seamType: TypeDescription
 			public let path: [Property]
 		}
@@ -948,8 +1105,8 @@ public struct SeamSignature: Sendable {
 	/// How the seam's tree hands an inner seam's enum up from a call whose case is in an enum nested by type: the call's path,
 	/// the inner enum, the cases that lead from the root enum to the call's case, and the values the call's owner binds
 	/// before it, which the closure the call passes builds.
-	public struct CallRoute: Sendable {
-		init(sitePath: [Property], innerKey: ScopeEnum.Key, rootKey: ScopeEnum.Key, route: [Hole.RouteStep], caseName: String, memberValuesType: TypeDescription? = nil, handsFillLevelStruct: Bool = false, reentersEnclosingFill: Bool = false) {
+	public struct CallRoute: Codable, Sendable {
+		public init(sitePath: [Property], innerKey: ScopeEnum.Key, rootKey: ScopeEnum.Key, route: [Hole.RouteStep], caseName: String, memberValuesType: TypeDescription? = nil, handsFillLevelStruct: Bool = false, reentersEnclosingFill: Bool = false) {
 			self.sitePath = sitePath
 			self.innerKey = innerKey
 			self.rootKey = rootKey
@@ -1007,7 +1164,12 @@ public struct SeamSignature: Sendable {
 	}
 
 	/// What a seam takes one builder of per family (see `Hole.holeType`).
-	public struct HoleType: Hashable, Sendable {
+	public struct HoleType: Codable, Hashable, Sendable {
+		public init(instantiatedType: TypeDescription, builtType: TypeDescription) {
+			self.instantiatedType = instantiatedType
+			self.builtType = builtType
+		}
+
 		public let instantiatedType: TypeDescription
 		public let builtType: TypeDescription
 	}
@@ -1020,8 +1182,8 @@ public struct SeamSignature: Sendable {
 	/// a property that builds a type with an enum, a call of an inner seam or another module's public mock, or such a call
 	/// and a builder it fills with a type whose tree leads to a place – and carries what that type binds before the property
 	/// (`Case.values`).
-	public struct ScopeEnum: Sendable {
-		public struct Key: Hashable, Sendable {
+	public struct ScopeEnum: Codable, Sendable {
+		public struct Key: Codable, Hashable, Sendable {
 			public init(seamType: TypeDescription, holeType: HoleType, isSendable: Bool, describedType: TypeDescription? = nil) {
 				self.seamType = seamType
 				self.holeType = holeType
@@ -1044,7 +1206,7 @@ public struct SeamSignature: Sendable {
 		/// What the type an enum nested by type describes binds before a case's property: its `@Forwarded` properties, then
 		/// the children it builds before the property, and, for the seam itself, its parameters first. The case's payload
 		/// struct holds them.
-		public struct Values: Sendable {
+		public struct Values: Codable, Sendable {
 			public init(typeName: String, fields: [Hole.Field], labelsBoundLater: Set<String> = []) {
 				self.typeName = typeName
 				self.fields = fields
@@ -1061,7 +1223,7 @@ public struct SeamSignature: Sendable {
 			public let labelsBoundLater: Set<String>
 		}
 
-		public struct Case: Sendable {
+		public struct Case: Codable, Sendable {
 			public init(name: String, kind: Kind, values: Values? = nil, memberValuesTypeName: String? = nil) {
 				self.name = name
 				self.kind = kind
@@ -1069,7 +1231,15 @@ public struct SeamSignature: Sendable {
 				self.memberValuesTypeName = memberValuesTypeName ?? values?.typeName
 			}
 
-			public enum Kind: Sendable {
+			/// The case of each field as given, as a module info file stores it.
+			public init(storing name: String, kind: Kind, values: Values?, memberValuesTypeName: String?) {
+				self.name = name
+				self.kind = kind
+				self.values = values
+				self.memberValuesTypeName = memberValuesTypeName
+			}
+
+			public enum Kind: Codable, Sendable {
 				/// A place of the enum's seam: every site at which the type the enum describes builds the property, in the order
 				/// the builders reach them.
 				case place(sites: [Hole.Site])
@@ -1180,7 +1350,21 @@ public struct SeamSignature: Sendable {
 	}
 
 	/// A builder of the generated initializer, over a root scope enum.
-	public struct Builder: Sendable {
+	public struct Builder: Codable, Sendable {
+		public init(enumKey: ScopeEnum.Key, label: String, internalName: String, parameterType: TypeDescription, readableParameterType: TypeDescription, takesBuilderStruct: Bool, tierAccess: AccessLevel, accessCause: TypeAccessProof.Cause?, narrowingInnerSeam: TypeDescription?, narrowerTierLabels: [AccessLevel: String] = [:]) {
+			self.enumKey = enumKey
+			self.label = label
+			self.internalName = internalName
+			self.parameterType = parameterType
+			parameterTypeWithoutAny = parameterType.withoutAny
+			self.readableParameterType = readableParameterType
+			self.takesBuilderStruct = takesBuilderStruct
+			self.tierAccess = tierAccess
+			self.accessCause = accessCause
+			self.narrowingInnerSeam = narrowingInnerSeam
+			self.narrowerTierLabels = narrowerTierLabels
+		}
+
 		/// The key of the root enum the builder is handed.
 		public let enumKey: ScopeEnum.Key
 		/// The label the widest tier takes the builder under.
@@ -1205,7 +1389,7 @@ public struct SeamSignature: Sendable {
 		/// The label each narrower tier takes the builder under, where it differs from `label`: each tier names its builders
 		/// apart from its own parameters and those of the tiers wider than it, so a narrower parameter never renames a wider
 		/// tier's builder.
-		var narrowerTierLabels = [AccessLevel: String]()
+		public internal(set) var narrowerTierLabels = [AccessLevel: String]()
 
 		/// The label the initializer only generated code calls takes the builder under.
 		public var generatedOnlyArgumentLabel: String {
@@ -1229,7 +1413,6 @@ public struct SeamSignature: Sendable {
 				label: label(inTierAt: tier),
 				internalName: internalName,
 				parameterType: parameterType,
-				parameterTypeWithoutAny: parameterTypeWithoutAny,
 				readableParameterType: readableParameterType,
 				takesBuilderStruct: takesBuilderStruct,
 				tierAccess: tierAccess,
@@ -1550,6 +1733,82 @@ public struct SeamSignature: Sendable {
 	}
 }
 
+extension SeamSignature: Codable {
+	public init(from decoder: any Decoder) throws {
+		let container = try decoder.container(keyedBy: CodingKeys.self)
+		try self.init(
+			seamType: container.decode(TypeDescription.self, forKey: .seamType),
+			parameters: container.decode([Parameter].self, forKey: .parameters),
+			tiers: container.decode([AccessLevel].self, forKey: .tiers),
+			noTierParameters: container.decode([Parameter].self, forKey: .noTierParameters),
+			holes: container.decode([Hole].self, forKey: .holes),
+			builders: container.decode([Builder].self, forKey: .builders),
+			scopeEnums: container.decode([ScopeEnum].self, forKey: .scopeEnums),
+			callRoutes: container.decode([CallRoute].self, forKey: .callRoutes),
+			typesDeclaredEscaping: container.decode(Set<TypeDescription>.self, forKey: .typesDeclaredEscaping),
+		)
+	}
+
+	public func encode(to encoder: any Encoder) throws {
+		var container = encoder.container(keyedBy: CodingKeys.self)
+		try container.encode(seamType, forKey: .seamType)
+		try container.encode(parameters, forKey: .parameters)
+		try container.encode(tiers, forKey: .tiers)
+		try container.encode(noTierParameters, forKey: .noTierParameters)
+		try container.encode(holes, forKey: .holes)
+		try container.encode(builders, forKey: .builders)
+		try container.encode(scopeEnums, forKey: .scopeEnums)
+		try container.encode(callRoutes, forKey: .callRoutes)
+		try container.encode(typesDeclaredEscaping.sorted(), forKey: .typesDeclaredEscaping)
+	}
+
+	/// The fields a signature is written as: `callShape` and `guardTypeName` are computed from them.
+	private enum CodingKeys: String, CodingKey {
+		case seamType
+		case parameters
+		case tiers
+		case noTierParameters
+		case holes
+		case builders
+		case scopeEnums
+		case callRoutes
+		case typesDeclaredEscaping
+	}
+}
+
+/// A seam's signature as the run of `generate` of the module that declares it computed it, which the module's module
+/// info file carries so that a module calling the seam reads the signature rather than computes it again.
+// A synthesized `Codable` conformance writes a set's elements, and a dictionary whose keys are not strings, in hash order,
+// which changes between runs. The conformances in this module call these overloads instead, so that `SafeDITool dump` prints
+// a seam signature the same on every run. Each writes what the synthesized conformance reads back.
+extension KeyedEncodingContainer {
+	mutating func encode(_ labels: Set<String>, forKey key: Key) throws {
+		try encode(labels.sorted(), forKey: key)
+	}
+
+	/// Writes the labels widest tier first, each tier followed by its label, as a dictionary writes its pairs.
+	mutating func encode(_ labelsByTier: [AccessLevel: String], forKey key: Key) throws {
+		var container = nestedUnkeyedContainer(forKey: key)
+		for (tier, label) in labelsByTier.sorted(by: { $0.key > $1.key }) {
+			try container.encode(tier)
+			try container.encode(label)
+		}
+	}
+}
+
+public struct StoredSeamSignature: Codable, Sendable {
+	public init(seamType: TypeDescription, signature: SeamSignature?) {
+		self.seamType = seamType
+		self.signature = signature
+	}
+
+	/// The seam, as its module's run names it.
+	public let seamType: TypeDescription
+	/// The seam's signature, or `nil` for a seam whose generated signature equals its own initializer's (see
+	/// `ScopeGenerator.SeamRoot`), which every tree builds with that initializer.
+	public let signature: SeamSignature?
+}
+
 /// A 64-bit FNV-1a hash, which is the same on every platform and in every process, unlike `Hasher`, which Swift
 /// seeds per process.
 struct SeamSignatureHash {
@@ -1738,50 +1997,69 @@ struct CalledBuilders: Sendable {
 public struct SeamResolution: Sendable {
 	/// A seam declared in another module, which that module's run of `generate` generated the initializer of.
 	public struct ForeignSeam: Sendable {
-		public init(declaringModule: ModuleIdentity, visibleInstantiables: [TypeDescription: Instantiable], visiblePlainTypeDeclarations: [PlainTypeDeclaration], callComment: SeamCallComment, declaringModuleMockCondition: MockCondition? = nil) {
+		public init(declaringModule: ModuleIdentity, visibleDeclarations: @escaping @Sendable () throws -> VisibleDeclarations, callComment: SeamCallComment, declaringModuleMockCondition: MockCondition? = nil, storedSignature: StoredSeamSignature? = nil) {
 			self.declaringModule = declaringModule
-			self.visibleInstantiables = visibleInstantiables
-			self.visiblePlainTypeDeclarations = visiblePlainTypeDeclarations
+			self.visibleDeclarations = visibleDeclarations
 			self.callComment = callComment
 			self.declaringModuleMockCondition = declaringModuleMockCondition
+			self.storedSignature = storedSignature
 		}
 
 		/// The module that declares the seam, whose name is known: a seam whose module is unknown is built inline.
 		public let declaringModule: ModuleIdentity
-		/// The declarations the seam's module can see, resolved as `generate` resolves them, from which the seam's
-		/// signature is computed exactly as that module computed it. The seams of one module share one map.
-		public let visibleInstantiables: [TypeDescription: Instantiable]
-		/// The plain type declarations of the modules whose declarations `visibleInstantiables` holds, which prove the
-		/// access of the types the seam's parameters name as they prove it in the seam's module.
-		public let visiblePlainTypeDeclarations: [PlainTypeDeclaration]
+		/// Resolves the declarations the seam's module can see, as `generate` resolves them, from which the seam's
+		/// signature is computed exactly as that module computed it: called only for a module whose seams a tree
+		/// reaches and that carries no signatures of them, once per module, since the seams of one module share them.
+		public let visibleDeclarations: @Sendable () throws -> VisibleDeclarations
 		/// See `SeamCall.comment`.
 		public let callComment: SeamCallComment
 		/// The mock condition of the seam's module, when this run read that module's files under its own mock condition,
-		/// as it does under the SwiftPM plugin's target graph: `visibleInstantiables` then holds the module's mock-only
+		/// as it does under the SwiftPM plugin's target graph: `visibleDeclarations` then holds the module's mock-only
 		/// declarations as this run's condition selects them, which is how the module reads them only when the two
 		/// conditions are spelled the same. `nil` when this run read the module's module info, which holds its
 		/// declarations as the module read them.
 		public let declaringModuleMockCondition: MockCondition?
+		/// The seam's signature as its module's run computed it, which the module info this run read it from carries;
+		/// `nil` when this run read the module's files, under the SwiftPM plugin's target graph.
+		public let storedSignature: StoredSeamSignature?
+	}
+
+	/// Whether a foreign seam carries the signature its module's run stored.
+	public var readsStoredSignature: Bool {
+		foreignSeams.values.contains { $0.storedSignature != nil }
+			|| (foreignDeclarationsSeenByModule ?? [:]).values.contains { $0.seams.values.contains { $0.storedSignature != nil } }
+	}
+
+	/// The declarations a module sees.
+	public struct VisibleDeclarations: Sendable {
+		public init(instantiables: [TypeDescription: Instantiable], plainTypeDeclarations: [PlainTypeDeclaration]) {
+			self.instantiables = instantiables
+			self.plainTypeDeclarations = plainTypeDeclarations
+		}
+
+		/// The declarations, resolved as `generate` resolves them.
+		public let instantiables: [TypeDescription: Instantiable]
+		/// The plain type declarations of the modules whose declarations `instantiables` holds, which prove the access
+		/// of the types a seam's parameters name as they prove it in the seam's module.
+		public let plainTypeDeclarations: [PlainTypeDeclaration]
 	}
 
 	/// A type another module declares with `generateMock: .public`, whose `mock()` that module's run of `generate`
 	/// generated, and which a mock tree of this module calls where it cannot build the type's tree itself.
 	public struct ForeignPublicMock: Sendable {
-		public init(declaringModule: ModuleIdentity, visibleInstantiables: [TypeDescription: Instantiable], visiblePlainTypeDeclarations: [PlainTypeDeclaration], callComment: SeamCallComment, declaringModuleMockCondition: MockCondition) {
+		public init(declaringModule: ModuleIdentity, visibleDeclarations: @escaping @Sendable () throws -> VisibleDeclarations, callComment: SeamCallComment, declaringModuleMockCondition: MockCondition) {
 			self.declaringModule = declaringModule
-			self.visibleInstantiables = visibleInstantiables
-			self.visiblePlainTypeDeclarations = visiblePlainTypeDeclarations
+			self.visibleDeclarations = visibleDeclarations
 			self.callComment = callComment
 			self.declaringModuleMockCondition = declaringModuleMockCondition
 		}
 
 		/// The module that declares the type, whose name is known: a type whose module is unknown is built inline.
 		public let declaringModule: ModuleIdentity
-		/// The declarations the declaring module can see, resolved as `generate` resolves them, from which the public
-		/// mock's signature is computed exactly as that module computed it.
-		public let visibleInstantiables: [TypeDescription: Instantiable]
-		/// See `ForeignSeam.visiblePlainTypeDeclarations`.
-		public let visiblePlainTypeDeclarations: [PlainTypeDeclaration]
+		/// Resolves the declarations the declaring module can see, as `generate` resolves them, from which the public
+		/// mock's signature is computed exactly as that module computed it: called only for a module whose public mock a
+		/// plan needs.
+		public let visibleDeclarations: @Sendable () throws -> VisibleDeclarations
 		/// See `SeamCall.comment`.
 		public let callComment: SeamCallComment
 		/// The condition the declaring module generates its mocks under: its configuration's, `DEBUG` without one, read

@@ -1071,11 +1071,12 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_passesNilWhereClosedOnFunctionIsDeclared_whenOnlyCallOfPublicMockReceivesLabelAndNothingAboveProvidesIt() async throws {
+	mutating func mock_passesOverrideWhereClosedOnFunctionIsDeclared_whenOnlyCallOfPublicMockReceivesLabelAndNothingAboveProvidesIt() async throws {
 		// `A`'s builder function calls `Service`'s `public` mock, which takes `filter` for `TokenCache`, and takes `filter` itself, since
-		// `Mid` forwards it before closing the cycle on `A`. Only that call receives `filter`, so `Screen`'s internal mock binds
-		// nothing for it, and passes the function `nil`, as a production root passes `nil` where nothing above provides a receive
-		// only if available. `Mid`'s cycle-closing scope passes its own `filter`.
+		// `Mid` forwards it before closing the cycle on `A`. Only that call receives `filter`, so `Screen`'s internal mock takes an
+		// override for it, as for a receive only if available in its own tree, and passes the function that override, which is
+		// `nil` unless a test sets it, as a production root passes `nil` where nothing above provides a receive only if available.
+		// `Mid`'s cycle-closing scope passes its own `filter`.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.publicMockLazyCycleModules(core: Self.coreWhosePublicMockTakesFilter, appFiles: [
 			Self.screen(generateMock: "true"),
 			Self.aCallingPublicMock,
@@ -1094,14 +1095,17 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            aBuilder: A.SafeDIMockConfiguration = .init()
+		            aBuilder: A.SafeDIMockConfiguration = .init(),
+		            filter: Filter? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                aBuilder: aBuilder
 		            )
+		            self.filter = filter
 		        }
 
 		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+		        let filter: Filter?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -1119,9 +1123,10 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let filter: Filter? = safeDIOverrides.filter
 		        func __safeDI_aBuilder(filter: Filter?) -> A {
 		            _ = Service.__safeDI_Service_mock_7257C1618F8CE2B3.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let service = Service.mock(filter: filter, safeDIOverrides: safeDIOverrides.aBuilder.service)
+		            let service = Service.__safeDI_mock(filter: filter, safeDIOverrides: safeDIOverrides.aBuilder.service)
 		            func __safeDI_midBuilder(filter: Filter) -> Mid {
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(filter: filter)
@@ -1134,7 +1139,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(service, midBuilder) } else { A(service: service, midBuilder: midBuilder) }
 		        }
 		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(filter: nil)
+		            __safeDI_aBuilder(filter: filter)
 		        }
 		        return Screen(aBuilder: aBuilder)
 		    }
@@ -1215,9 +1220,9 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_passesNilWhereClosedOnFunctionIsDeclared_whenOnlyCallOfPublicMockReceivesInstantiatorAndNothingAboveProvidesIt() async throws {
+	mutating func mock_passesOverrideWhereClosedOnFunctionIsDeclared_whenOnlyCallOfPublicMockReceivesInstantiatorAndNothingAboveProvidesIt() async throws {
 		// As for a constant: only the call of `Service`'s `public` mock receives `filterBuilder: Instantiator<Filter>?`, so `Screen`'s
-		// mock passes `A`'s builder function `nil`, and `Mid`'s cycle-closing scope its own `filterBuilder`.
+		// mock passes `A`'s builder function its override, and `Mid`'s cycle-closing scope its own `filterBuilder`.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.publicMockLazyCycleModules(core: Self.coreWhosePublicMockTakesFilterBuilder, appFiles: [
 			Self.screen(generateMock: "true"),
 			Self.aCallingPublicMock,
@@ -1236,14 +1241,17 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            aBuilder: A.SafeDIMockConfiguration = .init()
+		            aBuilder: A.SafeDIMockConfiguration = .init(),
+		            filterBuilder: Instantiator<Filter>? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                aBuilder: aBuilder
 		            )
+		            self.filterBuilder = filterBuilder
 		        }
 
 		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+		        let filterBuilder: Instantiator<Filter>?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -1261,9 +1269,10 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let filterBuilder: Instantiator<Filter>? = safeDIOverrides.filterBuilder
 		        func __safeDI_aBuilder(filterBuilder: Instantiator<Filter>?) -> A {
 		            _ = Service.__safeDI_Service_mock_7BB6CDEEAD5D6D34.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let service = Service.mock(filterBuilder: filterBuilder, safeDIOverrides: safeDIOverrides.aBuilder.service)
+		            let service = Service.__safeDI_mock(filterBuilder: filterBuilder, safeDIOverrides: safeDIOverrides.aBuilder.service)
 		            func __safeDI_midBuilder(filterBuilder: Instantiator<Filter>) -> Mid {
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(filterBuilder: filterBuilder)
@@ -1276,7 +1285,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(service, midBuilder) } else { A(service: service, midBuilder: midBuilder) }
 		        }
 		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(filterBuilder: nil)
+		            __safeDI_aBuilder(filterBuilder: filterBuilder)
 		        }
 		        return Screen(aBuilder: aBuilder)
 		    }
@@ -1415,7 +1424,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    ) -> Screen {
 		        func __safeDI_aBuilder(filter: (any Hub.Space.FilterProtocol)?) -> A {
 		            _ = Service.__safeDI_Service_mock_4D061AF06C28784E.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let service = Service.mock(safeDIOverrides: safeDIOverrides.aBuilder.service)
+		            let service = Service.__safeDI_mock(safeDIOverrides: safeDIOverrides.aBuilder.service)
 		            func __safeDI_midBuilder() -> Mid {
 		                func __safeDI_filter() -> any Hub.Space.FilterProtocol {
 		                    let aBuilder = Instantiator<A> {
@@ -1609,9 +1618,16 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    public static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        Screen.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
 		        func __safeDI_aBuilder(filter: (any Hub.Space.FilterProtocol)?) -> A {
 		            _ = Service.__safeDI_Service_mock_4D061AF06C28784E.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let service = Service.mock(safeDIOverrides: safeDIOverrides.aBuilder.service)
+		            let service = Service.__safeDI_mock(safeDIOverrides: safeDIOverrides.aBuilder.service)
 		            func __safeDI_midBuilder() -> Mid {
 		                func __safeDI_filter() -> any Hub.Space.FilterProtocol {
 		                    let aBuilder = Instantiator<A> {
@@ -1775,9 +1791,9 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_passesNilWhereClosedOnFunctionIsDeclared_whenHandWrittenMockBuildsClosedOnType() async throws {
+	mutating func mock_passesOverrideWhereClosedOnFunctionIsDeclared_whenHandWrittenMockBuildsClosedOnType() async throws {
 		// `A`'s hand-written mock builds `A` in the closed-on function, which calls `Service`'s `public` mock: as when `init` builds
-		// it, `Screen`'s mock passes the function `nil` for `filter`.
+		// it, `Screen`'s mock passes the function its override for `filter`.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.publicMockLazyCycleModules(core: Self.coreWhosePublicMockTakesFilter, appFiles: [
 			Self.screen(generateMock: "true"),
 			"""
@@ -1811,14 +1827,17 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            aBuilder: A.SafeDIMockConfiguration = .init()
+		            aBuilder: A.SafeDIMockConfiguration = .init(),
+		            filter: Filter? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                aBuilder: aBuilder
 		            )
+		            self.filter = filter
 		        }
 
 		        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+		        let filter: Filter?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -1836,9 +1855,10 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let filter: Filter? = safeDIOverrides.filter
 		        func __safeDI_aBuilder(filter: Filter?) -> A {
 		            _ = Service.__safeDI_Service_mock_7257C1618F8CE2B3.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let service = Service.mock(filter: filter, safeDIOverrides: safeDIOverrides.aBuilder.service)
+		            let service = Service.__safeDI_mock(filter: filter, safeDIOverrides: safeDIOverrides.aBuilder.service)
 		            func __safeDI_midBuilder(filter: Filter) -> Mid {
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(filter: filter)
@@ -1851,7 +1871,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(service, midBuilder) } else { A.mock(service: service, midBuilder: midBuilder) }
 		        }
 		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(filter: nil)
+		            __safeDI_aBuilder(filter: filter)
 		        }
 		        return Screen(aBuilder: aBuilder)
 		    }
@@ -1980,7 +2000,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    ) -> Screen {
 		        func __safeDI_aBuilder(filter: Filter?) -> A {
 		            _ = Service.__safeDI_Service_mock_7257C1618F8CE2B3.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let service = Service.mock(filter: filter, safeDIOverrides: safeDIOverrides.aBuilder.service)
+		            let service = Service.__safeDI_mock(filter: filter, safeDIOverrides: safeDIOverrides.aBuilder.service)
 		            func __safeDI_midBuilder(filter: Filter) -> Mid {
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(filter: filter)
@@ -2126,7 +2146,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        let filter: Filter? = safeDIOverrides.filter
 		        func __safeDI_aBuilder(filter: Filter?) -> A {
 		            _ = Service.__safeDI_Service_mock_7257C1618F8CE2B3.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let service = Service.mock(filter: filter, safeDIOverrides: safeDIOverrides.aBuilder.service)
+		            let service = Service.__safeDI_mock(filter: filter, safeDIOverrides: safeDIOverrides.aBuilder.service)
 		            func __safeDI_midBuilder(filter: Filter) -> Mid {
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(filter: filter)
@@ -2267,9 +2287,17 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		        filter: Filter? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        Screen.__safeDI_mock(filter: filter, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        filter: Filter? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
 		        func __safeDI_aBuilder(filter: Filter?) -> A {
 		            _ = Service.__safeDI_Service_mock_7257C1618F8CE2B3.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            let service = Service.mock(filter: filter, safeDIOverrides: safeDIOverrides.aBuilder.service)
+		            let service = Service.__safeDI_mock(filter: filter, safeDIOverrides: safeDIOverrides.aBuilder.service)
 		            func __safeDI_midBuilder(filter: Filter) -> Mid {
 		                let aBuilder = Instantiator<A> {
 		                    __safeDI_aBuilder(filter: filter)

@@ -314,6 +314,16 @@ struct SafeDIToolSeamOnlyIfAvailableParameterTests: ~Copyable {
 		        user: User? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        Screen.__safeDI_mock(database: database, logger: logger, user: user, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        database: Database? = nil,
+		        logger: Logger? = nil,
+		        user: User? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
 		        let database = if let database { database } else if let safeDIBuilder = safeDIOverrides.database { safeDIBuilder() } else { Database() }
 		        let cache = if let safeDIBuilder = safeDIOverrides.cache { safeDIBuilder(database, logger) } else { Cache(database: database, logger: logger) }
 		        let user = if let user { user } else if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }

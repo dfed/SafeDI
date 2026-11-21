@@ -99,6 +99,7 @@ enum BinaryFile {
 			ModuleInfoView.self,
 			ViewedModuleIdentity.self,
 			ViewedModule.self,
+			ViewedModuleReference.self,
 			ImportStatement.self,
 			FileVisitor.ImportSegment.self,
 			ConditionalCompilationDecision.self,
@@ -123,6 +124,47 @@ enum BinaryFile {
 			TypeDescription.VoidSpelling.self,
 			TypeDescription.TupleElement.self,
 			UnorderedEquatingCollection<TypeDescription>.self,
+			StoredSeamSignature.self,
+			SeamSignature.self,
+			SeamSignature.Receiver.self,
+			SeamSignature.NestedSeamCall.self,
+			SeamSignature.Parameter.self,
+			SeamSignature.Parameter.Deferral.self,
+			SeamSignature.Hole.self,
+			SeamSignature.Hole.Field.self,
+			SeamSignature.Hole.Field.SeamParameterOrigin.self,
+			SeamSignature.Hole.UncarriedDeclaration.self,
+			SeamSignature.Hole.UncarriedDeclaration.Reason.self,
+			SeamSignature.Hole.UncarriedDeclaration.SendableFunction.self,
+			SeamSignature.Hole.UncarriedDeclaration.AliasOrigin.self,
+			SeamSignature.Hole.UncarriedDeclaration.CycleParameterOrigin.self,
+			SeamSignature.Hole.UncarriedDeclaration.PresentedPlace.self,
+			SeamSignature.Hole.CycleReentryDeclaration.self,
+			SeamSignature.Hole.ReenteringCallDeclaration.self,
+			SeamSignature.Hole.FieldOfReenteringPlace.self,
+			SeamSignature.Hole.ReenteringPlaceField.self,
+			SeamSignature.Hole.DeclarationHiddenByField.self,
+			SeamSignature.Hole.PathType.self,
+			SeamSignature.Hole.EnumPlace.self,
+			SeamSignature.Hole.RouteStep.self,
+			SeamSignature.Hole.RouteStep.Member.self,
+			SeamSignature.Hole.RouteStep.Values.self,
+			SeamSignature.Hole.RouteStep.InnerScope.self,
+			SeamSignature.Hole.DeclaredProperty.self,
+			SeamSignature.Hole.Site.self,
+			SeamSignature.CallRoute.self,
+			SeamSignature.HoleType.self,
+			SeamSignature.ScopeEnum.self,
+			SeamSignature.ScopeEnum.Key.self,
+			SeamSignature.ScopeEnum.Values.self,
+			SeamSignature.ScopeEnum.Case.self,
+			SeamSignature.ScopeEnum.Case.Kind.self,
+			SeamSignature.Builder.self,
+			TypeAccessProof.Cause.self,
+			TypeAccessProof.Prover.self,
+			TypeAccessProof.MemberKind.self,
+			ModuleIdentity.self,
+			AccessRequirement.self,
 		]
 	}
 
@@ -133,7 +175,7 @@ enum BinaryFile {
 	/// because describing the schema reflects on every member's type, and reflection scans the runtime's
 	/// protocol conformance tables: computing it took most of a small module's `generate`. A test computes it
 	/// and fails, giving the new value, when a stored type's layout changes.
-	static let schemaFingerprint: UInt64 = 0xCE1043F6D6EA5356
+	static let schemaFingerprint: UInt64 = 0x777168D2714CA35A
 
 	/// The format version and every schema member's layout, one member per line: the name and type of each
 	/// field a struct writes, and the name and payload types of each case an enum writes, in the order written.
@@ -178,10 +220,13 @@ enum BinaryFile {
 	}
 
 	/// What `readBody` reads from the body of a file of `kind`, after the header has been checked.
-	static func value<Value>(_ kind: Kind, from data: Data, readBody: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryFileReadError) -> Value {
+	/// - Parameter checksBody: Whether to check the body against the header's checksum, and decode every string of its
+	///   string table before `readBody` runs. `false` suits a reader of the first fields alone, which reads a string only
+	///   when a field names it.
+	static func value<Value>(_ kind: Kind, from data: Data, checksBody: Bool = true, readBody: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryFileReadError) -> Value {
 		let result = data.withUnsafeBytes { bytes in
 			Result { () throws(BinaryFileReadError.Reason) in
-				try value(from: bytes, magic: kind.magic, readBody: readBody)
+				try value(from: bytes, magic: kind.magic, checksBody: checksBody, readBody: readBody)
 			}
 		}
 		do throws(BinaryFileReadError.Reason) {
@@ -227,7 +272,7 @@ enum BinaryFile {
 		withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
 	}
 
-	private static func value<Value>(from bytes: UnsafeRawBufferPointer, magic: [UInt8], readBody: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryFileReadError.Reason) -> Value {
+	private static func value<Value>(from bytes: UnsafeRawBufferPointer, magic: [UInt8], checksBody: Bool, readBody: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryFileReadError.Reason) -> Value {
 		func integer<Integer: FixedWidthInteger>(at offset: Int) -> Integer {
 			Integer(littleEndian: bytes.loadUnaligned(fromByteOffset: offset, as: Integer.self))
 		}
@@ -250,11 +295,11 @@ enum BinaryFile {
 		guard bodyLength == UInt64(body.count) else {
 			throw .bodyLengthMismatch(recorded: bodyLength, actual: body.count)
 		}
-		guard integer(at: 22) == checksum(of: body) else {
+		guard !checksBody || integer(at: 22) == checksum(of: body) else {
 			throw .checksumMismatch
 		}
 		do throws(BinaryDecodingError) {
-			var reader = try BinaryReader(bytes: body)
+			var reader = try BinaryReader(bytes: body, decodesStringsUpFront: checksBody)
 			return try readBody(&reader)
 		} catch {
 			throw .malformedBody(error)
@@ -300,6 +345,8 @@ public struct BinaryFileReadError: Error, Equatable, CustomStringConvertible {
 			"The \(name)’s body records a count of \(count) at byte \(offset), more than the bytes that remain."
 		case let .malformedBody(.stringIndexOutOfRange(index, offset)):
 			"The \(name)’s body refers to string \(index) at byte \(offset), which its string table does not hold."
+		case let .malformedBody(.sharedValueReferenceOutOfRange(reference, offset)):
+			"The \(name)’s body refers to shared value \(reference) at byte \(offset), which no value before it holds."
 		case let .malformedBody(.invalidTag(tag, tagType, offset)):
 			"The \(name)’s body holds \(tag) at byte \(offset), which is not a tag of \(tagType)."
 		case let .malformedBody(.nestedTooDeeply(offset)):
