@@ -2804,6 +2804,11 @@ jobs:
       # symbolic links and refuses missing data before it reads the reports.
       - name: Check the Script Against Its Fixtures
         run: python3 -I Scripts/unexecuted-lines.py --self-test "$RUNNER_TEMP/unexecuted-lines-self-test"
+      # Scripts/changed-line-coverage.sh is how a change is checked before it
+      # is pushed; its report of the files no report records must agree with
+      # this job's, or a change passes there and fails here.
+      - name: Check the Changed Line Coverage Script Against Its Fixtures
+        run: python3 -I Scripts/changed-line-coverage.py --self-test "$RUNNER_TEMP/changed-line-coverage-self-test"
       # This job has no container, so it does not run as the superuser, and
       # the script's read-only file case runs here.
       - name: Check the Edit Script Against Its Fixtures
