@@ -1830,8 +1830,9 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test
 	func nilArgumentFailure_countsInlinesNilAtTheConstructionsOfItsBuilderFunction_whenInlinePassesACycleParameterNil() {
 		// Inline hands the builder function a lazy cycle closes on a literal `nil` for `mark`, which the construction in its
-		// body passes on by name: that `nil` counts at the construction, so a seam that writes it there once matches inline,
-		// and one that writes it at a second construction, or loses `token`, does not.
+		// body passes on by name: that `nil` counts at the construction. The function is called twice, so it is shared and
+		// stands for places its text does not count: a seam that writes `mark`'s `nil` at one construction or two matches
+		// inline, and one that loses `token`, which inline never passes `nil`, does not.
 		let fixture = GraphFuzzerFixture(seed: 7, swiftFileContent: [
 			"@Instantiable(generateDependencyTree: true)\npublic final class S7_Screen: Instantiable {\n\tpublic init(reader: S7_Reader) {\n\t\tself.reader = reader\n\t}\n\n\t@Instantiated let reader: S7_Reader\n}\n",
 		])
@@ -1845,43 +1846,112 @@ struct SafeDIToolGraphFuzzerTests {
 			return GraphFuzzerToolRuns(fixture: fixture, firstOutcome: seam, secondOutcome: seam, inlineOutcome: inline)
 		}
 		#expect(runs(seamFile: "let first = S7_Reader(token: token, mark: nil)\nlet second = S7_Reader(token: token, mark: mark)").nilArgumentFailure == nil)
-		#expect(runs(seamFile: "let first = S7_Reader(token: token, mark: nil)\nlet second = S7_Reader(token: token, mark: nil)").nilArgumentFailure?.details.prefix { $0 != "\n" } == "`S7_Reader(mark:)` is passed `nil` 2 times with the seam and 1 without it.")
+		#expect(runs(seamFile: "let first = S7_Reader(token: token, mark: nil)\nlet second = S7_Reader(token: token, mark: nil)").nilArgumentFailure == nil)
 		#expect(runs(seamFile: "let first = S7_Reader(token: nil, mark: nil)").nilArgumentFailure?.details.prefix { $0 != "\n" } == "`S7_Reader(token:)` is passed `nil` 1 times with the seam and 0 without it.")
 	}
 
 	@Test
-	func nilArgumentFailure_countsANilInASharedBuilderFunctionOncePerPlace_whenTwoPlacesCallTheFunction() {
+	func nilArgumentFailure_comparesOnlyWhetherNilIsPassed_whenInlinePassesItInASharedBuilderFunction() {
 		// The type key builds a type that two places build alike in one function, which each place calls, where the seam
-		// writes the type's code at each place: the `nil` in the function's body stands for both places, so a seam that
-		// writes it at both matches inline, and one that writes it at a third construction does not.
+		// writes the type's code at each place: the text of the shared function does not count its places, so a seam that
+		// passes `token` `nil` any number of times matches inline, which passes it `nil` in the shared function, and one
+		// that passes `nil` to an argument inline never passes `nil` does not.
 		let fixture = GraphFuzzerFixture(seed: 7, swiftFileContent: [
 			"@Instantiable(generateDependencyTree: true)\npublic final class S7_Screen: Instantiable {\n\tpublic init(reader: S7_Reader) {\n\t\tself.reader = reader\n\t}\n\n\t@Instantiated let reader: S7_Reader\n}\n",
 		])
 		let inlineFiles = [
-			"S7_Root+SafeDI.swift": "func __safeDI_S7_Reader() -> S7_Reader {\n    let mark = S7_Mark(token: nil)\n    return S7_Reader(mark: mark)\n}\nlet first = __safeDI_S7_Reader()\nlet second = __safeDI_S7_Reader()",
+			"S7_Root+SafeDI.swift": "func __safeDI_S7_Reader() -> S7_Reader {\n    let mark = S7_Mark(token: nil, user: user)\n    return S7_Reader(mark: mark)\n}\nlet first = __safeDI_S7_Reader()\nlet second = __safeDI_S7_Reader()",
 		]
-		#expect(GraphFuzzerOracle.nilArgumentCounts(in: inlineFiles, typeNamePrefix: "S7_", excluding: []) == ["S7_Mark(token:)": 2])
+		#expect(GraphFuzzerOracle.nilArgumentKeysInSharedBuilderFunctions(in: inlineFiles, typeNamePrefix: "S7_", excluding: []) == ["S7_Mark(token:)"])
 		let inline = GraphFuzzerToolOutcome.accepted(generatedFiles: inlineFiles, warnings: [])
 		func runs(seamFile: String) -> GraphFuzzerToolRuns {
 			let seam = GraphFuzzerToolOutcome.accepted(generatedFiles: ["S7_Root+SafeDI.swift": seamFile], warnings: [])
 			return GraphFuzzerToolRuns(fixture: fixture, firstOutcome: seam, secondOutcome: seam, inlineOutcome: inline)
 		}
-		#expect(runs(seamFile: "let first = S7_Mark(token: nil)\nlet second = S7_Mark(token: nil)").nilArgumentFailure == nil)
-		#expect(runs(seamFile: "let first = S7_Mark(token: nil)\nlet second = S7_Mark(token: nil)\nlet third = S7_Mark(token: nil)").nilArgumentFailure?.details.prefix { $0 != "\n" } == "`S7_Mark(token:)` is passed `nil` 3 times with the seam and 2 without it.")
+		#expect(runs(seamFile: "let first = S7_Mark(token: nil, user: user)\nlet second = S7_Mark(token: nil, user: user)\nlet third = S7_Mark(token: nil, user: user)").nilArgumentFailure == nil)
+		#expect(runs(seamFile: "let first = S7_Mark(token: nil, user: user)\nlet second = S7_Mark(token: nil, user: nil)").nilArgumentFailure?.details.prefix { $0 != "\n" } == "`S7_Mark(user:)` is passed `nil` 1 times with the seam and 0 without it.")
 	}
 
 	@Test
-	func nilArgumentFailure_countsANilInABuilderFunctionOncePerLabelItsLoopBindsItTo_whenTheFunctionBindsItselfAgain() {
-		// The type key closes a type's loop on the type's own function, where the path key wrote the loop once more until a
-		// label repeated: a reference from inside the function under a new label is one more place, and one under a label
-		// a reference from outside binds, or a generated-only argument label that spells `__safeDI_`, is none.
-		func counts(innerLabel: String) -> [String: Int] {
-			GraphFuzzerOracle.nilArgumentCounts(in: [
-				"S7_Root+SafeDI.swift": "func __safeDI_t1Builder(__safeDI_mark: S7_Mark?) -> S7_T1 {\n    let \(innerLabel) = Instantiator<S7_T1>({ __safeDI_t1Builder(__safeDI_mark: nil) })\n    return S7_T1(\(innerLabel): \(innerLabel), lazyT4: nil)\n}\nlet t1Builder = Instantiator<S7_T1>({ __safeDI_t1Builder(__safeDI_mark: nil) })",
-			], typeNamePrefix: "S7_", excluding: [])
+	func nilArgumentKeysInSharedBuilderFunctions_holdsOnlyFunctionsThatStandForMoreThanOnePlace_whenFunctionsAreReferencedOnceOrMore() {
+		// A function referenced once from the root's body stands for one place, and so does one it alone references; one
+		// referenced twice, one that references itself again, and one only such a function references, stand for more.
+		let file = """
+		func __safeDI_once() -> S7_A {
+		    let b = __safeDI_onceInner()
+		    return S7_A(b: b, x: nil)
 		}
-		#expect(counts(innerLabel: "t2Builder") == ["S7_T1(lazyT4:)": 2])
-		#expect(counts(innerLabel: "t1Builder") == ["S7_T1(lazyT4:)": 1])
+		func __safeDI_onceInner() -> S7_B {
+		    S7_B(y: nil)
+		}
+		func __safeDI_twice() -> S7_C {
+		    let d = __safeDI_twiceInner()
+		    return S7_C(d: d, z: nil)
+		}
+		func __safeDI_twiceInner() -> S7_D {
+		    S7_D(w: nil)
+		}
+		func __safeDI_loop() -> S7_E {
+		    let next = Instantiator<S7_E>(__safeDI_loop)
+		    return S7_E(next: next, v: nil)
+		}
+		let a = __safeDI_once()
+		let c = __safeDI_twice()
+		let other = __safeDI_twice()
+		let e = Instantiator<S7_E>(__safeDI_loop)
+		let f = S7_F(u: nil)
+		"""
+		#expect(GraphFuzzerOracle.nilArgumentKeysInSharedBuilderFunctions(in: ["S7_Root+SafeDI.swift": file], typeNamePrefix: "S7_", excluding: []) == ["S7_C(z:)", "S7_D(w:)", "S7_E(v:)"])
+	}
+
+	@Test
+	func nilArgumentKeysInSharedBuilderFunctions_holdsAConstructionTwoFunctionsAway_whenASharedFunctionHandsOnTheNilItIsGiven() {
+		// The type key's shared function for a subtree takes a received label, one of whose callers passes `nil`; the function
+		// hands it on to the function of a child, which constructs with it, so the `nil` reaches a construction two calls away.
+		let file = """
+		let first = __safeDI_sub(mark: nil, label: label)
+		let mark = S7_Mark()
+		let second = __safeDI_sub(mark: mark, label: label)
+		func __safeDI_sub(mark: S7_Mark?, label: S7_Label) -> S7_Sub {
+		    let child = __safeDI_child(label: label, mark: mark)
+		    return S7_Sub(mark: mark, child: child)
+		}
+		func __safeDI_child(label: S7_Label, mark: S7_Mark?) -> S7_Child {
+		    let gadget = S7_Gadget(label: label, mark: mark)
+		    return S7_Child(gadget: gadget)
+		}
+		"""
+		#expect(GraphFuzzerOracle.nilArgumentKeysInSharedBuilderFunctions(in: ["S7_Root+SafeDI.swift": file], typeNamePrefix: "S7_", excluding: []) == ["S7_Sub(mark:)", "S7_Gadget(mark:)"])
+	}
+
+	@Test
+	func nilArgumentKeysInSharedBuilderFunctions_holdsAConstructionReadingTheWrappersInstance_whenASharedFunctionTakesALazyCyclesWrapper() {
+		// The type key's function for a type a lazy cycle closes on takes the cycle's optional wrapper, which the root passes
+		// `nil` and the cycle's closer passes the wrapper; its constructions read the wrapper's instance.
+		let file = """
+		@Sendable func __safeDI_a(tag: SendableLazilyInstantiated<S7_Tag>?) -> S7_A {
+		    let reader = S7_Reader(tag: tag?.instance)
+		    return S7_A(reader: reader)
+		}
+		@Sendable func __safeDI_c(tag: SendableLazilyInstantiated<S7_Tag>) -> S7_C {
+		    let a: S7_A = __safeDI_a(tag: tag)
+		    return S7_C(a: a)
+		}
+		let a: S7_A = __safeDI_a(tag: nil)
+		"""
+		#expect(GraphFuzzerOracle.nilArgumentKeysInSharedBuilderFunctions(in: ["S7_Root+SafeDI.swift": file], typeNamePrefix: "S7_", excluding: []) == ["S7_Reader(tag:)"])
+	}
+
+	@Test
+	func nilArgumentCountsThroughBuilderFunctions_countsAConstructionReadingTheWrappersInstance_whenACallPassesTheWrapperNil() {
+		let file = """
+		@Sendable func __safeDI_a(tag: SendableLazilyInstantiated<S7_Tag>?) -> S7_A {
+		    let reader = S7_Reader(tag: tag?.instance)
+		    return S7_A(reader: reader)
+		}
+		let a: S7_A = __safeDI_a(tag: nil)
+		"""
+		#expect(GraphFuzzerOracle.nilArgumentCountsThroughBuilderFunctions(in: ["S7_Root+SafeDI.swift": file], typeNamePrefix: "S7_", excluding: []) == ["S7_Reader(tag:)": 1])
 	}
 
 	/// A seam's generated file whose plain enum holds `cases`, each `case <name>(<name>_Values)`, and whose initializer
@@ -3256,6 +3326,19 @@ struct SafeDIToolGraphFuzzerTests {
 		extension S731_Root0 {
 		    public convenience init() {
 		        let t1 = S731_T1()
+		        @Sendable func __safeDI_link0(t1Alias: S731_T1?) -> S731_Link0 {
+		            #sourceLocation(file: "S731_Link0.swift", line: 8)
+		            let t1AliasAlias: S731_T1? = t1Alias
+		            #sourceLocation()
+		            let link1: S731_Link1 = __safeDI_link1(t1AliasAlias: t1AliasAlias)
+		            return S731_Link0(t1AliasAlias: t1AliasAlias, link1: link1)
+		        }
+		        @Sendable func __safeDI_link1(t1AliasAlias: S731_T1?) -> S731_Link1 {
+		            #sourceLocation(file: "S731_Link1.swift", line: 7)
+		            let t1AliasAliasAlias: S731_T1? = t1AliasAlias
+		            #sourceLocation()
+		            return S731_Link1(t1AliasAliasAlias: t1AliasAliasAlias)
+		        }
 		        @Sendable func __safeDI_lazyT0() -> S731_T0 {
 		            #sourceLocation(file: "S731_T0.swift", line: 9)
 		            let anyT1Alias: S731_AnyT1? = S731_AnyT1(t1)
@@ -3263,20 +3346,7 @@ struct SafeDIToolGraphFuzzerTests {
 		            #sourceLocation(file: "S731_T0.swift", line: 10)
 		            let t1Alias: S731_T1? = t1
 		            #sourceLocation()
-		            func __safeDI_link0() -> S731_Link0 {
-		                #sourceLocation(file: "S731_Link0.swift", line: 8)
-		                let t1AliasAlias: S731_T1? = t1Alias
-		                #sourceLocation()
-		                func __safeDI_link1() -> S731_Link1 {
-		                    #sourceLocation(file: "S731_Link1.swift", line: 7)
-		                    let t1AliasAliasAlias: S731_T1? = t1AliasAlias
-		                    #sourceLocation()
-		                    return S731_Link1(t1AliasAliasAlias: t1AliasAliasAlias)
-		                }
-		                let link1: S731_Link1 = __safeDI_link1()
-		                return S731_Link0(t1AliasAlias: t1AliasAlias, link1: link1)
-		            }
-		            let link0: S731_Link0 = __safeDI_link0()
+		            let link0: S731_Link0 = __safeDI_link0(t1Alias: t1Alias)
 		            return S731_T0(anyT1Alias: anyT1Alias, t1Alias: t1Alias, link0: link0)
 		        }
 		        let lazyT0 = SendableLazilyInstantiated<S731_T0>(__safeDI_lazyT0)
