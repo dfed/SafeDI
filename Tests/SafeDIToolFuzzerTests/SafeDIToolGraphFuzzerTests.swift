@@ -2297,6 +2297,15 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func smokeSeeds_judgeQuerySuppliers_inGraphsTheToolAccepts() async throws {
+		// The query oracle compares the suppliers `query graph` exports with the generated code of each accepted graph in
+		// one module, so a change that stops it exporting or reading them fails here rather than quietly judging nothing.
+		let judgedCount = try await smokeResults.value.count(where: \.isJudgedByQueryOracle)
+		#expect(judgedCount >= 10, "Judged \(judgedCount) of \(Self.smokeSeeds.count) graphs")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func seamSmokeSeeds_judgeGeneratedOnlyInitializerDefaults_inGraphsTheToolAccepts() async throws {
 		// The oracle judges each initializer only generated code calls, so a change that stops it finding them fails here
 		// rather than quietly judging nothing.

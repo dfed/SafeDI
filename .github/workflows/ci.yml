@@ -1910,13 +1910,13 @@ jobs:
   # after another in one job they took 9.7 to 25.3 minutes and ended run
   # 43755152593. Coverage is not collected: the bundle is built for
   # coverage, so its profiles go to the runner's temporary directory.
-  # Checks that every base corpus graph SafeDI 2.3.0 accepts still compiles
-  # and builds the same values, on every pull request and push to main, so a
+  # Checks that every graph of the base, seam and public mock corpora that
+  # SafeDI 2.3.0 accepts still compiles and builds the same values, on every pull request and push to main, so a
   # break is attributed or fixed in the change that makes it rather than
   # found before a release candidate. release-acceptance.yml's jobs run in
   # this run from the bundle "Build Tests on Linux" built: one job that
-  # builds 2.3.0 (restored from a cache after its first run on main), four
-  # shards and the job that combines their reports. No required check.
+  # builds 2.3.0 (restored from a cache after its first run on main), the
+  # shards of each corpus and the job that combines their reports. No required check.
   # graph-fuzzer.yml's `release_acceptance` input checks a branch by hand.
   release-acceptance:
     name: Release Acceptance
@@ -2033,6 +2033,15 @@ jobs:
           fi
       - name: Smoke test
         run: .build/release/SafeDITool --version
+      # The only place a miscompile of the tool shows before a publish: 2.3.1's
+      # release binaries, built as this job builds, made `query` return no
+      # modules or crash, while every test passed, because no job ran a
+      # command of a binary built this way. A crash or wrong output ends the
+      # step at once; the limit is for a hang. Not yet measured on a runner
+      # (under a minute on a 4-core Linux machine); set it from the first runs.
+      - name: Run generate and query with the Release SafeDITool
+        timeout-minutes: 5
+        run: Scripts/query-release-smoke-test.sh .build/release/SafeDITool
 
   # Compares how long `SafeDITool generate` takes on synthetic dependency
   # graphs, the change's tool against the tool of the commit it is based on,
@@ -2906,6 +2915,15 @@ jobs:
       # `.claude/rules` within the limits the root CLAUDE.md states.
       - name: Check Claude Instruction Files
         run: Scripts/check-claude-instruction-files.sh
+      # A merge resolved by hand can commit its conflict markers, and in a
+      # Markdown file nothing else fails on them: main once held them in a rules
+      # file. This job runs for Markdown-only changes too, so the check is here.
+      - name: Check for Merge Conflict Markers
+        run: |
+          if git grep -nI -E '^(<{7}|>{7}) ' -- . ; then
+            echo "::error::The lines above are merge conflict markers. Resolve the conflict and remove them."
+            exit 1
+          fi
 
   lint-swift:
     name: Lint Swift
