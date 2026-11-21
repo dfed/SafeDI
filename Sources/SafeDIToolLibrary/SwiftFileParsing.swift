@@ -1004,27 +1004,34 @@ private func walkFiles(
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
 	findingPackageAccessModifier: Bool = false,
 ) async throws -> WalkedFiles {
-	try await withThrowingTaskGroup(
-		of: (path: String, read: WalkedSwiftFile).self,
-		returning: WalkedFiles.self,
+	try await withTaskGroup(
+		of: (path: String, read: Result<WalkedSwiftFile, UnreadableSwiftFileError>).self,
+		returning: Result<WalkedFiles, UnreadableSwiftFileError>.self,
 	) { taskGroup in
 		for filePath in filePaths where !filePath.isEmpty {
 			taskGroup.addTask {
-				let read = try readSwiftFile(atPath: filePath, findingPackageAccessModifier: findingPackageAccessModifier)
-				return if let syntaxTree = read.syntaxTree {
-					(filePath, .scanned(walk(syntaxTree, at: filePath, conditionalCompilation: evaluator)))
-				} else {
-					(filePath, .skipped(mayDeclareTypesNamed: read.mayDeclareTypesNamed, mayDeclareTypeOtherModulesCanName: read.mayDeclareTypeOtherModulesCanName))
+				do throws(UnreadableSwiftFileError) {
+					let read = try readSwiftFile(atPath: filePath, findingPackageAccessModifier: findingPackageAccessModifier)
+					return if let syntaxTree = read.syntaxTree {
+						(filePath, .success(.scanned(walk(syntaxTree, at: filePath, conditionalCompilation: evaluator))))
+					} else {
+						(filePath, .success(.skipped(mayDeclareTypesNamed: read.mayDeclareTypesNamed, mayDeclareTypeOtherModulesCanName: read.mayDeclareTypeOtherModulesCanName)))
+					}
+				} catch {
+					return (filePath, .failure(error))
 				}
 			}
 		}
 
 		var walkedFiles = WalkedFiles()
-		for try await file in taskGroup {
+		var firstUnreadableFile: UnreadableSwiftFileError?
+		for await file in taskGroup {
 			switch file.read {
-			case let .scanned(fileScan):
+			case let .failure(unreadableFile):
+				firstUnreadableFile = UnreadableSwiftFileError.first(of: firstUnreadableFile, unreadableFile)
+			case let .success(.scanned(fileScan)):
 				walkedFiles.fileScans.append(fileScan)
-			case let .skipped(mayDeclareTypesNamed, mayDeclareTypeOtherModulesCanName):
+			case let .success(.skipped(mayDeclareTypesNamed, mayDeclareTypeOtherModulesCanName)):
 				if !mayDeclareTypesNamed.isEmpty {
 					walkedFiles.mayDeclareTypesNamedBySkippedFilePath[file.path] = mayDeclareTypesNamed
 				}
@@ -1033,8 +1040,14 @@ private func walkFiles(
 				}
 			}
 		}
-		return walkedFiles
+		// The files are read in parallel, so their failures arrive in any order: the one reported is first in path order.
+		return if let firstUnreadableFile {
+			.failure(firstUnreadableFile)
+		} else {
+			.success(walkedFiles)
+		}
 	}
+	.get()
 }
 
 /// What `walkFiles(named:conditionalCompilation:findingPackageAccessModifier:)` found in one file.
@@ -1064,7 +1077,8 @@ private func walkFilesDeclaringTypes(
 	) { taskGroup in
 		for filePath in filePaths {
 			taskGroup.addTask {
-				let syntaxTree = try Parser.parse(source: String(contentsOfFile: filePath, encoding: .utf8))
+				// `walkFiles` read each of these files a moment ago, so only a file changed since then fails here.
+				let syntaxTree = try Parser.parse(source: swiftFileContents(atPath: filePath))
 				let fileVisitor = FileVisitor(
 					conditionalCompilationEvaluator: evaluator,
 					sourceLocationConverter: SourceLocationConverter(fileName: filePath, tree: syntaxTree),
@@ -1102,6 +1116,67 @@ private func walkFilesDeclaringTypes(
 	}
 }
 
+/// A Swift file SafeDI was given and could not read. Its text is the same on every run, which Foundation’s own error is
+/// not: it prints its details in the hash order of a dictionary.
+struct UnreadableSwiftFileError: Error, CustomStringConvertible {
+	/// The path as SafeDI was given it.
+	let path: String
+	let reason: Reason
+
+	enum Reason {
+		case missing
+		case notUTF8
+		/// A directory, or a file SafeDI may not open.
+		case notOpenable
+	}
+
+	/// The error of reading `path`, which failed with `error`.
+	init(path: String, failure error: any Error) {
+		self.path = path
+		reason = if !FileManager.default.fileExists(atPath: path) {
+			.missing
+		} else if let code = (error as? CocoaError)?.code, code == .fileReadInapplicableStringEncoding || code == .fileReadCorruptFile {
+			// Foundation on Linux reports text that is not UTF-8 as a corrupt file, and on Apple platforms as an inapplicable
+			// encoding.
+			.notUTF8
+		} else {
+			.notOpenable
+		}
+	}
+
+	var description: String {
+		let explanation = switch reason {
+		case .missing:
+			"No file exists at that path."
+		case .notUTF8:
+			"The file is not UTF-8 text."
+		case .notOpenable:
+			"The path names a directory, or a file SafeDI may not open."
+		}
+		return "Could not read the Swift file at '\(path)': \(explanation)"
+	}
+
+	/// Of `earlier`, if any, and `other`, the error of the path first in path order, so the error reported of files read in
+	/// parallel never depends on which read failed first.
+	static func first(of earlier: UnreadableSwiftFileError?, _ other: UnreadableSwiftFileError) -> UnreadableSwiftFileError {
+		if let earlier, earlier.path < other.path {
+			earlier
+		} else {
+			other
+		}
+	}
+}
+
+/// The text of the Swift file at `path`.
+/// - Throws: `UnreadableSwiftFileError` when the file cannot be read as UTF-8 text.
+func swiftFileContents(atPath path: String) throws(UnreadableSwiftFileError) -> String {
+	do {
+		return try String(contentsOfFile: path, encoding: .utf8)
+	} catch {
+		throw UnreadableSwiftFileError(path: path, failure: error)
+	}
+}
+
 /// What reading a Swift file found.
 private struct ReadSwiftFile {
 	/// The file's syntax tree, when its text mentions a SafeDI marker, so it was parsed.
@@ -1121,8 +1196,8 @@ private struct ReadSwiftFile {
 /// Reads the file at `filePath`, and parses it when its text shows it can declare something SafeDI scans for. When
 /// `findingPackageAccessModifier`, a file it does not parse also records whether its text may declare a type only
 /// another module of the package can name.
-private func readSwiftFile(atPath filePath: String, findingPackageAccessModifier: Bool) throws -> ReadSwiftFile {
-	var content = try String(contentsOfFile: filePath, encoding: .utf8)
+private func readSwiftFile(atPath filePath: String, findingPackageAccessModifier: Bool) throws(UnreadableSwiftFileError) -> ReadSwiftFile {
+	var content = try swiftFileContents(atPath: filePath)
 	// Searching the bytes rather than the characters is many times faster, and finds the markers wherever a
 	// character search does: no other sequence of characters is equivalent to these ASCII ones. It also finds a
 	// marker whose last character a combining mark changes, which a character search does not.

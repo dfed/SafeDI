@@ -41,6 +41,7 @@ extension DependencyTreeGenerator {
 		for instantiable: Instantiable,
 		scope: Scope,
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		frozenScopeMap: FrozenScopeMap,
 		flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault],
 		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
 		publicMockContext: PublicMockContext?,
@@ -49,6 +50,7 @@ extension DependencyTreeGenerator {
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
 		scopesWithValidatedDeclarations: inout Set<ObjectIdentifier>,
+		constructionMemo: inout ConstructionMemo,
 	) async throws -> ScopeGenerator {
 		// Recursively collect all transitive received properties from the scope tree
 		// and any promoted scopes' subtrees. Results are cached per Scope identity
@@ -155,8 +157,10 @@ extension DependencyTreeGenerator {
 			}
 			// A dependency the public mock another module generated builds when its call passes `nil` is built once here
 			// and passed to every call – each call an `Instantiator` makes included – and every receiver that receives it
-			// only if available, as the inline mock promotes it, where this module can build it (M8.8b). One this module
-			// cannot build is each called mock's to build.
+			// only if available, as the inline mock promotes it, where this module can build it (M8.8b): its whole tree,
+			// with the fills of the public mock calls in it where the build compiles the generated mocks, as the mock root's
+			// own access check walks them, so a promotion never brings in an error the called mock's module would not have.
+			// One this module cannot build is each called mock's to build.
 			for property in builtWhenNilByPublicMockCalls.sorted() where !allRequired.contains(property) {
 				guard !isForwarded(property), let promotedScope = scopeToPromote(for: property)?.scope else { continue }
 				if let emittingModule {
@@ -167,6 +171,7 @@ extension DependencyTreeGenerator {
 						isMock: true,
 						emittingModule: emittingModule,
 						extendedTypes: extendedTypeDeclarations,
+						walksFillsOfPublicMockCalls: compilesGeneratedMocks,
 					)
 					guard Self.inaccessibleConstructions(constructions, from: emittingModule, extendedTypes: extendedTypeDeclarations).isEmpty else { continue }
 				}
@@ -175,14 +180,13 @@ extension DependencyTreeGenerator {
 				worklist.append(property)
 			}
 		} while !worklist.isEmpty
-		// A public mock takes what the calls of other modules' public mocks in its tree pass and nothing else in its tree
-		// receives, as a parameter that defaults to `nil`, which it passes on.
-		if instantiable.generateMock == .public {
-			// A wrapper promoted for them stands for its instance too.
-			let surfacedByPublicMockCalls = passedByPublicMockCalls.subtracting(allReceived).subtracting(allReceived.compactMap(\.asLazilyInstantiatedInstanceProperty))
-			allReceived.formUnion(surfacedByPublicMockCalls)
-			allOnlyIfAvailable.formUnion(surfacedByPublicMockCalls)
-		}
+		// A mock takes what the calls of other modules' public mocks in its tree pass and nothing else in its tree receives,
+		// as a receive only if available, which it passes on: a public mock as a parameter that defaults to `nil`, and an
+		// internal one as an override that does, as it takes its own tree's receive only if available.
+		// A wrapper promoted for them stands for its instance too.
+		let surfacedByPublicMockCalls = passedByPublicMockCalls.subtracting(allReceived).subtracting(allReceived.compactMap(\.asLazilyInstantiatedInstanceProperty))
+		allReceived.formUnion(surfacedByPublicMockCalls)
+		allOnlyIfAvailable.formUnion(surfacedByPublicMockCalls)
 		allOnlyIfAvailable.subtract(allRequired)
 
 		// Promote all received properties that have scopes.
@@ -212,15 +216,24 @@ extension DependencyTreeGenerator {
 		// A receive of the instance, or of the optional instance, that a forwarded property fulfills does not count:
 		// the forwarded value comes from outside the tree. A required `x: LazilyInstantiated<X>?` beside no required
 		// instance is promoted below as it is, as any optional form is when nothing requires its non-optional form.
+		// A required wrapper provides its instance, so where the tree requires one wrapper kind, a requirement of the
+		// instance promotes no wrapper of the other kind: a receive of that kind only if available is then not promoted,
+		// as production passes it no value of that wrapper's own (`MockReceivesPassedNil`, where the required wrapper pins it).
+		var requiredWrappersByInstanceProperty = [Property: Set<Property>]()
+		for requiredProperty in allRequired where !requiredProperty.typeDescription.isOptional {
+			guard let instanceProperty = requiredProperty.asLazilyInstantiatedInstanceProperty else { continue }
+			requiredWrappersByInstanceProperty[instanceProperty, default: []].insert(requiredProperty)
+		}
 		var lazilyInstantiatedPropertiesToPromote = Set<Property>()
 		var instancePropertiesOfLazilyInstantiatedProperties = Set(mockRootScope.propertiesToGenerate.compactMap(\.lazilyInstantiatedInstanceProperty))
 		for receivedProperty in allReceived {
 			guard let instanceProperty = receivedProperty.asLazilyInstantiatedInstanceProperty else { continue }
 			let lazilyInstantiatedProperty = receivedProperty.asUnwrappedProperty
 			let optionalInstanceProperty = Property(label: instanceProperty.label, typeDescription: .optional(instanceProperty.typeDescription))
+			let otherKindIsRequired = requiredWrappersByInstanceProperty[instanceProperty]?.contains { $0 != lazilyInstantiatedProperty } == true
 			guard allRequired.contains(lazilyInstantiatedProperty)
-				|| (allRequired.contains(instanceProperty) && !isForwarded(instanceProperty))
-				|| (allRequired.contains(optionalInstanceProperty) && !isForwarded(optionalInstanceProperty)),
+				|| (!otherKindIsRequired && allRequired.contains(instanceProperty) && !isForwarded(instanceProperty))
+				|| (!otherKindIsRequired && allRequired.contains(optionalInstanceProperty) && !isForwarded(optionalInstanceProperty)),
 				scopeToPromote(for: lazilyInstantiatedProperty) != nil
 			else { continue }
 			lazilyInstantiatedPropertiesToPromote.insert(lazilyInstantiatedProperty)
@@ -420,7 +433,9 @@ extension DependencyTreeGenerator {
 			let rootReferenceLocation = instantiable.sourceFilePath.map(emittingModule.isOwnFile) ?? false
 				? instantiable.declarationLocation
 				: emittingModule.additionalMocksToGenerateLocation
-			// A mock constructs its root with the root's hand-written mock whenever it has one.
+			// A mock constructs its root with the root's hand-written mock whenever it has one. The fills of the calls its tree
+			// makes are constructions of its code too, which `holesFilled(byCallsOf:in:)` left to this check in a build that
+			// compiles the generated mocks; elsewhere it made only fills whose every construction this module can reach.
 			let constructions = Self.constructions(
 				inTreeRootedAt: mockRootScope,
 				rootIsConstructedWithMockMethod: instantiable.mockInitializer != nil,
@@ -428,6 +443,7 @@ extension DependencyTreeGenerator {
 				isMock: true,
 				emittingModule: emittingModule,
 				extendedTypes: extendedTypeDeclarations,
+				walksFillsOfPublicMockCalls: compilesGeneratedMocks,
 			)
 			let inaccessibleConstructions = Self.inaccessibleConstructions(
 				constructions,
@@ -446,8 +462,12 @@ extension DependencyTreeGenerator {
 		// The instances the tree reads by value through a wrapper a public mock takes as a parameter, which it reads as
 		// `<label>.instance` when it builds the type that reads it, as production reads a received wrapper's instance.
 		var instancesReadThroughWrapperParameters = Set<Property>()
-		func mockRootGenerator(builders: ShapedBuilders?) throws -> ScopeGenerator {
-			try mockRootScope.createScopeGenerator(
+		let (mockRootTable, mockRootRecord) = MockRootPlan(mockRootScope: mockRootScope, frozenScopeMap: frozenScopeMap).freezingRoot()
+		// A public mock's tree built with builders has holes, whose places no memo holds, so only the tree built without
+		// them shares the mock roots' memo.
+		func mockRootGenerator(builders: ShapedBuilders?, constructionMemo: inout ConstructionMemo) throws -> ScopeGenerator {
+			try mockRootRecord.createScopeGenerator(
+				in: mockRootTable,
 				for: nil,
 				// The mock root binds every received property it does not promote, which encloses its whole tree.
 				nearestDeclarations: .binding(allReceived, passingNilTo: receivesPassedNil),
@@ -456,16 +476,35 @@ extension DependencyTreeGenerator {
 				erasedToConcreteExistential: false,
 				forMockGeneration: true,
 				declaredTypeNames: declaredTypeNames,
+				constructionMemo: &constructionMemo,
 			)
 		}
-		var generator = try mockRootGenerator(builders: nil)
+		func mockRootGeneratorWithHoles(builders: ShapedBuilders) throws -> ScopeGenerator {
+			var memoOfTreeWithHoles = ConstructionMemo()
+			return try mockRootGenerator(builders: builders, constructionMemo: &memoOfTreeWithHoles)
+		}
+		var generator = try mockRootGenerator(builders: nil, constructionMemo: &constructionMemo)
+		// An internal mock binds no override for a value only the calls of other modules' public mocks receive where a call
+		// reads it inside a `@Sendable` function (`ScopeGenerator.passedByPublicMockCallLabelsReadInsideSendableFunctions(of:)`,
+		// a deliberate gap): which calls read it there is decided by the tree the generator holds, so a tree with one is built
+		// again without binding the value, and its calls pass `nil`.
+		if !surfacedByPublicMockCalls.isEmpty {
+			let labelsReadInsideSendableFunctions = generator.passedByPublicMockCallLabelsReadInsideSendableFunctions(of: instantiable)
+			if !labelsReadInsideSendableFunctions.isEmpty {
+				for property in surfacedByPublicMockCalls where labelsReadInsideSendableFunctions.contains(property.label) {
+					allReceived.remove(property)
+				}
+				generator = try mockRootGenerator(builders: nil, constructionMemo: &constructionMemo)
+			}
+		}
 		if instantiable.generateMock == .public, allReceived.contains(where: \.propertyType.isLazilyInstantiated) {
 			// A public mock takes a value its tree receives lazily as the wrapper (`ScopeGenerator.publicMockWrapperParameters`),
 			// which a type of the tree that receives the value by value reads the instance of. Which values it takes so is
-			// decided by the tree the generator holds, so a tree that reads one is built again.
+			// decided by the tree the generator holds, so a tree that reads one is built again. The memo keys each place by
+			// the instances it reads through a wrapper, so the second build shares only what it reads alike.
 			instancesReadThroughWrapperParameters = await generator.instancesReadThroughPublicMockWrapperParameters(of: instantiable, mockDefaults: flatParameterMockDefaults)
 			if !instancesReadThroughWrapperParameters.isEmpty {
-				generator = try mockRootGenerator(builders: nil)
+				generator = try mockRootGenerator(builders: nil, constructionMemo: &constructionMemo)
 			}
 		}
 		try Self.validateCycleLabelsArePassable(inTreesRootedAt: [generator])
@@ -532,7 +571,7 @@ extension DependencyTreeGenerator {
 			)
 		}
 		let builders = shapedBuilders(namedApartFrom: [])
-		let builtGenerator = try mockRootGenerator(builders: builders)
+		let builtGenerator = try mockRootGeneratorWithHoles(builders: builders)
 		// The builders follow every other parameter, and each tier's are named apart from the parameters it takes as a seam's
 		// are. A builder's name changes no other parameter's, so the tree is built again only when a builder takes another
 		// name in some tier.
@@ -554,7 +593,7 @@ extension DependencyTreeGenerator {
 			throw error
 		}
 		guard buildersNamedApart.builders.map(SeamSignature.CallShape.Builder.init) != builders.builders.map(SeamSignature.CallShape.Builder.init) else { return builtGenerator }
-		return try mockRootGenerator(builders: buildersNamedApart)
+		return try mockRootGeneratorWithHoles(builders: buildersNamedApart)
 	}
 
 	/// What a public mock's root level holds beside the root's children: the payload of every case of its root enums, and the
@@ -854,7 +893,7 @@ extension DependencyTreeGenerator {
 						))
 					}
 					// The scope walked next is the last one on the stack, so the first child goes last.
-					scopesToWalk[firstChildIndex...].reverse()
+					scopesToWalk.reverseElements(from: firstChildIndex)
 				}
 			}
 		}
@@ -912,10 +951,15 @@ extension DependencyTreeGenerator {
 	/// of them rename, and the receives of its dependencies from above it, as `receivesPassedNilInMockTree` walks them.
 	/// A builder passed up to the mock's own parameter is read there, which the mock names apart from every label.
 	private static func declaredLabelsAndReceivesFromAbove(of scope: Scope) -> (declaredLabels: Set<String>, receives: [HidingReceive]) {
-		let scopeType = scope.instantiable.concreteInstantiable
-		let declaredLabels = Set(scope.instantiable.dependencies.lazy.filter { !$0.source.isReceived }.map(\.property.label))
-		let receives = scope.instantiable.dependencies.compactMap { dependency -> HidingReceive? in
-			guard !(scope.publicMockCall?.passesUpBuilder(receivedAs: dependency.property) ?? false) else { return nil }
+		declaredLabelsAndReceivesFromAbove(of: scope.instantiable, publicMockCall: scope.publicMockCall)
+	}
+
+	/// See `declaredLabelsAndReceivesFromAbove(of:)`: of the type `instantiable` declares, built by `publicMockCall`.
+	private static func declaredLabelsAndReceivesFromAbove(of instantiable: Instantiable, publicMockCall: PublicMockCall?) -> (declaredLabels: Set<String>, receives: [HidingReceive]) {
+		let scopeType = instantiable.concreteInstantiable
+		let declaredLabels = Set(instantiable.dependencies.lazy.filter { !$0.source.isReceived }.map(\.property.label))
+		let receives = instantiable.dependencies.compactMap { dependency -> HidingReceive? in
+			guard !(publicMockCall?.passesUpBuilder(receivedAs: dependency.property) ?? false) else { return nil }
 			return Self.propertyReceivedFromAbove(byReceiveOf: dependency, onTypeDeclaring: declaredLabels).map {
 				HidingReceive(dependency: dependency, property: $0.property, isRequired: $0.isRequired, hidingType: scopeType)
 			}
@@ -1110,7 +1154,7 @@ extension DependencyTreeGenerator {
 				))
 			}
 			// The scope walked next is the last one on the stack, so the first child goes last.
-			scopesToWalk[firstChildIndex...].reverse()
+			scopesToWalk.reverseElements(from: firstChildIndex)
 		}
 		if !receivesPassedNil.labelsPinnedFromAbove.isEmpty {
 			// The mocked type's own receives are above its own children, not above the children it promotes, whose trees
@@ -1125,8 +1169,8 @@ extension DependencyTreeGenerator {
 	/// The properties each required receive of the type of `scope` reads from above it, by label, as
 	/// `receivesPassedNilInMockTree` walks them: each pins the declaration of its label that every receive of it beneath
 	/// the type reads, back to a type that declares the label.
-	static func propertiesReadByRequiredReceivesFromAbove(of scope: Scope) -> [(label: String, propertiesRead: Set<Property>)] {
-		declaredLabelsAndReceivesFromAbove(of: scope).receives.compactMap { receive in
+	static func propertiesReadByRequiredReceivesFromAbove(of scope: ConstructionScope) -> [(label: String, propertiesRead: Set<Property>)] {
+		declaredLabelsAndReceivesFromAbove(of: scope.instantiable, publicMockCall: scope.publicMockCall).receives.compactMap { receive in
 			receive.isRequired ? (receive.property.label, receive.propertiesRead) : nil
 		}
 	}
@@ -1188,14 +1232,38 @@ extension DependencyTreeGenerator {
 		let scope: Scope
 		/// The properties of the scopes `scope` is built inside, innermost first, as cycle validation sees them.
 		let propertyStack: [Property]
-		/// The concrete types of the scopes `scope` is built inside, innermost first, beside `propertyStack`.
-		let concreteTypeStack: [TypeDescription]
+		/// The scopes built for the entries of `propertyStack`, beside it: `scope` first, then the scopes it is built
+		/// inside, up to the mock root's child.
+		let scopeStack: [Scope]
 		/// The lazily instantiated properties on `propertyStack`, keyed by the constant each is validated as.
 		let lazilyInstantiatedDeclarations: [Property: Property]
-		/// The properties the nearest declarations of each label above `scope` declare, as cycle validation sees them, with
-		/// how many scopes the declaring scope is built inside: `0` for the mock root, which declares the properties it
-		/// creates and the dependencies it promotes, several forms of one label among them.
-		let nearestDeclarationByLabel: [String: (properties: [Property], depth: Int)]
+
+		/// The properties the nearest declaration of `label` above `scope` declares, as cycle validation sees them, with how
+		/// many scopes the declaring scope is built inside, or `nil` when no scope above declares the label. Each scope
+		/// above declares, for the scopes it builds, the properties it creates and, at the mock root, which is built inside
+		/// no scope, the dependencies it promotes, several forms of one label among them. Asked only of a dependency that
+		/// might close a cycle, so nothing is gathered for any other.
+		func nearestDeclaration(of label: String, mockRootScope: Scope) -> (properties: [Property], depth: Int)? {
+			for index in scopeStack.indices.dropFirst() {
+				let properties = Self.declarations(of: label, by: scopeStack[index])
+				guard properties.isEmpty else { return (properties, scopeStack.count - index) }
+			}
+			let properties = Self.declarations(of: label, by: mockRootScope)
+			return properties.isEmpty ? nil : (properties, 0)
+		}
+
+		/// The properties of `label` that `scope` declares for the scopes it builds, as cycle validation sees them, in the
+		/// order it declares them.
+		private static func declarations(of label: String, by scope: Scope) -> [Property] {
+			var properties = [Property]()
+			for dependency in scope.instantiable.dependencies where dependency.property.label == label && scope.createdProperties.contains(dependency.property) {
+				properties.append(dependency.property.asValidatedForDependencyCycles)
+			}
+			for propertyToGenerate in scope.propertiesToGenerate where propertyToGenerate.property.label == label && !scope.createdProperties.contains(propertyToGenerate.property) {
+				properties.append(propertyToGenerate.property.asValidatedForDependencyCycles)
+			}
+			return properties
+		}
 	}
 
 	/// The children a mock root promotes, in the order its tree first receives them: the order in which a walk first
@@ -1268,7 +1336,7 @@ extension DependencyTreeGenerator {
 					scopesToWalk.append(childScope)
 				}
 				// The scope walked next is the last one on the stack, so the first child goes last.
-				scopesToWalk[firstChildIndex...].reverse()
+				scopesToWalk.reverseElements(from: firstChildIndex)
 				if scope.publicMockCall != nil {
 					for case let .fill(_, fillScope) in scope.holeArguments {
 						fillScopes.append(fillScope)
@@ -1301,7 +1369,7 @@ extension DependencyTreeGenerator {
 	/// The walk goes depth first, in the order each scope declares its children, and keeps its own stack of
 	/// the scopes left to walk, since a tree can be as deep as the module has types.
 	private func validateMockRootScopeForCycles(_ mockRootScope: Scope) throws {
-		var scopesToWalk = [ScopeToWalkForCycles(scope: mockRootScope, propertyStack: [], concreteTypeStack: [], lazilyInstantiatedDeclarations: [:], nearestDeclarationByLabel: [:])]
+		var scopesToWalk = [ScopeToWalkForCycles(scope: mockRootScope, propertyStack: [], scopeStack: [], lazilyInstantiatedDeclarations: [:])]
 		while let scopeToWalk = scopesToWalk.popLast() {
 			let scope = scopeToWalk.scope
 			let propertyStack = scopeToWalk.propertyStack
@@ -1311,7 +1379,15 @@ extension DependencyTreeGenerator {
 				let propertyForDependency = declaredPropertyForDependency.asValidatedForDependencyCycles
 				// An `onlyIfAvailable` dependency is passed `nil` instead (`Dependency.canCloseDependencyCycle`), and an
 				// `onlyIfAvailable` alias is bound to `nil`, which a receive of it reads.
-				guard dependency.canCloseDependencyCycle else { continue }
+				guard dependency.canCloseDependencyCycle,
+				      // Every form a stack entry can match has the property's label, and nearly every dependency's label is on no
+				      // entry, so the forms are made only for one whose label is.
+				      propertyStack.contains(where: { $0.label == propertyForDependency.label })
+				else { continue }
+				let closingReceive = Self.closingReceive(of: dependency, in: scope)
+				// `throwIfInvalidCycle` throws for an instantiation only when every property on the cycle, its own included, is
+				// constant, so an instantiation of an instantiator closes no cycle it could report.
+				guard closingReceive != nil || propertyForDependency.propertyType.isConstant else { continue }
 				// A mock promotes a received optional property as the non-optional value it builds, so a receive of the
 				// non-optional form inside the tree it builds reaches it too.
 				let receivedForms: [Property] = if dependency.isInstantiated {
@@ -1319,15 +1395,14 @@ extension DependencyTreeGenerator {
 				} else {
 					[propertyForDependency, Property(label: propertyForDependency.label, typeDescription: .optional(propertyForDependency.typeDescription))]
 				}
-				let closingReceive = Self.closingReceive(of: dependency, in: scope)
 				guard let cycleIndex = Self.indexOfEntryClosedOn(
 					by: declaredPropertyForDependency,
 					of: scope,
 					receivedForms: receivedForms,
 					closesByReceive: closingReceive != nil,
 					propertyStack: propertyStack,
-					concreteTypeStack: scopeToWalk.concreteTypeStack,
-					nearestDeclaration: { scopeToWalk.nearestDeclarationByLabel[$0] },
+					concreteTypeOfEntry: { scopeToWalk.scopeStack[$0].instantiable.concreteInstantiable },
+					nearestDeclaration: { scopeToWalk.nearestDeclaration(of: $0, mockRootScope: mockRootScope) },
 				) else {
 					continue
 				}
@@ -1347,36 +1422,20 @@ extension DependencyTreeGenerator {
 				)
 			}
 
-			// Walk the children next. They see what this scope declares as the nearest declaration of its labels: what it
-			// creates, and at the mock root the dependencies it promotes.
-			var childNearestDeclarationByLabel = scopeToWalk.nearestDeclarationByLabel
-			var labelsDeclaredHere = Set<String>()
-			func declare(_ property: Property) {
-				if labelsDeclaredHere.insert(property.label).inserted {
-					childNearestDeclarationByLabel[property.label] = ([property.asValidatedForDependencyCycles], propertyStack.count)
-				} else {
-					childNearestDeclarationByLabel[property.label]?.properties.append(property.asValidatedForDependencyCycles)
-				}
-			}
-			for dependency in scope.instantiable.dependencies where scope.createdProperties.contains(dependency.property) {
-				declare(dependency.property)
-			}
-			for propertyToGenerate in scope.propertiesToGenerate where !scope.createdProperties.contains(propertyToGenerate.property) {
-				declare(propertyToGenerate.property)
-			}
+			// Walk the children next.
 			let firstChildIndex = scopesToWalk.endIndex
 			for childPropertyToGenerate in scope.propertiesToGenerate {
 				switch childPropertyToGenerate {
 				case let .instantiated(declaredChildProperty, childScope, _):
 					let childProperty = declaredChildProperty.asValidatedForDependencyCycles
-					let childConcreteType = childScope.instantiable.concreteInstantiable
-					guard !propertyStack.indices.contains(where: { propertyStack[$0] == childProperty && scopeToWalk.concreteTypeStack[$0] == childConcreteType }) else { continue }
+					guard !propertyStack.indices.contains(where: {
+						propertyStack[$0] == childProperty && scopeToWalk.scopeStack[$0].instantiable.concreteInstantiable == childScope.instantiable.concreteInstantiable
+					}) else { continue }
 					scopesToWalk.append(ScopeToWalkForCycles(
 						scope: childScope,
 						propertyStack: [childProperty] + propertyStack,
-						concreteTypeStack: [childConcreteType] + scopeToWalk.concreteTypeStack,
+						scopeStack: [childScope] + scopeToWalk.scopeStack,
 						lazilyInstantiatedDeclarations: scopeToWalk.lazilyInstantiatedDeclarations.recordingLazilyInstantiated(declaredChildProperty),
-						nearestDeclarationByLabel: childNearestDeclarationByLabel,
 					))
 				case .aliased, .hole:
 					// A hole's tree is a fill's, which a mock never builds: a mock's scopes hold no hole.
@@ -1384,7 +1443,27 @@ extension DependencyTreeGenerator {
 				}
 			}
 			// The scope walked next is the last one on the stack, so the first child goes last.
-			scopesToWalk[firstChildIndex...].reverse()
+			scopesToWalk.reverseElements(from: firstChildIndex)
 		}
 	}
+}
+
+/// A mock root whose own checks have passed: the cycles and hidden receives of the trees of the dependencies it
+/// promotes, and the access of every construction its mock makes. Made only in this file, where
+/// `createMockRootScopeGenerator` runs those checks, and the one way that function freezes the root's tree, so no other
+/// mock root's outcome decides whether this one is built. As `ValidatedWorld` is, a convention the compiler enforces by
+/// access.
+struct MockRootPlan {
+	fileprivate init(mockRootScope: Scope, frozenScopeMap: FrozenScopeMap) {
+		self.mockRootScope = mockRootScope
+		self.frozenScopeMap = frozenScopeMap
+	}
+
+	/// The root's record, and the table its tree is found in.
+	func freezingRoot() -> (table: ScopeTable, record: ScopeRecord) {
+		frozenScopeMap.freezing(rootScope: mockRootScope)
+	}
+
+	private let mockRootScope: Scope
+	private let frozenScopeMap: FrozenScopeMap
 }
