@@ -3,6 +3,9 @@
 --exclude Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDI.swift
 --exclude Examples/ExampleTuistIntegration/ExampleTuistIntegration/Generated
 --exclude Examples/ExampleTuistIntegration/Derived
+# The written-calls fixtures keep the Manual’s spellings (`ErasedInstantiator<(), …>`) and the type annotations that
+# check what each call returns (`let _: Screen = …`), and a released copy must never change.
+--exclude Scripts/release-checks/written-calls
 
 # format options
 --indent tab

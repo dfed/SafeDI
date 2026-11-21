@@ -34,16 +34,12 @@ import sys
 # SafeDIToolGraphFuzzerTests.corpusSeedCount.
 CORPUS_SEED_COUNT = 5000
 # The graphs both releases accept and compile cleanly, which the values compare.
-# Set from run 44545790927, which compared 1445 graphs against 2.2.0: about a
+# Set from run 44696894161, which compared 2679 graphs against 2.3.0, every
+# graph of the base corpus this tree accepts (corpusAcceptedSeedCount): about a
 # tenth below it, so a runner that stops comparing a whole shard's worth fails,
 # while the count may move a little with a change that rejects or accepts a few
-# graphs. Run 43739187246 had compared 1669; since then the base corpus draws
-# four shapes whose generated code 2.2.0 does not compile (a throwing
-# @autoclosure default, a closure default @Sendable only inside its type, a
-# type built only beneath a repeated ancestor, and a hand-written mock
-# parameter an inactive #if clause declares), which raised 2.2.0's compile
-# rejections from 91 graphs to 323.
-COMPARED_GRAPH_FLOOR = 1300
+# graphs.
+COMPARED_GRAPH_FLOOR = 2400
 
 reports_directory = sys.argv[1]
 expected_shard_count = int(sys.argv[2])

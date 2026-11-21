@@ -65,13 +65,19 @@ struct ModulesBeneathSelection {
 	/// Whether the module's trees reach a type that nothing read so far declares: whether the files of the modules beneath
 	/// are opened at all.
 	func reachesTypeNothingReadDeclares() -> Bool {
-		walk().reachesTypeNothingReadDeclares
+		var walkState = WalkState()
+		return walk(resuming: &walkState).reachesTypeNothingReadDeclares
 	}
 
 	/// The indices of those of `files` that declare what the module's trees need.
 	///
 	/// Works in rounds: a whole walk over what has been read names the files it wants, and only then are they read, so that
-	/// what a round wants follows from the graph alone and never from the order of a walk.
+	/// what a round wants follows from the graph alone and never from the order of a walk. Each round resumes the walk
+	/// before it rather than walking again from the trees, so a chain of modules each round reaches one more of costs one
+	/// walk in all: what a round reads only adds declarations, so every visit an earlier round made stays one this round's
+	/// walk would make, and only the dependencies that found no declaration are looked up again. The one exception is a
+	/// read that declares a type more qualified than the one a dependency was found as, which a walk from the trees would
+	/// find instead; the round then walks again from the trees.
 	/// - Parameter files: The module info files of the modules beneath, without those the build lists.
 	mutating func indicesOfFilesToRead(among files: [ModuleInfoFile]) -> Set<Int> {
 		for (index, file) in files.enumerated() {
@@ -83,13 +89,14 @@ struct ModulesBeneathSelection {
 			}
 		}
 		var indicesRead = Set<Int>()
-		var indicesToRead = walk().fileIndicesToRead
+		var walkState = WalkState()
+		var indicesToRead = walk(resuming: &walkState).fileIndicesToRead
 		while !indicesToRead.isEmpty {
 			for index in indicesToRead.sorted() {
 				read(files[index])
 			}
 			indicesRead.formUnion(indicesToRead)
-			indicesToRead = walk().fileIndicesToRead
+			indicesToRead = walk(resuming: &walkState).fileIndicesToRead
 		}
 		return indicesRead
 	}
@@ -161,28 +168,35 @@ struct ModulesBeneathSelection {
 		func declaration(amongTypes types: [TypeDescription], readByRunOfModuleNamed moduleName: String) -> Declaration? {
 			let moduleNamesRead = moduleNamesReadByModuleName[moduleName, default: []]
 			return types.lazy.compactMap { type in
-				productionDeclarationsByType[type]?.first { moduleNamesRead.contains($0.moduleName) }?.declaration
+				productionDeclarationsByType[type]?.first { moduleNamesRead.contains($0.moduleName) }.map { productionDeclarations[$0.index] }
 			}.first
 		}
 
 		private var moduleNamesReadByModuleName = [String: Set<String>]()
-		private var productionDeclarationsByType = [TypeDescription: [(moduleName: String, declaration: Declaration)]]()
+		/// Each production declaration of the modules added, once, which `productionDeclarationsByType` indexes, so that a
+		/// declaration of several types is held once.
+		private var productionDeclarations = [Declaration]()
+		private var productionDeclarationsByType = [TypeDescription: [(moduleName: String, index: Int)]]()
 		private var moduleNamesAdded = Set<String>()
 
 		private mutating func add(moduleNamed moduleName: String, instantiables: [Instantiable]) {
 			guard moduleNamesAdded.insert(moduleName).inserted else { return }
 			for instantiable in instantiables where !instantiable.mockOnly {
-				let declaration = Declaration(instantiable: instantiable, isOwn: false)
+				let index = productionDeclarations.count
+				productionDeclarations.append(Declaration(instantiable: instantiable, isOwn: false))
 				for instantiableType in instantiable.instantiableTypes {
-					productionDeclarationsByType[instantiableType, default: []].append((moduleName: moduleName, declaration: declaration))
+					productionDeclarationsByType[instantiableType, default: []].append((moduleName: moduleName, index: index))
 				}
 			}
 		}
 	}
 
 	private var startingVisits = [Visit]()
-	/// The production declaration read so far of each type.
-	private var declarationsByType = [TypeDescription: Declaration]()
+	/// Each production declaration read so far, which `declarationIndicesByType` indexes, so that a declaration of several
+	/// types is held once.
+	private var declarationsRead = [Declaration]()
+	/// The index in `declarationsRead` of the production declaration read so far of each type.
+	private var declarationIndicesByType = [TypeDescription: Int]()
 	private var fileIndicesDeclaringType = [TypeDescription: Set<Int>]()
 	private var otherModules = OtherModules()
 
@@ -200,28 +214,59 @@ struct ModulesBeneathSelection {
 	private mutating func read(_ instantiables: [Instantiable], isOwn: Bool) -> [Declaration] {
 		instantiables.filter { !$0.mockOnly }.map { instantiable in
 			let declaration = Declaration(instantiable: instantiable, isOwn: isOwn)
-			for instantiableType in instantiable.instantiableTypes where declarationsByType[instantiableType] == nil {
-				declarationsByType[instantiableType] = declaration
+			let index = declarationsRead.count
+			declarationsRead.append(declaration)
+			for instantiableType in instantiable.instantiableTypes where declarationIndicesByType[instantiableType] == nil {
+				declarationIndicesByType[instantiableType] = index
 			}
 			return declaration
 		}
 	}
 
-	/// Visits everything the module's trees reach over what has been read, with an explicit stack, since a dependency tree
-	/// can be as deep as the module has types. Reads nothing: it says which files of the modules beneath declare a type it
-	/// reaches that nothing read declares, or that stands between its trees and a hole they fill.
-	///
-	/// Holes are settled when nothing is left to walk, since a fill's tree can reach another hole, or another route to one.
-	private func walk() -> (reachesTypeNothingReadDeclares: Bool, fileIndicesToRead: Set<Int>) {
-		var visitsToMake = startingVisits
-		var reachesTypeNothingReadDeclares = false
-		var fileIndicesToRead = Set<Int>()
+	/// What a walk has visited and found, which the next round's walk resumes from.
+	private struct WalkState {
+		var visitsToMake = [Visit]()
 		var visitedKeys = Set<Visit.Key>()
 		var callersOfVisits = [Visit.Key: Set<Visit.Key>]()
 		var holes = [Hole]()
+		/// Of `startingVisits`, how many the walk has started from.
+		var startingVisitCount = 0
+		/// Of `declarationsRead`, how many the walk has checked against `typesQualifyingFoundTypes`.
+		var checkedDeclarationCount = 0
+		/// Each dependency of a visit made that no declaration read yet fulfills, by the visit and the types that would
+		/// fulfill it, most qualified first.
+		var dependenciesFoundUndeclared = [(visit: Visit, types: [TypeDescription])]()
+		/// The types more qualified than the one a dependency or a hole's fill was found as, which nothing read declared
+		/// when it was found: a read that declares one makes a walk from the trees find that type instead.
+		var typesQualifyingFoundTypes = Set<TypeDescription>()
+	}
+
+	/// Visits everything the module's trees reach over what has been read, with an explicit stack, since a dependency tree
+	/// can be as deep as the module has types, resuming from `walkState`, which a walk over what was read before left. Reads
+	/// nothing: it says which files of the modules beneath declare a type it reaches that nothing read declares, or that
+	/// stands between its trees and a hole they fill.
+	///
+	/// Holes are settled when nothing is left to walk, since a fill's tree can reach another hole, or another route to one.
+	private func walk(resuming walkState: inout WalkState) -> (reachesTypeNothingReadDeclares: Bool, fileIndicesToRead: Set<Int>) {
+		// A type recorded as more qualified was declared by nothing read when it was recorded, so only the declarations read
+		// since the last walk can declare one, and a round costs what it read.
+		let declarationsReadSinceLastWalk = declarationsRead[walkState.checkedDeclarationCount...]
+		if declarationsReadSinceLastWalk.contains(where: { $0.instantiable.instantiableTypes.contains(where: walkState.typesQualifyingFoundTypes.contains) }) {
+			walkState = WalkState()
+		}
+		walkState.checkedDeclarationCount = declarationsRead.count
+		walkState.visitsToMake += startingVisits[walkState.startingVisitCount...]
+		walkState.startingVisitCount = startingVisits.count
+		var reachesTypeNothingReadDeclares = false
+		var fileIndicesToRead = Set<Int>()
+		let dependenciesFoundUndeclared = walkState.dependenciesFoundUndeclared
+		walkState.dependenciesFoundUndeclared = []
+		for (visit, types) in dependenciesFoundUndeclared {
+			visitDependency(ofTypes: types, of: visit, walkingFrom: visit.walkOfDependencies, walkState: &walkState, reachesTypeNothingReadDeclares: &reachesTypeNothingReadDeclares, fileIndicesToRead: &fileIndicesToRead)
+		}
 		repeat {
-			while let visit = visitsToMake.popLast() {
-				guard visitedKeys.insert(visit.key).inserted else { continue }
+			while let visit = walkState.visitsToMake.popLast() {
+				guard walkState.visitedKeys.insert(visit.key).inserted else { continue }
 				let instantiable = visit.declaration.instantiable
 				let walk = visit.walkOfDependencies
 				for dependency in instantiable.dependencies where dependency.isInstantiated {
@@ -233,29 +278,26 @@ struct ModulesBeneathSelection {
 					if case let .treeOfSeam(moduleName) = walk {
 						if let declaration = otherModules.declaration(amongTypes: types, readByRunOfModuleNamed: moduleName) {
 							let callee = Visit(declaration: declaration, walk: walk)
-							callersOfVisits[callee.key, default: []].insert(visit.key)
-							visitsToMake.append(callee)
+							walkState.callersOfVisits[callee.key, default: []].insert(visit.key)
+							walkState.visitsToMake.append(callee)
 						} else {
-							holes.append(Hole(ownerKey: visit.key, types: types))
+							walkState.holes.append(Hole(ownerKey: visit.key, types: types))
 						}
-					} else if let declaration = declaration(amongTypes: types) {
-						visitsToMake.append(Visit(declaration: declaration, walk: walk))
 					} else {
-						reachesTypeNothingReadDeclares = true
-						fileIndicesToRead.formUnion(types.lazy.compactMap { fileIndicesDeclaringType[$0] }.first ?? [])
+						visitDependency(ofTypes: types, of: visit, walkingFrom: walk, walkState: &walkState, reachesTypeNothingReadDeclares: &reachesTypeNothingReadDeclares, fileIndicesToRead: &fileIndicesToRead)
 					}
 				}
 			}
-			for hole in holes {
-				let routes = routes(to: hole, callersOfVisits: callersOfVisits)
+			for hole in walkState.holes {
+				let routes = routes(to: hole, callersOfVisits: walkState.callersOfVisits)
 				for fill in routes.fillsOfSeamsBetween {
-					callersOfVisits[fill.visit.key, default: []].insert(fill.callerKey)
-					visitsToMake.append(fill.visit)
+					walkState.callersOfVisits[fill.visit.key, default: []].insert(fill.callerKey)
+					walkState.visitsToMake.append(fill.visit)
 				}
 				guard !routes.keysFromThisRunsTrees.isEmpty else { continue }
-				if let fill = declaration(amongTypes: hole.types) {
-					visitsToMake.append(Visit(declaration: fill, walk: .tree))
-					for key in routes.keysFromThisRunsTrees where declarationsByType[key.concreteType] == nil {
+				if let fill = declaration(amongTypes: hole.types, recordingMoreQualifiedTypesIn: &walkState.typesQualifyingFoundTypes) {
+					walkState.visitsToMake.append(Visit(declaration: fill, walk: .tree))
+					for key in routes.keysFromThisRunsTrees where declarationIndicesByType[key.concreteType] == nil {
 						reachesTypeNothingReadDeclares = true
 						fileIndicesToRead.formUnion(fileIndicesDeclaringType[key.concreteType] ?? [])
 					}
@@ -264,9 +306,28 @@ struct ModulesBeneathSelection {
 					fileIndicesToRead.formUnion(hole.types.lazy.compactMap { fileIndicesDeclaringType[$0] }.first ?? [])
 				}
 			}
-			visitsToMake.removeAll { visitedKeys.contains($0.key) }
-		} while !visitsToMake.isEmpty
+			walkState.visitsToMake.removeAll { walkState.visitedKeys.contains($0.key) }
+		} while !walkState.visitsToMake.isEmpty
 		return (reachesTypeNothingReadDeclares: reachesTypeNothingReadDeclares, fileIndicesToRead: fileIndicesToRead)
+	}
+
+	/// Visits the declaration read of the first of `types` that one declares, a dependency of `visit`, or records the
+	/// dependency as found undeclared, with the files that declare it.
+	private func visitDependency(
+		ofTypes types: [TypeDescription],
+		of visit: Visit,
+		walkingFrom walk: Walk,
+		walkState: inout WalkState,
+		reachesTypeNothingReadDeclares: inout Bool,
+		fileIndicesToRead: inout Set<Int>,
+	) {
+		if let declaration = declaration(amongTypes: types, recordingMoreQualifiedTypesIn: &walkState.typesQualifyingFoundTypes) {
+			walkState.visitsToMake.append(Visit(declaration: declaration, walk: walk))
+		} else {
+			reachesTypeNothingReadDeclares = true
+			fileIndicesToRead.formUnion(types.lazy.compactMap { fileIndicesDeclaringType[$0] }.first ?? [])
+			walkState.dependenciesFoundUndeclared.append((visit: visit, types: types))
+		}
 	}
 
 	/// How `hole` is reached, walking back from its owner through the callers of each visit: the visits on every route from
@@ -307,8 +368,14 @@ struct ModulesBeneathSelection {
 		return (keysFromThisRunsTrees: keysFromThisRunsTrees, fillsOfSeamsBetween: fillsOfSeamsBetween)
 	}
 
-	private func declaration(amongTypes types: [TypeDescription]) -> Declaration? {
-		types.lazy.compactMap { declarationsByType[$0] }.first
+	/// The declaration read of the first of `types` that one declares, recording each type before it in
+	/// `moreQualifiedTypes`.
+	private func declaration(amongTypes types: [TypeDescription], recordingMoreQualifiedTypesIn moreQualifiedTypes: inout Set<TypeDescription>) -> Declaration? {
+		guard let position = types.firstIndex(where: { declarationIndicesByType[$0] != nil }),
+		      let index = declarationIndicesByType[types[position]]
+		else { return nil }
+		moreQualifiedTypes.formUnion(types[..<position])
+		return declarationsRead[index]
 	}
 }
 

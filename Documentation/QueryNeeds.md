@@ -63,7 +63,7 @@ Pass `--json` for the same report as JSON. The root object carries a `formatVers
             ],
             "name" : "ConfigMocks",
             "paths" : [
-              "Sources/ConfigMocks"
+              "Sources/ConfigMocks/"
             ]
           },
           {
@@ -76,7 +76,7 @@ Pass `--json` for the same report as JSON. The root object carries a `formatVers
             ],
             "name" : "FeatureModule",
             "paths" : [
-              "Sources/FeatureModule"
+              "Sources/FeatureModule/"
             ]
           }
         ],
@@ -100,7 +100,7 @@ Pass `--json` for the same report as JSON. The root object carries a `formatVers
           ],
           "name" : "FeatureModule",
           "paths" : [
-            "Sources/FeatureModule"
+            "Sources/FeatureModule/"
           ]
         }
       ],
