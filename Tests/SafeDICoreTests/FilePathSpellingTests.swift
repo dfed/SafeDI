@@ -127,6 +127,37 @@ struct FilePathSpellingTests: ~Copyable {
 	}
 
 	@Test
+	func projectFileSet_containsFile_whenPathSpellsItAnotherWay() throws {
+		let projectFilePaths = ProjectFilePaths(projectRoot: linkedProjectRoot)
+		let files = ProjectFileSet([projectFilePaths.projectFilePath(of: "Sources/File.swift")], spelledBy: projectFilePaths)
+
+		#expect(files.contains(filePathAsRecorded: "Sources/File.swift"))
+		#expect(files.contains(filePathAsRecorded: "./Sources//Other/../File.swift"))
+		#expect(files.contains(filePathAsRecorded: "\(linkedProjectRoot)/Sources/File.swift"))
+		#expect(try files.contains(filePathAsRecorded: "\(resolvedProjectRoot)/Sources/File.swift"))
+	}
+
+	@Test
+	func projectFileSet_doesNotContainFile_whenPathNamesAnotherFileOfTheSameName() {
+		let projectFilePaths = ProjectFilePaths(projectRoot: "/Project")
+		let files = ProjectFileSet([projectFilePaths.projectFilePath(of: "Sources/File.swift")], spelledBy: projectFilePaths)
+
+		#expect(!files.contains(filePathAsRecorded: "Other/File.swift"))
+		#expect(!files.contains(filePathAsRecorded: "Sources/Other.swift"))
+	}
+
+	@Test
+	func projectFileSet_spellsPath_whenLastComponentIsDotDotDotOrEmpty() {
+		let projectFilePaths = ProjectFilePaths(projectRoot: "/Project")
+		let files = ProjectFileSet([projectFilePaths.projectFilePath(of: "Sources")], spelledBy: projectFilePaths)
+
+		#expect(files.contains(filePathAsRecorded: "Sources/."))
+		#expect(files.contains(filePathAsRecorded: "Sources/Inner/.."))
+		#expect(files.contains(filePathAsRecorded: "Sources/"))
+		#expect(!files.contains(filePathAsRecorded: "Other/."))
+	}
+
+	@Test
 	func projectFilePath_ordersByPath() {
 		let projectFilePaths = ProjectFilePaths(projectRoot: "/Project")
 

@@ -318,7 +318,7 @@ extension DependencyTreeGenerator {
 	func publicMockPlans(ofOwnTypes types: [TypeDescription]) async -> PublicMockPlans {
 		var plans = PublicMockPlans()
 		var mockScopes: MockScopes?
-		let publicMockContext = makePublicMockContext()
+		let publicMockContext = makePublicMockContext(proof: ownAccessProof().proof)
 		var foreignPublicMockPlans = PublicMockPlans()
 		for type in types {
 			do {

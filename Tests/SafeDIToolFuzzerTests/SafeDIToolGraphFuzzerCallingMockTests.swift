@@ -460,7 +460,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		let seeds = GraphFuzzerCallingMockCell.all.compactMap { cell in
 			draws.first { $0.cell == cell && $0.valueProbes != nil }?.seed
 		}
-		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293, 450, 451, 452, 453, 530, 531, 610, 611, 612, 613, 614, 615, 670, 671, 672, 673, 674, 675, 730, 743, 738, 733, 734, 735, 790, 791, 792, 793, 794, 795, 1_030, 1_031, 1_032, 1_033, 1_034, 1_035])
+		#expect(seeds == [8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27, 284, 285, 288, 289, 292, 293, 450, 451, 452, 453, 530, 531, 610, 611, 612, 613, 614, 615, 670, 671, 672, 673, 674, 675, 730, 743, 738, 733, 734, 735, 790, 791, 792, 793, 794, 795, 1_030, 1_031, 1_032, 1_033, 1_034, 1_035, 1_090, 1_091, 1_092, 1_120, 1_121, 1_122, 1_123, 1_124, 1_125, 1_180, 1_181, 1_182, 1_183, 1_184, 1_185])
 		for seed in seeds {
 			var filesToDelete = [URL]()
 			defer {
@@ -1330,6 +1330,154 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 		#expect(GraphFuzzerCallingMockDraw(seed: 0).valueNothingProvides == nil)
 	}
 
+	/// Seed 1090 draws the first graph of `calledTypeHoldsPlaceLazily/internal/plain`, the first of its block: an internal
+	/// calling mock whose called type holds its place in a `LazilyInstantiated` beside a place by value, which one fill of
+	/// the caller's module fills, reading the caller's value. Its twin fills both places, and so does the mock, whose values
+	/// the probe compares with the twin's. It fails with a place held in a lazy wrapper left unfilled
+	/// (`DependencyTreeGenerator.holesFilled(byCallsOf:in:)` skipping a hole whose property is a `LazilyInstantiated` or
+	/// `SendableLazilyInstantiated`), when the mock passes up `feedServiceBuilder`, which no reason explains.
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_fillsLazyPlaceAsTwin_whenDrawnCalledTypeHoldsPlaceLazily() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 1_090)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 1_090)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .calledTypeHoldsPlaceLazily, caller: .internal, place: .plain))
+		#expect(draw.lazyPlace?.wrapper == "LazilyInstantiated")
+		#expect(draw.lazyPlace?.besideByValuePlace == true)
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.passUps.isEmpty)
+		#expect(result.comparedValues)
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
+	/// The graphs of the shape whose called type holds its place lazily draw each wrapper, with and without a place by
+	/// value beside it, and each caller kind, in the pinned number of graphs, each at least ten. The block draws only a
+	/// plain place: the lazy wrapper is the place's deferral.
+	@Test
+	func calledTypeHoldsPlaceLazilyDraw_drawsEachVariation_inPinnedNumberOfGraphs() {
+		let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .calledTypeHoldsPlaceLazily }
+		var counts = [String: Int]()
+		for draw in draws {
+			counts[draw.lazyPlace?.wrapper ?? "none", default: 0] += 1
+			counts[draw.lazyPlace?.besideByValuePlace == true ? "besideByValuePlace" : "alone", default: 0] += 1
+			counts[draw.cell.caller.rawValue, default: 0] += 1
+			counts[draw.cell.place.rawValue, default: 0] += 1
+		}
+		print("calling-mock called types holding places lazily \(counts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
+
+		#expect(counts == [
+			"LazilyInstantiated": 15,
+			"SendableLazilyInstantiated": 15,
+			"besideByValuePlace": 18,
+			"alone": 12,
+			"internal": 10,
+			"public": 10,
+			"listed": 10,
+			"plain": 30,
+		])
+		#expect(counts.values.allSatisfy { $0 >= 10 })
+		#expect(GraphFuzzerCallingMockDraw(seed: 0).lazyPlace == nil)
+	}
+
+	/// Seed 1120 draws the first graph of `calledTypeHoldsSecondHoleType/internal/plain`, the first of its block: an
+	/// internal calling mock whose called type holds a place of a second hole type, `MeterService`, beside the first, each
+	/// filled by a type of the caller's module. Its twin fills both, and so does the mock, whose values the probe compares
+	/// with the twin's. It fails with only the first hole type of each call filled
+	/// (`DependencyTreeGenerator.holesFilled(byCallsOf:in:)` skipping every hole whose instantiated type is not the call's
+	/// first hole's), when the mock passes up `meterServiceBuilder`, which no reason explains.
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_fillsSecondHoleTypeAsTwin_whenDrawnCalledTypeHoldsSecondHoleType() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 1_120)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 1_120)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .calledTypeHoldsSecondHoleType, caller: .internal, place: .plain))
+		#expect(draw.secondHole?.fill != .invisible)
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.passUps.isEmpty)
+		#expect(result.comparedValues)
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
+	/// The graphs of the shape whose called type holds a place of a second hole type draw each fill of it, the place before
+	/// and after the first hole's, each caller kind and each place, in the pinned number of graphs, each at least ten.
+	@Test
+	func calledTypeHoldsSecondHoleTypeDraw_drawsEachVariation_inPinnedNumberOfGraphs() {
+		let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .calledTypeHoldsSecondHoleType }
+		var counts = [String: Int]()
+		for draw in draws {
+			counts[draw.secondHole?.fill.rawValue ?? "none", default: 0] += 1
+			counts[draw.secondHole?.isBeforeFirstPlace == true ? "beforeFirstPlace" : "afterFirstPlace", default: 0] += 1
+			counts[draw.cell.caller.rawValue, default: 0] += 1
+			counts[draw.cell.place.rawValue, default: 0] += 1
+		}
+		print("calling-mock called types holding a second hole type \(counts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
+
+		#expect(counts == [
+			"readsValue": 21,
+			"readsNothing": 23,
+			"invisible": 16,
+			"beforeFirstPlace": 29,
+			"afterFirstPlace": 31,
+			"internal": 20,
+			"public": 20,
+			"listed": 20,
+			"plain": 30,
+			"deferred": 30,
+		])
+		#expect(counts.values.allSatisfy { $0 >= 10 })
+		#expect(GraphFuzzerCallingMockDraw(seed: 0).secondHole == nil)
+	}
+
+	/// Seed 1180 draws the first graph of `callerForwardsValueFillReads/internal/plain`, the first of its block: an internal
+	/// calling mock whose caller forwards `database`, which the fill of the called type's place reads. Its twin fills the
+	/// place from its forwarded value, and so does the mock, from the value its `mock()` is passed, which the probe compares
+	/// with the twin's. It fails with a place whose fill receives anything beside its place's fields passed up
+	/// (`DependencyTreeGenerator.holesFilled(byCallsOf:in:)` skipping such a fill), when the mock passes up
+	/// `trackerServiceBuilder`, which no reason explains.
+	@Test(.enabled(if: compileVerificationIsEnabled, "Compiles Swift only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func callingMock_fillsPlaceFromForwardedValue_whenDrawnCallerForwardsValueFillReads() async throws {
+		let draw = GraphFuzzerCallingMockDraw(seed: 1_180)
+
+		let result = try await GraphFuzzerCallingMockCheck.run(draw.graph, seed: 1_180)
+
+		#expect(draw.cell == GraphFuzzerCallingMockCell(shape: .callerForwardsValueFillReads, caller: .internal, place: .plain))
+		#expect(result.twinHasIntendedOutcome, "\(result.drawingDefect ?? "")")
+		#expect(result.passUps.isEmpty)
+		#expect(result.comparedValues)
+		#expect(result.failure == nil, "\(result.failure?.details ?? "")")
+	}
+
+	/// The graphs of the shape whose caller forwards the value its fill reads draw a required and an only-if-available
+	/// read, each caller kind and each place, in the pinned number of graphs, each at least ten.
+	@Test
+	func callerForwardsValueFillReadsDraw_drawsEachVariation_inPinnedNumberOfGraphs() {
+		let draws = (UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).map { GraphFuzzerCallingMockDraw(seed: $0) }.filter { $0.cell.shape == .callerForwardsValueFillReads }
+		var counts = [String: Int]()
+		for draw in draws {
+			counts[draw.forwardedValue?.fillReceivesOnlyIfAvailable == true ? "onlyIfAvailable" : "required", default: 0] += 1
+			counts[draw.cell.caller.rawValue, default: 0] += 1
+			counts[draw.cell.place.rawValue, default: 0] += 1
+		}
+		print("calling-mock callers forwarding the value their fill reads \(counts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))")
+
+		#expect(counts == [
+			"required": 25,
+			"onlyIfAvailable": 35,
+			"internal": 20,
+			"public": 20,
+			"listed": 20,
+			"plain": 30,
+			"deferred": 30,
+		])
+		#expect(counts.values.allSatisfy { $0 >= 10 })
+		#expect(GraphFuzzerCallingMockDraw(seed: 0).forwardedValue == nil)
+	}
+
 	/// Seed 970 draws the first graph of `fillConstructsTypeCallerModuleCannotReach/internal/plain`, the first of its block:
 	/// an internal calling mock whose fill instantiates a protocol only a type of the outer module fulfills, which the
 	/// caller's module cannot reach, in a build that compiles the generated mocks. Its twin reports the access error, and
@@ -2040,7 +2188,9 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	/// probes, and a cell that draws a builder of the enclosing called type one graph of each builder and, for each builder,
 	/// one whose fill also instantiates what nothing fulfills: its compared graphs are the first of each position, the first
 	/// of each call and the first of each such variation, or the first of each position, the first of each builder and the
-	/// first such fill beside each builder.
+	/// first such fill beside each builder; a cell of the shapes whose called type holds its place lazily or a place of a
+	/// second hole type, or whose caller forwards the value its fill reads, also compares the first graph of each variation
+	/// of its shape (`shapeVariation(of:)`) that it holds.
 	@Test
 	func comparesValues_comparesFirstGraphOfEachLeafPosition_inEachProbedCell() {
 		for cell in GraphFuzzerCallingMockCell.drawnCells {
@@ -2080,6 +2230,21 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 				#expect(Set(compared.compactMap { $0.enclosingBuilder?.rawValue }) == Set(builders), "\(cell)")
 				#expect(Set(compared.filter(\.reenteringFillInstantiatesWhatNothingFulfills).compactMap { $0.enclosingBuilder?.rawValue }) == buildersOfReenteringFillsInstantiatingWhatNothingFulfills, "\(cell)")
 				#expect(Set(compared.map(\.seed)) == firstSeeds, "\(cell)")
+			} else if draws.contains(where: { Self.shapeVariation(of: $0) != nil }) {
+				// The first graph of each variation, across the shape's cells, is compared beside the first of each position.
+				var seenVariations = Set<String>()
+				let firstSeedsOfVariations = Set((UInt64(0)..<UInt64(Self.callingMockCorpusSeedCount)).filter { seed in
+					Self.shapeVariation(of: GraphFuzzerCallingMockDraw(seed: seed)).map { seenVariations.insert($0).inserted } ?? false
+				})
+				var firstSeeds = Set<UInt64>()
+				for position in Set(draws.map { "\($0.tickerPosition)" }) {
+					if let first = draws.first(where: { position == "\($0.tickerPosition)" }) {
+						firstSeeds.insert(first.seed)
+					}
+				}
+				firstSeeds.formUnion(draws.map(\.seed).filter(firstSeedsOfVariations.contains))
+				#expect(Set(compared.map { "\($0.tickerPosition)" }) == Set(draws.map { "\($0.tickerPosition)" }), "\(cell)")
+				#expect(Set(compared.map(\.seed)) == firstSeeds, "\(cell)")
 			} else if calls.isEmpty {
 				#expect(compared.map { "\($0.tickerPosition)" }.sorted() == Set(draws.map { "\($0.tickerPosition)" }).sorted(), "\(cell)")
 			} else {
@@ -2110,7 +2275,7 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	@Test
 	func drawnCells_coverEveryCell_whenCorpusDrawsTenGraphsPerCell() {
-		#expect(GraphFuzzerCallingMockCell.all.count == 109)
+		#expect(GraphFuzzerCallingMockCell.all.count == 124)
 		#expect(GraphFuzzerCallingMockCell.drawnCells == GraphFuzzerCallingMockCell.all)
 		#expect(Self.callingMockCorpusSeedCount == GraphFuzzerCallingMockCell.drawnCells.count * 10)
 		#expect(GraphFuzzerCallingMockCell.firstSeeds.map(GraphFuzzerCallingMockCell.cell(ofSeed:)) == GraphFuzzerCallingMockCell.all)
@@ -2442,7 +2607,9 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 	/// whose fill also instantiates what nothing fulfills (`reenteringFillInstantiatesWhatNothingFulfills`), whose
 	/// re-entered level function, and, beside a `SendableInstantiator`, the no-scope initializer of the fill's plain level,
 	/// only a compile judges, and the first whose enclosing called type receives the caller's value in each wrapper
-	/// (`enclosingCalledTypeLazyValueWrapper`), whose instance only the values show. The other graphs of a probed cell
+	/// (`enclosingCalledTypeLazyValueWrapper`), whose instance only the values show; and, in the shapes whose called type
+	/// holds its place lazily or a place of a second hole type, and whose caller forwards the value its fill reads, the
+	/// first graph with each of their variations (`comparedSeeds`). The other graphs of a probed cell
 	/// differ from a compared one only in names and in variations the tool run alone judges, and pass on their tool runs
 	/// alone, the seam built again's too.
 	static func comparesValues(ofSeed seed: UInt64) -> Bool {
@@ -2451,9 +2618,13 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 
 	/// The first seed of each cell and leaf position, and of each cell and call of the shape that draws one, and of each
 	/// cell and variation of that shape drawn after the call, in the corpus, among that shape's graphs that state probes;
-	/// and the first of each cell and builder of the shape whose fill holds a builder of the enclosing called type, the
-	/// first of each cell and builder of that shape whose fill also instantiates what nothing fulfills, and the first of
-	/// each cell of that shape whose enclosing called type receives the caller's value in each wrapper.
+	/// the first of each cell and builder of the shape whose fill holds a builder of the enclosing called type, the first
+	/// of each cell and builder of that shape whose fill also instantiates what nothing fulfills, and the first of each cell
+	/// of that shape whose enclosing called type receives the caller's value in each wrapper; and, keyed by shape rather
+	/// than by cell, since the cell's leaf position already varies the caller, the first that draws each wrapper with and
+	/// without a place by value beside it, of the shape whose called type holds its place lazily; each place, fill and
+	/// position of the second hole type, of the shape whose called type holds one; and each place and read, of the shape
+	/// whose caller forwards the value its fill reads.
 	static let comparedSeeds: Set<UInt64> = {
 		var seenCellsAndPositions = Set<String>()
 		var seenCellsAndCalls = Set<String>()
@@ -2480,9 +2651,27 @@ struct SafeDIToolGraphFuzzerCallingMockTests {
 			if let wrapper = draw.enclosingCalledTypeLazyValueWrapper, seenCellsAndCalls.insert("\(draw.cell) \(wrapper)").inserted {
 				seeds.insert(seed)
 			}
+			if let variation = shapeVariation(of: draw), seenCellsAndCalls.insert(variation).inserted {
+				seeds.insert(seed)
+			}
 		}
 		return seeds
 	}()
+
+	/// The variation `draw` draws of the shapes whose called type holds its place lazily or a place of a second hole type,
+	/// and whose caller forwards the value its fill reads, keyed by shape rather than by cell, since the cell's leaf
+	/// position already varies the caller; `nil` for a draw of another shape.
+	static func shapeVariation(of draw: GraphFuzzerCallingMockDraw) -> String? {
+		if let lazyPlace = draw.lazyPlace {
+			"\(draw.cell.shape) \(lazyPlace.wrapper) \(lazyPlace.besideByValuePlace)"
+		} else if let secondHole = draw.secondHole {
+			"\(draw.cell.shape) \(draw.cell.place) \(secondHole.fill) \(secondHole.isBeforeFirstPlace)"
+		} else if let forwardedValue = draw.forwardedValue {
+			"\(draw.cell.shape) \(draw.cell.place) \(forwardedValue.fillReceivesOnlyIfAvailable)"
+		} else {
+			nil
+		}
+	}
 
 	/// The variations `draw` draws after the call, of the shape whose fill receives the caller's lazy value below the called
 	/// type's root (`CallerLazyValue.secondPlaceCallsAgain`, `buildsPlaceInSendableFunctionToo`).
