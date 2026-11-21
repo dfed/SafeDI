@@ -428,6 +428,15 @@ struct ConstructionLog {
 		var reads = Self()
 		let allParts = allParts
 		guard !allParts.isEmpty else { return reads }
+		// A short log is copied, so that the many candidates a short log is asked to tell apart read one array, as a log did
+		// before segments; only a long one, whose copies grow with the square of a chain, is frozen in a segment.
+		if let readsAbove = Self.distinctReads(of: allParts, answeredAbove: depth, upTo: Self.copiedReadLimit) {
+			ConstructionLogStorage.record(readsAbove.count)
+			if !readsAbove.isEmpty {
+				reads.parts = [.reads(readsAbove)]
+			}
+			return reads
+		}
 		let segment = Segment(parts: allParts)
 		ConstructionLogStorage.record(segment.storedElementCount)
 		if segment.shallowestDepth < depth {
@@ -471,6 +480,15 @@ struct ConstructionLog {
 	/// (and depth) once, with the first answer it was added with, until `body` returns `false`.
 	/// - Returns: Whether `body` returned `true` for every read.
 	private func forEachRead(where isIncluded: (Read) -> Bool, _ body: (RecordedRead) -> Bool) -> Bool {
+		// Most candidates are set aside after a read or two, and most logs are one run of distinct reads: a log this one
+		// recorded or answered alike, or a short one a place kept as a copy. Their reads are read in place, with no stack
+		// and no set of the reads visited, which cost more than the reads.
+		if let reads = distinctReadsInOneRun {
+			for recorded in reads where isIncluded(recorded.read.read) {
+				guard body(recorded) else { return false }
+			}
+			return true
+		}
 		var readsVisited = Set<AnsweredRead>()
 		// A segment refers to the segments of the places beneath it, which can be as deep as the module has types, so the
 		// walk keeps a stack of its own rather than recursing.
@@ -495,6 +513,49 @@ struct ConstructionLog {
 			}
 		}
 		return true
+	}
+
+	/// This log's reads when they are one run of distinct reads, every one of which a walk reads: those it recorded, or the
+	/// one part of reads a place's copy (`reads(answeredAbove:)`) holds.
+	private var distinctReadsInOneRun: [RecordedRead]? {
+		guard ownReads.isEmpty else {
+			return parts.isEmpty ? ownReads : nil
+		}
+		guard parts.count == 1, case let .reads(reads) = parts[0] else {
+			return parts.isEmpty ? [] : nil
+		}
+		return reads
+	}
+
+	/// The most reads a place's log keeps as a copy (`reads(answeredAbove:)`).
+	private static let copiedReadLimit = 32
+
+	/// The reads of `parts` answered above `depth`, in order, each read (and depth) once with the first answer it was added
+	/// with, or `nil` when there are more than `limit`.
+	private static func distinctReads(of parts: [Part], answeredAbove depth: Int, upTo limit: Int) -> [RecordedRead]? {
+		var reads = [RecordedRead]()
+		var readsVisited = Set<AnsweredRead>()
+		var stack = [(parts: parts, index: 0, answeredAbove: depth)]
+		while let frame = stack.last {
+			guard frame.index < frame.parts.count else {
+				stack.removeLast()
+				continue
+			}
+			stack[stack.count - 1].index += 1
+			switch frame.parts[frame.index] {
+			case let .reads(partReads):
+				for recorded in partReads where recorded.read.depth < frame.answeredAbove && readsVisited.insert(recorded.read).inserted {
+					guard reads.count < limit else { return nil }
+					reads.append(recorded)
+				}
+			case let .segment(segment, answeredAbove):
+				let answeredAbove = min(answeredAbove, frame.answeredAbove)
+				if segment.shallowestDepth < answeredAbove {
+					stack.append((segment.parts, 0, answeredAbove))
+				}
+			}
+		}
+		return reads
 	}
 
 	/// The reads this log was told, in order: its parts, then the reads recorded since its last part.
