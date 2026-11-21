@@ -3354,9 +3354,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		declarationsByLabel: [String: [VisibleDeclaration]],
 		enclosingCycleFunctions: [BuiltDeclaration: Int],
 		visitNumber: Int,
-	) async -> OmissionFindings<ReceivedValueSupply> {
+	) async -> ReceivedValueSupplyFindings {
 		let declaringType = instantiable.concreteInstantiable
-		var findings = OmissionFindings<ReceivedValueSupply>(nextVisitNumber: visitNumber + 1)
+		var findings = ReceivedValueSupplyFindings(nextVisitNumber: visitNumber + 1)
 		/// Records what the receive of `receivedProperty` under `label` reads among `declarationsByLabel`, or `nil` when
 		/// generation passes it `nil`.
 		func recordSupply(of receivedProperty: Property, label: String, among declarationsByLabel: [String: [VisibleDeclaration]], isPassedNil: Bool) {
@@ -3781,6 +3781,105 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// a call in its body that omits one is judged at the calls of the function, by the declarations they pass, never by
 	/// the declarations above the function, as `nonSendableWrapperCaptures` judges a capture of one.
 	private struct OmissionFindings<Omission: Sendable>: Sendable {
+		/// A call, in the body of a builder function a lazy cycle closes on, that omits a value of one of the function's
+		/// parameters: an omission at each declaration a call of the function passes that provides `unwrappedProperty`.
+		struct ParameterRead: Sendable {
+			let function: Int
+			let label: String
+			/// The property the call's leaf receives, unwrapped.
+			let unwrappedProperty: Property
+			/// The omission, given the declaration that provides the value.
+			let omission: @Sendable (VisibleDeclaration) -> Omission
+		}
+
+		/// A call of a builder function a lazy cycle closes on that passes its parameter of `label` a value: the
+		/// declarations of the label where the call is made.
+		struct Call: Sendable {
+			let function: Int
+			let label: String
+			let declarations: [VisibleDeclaration]
+		}
+
+		/// The number the walk gives the next scope it visits, which tells apart the builder functions the walk enters.
+		private(set) var nextVisitNumber: Int
+		private(set) var omissions = [Omission]()
+		private(set) var parameterReads = [ParameterRead]()
+		private(set) var calls = [Call]()
+
+		/// The findings of a visit, whose first visit beneath it is numbered `nextVisitNumber`.
+		init(nextVisitNumber: Int) {
+			self.nextVisitNumber = nextVisitNumber
+		}
+
+		/// Records the omission of a value of `unwrappedProperty` that `provider`, the declaration the omitting call's leaf
+		/// would read, provides.
+		mutating func append(reading unwrappedProperty: Property, from provider: VisibleDeclaration, omission: @escaping @Sendable (VisibleDeclaration) -> Omission) {
+			if let function = provider.cycleFunction {
+				parameterReads.append(ParameterRead(function: function, label: provider.property.label, unwrappedProperty: unwrappedProperty, omission: omission))
+			} else {
+				omissions.append(omission(provider))
+			}
+		}
+
+		/// Records the call `child` makes of `function`, which it declares or closes a cycle on, with the declarations of
+		/// each parameter's label among `declarationsByLabel`, where the call is made, but for those it passes `nil`.
+		/// `function` is `nil` for a function that takes no parameters.
+		mutating func recordCalls(by child: OrderedChild, of function: Int?, among declarationsByLabel: [String: [VisibleDeclaration]]) {
+			guard let function else { return }
+			for parameter in child.generator.cycleParameters where !child.unavailableProperties.contains(parameter.property) {
+				calls.append(Call(function: function, label: parameter.property.label, declarations: declarationsByLabel[parameter.property.label, default: []]))
+			}
+		}
+
+		/// Adds the findings of a visit this visit made, which numbered the visits beneath it from this visit's
+		/// `nextVisitNumber`.
+		mutating func append(contentsOf findings: Self) {
+			nextVisitNumber = findings.nextVisitNumber
+			omissions.append(contentsOf: findings.omissions)
+			parameterReads.append(contentsOf: findings.parameterReads)
+			calls.append(contentsOf: findings.calls)
+		}
+
+		/// The omissions, with each parameter read judged at every call of its function: an omission at each declaration a
+		/// call passes that provides what the read receives, or, where a call passes a parameter of an enclosing function,
+		/// at the calls of that function in turn.
+		func judged() -> [Omission] {
+			guard !parameterReads.isEmpty else { return omissions }
+			var callsByFunction = [Int: [Call]]()
+			for call in calls {
+				callsByFunction[call.function, default: []].append(call)
+			}
+			var omissions = omissions
+			for read in parameterReads {
+				var judgedFunctions: Set = [read.function]
+				var functionsToJudge = [read.function]
+				while let function = functionsToJudge.popLast() {
+					for call in callsByFunction[function, default: []] where call.label == read.label {
+						guard let provider = call.declarations.first(where: { $0.provides(read.unwrappedProperty) }) else { continue }
+						if let enclosingFunction = provider.cycleFunction {
+							// A call that passes a function's parameter passes what that function's calls pass.
+							if judgedFunctions.insert(enclosingFunction).inserted {
+								functionsToJudge.append(enclosingFunction)
+							}
+						} else {
+							omissions.append(read.omission(provider))
+						}
+					}
+				}
+			}
+			return omissions
+		}
+	}
+
+	/// What `receivedValueSupplies` finds: `OmissionFindings` for the value each receive is handed, which also records
+	/// what a call that passes a parameter `nil` finds, and the loop members a `__safeDI_<label>_received` function passes.
+	/// A type of its own rather than more of `OmissionFindings`: Apple Swift 6.4.2 (Xcode 27.2) crashed with "Found
+	/// ownership error" in CopyPropagation compiling `seamTierOmissions` in a release build once `OmissionFindings`
+	/// carried an optional of its generic `Omission` and these members, so the tier walks keep the collector they
+	/// compiled with before.
+	private struct ReceivedValueSupplyFindings: Sendable {
+		typealias Omission = ReceivedValueSupply
+
 		/// A call, in the body of a builder function a lazy cycle closes on, that omits a value of one of the function's
 		/// parameters: an omission at each declaration a call of the function passes that provides `unwrappedProperty`.
 		struct ParameterRead: Sendable {
