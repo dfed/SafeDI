@@ -2111,20 +2111,34 @@ struct UnreadableModuleInfoError: Error, CustomStringConvertible {
 
 	/// The module info file at `url`, with its view when `readingViews`.
 	/// - Throws: `UnreadableModuleInfoError` when the file is missing, cannot be opened, or is not a module info file.
-	static func reading(_ url: URL, readingViews: Bool) throws -> ModuleInfoFile {
-		let data: Data
+	static func reading(_ url: URL, readingViews: Bool) throws(UnreadableModuleInfoError) -> ModuleInfoFile {
+		let data = try contents(of: url)
 		do {
-			data = try Data(contentsOf: url)
+			return try readingViews ? ModuleInfoFile(moduleInfoData: data) : ModuleInfoFile(moduleInfoDataWithoutView: data)
+		} catch {
+			throw UnreadableModuleInfoError(path: url.path, reason: "\(error) \(BinaryFile.unreadableFileExplanation)")
+		}
+	}
+
+	/// The first fields of the module info file at `url`.
+	/// - Throws: `UnreadableModuleInfoError` when the file is missing, cannot be opened, or is not a module info file.
+	static func readingHead(_ url: URL) throws(UnreadableModuleInfoError) -> ModuleInfoFile.Head {
+		let data = try contents(of: url)
+		do {
+			return try ModuleInfoFile.Head(moduleInfoData: data)
+		} catch {
+			throw UnreadableModuleInfoError(path: url.path, reason: "\(error) \(BinaryFile.unreadableFileExplanation)")
+		}
+	}
+
+	private static func contents(of url: URL) throws(UnreadableModuleInfoError) -> Data {
+		do {
+			return try Data(contentsOf: url)
 		} catch {
 			throw UnreadableModuleInfoError(
 				path: url.path,
 				reason: FileManager.default.fileExists(atPath: url.path) ? "The path names a directory, or a file SafeDI may not open." : "No file exists at that path.",
 			)
-		}
-		do {
-			return try readingViews ? ModuleInfoFile(moduleInfoData: data) : ModuleInfoFile(moduleInfoDataWithoutView: data)
-		} catch {
-			throw UnreadableModuleInfoError(path: url.path, reason: "\(error) \(BinaryFile.unreadableFileExplanation)")
 		}
 	}
 }
