@@ -99,26 +99,16 @@ extension [UInt8] {
 }
 
 extension String {
-	/// Each element of `bodies` joined by `separator`, and those joined by `separator`: the same text as
-	/// `bodies.map { $0.joined(separator: separator) }.joined(separator: separator)`, an empty body included, written once
-	/// into a string of its exact size rather than through a copy of each body.
-	init(joiningBodiesOf bodies: [[String]], separator: String) {
-		var byteCount = separator.utf8.count * Swift.max(bodies.count - 1, 0)
-		for pieces in bodies {
-			byteCount += pieces.reduce(0) { $0 + $1.utf8.count } + separator.utf8.count * Swift.max(pieces.count - 1, 0)
-		}
+	/// `pieces` joined by `separator`: the same text as `pieces.joined(separator: separator)`, written once into a string of
+	/// its exact size rather than one grown by doubling beside the pieces it copies.
+	init(joining pieces: [String], separator: String) {
 		var text = ""
-		text.reserveCapacity(byteCount)
-		for (bodyIndex, pieces) in bodies.enumerated() {
-			if bodyIndex > 0 {
+		text.reserveCapacity(pieces.reduce(0) { $0 + $1.utf8.count } + separator.utf8.count * Swift.max(pieces.count - 1, 0))
+		for (index, piece) in pieces.enumerated() {
+			if index > 0 {
 				text += separator
 			}
-			for (pieceIndex, piece) in pieces.enumerated() {
-				if pieceIndex > 0 {
-					text += separator
-				}
-				text += piece
-			}
+			text += piece
 		}
 		self = text
 	}
