@@ -8,7 +8,7 @@ paths:
 
 # Graph fuzzer: the calling-mock check's limits
 
-The known issues, cost, undrawn shapes and report-only run of the calling-mock check and draw that `fuzzer-calling-mocks.md` describes, and the draw's blocks after `970..<1030`, which that file has no room for.
+The known issues, cost, undrawn shapes and report-only run of the calling-mock check and draw that `fuzzer-calling-mocks.md` and `fuzzer-calling-mock-draw.md` describe, and the draw's blocks after `970..<1030`, which that file has no room for.
 
 ## Blocks after `970..<1030`
 

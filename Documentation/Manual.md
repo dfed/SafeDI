@@ -387,7 +387,7 @@ To build a value SafeDI cannot build, later or more than once, forward a closure
 
 Property declarations within `@Instantiable` types decorated with [`@Received`](../Sources/SafeDI/Decorators/Received.swift) are injected into the enclosing type’s initializer. SafeDI fills a `@Received` property from the nearest type above it that instantiates, forwards, or [renames](#renaming-and-retyping-dependencies) a property with the same label. If no type above provides the property, the build fails.
 
-Do not declare a label again beneath a type that already declares it on the same path from a root: give the inner declaration its own label. Types on separate branches may share a label. SafeDI accepts some graphs that redeclare a label on one path today, but a future feature release may reject them.
+Do not declare a label again beneath a type that already declares it on the same path from a root: give the inner declaration its own label. Types on separate branches may share a label.
 
 That property must have the received type, with two exceptions:
 
@@ -1616,6 +1616,8 @@ An Xcode script phase that runs `SafeDITool` can keep `ENABLE_USER_SCRIPT_SANDBO
 | `--module-info-output` | Where to write this module’s `.safedi` file, for the modules that list it. |
 | `--dependent-module-info-file-path` | A file listing the `.safedi` file of each module this one [lists](#which-modules-to-list). |
 | `--transitive-module-info-file-path` | A file listing the `.safedi` file of every module this one depends on, directly or through other modules, as the Bazel rule passes. |
+| `--module-info-views-refer-to-modules` | A smaller `.safedi` file: it names the modules whose declarations a module that calls this one’s seams or public mocks needs, instead of copying them. Pass it only when every module that reads the file is also given the `.safedi` of every module beneath it through `--transitive-module-info-file-path`, as the Bazel rule does. |
+| `--unused-inputs-list-output` | Where to write the paths `--transitive-module-info-file-path` lists, and the module does not list, whose files the run did not open, one per line, for Bazel’s `unused_inputs_list`, as the Bazel rule passes. A module that declares no root or seam opens none of them but those its listed modules’ views refer to (`--module-info-views-refer-to-modules`), so with Bazel’s local action cache an edit to a module beneath reruns only the modules that list it or open it. |
 | `--compiler-receives-input-paths-unchanged` | Better error locations, when your build allows it; see below. |
 
 `--module-name` and `--package-name` tell `SafeDITool` which module and package declare each type it reads, which decides the access its generated code needs ([Access levels](#access-levels)).
@@ -1683,7 +1685,7 @@ Your integration already has a `SafeDITool`; a [custom build system](#custom-bui
 - **Bazel:** `bazel run @safedi//:SafeDITool -- <arguments>` runs the `SafeDITool` your build runs, prebuilt or built from source, in the directory you run it from, so relative paths among the arguments work. A build writes `bazel-bin/<package>/<name>_safedi.safedi`, though when the action’s result comes from a cache, such as `--disk_cache`, only for a build passed `--remote_download_regex='.*\.safedi$'`.
 - **Tuist:** `Tuist/.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool` from the directory that holds `Tuist/Package.swift`; a build writes `$BUILT_PRODUCTS_DIR/SafeDI/<PRODUCT_MODULE_NAME>.safedi`.
 
-On an Intel Mac, the bundle’s directory is `SafeDITool-macos-x86_64`.
+On an Intel Mac, the bundle’s directory is `SafeDITool-macos-x86_64`, and on Linux, `SafeDITool-linux-x86_64` or `SafeDITool-linux-arm64`.
 
 ### Finding the generated code
 

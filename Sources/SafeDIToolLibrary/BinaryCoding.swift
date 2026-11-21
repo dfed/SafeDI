@@ -375,16 +375,28 @@ struct BinaryReader {
 	// MARK: Initialization
 
 	/// A reader positioned after the string table at the start of `bytes`.
-	/// - Parameter bytes: Memory that outlives the reader.
-	init(bytes: UnsafeRawBufferPointer) throws(BinaryDecodingError) {
+	/// - Parameters:
+	///   - bytes: Memory that outlives the reader.
+	///   - decodesStringsUpFront: Whether to decode every string of the table now, as a reader of a whole value does, or
+	///     only each string a value names when it is read, as a reader of a few fields does.
+	init(bytes: UnsafeRawBufferPointer, decodesStringsUpFront: Bool = true) throws(BinaryDecodingError) {
 		self.bytes = bytes
 		let stringCount = try readCount()
-		strings.reserveCapacity(stringCount)
+		if decodesStringsUpFront {
+			strings.reserveCapacity(stringCount)
+		} else {
+			stringRanges.reserveCapacity(stringCount)
+		}
 		for _ in 0..<stringCount {
 			let length = try readCount()
-			strings.append(String(decoding: UnsafeRawBufferPointer(rebasing: bytes[offset..<offset + length]), as: UTF8.self))
+			if decodesStringsUpFront {
+				strings.append(String(decoding: UnsafeRawBufferPointer(rebasing: bytes[offset..<offset + length]), as: UTF8.self))
+			} else {
+				stringRanges.append(offset..<offset + length)
+			}
 			offset += length
 		}
+		self.decodesStringsUpFront = decodesStringsUpFront
 	}
 
 	// MARK: Internal
@@ -445,10 +457,12 @@ struct BinaryReader {
 	mutating func readString() throws(BinaryDecodingError) -> String {
 		let indexOffset = offset
 		let index = try readUnsigned()
-		guard index < UInt64(strings.count) else {
+		guard index < UInt64(decodesStringsUpFront ? strings.count : stringRanges.count) else {
 			throw .stringIndexOutOfRange(index: index, offset: indexOffset)
 		}
-		return strings[Int(index)]
+		return decodesStringsUpFront
+			? strings[Int(index)]
+			: String(decoding: UnsafeRawBufferPointer(rebasing: bytes[stringRanges[Int(index)]]), as: UTF8.self)
 	}
 
 	/// Reads a value that ``BinaryWriter/writeShared(_:)`` wrote: the value itself where it was first written, and
@@ -515,6 +529,9 @@ struct BinaryReader {
 	private let bytes: UnsafeRawBufferPointer
 	private var offset = 0
 	private var strings = [String]()
+	/// Where each string of the table lies, for a reader that decodes a string only when a value names it.
+	private var stringRanges = [Range<Int>]()
+	private var decodesStringsUpFront = true
 	private var sharedValues = [Any]()
 	private var nestingDepth = 0
 
@@ -559,6 +576,16 @@ extension Int: BinaryCodable {
 
 	func write(to writer: inout BinaryWriter) {
 		Int64(self).write(to: &writer)
+	}
+}
+
+extension UInt64: BinaryCodable {
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		self = try reader.readUnsigned()
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.writeUnsigned(self)
 	}
 }
 
