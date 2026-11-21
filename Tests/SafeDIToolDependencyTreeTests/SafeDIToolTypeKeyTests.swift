@@ -1804,6 +1804,121 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 		""")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesEachCloserItsTargetsDeclaration_whenTwoPlacesOfOneTypeDifferOnlyInClosingTarget() async throws {
+		// `B` reads nothing of its own: its closer calls the function of the nearest `A`, which reads `x` through `K`. The root's
+		// `A` and `P`'s `A` resolve `x` to different declarations, so the two places of `B` differ only in the target their
+		// closer calls. Each passes that target's `x`: the root's under the root's `A`, `P`'s under `P`'s.
+		try await expectTypeKeyTree(
+			of: [
+				Self.type("Root", isRoot: true, "@Instantiated let x: X", "@Instantiated let a: A", "@Instantiated let p: P"),
+				Self.type("P", "@Instantiated let x: X", "@Instantiated let a: A"),
+				Self.type("A", "@Instantiated let k: K", "@Instantiated let bBuilder: Instantiator<B>"),
+				Self.type("B", "@Instantiated let aBuilder: Instantiator<A>"),
+				Self.type("K", "@Received let x: X"),
+				Self.type("X"),
+			],
+			equals: """
+			extension Root {
+			    public convenience init() {
+			        let x = X()
+			        func __safeDI_a(x: X) -> A {
+			            let k = K(x: x)
+			            let bBuilder = Instantiator<B> {
+			                __safeDI_bBuilder(x: x)
+			            }
+			            return A(k: k, bBuilder: bBuilder)
+			        }
+			        func __safeDI_bBuilder(x: X) -> B {
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_a(x: x)
+			            }
+			            return B(aBuilder: aBuilder)
+			        }
+			        let a: A = __safeDI_a(x: x)
+			        func __safeDI_p() -> P {
+			            let x = X()
+			            let a: A = __safeDI_a(x: x)
+			            return P(x: x, a: a)
+			        }
+			        let p: P = __safeDI_p()
+			        self.init(x: x, a: a, p: p)
+			    }
+			}
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesEachCloserItsTargetsDeclaration_whenOneViewClosesOnTwoMembersOfItsLoop() async throws {
+		// `D`, inside the loop `A` -> `B` -> `C`, closes on two of its members: `A`, which reads `x`, and `B`, which reads `y`.
+		// The loop is entered from the root and from `P`, which declares `x` again, so each of `D`'s closers passes the `x` of
+		// the entry it is beneath, and `y`, which every place resolves to the root's, is captured.
+		try await expectTypeKeyTree(
+			of: [
+				Self.type("Root", isRoot: true, "@Instantiated let x: X", "@Instantiated let y: Y", "@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let p: P"),
+				Self.type("P", "@Instantiated let x: X", "@Instantiated let aBuilder: Instantiator<A>"),
+				Self.type("A", "@Instantiated let kx: KX", "@Instantiated let bBuilder: Instantiator<B>"),
+				Self.type("B", "@Instantiated let ky: KY", "@Instantiated let cBuilder: Instantiator<C>"),
+				Self.type("C", "@Instantiated let d: D"),
+				Self.type("D", "@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>"),
+				Self.type("KX", "@Received let x: X"),
+				Self.type("KY", "@Received let y: Y"),
+				Self.type("X"),
+				Self.type("Y"),
+			],
+			equals: """
+			extension Root {
+			    public convenience init() {
+			        let x = X()
+			        let y = Y()
+			        func __safeDI_aBuilder(x: X) -> A {
+			            let kx = KX(x: x)
+			            let bBuilder = Instantiator<B> {
+			                __safeDI_bBuilder(x: x)
+			            }
+			            return A(kx: kx, bBuilder: bBuilder)
+			        }
+			        func __safeDI_bBuilder(x: X) -> B {
+			            let ky = KY(y: y)
+			            let cBuilder = Instantiator<C> {
+			                __safeDI_cBuilder(x: x)
+			            }
+			            return B(ky: ky, cBuilder: cBuilder)
+			        }
+			        func __safeDI_cBuilder(x: X) -> C {
+			            let d: D = __safeDI_d(x: x)
+			            return C(d: d)
+			        }
+			        func __safeDI_d(x: X) -> D {
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(x: x)
+			            }
+			            let bBuilder = Instantiator<B> {
+			                __safeDI_bBuilder(x: x)
+			            }
+			            return D(aBuilder: aBuilder, bBuilder: bBuilder)
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(x: x)
+			        }
+			        func __safeDI_p() -> P {
+			            let x = X()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(x: x)
+			            }
+			            return P(x: x, aBuilder: aBuilder)
+			        }
+			        let p: P = __safeDI_p()
+			        self.init(x: x, y: y, aBuilder: aBuilder, p: p)
+			    }
+			}
+			""",
+		)
+	}
+
 	// MARK: Private
 
 	/// The order the root declares the twenty parents of a merge-order cell in: neither their names' order nor its reverse.
