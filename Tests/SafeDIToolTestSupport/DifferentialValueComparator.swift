@@ -530,6 +530,9 @@ struct DifferentialValueOracleError: Error, CustomStringConvertible {
 	let path: DifferentialValuePathRole?
 	let stage: Stage
 	let description: String
+	/// Whether a probe spent its traversals, so that the graph may compare under a larger
+	/// `DifferentialValueLimits` on its own.
+	var spentTraversals = false
 }
 
 // MARK: - Oracle
@@ -981,6 +984,7 @@ enum DifferentialValueOracle {
 			path: spentTraversal.path,
 			stage: .runningProbes,
 			description: "\(pathName) probe `\(difference.probe)` spent its \(limits.traversalsPerProbe) traversals at \(difference.path.joined(separator: " > ")), so nothing beneath it is compared. Raise `DifferentialValueLimits.traversalsPerProbe`, or accept it with an exemption equal to this difference:\n\(difference)\(others)",
+			spentTraversals: true,
 		)
 	}
 
