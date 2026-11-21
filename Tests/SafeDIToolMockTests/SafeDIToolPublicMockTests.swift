@@ -5084,14 +5084,17 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            hub: Hub.SafeDIOverrides = .init()
+		            hub: Hub.SafeDIOverrides = .init(),
+		            a: A? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                hub: hub
 		            )
+		            self.a = a
 		        }
 
 		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+		        let a: A?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -5110,6 +5113,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        apiSendableBuilder: (@Sendable () -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let a: A? = safeDIOverrides.a
 		        func __safeDI_hub() -> Hub {
 		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.SafeDISendableMockScope_Api.__safeDI_Builder<any Api> {
 		                .init(a_Sendable: { _ in __safeDI_apiSendableBuilder_Hub_A_Scope() })
@@ -5124,7 +5128,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		                })
 		            }
 		            _ = Hub.__safeDI_Hub_mock_82CCC0CB7331B7F8.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Hub", declaringModule: "Feature"))
-		            return Hub.__safeDI_mock(apiSendableBuilder: apiSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiSendableBuilder_Hub(), a: nil, safeDIOverrides: safeDIOverrides.hub)
+		            return Hub.__safeDI_mock(apiSendableBuilder: apiSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiSendableBuilder_Hub(), a: a, safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Screen(hub: hub)
@@ -8820,9 +8824,10 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesNilToPublicMockCallInsideFill_whenInternalMockTakesNothingForLabelOnlyThatCallReceives() async throws {
-		// The internal mock of the cell above: a mock that is not public takes no parameter or override for what only calls
-		// of other modules' public mocks receive, so the call inside the fill passes `nil`, as one outside a fill does.
+	mutating func generate_passesOverrideToPublicMockCallInsideFill_whenOnlyThatCallReceivesLabel() async throws {
+		// The internal mock of the cell above: a mock that is not public takes an override for what only calls of other modules'
+		// public mocks receive, where a public mock takes a parameter, so the call inside the fill passes the override, as one
+		// outside a fill does.
 		let modules = Self.fillReceivingLabelModules(app: Self.fillReceivingLabelScreen(generateMock: "true") + "\n\n" + """
 		@Instantiable
 		public final class DefaultUserService: UserService, Instantiable {
@@ -8847,16 +8852,19 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            analytics: (() -> Analytics)? = nil,
-		            service: Service.SafeDIOverrides = .init()
+		            service: Service.SafeDIOverrides = .init(),
+		            filter: (any FilterProtocol)? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                analytics: analytics,
 		                service: service
 		            )
+		            self.filter = filter
 		        }
 
 		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
 		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
+		        let filter: (any FilterProtocol)?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -8878,12 +8886,13 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        defaultUserService_AnyUserServiceBuilder: (() -> AnyUserService)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let filter: (any FilterProtocol)? = safeDIOverrides.filter
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        func __safeDI_service() -> Service {
 		            func __safeDI_defaultUserService_AnyUserServiceBuilder_Service_userService(_ scope: Service.SafeDIMockScope_DefaultUserService_AnyUserService.userService_Values) -> AnyUserService {
 		                let analytics = scope.analytics
 		                func __safeDI_userService() -> DefaultUserService {
-		                    let cache = Cache.__safeDI_mock(filter: nil)
+		                    let cache = Cache.__safeDI_mock(filter: filter)
 		                    return DefaultUserService(analytics: analytics, cache: cache)
 		                }
 		                let userService = AnyUserService(__safeDI_userService())
@@ -8901,7 +8910,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		#endif
 		"""])
-		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()"), Self.internalScreenMockPassingFilter])
 	}
 
 	@Test
@@ -13702,16 +13711,19 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            analytics: (() -> Analytics)? = nil,
-		            serviceBuilder: Service.SafeDIOverrides = .init()
+		            serviceBuilder: Service.SafeDIOverrides = .init(),
+		            theme: Theme? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                analytics: analytics,
 		                serviceBuilder: serviceBuilder
 		            )
+		            self.theme = theme
 		        }
 
 		        var analytics: (() -> Analytics)? { __safeDI_storage.analytics }
 		        var serviceBuilder: Service.SafeDIOverrides { __safeDI_storage.serviceBuilder }
+		        let theme: Theme?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -13732,13 +13744,14 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let theme: Theme? = safeDIOverrides.theme
 		        func __safeDI_analytics() -> Analytics {
 		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        _ = Service.__safeDI_Service_mock_8D69AB86D0326E72.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        func __safeDI_serviceBuilder() -> Service {
-		            Service.__safeDI_mock(analytics: analytics, theme: nil, safeDIOverrides: safeDIOverrides.serviceBuilder)
+		            Service.__safeDI_mock(analytics: analytics, theme: theme, safeDIOverrides: safeDIOverrides.serviceBuilder)
 		        }
 		        let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
 		        return Screen(analytics: analytics, serviceBuilder: serviceBuilder)
@@ -14326,14 +14339,17 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            service: Service.SafeDIOverrides = .init()
+		            service: Service.SafeDIOverrides = .init(),
+		            shelf: Space.Shelf? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                service: service
 		            )
+		            self.shelf = shelf
 		        }
 
 		        var service: Service.SafeDIOverrides { __safeDI_storage.service }
+		        let shelf: Space.Shelf?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -14351,8 +14367,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let shelf: Space.Shelf? = safeDIOverrides.shelf
 		        _ = Service.__safeDI_Service_mock_CBCD36FF0797CB15.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		        let service = Service.__safeDI_mock(shelf: nil, safeDIOverrides: safeDIOverrides.service)
+		        let service = Service.__safeDI_mock(shelf: shelf, safeDIOverrides: safeDIOverrides.service)
 		        return Screen(service: service)
 		    }
 		}
@@ -16596,6 +16613,14 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	private static let screenMockPassingFilter = DifferentialValueProbe(
 		name: "Screen.mock() passed a filter",
 		expression: "Screen.mock(filter: ProbeFilter())",
+		knownRightExpression: "Screen.mock(safeDIOverrides: .init(filter: ProbeFilter()))",
+	)
+
+	/// The probe of an internal mock that takes `filter`, only calls of other modules' public mocks in its tree receive, as an
+	/// override, passed `ProbeFilter`, which the inline mock takes as the override of its tree's receive only if available.
+	private static let internalScreenMockPassingFilter = DifferentialValueProbe(
+		name: "Screen.mock() passed a filter",
+		expression: "Screen.mock(safeDIOverrides: .init(filter: ProbeFilter()))",
 		knownRightExpression: "Screen.mock(safeDIOverrides: .init(filter: ProbeFilter()))",
 	)
 

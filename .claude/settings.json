@@ -1,5 +1,30 @@
 {
 	"$schema": "https://json.schemastore.org/claude-code-settings.json",
+	"permissions": {
+		"allow": [
+			"Bash(git push *--force-with-lease* origin claude/*)"
+		],
+		"deny": [
+			"Bash(git push * main)",
+			"Bash(git push * main *)",
+			"Bash(git push *:main)",
+			"Bash(git push *:main *)",
+			"Bash(git push --force)",
+			"Bash(git push --force *)",
+			"Bash(git push * --force)",
+			"Bash(git push * --force *)",
+			"Bash(git push -f)",
+			"Bash(git push -f *)",
+			"Bash(git push * -f)",
+			"Bash(git push * -f *)",
+			"Bash(git push * +*)",
+			"Bash(git push *refs/heads/main*)",
+			"Bash(git push *--mirror*)",
+			"Bash(git push *--force-if-includes*)",
+			"Bash(git -C * push*)",
+			"Bash(git -c * push*)"
+		]
+	},
 	"hooks": {
 		"PreToolUse": [
 			{

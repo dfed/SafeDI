@@ -1136,14 +1136,17 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 			    /// Overrides for the mock dependency tree.
 			    struct SafeDIOverrides {
 			        init(
-			            consumer: ((Session?) -> Consumer)? = nil
+			            consumer: ((Session?) -> Consumer)? = nil,
+			            session: Session? = nil
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
 			                consumer: consumer
 			            )
+			            self.session = session
 			        }
 
 			        var consumer: ((Session?) -> Consumer)? { __safeDI_storage.consumer }
+			        let session: Session?
 
 			        private let __safeDI_storage: __safeDI_Storage
 
@@ -1161,8 +1164,9 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
+			        let session: Session? = safeDIOverrides.session
 			        _ = Consumer.__safeDI_Consumer_mock_D4A974D59A93702C.self\(seamCallComment)
-			        let consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(nil) } else { Consumer.__safeDI_mock(session: nil) }
+			        let consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(session) } else { Consumer.__safeDI_mock(session: session) }
 			        return Screen(consumer: consumer)
 			    }
 			}
@@ -1185,14 +1189,17 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 			    /// Overrides for the mock dependency tree.
 			    struct SafeDIOverrides {
 			        init(
-			            consumer: ((Session?) -> Consumer)? = nil
+			            consumer: ((Session?) -> Consumer)? = nil,
+			            session: Session? = nil
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
 			                consumer: consumer
 			            )
+			            self.session = session
 			        }
 
 			        var consumer: ((Session?) -> Consumer)? { __safeDI_storage.consumer }
+			        let session: Session?
 
 			        private let __safeDI_storage: __safeDI_Storage
 
@@ -1210,8 +1217,9 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
+			        let session: Session? = safeDIOverrides.session
 			        _ = Consumer.__safeDI_Consumer_mock_D4A974D59A93702C.self\(seamCallComment)
-			        let consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(nil) } else { Consumer.__safeDI_mock(session: nil) }
+			        let consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(session) } else { Consumer.__safeDI_mock(session: session) }
 			        return Screen(consumer: consumer)
 			    }
 			}

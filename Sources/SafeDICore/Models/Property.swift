@@ -54,7 +54,10 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 	// MARK: Equatable
 
 	public static func == (lhs: Property, rhs: Property) -> Bool {
-		lhs.label == rhs.label && lhs.typeDescription == rhs.typeDescription
+		// Equal properties hash alike, so the hash each property computes once rejects nearly every unequal pair before the
+		// type descriptions, whose comparison walks their trees, are compared.
+		guard lhs.hashOfLabelAndTypeDescription == rhs.hashOfLabelAndTypeDescription else { return false }
+		return lhs.label == rhs.label && lhs.typeDescription == rhs.typeDescription
 	}
 
 	// MARK: Hashable
@@ -141,15 +144,37 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
-	/// `asFunctionParamterSyntax`, spelling a property of one of `typesDeclaredEscaping` `@escaping`
-	/// (`TypeDescription.asFunctionParameter(amongTypesDeclaredEscaping:)`).
-	func asFunctionParameterSyntax(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> FunctionParameterSyntax {
-		guard typesDeclaredEscaping.contains(typeDescription) else { return asFunctionParamterSyntax }
-		return FunctionParameterSyntax(
-			firstName: .identifier(label),
-			colon: .colonToken(trailingTrivia: .space),
-			type: IdentifierTypeSyntax(name: .identifier(typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)),
-		)
+	/// The parameter generated code declares for this property, `label: Type`, as `asFunctionParamterSyntax` spells it,
+	/// but spelling a property of one of `typesDeclaredEscaping` `@escaping`
+	/// (`TypeDescription.asFunctionParameter(amongTypesDeclaredEscaping:)`). Written as text, since emission declares one
+	/// for every builder function.
+	func functionParameterSource(amongTypesDeclaredEscaping typesDeclaredEscaping: Set<TypeDescription>) -> String {
+		let type = if typesDeclaredEscaping.contains(typeDescription) {
+			typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource
+		} else {
+			switch typeDescription {
+			case .closure:
+				"@escaping \(typeDescription.asSource)"
+			case .attributed:
+				typeDescription.asFunctionParameter.asSource
+			case .simple,
+			     .nested,
+			     .composition,
+			     .optional,
+			     .implicitlyUnwrappedOptional,
+			     .some,
+			     .any,
+			     .metatype,
+			     .array,
+			     .dictionary,
+			     .tuple,
+			     .unknown,
+			     .variadic,
+			     .void:
+				typeDescription.asSource
+			}
+		}
+		return "\(label): \(type)"
 	}
 
 	public func asPropertyAssignment(withTrailingNewline trailingNewline: Bool = false) -> CodeBlockItemSyntax {
