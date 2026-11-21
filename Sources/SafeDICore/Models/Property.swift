@@ -54,7 +54,10 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 	// MARK: Equatable
 
 	public static func == (lhs: Property, rhs: Property) -> Bool {
-		lhs.label == rhs.label && lhs.typeDescription == rhs.typeDescription
+		// Equal properties hash alike, so the hash each property computes once rejects nearly every unequal pair before the
+		// type descriptions, whose comparison walks their trees, are compared.
+		guard lhs.hashOfLabelAndTypeDescription == rhs.hashOfLabelAndTypeDescription else { return false }
+		return lhs.label == rhs.label && lhs.typeDescription == rhs.typeDescription
 	}
 
 	// MARK: Hashable

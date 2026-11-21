@@ -110,8 +110,8 @@ struct GeneratedCode: Sendable {
 		case children(Children)
 	}
 
-	/// The codes a level holds, which its release hands to `DeferredRelease` so that releasing a deep plan nests no
-	/// release per level.
+	/// The codes a level holds, which its slot hands to `DeferredRelease` when the level is released, so that releasing a
+	/// deep plan nests no release per level.
 	private final class Children: Sendable {
 		enum Kind: Sendable {
 			case sequence
@@ -122,20 +122,15 @@ struct GeneratedCode: Sendable {
 
 		init(_ kind: Kind, _ codes: [GeneratedCode]) {
 			self.kind = kind
-			self.codes = codes
-		}
-
-		deinit {
-			var codes = [GeneratedCode]()
-			swap(&codes, &self.codes)
-			DeferredRelease.release(consume codes)
+			slot = DeferredReleaseSlot(codes)
 		}
 
 		let kind: Kind
-		/// Written only by `deinit`, which has exclusive access to the instance, to move the children into `DeferredRelease`
-		/// so that releasing a plan stays iterative: a `let` could only be copied there, and the copy left in the instance
-		/// would release the children within this release.
-		nonisolated(unsafe) private(set) var codes: [GeneratedCode]
+		var codes: [GeneratedCode] {
+			slot.value
+		}
+
+		private let slot: DeferredReleaseSlot<[GeneratedCode]>
 	}
 
 	private let storage: Storage

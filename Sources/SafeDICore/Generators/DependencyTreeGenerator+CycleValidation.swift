@@ -345,7 +345,7 @@ extension DependencyTreeGenerator {
 							scopesToValidate.append((scope: childScope, parentIndex: walkedScopeIndex))
 						}
 						// The scope validated next is the last one on the stack, so the first child goes last.
-						scopesToValidate[firstChildIndex...].reverse()
+						scopesToValidate.reverseElements(from: firstChildIndex)
 					}
 				}
 			} catch let error as DependencyTreeGeneratorError {
@@ -376,6 +376,8 @@ extension DependencyTreeGenerator {
 	static func renamesContradictingOwnProperties(
 		in scope: Scope,
 	) -> [DependencyTreeGeneratorError.RenameContradictingOwnProperty] {
+		// Most types rename nothing, and every walk of every tree asks of each of its scopes.
+		guard scope.instantiable.dependencies.contains(where: { $0.source.fulfillingProperty != nil }) else { return [] }
 		var ownDependencyByLabel = [String: Dependency]()
 		for dependency in scope.instantiable.dependencies {
 			switch dependency.source {
@@ -499,7 +501,7 @@ extension DependencyTreeGenerator {
 				for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
 					scopesToSearch.append((childScope, searchedProperty, requiredOnlyIfAvailableAliases))
 				}
-				scopesToSearch[firstChildIndex...].reverse()
+				scopesToSearch.reverseElements(from: firstChildIndex)
 			}
 		}
 		return receiver
@@ -629,7 +631,7 @@ extension DependencyTreeGenerator {
 		declarationLocation: Dependency.DeclarationLocation?,
 		directParent: TypeDescription,
 		closingReceive: CycleClosingReceive?,
-		lazilyInstantiatedProperties: [Property],
+		lazilyInstantiatedProperties: @autoclosure () -> [Property],
 	) throws {
 		// A receive of an instantiator that is still being built reads a wrapper the instantiator's builder function makes
 		// again of that function (see `ScopeGenerator.ReceivedBuilderLoops`): a loop through that instantiator alone, which
@@ -645,7 +647,7 @@ extension DependencyTreeGenerator {
 				declarationLocation: declarationLocation,
 				directParent: directParent,
 				closingReceive: closingReceive,
-				lazilyInstantiatedProperties: lazilyInstantiatedProperties,
+				lazilyInstantiatedProperties: lazilyInstantiatedProperties(),
 			)
 		}
 	}
@@ -859,7 +861,7 @@ extension DependencyTreeGenerator {
 	///   - closesByReceive: Whether `dependency` closes a cycle by receiving (see `closingReceive(of:in:)`).
 	///   - propertyStack: The properties of `scope` and of the scopes it is built inside, innermost first, as cycle
 	///     validation sees them.
-	///   - concreteTypeStack: The concrete types of those scopes, beside `propertyStack`.
+	///   - concreteTypeOfEntry: The concrete type of the scope built for the entry at an index of `propertyStack`.
 	///   - nearestDeclaration: The properties the nearest declarations of a label above `scope` declare, as cycle
 	///     validation sees them – one, but for a mock root's promoted forms of one label – with how many scopes the declaring
 	///     scope is built inside, or `nil` when no scope above declares the label. The entry at index `i` of `propertyStack`
@@ -870,7 +872,7 @@ extension DependencyTreeGenerator {
 		receivedForms: [Property],
 		closesByReceive: Bool,
 		propertyStack: [Property],
-		concreteTypeStack: [TypeDescription],
+		concreteTypeOfEntry: (Int) -> TypeDescription,
 		nearestDeclaration: (String) -> (properties: [Property], depth: Int)?,
 	) -> Int? {
 		if closesByReceive {
@@ -885,7 +887,7 @@ extension DependencyTreeGenerator {
 			// no property with an entry built from a scope.
 			guard propertyStack.contains(receivedForms[0]) else { return nil }
 			let builtType = scope.propertiesToGenerate.first { $0.property == fulfillingProperty }?.builtScope?.instantiable.concreteInstantiable
-			return propertyStack.indices.first { propertyStack[$0] == receivedForms[0] && concreteTypeStack[$0] == builtType }
+			return propertyStack.indices.first { propertyStack[$0] == receivedForms[0] && concreteTypeOfEntry($0) == builtType }
 		}
 	}
 

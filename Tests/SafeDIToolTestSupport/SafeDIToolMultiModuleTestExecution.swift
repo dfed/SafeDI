@@ -243,6 +243,9 @@ struct ModuleTestOutput {
 	let generateOutput: Generate.Output?
 	/// The DOT tree `generate` wrote (`--dot-file-output`), when the test asked for one under `.moduleInfo`.
 	var dotTree: String?
+	/// The lines of the list of unused inputs `generate` wrote (`--unused-inputs-list-output`), which `.moduleInfo` asks
+	/// for whenever the test passes `modulesBeneath`, as the Bazel rule always does.
+	var unusedInputs: [String]?
 }
 
 /// What `executeSafeDIToolMultiModuleTest` produced: each module's output and, when the modules were compiled,
@@ -349,6 +352,8 @@ struct MultiModuleFixtureError: Error, CustomStringConvertible {
 ///     `--transitive-module-info-file-path`, of the `.safedi` of every module the module depends on, directly or not, as
 ///     the Bazel rule tells it of the set it collects. `nil` passes no such option, as the Tuist plugin does and a
 ///     custom script may.
+///   - viewsReferToModules: Under `.moduleInfo`, whether every module that writes a `.safedi` passes
+///     `--module-info-views-refer-to-modules`, as the Bazel rule does.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func executeSafeDIToolMultiModuleTest(
 	modules: [ModuleFixture],
@@ -360,6 +365,7 @@ func executeSafeDIToolMultiModuleTest(
 	discardsStoredSeamSignatures: Bool = false,
 	writesDOTTrees: Bool = false,
 	modulesBeneath: ((_ moduleNames: [String]) -> [String])? = nil,
+	viewsReferToModules: Bool = false,
 	filesToDelete: inout [URL],
 	recordDirectory: URL? = ExpectationRecording.directoryFromEnvironment,
 	sourceLocation: SourceLocation = #_sourceLocation,
@@ -470,8 +476,15 @@ func executeSafeDIToolMultiModuleTest(
 				arguments += ["--dot-file-output", outputDirectory.appendingPathComponent("\(moduleName).dot").path]
 			}
 			arguments.append("--compiler-receives-input-paths-unchanged")
+			let unusedInputsOutput = modulesBeneath == nil ? nil : outputDirectory.appendingPathComponent("\(moduleName)_unused_inputs.txt")
+			if let unusedInputsOutput {
+				arguments += ["--unused-inputs-list-output", unusedInputsOutput.path]
+			}
 			if !module.fixture.omitsModuleName {
 				arguments += ["--module-info-output", output.path, "--module-name", moduleName]
+				if viewsReferToModules {
+					arguments.append("--module-info-views-refer-to-modules")
+				}
 			}
 			if !module.fixture.omitsPackageName {
 				arguments += ["--package-name", module.fixture.packageName]
@@ -628,6 +641,9 @@ func executeSafeDIToolMultiModuleTest(
 			generatedFiles: try generatedSwiftFiles(in: outputDirectory),
 			generateOutput: generateOutput,
 			dotTree: writesDOTTrees ? try String(contentsOf: outputDirectory.appendingPathComponent("\(moduleName).dot"), encoding: .utf8) : nil,
+			unusedInputs: integration == .moduleInfo && modulesBeneath != nil
+				? try String(contentsOf: outputDirectory.appendingPathComponent("\(moduleName)_unused_inputs.txt"), encoding: .utf8).split(separator: "\n").map(String.init)
+				: nil,
 		)
 	}
 
@@ -650,6 +666,10 @@ func executeSafeDIToolMultiModuleTest(
 		inputs.append(("moduleOrder", modules.map(\.name).joinedForRecording))
 		inputs.append(("writesTargetGraph", "\(writesTargetGraph)"))
 		inputs.append(("scansDuringGenerate", "\(scansDuringGenerate)"))
+		// Recorded only when set, so every record made without it keeps its digest.
+		if viewsReferToModules {
+			inputs.append(("viewsReferToModules", "true"))
+		}
 		inputs.append(("moduleInfoOverrides", moduleInfoOverrides.sorted { $0.key < $1.key }.flatMap { [$0.key, $0.value] }.joinedForRecording))
 		inputs.append(("writesDOTTrees", "\(writesDOTTrees)"))
 		ExpectationRecording.recordGeneration(

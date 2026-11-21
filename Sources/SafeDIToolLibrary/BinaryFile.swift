@@ -82,7 +82,7 @@ enum BinaryFile {
 
 	/// The version of the layout of the header and of the primitives in ``BinaryCodable``. Changes to how a
 	/// stored type is laid out change ``schemaFingerprint`` instead.
-	static let formatVersion: UInt16 = 1
+	static let formatVersion: UInt16 = 2
 
 	/// Every struct and enum a file holds.
 	static var schemaMembers: [any BinarySchemaMember.Type] {
@@ -99,6 +99,7 @@ enum BinaryFile {
 			ModuleInfoView.self,
 			ViewedModuleIdentity.self,
 			ViewedModule.self,
+			ViewedModuleReference.self,
 			ImportStatement.self,
 			FileVisitor.ImportSegment.self,
 			ConditionalCompilationDecision.self,
@@ -174,7 +175,7 @@ enum BinaryFile {
 	/// because describing the schema reflects on every member's type, and reflection scans the runtime's
 	/// protocol conformance tables: computing it took most of a small module's `generate`. A test computes it
 	/// and fails, giving the new value, when a stored type's layout changes.
-	static let schemaFingerprint: UInt64 = 0x0C8CC15A75730148
+	static let schemaFingerprint: UInt64 = 0x4C4D093143B64EF3
 
 	/// The format version and every schema member's layout, one member per line: the name and type of each
 	/// field a struct writes, and the name and payload types of each case an enum writes, in the order written.
@@ -188,8 +189,15 @@ enum BinaryFile {
 	/// - Throws: When `value` holds an instantiable whose declaration names a type that nests more deeply than a
 	///   ``BinaryReader`` reads.
 	static func data(_ kind: Kind, holding value: some BinaryCodable) throws(BinaryFileWriteError) -> Data {
+		try data(kind) { writer in writer.write(value) }
+	}
+
+	/// A file of `kind` that holds what `write` writes.
+	/// - Throws: When `write` writes an instantiable whose declaration names a type that nests more deeply than a
+	///   ``BinaryReader`` reads.
+	static func data(_ kind: Kind, writing write: (inout BinaryWriter) -> Void) throws(BinaryFileWriteError) -> Data {
 		var writer = BinaryWriter()
-		writer.write(value)
+		write(&writer)
 		if let valueNestedTooDeeply = writer.valueNestedTooDeeply {
 			throw BinaryFileWriteError(kind: kind, instantiableNestedTooDeeply: valueNestedTooDeeply)
 		} else {
@@ -219,10 +227,13 @@ enum BinaryFile {
 	}
 
 	/// What `readBody` reads from the body of a file of `kind`, after the header has been checked.
-	static func value<Value>(_ kind: Kind, from data: Data, readBody: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryFileReadError) -> Value {
+	/// - Parameter checksBody: Whether to check the body against the header's checksum, and decode every string of its
+	///   string table before `readBody` runs. `false` suits a reader of the first fields alone, which reads a string only
+	///   when a field names it.
+	static func value<Value>(_ kind: Kind, from data: Data, checksBody: Bool = true, readBody: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryFileReadError) -> Value {
 		let result = data.withUnsafeBytes { bytes in
 			Result { () throws(BinaryFileReadError.Reason) in
-				try value(from: bytes, magic: kind.magic, readBody: readBody)
+				try value(from: bytes, magic: kind.magic, checksBody: checksBody, readBody: readBody)
 			}
 		}
 		do throws(BinaryFileReadError.Reason) {
@@ -268,7 +279,7 @@ enum BinaryFile {
 		withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
 	}
 
-	private static func value<Value>(from bytes: UnsafeRawBufferPointer, magic: [UInt8], readBody: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryFileReadError.Reason) -> Value {
+	private static func value<Value>(from bytes: UnsafeRawBufferPointer, magic: [UInt8], checksBody: Bool, readBody: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryFileReadError.Reason) -> Value {
 		func integer<Integer: FixedWidthInteger>(at offset: Int) -> Integer {
 			Integer(littleEndian: bytes.loadUnaligned(fromByteOffset: offset, as: Integer.self))
 		}
@@ -291,11 +302,11 @@ enum BinaryFile {
 		guard bodyLength == UInt64(body.count) else {
 			throw .bodyLengthMismatch(recorded: bodyLength, actual: body.count)
 		}
-		guard integer(at: 22) == checksum(of: body) else {
+		guard !checksBody || integer(at: 22) == checksum(of: body) else {
 			throw .checksumMismatch
 		}
 		do throws(BinaryDecodingError) {
-			var reader = try BinaryReader(bytes: body)
+			var reader = try BinaryReader(bytes: body, decodesStringsUpFront: checksBody)
 			return try readBody(&reader)
 		} catch {
 			throw .malformedBody(error)

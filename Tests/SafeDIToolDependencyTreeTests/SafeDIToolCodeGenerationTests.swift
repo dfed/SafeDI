@@ -13742,14 +13742,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// which differ from the recorded ones, and that forces the bypass.
 		try FileManager.default.removeItem(at: rootFile)
 
-		// Fresh parse hits the missing file and throws a Foundation
-		// NSError. Its human-readable description differs between Darwin
-		// Foundation and swift-corelibs-foundation (Linux), but both
-		// platforms emit the same domain+code prefix
-		// (`NSCocoaErrorDomain Code=260` = `NSFileReadNoSuchFileError`).
-		// A cache hit would return the cached Root successfully instead
-		// of throwing.
-		await assertThrowsError(containing: "NSCocoaErrorDomain Code=260") {
+		// Fresh parse hits the missing file and reports it. A cache hit
+		// would return the cached Root successfully instead of throwing.
+		await assertThrowsError(containing: "Could not read the Swift file at '\(rootFile.path)': No file exists at that path.") {
 			try await (Generate.parse([
 				swiftFileCSV.path,
 				"--swift-manifest", manifestFile.path,

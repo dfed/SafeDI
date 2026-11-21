@@ -171,8 +171,15 @@ extension DependencyTreeGenerator {
 				// here, so an omission such a call would let its seam skip is reported.
 				checkingModule: nil,
 				// Another module's seams are computed from its named module's declarations.
-				isOwnFile: nil,
-				modulesReadByRunOfModule: emittingModule?.modulesReadByRunOfModule,
+				proof: {
+					GenerationLayerObservation.record(.accessProof(ofModule: module.moduleName, inCallersView: false), inRunOf: seams.currentModule.moduleName)
+					return TypeAccessProof(
+						instantiables: visible.instantiables,
+						plainTypeDeclarations: visible.plainTypeDeclarations,
+						isOwnFile: nil,
+						reach: Self.moduleReach(viewedFrom: moduleSeam.declaringModule, instantiables: visible.instantiables, plainTypeDeclarations: visible.plainTypeDeclarations, modulesReadByRunOfModule: emittingModule?.modulesReadByRunOfModule),
+					)
+				},
 			)
 			errors += computation.errors
 			for (seamType, seamRoot) in computation.seamRoots where !computation.failedSeams.contains(seamType) {
@@ -188,8 +195,9 @@ extension DependencyTreeGenerator {
 	/// The signature of each seam this module generates or calls, by concrete type, or `nil` for a seam whose
 	/// generated signature would equal its own initializer's – one with no `@Instantiated` or aliased dependency and
 	/// no pass-through – which is built with that initializer wherever a tree reaches it, as any other type is, and
-	/// whose file holds no code. Computed once per run, from the signatures of the foreign seams, `foreignSeamRoots`.
-	private func computeSeamRoots(validatedWorld: ValidatedWorld, foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?]) throws -> [TypeDescription: ScopeGenerator.SeamRoot?] {
+	/// whose file holds no code. Computed once per run, from the signatures of the foreign seams, `foreignSeamRoots`, and
+	/// over the proof of every type's access the public mock context reads too, `ownAccessProof`.
+	private func computeSeamRoots(validatedWorld: ValidatedWorld, foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?], ownAccessProof: OwnAccessProof) throws -> [TypeDescription: ScopeGenerator.SeamRoot?] {
 		var seamRoots = foreignSeamRoots
 		GenerationLayerObservation.record(.seamSignatures(ofModule: seams.currentModule.moduleName, inCallersView: false), inRunOf: seams.currentModule.moduleName)
 		let ownComputation = try Self.seamSignatures(
@@ -202,8 +210,7 @@ extension DependencyTreeGenerator {
 			callerModule: seams.currentModule,
 			seams: seams,
 			checkingModule: emittingModuleToCheck,
-			isOwnFile: emittingModule?.isOwnFile,
-			modulesReadByRunOfModule: emittingModule?.modulesReadByRunOfModule,
+			proof: { ownAccessProof.proof },
 		)
 		var errors = ownComputation.errors
 		// Each generated seam is computed again over the declarations its callers see, when those differ from this
@@ -215,7 +222,7 @@ extension DependencyTreeGenerator {
 		// first by source location in each. A seam whose call shape the callers compute the same is not reported,
 		// whatever its tree reaches, and a seam this run could not compute is reported with its own error alone.
 		// `reportingAll` orders the errors by source location.
-		if let callersVisibleInstantiables = seams.callersVisibleInstantiables, !ownComputation.seamRoots.isEmpty {
+		if let callersVisibleInstantiables = seams.callersVisibleInstantiables, let ownProof = ownComputation.proof {
 			let unseenDeclarations = Set(typeDescriptionToFulfillingInstantiableMap.values.map(\.concreteInstantiable))
 				.subtracting(callersVisibleInstantiables.values.map(\.concreteInstantiable))
 			GenerationLayerObservation.record(.seamSignatures(ofModule: seams.currentModule.moduleName, inCallersView: true), inRunOf: seams.currentModule.moduleName)
@@ -229,8 +236,15 @@ extension DependencyTreeGenerator {
 				callerModule: seams.currentModule,
 				seams: seams,
 				checkingModule: emittingModuleToCheck,
-				isOwnFile: emittingModule?.isOwnFile,
-				modulesReadByRunOfModule: emittingModule?.modulesReadByRunOfModule,
+				proof: {
+					GenerationLayerObservation.record(.accessProof(ofModule: seams.currentModule.moduleName, inCallersView: true), inRunOf: seams.currentModule.moduleName)
+					return TypeAccessProof(
+						instantiables: callersVisibleInstantiables,
+						plainTypeDeclarations: seams.callersVisiblePlainTypeDeclarations,
+						isOwnFile: emittingModule?.isOwnFile,
+						reach: Self.moduleReach(viewedFrom: seams.currentModule, instantiables: callersVisibleInstantiables, plainTypeDeclarations: seams.callersVisiblePlainTypeDeclarations, modulesReadByRunOfModule: emittingModule?.modulesReadByRunOfModule),
+					)
+				},
 			)
 			for seamType in generatedSeamTypes.sorted() {
 				guard let seam = typeDescriptionToFulfillingInstantiableMap[seamType],
@@ -249,7 +263,7 @@ extension DependencyTreeGenerator {
 					labelsCallersFailedOn: labelsCallersFailedOn,
 					unseenDeclarations: unseenDeclarations,
 					in: typeDescriptionToFulfillingInstantiableMap,
-					proof: ownComputation.proof,
+					proof: ownProof,
 				) {
 					errors.append(.seam(.init(seam: seam, kind: .treeReachesDeclarationCallersCannotSee(declaration: declaration))))
 				} else if let plainDeclaration = Self.unseenPlainDeclarationToName(
@@ -400,12 +414,14 @@ extension DependencyTreeGenerator {
 	/// - Parameters:
 	///   - foreignSeamRoots: The signatures of the foreign seams this module's trees reach (`computeForeignSeamRoots()`).
 	///   - unreadTypeComment: The comment the `public` initializers of the seams this module generates carry.
+	///   - ownAccessProof: The proof of every type's access over the module's declarations (`ownAccessProof()`).
 	func seamWorldRootScopeGenerators(
 		validatedWorld: ValidatedWorld,
 		foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?],
 		unreadTypeComment: UnreadTypeComment?,
+		ownAccessProof: OwnAccessProof,
 	) throws -> (roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable], storedSeamSignatures: [StoredSeamSignature]) {
-		let seamRoots = try computeSeamRoots(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots)
+		let seamRoots = try computeSeamRoots(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, ownAccessProof: ownAccessProof)
 		// The generated code ends each construction with the comment the validated scopes would carry, the call of a
 		// seam's tier included, whose construction the leaf's initializer at the tier's level describes.
 		let seamScopeMap = Self.createSeamScopeMapping(
@@ -659,18 +675,13 @@ extension DependencyTreeGenerator {
 		callerModule: ModuleIdentity,
 		seams: SeamResolution,
 		checkingModule: EmittingModule?,
-		isOwnFile: (@Sendable (String) -> Bool)?,
-		modulesReadByRunOfModule: (@Sendable (_ moduleName: String) -> TypeAccessProof.ModuleReach.ModulesRead)?,
+		proof makeProof: () -> TypeAccessProof,
 	) throws -> SeamSignatureComputation {
 		let seamInstantiables = seamTypes.sorted().compactMap { instantiables[$0] }.filter(\.generatesDependencyTree)
-		// One proof of every type's access per declaration map, which every seam of the computation reads.
-		let proof = TypeAccessProof(
-			instantiables: instantiables,
-			plainTypeDeclarations: plainTypeDeclarations,
-			isOwnFile: isOwnFile,
-			reach: moduleReach(viewedFrom: callerModule, instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, modulesReadByRunOfModule: modulesReadByRunOfModule),
-		)
-		guard !seamInstantiables.isEmpty else { return SeamSignatureComputation(seamRoots: [:], errors: [], failedSeams: [], proof: proof) }
+		guard !seamInstantiables.isEmpty else { return SeamSignatureComputation(seamRoots: [:], errors: [], failedSeams: [], proof: nil) }
+		// One proof of every type's access over `instantiables`, which every seam of the computation reads, made only when
+		// the computation has a seam.
+		let proof = makeProof()
 		let ownSeamTypes = Set(seamInstantiables.map(\.concreteInstantiable))
 		let declaredTypeNames = namesOfTypesDeclaredAtFileScope(instantiables: Array(instantiables.values), plainTypeDeclarations: plainTypeDeclarations)
 		// The base of every pass's table: the seam world of every declaration, in which every seam is built and none is
@@ -868,7 +879,8 @@ extension DependencyTreeGenerator {
 		let errors: [DependencyTreeGeneratorError]
 		let failedSeams: Set<TypeDescription>
 		/// The proof of every type's access the computation read, which says what a parameter's access depends on.
-		let proof: TypeAccessProof
+		/// `nil` when the computation has no seam, which builds no proof.
+		let proof: TypeAccessProof?
 	}
 
 	/// The strongly connected components of the graph in which a seam reaches another when its tree, built from
@@ -1452,7 +1464,7 @@ extension DependencyTreeGenerator {
 					fillsBindingLabels: childFillsBindingLabels,
 				))
 			}
-			generatorsToVisit[firstChildIndex...].reverse()
+			generatorsToVisit.reverseElements(from: firstChildIndex)
 		}
 		return (receivers, parameterReads)
 	}

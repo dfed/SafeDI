@@ -62,6 +62,10 @@ extension BinarySchemaMember {
 }
 
 /// The tag a case of a cached enum is written as. Its cases are the enum's cases in the schema.
+/// A line and column in a source file, which a module info file writes as absent where a declaration another module
+/// records is read without positions (``BinaryWriter/writingPositionsAsAbsent(_:)``).
+protocol BinaryPosition: BinaryCodable {}
+
 protocol BinaryTag: RawRepresentable, CaseIterable where RawValue == UInt8 {}
 
 /// How a ``BinarySchemaMember`` is written.
@@ -185,6 +189,19 @@ struct BinaryWriter {
 		value.write(to: &self)
 	}
 
+	/// Whether every optional ``BinaryPosition`` is written as absent, as inside ``writingPositionsAsAbsent(_:)``.
+	private(set) var writesPositionsAsAbsent = false
+
+	/// Runs `write` with every optional ``BinaryPosition`` it writes written as absent. Every position a value holds is
+	/// optional, and its `withoutPositions()` makes each one absent, so `write` writes what it would write of the values'
+	/// `withoutPositions()`, without making that copy.
+	mutating func writingPositionsAsAbsent(_ write: (inout BinaryWriter) -> Void) {
+		let wasWritingPositionsAsAbsent = writesPositionsAsAbsent
+		writesPositionsAsAbsent = true
+		write(&self)
+		writesPositionsAsAbsent = wasWritingPositionsAsAbsent
+	}
+
 	mutating func writeTag(_ tag: some BinaryTag) {
 		bytes.append(tag.rawValue)
 	}
@@ -233,17 +250,19 @@ struct BinaryWriter {
 		}
 	}
 
-	/// Whether a type description is written through ``writeSharedByBytes(_:)``, as it is inside
-	/// ``writeSharingTypeDescriptions(_:)``.
-	private(set) var sharesTypeDescriptions = false
+	/// Whether a value a seam signature repeats is written through ``writeSharedByBytes(_:)``, as it is inside
+	/// ``writeSharingSignatureValues(_:)``.
+	private(set) var sharesSignatureValues = false
 
-	/// Runs `write` with every type description it writes, at the outermost level of each, written once
-	/// (``writeSharedByBytes(_:)``). A seam signature names the same few types at many places.
-	mutating func writeSharingTypeDescriptions(_ write: (inout BinaryWriter) -> Void) {
-		let wasSharing = sharesTypeDescriptions
-		sharesTypeDescriptions = true
+	/// Runs `write` with every value a seam signature repeats, at the outermost level of each, written once
+	/// (``writeSharedByBytes(_:)``): a type description, a hole's field, and the reason a declaration is not carried
+	/// to a hole's place. A seam signature names the same few types at many places, and repeats each field of a scope at
+	/// every hole and route step that binds it: E24-fill's `Feature` wrote 4 MB of fields, 2 KB of them distinct.
+	mutating func writeSharingSignatureValues(_ write: (inout BinaryWriter) -> Void) {
+		let wasSharing = sharesSignatureValues
+		sharesSignatureValues = true
 		write(&self)
-		sharesTypeDescriptions = wasSharing
+		sharesSignatureValues = wasSharing
 	}
 
 	/// Writes the value `write` writes as ``writeShared(_:)`` does, but keyed by the bytes it writes, which are equal
@@ -254,10 +273,10 @@ struct BinaryWriter {
 		let referenceStart = bytes.count
 		writeUnsigned(0)
 		let valueStart = bytes.count
-		let wasSharing = sharesTypeDescriptions
-		sharesTypeDescriptions = false
+		let wasSharing = sharesSignatureValues
+		sharesSignatureValues = false
 		write(&self)
-		sharesTypeDescriptions = wasSharing
+		sharesSignatureValues = wasSharing
 		// Copied: a slice would keep the writer's buffer shared, so that every later append copied the whole buffer.
 		let key = Array(bytes[valueStart...])
 		if let index = sharedValueIndicesByBytes[key] {
@@ -375,16 +394,28 @@ struct BinaryReader {
 	// MARK: Initialization
 
 	/// A reader positioned after the string table at the start of `bytes`.
-	/// - Parameter bytes: Memory that outlives the reader.
-	init(bytes: UnsafeRawBufferPointer) throws(BinaryDecodingError) {
+	/// - Parameters:
+	///   - bytes: Memory that outlives the reader.
+	///   - decodesStringsUpFront: Whether to decode every string of the table now, as a reader of a whole value does, or
+	///     only each string a value names when it is read, as a reader of a few fields does.
+	init(bytes: UnsafeRawBufferPointer, decodesStringsUpFront: Bool = true) throws(BinaryDecodingError) {
 		self.bytes = bytes
 		let stringCount = try readCount()
-		strings.reserveCapacity(stringCount)
+		if decodesStringsUpFront {
+			strings.reserveCapacity(stringCount)
+		} else {
+			stringRanges.reserveCapacity(stringCount)
+		}
 		for _ in 0..<stringCount {
 			let length = try readCount()
-			strings.append(String(decoding: UnsafeRawBufferPointer(rebasing: bytes[offset..<offset + length]), as: UTF8.self))
+			if decodesStringsUpFront {
+				strings.append(String(decoding: UnsafeRawBufferPointer(rebasing: bytes[offset..<offset + length]), as: UTF8.self))
+			} else {
+				stringRanges.append(offset..<offset + length)
+			}
 			offset += length
 		}
+		self.decodesStringsUpFront = decodesStringsUpFront
 	}
 
 	// MARK: Internal
@@ -445,10 +476,12 @@ struct BinaryReader {
 	mutating func readString() throws(BinaryDecodingError) -> String {
 		let indexOffset = offset
 		let index = try readUnsigned()
-		guard index < UInt64(strings.count) else {
+		guard index < UInt64(decodesStringsUpFront ? strings.count : stringRanges.count) else {
 			throw .stringIndexOutOfRange(index: index, offset: indexOffset)
 		}
-		return strings[Int(index)]
+		return decodesStringsUpFront
+			? strings[Int(index)]
+			: String(decoding: UnsafeRawBufferPointer(rebasing: bytes[stringRanges[Int(index)]]), as: UTF8.self)
 	}
 
 	/// Reads a value that ``BinaryWriter/writeShared(_:)`` wrote: the value itself where it was first written, and
@@ -468,15 +501,15 @@ struct BinaryReader {
 		}
 	}
 
-	/// Whether a type description is read through ``readSharedByBytes(_:)``, as it is inside
-	/// ``readSharingTypeDescriptions(_:)``.
-	private(set) var sharesTypeDescriptions = false
+	/// Whether a value a seam signature repeats is read through ``readSharedByBytes(_:)``, as it is inside
+	/// ``readSharingSignatureValues(_:)``.
+	private(set) var sharesSignatureValues = false
 
-	/// Reads what ``BinaryWriter/writeSharingTypeDescriptions(_:)`` wrote.
-	mutating func readSharingTypeDescriptions<Value>(_ read: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryDecodingError) -> Value {
-		let wasSharing = sharesTypeDescriptions
-		sharesTypeDescriptions = true
-		defer { sharesTypeDescriptions = wasSharing }
+	/// Reads what ``BinaryWriter/writeSharingSignatureValues(_:)`` wrote.
+	mutating func readSharingSignatureValues<Value>(_ read: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryDecodingError) -> Value {
+		let wasSharing = sharesSignatureValues
+		sharesSignatureValues = true
+		defer { sharesSignatureValues = wasSharing }
 		return try read(&self)
 	}
 
@@ -485,9 +518,9 @@ struct BinaryReader {
 		let referenceOffset = offset
 		let reference = try readUnsigned()
 		if reference == 0 {
-			let wasSharing = sharesTypeDescriptions
-			sharesTypeDescriptions = false
-			defer { sharesTypeDescriptions = wasSharing }
+			let wasSharing = sharesSignatureValues
+			sharesSignatureValues = false
+			defer { sharesSignatureValues = wasSharing }
 			let value = try read(&self)
 			sharedValues.append(value)
 			return value
@@ -515,6 +548,9 @@ struct BinaryReader {
 	private let bytes: UnsafeRawBufferPointer
 	private var offset = 0
 	private var strings = [String]()
+	/// Where each string of the table lies, for a reader that decodes a string only when a value names it.
+	private var stringRanges = [Range<Int>]()
+	private var decodesStringsUpFront = true
 	private var sharedValues = [Any]()
 	private var nestingDepth = 0
 
@@ -562,6 +598,16 @@ extension Int: BinaryCodable {
 	}
 }
 
+extension UInt64: BinaryCodable {
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		self = try reader.readUnsigned()
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.writeUnsigned(self)
+	}
+}
+
 extension Int64: BinaryCodable {
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		let zigzag = try reader.readUnsigned()
@@ -594,7 +640,7 @@ extension Optional: BinaryCodable where Wrapped: BinaryCodable {
 	}
 
 	func write(to writer: inout BinaryWriter) {
-		if let self {
+		if let self, !(writer.writesPositionsAsAbsent && Wrapped.self is any BinaryPosition.Type) {
 			writer.write(true)
 			writer.write(self)
 		} else {
@@ -621,20 +667,21 @@ extension Array: BinaryCodable where Element: BinaryCodable {
 	}
 }
 
-/// A value whose type descriptions are each written once (``BinaryWriter/writeSharingTypeDescriptions(_:)``).
-struct BinarySharingTypeDescriptions<Value: BinaryCodable>: BinaryCodable {
+/// A value whose repeated type descriptions, hole fields and reasons are each written once
+/// (``BinaryWriter/writeSharingSignatureValues(_:)``).
+struct BinarySharingSignatureValues<Value: BinaryCodable>: BinaryCodable {
 	init(_ value: Value) {
 		self.value = value
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
-		value = try reader.readSharingTypeDescriptions { reader throws(BinaryDecodingError) in try reader.read() }
+		value = try reader.readSharingSignatureValues { reader throws(BinaryDecodingError) in try reader.read() }
 	}
 
 	let value: Value
 
 	func write(to writer: inout BinaryWriter) {
-		writer.writeSharingTypeDescriptions { $0.write(value) }
+		writer.writeSharingSignatureValues { $0.write(value) }
 	}
 }
 
