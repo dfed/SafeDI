@@ -2444,7 +2444,7 @@ jobs:
     # than the longest the job's other steps have taken, so that a shard that
     # runs out of time still uploads: one job spent 11 minutes initializing
     # its container (run 43879263598).
-    timeout-minutes: 50
+    timeout-minutes: 45
     permissions:
       contents: read
     strategy:
@@ -2601,12 +2601,12 @@ jobs:
       # base-comparison.txt, which "Check Graph Fuzzer Corpus on Linux"
       # judges. It fails only when it cannot compare every seed. Its
       # profiles go to a folder of their own, so the fuzzer's coverage
-      # report reads the fuzzer's alone. The limit is about four times the
-      # comparison's estimate of 1 to 2.5 minutes a shard, to be set from
-      # the first measured runs.
+      # report reads the fuzzer's alone. Measured across the 22 shards of run
+      # 44878123154: 1.1 minutes at most (base seeds 3750+1250), 0.5 on
+      # average; the limit is about twice the longest.
       - name: Compare with the Base Tool
         if: ${{ !cancelled() && needs.base-tool.result == 'success' }}
-        timeout-minutes: 10
+        timeout-minutes: 3
         env:
           SAFEDI_BASE_COMPARISON_BASE_TOOL: ${{ github.workspace }}/base-tool/SafeDITool
           SAFEDI_BASE_COMPARISON_HEAD_TOOL: ${{ github.workspace }}/.build/x86_64-unknown-linux-gnu/release/SafeDITool
