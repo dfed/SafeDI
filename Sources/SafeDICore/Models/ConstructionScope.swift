@@ -84,7 +84,7 @@ struct ConstructionScope: Sendable {
 		record.forwardedLazilyInstantiatedInstanceProperties
 	}
 
-	/// `Scope.createdBinding(of:)`.
+	/// `ScopeRecord.createdBinding(of:)`.
 	func createdBinding(of property: Property) -> Property? {
 		record.createdBinding(of: property)
 	}
