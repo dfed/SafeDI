@@ -107,6 +107,43 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func constantCycleCloser_isReadOnlyFromCallsThatReachTheirOwnFunction_whenTheTypeKeyDeclaresEveryFunctionInTheRootsBody() {
+		// The type key declares every builder function in the root's body, so a function's call of another is further out
+		// whether or not it closes a cycle. Only a call whose function reaches back to one the call is inside closes one.
+		let closed = { (bCall: String) in
+			GraphFuzzerFeature.closesCycleWithConstantOrLazilyInstantiatedDependency("""
+			extension Root {
+			    public convenience init() {
+			        let a: A = __safeDI_a()
+			        self.init(a: a)
+			        func __safeDI_a() -> A {
+			            let b: B = __safeDI_b()
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return A(b: b, cBuilder: cBuilder)
+			        }
+			        func __safeDI_b() -> B {
+			            let leaf: Leaf = __safeDI_leaf()
+			            return B(leaf: leaf)
+			        }
+			        func __safeDI_leaf() -> Leaf {
+			            Leaf()
+			        }
+			        func __safeDI_cBuilder() -> C {
+			\(bCall.split(separator: "\n").map { "            \($0)" }.joined(separator: "\n"))
+			            return C()
+			        }
+			    }
+			}
+			""")
+		}
+		#expect(!closed(""))
+		#expect(!closed("let b: B = __safeDI_b()"))
+		#expect(closed("let a: A = __safeDI_a()"))
+		#expect(closed("let a = LazilyInstantiated<A> {\n    __safeDI_a()\n}"))
+		#expect(!closed("let leaf = LazilyInstantiated<Leaf>(__safeDI_leaf)"))
+	}
+
+	@Test
 	func receivedBuilderLoopFeatures_readBuilderLeftNilBesideOwnBuilder_whenTypeReceivesItsOwnBuilderOnlyIfAvailable() {
 		// `T4`'s builder function wraps its own function again, and passes `nil` for `t2Builder`, which a sibling builder
 		// function is named for. Only where `T4` receives `t4Builder` only if available is that the feature: a required
@@ -6934,7 +6971,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.multipleRoots: 1_765,
 		.generateMock: 2_455,
 		.lazyCycle: 1_374,
-		.constantCycleCloser: 151,
+		.constantCycleCloser: 157,
 		.builderReceivedInsideItsTree: 179,
 		.sendableBuilderReceivedInsideItsTree: 68,
 		.builderReceivedInsideItsTreeBesideBuilderLeftNil: 40,

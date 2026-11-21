@@ -10310,7 +10310,12 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// reserved name that is a value rather than a function – a binding (`let __safeDI_x = …`) or a parameter
 	/// (`__safeDI_x: @…`), such as a `@Sendable` autoclosure a mock reads or a builder a seam's initializer takes – is
 	/// never a builder function, and neither is a member called on a type (`X.__safeDI_init(…)`). A seam's generated-only
-	/// argument label (`__safeDI_x: x`) names no value: a builder function of that name can sit beside it.
+	/// argument label (`__safeDI_x: x`) names no value: a builder function of that name can sit beside it. The type key
+	/// declares every builder function in the root's body, so a function further out is a cycle's only when the call is
+	/// inside it or the function reaches, through the functions it calls or wraps, one the call is inside
+	/// (`BuilderFunctionCycles`). Counting every call of a function declared further out would count graphs whose
+	/// functions the type key only hoists, nearly every graph with a shared function, rather than those whose cycle closes
+	/// on a constant or `LazilyInstantiated` dependency.
 	static func closesCycleWithConstantOrLazilyInstantiatedDependency(_ generatedCode: String) -> Bool {
 		let builderFunctionNamePrefix = "__safeDI_"
 		let lazilyInstantiatedWrapperPrefixes = ["LazilyInstantiated<", "SendableLazilyInstantiated<"]
@@ -10332,19 +10337,24 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				rest = after
 			}
 		}
+		let cycles = BuilderFunctionCycles(of: generatedCode)
 		// The builder functions declared at each indentation of the bodies the line being read is in.
 		var declaredFunctionNamesByIndentation = [Int: Set<Substring>]()
 		// The indentation of a binding to a lazily instantiated wrapper whose closure, on the lines that follow, calls the
 		// function.
 		var wrapperClosureBindingIndentation: Int?
-		for line in generatedCode.split(separator: "\n") {
+		var lineStart = 0
+		for line in generatedCode.split(separator: "\n", omittingEmptySubsequences: false) {
+			let location = lineStart
+			lineStart += line.utf16.count + 1
+			guard !line.isEmpty else { continue }
 			let indentation = line.prefix { $0 == " " }.count
 			let content = line.dropFirst(indentation)
 			declaredFunctionNamesByIndentation = declaredFunctionNamesByIndentation.filter { $0.key <= indentation }
 			if let bindingIndentation = wrapperClosureBindingIndentation {
 				wrapperClosureBindingIndentation = nil
 				let call = content.range(of: builderFunctionNamePrefix).map { content[$0.lowerBound...] }
-				if let name = call.flatMap(builderFunctionName(startingWith:)), !valueNames.contains(name), !declaredFunctionNamesByIndentation[bindingIndentation, default: []].contains(name) {
+				if let name = call.flatMap(builderFunctionName(startingWith:)), !valueNames.contains(name), !declaredFunctionNamesByIndentation[bindingIndentation, default: []].contains(name), cycles.callCloses(name, at: location + indentation) {
 					return true
 				}
 			}
@@ -10378,11 +10388,67 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 			if lazilyInstantiatedWrapperPrefixes.contains(where: value.hasPrefix), value.hasSuffix(" {") {
 				wrapperClosureBindingIndentation = indentation
-			} else if let calledName, !valueNames.contains(calledName), !declaredFunctionNamesByIndentation[indentation, default: []].contains(calledName) {
+			} else if let calledName, !valueNames.contains(calledName), !declaredFunctionNamesByIndentation[indentation, default: []].contains(calledName), cycles.callCloses(calledName, at: location + indentation) {
 				return true
 			}
 		}
 		return false
+	}
+
+	/// The builder functions of one generated file and the functions each reaches, read from its text: a function reaches
+	/// each function its body calls or wraps, and each function those reach.
+	struct BuilderFunctionCycles {
+		init(of contents: String) {
+			let source = contents as NSString
+			let whole = NSRange(location: 0, length: source.length)
+			// The expressions are this file's own.
+			let declarationExpression = try! NSRegularExpression(pattern: #"\bfunc (__safeDI_[A-Za-z0-9_]+)\("#)
+			let referenceExpression = try! NSRegularExpression(pattern: #"(?<![A-Za-z0-9_.])(__safeDI_[A-Za-z0-9_]+)(?=\s*[(),])"#)
+			declarations = declarationExpression.matches(in: contents, range: whole).compactMap { match -> (name: String, start: Int, nameLocation: Int, body: NSRange)? in
+				let parametersEnd = GeneratedTextDelimiters.closingDelimiterEnd(in: source, after: match.range.location + match.range.length)
+				let bodyStart = source.range(of: "{", range: NSRange(location: parametersEnd, length: source.length - parametersEnd)).location
+				guard bodyStart != NSNotFound else { return nil }
+				let bodyEnd = GeneratedTextDelimiters.closingDelimiterEnd(in: source, after: bodyStart + 1)
+				return (source.substring(with: match.range(at: 1)), match.range.location, match.range(at: 1).location, NSRange(location: bodyStart + 1, length: max(0, bodyEnd - bodyStart - 2)))
+			}
+			var calls = [Set<Int>](repeating: [], count: declarations.count)
+			for match in referenceExpression.matches(in: contents, range: whole) where !declarations.contains(where: { $0.nameLocation == match.range.location }) {
+				guard let target = declaration(named: source.substring(with: match.range(at: 1)), at: match.range.location) else { continue }
+				for caller in declarations.indices where NSLocationInRange(match.range.location, declarations[caller].body) {
+					calls[caller].insert(target)
+				}
+			}
+			reached = declarations.indices.map { start in
+				var reached = Set<Int>()
+				var pending = Array(calls[start])
+				while let next = pending.popLast() {
+					guard reached.insert(next).inserted else { continue }
+					pending.append(contentsOf: calls[next])
+				}
+				return reached
+			}
+		}
+
+		/// Whether a call of `name` at `location` closes a cycle: the function it reaches is one the call is inside, or
+		/// reaches one the call is inside.
+		func callCloses(_ name: Substring, at location: Int) -> Bool {
+			guard let target = declaration(named: String(name), at: location) else { return false }
+			return declarations.indices.contains { enclosing in
+				NSLocationInRange(location, declarations[enclosing].body) && (enclosing == target || reached[target].contains(enclosing))
+			}
+		}
+
+		private let declarations: [(name: String, start: Int, nameLocation: Int, body: NSRange)]
+		private var reached = [Set<Int>]()
+
+		/// The declaration a reference to `name` at `location` reaches: the one of its name whose body holds it, else the
+		/// last one before it, else the first after it.
+		private func declaration(named name: String, at location: Int) -> Int? {
+			let namesakes = declarations.indices.filter { declarations[$0].name == name }
+			return namesakes.last(where: { NSLocationInRange(location, declarations[$0].body) })
+				?? namesakes.last(where: { declarations[$0].start < location })
+				?? namesakes.first
+		}
 	}
 
 	static func features(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerFeature> {
@@ -15443,20 +15509,7 @@ enum GraphFuzzerOracle {
 	/// The location just past the delimiter that closes the one opened just before `start` in `source`, or the end of
 	/// `source`.
 	fileprivate static func closingDelimiterEnd(in source: NSString, after start: Int) -> Int {
-		var depth = 1
-		var end = start
-		while end < source.length, depth > 0 {
-			switch source.character(at: end) {
-			case 0x28, 0x5B, 0x7B: // ( [ {
-				depth += 1
-			case 0x29, 0x5D, 0x7D: // ) ] }
-				depth -= 1
-			default:
-				break
-			}
-			end += 1
-		}
-		return end
+		GeneratedTextDelimiters.closingDelimiterEnd(in: source, after: start)
 	}
 
 	/// A line for each construction argument `seamCounts` passes a literal `nil` more often than `inlineCounts`, in
@@ -17046,4 +17099,26 @@ enum GraphFuzzerOracle {
 
 struct GraphFuzzerInfrastructureError: Error, CustomStringConvertible {
 	let description: String
+}
+
+/// Where a bracketed run of generated text ends. It uses no API newer than the package's platforms, so feature detection,
+/// which reads builder functions with it, compiles for every platform the package supports.
+enum GeneratedTextDelimiters {
+	/// The index just past the delimiter that closes the one open before `start`, counting `(`, `[` and `{` alike.
+	static func closingDelimiterEnd(in source: NSString, after start: Int) -> Int {
+		var depth = 1
+		var end = start
+		while end < source.length, depth > 0 {
+			switch source.character(at: end) {
+			case 0x28, 0x5B, 0x7B: // ( [ {
+				depth += 1
+			case 0x29, 0x5D, 0x7D: // ) ] }
+				depth -= 1
+			default:
+				break
+			}
+			end += 1
+		}
+		return end
+	}
 }
