@@ -138,8 +138,14 @@ extension DependencyTreeGenerator {
 			// place its own module cannot fill: the `.public` mock takes the builder of that place's hole type as a struct with a
 			// member for each place its calls hold, and none for a place it builds inline, so only a call honors the builder a
 			// caller passes. Its values are those of the tree built inline.
-			let isCalledToHonorPublicMocksBuilders = typesReachedByOwnPublicMocks.contains(type)
-				&& constructions.contains { foreignPublicMock.visibleInstantiables[$0.instantiable.concreteInstantiable] == nil }
+			let isCalledToHonorPublicMocksBuilders = if typesReachedByOwnPublicMocks.contains(type) {
+				// Resolved only for a type a `.public` mock reaches.
+				try constructions.contains(where: { [instantiables = foreignPublicMock.visibleDeclarations().instantiables] construction in
+					instantiables[construction.instantiable.concreteInstantiable] == nil
+				})
+			} else {
+				false
+			}
 			guard isCalledToHonorPublicMocksBuilders || !Self.inaccessibleConstructions(constructions, from: emittingModule, extendedTypes: extendedTypeDeclarations).isEmpty else { continue }
 			calledTypes.append((type, foreignPublicMock))
 		}
