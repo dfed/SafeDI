@@ -682,6 +682,14 @@ jobs:
         uses: actions/checkout@v7
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
+      # For the reason "Build and Test on Xcode 26" gives: the three native
+      # builds below start from scratch directories an earlier run on main
+      # saved, and reuse only what was built from files with the same times.
+      - name: Stamp Source Times
+        run: .github/scripts/stamp-source-times.sh
+      - name: Read Runner Image Version
+        id: runner-image
+        run: echo "version=${ImageVersion:-$(sw_vers -buildVersion)}" >> "$GITHUB_OUTPUT"
       # Package Integration.
       - name: Resolve Package Dependencies
         timeout-minutes: 15
@@ -704,9 +712,51 @@ jobs:
       # command does not carry them at all. Every build uses its own scratch or
       # DerivedData directory, so no step can read a file a previous step
       # generated, and every step runs even when an earlier one failed, so one
-      # broken expectation does not hide the others. Release builds turn
+      # broken expectation does not hide the others. The three builds with
+      # SwiftPM's native backend start from the scratch directories a run on
+      # main saved ("Restore the Native Builds' Scratch Directories" below),
+      # because each otherwise compiles swift-syntax and SafeDI from nothing,
+      # and the native backend plans a build the same way from a restored
+      # directory as from an empty one. Each of the three deletes the
+      # restored directory's plugin outputs first, so that the generate
+      # command runs in this build and the file its `grep` reads is one this
+      # build generated. The two xcodebuild builds start from restored
+      # DerivedData the same way: Xcode plans a package's build with the
+      # plugin's in-process fallback whether DerivedData is empty or not. The
+      # Swift Build builds start empty: Swift Build runs the plugin's
+      # fallback only on a build from nothing. Release builds turn
       # optimization off because only the configuration matters here, and an
       # optimized build of swift-syntax takes several times longer.
+      # One entry for the three directories, keyed without the commit and
+      # saved only by a run on main that restored none: what a build reuses
+      # from it is mostly swift-syntax, which changes with Package.resolved,
+      # and a build of SafeDI's own targets from an older commit costs only
+      # the targets whose files differ. That cost grows with every change to
+      # SafeDI's sources until the key changes, so a build that is slower in
+      # an entry's second week is the entry's age, not a broken cache. The
+      # key names the runner image for the reason "Build and Test on Xcode
+      # 26" gives; "Delete Older Build Directories" deletes the entry of the
+      # image or Package.resolved before.
+      - name: Restore the Native Builds' Scratch Directories
+        id: native-scratch
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ${{ runner.temp }}/native-debug
+            ${{ runner.temp }}/native-release
+            ${{ runner.temp }}/native-without-define
+          key: example-native-scratch-v1-macOS-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved', 'Examples/Example Package Integration/Package.resolved', 'Examples/Example Package Integration/Package.swift') }}
+      # As the entry above, for the two xcodebuild builds, which took 141
+      # seconds from nothing and 12 from DerivedData kept through a fresh
+      # stamped checkout and a tar round trip (run 44203313851).
+      - name: Restore the xcodebuild Builds' DerivedData
+        id: xcodebuild-derived-data
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ${{ runner.temp }}/xcodebuild-debug
+            ${{ runner.temp }}/xcodebuild-release
+          key: example-xcodebuild-derived-data-v1-macOS-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved', 'Examples/Example Package Integration/Package.resolved', 'Examples/Example Package Integration/Package.swift') }}
       - name: Report swift build Backends
         id: backends
         run: |
@@ -723,17 +773,21 @@ jobs:
             echo "swiftbuild_is_default=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Build Package Integration (swift build, native backend)
+        id: native-debug
         timeout-minutes: 7
         if: ${{ !cancelled() }}
         run: |
+          rm -rf "$RUNNER_TEMP/native-debug/plugins/outputs"
           xcrun swift build --build-system native --scratch-path "$RUNNER_TEMP/native-debug" --package-path "Examples/Example Package Integration"
           grep -q "ConsoleEventLogger()" "$(find "$RUNNER_TEMP/native-debug/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
       # Twice the longest of ten runs, 5.5 minutes (run 44034763455; the
       # median was 3.9).
       - name: Build Package Integration in release configuration (swift build, native backend)
+        id: native-release
         timeout-minutes: 11
         if: ${{ !cancelled() }}
         run: |
+          rm -rf "$RUNNER_TEMP/native-release/plugins/outputs"
           xcrun swift build --build-system native -c release -Xswiftc -Onone --scratch-path "$RUNNER_TEMP/native-release" --package-path "Examples/Example Package Integration"
           grep -q "DisabledEventLogger()" "$(find "$RUNNER_TEMP/native-release/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
       # Xcode builds a package's source-built SafeDITool under a path with
@@ -746,11 +800,13 @@ jobs:
       # The limit is twice the longest of ten runs, 3.6 minutes (run
       # 44041978606).
       - name: Build Package Integration (xcodebuild)
+        id: xcodebuild-debug
         timeout-minutes: 8
         if: ${{ !cancelled() }}
         run: |
           log="$RUNNER_TEMP/xcodebuild-debug.log"
           status=0
+          rm -rf "$RUNNER_TEMP/xcodebuild-debug/Build/Intermediates.noindex/BuildToolPluginIntermediates"
           pushd "Examples/Example Package Integration"
           xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -destination "platform=macOS" -derivedDataPath "$RUNNER_TEMP/xcodebuild-debug" > "$log" 2>&1 || status=$?
           popd
@@ -762,11 +818,13 @@ jobs:
       # Twice the longest of ten runs, 3.4 minutes (run 44041978606; the
       # median was 2.4).
       - name: Build Package Integration in release configuration (xcodebuild)
+        id: xcodebuild-release
         timeout-minutes: 7
         if: ${{ !cancelled() }}
         run: |
           log="$RUNNER_TEMP/xcodebuild-release.log"
           status=0
+          rm -rf "$RUNNER_TEMP/xcodebuild-release/Build/Intermediates.noindex/BuildToolPluginIntermediates"
           pushd "Examples/Example Package Integration"
           xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -configuration Release -destination "platform=macOS" -derivedDataPath "$RUNNER_TEMP/xcodebuild-release" SWIFT_OPTIMIZATION_LEVEL=-Onone SWIFT_COMPILATION_MODE=singlefile GCC_OPTIMIZATION_LEVEL=0 ONLY_ACTIVE_ARCH=YES > "$log" 2>&1 || status=$?
           popd
@@ -775,33 +833,46 @@ jobs:
           [ "$status" -eq 0 ] || { tail -n 100 "$log"; exit 1; }
           [ "$arguments" = expanded ]
           grep -q "DisabledEventLogger()" "$(find "$RUNNER_TEMP/xcodebuild-release/Build/Intermediates.noindex/BuildToolPluginIntermediates" -path "*/RootModule/SafeDIGenerator/SafeDIOutput/Root+SafeDI.swift")"
+      - name: Save the xcodebuild Builds' DerivedData
+        if: ${{ !cancelled() && github.ref == 'refs/heads/main' && steps.xcodebuild-derived-data.outputs.cache-hit != 'true' && steps.xcodebuild-debug.outcome == 'success' && steps.xcodebuild-release.outcome == 'success' }}
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ${{ runner.temp }}/xcodebuild-debug
+            ${{ runner.temp }}/xcodebuild-release
+          key: ${{ steps.xcodebuild-derived-data.outputs.cache-primary-key }}
       # A copy of the example without its `DEBUG` define shows which builds
       # read the conditions from the build settings: those must still wire
       # the right logger, and a build that passes the arguments through
       # unexpanded must stop at SafeDI's compile-time assertion, as the
-      # Manual documents.
+      # Manual documents. The copy keeps the checkout's stamped times (`-p`),
+      # and its rewritten manifest gets a fixed one, so that the native
+      # build of the copy reuses a restored scratch directory too.
       - name: Prepare Package Integration without the DEBUG define
         id: prepare
         if: ${{ !cancelled() }}
         run: |
           copy="$RUNNER_TEMP/PackageIntegrationWithoutDebugDefine"
           rm -rf "$copy"
-          cp -R "Examples/Example Package Integration" "$copy"
+          cp -Rp "Examples/Example Package Integration" "$copy"
           rm -rf "$copy/.build"
           sed -i '' \
             -e "s|\.package(path: \"\.\./\.\./\"|.package(path: \"$GITHUB_WORKSPACE\"|" \
             -e '/\.define("DEBUG", \.when(configuration: \.debug)),/d' \
             "$copy/Package.swift"
+          TZ=UTC touch -t 200001010000.00 "$copy/Package.swift"
           grep -q "package(path: \"$GITHUB_WORKSPACE\"" "$copy/Package.swift"
           if grep -q '\.define("DEBUG"' "$copy/Package.swift"; then
             echo "The DEBUG define is still in $copy/Package.swift." >&2
             exit 1
           fi
       - name: Build Package Integration without the DEBUG define (swift build, native backend, expects the assertion)
+        id: native-without-define
         timeout-minutes: 7
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: |
           log="$RUNNER_TEMP/native-without-define.log"
+          rm -rf "$RUNNER_TEMP/native-without-define/plugins/outputs"
           if xcrun swift build --build-system native -v --scratch-path "$RUNNER_TEMP/native-without-define" --package-path "$RUNNER_TEMP/PackageIntegrationWithoutDebugDefine" > "$log" 2>&1; then
             echo "Expected the native backend to stop at SafeDI's compile-time assertion without the DEBUG define, but the build succeeded." >&2
             exit 1
@@ -810,6 +881,17 @@ jobs:
           echo "Build-setting arguments: $arguments"
           [ "$arguments" = unexpanded ] || { echo "::error::Expected the native backend to pass the build-setting arguments through unexpanded." >&2; exit 1; }
           grep -q 'SafeDI scanned this module assuming `#if DEBUG` was inactive, but it is active in this compilation' "$log" || { tail -n 100 "$log"; exit 1; }
+      # Saved only when all three builds went as expected, so that the entry
+      # every later run starts from holds three whole builds.
+      - name: Save the Native Builds' Scratch Directories
+        if: ${{ !cancelled() && github.ref == 'refs/heads/main' && steps.native-scratch.outputs.cache-hit != 'true' && steps.native-debug.outcome == 'success' && steps.native-release.outcome == 'success' && steps.native-without-define.outcome == 'success' }}
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ${{ runner.temp }}/native-debug
+            ${{ runner.temp }}/native-release
+            ${{ runner.temp }}/native-without-define
+          key: ${{ steps.native-scratch.outputs.cache-primary-key }}
       # The debug build's expectation follows what the log shows. Expanded
       # arguments must wire `ConsoleEventLogger`. Arguments that arrive
       # unexpanded must fall back to the assertion, as on the native backend,
@@ -1114,6 +1196,14 @@ jobs:
         uses: actions/checkout@v7
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
+      # Before anything reads a source's modification time: SwiftPM rebuilds
+      # a target whose sources' times differ from the ones it built with,
+      # and a checkout gives every file the time of the checkout, so without
+      # this a restored build rebuilt every SafeDI target (17.1 minutes in
+      # runs 44144477988 and 44153760541, which changed no Swift file and
+      # restored the build of their own key).
+      - name: Stamp Source Times
+        run: .github/scripts/stamp-source-times.sh
       # GitHub's macOS images export ImageVersion (for example
       # 20261102.0473.1) from ~/.bashrc; it is not in the `env` context, so
       # a step reads it for the cache key below. The OS build stands in if
@@ -1131,46 +1221,50 @@ jobs:
           arguments=$(printf '%s\n%s' "$SWIFT_TEST_ARGUMENTS" "$compiler" | shasum -a 256 | cut -c1-16)
           test "${#arguments}" -eq 16
           echo "hash=$arguments" >> "$GITHUB_OUTPUT"
-      # Restoring `.build` carries swift-syntax's release-mode objects
-      # over between runs; SafeDI's own targets and tests still rebuild
-      # from the current sources. The key pins the Xcode version because
-      # build products aren't portable across toolchains. The
-      # restore-keys prefix reuses the most recent cache when
-      # Package.resolved changes, and the incremental build takes it
-      # from there. The build's arguments are in the key too: a cache hit
-      # is never re-saved, so a build with other compiler flags must not
-      # hit a cache it would rebuild from on every run. The key holds a
+      # Restoring `.build` carries the build of main's newest commit over:
+      # with the sources' times stamped above, SwiftPM rebuilds only the
+      # targets whose files differ from that commit's, and what depends on
+      # them. The key ends in the commit, so each push to main saves its own
+      # build ("Save Build Directory" below) and "Delete Older Build
+      # Directories" then removes main's older ones; a key without the
+      # commit was never saved again once hit, so the build it held fell
+      # further behind main with every landing. The key pins the Xcode
+      # version because build products aren't portable across toolchains.
+      # The restore-keys prefixes reuse the most recent build of the same
+      # arguments, then of other arguments or another Package.resolved,
+      # and the incremental build takes it from there. The key holds a
       # hash of the arguments and the compiler's version rather than of
-      # this workflow, because every
-      # change to the workflow then saved another 580 MB copy.
+      # this workflow, because every change to the workflow then saved
+      # another 580 MB copy. `v2` keeps a build made before the sources
+      # were stamped from being restored: SwiftPM would rebuild all of it.
       #
-      # The key names the runner image: a cache hit is never re-saved, so
-      # when runner image 20261102.0473 rolled out, every run restored the
-      # previous image's cache and rebuilt swift-syntax (~8 min). The first
-      # run on a new image restores an older image's cache, builds
-      # incrementally, and saves under its own key.
+      # The key names the runner image: when runner image 20261102.0473
+      # rolled out, every run restored the previous image's cache and
+      # rebuilt swift-syntax (~8 min). The first run on a new image
+      # restores an older image's cache, builds incrementally, and saves
+      # under its own key.
       #
-      # Only a run on main saves ("Save Build Directory" below). A pull
-      # request can restore main's caches and its own, never another pull
-      # request's, so a copy it saved served only its own later runs, and
-      # the repository's caches are evicted, least recently used first,
-      # above 10 GB: on 2026-11-17 they stood at 9.98 GB, two pull
-      # requests each held a 582 MB copy of this build, and PR #765's run
-      # 44067580141, on image 20261102.0473.1, found only image
-      # 20261112.0504.1's build to restore and built for 23.5 minutes
-      # where main's run 44032976346 built for 14.1. A pull request that
-      # changes the dependencies or the arguments builds from main's
-      # nearest cache on every run until it lands.
+      # Only a run on main saves. A pull request can restore main's caches
+      # and its own, never another pull request's, so a copy it saved
+      # served only its own later runs, and the repository's caches are
+      # evicted, least recently used first, above 10 GB: on 2026-11-17
+      # they stood at 9.98 GB, two pull requests each held a 582 MB copy
+      # of this build, and PR #765's run 44067580141, on image
+      # 20261102.0473.1, found only image 20261112.0504.1's build to
+      # restore and built for 23.5 minutes where main's run 44032976346
+      # built for 14.1. A pull request builds from main's newest build on
+      # every run until it lands.
       - name: Restore Build Directory
         id: build-cache
         uses: actions/cache/restore@v6
         with:
           path: .build
-          key: spm-release-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved') }}-${{ steps.build-arguments.outputs.hash }}
+          key: spm-release-v2-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved') }}-${{ steps.build-arguments.outputs.hash }}-${{ github.sha }}
           restore-keys: |
-            spm-release-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved') }}-
-            spm-release-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-
-            spm-release-${{ runner.os }}-xcode-26.0-
+            spm-release-v2-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved') }}-${{ steps.build-arguments.outputs.hash }}-
+            spm-release-v2-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-${{ hashFiles('Package.resolved') }}-
+            spm-release-v2-${{ runner.os }}-xcode-26.0-${{ steps.runner-image.outputs.version }}-
+            spm-release-v2-${{ runner.os }}-xcode-26.0-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -1358,6 +1452,13 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
+      # For the macOS job's reason (17.9 and 19.8 minutes in the same two
+      # runs). The checkout is the container's, so git needs telling that
+      # this user may read it.
+      - name: Stamp Source Times
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          .github/scripts/stamp-source-times.sh
       # The compiler is hashed with the arguments, since a build is no start
       # for another compiler's. Assigned first, so that a compiler that
       # fails to report its version fails this step.
@@ -1371,7 +1472,8 @@ jobs:
       # Same idea as the macOS test job: reuse dependency build products
       # between runs. Keyed on the container's Swift version, the compiler
       # the `swift:6.2` tag names today, and the build's arguments, for the
-      # macOS job's reason. Only a run on main
+      # macOS job's reason, and on the commit, so that each push to main
+      # saves the build a later run starts from. Only a run on main
       # saves ("Save Build Directory" below), for the macOS job's reason
       # too: two pull requests each held a 546 MB copy of this build.
       - name: Restore Build Directory
@@ -1379,10 +1481,11 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: .build
-          key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ steps.build-arguments.outputs.hash }}
+          key: spm-release-v2-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ steps.build-arguments.outputs.hash }}-${{ github.sha }}
           restore-keys: |
-            spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-
-            spm-release-${{ runner.os }}-swift-6.2-
+            spm-release-v2-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ steps.build-arguments.outputs.hash }}-
+            spm-release-v2-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-
+            spm-release-v2-${{ runner.os }}-swift-6.2-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -1427,6 +1530,203 @@ jobs:
           name: graph-fuzzer-test-bundle
           path: graph-fuzzer-test-bundle.tar.gz
           retention-days: 3
+
+  # Leaves main the builds of its newest commits only: each push to main
+  # saves a build under a key that ends in its commit, about 580 MB on macOS
+  # and 546 MB on Linux, and the repository's caches are evicted above
+  # 10 GB. A build is deleted only when this run's commit has a build under
+  # the same prefix and the other build's commit is an ancestor of this
+  # run's. Two pushes to main do not cancel each other, so the older one's
+  # run can finish last: it finds the newer build's commit ahead of its
+  # own and leaves it. The macOS prefix names no runner image and the
+  # debug prefix no Swift version, so a build an older image or release
+  # made goes when a newer commit's build exists. Deleting a
+  # cache takes `actions: write` and comparing two commits `contents: read`;
+  # only this job has the first. It checks nothing out and calls only
+  # GitHub's API, so it runs on Linux with no container. A failure warns and
+  # leaves the builds for the next run or for eviction.
+  prune-build-caches:
+    name: Delete Older Build Directories
+    needs: [spm, linux-build, linux-latest-swift-group, generate-time, example-integrations]
+    if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Delete the Builds of This Commit's Ancestors
+        # A list for each job, then a comparison and a delete for each older
+        # build, usually one per job. One minute is the least the limit can
+        # be set to in whole minutes.
+        timeout-minutes: 1
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          for prefix in spm-release-v2-macOS-xcode-26.0- spm-release-v2-Linux-swift-6.2- spm-debug-v2-Linux-swift- generate-time-build-v1-Linux-swift-6.2-; do
+            if ! builds=$(gh api -X GET "repos/$REPOSITORY/actions/caches" -f key="$prefix" -f ref="$REF" -F per_page=100 --jq '.actions_caches[] | "\(.id) \(.key)"' 2>&1); then
+              echo "::warning::Listing $REF's builds under $prefix failed: $(printf '%s' "$builds" | tr '\r\n' '  ')"
+              continue
+            fi
+            # Without this commit's build, an ancestor's is the one to keep.
+            case "$builds" in
+              *"-$COMMIT"*) ;;
+              *)
+                echo "$REF has no build of $COMMIT under $prefix, so its other builds stay."
+                continue
+                ;;
+            esac
+            printf '%s\n' "$builds" | while read -r id key; do
+              other=${key##*-}
+              if [ "$other" = "$COMMIT" ]; then
+                continue
+              fi
+              if ! status=$(gh api "repos/$REPOSITORY/compare/$other...$COMMIT" --jq .status 2>&1); then
+                echo "::warning::Comparing $other with $COMMIT failed, so $key stays: $(printf '%s' "$status" | tr '\r\n' '  ')"
+                continue
+              fi
+              # "ahead" says this commit has commits the other lacks and lacks none of the other's.
+              if [ "$status" != ahead ]; then
+                echo "Kept $key, whose commit is not an ancestor of $COMMIT ($status)."
+                continue
+              fi
+              if deleted=$(gh api -X DELETE "repos/$REPOSITORY/actions/caches/$id" 2>&1); then
+                echo "Deleted $key."
+              else
+                echo "::warning::Deleting $key failed: $(printf '%s' "$deleted" | tr '\r\n' '  ')"
+              fi
+            done
+          done
+      # "Check Generate Time on Linux" saves each main commit's tool, 19 MB,
+      # for the pull requests that branch from that commit, so ancestry is
+      # the wrong rule here: an ancestor's tool is the one a pull request
+      # needs. The thirty newest stay, a few days of main on a day of many
+      # landings; a run whose base's tool is gone builds it, which costs
+      # time and changes no result.
+      - name: Delete All but the Thirty Newest Generate Time Tools
+        timeout-minutes: 1
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+        run: |
+          prefix=generate-time-tool-Linux-swift-6.2-
+          if ! older=$(gh api -X GET "repos/$REPOSITORY/actions/caches" -f key="$prefix" -f ref="$REF" -f sort=created_at -f direction=desc -F per_page=100 --jq '.actions_caches[30:][] | "\(.id) \(.key)"' 2>&1); then
+            echo "::warning::Listing $REF's tools under $prefix failed: $(printf '%s' "$older" | tr '\r\n' '  ')"
+            exit 0
+          fi
+          if [ -z "$older" ]; then
+            echo "$REF has thirty tools or fewer under $prefix."
+            exit 0
+          fi
+          printf '%s\n' "$older" | while read -r id key; do
+            if deleted=$(gh api -X DELETE "repos/$REPOSITORY/actions/caches/$id" 2>&1); then
+              echo "Deleted $key."
+            else
+              echo "::warning::Deleting $key failed: $(printf '%s' "$deleted" | tr '\r\n' '  ')"
+            fi
+          done
+      # The integrations job's scratch and DerivedData directories are saved
+      # once per runner image and Package.resolved, about 690 and 520 MB
+      # compressed (229 MB a scratch directory and 259 MB a DerivedData, run
+      # 44203313851), and a run restores only the entry of its own image, by
+      # its exact key. So one entry stays for each image still in use: the
+      # newest saved for the highest image version, and the newest saved for
+      # any other image that a run restored in the last two days. While GitHub
+      # is moving runners, main's runs land on both images, and keeping the
+      # newest entry alone would delete the other image's on every push, so
+      # each run would build from nothing; two days after the last run on the
+      # older image its entry goes. A hundred entries are listed, which the
+      # repository's 10 GB cannot hold at these sizes.
+      - name: Delete the Scratch Directories of the Integrations Job That No Image in Use Restores
+        timeout-minutes: 1
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+        run: |
+          in_use_since=$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%S)
+          for prefix in example-native-scratch-v1- example-xcodebuild-derived-data-v1-; do
+            # Newest saved first.
+            if ! entries=$(gh api -X GET "repos/$REPOSITORY/actions/caches" -f key="$prefix" -f ref="$REF" -f sort=created_at -f direction=desc -F per_page=100 --jq '.actions_caches[] | "\(.id) \(.last_accessed_at) \(.key)"' 2>&1); then
+              echo "::warning::Listing $REF's entries under $prefix failed: $(printf '%s' "$entries" | tr '\r\n' '  ')"
+              continue
+            fi
+            # <prefix>macOS-xcode-<Xcode version>-<image version, three numbers>-<hash>
+            pattern="s/^${prefix}macOS-xcode-[0-9.]+-([0-9]+\.[0-9]+\.[0-9]+)-.*$/\1/p"
+            highest=$(printf '%s\n' "$entries" | cut -d ' ' -f 3 | sed -n -E "$pattern" | sort -t . -k 1,1n -k 2,2n -k 3,3n | tail -n 1)
+            if [ -z "$highest" ]; then
+              echo "$REF has no entry under $prefix whose key names an image."
+              continue
+            fi
+            kept=" "
+            printf '%s\n' "$entries" | while read -r id accessed key; do
+              image=$(printf '%s\n' "$key" | sed -n -E "$pattern")
+              # A key this pattern does not read stays.
+              if [ -z "$image" ]; then
+                continue
+              fi
+              # The first entry met for an image is its newest.
+              if [ "${kept#* $image }" = "$kept" ]; then
+                kept="$kept$image "
+                if [ "$image" = "$highest" ] || [[ "$accessed" > "$in_use_since" ]]; then
+                  continue
+                fi
+              fi
+              if deleted=$(gh api -X DELETE "repos/$REPOSITORY/actions/caches/$id" 2>&1); then
+                echo "Deleted $key."
+              else
+                echo "::warning::Deleting $key failed: $(printf '%s' "$deleted" | tr '\r\n' '  ')"
+              fi
+            done
+          done
+      # The documentation build (219 MB) and CodeQL's build (337 MB, saved by
+      # codeql.yml) are saved once per macOS runner image, and a run restores
+      # the one for its own image, so the copy for an older image is 0.56 GB
+      # nothing needs once GitHub has moved every runner. The image version
+      # decides, not the time an entry was saved: while GitHub is moving
+      # runners, a run on the older image can save after one on the newer.
+      # Such a run then finds its own image's copy gone and restores the
+      # newer image's build by prefix, which costs it a longer build and
+      # changes no result.
+      - name: Delete the Documentation and CodeQL Builds of Older Runner Images
+        timeout-minutes: 1
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+        run: |
+          for prefix in spm-debug-macOS-xcode- codeql-swift-native-macOS-xcode-; do
+            if ! entries=$(gh api -X GET "repos/$REPOSITORY/actions/caches" -f key="$prefix" -f ref="$REF" -F per_page=100 --jq '.actions_caches[] | "\(.id) \(.key)"' 2>&1); then
+              echo "::warning::Listing $REF's entries under $prefix failed: $(printf '%s' "$entries" | tr '\r\n' '  ')"
+              continue
+            fi
+            # <prefix><Xcode version>-<image version, three numbers>-<hash>
+            images=$(printf '%s\n' "$entries" | sed -n -E "s/^[0-9]+ $prefix[0-9.]+-([0-9]+\.[0-9]+\.[0-9]+)-.*$/\1/p")
+            newest=$(printf '%s\n' "$images" | sort -t . -k 1,1n -k 2,2n -k 3,3n | tail -n 1)
+            if [ -z "$newest" ]; then
+              echo "$REF has no entry under $prefix whose key names an image."
+              continue
+            fi
+            printf '%s\n' "$entries" | while read -r id key; do
+              image=$(printf '%s\n' "$key" | sed -n -E "s/^$prefix[0-9.]+-([0-9]+\.[0-9]+\.[0-9]+)-.*$/\1/p")
+              # A key this pattern does not read stays.
+              if [ -z "$image" ] || [ "$image" = "$newest" ]; then
+                continue
+              fi
+              if deleted=$(gh api -X DELETE "repos/$REPOSITORY/actions/caches/$id" 2>&1); then
+                echo "Deleted $key, older than image $newest."
+              else
+                echo "::warning::Deleting $key failed: $(printf '%s' "$deleted" | tr '\r\n' '  ')"
+              fi
+            done
+          done
 
   # Runs the suite once, with compile checks and coverage, from the bundle
   # "Build Tests on Linux" built. It keeps the name it had when it also
@@ -1610,12 +1910,12 @@ jobs:
   # after another in one job they took 9.7 to 25.3 minutes and ended run
   # 43755152593. Coverage is not collected: the bundle is built for
   # coverage, so its profiles go to the runner's temporary directory.
-  # Checks that every base corpus graph SafeDI 2.2.0 accepts still compiles
+  # Checks that every base corpus graph SafeDI 2.3.0 accepts still compiles
   # and builds the same values, on every pull request and push to main, so a
   # break is attributed or fixed in the change that makes it rather than
   # found before a release candidate. release-acceptance.yml's jobs run in
   # this run from the bundle "Build Tests on Linux" built: one job that
-  # builds 2.2.0 (restored from a cache after its first run on main), four
+  # builds 2.3.0 (restored from a cache after its first run on main), four
   # shards and the job that combines their reports. No required check.
   # graph-fuzzer.yml's `release_acceptance` input checks a branch by hand.
   release-acceptance:
@@ -1739,9 +2039,12 @@ jobs:
   # both measured in this job, on this runner, in alternating runs
   # (Scripts/generate-time-check.py). It fails when a graph takes twice as
   # long, because a generator that slowed down several times over passed
-  # every other check and was found only by a benchmark run by hand. It also
-  # fails when a module's `.safedi` file is twice the base's size, because
-  # storing seam signatures once made one 400 times its size unnoticed.
+  # every other check and was found only by a benchmark run by hand, or when
+  # its `generate` processes' median peak memory is 1.3 times the base's and
+  # 8 MB more: main's tool against itself differed by 1% at most on every
+  # shape (45 to 308 MB, 2026-11-20). It also fails when a module's `.safedi`
+  # file is twice the base's size, because storing seam signatures once made
+  # one 400 times its size unnoticed.
   # The base is the main commit a pull request branched from, and for a push
   # to main the commit before the push. Its tool comes from the cache the
   # push to main that built it saved; when the cache has none, the job builds
@@ -1771,6 +2074,35 @@ jobs:
           command: command -v python3 >/dev/null || { apt-get update && apt-get install -y --no-install-recommends python3; }
       - name: Check the Script
         run: python3 -I Scripts/generate-time-check.py --self-test "$RUNNER_TEMP/generate-time-self-test"
+      # Scripts/compile-time-check.py imports this job's script, and its timed
+      # comparison is run by hand, so a change to either that breaks it fails
+      # here. About 40 s.
+      - name: Check the Compile Time Script
+        run: python3 -I Scripts/compile-time-check.py --self-test "$RUNNER_TEMP/compile-time-self-test"
+      # For the reason "Build Tests on Linux" gives. The builds below stamp
+      # again after each checkout of another commit, with this copy of the
+      # script, which the checkout of the base commit cannot change.
+      - name: Stamp Source Times
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          cp .github/scripts/stamp-source-times.sh "$RUNNER_TEMP/stamp-source-times.sh"
+          "$RUNNER_TEMP/stamp-source-times.sh"
+      # The release build of the SafeDITool product alone, which no other
+      # job builds with these arguments. Keyed on the commit, so that each
+      # push to main saves the build a later run starts from, and a run
+      # compiles only the targets whose files differ from that commit's.
+      # What the job measures is unchanged: a release build compiles each
+      # module whole, so a tool built on a restored build is the tool a
+      # build from nothing makes.
+      - name: Restore Build Directory
+        id: build-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .build
+          key: generate-time-build-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
+          restore-keys: |
+            generate-time-build-v1-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-
+            generate-time-build-v1-${{ runner.os }}-swift-6.2-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -1801,8 +2133,9 @@ jobs:
         with:
           path: .generate-time/cached
           key: generate-time-tool-${{ runner.os }}-swift-6.2-${{ steps.commits.outputs.base }}
-      # The limits are about twice the slowest build: this step took 10.3 and
-      # 11.2 minutes from nothing, and the change's build after it 2 seconds
+      # The limits are about twice the slowest build, which is the build
+      # from nothing a run makes when no build directory is restored: this
+      # step took 10.3 and 11.2 minutes from nothing, and the change's build after it 2 seconds
       # where the tool's sources were the same and 6.3 minutes where the
       # generator differed (probe runs 44053665790 and 44055931063); the
       # change's build alone, when the cache has the base's tool, is a build
@@ -1815,10 +2148,12 @@ jobs:
           HEAD: ${{ steps.commits.outputs.head }}
         run: |
           git checkout --quiet --detach "$BASE"
+          "$RUNNER_TEMP/stamp-source-times.sh"
           swift build -c release --product SafeDITool
           mkdir -p .generate-time/cached
           cp .build/release/SafeDITool .generate-time/cached/SafeDITool
           git checkout --quiet --detach "$HEAD"
+          "$RUNNER_TEMP/stamp-source-times.sh"
       - name: Build SafeDITool
         timeout-minutes: 25
         run: |
@@ -1826,6 +2161,14 @@ jobs:
           mv .generate-time/cached/SafeDITool .generate-time/base/SafeDITool
           swift build -c release --product SafeDITool
           cp .build/release/SafeDITool .generate-time/head/SafeDITool
+      # After the build rather than at the job's end, so that the cache
+      # holds this commit's build whatever the comparison finds.
+      - name: Save Build Directory
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .build
+          key: ${{ steps.build-cache.outputs.cache-primary-key }}
       # The comparison of all eight shapes took 3.9 minutes in a probe run in
       # this container (44630955284), whose medians summed to 19.4 seconds a
       # tool: 4.7 and 5.2 for the public mock and fill shapes, 2.4 to 2.5 for
@@ -1839,6 +2182,20 @@ jobs:
         run: |
           python3 -I Scripts/generate-time-check.py --summary "$GITHUB_STEP_SUMMARY" \
             .generate-time/base/SafeDITool .generate-time/head/SafeDITool "$RUNNER_TEMP/generate-time"
+      # The lines the change's tool generates for wide graphs, against
+      # Scripts/compile-time-baseline.txt: generated code that compiled 2.4
+      # times slower passed the step above, which times `generate` alone.
+      # Nothing is compiled. Measured: 22 s with main's release tool on four
+      # cores (00da8b5, 2026-11-20); one minute is the least the limit can be
+      # set to in whole minutes. Warns rather
+      # than fails (`--warn-only`) while the generator's output is still being
+      # rewritten often; a tool that cannot generate a shape still fails.
+      - name: Compare Generated Lines with the Baseline
+        if: ${{ !cancelled() && hashFiles('.generate-time/head/SafeDITool') != '' }}
+        timeout-minutes: 1
+        run: |
+          python3 -I Scripts/compile-time-check.py --lines --warn-only --summary "$GITHUB_STEP_SUMMARY" \
+            .generate-time/head/SafeDITool "$RUNNER_TEMP/compile-time-lines"
       # Main's tool, for the pull requests that branch from this commit. Saved
       # whatever the comparison found: the tool is this commit's either way.
       - name: Stage This Commit's SafeDITool
@@ -1852,6 +2209,85 @@ jobs:
         with:
           path: .generate-time/cached
           key: generate-time-tool-${{ runner.os }}-swift-6.2-${{ steps.commits.outputs.head }}
+
+  # Fails when the compiler spends too long on one function of SafeDICore in
+  # a release build (Scripts/function-compile-time-check.py): one initializer
+  # took 40% of the module's release compile, in every release build of every
+  # job, and no check said so. It builds SafeDICore alone, with the
+  # optimizer's and the type checker's timers on, and reads the log. The
+  # build caches nothing, so it runs only when the change touches what it
+  # times: SafeDICore's sources, the package manifest or the check itself.
+  function-compile-time:
+    name: Check Function Compile Time on Linux
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+        with:
+          # Main's history, for the diff below.
+          fetch-depth: 0
+      # Retried for the reason "Install curl for Codecov" gives.
+      - name: Install Python
+        uses: ./.github/actions/retry
+        with:
+          command: command -v python3 >/dev/null || { apt-get update && apt-get install -y --no-install-recommends python3; }
+      - name: Check the Script
+        run: python3 -I Scripts/function-compile-time-check.py --self-test "$RUNNER_TEMP/function-compile-time-self-test"
+      # A pull request is compared with the default branch, as `changes`
+      # compares it, because CI runs on the top pull request of a stack only;
+      # a push to main with the commit before it. Anything else, or a base
+      # that cannot be read, is timed.
+      - name: See Whether the Change Touches What Is Timed
+        id: scope
+        env:
+          BEFORE: ${{ github.event.before }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          base=
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            base=$(git merge-base "origin/$DEFAULT_BRANCH" HEAD || true)
+          elif [ "$GITHUB_EVENT_NAME" = push ] && git rev-parse --verify --quiet "$BEFORE^{commit}" > /dev/null; then
+            base=$BEFORE
+          fi
+          timed=true
+          if [ -n "$base" ] && git diff --quiet "$base" HEAD -- Sources/SafeDICore Package.swift Package.resolved \
+              Scripts/function-compile-time-check.py Scripts/function-compile-time-waivers.txt .github/workflows/ci.yml; then
+            timed=false
+            echo "Nothing this check times changed since $base." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "timed=$timed" >> "$GITHUB_OUTPUT"
+      - name: Resolve Package Dependencies
+        if: ${{ steps.scope.outputs.timed == 'true' }}
+        uses: ./.github/actions/retry
+        with:
+          command: swift package resolve
+      # Measured: 604 s and 733 s on four cores, swift-syntax included,
+      # before #819 split SafeDICore's long initializer, and 537 s after it
+      # on a four-core cloud machine (main at 00da8b5, 2026-11-20).
+      # The optimizer prints each pass of 20 ms or more over one function:
+      # about 1,400 lines, 5% of the log, where 200 ms printed 62 and missed
+      # a function whose time is spread over short passes.
+      - name: Build SafeDICore with the Compiler's Timers
+        if: ${{ steps.scope.outputs.timed == 'true' }}
+        timeout-minutes: 25
+        run: |
+          set -o pipefail
+          swift build -c release --traits sourceBuild --target SafeDICore -v \
+            -Xswiftc -Xfrontend -Xswiftc -debug-time-function-bodies \
+            -Xswiftc -Xllvm -Xswiftc -sil-print-pass-time -Xswiftc -Xllvm -Xswiftc -sil-min-pass-time=20 \
+            > "$RUNNER_TEMP/function-compile-time.log" 2>&1 || { tail -n 200 "$RUNNER_TEMP/function-compile-time.log"; exit 1; }
+      - name: Check Each Function's Time
+        if: ${{ steps.scope.outputs.timed == 'true' }}
+        run: python3 -I Scripts/function-compile-time-check.py --summary "$GITHUB_STEP_SUMMARY" "$RUNNER_TEMP/function-compile-time.log"
 
   # Fuzzes each of the graph fuzzer's corpora whole – the base corpus, seeds
   # 0..<corpusSeedCount, the seam corpus, seeds 0..<seamCorpusSeedCount
@@ -2284,22 +2720,34 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
+      # For the reason "Build Tests on Linux" gives: without it, a restored
+      # build directory rebuilds every target of this package, in each of
+      # the seven groups.
+      - name: Stamp Source Times
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          .github/scripts/stamp-source-times.sh
       - name: Print Swift Version
         id: swift
         run: |
           swift --version
           echo "version=$(swift --version 2>&1 | grep -m1 -oE 'Swift version [0-9.]+' | awk '{print $3}')" >> "$GITHUB_OUTPUT"
       # The toolchain floats, so the key carries the version printed
-      # above: a new release starts from an empty cache. The groups restore
-      # one cache and, where no cache has the key yet, each tries to save
-      # it; the first to finish does.
-      - name: Cache Build Directory
-        uses: actions/cache@v6
+      # above: a new release starts from an empty cache. It ends in the
+      # commit, so that each push to main saves the build a later run
+      # starts from ("Save Build Directory" below), and only a run on main
+      # saves, both for the reasons "Build Tests on Linux" gives; "Delete
+      # Older Build Directories" removes main's older ones. `v2` keeps a
+      # build made before the sources were stamped from being restored.
+      - name: Restore Build Directory
+        id: build-cache
+        uses: actions/cache/restore@v6
         with:
           path: .build
-          key: spm-debug-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}
+          key: spm-debug-v2-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
           restore-keys: |
-            spm-debug-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-
+            spm-debug-v2-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.resolved') }}-
+            spm-debug-v2-${{ runner.os }}-swift-${{ steps.swift.outputs.version }}-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
@@ -2321,12 +2769,30 @@ jobs:
         # times that, rounded up for the runner's variance.
         timeout-minutes: 5
         run: swift build --build-system swiftbuild --traits sourceBuild --target SafeDIToolTestSupport --scratch-path "$RUNNER_TEMP/swiftbuild-test-support"
+      # Built in a step of its own so that one group saves the build
+      # directory after a build that succeeded and before the tests, which
+      # a failure of theirs then cannot lose. Before the groups, the build
+      # from nothing took 4.2 minutes on the 4-core Linux runner, 2.5
+      # minutes on a restored build whose sources were not stamped, and 7
+      # seconds on one whose sources were (run 44189733147, 2026-11-17); the
+      # limit is about twice the first.
+      - name: Build Tests
+        timeout-minutes: 10
+        run: swift build --build-tests --traits sourceBuild
+      # One group saves, since all seven build the same thing.
+      - name: Save Build Directory
+        if: ${{ matrix.group == 'others' && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .build
+          key: ${{ steps.build-cache.outputs.cache-primary-key }}
       # A time limit for the macOS job's reason: about twice the longest
       # duration measured. On their first run (44625637732, 2026-11-19, the
       # 2.3.0 stack's tests, the build restored from the cache) the groups'
       # step took 17.6 minutes for mocks, 16.0 for fuzzer-seam-smoke, 14.0
       # for seams, 11.2 for fuzzer-smoke, 9.4 for others, 5.3 for tool and
-      # 5.2 for dependency-trees, of which the build is 3 to 5. Twice 17.6
+      # 5.2 for dependency-trees, of which the build was 3 to 5 before it
+      # moved to "Build Tests" above. Twice 17.6
       # is 35. A build job that hands the groups its build directory was
       # measured beside it (run 44625836276): the build job took 9.6
       # minutes and each group another minute to fetch its work, so the
