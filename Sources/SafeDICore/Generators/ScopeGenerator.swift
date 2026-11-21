@@ -91,39 +91,40 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		placeHoldingProperties: Set<Property>? = nil,
 		cycleClosingRedeclaredLabels: inout CycleClosingRedeclaredLabels,
 	) {
+		var seamAndFillFields = SeamAndFillFields()
 		self.placeHoldingProperties = placeHoldingProperties
-		self.builtInlineSeamComment = builtInlineSeamComment
-		self.namesBoundBySeam = namesBoundBySeam
+		seamAndFillFields.builtInlineSeamComment = builtInlineSeamComment
+		seamAndFillFields.namesBoundBySeam = namesBoundBySeam
 		self.constructsWithHandWrittenMock = constructsWithHandWrittenMock
 		self.closedOnDeclaration = closedOnDeclaration
 		self.closedOnFillPathDeclarationsBeneath = closedOnFillPathDeclarationsBeneath
 		self.cycleParameters = cycleParameters
 		self.cycleParameterUnavailableProperties = cycleParameterUnavailableProperties
 		self.callSiteLazilyInstantiatedInstanceProperties = callSiteLazilyInstantiatedInstanceProperties ?? lazilyInstantiatedInstanceProperties
-		self.publicMockCall = publicMockCall
-		self.mockBuilders = mockBuilders
-		self.holeCallArguments = holeCallArguments
-		self.builderCallArguments = builderCallArguments
-		self.fillDispatchers = fillDispatchers
-		fillKey = fill?.key
-		fillStructBoundLabels = fill?.boundLabels ?? []
+		seamAndFillFields.publicMockCall = publicMockCall
+		seamAndFillFields.mockBuilders = mockBuilders
+		seamAndFillFields.holeCallArguments = holeCallArguments
+		seamAndFillFields.builderCallArguments = builderCallArguments
+		seamAndFillFields.fillDispatchers = fillDispatchers
+		seamAndFillFields.fillKey = fill?.key
+		seamAndFillFields.fillStructBoundLabels = fill?.boundLabels ?? []
 		fillBindsDeferredFieldsFromStruct = fill.map { fill in fill.hole.innerSeamType != nil && fill.fields.contains { $0.isDeferredParameter && fill.boundLabels.contains($0.property.label) } } ?? false
-		fillLabelsHandedAsMemo = fill?.labelsHandedAsMemo ?? []
-		fillPlainMemoRoutesOfSendableWrapperReads = fill?.plainMemoRoutesOfSendableWrapperReads ?? [:]
-		fillMemoOriginsByLabel = fill?.memoOriginsByLabel ?? [:]
-		fillFields = fill?.fields ?? []
-		fillCaseHoles = fill?.caseHoles ?? []
+		seamAndFillFields.fillLabelsHandedAsMemo = fill?.labelsHandedAsMemo ?? []
+		seamAndFillFields.fillPlainMemoRoutesOfSendableWrapperReads = fill?.plainMemoRoutesOfSendableWrapperReads ?? [:]
+		seamAndFillFields.fillMemoOriginsByLabel = fill?.memoOriginsByLabel ?? [:]
+		seamAndFillFields.fillFields = fill?.fields ?? []
+		seamAndFillFields.fillCaseHoles = fill?.caseHoles ?? []
 		fillEmitsCode = fill?.emitsCode ?? true
-		fillCallerReads = fill?.callerReads ?? FillCallerReads()
+		seamAndFillFields.fillCallerReads = fill?.callerReads
 		ownerPropertyStack = []
 		ownerConcreteTypeStack = []
-		self.passedUpHoles = passedUpHoles
-		self.valuesBindings = valuesBindings
-		self.memberCallsInsideFunction = memberCallsInsideFunction
+		seamAndFillFields.passedUpHoles = passedUpHoles
+		seamAndFillFields.valuesBindings = valuesBindings
+		seamAndFillFields.memberCallsInsideFunction = memberCallsInsideFunction
 		self.sendableFunctionsAreNonisolated = sendableFunctionsAreNonisolated
 		self.isBuiltByFill = isBuiltByFill
 		self.fillReturnsWrapperBuilder = fillReturnsWrapperBuilder
-		self.innerScopesCalledWithForwardedValue = innerScopesCalledWithForwardedValue
+		seamAndFillFields.innerScopesCalledWithForwardedValue = innerScopesCalledWithForwardedValue
 		if let fill {
 			scopeData = .fill(hole: fill.hole, functionName: fill.functionName)
 			description = fill.hole.builderLabel
@@ -150,13 +151,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let declaration = property.map { BuiltDeclaration(property: $0, concreteType: instantiable.concreteInstantiable) }
 		self.declaration = declaration
 		self.propertiesToGenerate = propertiesToGenerate
-		fillFieldSelection = fill.flatMap { fill in
+		seamAndFillFields.fillFieldSelection = fill.flatMap { fill in
 			propertiesToGenerate.first.flatMap { child in
 				FillFieldSelection(hole: fill.hole, boundLabels: fill.boundLabels, fields: fill.fields, child: child)
 			}
 		}
 		// What the code generated for the call's dispatchers decides, from the fills its children generate.
-		let levelFunctions = Self.publicMockLevelFunctions(
+		let publicMockLevelFunctions = Self.publicMockLevelFunctions(
 			publicMockCall: publicMockCall,
 			fillDispatchers: fillDispatchers,
 			builderCallArguments: builderCallArguments,
@@ -164,12 +165,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			enclosingLevelCalls: enclosingLevelCalls,
 			children: propertiesToGenerate,
 		)
-		publicMockLevelFunctions = levelFunctions
-		publicMockOverrideBuilders = Self.publicMockOverrideBuilders(
+		seamAndFillFields.publicMockLevelFunctions = publicMockLevelFunctions
+		seamAndFillFields.publicMockOverrideBuilders = Self.publicMockOverrideBuilders(
 			publicMockCall: publicMockCall,
 			builderCallArguments: builderCallArguments,
 			builtInstantiable: fill == nil ? instantiable : nil,
-			publicMockLevelFunctions: levelFunctions,
+			publicMockLevelFunctions: publicMockLevelFunctions,
 			children: propertiesToGenerate,
 		)
 		containsBuildSite = propertiesToGenerate.contains(where: \.containsBuildSite)
@@ -214,12 +215,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			children: propertiesToGenerate,
 			buildsInSendableFunction: cycleClosings.buildsInSendableFunction,
 		)
-		sendableFillKeys = fillReferences.sendableFillKeys
-		namedFillKeys = fillReferences.namedFillKeys
-		inlinableFillKeys = fillReferences.inlinableFillKeys
-		referencedFillNamesByKey = fillReferences.referencedFillNamesByKey
-		fillKeysReferencedFromSendableFunction = fillReferences.fillKeysReferencedFromSendableFunction
-		publicMockLevelReentries = fillReferences.publicMockLevelReentries
+		seamAndFillFields.sendableFillKeys = fillReferences.sendableFillKeys
+		seamAndFillFields.namedFillKeys = fillReferences.namedFillKeys
+		seamAndFillFields.inlinableFillKeys = fillReferences.inlinableFillKeys
+		seamAndFillFields.referencedFillNamesByKey = fillReferences.referencedFillNamesByKey
+		seamAndFillFields.fillKeysReferencedFromSendableFunction = fillReferences.fillKeysReferencedFromSendableFunction
+		seamAndFillFields.publicMockLevelReentries = fillReferences.publicMockLevelReentries
 		publicMockLevelReentriesChangedInTree = fillReferences.publicMockLevelReentries != previousPassPublicMockLevelReentries
 			|| propertiesToGenerate.contains(where: \.publicMockLevelReentriesChangedInTree)
 		let deferredFillLabels = Self.deferredFillLabels(
@@ -227,10 +228,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			previousPassFillSendableWrapperReads: previousPassFillSendableWrapperReads,
 			previousPassFillLabelsReadOnlyAsPlaceField: previousPassFillLabelsReadOnlyAsPlaceField,
 		)
-		fillDeferredLabelsHiddenByReenteringCalls = deferredFillLabels.hiddenByReenteringCalls
-		fillDeferredLabelsReadInsideSendableFunction = deferredFillLabels.readInsideSendableFunction
-		fillSendableWrapperReads = deferredFillLabels.sendableWrapperReads
-		fillLabelsReadOnlyAsPlaceField = deferredFillLabels.readOnlyAsPlaceField
+		seamAndFillFields.fillDeferredLabelsHiddenByReenteringCalls = deferredFillLabels.hiddenByReenteringCalls
+		seamAndFillFields.fillDeferredLabelsReadInsideSendableFunction = deferredFillLabels.readInsideSendableFunction
+		seamAndFillFields.fillSendableWrapperReads = deferredFillLabels.sendableWrapperReads
+		seamAndFillFields.fillLabelsReadOnlyAsPlaceField = deferredFillLabels.readOnlyAsPlaceField
 		fillStructBoundLabelsChangedInTree = deferredFillLabels.fillStructBoundLabelsChangedInTree
 		self.propertiesToDeclare = propertiesToDeclare
 		self.instantiatedDependenciesNotGenerated = instantiatedDependenciesNotGenerated
@@ -335,8 +336,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			receivedBuilderLoops: receivedBuilderLoops,
 			children: propertiesToGenerate,
 		)
-		boxedLoops = loopBoxes.boxedLoops
-		loopLevelsTypesInTree = loopBoxes.loopLevelsTypesInTree
+		seamAndFillFields.boxedLoops = loopBoxes.boxedLoops
+		seamAndFillFields.loopLevelsTypesInTree = loopBoxes.loopLevelsTypesInTree
+		seamAndFillFieldsStorage = SeamAndFillFieldsStorage.storing(seamAndFillFields)
 		self.reboundProperties = if let property, let declaration, !isPropertyCycle, !reboundProperties.isEmpty {
 			Self.reboundProperties(
 				reboundProperties,
@@ -1213,6 +1215,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		declarationReference: AliasDeclarationReferences.Reference?,
 	) {
 		self.fulfillingExpression = fulfillingExpression
+		seamAndFillFieldsStorage = nil
 		scopeData = .alias(
 			property: property,
 			fulfillingProperty: fulfillingProperty,
@@ -1261,9 +1264,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleParametersChangedInTree = false
 		receivedBuilderLoops = ReceivedBuilderLoops()
 		receivedBuilderLoopsChangedInTree = false
-		boxedLoops = [:]
-		loopLevelsTypesInTree = [:]
-		publicMockLevelReentries = [:]
 		publicMockLevelReentriesChangedInTree = false
 		reboundProperties = []
 		description = property.asSource
@@ -1276,53 +1276,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		declaredLazilyInstantiatedInstanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding
 		self.property = property
 		// An alias constructs nothing.
-		builtInlineSeamComment = nil
-		publicMockCall = nil
-		mockBuilders = nil
-		namesBoundBySeam = []
 		ownerPropertyStack = []
 		ownerConcreteTypeStack = []
-		holeCallArguments = []
-		builderCallArguments = []
-		fillDispatchers = []
-		publicMockLevelFunctions = nil
-		publicMockOverrideBuilders = nil
-		fillFieldSelection = nil
-		passedUpHoles = []
-		valuesBindings = []
-		memberCallsInsideFunction = []
 		sendableFunctionsAreNonisolated = false
 		isBuiltByFill = false
 		fillReturnsWrapperBuilder = false
-		innerScopesCalledWithForwardedValue = []
 		containsBuildSite = false
 		placeHoldingProperties = nil
 		fieldsCarriedBySites = []
 		passesUpBuilder = false
 		holdsCallReenteringEnclosingFill = false
 		treeHoldsCallOrFill = false
-		fillKey = nil
 		closedOnFillPathDeclarationsBeneath = nil
-		fillStructBoundLabels = []
 		fillBindsDeferredFieldsFromStruct = false
-		fillLabelsHandedAsMemo = []
-		fillPlainMemoRoutesOfSendableWrapperReads = [:]
-		fillMemoOriginsByLabel = [:]
-		fillFields = []
-		fillCaseHoles = []
 		fillEmitsCode = true
-		fillCallerReads = FillCallerReads()
-		fillDeferredLabelsHiddenByReenteringCalls = [:]
-		fillDeferredLabelsReadInsideSendableFunction = [:]
-		fillSendableWrapperReads = [:]
-		fillLabelsReadOnlyAsPlaceField = [:]
 		fillStructBoundLabelsChangedInTree = false
 		constructsWithHandWrittenMock = false
-		referencedFillNamesByKey = [:]
-		fillKeysReferencedFromSendableFunction = []
-		sendableFillKeys = []
-		inlinableFillKeys = []
-		namedFillKeys = []
 	}
 
 	/// The generator of a hole: a site in a seam's tree of `holeProperty`, which the builder the seam's generated
@@ -1340,6 +1309,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		ownerLazilyInstantiatedInstanceProperties: Set<Property> = [],
 		sendableFunctionsAreNonisolated: Bool,
 	) {
+		seamAndFillFieldsStorage = nil
 		scopeData = .hole(property: holeProperty, erasedToConcreteExistential: erasedToConcreteExistential, site: site)
 		self.ownerPropertyStack = ownerPropertyStack
 		self.ownerConcreteTypeStack = ownerConcreteTypeStack
@@ -1374,9 +1344,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleParametersChangedInTree = false
 		receivedBuilderLoops = ReceivedBuilderLoops()
 		receivedBuilderLoopsChangedInTree = false
-		boxedLoops = [:]
-		loopLevelsTypesInTree = [:]
-		publicMockLevelReentries = [:]
 		publicMockLevelReentriesChangedInTree = false
 		reboundProperties = []
 		description = holeProperty.asSource
@@ -1390,50 +1357,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fulfillingExpression = nil
 		declaredLazilyInstantiatedInstanceProperty = holeProperty.asLazilyInstantiatedInstanceProperty
 		property = holeProperty
-		builtInlineSeamComment = nil
-		publicMockCall = nil
-		mockBuilders = nil
-		namesBoundBySeam = []
-		holeCallArguments = []
-		builderCallArguments = []
-		fillDispatchers = []
-		publicMockLevelFunctions = nil
-		publicMockOverrideBuilders = nil
-		fillFieldSelection = nil
-		passedUpHoles = []
-		valuesBindings = []
-		memberCallsInsideFunction = []
 		self.sendableFunctionsAreNonisolated = sendableFunctionsAreNonisolated
 		isBuiltByFill = false
 		fillReturnsWrapperBuilder = false
-		innerScopesCalledWithForwardedValue = []
 		containsBuildSite = true
 		placeHoldingProperties = nil
 		fieldsCarriedBySites = Set((site.map(Self.fieldsCarried(by:)) ?? []).map(\.property))
 		passesUpBuilder = false
 		holdsCallReenteringEnclosingFill = false
 		treeHoldsCallOrFill = false
-		fillKey = nil
-		fillStructBoundLabels = []
 		fillBindsDeferredFieldsFromStruct = false
-		fillLabelsHandedAsMemo = []
-		fillPlainMemoRoutesOfSendableWrapperReads = [:]
-		fillMemoOriginsByLabel = [:]
-		fillFields = []
-		fillCaseHoles = []
 		fillEmitsCode = true
-		fillCallerReads = FillCallerReads()
-		fillDeferredLabelsHiddenByReenteringCalls = [:]
-		fillDeferredLabelsReadInsideSendableFunction = [:]
-		fillSendableWrapperReads = [:]
-		fillLabelsReadOnlyAsPlaceField = [:]
 		fillStructBoundLabelsChangedInTree = false
 		constructsWithHandWrittenMock = false
-		referencedFillNamesByKey = [:]
-		fillKeysReferencedFromSendableFunction = []
-		sendableFillKeys = []
-		inlinableFillKeys = []
-		namedFillKeys = []
 	}
 
 	/// The generator of a fill: the function the module that calls a seam generates for one of its holes, which binds
@@ -4186,7 +4122,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// (`MockParameterNode.callSiteArgumentsForPrunedOverride(handWrittenMockDefaultParameters:)`).
 		let handWrittenMockDefaultParameters: [TypeDescription: [MockParameterNode.DefaultParameter]]
 		/// The concrete types whose `SafeDIMockConfiguration` is `@Sendable`-typed, from
-		/// `collectSendableConfigurationTypeNames` across every root. Such a struct stores each labeled
+		/// `sendableConfigurationTypeNames()` across every root. Such a struct stores each labeled
 		/// default-valued parameter as a `@Sendable` closure, which the mock body calls where it builds the type,
 		/// so the body must know which structs do (`resolveBuilderArguments`).
 		let sendableConfigurationTypeNames: Set<String>
@@ -4195,6 +4131,103 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	private let scopeData: ScopeData
+
+	/// The fields only a seam's tree, a fill, or a call of another module's public mock sets: every other scope, nearly
+	/// all of a tree, holds them at their defaults. A tree has a generator per path, so they are kept behind one
+	/// reference (`seamAndFillFieldsStorage`), `nil` where every field is at its default, rather than inline in every
+	/// generator; each is read through the accessor of its name.
+	struct SeamAndFillFields: Sendable {
+		var publicMockCall: PublicMockCall?
+		var mockBuilders: DependencyTreeGenerator.ShapedBuilders?
+		/// `nil` outside a fill, whose generator reads an empty one.
+		var fillCallerReads: FillCallerReads?
+		var publicMockLevelFunctions: PublicMockLevelFunctions?
+		var fillKey: String?
+		var fillFields: [SeamSignature.Hole.Field] = []
+		var fillCaseHoles: [SeamSignature.Hole] = []
+		var holeCallArguments: [HoleCallArgument] = []
+		var builderCallArguments: [BuilderCallArgument] = []
+		var fillDispatchers: [FillDispatcher] = []
+		var passedUpHoles: [SeamSignature.Hole] = []
+		var referencedFillNamesByKey: [String: String] = [:]
+		var publicMockLevelReentries: [String: PublicMockLevelFunctions.Reentry] = [:]
+		var fillStructBoundLabels: Set<String> = []
+		var fillDeferredLabelsHiddenByReenteringCalls: [String: Set<String>] = [:]
+		var fillDeferredLabelsReadInsideSendableFunction: [String: Set<String>] = [:]
+		var fillSendableWrapperReads: [String: [String: Property]] = [:]
+		var fillLabelsReadOnlyAsPlaceField: [String: Set<String>] = [:]
+		var fillLabelsHandedAsMemo: Set<String> = []
+		var fillPlainMemoRoutesOfSendableWrapperReads: [String: [FillDispatcher.PlainMemoRoute]] = [:]
+		var fillMemoOriginsByLabel: [String: [SeamSignature.Hole.Field.SeamParameterOrigin]] = [:]
+		var fillKeysReferencedFromSendableFunction: Set<String> = []
+		var sendableFillKeys: Set<String> = []
+		var inlinableFillKeys: Set<String> = []
+		var namedFillKeys: Set<String> = []
+		var valuesBindings: [SeamHoles.ValuesBinding] = []
+		var memberCallsInsideFunction: [SeamHoles.ValuesBinding] = []
+		var innerScopesCalledWithForwardedValue: [String] = []
+		var namesBoundBySeam: Set<String> = []
+		var boxedLoops: [Int: String] = [:]
+		var loopLevelsTypesInTree: [String: String] = [:]
+		var builtInlineSeamComment: String?
+		var publicMockOverrideBuilders: [String: PublicMockOverrideBuilder]?
+		var fillFieldSelection: FillFieldSelection?
+
+		/// Whether any field differs from its default.
+		var holdsAnything: Bool {
+			publicMockCall != nil
+				|| mockBuilders != nil
+				|| fillCallerReads != nil
+				|| publicMockLevelFunctions != nil
+				|| fillKey != nil
+				|| !fillFields.isEmpty
+				|| !fillCaseHoles.isEmpty
+				|| !holeCallArguments.isEmpty
+				|| !builderCallArguments.isEmpty
+				|| !fillDispatchers.isEmpty
+				|| !passedUpHoles.isEmpty
+				|| !referencedFillNamesByKey.isEmpty
+				|| !publicMockLevelReentries.isEmpty
+				|| !fillStructBoundLabels.isEmpty
+				|| !fillDeferredLabelsHiddenByReenteringCalls.isEmpty
+				|| !fillDeferredLabelsReadInsideSendableFunction.isEmpty
+				|| !fillSendableWrapperReads.isEmpty
+				|| !fillLabelsReadOnlyAsPlaceField.isEmpty
+				|| !fillLabelsHandedAsMemo.isEmpty
+				|| !fillPlainMemoRoutesOfSendableWrapperReads.isEmpty
+				|| !fillMemoOriginsByLabel.isEmpty
+				|| !fillKeysReferencedFromSendableFunction.isEmpty
+				|| !sendableFillKeys.isEmpty
+				|| !inlinableFillKeys.isEmpty
+				|| !namedFillKeys.isEmpty
+				|| !valuesBindings.isEmpty
+				|| !memberCallsInsideFunction.isEmpty
+				|| !innerScopesCalledWithForwardedValue.isEmpty
+				|| !namesBoundBySeam.isEmpty
+				|| !boxedLoops.isEmpty
+				|| !loopLevelsTypesInTree.isEmpty
+				|| builtInlineSeamComment != nil
+				|| publicMockOverrideBuilders != nil
+				|| fillFieldSelection != nil
+		}
+	}
+
+	/// `SeamAndFillFields` behind a reference.
+	final class SeamAndFillFieldsStorage: Sendable {
+		init(_ fields: SeamAndFillFields) {
+			self.fields = fields
+		}
+
+		let fields: SeamAndFillFields
+
+		/// `fields` behind a reference, or `nil` where they hold nothing.
+		static func storing(_ fields: SeamAndFillFields) -> SeamAndFillFieldsStorage? {
+			fields.holdsAnything ? SeamAndFillFieldsStorage(fields) : nil
+		}
+	}
+
+	/// See `SeamAndFillFields`.
+	nonisolated private let seamAndFillFieldsStorage: SeamAndFillFieldsStorage?
 	/// The received properties that some receiver in this subtree requires — a `@Received`
 	/// dependency, or the fulfilling property of an aliased one, that is not `onlyIfAvailable`.
 	let requiredReceivedProperties: Set<Property>
@@ -4295,14 +4328,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// reaches exactly what the bindings reached, so what the wrappers keep alive is unchanged. Only a loop that binds two
 	/// or more is boxed, and none with a `@Sendable` member function, which could not capture the class; the bindings are
 	/// those of the loop's own members, bound before its first function, so none holds a wrapper of the loop.
-	nonisolated let boxedLoops: [Int: String]
+	nonisolated var boxedLoops: [Int: String] {
+		seamAndFillFieldsStorage?.fields.boxedLoops ?? [:]
+	}
 	/// The declaration of each class of `boxedLoops` in this tree, by its name, which the seam whose tree it is declares
 	/// beside its initializers.
-	let loopLevelsTypesInTree: [String: String]
+	nonisolated var loopLevelsTypesInTree: [String: String] {
+		seamAndFillFieldsStorage?.fields.loopLevelsTypesInTree ?? [:]
+	}
 	/// For a call of another module's public mock, what each level function a call inside one of its fills re-enters takes of
 	/// the caller's scope, by its dispatcher's key, where it takes anything (`PublicMockLevelFunctions.levelReentries(amongKeys:)`),
 	/// which the next pass of `Scope.createScopeGenerator` hands those calls. Empty for nearly every scope.
-	nonisolated let publicMockLevelReentries: [String: PublicMockLevelFunctions.Reentry]
+	nonisolated var publicMockLevelReentries: [String: PublicMockLevelFunctions.Reentry] {
+		seamAndFillFieldsStorage?.fields.publicMockLevelReentries ?? [:]
+	}
 	/// Whether a call in this tree found other `publicMockLevelReentries` than the pass before handed the calls inside its
 	/// fills, so that `Scope.createScopeGenerator` creates the tree again.
 	let publicMockLevelReentriesChangedInTree: Bool
@@ -4357,52 +4396,74 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// property this scope generated.
 	private let instantiatedDependenciesNotGenerated: [Dependency]
 	/// For a scope that calls a seam, the builders the call passes, in builder-label order; empty otherwise.
-	private let holeCallArguments: [HoleCallArgument]
+	nonisolated private var holeCallArguments: [HoleCallArgument] {
+		seamAndFillFieldsStorage?.fields.holeCallArguments ?? []
+	}
 	/// What this scope's seam call passes each builder, in the order the seam takes them.
-	private let builderCallArguments: [BuilderCallArgument]
+	nonisolated private var builderCallArguments: [BuilderCallArgument] {
+		seamAndFillFieldsStorage?.fields.builderCallArguments ?? []
+	}
 	/// The dispatchers this scope's seam call declares.
-	private let fillDispatchers: [FillDispatcher]
+	nonisolated private var fillDispatchers: [FillDispatcher] {
+		seamAndFillFieldsStorage?.fields.fillDispatchers ?? []
+	}
 	/// For a scope that calls another module's public mock and fills a builder, the level functions its call declares for
 	/// the builders it fills (`PublicMockLevelFunctions`); `nil` for every other scope.
-	private let publicMockLevelFunctions: PublicMockLevelFunctions?
+	nonisolated private var publicMockLevelFunctions: PublicMockLevelFunctions? {
+		seamAndFillFieldsStorage?.fields.publicMockLevelFunctions
+	}
 	/// For a scope that calls a seam, the holes of that seam whose builders the call passes up from the builders of
 	/// the seam whose tree makes the call, in builder-label order: the caller's declarations hold no type that fulfills
 	/// them. Empty otherwise.
-	let passedUpHoles: [SeamSignature.Hole]
+	nonisolated var passedUpHoles: [SeamSignature.Hole] {
+		seamAndFillFieldsStorage?.fields.passedUpHoles ?? []
+	}
 	/// Whether a scope in this generator's subtree passes up a builder (see `passedUpHoles`).
 	let passesUpBuilder: Bool
 	/// Whether this scope, or a scope in its subtree, calls a seam inside a fill of an enclosing call and passes one of that
 	/// call's fills or dispatchers by name (`enclosingFillsPassed`): the call re-enters the enclosing call's fill.
 	let holdsCallReenteringEnclosingFill: Bool
 	/// For a fill, its key (see `fillKey(of:)`); `nil` for every other generator.
-	let fillKey: String?
+	nonisolated var fillKey: String? {
+		seamAndFillFieldsStorage?.fields.fillKey
+	}
 	/// For a fill, the labels of the fields of its hole's struct it binds from the struct: every field but those bound
 	/// from a parameter the seam defers, which the fill reads from the caller's scope, as inline, unless a call inside a
 	/// fill of the same seam call passes this fill on beneath another declaration of the label
 	/// (`fillDeferredLabelsHiddenByReenteringCalls`). Empty for every other generator.
-	let fillStructBoundLabels: Set<String>
+	nonisolated var fillStructBoundLabels: Set<String> {
+		seamAndFillFieldsStorage?.fields.fillStructBoundLabels ?? []
+	}
 	/// For a seam call, by the key of each of its fills, the labels of the hole's fields bound from deferred parameters
 	/// that a declaration on the path from a fill of the call to a call inside it that passes the fill on hides: the
 	/// fill, one function, would read the outer call's declaration for every call, so it reads the struct's field for
 	/// them instead (see `DependencyTreeGenerator.hiddenByReenteringCalls(ofFills:)`). Empty for nearly every scope.
-	let fillDeferredLabelsHiddenByReenteringCalls: [String: Set<String>]
+	nonisolated var fillDeferredLabelsHiddenByReenteringCalls: [String: Set<String>] {
+		seamAndFillFieldsStorage?.fields.fillDeferredLabelsHiddenByReenteringCalls ?? [:]
+	}
 	/// For a seam call, by the key of each of its fills, the labels of the hole's fields bound from deferred parameters held
 	/// in a `LazilyInstantiated` that the fill binds from its struct and that its tree reads inside a `@Sendable` function,
 	/// which cannot capture the memo: the fill binds the struct's by-value member for them instead (see
 	/// `Scope.fillUnderConstruction`). Empty for nearly every scope.
-	let fillDeferredLabelsReadInsideSendableFunction: [String: Set<String>]
+	nonisolated var fillDeferredLabelsReadInsideSendableFunction: [String: Set<String>] {
+		seamAndFillFieldsStorage?.fields.fillDeferredLabelsReadInsideSendableFunction ?? [:]
+	}
 	/// For a seam call, by the key of each of its fills, the labels some route hands the fill as a memo
 	/// (`fillLabelsHandedAsMemo`) that its tree also reads as a `SendableLazilyInstantiated`, each with the instance property
 	/// that wrapper holds: the fill takes that wrapper as the memo where every route can hand it
 	/// (`FillDispatcher.memosHanded(toFillOf:labels:readingSendableWrapper:among:)`). Empty for nearly every scope.
-	let fillSendableWrapperReads: [String: [String: Property]]
+	nonisolated var fillSendableWrapperReads: [String: [String: Property]] {
+		seamAndFillFieldsStorage?.fields.fillSendableWrapperReads ?? [:]
+	}
 	/// For a seam call, by the key of each of its fills, the labels some route hands the fill as a memo
 	/// (`fillLabelsHandedAsMemo`) whose tree reads the label but neither the memo's value nor carries it to a site: it reads
 	/// the place's own field, the wrapper a type further out declares, as inline reads that declaration. The fill takes that
 	/// field rather than the memo, and the levels hand it on past the deferring seam's
 	/// (`FillDispatcher.Case.handsOn(_:)`). A label stays found on every later pass, where no memo is handed to show it.
 	/// Empty for nearly every scope.
-	let fillLabelsReadOnlyAsPlaceField: [String: Set<String>]
+	nonisolated var fillLabelsReadOnlyAsPlaceField: [String: Set<String>] {
+		seamAndFillFieldsStorage?.fields.fillLabelsReadOnlyAsPlaceField ?? [:]
+	}
 	/// Whether a fill in this subtree binds other fields from its struct than its call's
 	/// `fillDeferredLabelsHiddenByReenteringCalls` ask, binds a memo `fillDeferredLabelsReadInsideSendableFunction` binds
 	/// by value, reads a `SendableLazilyInstantiated` of a label it takes another memo of (`fillSendableWrapperReads`), or
@@ -4417,19 +4478,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// For a fill, the labels of its fields every route hands it as the memo of a deferred parameter a level on a carried route
 	/// holds (`Scope.Fill.labelsHandedAsMemo`), which it binds from what it is handed. Empty for every other generator.
-	let fillLabelsHandedAsMemo: Set<String>
+	nonisolated var fillLabelsHandedAsMemo: Set<String> {
+		seamAndFillFieldsStorage?.fields.fillLabelsHandedAsMemo ?? []
+	}
 	/// For a fill, by each label it takes a `LazilyInstantiated` memo of while its tree also reads the label as a
 	/// `SendableLazilyInstantiated`, the routes that hand it a seam's `LazilyInstantiated`
 	/// (`FillDispatcher.memosHanded(toFillOf:labels:readingSendableWrapper:among:)`): no such memo is the wrapper, so
 	/// `DependencyTreeGenerator.validateFills(inTreesRootedAt:callerModule:)` reports the read. Empty for every other generator.
-	let fillPlainMemoRoutesOfSendableWrapperReads: [String: [FillDispatcher.PlainMemoRoute]]
+	nonisolated var fillPlainMemoRoutesOfSendableWrapperReads: [String: [FillDispatcher.PlainMemoRoute]] {
+		seamAndFillFieldsStorage?.fields.fillPlainMemoRoutesOfSendableWrapperReads ?? [:]
+	}
 
 	/// For a fill, by each label some route hands it as the memo of a seam's deferred parameter
 	/// (`FillDispatcher.memosHanded(toFillOf:labels:readingSendableWrapper:among:)`), each such parameter: the seam's tree, as
 	/// the caller fills it, receives the label wherever the fill's tree reads that memo, so
 	/// `DependencyTreeGenerator.validateFills(inTreesRootedAt:callerModule:)` judges the fill's reads against the parameter. Empty
 	/// for every other generator.
-	let fillMemoOriginsByLabel: [String: [SeamSignature.Hole.Field.SeamParameterOrigin]]
+	nonisolated var fillMemoOriginsByLabel: [String: [SeamSignature.Hole.Field.SeamParameterOrigin]] {
+		seamAndFillFieldsStorage?.fields.fillMemoOriginsByLabel ?? [:]
+	}
 
 	/// For a fill, the fields of its hole's struct it binds from the struct (see `fillStructBoundLabels`), in
 	/// field order. Empty for every other generator.
@@ -4521,7 +4588,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// For a fill of a place whose case is nested by type, the fields it takes (`FillFieldSelection`); `nil` for every other
 	/// generator.
-	private let fillFieldSelection: FillFieldSelection?
+	nonisolated private var fillFieldSelection: FillFieldSelection? {
+		seamAndFillFieldsStorage?.fields.fillFieldSelection
+	}
 
 	/// For a fill or a mock root, the labels among `labels` its tree reads inside a `@Sendable` function, or hands to a
 	/// nested seam that takes them `@Sendable`, where no declaration inside the tree hides them, as
@@ -4573,14 +4642,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// For a fill of a case nested by type, what it reads of the caller's scope through the root dispatcher. Empty for
 	/// every other generator.
-	let fillCallerReads: FillCallerReads
+	nonisolated var fillCallerReads: FillCallerReads {
+		seamAndFillFieldsStorage?.fields.fillCallerReads ?? FillCallerReads()
+	}
 
 	/// For a fill, the fields it can bind: its hole's struct's, or, for a place whose case is nested by type, those of every
 	/// place of the case, each label once (see `init(fill:…)`). Empty for every other generator.
-	let fillFields: [SeamSignature.Hole.Field]
+	nonisolated var fillFields: [SeamSignature.Hole.Field] {
+		seamAndFillFieldsStorage?.fields.fillFields ?? []
+	}
 	/// For a fill, the places it stands for: its hole, or, for a place whose case is nested by type, every place of the case,
 	/// in the order the builders reach them. Empty for every other generator.
-	let fillCaseHoles: [SeamSignature.Hole]
+	nonisolated var fillCaseHoles: [SeamSignature.Hole] {
+		seamAndFillFieldsStorage?.fields.fillCaseHoles ?? []
+	}
 
 	/// For a fill, the declarations on the paths of the places it stands for that their structs do not carry, each label
 	/// once, in the order the places first declare them. Empty for every other generator.
@@ -4613,27 +4688,41 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// name, which no builder function declared between such a call and the fill may share (see `builderFunctionNames`).
 	/// A call refers to such a fill when it passes it as an argument, and to a level function of the enclosing call that it
 	/// reuses when a case of one of its own dispatchers calls that function (`FillDispatcher.Case.Target.reusedCarriedInnerScopes`).
-	let referencedFillNamesByKey: [String: String]
+	nonisolated var referencedFillNamesByKey: [String: String] {
+		seamAndFillFieldsStorage?.fields.referencedFillNamesByKey ?? [:]
+	}
 	/// The keys of `referencedFillNamesByKey` referred to from inside a `@Sendable` builder function that does not
 	/// enclose the fill, or passed to a seam that takes the fill `@Sendable`.
-	let fillKeysReferencedFromSendableFunction: Set<String>
+	nonisolated var fillKeysReferencedFromSendableFunction: Set<String> {
+		seamAndFillFieldsStorage?.fields.fillKeysReferencedFromSendableFunction ?? []
+	}
 	/// For a seam call, the keys of its fills whose function is `@Sendable`, which `buildsInSendableFunction(ofFill:)` reads
 	/// (see `sendableFills(of:referencedFromSendableFunctions:)`).
-	private let sendableFillKeys: Set<String>
+	nonisolated private var sendableFillKeys: Set<String> {
+		seamAndFillFieldsStorage?.fields.sendableFillKeys ?? []
+	}
 	/// For a seam call, the keys of its fills generated in the one dispatcher case that calls them, not as functions of
 	/// their own: a fill nothing else refers to by name, which is `@Sendable` exactly when its dispatcher is.
-	private let inlinableFillKeys: Set<String>
+	nonisolated private var inlinableFillKeys: Set<String> {
+		seamAndFillFieldsStorage?.fields.inlinableFillKeys ?? []
+	}
 	/// The keys of the fills and dispatchers of enclosing calls that this scope's code, or a scope's beneath it, calls or
 	/// passes by name.
-	let namedFillKeys: Set<String>
+	nonisolated var namedFillKeys: Set<String> {
+		seamAndFillFieldsStorage?.fields.namedFillKeys ?? []
+	}
 	/// The payloads of the cases on the routes to the places beneath this scope that the seam's tree binds just before this
 	/// scope's builder function (`SeamHoles.valuesBindings(at:)`): empty but where a case nested by type leads through this
 	/// scope's property.
-	private let valuesBindings: [SeamHoles.ValuesBinding]
+	nonisolated private var valuesBindings: [SeamHoles.ValuesBinding] {
+		seamAndFillFieldsStorage?.fields.valuesBindings ?? []
+	}
 	/// The structs the member calls the seam's tree makes at the top of this scope's builder function return, a `@Sendable`
 	/// function (`SeamHoles.memberCallsInsideFunction(at:)`): empty but where a builder struct's `@Sendable` member leads
 	/// through this scope's property.
-	private let memberCallsInsideFunction: [SeamHoles.ValuesBinding]
+	nonisolated private var memberCallsInsideFunction: [SeamHoles.ValuesBinding] {
+		seamAndFillFieldsStorage?.fields.memberCallsInsideFunction ?? []
+	}
 	/// Whether each `@Sendable` local function this scope declares is spelled `@Sendable nonisolated`: in the tree of a
 	/// seam a builder of which takes a builder struct (`SeamHoles.declaresBuilderStructs`).
 	private let sendableFunctionsAreNonisolated: Bool
@@ -4649,7 +4738,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// which take the value the wrapper forwards and return the struct of the fill's own level: the property's builder
 	/// function calls each with what it was forwarded, at its top, and binds the struct under the parameter's name, so the
 	/// builder the fill returns captures no payload.
-	private let innerScopesCalledWithForwardedValue: [String]
+	nonisolated private var innerScopesCalledWithForwardedValue: [String] {
+		seamAndFillFieldsStorage?.fields.innerScopesCalledWithForwardedValue ?? []
+	}
 	/// See `MockParameterNode.valuesBindings`: each field read as the scope's parent reads its label, as production's are.
 	nonisolated var valuesBindingsBeforeBuilderFunction: [MockParameterNode.ValuesBinding] {
 		valuesBindings.map { MockParameterNode.ValuesBinding(binding: $0, lazilyInstantiatedInstanceProperties: callSiteLazilyInstantiatedInstanceProperties) }
@@ -4728,19 +4819,27 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private let fulfillingExpression: String?
 	let property: Property?
 	/// The comment that ends each line that constructs this scope's type (`Scope.builtInlineSeamComment`).
-	private let builtInlineSeamComment: String?
+	nonisolated private var builtInlineSeamComment: String? {
+		seamAndFillFieldsStorage?.fields.builtInlineSeamComment
+	}
 	/// Whether this scope, in the tree of a fill a mock declares for another module's public mock, builds its type with
 	/// its hand-written mock, as the mock's tree built inline would (`Scope.createScopeGenerator`).
 	private let constructsWithHandWrittenMock: Bool
 	/// How a mock tree calls the public mock another module generated for this scope's type, or `nil` for a scope
 	/// that builds its type (see `Scope.publicMockCall`).
-	let publicMockCall: PublicMockCall?
+	nonisolated var publicMockCall: PublicMockCall? {
+		seamAndFillFieldsStorage?.fields.publicMockCall
+	}
 	/// For a public mock's root, the builders its `mock()` takes; `nil` for every other generator.
-	let mockBuilders: DependencyTreeGenerator.ShapedBuilders?
+	nonisolated var mockBuilders: DependencyTreeGenerator.ShapedBuilders? {
+		seamAndFillFieldsStorage?.fields.mockBuilders
+	}
 	/// In a seam's tree, the names its generated initializer binds for its deferred parameters and its builders, which
 	/// code anywhere in the tree may read and no `__safeDI_<label>_received` function may hide (see
 	/// `namesReceivedFunctionsAvoid`). Empty outside a seam's tree.
-	private let namesBoundBySeam: Set<String>
+	nonisolated private var namesBoundBySeam: Set<String> {
+		seamAndFillFieldsStorage?.fields.namesBoundBySeam ?? []
+	}
 
 	/// For a scope that calls another module's public mock: what the call passes each builder it fills or hands up through a
 	/// case of the calling public mock's own enum, by label. A builder it passes up as the calling internal mock's parameter
@@ -4775,7 +4874,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// offered there by unwrapping the called mock's struct in generated code, a later addition that breaks nothing.
 	///
 	/// Computed once, when the generator is built, from values that never change.
-	let publicMockOverrideBuilders: [String: PublicMockOverrideBuilder]?
+	nonisolated var publicMockOverrideBuilders: [String: PublicMockOverrideBuilder]? {
+		seamAndFillFieldsStorage?.fields.publicMockOverrideBuilders
+	}
 
 	nonisolated private static func publicMockOverrideBuilders(
 		publicMockCall: PublicMockCall?,
@@ -10627,7 +10728,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// What this node's construction reads from its `SafeDIMockConfiguration` struct. Every node of
 		/// a type shares the struct `generateMockCode` generates from the first of them, so a node
 		/// whose requirements differ from that node's cannot be built from it. `@Sendable` is left
-		/// out: it is decided once for every root (`collectSendableConfigurationTypeNames`).
+		/// out: it is decided once for every root (`sendableConfigurationTypeNames()`).
 		var configurationRequirements: ConfigurationRequirements {
 			ConfigurationRequirements(
 				childProperties: propertyChildren.map(\.property),
@@ -11236,12 +11337,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 	}
 
-	/// What `generateMockCode` reads of a mock root's parameter tree before any root's code is generated, and keeps until
+	/// What `generateMockCode` reads of a mock root's parameter tree beside the root's code, and keeps until
 	/// the module's mocks are generated, with every node it keeps holding its children but nothing beneath them
 	/// (`MockParameterNode.withChildrenOnly`), so that the tree can be released.
 	struct MockTreeSummary: Sendable {
-		/// See `collectSendableConfigurationTypeNames()`.
-		let sendableConfigurationTypeNames: Set<String>
 		/// See `collectConfigurationTypes(isPublicMock:handWrittenMockDefaultParameters:)`. The nodes beneath repeated
 		/// ancestors keep their subtrees: the configurations their structs nest are found beneath them, transitively
 		/// (`DependencyTreeGenerator.configurationsBeneathRepeatedAncestors`), and only a tree with a cycle has any.
@@ -11252,8 +11351,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let configurationNodesByConstruction: [BuiltMockParameterNode]
 	}
 
-	/// What `generateMockCode` reads of this mock root's parameter tree before any root's code is generated, after which
-	/// the tree is released.
+	/// What `generateMockCode` reads of this mock root's parameter tree beside the root's code, which outlives the tree.
 	/// - Parameters:
 	///   - concreteTypesWithHandWrittenMocks: The types whose nodes `collectConfigurationNodesByConstruction` collects.
 	func mockTreeSummary(
@@ -11263,15 +11361,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		mockRoot: TypeDescription,
 		cycleEdges: Set<CycleEdge>,
 	) async -> MockTreeSummary {
-		let sendableConfigurationTypeNames = await collectSendableConfigurationTypeNames()
 		let configurationTypes = await collectConfigurationTypes(isPublicMock: isPublicMock, handWrittenMockDefaultParameters: handWrittenMockDefaultParameters)
 		let publicConstructionNodes = isPublicMock ? await collectPublicConstructionNodes() : []
 		let configurationNodesByConstruction = concreteTypesWithHandWrittenMocks.isEmpty
 			? []
 			: await collectConfigurationNodesByConstruction(of: concreteTypesWithHandWrittenMocks, mockRoot: mockRoot, cycleEdges: cycleEdges)
-		releaseRootMockParameterTree()
 		return MockTreeSummary(
-			sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 			configurationTypes: ConfigurationTypes(
 				nodes: configurationTypes.nodes.map(\.withChildrenOnly),
 				nodesBeneathRepeatedAncestors: configurationTypes.nodesBeneathRepeatedAncestors,
@@ -11287,20 +11382,47 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `SendableInstantiator` scope. Aggregated across all roots before generation
 	/// so every root emits consistent `@Sendable`-ness for a given type's
 	/// `SafeDIMockConfiguration` struct.
-	func collectSendableConfigurationTypeNames() async -> Set<String> {
-		let parameterTree = await rootMockParameterTree
+	///
+	/// Read from the generator tree, not the mock parameter tree, which `generateMockCode` builds only once each root's
+	/// code is generated: a node is one of `collectMockParameterTree`'s for each child built for a property, inside a
+	/// `Sendable` scope where it or an ancestor builds in a `@Sendable` function, and needs a configuration struct where a
+	/// child of its own is built for a property, its construction has default-valued parameters, or it closes a cycle
+	/// (`MockParameterNode.needsConfigurationStruct`).
+	nonisolated func sendableConfigurationTypeNames() -> Set<String> {
 		var result = Set<String>()
-		// A worklist of each node's children rather than recursion, since the tree can be as deep as the module has types.
-		var nodeListsToVisit = [parameterTree.propertyNodes]
-		while let nodes = nodeListsToVisit.popLast() {
-			for node in nodes {
-				if node.requiresSendable, node.needsConfigurationStruct {
-					result.insert(node.concreteType.asSource)
+		var constructions = MockConstructions()
+		// A worklist rather than recursion, since the tree can be as deep as the module has types.
+		var generatorsToVisit = [(generator: self, insideSendableScope: false)]
+		while let (generator, insideSendableScope) = generatorsToVisit.popLast() {
+			for child in generator.propertiesToGenerate {
+				if case let .property(childInstantiable, childProperty, _, _, isPropertyCycle, _) = child.scopeData {
+					let childInsideSendableScope = insideSendableScope || child.buildsInSendableFunction
+					if childInsideSendableScope {
+						let needsConfigurationStruct = isPropertyCycle
+							|| child.propertiesToGenerate.contains(where: \.isBuiltForProperty)
+							|| !constructions.construction(
+								of: childInstantiable,
+								useMockInitializer: childInstantiable.mockReturnTypeIsCompatible(withPropertyType: childProperty.typeDescription.asInstantiatedType),
+								builderTypesDeclaredEscaping: child.publicMockCall?.typesDeclaredEscaping ?? [],
+							).defaultParameters.isEmpty
+						if needsConfigurationStruct {
+							result.insert(childInstantiable.concreteInstantiable.asSource)
+						}
+					}
+					generatorsToVisit.append((generator: child, insideSendableScope: childInsideSendableScope))
 				}
-				nodeListsToVisit.append(node.propertyChildren)
 			}
 		}
 		return result
+	}
+
+	/// Whether this scope is built for a property, which `collectMockParameterTree` makes a property node of.
+	nonisolated private var isBuiltForProperty: Bool {
+		if case .property = scopeData {
+			true
+		} else {
+			false
+		}
 	}
 
 	/// Walks the dependency tree and builds a `[MockTreeItem]` tree representing
@@ -11315,7 +11437,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `onlyIfAvailable` alias of one is not bound, as in the production tree. The
 	/// same holds for a receive of an ancestor that is still being built (see
 	/// `Scope.createScopeGenerator`).
-	/// The mock parameter tree beneath this scope, and `constructions` with those its nodes worked out added, which the
+	///
+	/// Returns the mock parameter tree beneath this scope, and `constructions` with those its nodes worked out added, which the
 	/// walk hands on to the next sibling.
 	private func collectMockParameterTree(
 		insideSendableScope: Bool = false,
