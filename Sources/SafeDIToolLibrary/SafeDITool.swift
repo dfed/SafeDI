@@ -56,32 +56,73 @@ public struct SafeDITool: AsyncParsableCommand {
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 extension Data {
-	func write(toPath filePath: String) throws {
-		try write(to: filePath.asFileURL)
+	func write(toPath filePath: String, atomically: Bool = false) throws {
+		try write(to: filePath.asFileURL, options: atomically ? .atomic : [])
 	}
 
 	/// Writes these bytes to `filePath` unless the file there already holds exactly them, so its modification time moves
 	/// only when its content does: a build system that compares modification times, as Xcode does for a script phase's
 	/// outputs, then reruns what reads the file only when it changed.
-	func writeIfChanged(toPath filePath: String) throws {
+	/// - Parameter atomically: Whether to write a temporary file and move it into place, so that a reader never sees
+	///   part of the file.
+	func writeIfChanged(toPath filePath: String, atomically: Bool = false) throws {
 		guard (try? Data(contentsOf: filePath.asFileURL)) != self else { return }
-		try write(toPath: filePath)
+		try write(toPath: filePath, atomically: atomically)
 	}
 }
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 extension [UInt8] {
-	/// Writes these bytes as `Data.writeIfChanged(toPath:)` does, without copying them into a `Data` first.
-	func writeIfChanged(toPath filePath: String) throws {
+	/// The UTF-8 bytes of `prefix` followed by `pieces` joined by `separator`: the same bytes as
+	/// `Array((prefix + pieces.joined(separator: separator)).utf8)`, written once into an array of their exact size, with
+	/// no joined text. A generated file can be tens of megabytes, and each copy of it adds to `generate`'s peak memory.
+	init(joining pieces: [String], separator: String, after prefix: String) {
+		self.init()
+		reserveCapacity(prefix.utf8.count + pieces.reduce(0) { $0 + $1.utf8.count } + separator.utf8.count * Swift.max(pieces.count - 1, 0))
+		append(contentsOf: prefix.utf8)
+		for (index, piece) in pieces.enumerated() {
+			if index > 0 {
+				append(contentsOf: separator.utf8)
+			}
+			append(contentsOf: piece.utf8)
+		}
+	}
+
+	/// Writes these bytes as `Data.writeIfChanged(toPath:atomically:)` does, without copying them into a `Data` first.
+	func writeIfChanged(toPath filePath: String, atomically: Bool = false) throws {
 		try withUnsafeBufferPointer { bytes in
 			// The `Data` only lends the array's bytes for the write, and is gone before the array can change.
 			let data = bytes.baseAddress.map { Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: $0), count: bytes.count, deallocator: .none) } ?? Data()
-			try data.writeIfChanged(toPath: filePath)
+			try data.writeIfChanged(toPath: filePath, atomically: atomically)
 		}
 	}
 }
 
 extension String {
+	/// Each element of `bodies` joined by `separator`, and those joined by `separator`: the same text as
+	/// `bodies.map { $0.joined(separator: separator) }.joined(separator: separator)`, an empty body included, written once
+	/// into a string of its exact size rather than through a copy of each body.
+	init(joiningBodiesOf bodies: [[String]], separator: String) {
+		var byteCount = separator.utf8.count * Swift.max(bodies.count - 1, 0)
+		for pieces in bodies {
+			byteCount += pieces.reduce(0) { $0 + $1.utf8.count } + separator.utf8.count * Swift.max(pieces.count - 1, 0)
+		}
+		var text = ""
+		text.reserveCapacity(byteCount)
+		for (bodyIndex, pieces) in bodies.enumerated() {
+			if bodyIndex > 0 {
+				text += separator
+			}
+			for (pieceIndex, piece) in pieces.enumerated() {
+				if pieceIndex > 0 {
+					text += separator
+				}
+				text += piece
+			}
+		}
+		self = text
+	}
+
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func write(toPath filePath: String) throws {
 		try Data(utf8).write(toPath: filePath)

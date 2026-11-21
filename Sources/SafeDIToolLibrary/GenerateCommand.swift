@@ -721,8 +721,8 @@ public struct Generate: AsyncParsableCommand {
 					}
 				}
 
-				// Accumulate every emission as a `(destination, holdsMockCode, body)`
-				// triple. `destination == nil` means the write is combined-
+				// Accumulate every emission as a `(destination, holdsMockCode, pieces)`
+				// triple, whose body is its pieces joined by a blank line. `destination == nil` means the write is combined-
 				// only (no standalone file). A manifest-driven run
 				// populates destinations from the manifest; a
 				// combined-output run leaves them all nil and lets the
@@ -732,15 +732,19 @@ public struct Generate: AsyncParsableCommand {
 				// made from its body. Generated mocks compile only where the
 				// mock condition is active, so they import what the module's
 				// `#if` blocks select there.
-				var writes: [(destination: URL?, holdsMockCode: Bool, body: String, fulfillers: Set<FulfillerImports.Fulfiller>)] = []
+				// A write keeps its roots' code as pieces, never joined into a body: the output can be tens of megabytes, and
+				// a joined copy of it beside the roots' code it copies would add to the run's peak memory. Each file is
+				// written once, from its pieces, into bytes of its exact size.
+				var writes: [(destination: URL?, holdsMockCode: Bool, pieces: [String], fulfillers: Set<FulfillerImports.Fulfiller>)] = []
 				func appendWrite(destination: URL?, holdsMockCode: Bool, roots: [DependencyTreeGenerator.GeneratedRoot]) {
 					writes.append((
 						destination: destination,
 						holdsMockCode: holdsMockCode,
-						body: roots.map(\.code).sorted().joined(separator: "\n\n"),
+						pieces: roots.map(\.code).sorted(),
 						fulfillers: Set(roots.flatMap(\.fulfillers)),
 					))
 				}
+				let separator = "\n\n"
 
 				// ---- Dependency tree ----
 				let dependencyTreeSourcesInOrder: [String] = if let manifest {
@@ -804,7 +808,7 @@ public struct Generate: AsyncParsableCommand {
 							writes.append((
 								destination: URL(fileURLWithPath: mockConfigurationOutputFilePath),
 								holdsMockCode: true,
-								body: mockResult.mockConfigurationCode ?? "",
+								pieces: [mockResult.mockConfigurationCode ?? ""],
 								fulfillers: mockResult.mockConfigurationFulfillers,
 							))
 						}
@@ -823,7 +827,7 @@ public struct Generate: AsyncParsableCommand {
 						if let mockConfigurationCode = mockResult.mockConfigurationCode,
 						   !mockConfigurationCode.isEmpty
 						{
-							writes.append((destination: nil, holdsMockCode: true, body: mockConfigurationCode, fulfillers: mockResult.mockConfigurationFulfillers))
+							writes.append((destination: nil, holdsMockCode: true, pieces: [mockConfigurationCode], fulfillers: mockResult.mockConfigurationFulfillers))
 						}
 					}
 				}
@@ -836,25 +840,27 @@ public struct Generate: AsyncParsableCommand {
 					// header-only file so the build system's declared
 					// output is populated. A file that holds mocks imports
 					// what both the dependency tree and the mocks need.
-					let bodies = writes.map(\.body).filter { !$0.isEmpty }
+					// A write's body is empty exactly when it has no piece, or one empty piece. Joining the non-empty bodies
+					// by a blank line joins their pieces by one.
+					let pieces = writes.filter { $0.pieces.count > 1 || $0.pieces.first?.isEmpty == false }.flatMap(\.pieces)
 					// The header reads the dependency-tree code apart from the mock code, which compiles only under the mock
 					// condition. It reads the code only where its imports spell levels, so each text is joined only then.
-					let dependencyTreeBodies = writes.filter { !$0.holdsMockCode }.map(\.body)
-					let mockBodies = writes.filter(\.holdsMockCode).map(\.body)
+					let dependencyTreePieces = writes.filter { !$0.holdsMockCode }.map(\.pieces)
+					let mockPieces = writes.filter(\.holdsMockCode).map(\.pieces)
 					let combinedContent: DependencyTreeGenerator.GeneratedFileContent = if hasAnyMockGeneration {
 						.dependencyTreeAndMock(
-							dependencyTreeCode: { UnreadTypeComment.resolvingMarkers(in: dependencyTreeBodies.joined(separator: "\n\n")) },
-							mockCode: { UnreadTypeComment.resolvingMarkers(in: mockBodies.joined(separator: "\n\n")) },
+							dependencyTreeCode: { UnreadTypeComment.resolvingMarkers(in: String(joiningBodiesOf: dependencyTreePieces, separator: "\n\n")) },
+							mockCode: { UnreadTypeComment.resolvingMarkers(in: String(joiningBodiesOf: mockPieces, separator: "\n\n")) },
 							mockConditionalCompilation: mockConditionalCompilation,
 						)
 					} else {
-						.dependencyTree(code: { UnreadTypeComment.resolvingMarkers(in: bodies.joined(separator: "\n\n")) })
+						.dependencyTree(code: { UnreadTypeComment.resolvingMarkers(in: pieces.joined(separator: "\n\n")) })
 					}
 					let headers = await generator.fileHeaders(for: [DependencyTreeGenerator.GeneratedFile(content: combinedContent, fulfillers: Set(writes.flatMap(\.fulfillers)))])
-					// The header, then the bodies, one blank line between each, written once into bytes of the file's exact
-					// size: the output can be tens of megabytes, and each copy of it would add to the run's peak memory. One
-					// comment names the types the file's `public` declarations name that SafeDI reads no declaration of.
-					let code = UnreadTypeComment.resolvingMarkers(joining: bodies, separator: "\n\n", after: headers.joined() + compileTimeAssertions)
+					// The header, then the pieces, one blank line between each, written once into bytes of the file's exact
+					// size. One comment names the types the file's `public` declarations name that SafeDI reads no
+					// declaration of.
+					let code = UnreadTypeComment.resolvingMarkers(joining: pieces, separator: separator, after: headers.joined() + compileTimeAssertions)
 					// Written only when its bytes change, so a build that compares modification times, as Xcode does for a
 					// script phase's outputs, recompiles the module only when its generated code changed. Bazel removes an
 					// action's outputs before it runs, so every Bazel run writes the file it declares.
@@ -865,17 +871,15 @@ public struct Generate: AsyncParsableCommand {
 					let headers = await generator.fileHeaders(for: filesToWrite.map { file in
 						DependencyTreeGenerator.GeneratedFile(
 							content: file.write.holdsMockCode
-								? .mock(code: { [body = file.write.body] in body }, mockConditionalCompilation: mockConditionalCompilation)
-								: .dependencyTree(code: { [body = file.write.body] in body }),
+								? .mock(code: { [pieces = file.write.pieces] in pieces.joined(separator: "\n\n") }, mockConditionalCompilation: mockConditionalCompilation)
+								: .dependencyTree(code: { [pieces = file.write.pieces] in pieces.joined(separator: "\n\n") }),
 							fulfillers: file.write.fulfillers,
 						)
 					})
+					// Each file in order, as soon as its bytes are written, so only one file's bytes are held at a time.
 					for ((destination, write), header) in zip(filesToWrite, headers) {
-						let content = header + compileTimeAssertions + write.body
-						let existingContent = try? String(contentsOf: destination, encoding: .utf8)
-						if existingContent != content {
-							try content.write(to: destination, atomically: true, encoding: .utf8)
-						}
+						try [UInt8](joining: write.pieces, separator: separator, after: header + compileTimeAssertions)
+							.writeIfChanged(toPath: destination.path, atomically: true)
 					}
 				}
 			}
