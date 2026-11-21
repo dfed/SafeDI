@@ -212,6 +212,7 @@ extension DependencyTreeGenerator {
 				)
 			}
 
+		let foreignPublicMocks = seams.foreignPublicMocks
 		// Generate mock code and collect configuration types in parallel.
 		let generatedRoots = try await withThrowingTaskGroup(
 			of: GeneratedMockRoot.self,
@@ -227,6 +228,7 @@ extension DependencyTreeGenerator {
 							handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 							sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 							publicMockContext: publicMockContext,
+							foreignPublicMocks: foreignPublicMocks,
 						)),
 					)
 					let isPublicMock = instantiable.generateMock == .public

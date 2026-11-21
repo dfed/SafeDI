@@ -50,6 +50,34 @@ struct PublicMockPlans: Sendable {
 }
 
 extension DependencyTreeGenerator {
+	/// The types the trees of the `.public` mocks of the module named `moduleName` build: each such type's tree, and the tree
+	/// of each dependency it receives that its mock can build, every type on them included.
+	static func typesReached(
+		byPublicMocksOf moduleName: String?,
+		in typeDescriptionToScopeMap: [TypeDescription: Scope],
+		receivedPropertiesCache: inout ReceivedPropertiesCache,
+	) -> Set<TypeDescription> {
+		var reached = Set<TypeDescription>()
+		var visitedScopes = Set<ObjectIdentifier>()
+		var scopesToVisit = [Scope]()
+		for (type, scope) in typeDescriptionToScopeMap where scope.instantiable.concreteInstantiable == type && scope.instantiable.generateMock == .public && scope.instantiable.moduleName == moduleName {
+			scopesToVisit.append(scope)
+			let receivedProperties = collectReceivedProperties(from: scope, cache: &receivedPropertiesCache)
+			for property in receivedProperties.received {
+				guard let receivedScope = typeDescriptionToScopeMap[property.typeDescription.asInstantiatedType], mockCanBuild(property, from: receivedScope) else { continue }
+				scopesToVisit.append(receivedScope)
+			}
+		}
+		while let scope = scopesToVisit.popLast() {
+			guard visitedScopes.insert(ObjectIdentifier(scope)).inserted else { continue }
+			reached.insert(scope.instantiable.concreteInstantiable)
+			for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
+				scopesToVisit.append(childScope)
+			}
+		}
+		return reached
+	}
+
 	/// The public mock another module generated for each type this module's mock trees reach but cannot build: a type
 	/// declared with `generateMock: .public` in a module SafeDI knows, whose tree, as this module would build it inline
 	/// – the public mocks of other types in it called, as they are wherever they cannot be built – constructs a
@@ -63,6 +91,11 @@ extension DependencyTreeGenerator {
 		guard !seams.foreignPublicMocks.isEmpty, let emittingModule = emittingModuleToCheck else { return [:] }
 		let foreignPublicMockTypes = Set(seams.foreignPublicMocks.keys)
 		var receivedPropertiesCache = ReceivedPropertiesCache()
+		let typesReachedByOwnPublicMocks = Self.typesReached(
+			byPublicMocksOf: emittingModule.identity.moduleName,
+			in: typeDescriptionToScopeMap,
+			receivedPropertiesCache: &receivedPropertiesCache,
+		)
 		// The types whose trees construct a declaration this module cannot reach, in type order, each with the public mock
 		// that is called instead.
 		var calledTypes = [(type: TypeDescription, foreignPublicMock: SeamResolution.ForeignPublicMock)]()
@@ -101,7 +134,35 @@ extension DependencyTreeGenerator {
 					leavingOut: typesLeftOut,
 				)
 			}
-			guard !Self.inaccessibleConstructions(constructions, from: emittingModule, extendedTypes: extendedTypeDeclarations).isEmpty else { continue }
+			// A type the module can build is still called where a `.public` mock of the module reaches it and its tree holds a
+			// place its own module cannot fill: the `.public` mock takes the builder of that place's hole type as a struct with a
+			// member for each place its calls hold, and none for a place it builds inline, so only a call honors the builder a
+			// caller passes. Its values are those of the tree built inline.
+			// Only where each such place's fill receives from the type's tree nothing that the tree declares – only what the
+			// type's caller hands the tree: a fill that receives a value the tree declares could read one the call cannot hand
+			// it – declared outside a `@Sendable` function that builds the place, say – where the tree built inline hands it
+			// every value, so such a type stays built inline, and the `.public` mock fills the place itself, as it fills every
+			// place it builds inline.
+			let isCalledToHonorPublicMocksBuilders: Bool
+			if typesReachedByOwnPublicMocks.contains(type) {
+				// Resolved only for a type a `.public` mock reaches.
+				let instantiables = try foreignPublicMock.visibleDeclarations().instantiables
+				let receivedFromTheCaller = Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache).received
+				var fillsAPlace = false
+				var fillReceivesFromTheTree = false
+				for construction in constructions where instantiables[construction.instantiable.concreteInstantiable] == nil {
+					fillsAPlace = true
+					if let fillScope = typeDescriptionToScopeMap[construction.instantiable.concreteInstantiable],
+					   !Self.collectReceivedProperties(from: fillScope, cache: &receivedPropertiesCache).received.isSubset(of: receivedFromTheCaller)
+					{
+						fillReceivesFromTheTree = true
+					}
+				}
+				isCalledToHonorPublicMocksBuilders = fillsAPlace && !fillReceivesFromTheTree
+			} else {
+				isCalledToHonorPublicMocksBuilders = false
+			}
+			guard isCalledToHonorPublicMocksBuilders || !Self.inaccessibleConstructions(constructions, from: emittingModule, extendedTypes: extendedTypeDeclarations).isEmpty else { continue }
 			calledTypes.append((type, foreignPublicMock))
 		}
 		try await computePublicMockPlans(of: calledTypes, into: &foreignPublicMockPlans, modulesReadByRunOfModule: emittingModule.modulesReadByRunOfModule)
