@@ -62,12 +62,12 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public init() {
+			        func __safeDI_left() -> Left {
+			            let user = Name()
+			            let reader = Reader(user: nil)
+			            return Left(user: user, reader: reader)
+			        }
 			        func __safeDI_screen() -> Screen {
-			            func __safeDI_left() -> Left {
-			                let user = Name()
-			                let reader = Reader(user: nil)
-			                return Left(user: user, reader: reader)
-			            }
 			            let left: Left = __safeDI_left()
 			            return Screen(user: nil, left: left)
 			        }
@@ -207,12 +207,12 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public init() {
+			        func __safeDI_left() -> Left {
+			            let user = User()
+			            let reader = Reader(user: user)
+			            return Left(user: user, reader: reader)
+			        }
 			        func __safeDI_screen() -> Screen {
-			            func __safeDI_left() -> Left {
-			                let user = User()
-			                let reader = Reader(user: user)
-			                return Left(user: user, reader: reader)
-			            }
 			            let left: Left = __safeDI_left()
 			            return Screen(user: nil, left: left)
 			        }
@@ -374,13 +374,13 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        let token = Secret()
+			        func __safeDI_detail() -> Detail {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+			            let token: (any Auth)? = token
+			            #sourceLocation()
+			            return Detail(token: token)
+			        }
 			        func __safeDI_screen() -> Screen {
-			            func __safeDI_detail() -> Detail {
-			                #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
-			                let token: (any Auth)? = token
-			                #sourceLocation()
-			                return Detail(token: token)
-			            }
 			            let detail: Detail = __safeDI_detail()
 			            return Screen(detail: detail)
 			        }
@@ -439,13 +439,13 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public init() {
+			        func __safeDI_detail() -> Detail {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+			            let token: (any Auth)? = nil
+			            #sourceLocation()
+			            return Detail(token: token)
+			        }
 			        func __safeDI_screen() -> Screen {
-			            func __safeDI_detail() -> Detail {
-			                #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
-			                let token: (any Auth)? = nil
-			                #sourceLocation()
-			                return Detail(token: token)
-			            }
 			            let detail: Detail = __safeDI_detail()
 			            return Screen(detail: detail)
 			        }
@@ -505,13 +505,13 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        let token = Secret()
+			        func __safeDI_detail() -> Detail {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+			            let token: (any Auth)? = token
+			            #sourceLocation()
+			            return Detail(token: token)
+			        }
 			        func __safeDI_screen() -> Screen {
-			            func __safeDI_detail() -> Detail {
-			                #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
-			                let token: (any Auth)? = token
-			                #sourceLocation()
-			                return Detail(token: token)
-			            }
 			            let detail: Detail = __safeDI_detail()
 			            let consumer = Consumer(token: token)
 			            return Screen(detail: detail, consumer: consumer)
@@ -571,13 +571,13 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        let token = Secret()
+			        func __safeDI_detail() -> Detail {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+			            let auth: (any Auth)? = token
+			            #sourceLocation()
+			            return Detail(auth: auth)
+			        }
 			        func __safeDI_screen() -> Screen {
-			            func __safeDI_detail() -> Detail {
-			                #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
-			                let auth: (any Auth)? = token
-			                #sourceLocation()
-			                return Detail(auth: auth)
-			            }
 			            let detail: Detail = __safeDI_detail()
 			            return Screen(detail: detail)
 			        }
@@ -609,31 +609,24 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        let authToken = Secret()
+			        func __safeDI_left() -> Left {
+			            let token = Token()
+			            let detail: Detail = __safeDI_detail()
+			            return Left(token: token, detail: detail)
+			        }
+			        func __safeDI_detail() -> Detail {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			            let authToken: Secret? = nil
+			            #sourceLocation()
+			            let reader = Reader(authToken: authToken)
+			            return Detail(authToken: authToken, reader: reader)
+			        }
+			        func __safeDI_right() -> Right {
+			            let detail: Detail = __safeDI_detail()
+			            return Right(detail: detail)
+			        }
 			        func __safeDI_screen() -> Screen {
-			            func __safeDI_left() -> Left {
-			                let token = Token()
-			                func __safeDI_detail() -> Detail {
-			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			                    let authToken: Secret? = nil
-			                    #sourceLocation()
-			                    let reader = Reader(authToken: authToken)
-			                    return Detail(authToken: authToken, reader: reader)
-			                }
-			                let detail: Detail = __safeDI_detail()
-			                return Left(token: token, detail: detail)
-			            }
 			            let left: Left = __safeDI_left()
-			            func __safeDI_right() -> Right {
-			                func __safeDI_detail() -> Detail {
-			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			                    let authToken: Secret? = nil
-			                    #sourceLocation()
-			                    let reader = Reader(authToken: authToken)
-			                    return Detail(authToken: authToken, reader: reader)
-			                }
-			                let detail: Detail = __safeDI_detail()
-			                return Right(detail: detail)
-			            }
 			            let right: Right = __safeDI_right()
 			            return Screen(left: left, right: right)
 			        }
