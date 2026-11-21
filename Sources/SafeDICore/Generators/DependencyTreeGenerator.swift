@@ -331,8 +331,16 @@ public actor DependencyTreeGenerator {
 		} else {
 			[]
 		}
-		let warnings = if let trees, request.generatesDependencyTrees { trees.warnings } else { [SourceDiagnostic]() }
-		let storedSeamSignatures = if let trees, request.generatesDependencyTrees { trees.storedSeamSignatures } else { [StoredSeamSignature]() }
+		let warnings = if let trees, request.generatesDependencyTrees {
+			trees.warnings
+		} else {
+			[SourceDiagnostic]()
+		}
+		let storedSeamSignatures = if let trees, request.generatesDependencyTrees {
+			trees.storedSeamSignatures
+		} else {
+			[StoredSeamSignature]()
+		}
 		let dotTreeAndMocks: Result<(String?, MockGenerationResult?), any Error>
 		do {
 			var dotTree: String?

@@ -49,49 +49,49 @@ struct SafeDIToolMockBodyRoutingTests: ~Copyable {
 		let (routings, continuation) = AsyncStream.makeStream(of: Bool.self)
 		let output = try await MockBodyRouting.$observer.withValue({ continuation.yield($0) }) {
 			try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@Instantiable(generateMock: true)
-				public final class Root: Instantiable {
-				    public init(a: A, b: B) {
-				        self.a = a
-				        self.b = b
-				    }
-				    @Instantiated let a: A
-				    @Instantiated let b: B
-				}
-				""",
-				"""
-				@Instantiable
-				public final class A: Instantiable {
-				    public init(shared: Shared) { self.shared = shared }
-				    @Instantiated let shared: Shared
-				}
-				""",
-				"""
-				@Instantiable
-				public final class B: Instantiable {
-				    public init(shared: Shared) { self.shared = shared }
-				    @Instantiated let shared: Shared
-				}
-				""",
-				"""
-				@Instantiable
-				public final class Shared: Instantiable {
-				    public init(leaf: Leaf) { self.leaf = leaf }
-				    @Instantiated let leaf: Leaf
-				}
-				""",
-				"""
-				@Instantiable
-				public final class Leaf: Instantiable {
-				    public init() {}
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Root: Instantiable {
+					    public init(a: A, b: B) {
+					        self.a = a
+					        self.b = b
+					    }
+					    @Instantiated let a: A
+					    @Instantiated let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A: Instantiable {
+					    public init(shared: Shared) { self.shared = shared }
+					    @Instantiated let shared: Shared
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    public init(shared: Shared) { self.shared = shared }
+					    @Instantiated let shared: Shared
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Shared: Instantiable {
+					    public init(leaf: Leaf) { self.leaf = leaf }
+					    @Instantiated let leaf: Leaf
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Leaf: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
 		}
 
 		continuation.finish()
