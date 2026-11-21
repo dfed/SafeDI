@@ -94,6 +94,21 @@ extension GraphFuzzerToolRuns {
 	/// (`GraphFuzzerOracle.callsOfEntriesMeantForPeople(in:)`), in one module or under the module-info integration of a
 	/// split of it, or `nil`.
 	var generatedCodeCallsEntryMeantForPeopleFailure: GraphFuzzerFailure? {
+		for (description, files) in judgedGeneratedFiles {
+			let findings = GraphFuzzerOracle.callsOfEntriesMeantForPeople(in: files)
+			guard !findings.isEmpty else { continue }
+			return GraphFuzzerFailure(
+				seed: fixture.seed,
+				kind: .generatedCodeCallsEntryMeantForPeople,
+				details: "\(findings.joined(separator: "\n"))\n\(description):\n\(files.keys.sorted().map { "// \($0)\n\(files[$0, default: ""])" }.joined(separator: "\n"))",
+			)
+		}
+		return nil
+	}
+
+	/// The generated code of an accepted graph in one module, then of each split of it under the module-info
+	/// integration, each file keyed by its module and unit there, which the oracles of generated-only entries judge.
+	var judgedGeneratedFiles: [(description: String, files: [String: String])] {
 		var judged = [(description: String, files: [String: String])]()
 		if case let .accepted(generatedFiles, _) = firstOutcome {
 			judged.append(("This graph", generatedFiles))
@@ -108,15 +123,6 @@ extension GraphFuzzerToolRuns {
 			}
 			judged.append(("Split into modules (\(runs.partition.description))", files))
 		}
-		for (description, files) in judged {
-			let findings = GraphFuzzerOracle.callsOfEntriesMeantForPeople(in: files)
-			guard !findings.isEmpty else { continue }
-			return GraphFuzzerFailure(
-				seed: fixture.seed,
-				kind: .generatedCodeCallsEntryMeantForPeople,
-				details: "\(findings.joined(separator: "\n"))\n\(description):\n\(files.keys.sorted().map { "// \($0)\n\(files[$0, default: ""])" }.joined(separator: "\n"))",
-			)
-		}
-		return nil
+		return judged
 	}
 }

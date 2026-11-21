@@ -27,12 +27,16 @@ public final class FileVisitor: SyntaxVisitor {
 	/// - Parameters:
 	///   - conditionalCompilationEvaluator: Decides which clauses of each `#if` block are scanned. Defaults to no active conditions, which scans platform-conditioned blocks and skips blocks guarded by bare conditions.
 	///   - sourceLocationConverter: A converter for the tree being walked. When provided, each declaration records where it begins.
+	///   - sourceFilePath: The path each instantiable the walk finds records as its `sourceFilePath`, or `nil` to record
+	///     none. A scan names the file so as it walks it, rather than copying every instantiable afterwards to name it.
 	public init(
 		conditionalCompilationEvaluator: ConditionalCompilationEvaluator = ConditionalCompilationEvaluator(activeCompilationConditions: []),
 		sourceLocationConverter: SourceLocationConverter? = nil,
+		sourceFilePath: String? = nil,
 	) {
 		self.conditionalCompilationEvaluator = conditionalCompilationEvaluator
 		self.sourceLocationConverter = sourceLocationConverter
+		self.sourceFilePath = sourceFilePath
 		super.init(viewMode: .sourceAccurate)
 	}
 
@@ -357,6 +361,8 @@ public final class FileVisitor: SyntaxVisitor {
 
 	private let conditionalCompilationEvaluator: ConditionalCompilationEvaluator
 	private let sourceLocationConverter: SourceLocationConverter?
+	/// The path each instantiable the walk finds records as its `sourceFilePath`, when one is given.
+	private let sourceFilePath: String?
 	/// The `#if` clauses the evaluator selected for scanning.
 	private var activeIfConfigClauses = Set<SyntaxIdentifier>()
 	/// How many `#if` blocks deep the walk is inside a block that `importSegments` holds as source.
@@ -370,9 +376,13 @@ public final class FileVisitor: SyntaxVisitor {
 	/// whose condition only the compiler decides encloses it.
 	private func appendInstantiables(of instantiableVisitor: InstantiableVisitor) {
 		let isInsideCompilerDecidedBlock = enclosingBlocksNameConditionOnlyTheCompilerDecides.contains(true)
-		for var instantiable in instantiableVisitor.instantiables {
-			instantiable.isInsideCompilerDecidedBlock = isInsideCompilerDecidedBlock
-			instantiables.append(instantiable)
+		let firstIndex = instantiables.endIndex
+		instantiables.append(contentsOf: instantiableVisitor.instantiables)
+		for index in firstIndex..<instantiables.endIndex {
+			instantiables[index].isInsideCompilerDecidedBlock = isInsideCompilerDecidedBlock
+			if let sourceFilePath {
+				instantiables[index].sourceFilePath = sourceFilePath
+			}
 		}
 	}
 
@@ -389,9 +399,11 @@ public final class FileVisitor: SyntaxVisitor {
 		appendInstantiables(of: instantiableVisitor)
 		record(instantiableVisitor.conditionalCompilationDecisions)
 		consultedCompilationConditions.formUnion(instantiableVisitor.consultedCompilationConditions)
-		recordReservedTypeName(node.name, isInstantiable: node.attributes.instantiableMacro != nil)
+		// Finding the attribute compares the name of each, so it is found once.
+		let isInstantiable = node.attributes.instantiableMacro != nil
+		recordReservedTypeName(node.name, isInstantiable: isInstantiable)
 		let definedType = typeDefined(named: node.name.text)
-		if node.attributes.instantiableMacro != nil {
+		if isInstantiable {
 			outputFileDeclarations.recordInstantiable(
 				named: definedType.asSource,
 				inExtensionOf: enclosingExtendedType,
@@ -405,7 +417,7 @@ public final class FileVisitor: SyntaxVisitor {
 		enterType(
 			definedType,
 			access: node.modifiers.access(introducedBy: node.keyword, sourceLocationConverter: sourceLocationConverter),
-			isInstantiable: node.attributes.instantiableMacro != nil,
+			isInstantiable: isInstantiable,
 		)
 
 		// Continue to find child types.
