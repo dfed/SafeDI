@@ -315,8 +315,15 @@ jobs:
       # minutes (43763818802), and from nothing 23 to 26 minutes (runs
       # 43772841709, 43774444496, 43774447047). The limit is twice the
       # slowest cold build.
+      #
+      # A `release` run with a filter builds here too and then runs the
+      # bundle, as the split run's test jobs do. `swift test` does not reuse
+      # what `swift build --build-tests` built with the same arguments: on
+      # main, from the cache of the very commit it tested, a filtered run
+      # compiled every target again, the dependencies included, for 12.8
+      # minutes before its tests ran for 9.4 (run 44902486611).
       - name: Build Tests
-        if: ${{ steps.split.outputs.split == 'true' }}
+        if: ${{ inputs.mode == 'release' }}
         timeout-minutes: 50
         run: |
           # shellcheck disable=SC2086 # The arguments are words to split.
@@ -415,10 +422,20 @@ jobs:
         timeout-minutes: 60
         env:
           FILTER: ${{ inputs.filter }}
+          MODE: ${{ inputs.mode }}
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
+          # The release bundle is built for coverage; nothing reads a
+          # filtered run's profile, so it goes to the runner's temporary
+          # directory, not the checkout.
+          LLVM_PROFILE_FILE: ${{ runner.temp }}/verify-filter-%p.profraw
         run: |
           # shellcheck disable=SC2086 # The arguments are words to split.
-          if [ -n "$FILTER" ]; then
+          if [ "$MODE" = release ]; then
+            # A split run never reaches this step, so a release run here has
+            # a filter. Every test is a swift-testing test, as in "Build and
+            # Test on Linux", which runs the bundle the same way.
+            .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing --filter "$FILTER"
+          elif [ -n "$FILTER" ]; then
             swift test $SWIFT_TEST_ARGUMENTS --filter "$FILTER"
           else
             swift test $SWIFT_TEST_ARGUMENTS
