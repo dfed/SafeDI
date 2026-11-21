@@ -423,6 +423,234 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		}
 	}
 
+	// MARK: Tests – Views that refer to modules
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_generatesSameCode_whenViewsReferToModules() async throws {
+		let modules = Self.seamOverInnerOverDeep(middleDependencies: ["Inner"], appDependencies: ["Middle"])
+		let reference = try await executeSafeDIToolMultiModuleTest(
+			modules: modules,
+			integration: .moduleInfo,
+			compileVerification: .skipped,
+			modulesBeneath: { $0 },
+			filesToDelete: &filesToDelete,
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: modules,
+			integration: .moduleInfo,
+			modulesBeneath: { $0 },
+			viewsReferToModules: true,
+			filesToDelete: &filesToDelete,
+		)
+		for moduleName in ["Deep", "Inner", "Middle", "App"] {
+			#expect(output.modules[moduleName]?.generatedFiles == reference.modules[moduleName]?.generatedFiles)
+		}
+		#expect(output.modules["Middle"]?.moduleInfoFile?.view.declarations.isEmpty == true)
+		#expect(output.modules["Middle"]?.moduleInfoFile?.view.references.map(\.moduleName) == ["Deep", "Inner"])
+		#expect(output.modules["App"]?.moduleInfoFile?.view.declarations.isEmpty == true)
+		#expect(output.modules["App"]?.moduleInfoFile?.view.references.map(\.moduleName) == ["Deep", "Inner", "Middle"])
+		#expect(output.modules["App"]?.moduleInfoFile?.view.moduleGraph.map(\.moduleName) == reference.modules["App"]?.moduleInfoFile?.view.moduleGraph.map(\.moduleName))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsUnresolvableModuleReference_whenModuleBeneathIsNotPassed() async {
+		await assertThrowsError(containing: "SafeDI could not find the module info of module `Inner`, which `") {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.seamOverInnerOverDeep(middleDependencies: ["Inner"], appDependencies: ["Middle"]),
+				integration: .moduleInfo,
+				compileVerification: .skipped,
+				modulesBeneath: { moduleNames in moduleNames.filter { $0 != "Inner" } },
+				viewsReferToModules: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsDisagreement_whenReferencedModuleChangedAfterReferringModuleWasBuilt() async throws {
+		let stale = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.seamOverInnerOverDeep(middleDependencies: ["Inner"], appDependencies: ["Middle"]),
+			integration: .moduleInfo,
+			compileVerification: .skipped,
+			modulesBeneath: { $0 },
+			viewsReferToModules: true,
+			filesToDelete: &filesToDelete,
+		)
+		let staleMiddlePath = try #require(stale.modules["Middle"]?.moduleInfoOutputPath)
+		// `Deep` gains a type after `Middle`'s file was written, so `Middle`'s reference to `Deep` no longer matches `Deep`'s own
+		// file. (Each run writes its files under a fixture root of its own, which the declarations' paths name, so the
+		// reference would not match even without the new type: the test checks that a stale reference is reported, which
+		// either difference makes it.)
+		var modules = Self.seamOverInnerOverDeep(middleDependencies: ["Inner"], appDependencies: ["Middle"])
+		modules[0] = ModuleFixture(name: "Deep", packageName: "Base", swiftFileContent: [Self.clock, seamFixtureType(named: "Spare", declarations: [])])
+		await assertThrowsError(containing: "SafeDI was given two module infos that describe module `Deep` differently") {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: modules,
+				integration: .moduleInfo,
+				compileVerification: .skipped,
+				moduleInfoOverrides: ["Middle": staleMiddlePath],
+				modulesBeneath: { $0 },
+				viewsReferToModules: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesSameModuleInfoAbove_whenOnlyPositionsOfReferencedModuleChange() async throws {
+		let modules = Self.seamOverInnerOverDeep(middleDependencies: ["Inner"], appDependencies: ["Middle"])
+		var movedModules = modules
+		movedModules[1] = ModuleFixture(name: "Inner", packageName: "Base", swiftFileContent: [
+			"import Deep\n\n\n// A comment that moves every declaration beneath it.\n\n" + seamFixtureType(named: "InnerScreen", declarations: ["@Instantiated let clock: Clock"]),
+		], dependencies: ["Deep"])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, modulesBeneath: { $0 }, viewsReferToModules: true, filesToDelete: &filesToDelete)
+		let moved = try await executeSafeDIToolMultiModuleTest(modules: movedModules, integration: .moduleInfo, compileVerification: .skipped, modulesBeneath: { $0 }, viewsReferToModules: true, filesToDelete: &filesToDelete)
+		// Each run writes under a fixture root of its own, which the declarations' paths and so the checksums name: the
+		// references are checked against each run's own files, and the files compared without the root and the checksums.
+		#expect(Self.withoutFixtureRoot(output, module: "Inner") != Self.withoutFixtureRoot(moved, module: "Inner"))
+		#expect(Self.ownEntryWithoutFixtureRoot(output, module: "Inner") == Self.ownEntryWithoutFixtureRoot(moved, module: "Inner"))
+		for run in [output, moved] {
+			for moduleName in ["Middle", "App"] {
+				#expect(Self.referencesMatchOwnEntries(in: run, module: moduleName))
+			}
+		}
+		#expect(Self.withoutFixtureRootOrChecksums(output, module: "Middle") == Self.withoutFixtureRootOrChecksums(moved, module: "Middle"))
+		#expect(Self.withoutFixtureRootOrChecksums(output, module: "App") == Self.withoutFixtureRootOrChecksums(moved, module: "App"))
+	}
+
+	@Test(arguments: [
+		[0, 1, 2, 3, 4, 5],
+		[5, 4, 3, 2, 1, 0],
+		[1, 3, 5, 0, 2, 4],
+		[4, 2, 0, 5, 3, 1],
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesSameModuleInfo_whateverOrderTheReferencedModulesArriveIn(permutation: [Int]) async throws {
+		// Six modules beneath, each declaring a seam, so `Middle`'s view refers to each, and `App` resolves each reference
+		// from the set in the order the permutation gives it.
+		let leafNames = ["Alpha", "Bravo", "Charlie", "Xray", "Yankee", "Zulu"]
+		func run(order: [Int], filesToDelete: inout [URL]) async throws -> MultiModuleTestOutput {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: leafNames.map { ModuleFixture(name: $0, packageName: "Base", swiftFileContent: [seamFixtureType(named: "\($0)Type", isSeam: true, declarations: [])]) } + [
+					ModuleFixture(name: "Middle", packageName: "Base", swiftFileContent: [
+						leafNames.map { "import \($0)" }.joined(separator: "\n") + "\n\n" + seamFixtureType(named: "Hub", isSeam: true, declarations: leafNames.map { "@Instantiated let \($0.lowercased()): \($0)Type" }),
+					], dependencies: leafNames),
+					ModuleFixture(name: "App", packageName: "App", swiftFileContent: ["import Middle\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let hub: Hub"])], dependencies: ["Middle"]),
+				],
+				integration: .moduleInfo,
+				compileVerification: .skipped,
+				modulesBeneath: { moduleNames in
+					let leaves = order.map { leafNames[$0] }
+					return leaves + moduleNames.filter { !leaves.contains($0) }
+				},
+				viewsReferToModules: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		let output = try await run(order: permutation, filesToDelete: &filesToDelete)
+		let reference = try await run(order: [0, 1, 2, 3, 4, 5], filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.moduleInfoFile?.view.references.map(\.moduleName) == ["Alpha", "Bravo", "Charlie", "Middle", "Xray", "Yankee", "Zulu"])
+		#expect(Self.referencesMatchOwnEntries(in: output, module: "App"))
+		#expect(Self.withoutFixtureRootOrChecksums(output, module: "App") == Self.withoutFixtureRootOrChecksums(reference, module: "App"))
+		#expect(output.modules["App"]?.generatedFiles == reference.modules["App"]?.generatedFiles)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsUnresolvableModuleReference_whenNoModuleBeneathIsListed() async {
+		await assertThrowsError(containing: "SafeDI could not find the module info of module `Deep`, which `") {
+			try await ModuleReferenceResolver(transitiveModuleInfoListPath: nil).resolvingReferences(in: [(Self.fileReferringToDeep, "/App.safedi")])
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingTheFile_whenViewRefersToModuleAndAModuleBeneathCannotBeRead() async throws {
+		let unreadableModuleInfo = URL.temporaryFile.appendingPathExtension("safedi")
+		try Data("not a module info file".utf8).write(to: unreadableModuleInfo)
+		filesToDelete.append(unreadableModuleInfo)
+		let modulesBeneathCSV = URL.temporaryFile
+		try unreadableModuleInfo.path.write(to: modulesBeneathCSV, atomically: true, encoding: .utf8)
+		filesToDelete.append(modulesBeneathCSV)
+		await assertThrowsError(containing: "Could not read the SafeDI module info file at \(unreadableModuleInfo.path)") {
+			try await ModuleReferenceResolver(transitiveModuleInfoListPath: modulesBeneathCSV.path).resolvingReferences(in: [(Self.fileReferringToDeep, "/App.safedi")])
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsDisagreementNamingBothFiles_whenTwoModulesBeneathNameTheReferencedModule() async throws {
+		var paths = [String]()
+		for checksum: UInt64 in [1, 2] {
+			let path = URL.temporaryFile.appendingPathExtension("safedi")
+			try Self.moduleInfoFile(named: "Deep", ownEntryChecksum: checksum).moduleInfoData.write(to: path)
+			filesToDelete.append(path)
+			paths.append(path.path)
+		}
+		let modulesBeneathCSV = URL.temporaryFile
+		try paths.joined(separator: ",").write(to: modulesBeneathCSV, atomically: true, encoding: .utf8)
+		filesToDelete.append(modulesBeneathCSV)
+		await assertThrowsError("SafeDI was given two module infos that describe module `Deep` differently: \(paths.sorted().map { "`\($0)`" }.joined(separator: " and ")) were written against two different builds of `Deep`. Build `Deep` and the modules that depend on it again, so that every module info is written against the current one.") {
+			try await ModuleReferenceResolver(transitiveModuleInfoListPath: modulesBeneathCSV.path).resolvingReferences(in: [(Self.fileReferringToDeep, "/App.safedi")])
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func resolvingReferences_keepsFileUnchanged_whenItsViewRefersToNoModuleBesideFileThatRefersToOne() async throws {
+		let modulesBeneathCSV = try writeModulesBeneath([Self.moduleInfoFile(named: "Deep", ownEntryChecksum: 1)])
+		let resolved = try await ModuleReferenceResolver(transitiveModuleInfoListPath: modulesBeneathCSV).resolvingReferences(in: [
+			(Self.fileReferringToDeep, "/App.safedi"),
+			(Self.moduleInfoFile(named: "Zed"), "/Zed.safedi"),
+		])
+		#expect(resolved.map(\.path) == ["/App.safedi", "/Zed.safedi"])
+		#expect(resolved[0].file.view.references.isEmpty)
+		#expect(resolved[0].file.view.declarations.map(\.moduleName) == ["Deep"])
+		#expect(resolved[1].file.moduleName == "Zed")
+		#expect(resolved[1].file.view.references.isEmpty)
+		#expect(resolved[1].file.view.declarations.isEmpty)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func resolvingReferences_readsEachModuleBeneathOnce_whenSecondCallRefersToModuleFirstDidNot() async throws {
+		let modulesBeneathCSV = try writeModulesBeneath([
+			Self.moduleInfoFile(named: "Deep", ownEntryChecksum: 1),
+			Self.moduleInfoFile(named: "Other", ownEntryChecksum: 2),
+		])
+		let resolver = ModuleReferenceResolver(transitiveModuleInfoListPath: modulesBeneathCSV)
+		_ = try await resolver.resolvingReferences(in: [(Self.fileReferringToDeep, "/App.safedi")])
+		let headReadPathsAfterFirstCall = await resolver.headReadPaths
+		let fileReferringToOther = Self.moduleInfoFile(
+			named: "Middle",
+			view: ModuleInfoView(moduleGraph: [], declarations: [], references: [ViewedModuleReference(moduleName: "Other", checksum: 2)]),
+		)
+		let resolved = try await resolver.resolvingReferences(in: [(fileReferringToOther, "/Middle.safedi")])
+		#expect(resolved.map { $0.file.view.declarations.map(\.moduleName) } == [["Other"]])
+		#expect(await resolver.headReadPaths == headReadPathsAfterFirstCall)
+		#expect(headReadPathsAfterFirstCall.count == 2)
+	}
+
+	/// Writes each of `files` to a module info file of its own, and a list of them as a run's modules beneath names them,
+	/// and returns the list's path.
+	private mutating func writeModulesBeneath(_ files: [ModuleInfoFile]) throws -> String {
+		var paths = [String]()
+		for file in files {
+			let path = URL.temporaryFile.appendingPathExtension("safedi")
+			try file.moduleInfoData.write(to: path)
+			filesToDelete.append(path)
+			paths.append(path.path)
+		}
+		let modulesBeneathCSV = URL.temporaryFile
+		try paths.joined(separator: ",").write(to: modulesBeneathCSV, atomically: true, encoding: .utf8)
+		filesToDelete.append(modulesBeneathCSV)
+		return modulesBeneathCSV.path
+	}
+
 	// MARK: Tests – Mocks
 
 	@Test
@@ -1444,6 +1672,25 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["App"]?.unusedInputs == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_listsOnlyTheModuleNoViewRefersTo_whenListedModulesViewRefersToModulesBeneath() async throws {
+		// `App` declares no tree and lists only `Middle`, whose view refers to `Deep` and `Inner`: the run opens their files
+		// to resolve the references, and never `Zed`'s, which only the set of modules beneath names.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [ModuleFixture(name: "Zed", packageName: "Base", swiftFileContent: [seamFixtureType(named: "ZedType", declarations: [])])]
+				+ Self.seamOverInnerOverDeep(middleDependencies: ["Inner"], appDependencies: ["Middle"]).dropLast()
+				+ [ModuleFixture(name: "App", packageName: "App", swiftFileContent: ["import Middle\n\n" + seamFixtureType(named: "Screen", declarations: [])], dependencies: ["Middle"])],
+			integration: .moduleInfo,
+			compileVerification: .skipped,
+			modulesBeneath: { moduleNames in moduleNames.contains("Middle") ? moduleNames + ["Zed"] : moduleNames },
+			viewsReferToModules: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Middle"]?.moduleInfoFile?.view.references.map(\.moduleName) == ["Deep", "Inner"])
+		#expect(output.modules["App"]?.unusedInputs == [output.fixtureRoot.appendingPathComponent("ModuleInfo").appendingPathComponent("Zed.safedi").path])
 	}
 
 	// MARK: Tests – What the modules beneath cost
@@ -2552,6 +2799,32 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 
 	private static let clock = seamFixtureType(named: "Clock", declarations: [])
 
+	/// The module info file of a module `App` whose view refers to a module `Deep`.
+	private static let fileReferringToDeep = moduleInfoFile(
+		named: "App",
+		view: ModuleInfoView(moduleGraph: [], declarations: [], references: [ViewedModuleReference(moduleName: "Deep", checksum: 1)]),
+	)
+
+	/// The module info file of a module named `moduleName` that declares nothing.
+	private static func moduleInfoFile(named moduleName: String, ownEntryChecksum: UInt64? = nil, view: ModuleInfoView = .empty) -> ModuleInfoFile {
+		ModuleInfoFile(
+			moduleName: moduleName,
+			ownEntryChecksum: ownEntryChecksum,
+			packageName: nil,
+			dependencyModuleNames: [],
+			imports: [],
+			mockImports: [],
+			instantiables: [],
+			configurations: [],
+			filesWithUnexpectedNodes: nil,
+			conditionalCompilationDecisions: [],
+			instantiableTypeNamesInAnyClause: [],
+			plainTypeDeclarations: [],
+			seamSignatures: [],
+			view: view,
+		)
+	}
+
 	/// `DefaultThing`, which fulfills `Thing` and builds nothing.
 	private static let leafThingImplementation = """
 	@Instantiable(fulfillingAdditionalTypes: [Thing.self])
@@ -2689,6 +2962,35 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 	private static func withoutFixtureRoot(_ output: MultiModuleTestOutput, module moduleName: String) -> String? {
 		output.modules[moduleName]?.moduleInfoFile.map {
 			reflectedDescription(of: $0).description.replacingOccurrences(of: output.fixtureRoot.path, with: "")
+		}
+	}
+
+	/// What the module's `.safedi` holds, as `withoutFixtureRoot(_:module:)` gives it, with each reference's checksum and
+	/// the file's own checksum left out, since they cover the paths the fixture root is part of.
+	private static func withoutFixtureRootOrChecksums(_ output: MultiModuleTestOutput, module moduleName: String) -> String? {
+		withoutFixtureRoot(output, module: moduleName)?
+			.replacing(/checksum: UInt64\(\d+\)/, with: "checksum: UInt64(_)")
+			.replacing(/ownEntryChecksum: Optional<UInt64>\(some: UInt64\(\d+\)\)/, with: "ownEntryChecksum: _")
+	}
+
+	/// The module's own entry, as a view holds it, with the test's fixture root removed from every path.
+	private static func ownEntryWithoutFixtureRoot(_ output: MultiModuleTestOutput, module moduleName: String) -> String? {
+		output.modules[moduleName]?.moduleInfoFile.map {
+			reflectedDescription(of: $0.ownEntry).description.replacingOccurrences(of: output.fixtureRoot.path, with: "")
+		}
+	}
+
+	/// Whether every reference the module's view holds names a module of the run whose own entry has the reference's
+	/// checksum.
+	private static func referencesMatchOwnEntries(in output: MultiModuleTestOutput, module moduleName: String) -> Bool {
+		guard let references = output.modules[moduleName]?.moduleInfoFile?.view.references, !references.isEmpty else {
+			return false
+		}
+		return references.allSatisfy { reference in
+			guard let file = output.modules[reference.moduleName]?.moduleInfoFile else {
+				return false
+			}
+			return file.ownEntryChecksum == reference.checksum && file.ownEntry.checksum == reference.checksum
 		}
 	}
 
