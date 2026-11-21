@@ -518,22 +518,20 @@ final class ConstructionInternerSpace {
 
 	/// The ID of `type`, given now when the space has none.
 	func intern(_ type: TypeDescription) -> TypeID {
-		guard let missObserver = ConstructionInternerObservation.missObserver else { return builder.intern(type) }
-		let internedCount = builder.internedCount
-		let id = builder.intern(type)
-		if builder.internedCount != internedCount {
-			missObserver(missBucket, type.asSource)
-		}
-		return id
+		reportingMiss(of: type.asSource) { $0.intern(type) }
 	}
 
 	/// The ID of `property`, given now when the space has none.
 	func intern(_ property: Property) -> PropertyID {
-		guard let missObserver = ConstructionInternerObservation.missObserver else { return builder.intern(property) }
+		reportingMiss(of: "\(property.label): \(property.typeDescription.asSource)") { $0.intern(property) }
+	}
+
+	/// What `intern` returns, reporting `value` to the miss observer, if any, when it interned what the space did not hold.
+	private func reportingMiss<ID>(of value: @autoclosure () -> String, _ intern: (inout ConstructionInterner.Builder) -> ID) -> ID {
 		let internedCount = builder.internedCount
-		let id = builder.intern(property)
-		if builder.internedCount != internedCount {
-			missObserver(missBucket, "\(property.label): \(property.typeDescription.asSource)")
+		let id = intern(&builder)
+		if builder.internedCount != internedCount, let missObserver = ConstructionInternerObservation.missObserver {
+			missObserver(missBucket, value())
 		}
 		return id
 	}
