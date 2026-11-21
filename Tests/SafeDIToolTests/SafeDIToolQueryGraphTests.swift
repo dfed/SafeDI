@@ -970,6 +970,47 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_exportsEveryModule_whenManyModulesAreReadFromDirectoriesOrModuleInfo() async throws {
+		// Forty modules, read in parallel both ways. Release builds of SafeDITool 2.3.1 by Swift 6.3 with `-Osize`, by
+		// Swift 6.4.1 and 6.4.2 on Linux, and by Xcode 26.4 miscompiled the task groups that read them, and exported no
+		// module or crashed. This build's compiler may not show that miscompile; the release binary's check in CI does.
+		let directory = try temporaryDirectory()
+		let moduleCount = 40
+		var moduleDirectories = [URL]()
+		var moduleInfoFiles = [URL]()
+		for index in 0..<moduleCount {
+			let moduleName = "Module\(index)"
+			let moduleDirectory = directory.appendingPathComponent(moduleName)
+			let fixtures = try createSwiftFixtureFiles(
+				atFilePaths: ["Type\(index).swift": """
+				@Instantiable
+				public final class Type\(index): Instantiable {
+				    public init() {}
+				}
+				"""],
+				in: moduleDirectory,
+				alongside: [],
+			)
+			let filePaths = Set(fixtures.map { NormalizedFilePath($0.path).path })
+			let parsed = try await parseModule(filePaths: filePaths, configurationFilePaths: filePaths, activeCompilationConditions: [])
+			let moduleInfoFile = directory.appendingPathComponent("\(moduleName).safedi")
+			try ModuleInfoFile(module: parsed.module.moduleInfo, moduleName: moduleName, seamSignatures: [], view: .empty)
+				.moduleInfoData
+				.write(to: moduleInfoFile)
+			moduleDirectories.append(moduleDirectory)
+			moduleInfoFiles.append(moduleInfoFile)
+		}
+		let expectedIDs = (0..<moduleCount).map { "Module\($0).Type\($0)" }.sorted()
+
+		let fromDirectories = try await QueryGraph.parse(["--include"] + moduleDirectories.map(\.path)).graph()
+		let fromModuleInfo = try await QueryGraph.parse(["--module-info"] + moduleInfoFiles.map(\.path)).graph()
+
+		#expect(fromDirectories.types.map(\.id).sorted() == expectedIDs)
+		#expect(fromModuleInfo.types.map(\.id).sorted() == expectedIDs)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesOutputOnlyWhenItsBytesChange_whenOutputIsNamed() async throws {
 		let directory = try temporaryDirectory()
 		let moduleDirectory = directory.appendingPathComponent("App")
