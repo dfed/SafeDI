@@ -339,23 +339,20 @@ public actor DependencyTreeGenerator {
 		} else {
 			[StoredSeamSignature]()
 		}
-		let plannedRoots: Result<[PlannedRoot], any Error>
+		let plans: [PlannedRoot]
 		let warnings: [SourceDiagnostic]
-		let dotTree: Result<String?, any Error>
+		let drawnTree: String?
 		do {
-			// The trees as the work below reads them, released at the end of this block.
+			// The trees as the work below reads them, released at the end of this block, or as an error in the roots' and
+			// seams' code leaves it, which is reported before any mock is built.
 			let trees = trees
-			(plannedRoots, warnings, dotTree) = await withTaskGroup(
-				of: Result<[PlannedRoot], any Error>.self,
-				returning: (Result<[PlannedRoot], any Error>, [SourceDiagnostic], Result<String?, any Error>).self,
+			(plans, warnings, drawnTree) = try await withThrowingTaskGroup(
+				of: [PlannedRoot].self,
+				returning: ([PlannedRoot], [SourceDiagnostic], String?).self,
 			) { taskGroup in
 				if request.generatesDependencyTrees, let trees {
 					taskGroup.addTask { [roots = trees.roots, rootsOfOtherModules = trees.rootsOfOtherModules] in
-						do {
-							return try await .success(self.plannedCode(of: roots, rootsOfOtherModules: rootsOfOtherModules))
-						} catch {
-							return .failure(error)
-						}
+						try await self.plannedCode(of: roots, rootsOfOtherModules: rootsOfOtherModules)
 					}
 				}
 				let warnings = if let trees, request.generatesDependencyTrees {
@@ -363,27 +360,18 @@ public actor DependencyTreeGenerator {
 				} else {
 					[SourceDiagnostic]()
 				}
-				// Drawn from the trees the code is generated from, before any mock is built. Its error is kept until the
-				// plans' is reported.
-				let dotTree: Result<String?, any Error>
-				do {
-					dotTree = if let trees, request.generatesDOTTree {
-						try await .success(generateDOTTree(of: trees.roots))
-					} else {
-						.success(nil)
-					}
-				} catch {
-					dotTree = .failure(error)
+				// Drawn from the trees the code is generated from, before any mock is built. Drawing a tree throws nothing.
+				let drawnTree: String? = if let trees, request.generatesDOTTree {
+					await generateDOTTree(of: trees.roots)
+				} else {
+					nil
 				}
-				let plannedRoots = await taskGroup.next() ?? .success([])
-				return (plannedRoots, warnings, dotTree)
+				let plans = try await taskGroup.next() ?? []
+				return (plans, warnings, drawnTree)
 			}
 		}
 		// A read, not an assignment, so the optimizer cannot keep the trees past this point.
 		_ = consume trees
-		// An error in the roots' and seams' code is reported before any mock is built.
-		let plans = try plannedRoots.get()
-		let drawnTree = try dotTree.get()
 		// The roots' plans are spelled in a child task while the mocks are made.
 		async let roots = Self.spelled(plans)
 		var mocks: MockGenerationResult?
@@ -487,16 +475,16 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// The DOT graph of the trees `rootScopeGenerators` root.
-	private func generateDOTTree(of rootScopeGenerators: [RootScopeInfo]) async throws -> String {
-		let dependencyTree = try await withThrowingTaskGroup(
+	private func generateDOTTree(of rootScopeGenerators: [RootScopeInfo]) async -> String {
+		let dependencyTree = await withTaskGroup(
 			of: String.self,
 			returning: String.self,
 		) { taskGroup in
 			for rootInfo in rootScopeGenerators {
-				taskGroup.addTask { try await rootInfo.scopeGenerator.generateDOT() }
+				taskGroup.addTask { await rootInfo.scopeGenerator.generateDOT() }
 			}
 			var generatedRoots = [String]()
-			for try await generatedRoot in taskGroup {
+			for await generatedRoot in taskGroup {
 				generatedRoots.append(generatedRoot)
 			}
 			return generatedRoots.removingEmpty().sorted().joined(separator: "\n\n")
