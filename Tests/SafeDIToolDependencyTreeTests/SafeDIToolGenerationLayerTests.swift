@@ -24,8 +24,8 @@ import Testing
 @testable import SafeDIToolLibrary
 @testable import SafeDIToolTestSupport
 
-/// The layers of work a run of `generate` computes: the signatures of each declaration map's seams, the tree of each
-/// root and seam, and each module's mock scopes. One driver computes each once and hands it down, so a run that writes
+/// The layers of work a run of `generate` computes: the signatures of each declaration map's seams, the proof of each
+/// declaration map's access, the tree of each root and seam, and each module's mock scopes. One driver computes each once and hands it down, so a run that writes
 /// code, mocks and a DOT graph computes none of them twice, and a module whose public mocks the run calls builds its mock
 /// scopes once for every plan the run asks of it. Counted, not timed, so that the checks are the same on every machine and every run.
 struct SafeDIToolGenerationLayerTests: ~Copyable {
@@ -80,7 +80,9 @@ struct SafeDIToolGenerationLayerTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_computesEachLayerOnce_whenRunCallsForeignSeam() async throws {
 		// `App` generates the seam `Screen` and calls `Feature`'s seam `Service`, writes a mock and the DOT graph. Each
-		// module's run computes the signatures of each module's seams it reads once, and builds each tree it generates once.
+		// module's run computes the signatures of its own seams once, reads `Service`'s from `Feature`'s module info
+		// rather than computing it, and builds each tree it generates once. Each run proves its declarations' access
+		// once, for its seam's signature and its public mock context alike.
 		var output: MultiModuleTestOutput?
 		let layers = try await Self.countLayers {
 			output = try await executeSafeDIToolMultiModuleTest(
@@ -92,9 +94,10 @@ struct SafeDIToolGenerationLayerTests: ~Copyable {
 		}
 		#expect(layers == [
 			"Feature: seam signatures of Feature": 1,
+			"Feature: access proof of Feature": 1,
 			"Feature: tree of Service": 1,
-			"App: seam signatures of Feature": 1,
 			"App: seam signatures of App": 1,
+			"App: access proof of App": 1,
 			"App: tree of Root": 1,
 			"App: tree of Screen": 1,
 			"App: mock scopes of App": 1,
@@ -109,6 +112,32 @@ struct SafeDIToolGenerationLayerTests: ~Copyable {
 		    Screen -- "model: Model"
 		}
 		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_provesNoAccess_whenModuleCallsForeignSeamAndGeneratesNoSeamOrPublicMock() async throws {
+		// `App`'s root calls `Feature`'s seam `Service`, whose signature `App` reads from `Feature`'s module info. `App`
+		// generates no seam and declares no public mock, so nothing in its run reads a proof of its declarations' access.
+		let layers = try await Self.countLayers {
+			_ = try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.foreignSeamModules[0],
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+						"import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service"]),
+					], dependencies: ["Feature"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		#expect(layers == [
+			"Feature: seam signatures of Feature": 1,
+			"Feature: access proof of Feature": 1,
+			"Feature: tree of Service": 1,
+			"App: seam signatures of App": 1,
+			"App: tree of Root": 1,
+		])
 	}
 
 	@Test
@@ -141,6 +170,8 @@ struct SafeDIToolGenerationLayerTests: ~Copyable {
 		#expect(layers == [
 			"Feature: seam signatures of Feature": 1,
 			"Feature: seam signatures of Feature in its callers’ view": 1,
+			"Feature: access proof of Feature": 1,
+			"Feature: access proof of Feature in its callers’ view": 1,
 			"Feature: tree of Service": 1,
 			"Feature: mock scopes of Feature": 1,
 		])
@@ -153,7 +184,8 @@ struct SafeDIToolGenerationLayerTests: ~Copyable {
 		// configuration adds `Vendor`'s directory, which `Feature`'s callers cannot see. `Feature`'s run builds its mock
 		// scopes once for its mocks, once for the plans of both public mocks, and once over its callers' view for each
 		// public mock. `App`'s mock calls both public mocks, so its run computes `Feature`'s plans in one call, which builds
-		// `Feature`'s mock scopes once for both.
+		// `Feature`'s mock scopes once for both. Each of those generators proves its declarations' access once: `Feature`'s
+		// run over its own and over its callers' view for each public mock, and `App`'s run over its own and `Feature`'s.
 		let layers = try await Self.countLayers {
 			_ = try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -179,8 +211,11 @@ struct SafeDIToolGenerationLayerTests: ~Copyable {
 		}
 		#expect(layers == [
 			"Feature: mock scopes of Feature": 4,
+			"Feature: access proof of Feature": 3,
 			"App: mock scopes of App": 1,
 			"App: mock scopes of Feature": 1,
+			"App: access proof of App": 1,
+			"App: access proof of Feature": 1,
 		])
 	}
 
@@ -215,6 +250,8 @@ struct SafeDIToolGenerationLayerTests: ~Copyable {
 			let layerDescription = switch layer {
 			case let .seamSignatures(moduleName, inCallersView):
 				"seam signatures of \(moduleName ?? "nil")\(inCallersView ? " in its callers’ view" : "")"
+			case let .accessProof(moduleName, inCallersView):
+				"access proof of \(moduleName ?? "nil")\(inCallersView ? " in its callers’ view" : "")"
 			case let .dependencyTree(type):
 				"tree of \(type.asSource)"
 			case let .mockScopes(moduleName):

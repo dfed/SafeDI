@@ -18,20 +18,39 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// A scope of a dependency tree whose code starts generating as soon as the tree exists, rather than when the scope
-/// above it asks for it. A running task holds its code’s async frames, so starting every scope’s code at once ran the
-/// frames of most of a tree together; the tests count the starts to check that only scopes of large subtrees, and the
-/// small subtrees directly beneath them, start early. Handed to `observer`, which the tests set, never the tool.
+/// A task on which the code of a dependency tree’s scopes starts generating as soon as the tree exists, rather than when
+/// the scope above each asks for it. A running task holds its code’s async frames, so starting every scope’s code at
+/// once ran the frames of most of a tree together; the tests count the tasks to check that only scopes of large
+/// subtrees start early, each on a task of its own, and the small subtrees directly beneath them in groups, one task
+/// each. Handed to `observer`, which the tests set, never the tool.
 public enum CodeTaskStart {
-	/// Called once for each scope whose code starts early, when set: by the tests, never by the tool.
+	/// Called once for each task that starts scopes’ code early, when set: by the tests, never by the tool.
 	@TaskLocal public static var observer: (@Sendable () -> Void)?
 
-	/// Tells `observer`, when set, that a scope’s code started early.
+	/// Tells `observer`, when set, that a task started scopes’ code early.
 	static func record() {
 		if let observer {
 			observer()
 		}
 	}
+
+	/// Orders the early starts, when set: by the tests, never by the tool, which check that the order in which the
+	/// early starts finish never reaches what `generate` reports.
+	@TaskLocal public static var ordering: (any CodeTaskStartOrdering)?
+}
+
+/// Holds each early start until its turn, and the roots’ code until every early start has finished, so a test can
+/// force the order in which the early starts finish. Set as `CodeTaskStart.ordering` by the tests, never by the tool.
+public protocol CodeTaskStartOrdering: Sendable {
+	/// Called once for each scope whose code starts early, as it starts.
+	func registerStart()
+	/// Awaited by each early start before it generates its code; `finish` is called once it has.
+	func waitForTurn() async -> Int
+	/// Called once the early start that `waitForTurn` returned `turn` to has generated its code, or thrown.
+	func finish(_ turn: Int) async
+	/// Awaited before the roots’ code is asked for: lets each registered start take its turn, in the order the test
+	/// chooses, and returns once every one has finished.
+	func runEveryStart() async
 }
 
 /// The code tasks the generators of a root’s dependency tree still hold once its code is generated. A task keeps the

@@ -189,6 +189,11 @@ def _safedi_compile_impl(ctx):
         ctx.actions.declare_file("%s_Mocks%d.swift" % (ctx.label.name, index))
         for index in range(1, 33)
     ] if ctx.attr.split_mocks else []
+
+    # The `.safedi` files beneath this module that the run did not open,
+    # which Bazel's local action cache then leaves out of the action's key,
+    # so an edit beneath reruns only the actions that read what changed.
+    unused_inputs = ctx.actions.declare_file(ctx.label.name + "_unused_inputs.txt")
     input_csv = _write_csv(ctx, ctx.label.name + "_sources.csv", ctx.files.srcs)
 
     dependency_module_info_files = [
@@ -202,7 +207,8 @@ def _safedi_compile_impl(ctx):
 
     # Every module beneath this one, whichever of them `deps` lists. Which
     # of them SafeDITool reads depends on this module's sources, which
-    # analysis cannot see, so every action gets them all as inputs.
+    # analysis cannot see, so every action gets them all as inputs, and
+    # the run lists those it did not open in `unused_inputs`.
     module_infos_beneath = depset(transitive = module_infos_of_dependencies)
 
     arguments = [
@@ -215,6 +221,13 @@ def _safedi_compile_impl(ctx):
         # this rule writes to the CSV, so the generated `#sourceLocation`
         # directives can name them and stay free of machine-specific paths.
         "--compiler-receives-input-paths-unchanged",
+        # Every action is given the `.safedi` of every module beneath it
+        # (`module_infos_beneath`), so a view can name the modules it
+        # carries instead of copying their declarations: each reader finds
+        # them in the modules' own files.
+        "--module-info-views-refer-to-modules",
+        "--unused-inputs-list-output",
+        unused_inputs.path,
     ]
     if mock_files:
         arguments.append("--split-combined-output-mocks")
@@ -276,7 +289,8 @@ def _safedi_compile_impl(ctx):
         executable = ctx.toolchains[_SAFEDITOOL_TOOLCHAIN_TYPE].safeditool,
         toolchain = _SAFEDITOOL_TOOLCHAIN_TYPE,
         inputs = depset(ctx.files.srcs + [input_csv] + extra_inputs, transitive = [module_infos_beneath]),
-        outputs = [combined, module_info] + mock_files,
+        outputs = [combined, module_info, unused_inputs] + mock_files,
+        unused_inputs_list = unused_inputs,
         arguments = arguments,
         mnemonic = "SafeDI",
         progress_message = "SafeDI compile for %{label}",

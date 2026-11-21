@@ -39,7 +39,7 @@ struct GraphFuzzerRelease: Hashable, Sendable {
 	}
 
 	/// - Parameters:
-	///   - name: The release's name in reports, such as `2.2.0`.
+	///   - name: The release's name in reports, such as `2.3.0`.
 	///   - tool: How its tool runs.
 	///   - runtimeSource: Its runtime and macros, or `nil` for this tree's.
 	init(name: String, tool: Tool, runtimeSource: DifferentialValueRuntimeSource?) {
@@ -54,6 +54,41 @@ struct GraphFuzzerRelease: Hashable, Sendable {
 
 	/// This tree: its generator in the test process, compiled against its own runtime and macros.
 	static let currentTree = GraphFuzzerRelease(name: "this tree", tool: .inProcess, runtimeSource: nil)
+}
+
+/// A corpus release acceptance draws its graphs from: the base corpus, the seam corpus (`generateDependencyTree`) or the
+/// public mock corpus (`generateMockPublic`), each drawn as the graph fuzzer draws it.
+enum GraphFuzzerReleaseAcceptanceCorpus: String, CaseIterable, Sendable {
+	case base
+	case seam
+	case publicMock = "public-mock"
+
+	/// The generator features that draw the corpus's graphs.
+	var features: Set<GraphFuzzerGeneratorFeature> {
+		switch self {
+		case .base:
+			[]
+		case .seam:
+			[.generateDependencyTree]
+		case .publicMock:
+			[.generateMockPublic]
+		}
+	}
+
+	/// The samples each instantiator with forwarded properties is called with in `fixture`, a graph of the corpus drawn
+	/// storing every parameter: the base corpus value oracle's, or those the seam and public mock corpora's value
+	/// oracles register for the draws whose instantiators forward a value.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func forwardedPropertiesSamples(of fixture: GraphFuzzerFixture) -> [DifferentialValueSample] {
+		switch self {
+		case .base:
+			GraphFuzzerSampleValues(fixture: fixture, model: GraphFuzzerMockMirrorModel(fixture: fixture)).forwardedPropertiesSamples
+		case .seam:
+			fixture.holeDrawForwardedPropertiesSamples + fixture.forwardedLabelAcrossSeamCallSamples
+		case .publicMock:
+			fixture.placeInFillInnerScreenSamples
+		}
+	}
 }
 
 /// What a release did with a graph: the tool rejected it, or it generated files, which were compiled with the fixture
@@ -325,7 +360,11 @@ enum GraphFuzzerReleaseAcceptance {
 		case .inProcess:
 			try await GraphFuzzerOracle.toolOutcome(of: fixture)
 		case let .executable(toolURL):
-			try await executableToolOutcome(of: fixture, toolURL: toolURL, filesToDelete: &filesToDelete)
+			if let modules = fixture.modules {
+				try await executableSplitToolOutcome(of: fixture, modules: modules, toolURL: toolURL, filesToDelete: &filesToDelete)
+			} else {
+				try await executableToolOutcome(of: fixture, toolURL: toolURL, filesToDelete: &filesToDelete)
+			}
 		}
 		switch toolOutcome {
 		case let .rejected(diagnostics):
@@ -342,11 +381,11 @@ enum GraphFuzzerReleaseAcceptance {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	static func valueGraph(
 		of fixture: GraphFuzzerFixture,
+		corpus: GraphFuzzerReleaseAcceptanceCorpus = .base,
 		older: (release: GraphFuzzerRelease, generatedFiles: [String: String]),
 		current: (release: GraphFuzzerRelease, generatedFiles: [String: String]),
 		probes: [DifferentialValueProbe],
 	) -> DifferentialValueGraph {
-		let samples = GraphFuzzerSampleValues(fixture: fixture, model: GraphFuzzerMockMirrorModel(fixture: fixture))
 		func path(_ side: (release: GraphFuzzerRelease, generatedFiles: [String: String])) -> DifferentialValuePath {
 			DifferentialValuePath(modules: DifferentialValuePath(fixture: fixture, generatedFiles: side.generatedFiles).modules, runtimeSource: side.release.runtimeSource)
 		}
@@ -355,19 +394,22 @@ enum GraphFuzzerReleaseAcceptance {
 			feature: path(current),
 			knownRight: path(older),
 			probes: probes,
-			samples: samples.forwardedPropertiesSamples,
+			samples: corpus.forwardedPropertiesSamples(of: fixture),
 		)
 	}
 
-	/// Judges `seeds` of the base corpus, each graph drawn storing every parameter, `older` against `current`, running
-	/// the graphs of each batch concurrently and comparing a batch's values in one comparison. The verdicts are in
-	/// seed order.
+	/// Judges `seeds` of `corpus`, each graph drawn storing every parameter, `older` against `current`, running the
+	/// graphs of each batch concurrently and comparing a batch's values in one comparison, under `batchLimits`; a graph
+	/// whose probe spends those traversals is compared again on its own under `DifferentialValueLimits.isolatedFuzzerGraph`.
+	/// The verdicts are in seed order.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	static func verdicts(
 		forSeeds seeds: [UInt64],
+		of corpus: GraphFuzzerReleaseAcceptanceCorpus = .base,
 		older: GraphFuzzerRelease,
 		current: GraphFuzzerRelease = .currentTree,
 		batchSize: Int = 25,
+		batchLimits: DifferentialValueLimits = DifferentialValueLimits(),
 	) async throws -> [(seed: UInt64, verdict: GraphFuzzerReleaseVerdict)] {
 		await ProcessSlots.shared.takePlaceInLine(for: Test.current?.id)
 		let batches = stride(from: 0, to: seeds.count, by: batchSize).map { Array(seeds[$0..<min($0 + batchSize, seeds.count)]) }
@@ -375,7 +417,7 @@ enum GraphFuzzerReleaseAcceptance {
 		try await withThrowingTaskGroup(of: [(seed: UInt64, verdict: GraphFuzzerReleaseVerdict)].self) { group in
 			for batch in batches {
 				group.addTask {
-					try await batchVerdicts(forSeeds: batch, older: older, current: current)
+					try await batchVerdicts(forSeeds: batch, of: corpus, older: older, current: current, limits: batchLimits)
 				}
 			}
 			for try await batchVerdicts in group {
@@ -388,8 +430,10 @@ enum GraphFuzzerReleaseAcceptance {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private static func batchVerdicts(
 		forSeeds seeds: [UInt64],
+		of corpus: GraphFuzzerReleaseAcceptanceCorpus,
 		older: GraphFuzzerRelease,
 		current: GraphFuzzerRelease,
+		limits: DifferentialValueLimits,
 	) async throws -> [(seed: UInt64, verdict: GraphFuzzerReleaseVerdict)] {
 		var filesToDelete = [URL]()
 		defer {
@@ -401,7 +445,7 @@ enum GraphFuzzerReleaseAcceptance {
 			for seed in seeds {
 				group.addTask {
 					var filesToDelete = [URL]()
-					let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, storingEveryParameter: true)
+					let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: corpus.features, storingEveryParameter: true)
 					let olderRun = try await run(older, over: fixture, filesToDelete: &filesToDelete)
 					let currentRun = try await run(current, over: fixture, filesToDelete: &filesToDelete)
 					let classification = classify(older: olderRun, current: currentRun) { fixture.differentialValueProbes(generatedFiles: $0) }
@@ -411,7 +455,7 @@ enum GraphFuzzerReleaseAcceptance {
 					else {
 						return (seed, classification, nil, filesToDelete)
 					}
-					let graph = valueGraph(of: fixture, older: (older, olderGeneratedFiles), current: (current, currentGeneratedFiles), probes: probes)
+					let graph = valueGraph(of: fixture, corpus: corpus, older: (older, olderGeneratedFiles), current: (current, currentGeneratedFiles), probes: probes)
 					return (seed, classification, graph, filesToDelete)
 				}
 			}
@@ -423,10 +467,39 @@ enum GraphFuzzerReleaseAcceptance {
 			return classifications.sorted { $0.seed < $1.seed }
 		}
 		let graphs = classifications.compactMap(\.graph)
-		let comparisons = graphs.isEmpty ? [] : try await DifferentialValueOracle.compare(graphs: graphs, filesToDelete: &filesToDelete) ?? []
+		let comparisons = graphs.isEmpty ? [] : try await DifferentialValueOracle.compare(graphs: graphs, limits: limits, filesToDelete: &filesToDelete) ?? []
 		var comparisonByName = [String: Result<DifferentialValueComparison, DifferentialValueOracleError>]()
 		for comparison in comparisons {
 			comparisonByName[comparison.name] = comparison.result
+		}
+		// A graph whose probe spent the batch's traversals is compared again on its own with the budget the corpora give
+		// the seeds they isolate (`DifferentialValueLimits.isolatedFuzzerGraph`), so that its verdict is a comparison
+		// rather than a harness failure, while every other graph keeps the batch's budget and speed.
+		let graphsSpendingTraversals = graphs.filter { graph in
+			guard case let .failure(error) = comparisonByName[graph.name] else { return false }
+			return error.spentTraversals
+		}
+		if !graphsSpendingTraversals.isEmpty {
+			let isolatedComparisons = try await withThrowingTaskGroup(of: (name: String, result: Result<DifferentialValueComparison, DifferentialValueOracleError>?, filesToDelete: [URL]).self) { group in
+				for graph in graphsSpendingTraversals {
+					group.addTask {
+						var filesToDelete = [URL]()
+						let comparison = try await DifferentialValueOracle.compare(graphs: [graph], limits: .isolatedFuzzerGraph, filesToDelete: &filesToDelete)?.first
+						return (graph.name, comparison?.result, filesToDelete)
+					}
+				}
+				var isolatedComparisons = [(name: String, result: Result<DifferentialValueComparison, DifferentialValueOracleError>?)]()
+				for try await isolated in group {
+					filesToDelete += isolated.filesToDelete
+					isolatedComparisons.append((isolated.name, isolated.result))
+				}
+				return isolatedComparisons
+			}
+			for (name, result) in isolatedComparisons {
+				if let result {
+					comparisonByName[name] = result
+				}
+			}
 		}
 		return classifications.map { seed, classification, graph in
 			switch classification {
@@ -490,11 +563,95 @@ enum GraphFuzzerReleaseAcceptance {
 			generatedFiles[fileName] = try normalize(String(contentsOf: outputDirectory.appendingPathComponent(fileName), encoding: .utf8))
 		}
 		let warnings = (scan.stderr + generate.stderr).split(separator: "\n").filter { $0.contains("warning:") }.map { normalize(String($0)) }
-		return .accepted(generatedFiles: generatedFiles, warnings: warnings)
+		// The callers this tree's run adds (`GraphFuzzerOracle.toolRun(of:)`), so that both releases' code is compiled with
+		// the same hand-written calls of what it generated.
+		return .accepted(generatedFiles: GraphFuzzerOracle.addingSeamCallers(to: generatedFiles, seamTypeAccess: fixture.seamTypeAccess), warnings: warnings)
 	}
 
-	/// Compiles `fixture` and `generatedFiles` into an object file against `runtimeSource`'s runtime and macros, the
-	/// runtime the value comparator compiles, so that a release's code compiles against that release's `SafeDI`.
+	/// Runs a release's built `SafeDITool` over `fixture`, a graph split across modules, as Bazel runs it and as this
+	/// tree's run does (`GraphFuzzerOracle.toolRun(of:)`, `.moduleInfo`): one `generate` per module, in dependency order,
+	/// over a CSV of the module's files, naming its module and, unless the module has none, its package, writing one
+	/// combined output and the module's `.safedi`, and reading the `.safedi` of each module the module lists
+	/// (`GraphFuzzerFixture.dependencyLists(modules:integration:listsTransitiveDependencies:)`). Each combined output is
+	/// decomposed into the files one module writes, keyed by the module's name and the file's (`FuzzFeature/Type+SafeDI.swift`),
+	/// and given the callers this tree's run adds. The first module whose `generate` fails rejects the graph.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func executableSplitToolOutcome(of fixture: GraphFuzzerFixture, modules: [GraphFuzzerModule], toolURL: URL, filesToDelete: inout [URL]) async throws -> GraphFuzzerToolOutcome {
+		guard FileManager.default.isExecutableFile(atPath: toolURL.path) else {
+			throw GraphFuzzerInfrastructureError(description: "No SafeDITool executable at \(toolURL.path).")
+		}
+		let directory = TestTemporaryDirectory.uniquePath(prefix: "safedi-release-acceptance-tool-")
+		filesToDelete.append(directory)
+		let moduleInfoDirectory = directory.appendingPathComponent("ModuleInfo")
+		let inputsDirectory = directory.appendingPathComponent("Inputs")
+		let outputDirectory = directory.appendingPathComponent("Output")
+		for subdirectory in [moduleInfoDirectory, inputsDirectory, outputDirectory] {
+			try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
+		}
+		let normalize = GraphFuzzerOracle.normalizer(fixtureDirectory: directory.path)
+		let presentModules = Set(modules)
+		let dependencyLists = fixture.dependencyLists(modules: modules, integration: .moduleInfo, listsTransitiveDependencies: false)
+		var generatedFiles = [String: String]()
+		var warnings = [String]()
+		for module in GraphFuzzerModule.allCases where presentModules.contains(module) {
+			// Laid out as the multi-module harness lays a module out, so that the paths the generated code cites are spelled
+			// alike under both releases.
+			let sourceDirectory = directory.appendingPathComponent(module.packageName).appendingPathComponent("Sources").appendingPathComponent(module.name)
+			var paths = [String]()
+			for index in modules.indices where modules[index] == module {
+				let file = sourceDirectory.appendingPathComponent(fixture.fileNames[index])
+				try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+				try fixture.swiftFileContent[index].write(to: file, atomically: true, encoding: .utf8)
+				paths.append(file.path)
+			}
+			let inputsFile = inputsDirectory.appendingPathComponent("\(module.name).csv")
+			try paths.joined(separator: ",").write(to: inputsFile, atomically: true, encoding: .utf8)
+			let combinedOutput = outputDirectory.appendingPathComponent("\(module.name).swift")
+			var arguments = [
+				"generate", inputsFile.path,
+				"--combined-output", combinedOutput.path,
+				"--compiler-receives-input-paths-unchanged",
+				"--module-info-output", moduleInfoDirectory.appendingPathComponent("\(module.name).safedi").path,
+				"--module-name", module.name,
+			]
+			if !fixture.modulesOmittingPackageName.contains(module) {
+				arguments += ["--package-name", module.packageName]
+			}
+			let dependencies = dependencyLists[module] ?? []
+			if !dependencies.isEmpty {
+				let dependenciesFile = moduleInfoDirectory.appendingPathComponent("\(module.name)-dependencies.csv")
+				try dependencies
+					.map { moduleInfoDirectory.appendingPathComponent("\($0.name).safedi").path }
+					.joined(separator: ",")
+					.write(to: dependenciesFile, atomically: true, encoding: .utf8)
+				arguments += ["--dependent-module-info-file-path", dependenciesFile.path]
+			}
+			let generate = try await runProcess(toolURL, arguments: arguments)
+			guard generate.exitCode == 0 else {
+				return .rejected(diagnostics: normalize(generate.stderr))
+			}
+			for (fileName, contents) in GraphFuzzerOracle.decomposingCombinedOutput(normalize(try String(contentsOf: combinedOutput, encoding: .utf8))) {
+				generatedFiles["\(module.name)/\(fileName)"] = contents
+			}
+			warnings += generate.stderr.split(separator: "\n").filter { $0.contains("warning:") }.map { normalize(String($0)) }
+		}
+		return .accepted(
+			generatedFiles: GraphFuzzerOracle.addingOverrideClosureCallers(
+				to: GraphFuzzerOracle.addingPublicMockCallers(
+					to: GraphFuzzerOracle.addingSeamCallers(to: generatedFiles, seamTypeAccess: fixture.seamTypeAccess, modules: presentModules),
+					of: fixture,
+				),
+				of: fixture,
+			),
+			warnings: warnings,
+		)
+	}
+
+	/// Compiles `fixture` and `generatedFiles` against `runtimeSource`'s runtime and macros, the runtime the value
+	/// comparator compiles, so that a release's code compiles against that release's `SafeDI`: each module of the graph
+	/// as the value comparator compiles it (`DifferentialValuePath(fixture:generatedFiles:)`: its package, or none, its
+	/// conditions, and the modules beneath it), in dependency order, into an object file, until one does not compile. A
+	/// graph in one module is one module, in the seam module's package.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private static func compile(
 		_ fixture: GraphFuzzerFixture,
@@ -505,25 +662,48 @@ enum GraphFuzzerReleaseAcceptance {
 		let artifacts = try await DifferentialValueOracle.runtimeArtifacts(for: runtimeSource)
 		let directory = TestTemporaryDirectory.uniquePath(prefix: "safedi-release-acceptance-compile-")
 		filesToDelete.append(directory)
-		var sources = [URL]()
-		for (subdirectory, files) in [
-			(GraphFuzzerReleaseCompilation.fixtureDirectoryName, zip(fixture.fileNames, fixture.swiftFileContent).map { (GraphFuzzerReleaseCompilation.fixtureFileNamePrefix + $0, $1) }),
-			(GraphFuzzerReleaseCompilation.generatedDirectoryName, generatedFiles.sorted { $0.key < $1.key }.map { ($0.key, $0.value) }),
-		] {
-			let subdirectoryURL = directory.appendingPathComponent(subdirectory)
-			try FileManager.default.createDirectory(at: subdirectoryURL, withIntermediateDirectories: true)
-			for (fileName, content) in files {
-				let file = subdirectoryURL.appendingPathComponent(fileName.replacingOccurrences(of: "/", with: "_"))
-				// A generated file's `#sourceLocation` names the fixture file it was generated from, which the tool's run
-				// spelled `<fixture-directory>/…`: spelled under a directory of its own, so that what the compiler reports
-				// there is told apart as generated code, and under the fixture file's own name, which no compiled file has.
-				let resolvedContent = content.replacingOccurrences(of: "<fixture-directory>", with: directory.appendingPathComponent(GraphFuzzerReleaseCompilation.sourceLocationDirectoryName).path)
-				try ("import SafeDI\n" + resolvedContent).write(to: file, atomically: true, encoding: .utf8)
-				sources.append(file)
+		// A generated file's `#sourceLocation` names the fixture file it was generated from, which the tool's run spelled
+		// `<fixture-directory>/…`: spelled under a directory of its own, so that what the compiler reports there is told
+		// apart as generated code, and under the fixture file's own name, which no compiled file has.
+		let sourceLocationDirectory = directory.appendingPathComponent(GraphFuzzerReleaseCompilation.sourceLocationDirectoryName).path
+		let path = DifferentialValuePath(fixture: fixture, generatedFiles: generatedFiles)
+		var moduleDirectoriesByName = [String: URL]()
+		var stderr = ""
+		for module in path.modules {
+			let moduleDirectory = directory.appendingPathComponent(module.name)
+			var sources = [URL]()
+			for (subdirectory, files) in [
+				(GraphFuzzerReleaseCompilation.fixtureDirectoryName, module.fixtureFiles.sorted { $0.key < $1.key }.map { (GraphFuzzerReleaseCompilation.fixtureFileNamePrefix + $0.key, $0.value) }),
+				(GraphFuzzerReleaseCompilation.generatedDirectoryName, module.generatedFiles.sorted { $0.key < $1.key }.map { ($0.key, $0.value) }),
+			] {
+				let subdirectoryURL = moduleDirectory.appendingPathComponent(subdirectory)
+				try FileManager.default.createDirectory(at: subdirectoryURL, withIntermediateDirectories: true)
+				for (fileName, content) in files {
+					let file = subdirectoryURL.appendingPathComponent(fileName.replacingOccurrences(of: "/", with: "_"))
+					let resolvedContent = content.replacingOccurrences(of: "<fixture-directory>", with: sourceLocationDirectory)
+					try ("import SafeDI\n" + resolvedContent).write(to: file, atomically: true, encoding: .utf8)
+					sources.append(file)
+				}
 			}
+			let result = try await compileSwift(
+				sources: sources,
+				outputDirectory: moduleDirectory,
+				artifacts: artifacts,
+				activeCompilationConditions: module.activeCompilationConditions + [module.mockConditionalCompilation].compactMap(\.self),
+				moduleName: module.name,
+				packageName: module.packageName,
+				emitsModule: true,
+				moduleSearchPaths: path.moduleNames(dependedOnBy: module).compactMap { moduleDirectoriesByName[$0] },
+				parsesAsLibrary: true,
+			)
+			stderr += result.stderr
+			// A module that does not compile leaves the modules above it nothing to import.
+			guard result.exitCode == 0 else {
+				return GraphFuzzerReleaseCompilation(exitCode: result.exitCode, stderr: stderr)
+			}
+			moduleDirectoriesByName[module.name] = moduleDirectory
 		}
-		let result = try await compileSwift(sources: sources, outputDirectory: directory, artifacts: artifacts, packageName: GraphFuzzerModule.seamModule.packageName, parsesAsLibrary: true)
-		return GraphFuzzerReleaseCompilation(exitCode: result.exitCode, stderr: result.stderr)
+		return GraphFuzzerReleaseCompilation(exitCode: 0, stderr: stderr)
 	}
 
 	// MARK: Diagnostics
@@ -541,9 +721,19 @@ enum GraphFuzzerReleaseAcceptance {
 		}
 	}
 
-	/// A tool warning's message, without the location before `warning: `.
-	private static func warningMessage(of warning: String) -> String {
-		warning.range(of: "warning: ").map { String(warning[$0.upperBound...]) } ?? warning
+	/// A tool warning's message: without the location before `warning: ` where a release's executable printed it, and
+	/// the `message` of the `SourceDiagnostic` this tree's run describes (`SourceDiagnostic(severity: …, message: "…",
+	/// fixIts: […])`), unescaped, so that a warning both releases report is one message.
+	static func warningMessage(of warning: String) -> String {
+		let messageMarker = "message: \""
+		let fixItsMarker = "\", fixIts: "
+		if warning.hasPrefix("SourceDiagnostic("), let messageStart = warning.range(of: messageMarker), let messageEnd = warning.range(of: fixItsMarker, options: .backwards), messageStart.upperBound <= messageEnd.lowerBound {
+			return String(warning[messageStart.upperBound..<messageEnd.lowerBound])
+				.replacingOccurrences(of: "\\\"", with: "\"")
+				.replacingOccurrences(of: "\\\\", with: "\\")
+		} else {
+			return warning.range(of: "warning: ").map { String(warning[$0.upperBound...]) } ?? warning
+		}
 	}
 
 	private static func quoted(errorLinesOf diagnostics: String) -> String {

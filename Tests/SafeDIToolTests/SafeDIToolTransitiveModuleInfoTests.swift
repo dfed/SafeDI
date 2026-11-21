@@ -169,7 +169,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		    }
 		}
 		"""])
-		#expect(output.modules["App"]?.generateOutput?.dependentModules.map(\.moduleName) == ["Base", "Left", "Right"])
+		#expect(output.modules["App"]?.generateOutput?.dependentModuleNames == ["Base", "Left", "Right"])
 	}
 
 	@Test(arguments: [
@@ -199,7 +199,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 			},
 			filesToDelete: &filesToDelete,
 		)
-		#expect(output.modules["App"]?.generateOutput?.dependentModules.map(\.moduleName) == ["Alpha", "Bravo", "Charlie", "Middle", "Xray", "Yankee", "Zulu"])
+		#expect(output.modules["App"]?.generateOutput?.dependentModuleNames == ["Alpha", "Bravo", "Charlie", "Middle", "Xray", "Yankee", "Zulu"])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Alpha)
 		import Alpha
@@ -388,7 +388,7 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		#endif
 		"""])
 		#expect(output.modules["App"]?.moduleInfoFile?.dependencyModuleNames == ["Middle"])
-		#expect(output.modules["App"]?.generateOutput?.dependentModules.map(\.moduleName) == ["Middle"])
+		#expect(output.modules["App"]?.generateOutput?.dependentModuleNames == ["Middle"])
 	}
 
 	@Test
@@ -421,6 +421,234 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 				moduleMembershipArguments: ["--transitive-module-info-file-path", modulesBeneathCSV.path],
 			)
 		}
+	}
+
+	// MARK: Tests – Views that refer to modules
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_generatesSameCode_whenViewsReferToModules() async throws {
+		let modules = Self.seamOverInnerOverDeep(middleDependencies: ["Inner"], appDependencies: ["Middle"])
+		let reference = try await executeSafeDIToolMultiModuleTest(
+			modules: modules,
+			integration: .moduleInfo,
+			compileVerification: .skipped,
+			modulesBeneath: { $0 },
+			filesToDelete: &filesToDelete,
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: modules,
+			integration: .moduleInfo,
+			modulesBeneath: { $0 },
+			viewsReferToModules: true,
+			filesToDelete: &filesToDelete,
+		)
+		for moduleName in ["Deep", "Inner", "Middle", "App"] {
+			#expect(output.modules[moduleName]?.generatedFiles == reference.modules[moduleName]?.generatedFiles)
+		}
+		#expect(output.modules["Middle"]?.moduleInfoFile?.view.declarations.isEmpty == true)
+		#expect(output.modules["Middle"]?.moduleInfoFile?.view.references.map(\.moduleName) == ["Deep", "Inner"])
+		#expect(output.modules["App"]?.moduleInfoFile?.view.declarations.isEmpty == true)
+		#expect(output.modules["App"]?.moduleInfoFile?.view.references.map(\.moduleName) == ["Deep", "Inner", "Middle"])
+		#expect(output.modules["App"]?.moduleInfoFile?.view.moduleGraph.map(\.moduleName) == reference.modules["App"]?.moduleInfoFile?.view.moduleGraph.map(\.moduleName))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsUnresolvableModuleReference_whenModuleBeneathIsNotPassed() async {
+		await assertThrowsError(containing: "SafeDI could not find the module info of module `Inner`, which `") {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.seamOverInnerOverDeep(middleDependencies: ["Inner"], appDependencies: ["Middle"]),
+				integration: .moduleInfo,
+				compileVerification: .skipped,
+				modulesBeneath: { moduleNames in moduleNames.filter { $0 != "Inner" } },
+				viewsReferToModules: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsDisagreement_whenReferencedModuleChangedAfterReferringModuleWasBuilt() async throws {
+		let stale = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.seamOverInnerOverDeep(middleDependencies: ["Inner"], appDependencies: ["Middle"]),
+			integration: .moduleInfo,
+			compileVerification: .skipped,
+			modulesBeneath: { $0 },
+			viewsReferToModules: true,
+			filesToDelete: &filesToDelete,
+		)
+		let staleMiddlePath = try #require(stale.modules["Middle"]?.moduleInfoOutputPath)
+		// `Deep` gains a type after `Middle`'s file was written, so `Middle`'s reference to `Deep` no longer matches `Deep`'s own
+		// file. (Each run writes its files under a fixture root of its own, which the declarations' paths name, so the
+		// reference would not match even without the new type: the test checks that a stale reference is reported, which
+		// either difference makes it.)
+		var modules = Self.seamOverInnerOverDeep(middleDependencies: ["Inner"], appDependencies: ["Middle"])
+		modules[0] = ModuleFixture(name: "Deep", packageName: "Base", swiftFileContent: [Self.clock, seamFixtureType(named: "Spare", declarations: [])])
+		await assertThrowsError(containing: "SafeDI was given two module infos that describe module `Deep` differently") {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: modules,
+				integration: .moduleInfo,
+				compileVerification: .skipped,
+				moduleInfoOverrides: ["Middle": staleMiddlePath],
+				modulesBeneath: { $0 },
+				viewsReferToModules: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesSameModuleInfoAbove_whenOnlyPositionsOfReferencedModuleChange() async throws {
+		let modules = Self.seamOverInnerOverDeep(middleDependencies: ["Inner"], appDependencies: ["Middle"])
+		var movedModules = modules
+		movedModules[1] = ModuleFixture(name: "Inner", packageName: "Base", swiftFileContent: [
+			"import Deep\n\n\n// A comment that moves every declaration beneath it.\n\n" + seamFixtureType(named: "InnerScreen", declarations: ["@Instantiated let clock: Clock"]),
+		], dependencies: ["Deep"])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .skipped, modulesBeneath: { $0 }, viewsReferToModules: true, filesToDelete: &filesToDelete)
+		let moved = try await executeSafeDIToolMultiModuleTest(modules: movedModules, integration: .moduleInfo, compileVerification: .skipped, modulesBeneath: { $0 }, viewsReferToModules: true, filesToDelete: &filesToDelete)
+		// Each run writes under a fixture root of its own, which the declarations' paths and so the checksums name: the
+		// references are checked against each run's own files, and the files compared without the root and the checksums.
+		#expect(Self.withoutFixtureRoot(output, module: "Inner") != Self.withoutFixtureRoot(moved, module: "Inner"))
+		#expect(Self.ownEntryWithoutFixtureRoot(output, module: "Inner") == Self.ownEntryWithoutFixtureRoot(moved, module: "Inner"))
+		for run in [output, moved] {
+			for moduleName in ["Middle", "App"] {
+				#expect(Self.referencesMatchOwnEntries(in: run, module: moduleName))
+			}
+		}
+		#expect(Self.withoutFixtureRootOrChecksums(output, module: "Middle") == Self.withoutFixtureRootOrChecksums(moved, module: "Middle"))
+		#expect(Self.withoutFixtureRootOrChecksums(output, module: "App") == Self.withoutFixtureRootOrChecksums(moved, module: "App"))
+	}
+
+	@Test(arguments: [
+		[0, 1, 2, 3, 4, 5],
+		[5, 4, 3, 2, 1, 0],
+		[1, 3, 5, 0, 2, 4],
+		[4, 2, 0, 5, 3, 1],
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesSameModuleInfo_whateverOrderTheReferencedModulesArriveIn(permutation: [Int]) async throws {
+		// Six modules beneath, each declaring a seam, so `Middle`'s view refers to each, and `App` resolves each reference
+		// from the set in the order the permutation gives it.
+		let leafNames = ["Alpha", "Bravo", "Charlie", "Xray", "Yankee", "Zulu"]
+		func run(order: [Int], filesToDelete: inout [URL]) async throws -> MultiModuleTestOutput {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: leafNames.map { ModuleFixture(name: $0, packageName: "Base", swiftFileContent: [seamFixtureType(named: "\($0)Type", isSeam: true, declarations: [])]) } + [
+					ModuleFixture(name: "Middle", packageName: "Base", swiftFileContent: [
+						leafNames.map { "import \($0)" }.joined(separator: "\n") + "\n\n" + seamFixtureType(named: "Hub", isSeam: true, declarations: leafNames.map { "@Instantiated let \($0.lowercased()): \($0)Type" }),
+					], dependencies: leafNames),
+					ModuleFixture(name: "App", packageName: "App", swiftFileContent: ["import Middle\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let hub: Hub"])], dependencies: ["Middle"]),
+				],
+				integration: .moduleInfo,
+				compileVerification: .skipped,
+				modulesBeneath: { moduleNames in
+					let leaves = order.map { leafNames[$0] }
+					return leaves + moduleNames.filter { !leaves.contains($0) }
+				},
+				viewsReferToModules: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+		let output = try await run(order: permutation, filesToDelete: &filesToDelete)
+		let reference = try await run(order: [0, 1, 2, 3, 4, 5], filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.moduleInfoFile?.view.references.map(\.moduleName) == ["Alpha", "Bravo", "Charlie", "Middle", "Xray", "Yankee", "Zulu"])
+		#expect(Self.referencesMatchOwnEntries(in: output, module: "App"))
+		#expect(Self.withoutFixtureRootOrChecksums(output, module: "App") == Self.withoutFixtureRootOrChecksums(reference, module: "App"))
+		#expect(output.modules["App"]?.generatedFiles == reference.modules["App"]?.generatedFiles)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsUnresolvableModuleReference_whenNoModuleBeneathIsListed() async {
+		await assertThrowsError(containing: "SafeDI could not find the module info of module `Deep`, which `") {
+			try await ModuleReferenceResolver(transitiveModuleInfoListPath: nil).resolvingReferences(in: [(Self.fileReferringToDeep, "/App.safedi")])
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingTheFile_whenViewRefersToModuleAndAModuleBeneathCannotBeRead() async throws {
+		let unreadableModuleInfo = URL.temporaryFile.appendingPathExtension("safedi")
+		try Data("not a module info file".utf8).write(to: unreadableModuleInfo)
+		filesToDelete.append(unreadableModuleInfo)
+		let modulesBeneathCSV = URL.temporaryFile
+		try unreadableModuleInfo.path.write(to: modulesBeneathCSV, atomically: true, encoding: .utf8)
+		filesToDelete.append(modulesBeneathCSV)
+		await assertThrowsError(containing: "Could not read the SafeDI module info file at \(unreadableModuleInfo.path)") {
+			try await ModuleReferenceResolver(transitiveModuleInfoListPath: modulesBeneathCSV.path).resolvingReferences(in: [(Self.fileReferringToDeep, "/App.safedi")])
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsDisagreementNamingBothFiles_whenTwoModulesBeneathNameTheReferencedModule() async throws {
+		var paths = [String]()
+		for checksum: UInt64 in [1, 2] {
+			let path = URL.temporaryFile.appendingPathExtension("safedi")
+			try Self.moduleInfoFile(named: "Deep", ownEntryChecksum: checksum).moduleInfoData.write(to: path)
+			filesToDelete.append(path)
+			paths.append(path.path)
+		}
+		let modulesBeneathCSV = URL.temporaryFile
+		try paths.joined(separator: ",").write(to: modulesBeneathCSV, atomically: true, encoding: .utf8)
+		filesToDelete.append(modulesBeneathCSV)
+		await assertThrowsError("SafeDI was given two module infos that describe module `Deep` differently: \(paths.sorted().map { "`\($0)`" }.joined(separator: " and ")) were written against two different builds of `Deep`. Build `Deep` and the modules that depend on it again, so that every module info is written against the current one.") {
+			try await ModuleReferenceResolver(transitiveModuleInfoListPath: modulesBeneathCSV.path).resolvingReferences(in: [(Self.fileReferringToDeep, "/App.safedi")])
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func resolvingReferences_keepsFileUnchanged_whenItsViewRefersToNoModuleBesideFileThatRefersToOne() async throws {
+		let modulesBeneathCSV = try writeModulesBeneath([Self.moduleInfoFile(named: "Deep", ownEntryChecksum: 1)])
+		let resolved = try await ModuleReferenceResolver(transitiveModuleInfoListPath: modulesBeneathCSV).resolvingReferences(in: [
+			(Self.fileReferringToDeep, "/App.safedi"),
+			(Self.moduleInfoFile(named: "Zed"), "/Zed.safedi"),
+		])
+		#expect(resolved.map(\.path) == ["/App.safedi", "/Zed.safedi"])
+		#expect(resolved[0].file.view.references.isEmpty)
+		#expect(resolved[0].file.view.declarations.map(\.moduleName) == ["Deep"])
+		#expect(resolved[1].file.moduleName == "Zed")
+		#expect(resolved[1].file.view.references.isEmpty)
+		#expect(resolved[1].file.view.declarations.isEmpty)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func resolvingReferences_readsEachModuleBeneathOnce_whenSecondCallRefersToModuleFirstDidNot() async throws {
+		let modulesBeneathCSV = try writeModulesBeneath([
+			Self.moduleInfoFile(named: "Deep", ownEntryChecksum: 1),
+			Self.moduleInfoFile(named: "Other", ownEntryChecksum: 2),
+		])
+		let resolver = ModuleReferenceResolver(transitiveModuleInfoListPath: modulesBeneathCSV)
+		_ = try await resolver.resolvingReferences(in: [(Self.fileReferringToDeep, "/App.safedi")])
+		let headReadPathsAfterFirstCall = await resolver.headReadPaths
+		let fileReferringToOther = Self.moduleInfoFile(
+			named: "Middle",
+			view: ModuleInfoView(moduleGraph: [], declarations: [], references: [ViewedModuleReference(moduleName: "Other", checksum: 2)]),
+		)
+		let resolved = try await resolver.resolvingReferences(in: [(fileReferringToOther, "/Middle.safedi")])
+		#expect(resolved.map { $0.file.view.declarations.map(\.moduleName) } == [["Other"]])
+		#expect(await resolver.headReadPaths == headReadPathsAfterFirstCall)
+		#expect(headReadPathsAfterFirstCall.count == 2)
+	}
+
+	/// Writes each of `files` to a module info file of its own, and a list of them as a run's modules beneath names them,
+	/// and returns the list's path.
+	private mutating func writeModulesBeneath(_ files: [ModuleInfoFile]) throws -> String {
+		var paths = [String]()
+		for file in files {
+			let path = URL.temporaryFile.appendingPathExtension("safedi")
+			try file.moduleInfoData.write(to: path)
+			filesToDelete.append(path)
+			paths.append(path.path)
+		}
+		let modulesBeneathCSV = URL.temporaryFile
+		try paths.joined(separator: ",").write(to: modulesBeneathCSV, atomically: true, encoding: .utf8)
+		filesToDelete.append(modulesBeneathCSV)
+		return modulesBeneathCSV.path
 	}
 
 	// MARK: Tests – Mocks
@@ -1070,6 +1298,399 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 		}
+	}
+
+	// MARK: Tests – Rounds of reading
+
+	@Test(arguments: [
+		[0, 1, 2, 3, 4, 5],
+		[5, 4, 3, 2, 1, 0],
+		[2, 5, 0, 3, 1, 4],
+		[3, 0, 4, 1, 5, 2],
+		[1, 3, 5, 0, 2, 4],
+		[4, 2, 0, 5, 3, 1],
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsEveryLinkOfTheChain_whateverOrderTheModulesBeneathArriveIn(permutation: [Int]) async throws {
+		// Each link's type builds the next link's, which only the next module declares, so each round of reading finds one
+		// more module. The six modules the permutation moves are spread along the chain.
+		let linkNames = (1...22).map { "Link\($0 < 10 ? "0" : "")\($0)" }
+		let output = try await executeSafeDIToolMultiModuleTest(
+			// A module comes after the modules it lists, so the chain is listed from its end.
+			modules: linkNames.enumerated().reversed().map { index, name in
+				let nextName = index + 1 < linkNames.count ? linkNames[index + 1] : nil
+				return ModuleFixture(
+					name: name,
+					packageName: "Base",
+					swiftFileContent: [(nextName.map { "import \($0)\n\n" } ?? "") + seamFixtureType(named: "\(name)Type", declarations: nextName.map { ["@Instantiated let next: \($0)Type"] } ?? [])],
+					dependencies: nextName.map { [$0] } ?? [],
+				)
+			} + [
+				ModuleFixture(name: "App", packageName: "App", swiftFileContent: ["import Link01\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let first: Link01Type"])], dependencies: ["Link01"]),
+			],
+			integration: .moduleInfo,
+			modulesBeneath: { moduleNames in
+				let moved = permutation.map { linkNames[1 + 4 * $0] }
+				return moved + moduleNames.filter { !moved.contains($0) }
+			},
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generateOutput?.dependentModuleNames == linkNames.map { $0 as String? })
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Link01)
+		import Link01
+		#endif
+		#if canImport(Link02)
+		import Link02
+		#endif
+		#if canImport(Link03)
+		import Link03
+		#endif
+		#if canImport(Link04)
+		import Link04
+		#endif
+		#if canImport(Link05)
+		import Link05
+		#endif
+		#if canImport(Link06)
+		import Link06
+		#endif
+		#if canImport(Link07)
+		import Link07
+		#endif
+		#if canImport(Link08)
+		import Link08
+		#endif
+		#if canImport(Link09)
+		import Link09
+		#endif
+		#if canImport(Link10)
+		import Link10
+		#endif
+		#if canImport(Link11)
+		import Link11
+		#endif
+		#if canImport(Link12)
+		import Link12
+		#endif
+		#if canImport(Link13)
+		import Link13
+		#endif
+		#if canImport(Link14)
+		import Link14
+		#endif
+		#if canImport(Link15)
+		import Link15
+		#endif
+		#if canImport(Link16)
+		import Link16
+		#endif
+		#if canImport(Link17)
+		import Link17
+		#endif
+		#if canImport(Link18)
+		import Link18
+		#endif
+		#if canImport(Link19)
+		import Link19
+		#endif
+		#if canImport(Link20)
+		import Link20
+		#endif
+		#if canImport(Link21)
+		import Link21
+		#endif
+		#if canImport(Link22)
+		import Link22
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_first() -> Link01Type {
+		            func __safeDI_next() -> Link02Type {
+		                func __safeDI_next() -> Link03Type {
+		                    func __safeDI_next() -> Link04Type {
+		                        func __safeDI_next() -> Link05Type {
+		                            func __safeDI_next() -> Link06Type {
+		                                func __safeDI_next() -> Link07Type {
+		                                    func __safeDI_next() -> Link08Type {
+		                                        func __safeDI_next() -> Link09Type {
+		                                            func __safeDI_next() -> Link10Type {
+		                                                func __safeDI_next() -> Link11Type {
+		                                                    func __safeDI_next() -> Link12Type {
+		                                                        func __safeDI_next() -> Link13Type {
+		                                                            func __safeDI_next() -> Link14Type {
+		                                                                func __safeDI_next() -> Link15Type {
+		                                                                    func __safeDI_next() -> Link16Type {
+		                                                                        func __safeDI_next() -> Link17Type {
+		                                                                            func __safeDI_next() -> Link18Type {
+		                                                                                func __safeDI_next() -> Link19Type {
+		                                                                                    func __safeDI_next() -> Link20Type {
+		                                                                                        func __safeDI_next() -> Link21Type {
+		                                                                                            let next = Link22Type()
+		                                                                                            return Link21Type(next: next)
+		                                                                                        }
+		                                                                                        let next: Link21Type = __safeDI_next()
+		                                                                                        return Link20Type(next: next)
+		                                                                                    }
+		                                                                                    let next: Link20Type = __safeDI_next()
+		                                                                                    return Link19Type(next: next)
+		                                                                                }
+		                                                                                let next: Link19Type = __safeDI_next()
+		                                                                                return Link18Type(next: next)
+		                                                                            }
+		                                                                            let next: Link18Type = __safeDI_next()
+		                                                                            return Link17Type(next: next)
+		                                                                        }
+		                                                                        let next: Link17Type = __safeDI_next()
+		                                                                        return Link16Type(next: next)
+		                                                                    }
+		                                                                    let next: Link16Type = __safeDI_next()
+		                                                                    return Link15Type(next: next)
+		                                                                }
+		                                                                let next: Link15Type = __safeDI_next()
+		                                                                return Link14Type(next: next)
+		                                                            }
+		                                                            let next: Link14Type = __safeDI_next()
+		                                                            return Link13Type(next: next)
+		                                                        }
+		                                                        let next: Link13Type = __safeDI_next()
+		                                                        return Link12Type(next: next)
+		                                                    }
+		                                                    let next: Link12Type = __safeDI_next()
+		                                                    return Link11Type(next: next)
+		                                                }
+		                                                let next: Link11Type = __safeDI_next()
+		                                                return Link10Type(next: next)
+		                                            }
+		                                            let next: Link10Type = __safeDI_next()
+		                                            return Link09Type(next: next)
+		                                        }
+		                                        let next: Link09Type = __safeDI_next()
+		                                        return Link08Type(next: next)
+		                                    }
+		                                    let next: Link08Type = __safeDI_next()
+		                                    return Link07Type(next: next)
+		                                }
+		                                let next: Link07Type = __safeDI_next()
+		                                return Link06Type(next: next)
+		                            }
+		                            let next: Link06Type = __safeDI_next()
+		                            return Link05Type(next: next)
+		                        }
+		                        let next: Link05Type = __safeDI_next()
+		                        return Link04Type(next: next)
+		                    }
+		                    let next: Link04Type = __safeDI_next()
+		                    return Link03Type(next: next)
+		                }
+		                let next: Link03Type = __safeDI_next()
+		                return Link02Type(next: next)
+		            }
+		            let next: Link02Type = __safeDI_next()
+		            return Link01Type(next: next)
+		        }
+		        let first: Link01Type = __safeDI_first()
+		        self.init(first: first)
+		    }
+		}
+		"""])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsWhatTheMoreQualifiedTypeNeeds_whenALaterRoundReadsTheModuleDeclaringIt() async throws {
+		// `Child`, nested in `Outer`, builds an `Inner`, which Swift finds as `Outer.Inner` before the top-level `Inner`. The
+		// first round reads only the top-level one, and the module beneath that declares `Outer.Inner` is read for `Token`;
+		// what `Outer.Inner` builds is then read too.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Leaves", packageName: "Base", swiftFileContent: [seamFixtureType(named: "Leaf", declarations: [])]),
+				ModuleFixture(name: "Namespace", packageName: "Base", swiftFileContent: [
+					seamFixtureType(named: "Token", declarations: []),
+					"""
+					import Leaves
+
+					public enum Outer {}
+
+					extension Outer {
+					    @Instantiable
+					    public final class Inner: Instantiable {
+					        public init(leaf: Leaf) {
+					            self.leaf = leaf
+					        }
+
+					        @Instantiated let leaf: Leaf
+					    }
+					}
+					""",
+				], dependencies: ["Leaves"]),
+				ModuleFixture(name: "TopLevel", packageName: "Base", swiftFileContent: [seamFixtureType(named: "Inner", declarations: [])]),
+				ModuleFixture(name: "Feature", packageName: "Base", swiftFileContent: [
+					"""
+					import Namespace
+					import TopLevel
+
+					extension Outer {
+					    @Instantiable
+					    public final class Child: Instantiable {
+					        public init(inner: Inner, token: Token) {
+					            self.inner = inner
+					            self.token = token
+					        }
+
+					        @Instantiated let inner: Inner
+					        @Instantiated let token: Token
+					    }
+					}
+					""",
+					"import Namespace\n\n" + seamFixtureType(named: "Screen", declarations: ["@Instantiated let child: Outer.Child"]),
+				], dependencies: ["Namespace", "TopLevel"]),
+				ModuleFixture(name: "App", packageName: "App", swiftFileContent: ["import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screen: Screen"])], dependencies: ["Feature", "TopLevel"]),
+			],
+			integration: .moduleInfo,
+			modulesBeneath: { $0 },
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generateOutput?.dependentModuleNames == ["Feature", "Leaves", "Namespace", "TopLevel"])
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Leaves)
+		import Leaves
+		#endif
+		#if canImport(Namespace)
+		import Namespace
+		#endif
+		#if canImport(TopLevel)
+		import TopLevel
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_screen() -> Screen {
+		            func __safeDI_child() -> Outer.Child {
+		                func __safeDI_inner() -> Outer.Inner {
+		                    let leaf = Leaf()
+		                    return Outer.Inner(leaf: leaf)
+		                }
+		                let inner: Outer.Inner = __safeDI_inner()
+		                let token = Token()
+		                return Outer.Child(inner: inner, token: token)
+		            }
+		            let child: Outer.Child = __safeDI_child()
+		            return Screen(child: child)
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        self.init(screen: screen)
+		    }
+		}
+		"""])
+	}
+
+	// MARK: Tests – Unused inputs
+
+	@Test(arguments: [
+		[0, 1, 2, 3, 4, 5],
+		[5, 4, 3, 2, 1, 0],
+		[2, 5, 0, 3, 1, 4],
+		[3, 0, 4, 1, 5, 2],
+		[1, 3, 5, 0, 2, 4],
+		[4, 2, 0, 5, 3, 1],
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_listsEveryModuleBeneathItDoesNotList_whenModuleDeclaresNoTree(permutation: [Int]) async throws {
+		// `Middle`, the module listed, sorts between the modules only the set names, so that a list in the set's order, or
+		// with the listed module among them, differs from the one expected.
+		let leafNames = ["Alpha", "Bravo", "Charlie", "Xray", "Yankee", "Zulu"]
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: leafNames.map { ModuleFixture(name: $0, packageName: "Base", swiftFileContent: [seamFixtureType(named: "\($0)Type", declarations: [])]) } + [
+				ModuleFixture(name: "Middle", packageName: "Base", swiftFileContent: [
+					leafNames.map { "import \($0)" }.joined(separator: "\n") + "\n\n" + seamFixtureType(named: "Hub", declarations: leafNames.map { "@Instantiated let \($0.lowercased()): \($0)Type" }),
+				], dependencies: leafNames),
+				ModuleFixture(name: "App", packageName: "App", swiftFileContent: ["import Middle\n\n" + seamFixtureType(named: "Screen", declarations: ["@Instantiated let hub: Hub"])], dependencies: ["Middle"]),
+			],
+			integration: .moduleInfo,
+			modulesBeneath: { moduleNames in
+				let leaves = permutation.map { leafNames[$0] }
+				return leaves + moduleNames.filter { !leaves.contains($0) }
+			},
+			filesToDelete: &filesToDelete,
+		)
+		let moduleInfoDirectory = output.fixtureRoot.appendingPathComponent("ModuleInfo")
+		#expect(output.modules["App"]?.unusedInputs == [
+			moduleInfoDirectory.appendingPathComponent("Alpha.safedi").path,
+			moduleInfoDirectory.appendingPathComponent("Bravo.safedi").path,
+			moduleInfoDirectory.appendingPathComponent("Charlie.safedi").path,
+			moduleInfoDirectory.appendingPathComponent("Xray.safedi").path,
+			moduleInfoDirectory.appendingPathComponent("Yankee.safedi").path,
+			moduleInfoDirectory.appendingPathComponent("Zulu.safedi").path,
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_listsNoModule_whenTheModuleListsEveryModuleBeneathIt() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.deepAndMiddle + [
+				ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+					"import Deep\nimport Middle\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let feedScreen: FeedScreen", "@Instantiated let clock: Clock"]),
+				], dependencies: ["Middle", "Deep"]),
+			],
+			integration: .moduleInfo,
+			modulesBeneath: { $0 },
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.unusedInputs == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_listsTheModuleBeneathItNeverOpens_whenRootsTreeNeedsNothingOfIt() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.deepAndMiddle + [
+				ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+					seamFixtureType(named: "Screen", declarations: []),
+					"import Middle\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screen: Screen"]),
+				], dependencies: ["Middle"]),
+			],
+			integration: .moduleInfo,
+			modulesBeneath: { $0 },
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.unusedInputs == [output.fixtureRoot.appendingPathComponent("ModuleInfo").appendingPathComponent("Deep.safedi").path])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_listsNoModuleBeneath_whenRootsTreeOpensTheModulesBeneath() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.rootOverMiddleOverDeep(appDependencies: ["Middle"]),
+			integration: .moduleInfo,
+			modulesBeneath: { $0 },
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.unusedInputs == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_listsOnlyTheModuleNoViewRefersTo_whenListedModulesViewRefersToModulesBeneath() async throws {
+		// `App` declares no tree and lists only `Middle`, whose view refers to `Deep` and `Inner`: the run opens their files
+		// to resolve the references, and never `Zed`'s, which only the set of modules beneath names.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [ModuleFixture(name: "Zed", packageName: "Base", swiftFileContent: [seamFixtureType(named: "ZedType", declarations: [])])]
+				+ Self.seamOverInnerOverDeep(middleDependencies: ["Inner"], appDependencies: ["Middle"]).dropLast()
+				+ [ModuleFixture(name: "App", packageName: "App", swiftFileContent: ["import Middle\n\n" + seamFixtureType(named: "Screen", declarations: [])], dependencies: ["Middle"])],
+			integration: .moduleInfo,
+			compileVerification: .skipped,
+			modulesBeneath: { moduleNames in moduleNames.contains("Middle") ? moduleNames + ["Zed"] : moduleNames },
+			viewsReferToModules: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Middle"]?.moduleInfoFile?.view.references.map(\.moduleName) == ["Deep", "Inner"])
+		#expect(output.modules["App"]?.unusedInputs == [output.fixtureRoot.appendingPathComponent("ModuleInfo").appendingPathComponent("Zed.safedi").path])
 	}
 
 	// MARK: Tests – What the modules beneath cost
@@ -2178,6 +2799,32 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 
 	private static let clock = seamFixtureType(named: "Clock", declarations: [])
 
+	/// The module info file of a module `App` whose view refers to a module `Deep`.
+	private static let fileReferringToDeep = moduleInfoFile(
+		named: "App",
+		view: ModuleInfoView(moduleGraph: [], declarations: [], references: [ViewedModuleReference(moduleName: "Deep", checksum: 1)]),
+	)
+
+	/// The module info file of a module named `moduleName` that declares nothing.
+	private static func moduleInfoFile(named moduleName: String, ownEntryChecksum: UInt64? = nil, view: ModuleInfoView = .empty) -> ModuleInfoFile {
+		ModuleInfoFile(
+			moduleName: moduleName,
+			ownEntryChecksum: ownEntryChecksum,
+			packageName: nil,
+			dependencyModuleNames: [],
+			imports: [],
+			mockImports: [],
+			instantiables: [],
+			configurations: [],
+			filesWithUnexpectedNodes: nil,
+			conditionalCompilationDecisions: [],
+			instantiableTypeNamesInAnyClause: [],
+			plainTypeDeclarations: [],
+			seamSignatures: [],
+			view: view,
+		)
+	}
+
 	/// `DefaultThing`, which fulfills `Thing` and builds nothing.
 	private static let leafThingImplementation = """
 	@Instantiable(fulfillingAdditionalTypes: [Thing.self])
@@ -2315,6 +2962,35 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 	private static func withoutFixtureRoot(_ output: MultiModuleTestOutput, module moduleName: String) -> String? {
 		output.modules[moduleName]?.moduleInfoFile.map {
 			reflectedDescription(of: $0).description.replacingOccurrences(of: output.fixtureRoot.path, with: "")
+		}
+	}
+
+	/// What the module's `.safedi` holds, as `withoutFixtureRoot(_:module:)` gives it, with each reference's checksum and
+	/// the file's own checksum left out, since they cover the paths the fixture root is part of.
+	private static func withoutFixtureRootOrChecksums(_ output: MultiModuleTestOutput, module moduleName: String) -> String? {
+		withoutFixtureRoot(output, module: moduleName)?
+			.replacing(/checksum: UInt64\(\d+\)/, with: "checksum: UInt64(_)")
+			.replacing(/ownEntryChecksum: Optional<UInt64>\(some: UInt64\(\d+\)\)/, with: "ownEntryChecksum: _")
+	}
+
+	/// The module's own entry, as a view holds it, with the test's fixture root removed from every path.
+	private static func ownEntryWithoutFixtureRoot(_ output: MultiModuleTestOutput, module moduleName: String) -> String? {
+		output.modules[moduleName]?.moduleInfoFile.map {
+			reflectedDescription(of: $0.ownEntry).description.replacingOccurrences(of: output.fixtureRoot.path, with: "")
+		}
+	}
+
+	/// Whether every reference the module's view holds names a module of the run whose own entry has the reference's
+	/// checksum.
+	private static func referencesMatchOwnEntries(in output: MultiModuleTestOutput, module moduleName: String) -> Bool {
+		guard let references = output.modules[moduleName]?.moduleInfoFile?.view.references, !references.isEmpty else {
+			return false
+		}
+		return references.allSatisfy { reference in
+			guard let file = output.modules[reference.moduleName]?.moduleInfoFile else {
+				return false
+			}
+			return file.ownEntryChecksum == reference.checksum && file.ownEntry.checksum == reference.checksum
 		}
 	}
 

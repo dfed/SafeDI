@@ -1,10 +1,11 @@
 name: Release Acceptance
 
-# Checks that every base corpus graph SafeDI 2.2.0 accepts still compiles and
-# builds the same values: it builds 2.2.0's tool, macros and runtime sources
-# once, runs the base corpus through 2.2.0 and through this commit in four
-# shards (SafeDIToolReleaseAcceptanceTests/longRun), and combines their
-# reports (.github/scripts/combine-release-acceptance-reports.py). See
+# Checks that every graph of the base, seam and public mock corpora that
+# SafeDI 2.3.0 accepts still compiles and builds the same values: it builds
+# 2.3.0's tool, macros and runtime sources once, runs each corpus through 2.3.0
+# and through this commit in shards of its own
+# (SafeDIToolReleaseAcceptanceTests/longRun), and combines their reports
+# (.github/scripts/combine-release-acceptance-reports.py). See
 # .claude/rules/fuzzer-release-acceptance.md.
 #
 # Only called. ci.yml calls it on every pull request and push to main that
@@ -33,11 +34,11 @@ permissions: {}
 jobs:
   # Builds the
   # older release's tool, macros and runtime sources, which every comparing
-  # shard needs and none rebuilds. It builds the commit tag 2.2.0 names, which
+  # shard needs and none rebuilds. It builds the commit tag 2.3.0 names, which
   # this file fixes, never one an input names, so the cache it writes holds
   # only that release's build.
   release-acceptance-older-release:
-    name: Build SafeDI 2.2.0 for Release Acceptance on Linux
+    name: Build SafeDI 2.3.0 for Release Acceptance on Linux
     runs-on: ubuntu-latest
     container: swift:6.2
     timeout-minutes: 60
@@ -47,14 +48,14 @@ jobs:
       run:
         shell: bash
     env:
-      OLDER_RELEASE: 2.2.0
-      # The commit tag 2.2.0 names.
-      OLDER_RELEASE_COMMIT: 8596f075f46ea1a4043d5c2c2d0a0b99ea50cd46
+      OLDER_RELEASE: 2.3.0
+      # The commit tag 2.3.0 names.
+      OLDER_RELEASE_COMMIT: d2afff7db1fe2f11d386d69416988c2a7f00a7c9
     steps:
       # This commit, for its retry action.
       - name: Checkout Repo
         uses: actions/checkout@v7
-      - name: Checkout SafeDI 2.2.0
+      - name: Checkout SafeDI 2.3.0
         uses: actions/checkout@v7
         with:
           ref: ${{ env.OLDER_RELEASE_COMMIT }}
@@ -85,17 +86,17 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: swift package resolve --package-path older-release
-      # Only the tool and the macros, never 2.2.0's tests, which write into the
-      # system temporary directory. Measured on a 4-core cloud machine with
-      # Swift 6.2: 7 min 57 s for the tool and 6 min 58 s for the macros (a
-      # cloud-machine figure; confirm on CI and set each limit to twice it).
+      # Only the tool and the macros, never 2.3.0's tests, which write into the
+      # system temporary directory. Measured on CI (run 44690981519): 8 min 13 s
+      # for the tool and 8 min 49 s for the macros, so each limit is about twice
+      # its time.
       - name: Build Older Release Tool
         if: ${{ steps.older-release-cache.outputs.cache-hit != 'true' }}
-        timeout-minutes: 16
+        timeout-minutes: 17
         run: swift build -c release --traits sourceBuild --package-path older-release --product SafeDITool
       - name: Build Older Release Macros
         if: ${{ steps.older-release-cache.outputs.cache-hit != 'true' }}
-        timeout-minutes: 14
+        timeout-minutes: 18
         run: swift build -c release --traits sourceBuild --package-path older-release --product SafeDI
       - name: Save Older Release Build
         if: ${{ github.ref == 'refs/heads/main' && steps.older-release-cache.outputs.cache-hit != 'true' }}
@@ -168,24 +169,36 @@ jobs:
           path: release-acceptance-test-bundle.tar.gz
           retention-days: 1
 
-  # Four shards of the base corpus's 5000 seeds. combine-release-acceptance
-  # checks that they cover it once.
+  # Shards of each corpus: four of the base corpus's 5000 seeds, four of the
+  # seam corpus's 2000 and two of the public mock corpus's 1000.
+  # combine-release-acceptance checks that each corpus's shards cover it once,
+  # so a change to a corpus's shard count changes its argument there too.
   release-acceptance:
-    name: Compare with SafeDI 2.2.0 on Linux (shard ${{ matrix.shard }} of 4)
+    name: Compare with SafeDI 2.3.0 on Linux (${{ matrix.corpus }} shard ${{ matrix.shard }} of ${{ matrix.shards }})
     needs: [release-acceptance-older-release, release-acceptance-build]
     if: ${{ !cancelled() && needs.release-acceptance-older-release.result == 'success' && (needs.release-acceptance-build.result == 'success' || inputs.bundle) }}
     runs-on: ubuntu-latest
     container: swift:6.2
-    # The job's parts sum to about 25 minutes at their longest: the
+    # The job's parts sum to about 38 minutes at their longest: the
     # container's start (11 minutes once, run 43879263598), two downloads
-    # and an unpack, and the comparison under its own limit of 11.
-    timeout-minutes: 30
+    # and an unpack, and the comparison under its own limit of 25.
+    timeout-minutes: 60
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3]
+        include:
+          - { corpus: base, shard: 0, shards: 4 }
+          - { corpus: base, shard: 1, shards: 4 }
+          - { corpus: base, shard: 2, shards: 4 }
+          - { corpus: base, shard: 3, shards: 4 }
+          - { corpus: seam, shard: 0, shards: 4 }
+          - { corpus: seam, shard: 1, shards: 4 }
+          - { corpus: seam, shard: 2, shards: 4 }
+          - { corpus: seam, shard: 3, shards: 4 }
+          - { corpus: public-mock, shard: 0, shards: 2 }
+          - { corpus: public-mock, shard: 1, shards: 2 }
     defaults:
       run:
         shell: bash
@@ -211,17 +224,21 @@ jobs:
           tar -xzf "$BUNDLE.tar.gz"
           tar -xzf older-release.tar.gz
           mkdir -p release-acceptance
-      # Measured on CI (run 43739187246): the four shards of 1250 seeds took
-      # 3 min 28 s to 5 min 24 s each, so about twice the longest.
+      # Measured on CI against 2.3.0 (run 44874454705, with the graphs that
+      # spend a batch's traversals compared again on their own): the base
+      # corpus's four shards of 1250 seeds took 4 min 41 s to 6 min 32 s each,
+      # the seam corpus's four of 500 8 min 10 s to 11 min 30 s, and the public
+      # mock corpus's two of 500 7 min 33 s and 7 min 47 s.
       - name: Compare with the Older Release
-        timeout-minutes: 11
+        timeout-minutes: 25
         env:
-          SAFEDI_RELEASE_ACCEPTANCE_RELEASE: '2.2.0'
+          SAFEDI_RELEASE_ACCEPTANCE_RELEASE: '2.3.0'
           SAFEDI_RELEASE_ACCEPTANCE_TOOL: ${{ github.workspace }}/older-release-package/SafeDITool
           SAFEDI_RELEASE_ACCEPTANCE_MACROS_TOOL: ${{ github.workspace }}/older-release-package/SafeDIMacros-tool
           SAFEDI_RELEASE_ACCEPTANCE_RUNTIME_SOURCES: ${{ github.workspace }}/older-release-package/SafeDIRuntimeSources
           SAFEDI_RELEASE_ACCEPTANCE_REPORT: ${{ github.workspace }}/release-acceptance/report.txt
-          SAFEDI_RELEASE_ACCEPTANCE_SHARD: ${{ matrix.shard }}/4
+          SAFEDI_RELEASE_ACCEPTANCE_CORPUS: ${{ matrix.corpus }}
+          SAFEDI_RELEASE_ACCEPTANCE_SHARD: ${{ matrix.shard }}/${{ matrix.shards }}
           # A caller's bundle is built for coverage, which this job does not
           # collect, so its profiles go to the runner's temporary directory.
           LLVM_PROFILE_FILE: ${{ runner.temp }}/release-acceptance-%p.profraw
@@ -238,7 +255,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
-          name: release-acceptance-report-${{ matrix.shard }}
+          name: release-acceptance-report-${{ matrix.corpus }}-${{ matrix.shard }}
           path: release-acceptance/
           if-no-files-found: ignore
 
@@ -264,4 +281,6 @@ jobs:
           pattern: release-acceptance-report-*
           path: reports
       - name: Combine
-        run: python3 .github/scripts/combine-release-acceptance-reports.py reports 4 >> "$GITHUB_STEP_SUMMARY"
+        # Into the log as well as the summary, so the counts can be read
+        # through the API, which serves no step summary.
+        run: python3 .github/scripts/combine-release-acceptance-reports.py reports base=4 seam=4 public-mock=2 | tee -a "$GITHUB_STEP_SUMMARY"

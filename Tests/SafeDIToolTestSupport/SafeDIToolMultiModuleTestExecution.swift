@@ -243,6 +243,9 @@ struct ModuleTestOutput {
 	let generateOutput: Generate.Output?
 	/// The DOT tree `generate` wrote (`--dot-file-output`), when the test asked for one under `.moduleInfo`.
 	var dotTree: String?
+	/// The lines of the list of unused inputs `generate` wrote (`--unused-inputs-list-output`), which `.moduleInfo` asks
+	/// for whenever the test passes `modulesBeneath`, as the Bazel rule always does.
+	var unusedInputs: [String]?
 }
 
 /// What `executeSafeDIToolMultiModuleTest` produced: each module's output and, when the modules were compiled,
@@ -349,6 +352,8 @@ struct MultiModuleFixtureError: Error, CustomStringConvertible {
 ///     `--transitive-module-info-file-path`, of the `.safedi` of every module the module depends on, directly or not, as
 ///     the Bazel rule tells it of the set it collects. `nil` passes no such option, as the Tuist plugin does and a
 ///     custom script may.
+///   - viewsReferToModules: Under `.moduleInfo`, whether every module that writes a `.safedi` passes
+///     `--module-info-views-refer-to-modules`, as the Bazel rule does.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func executeSafeDIToolMultiModuleTest(
 	modules: [ModuleFixture],
@@ -357,8 +362,10 @@ func executeSafeDIToolMultiModuleTest(
 	writesTargetGraph: Bool = true,
 	scansDuringGenerate: Bool = false,
 	moduleInfoOverrides: [String: String] = [:],
+	discardsStoredSeamSignatures: Bool = false,
 	writesDOTTrees: Bool = false,
 	modulesBeneath: ((_ moduleNames: [String]) -> [String])? = nil,
+	viewsReferToModules: Bool = false,
 	filesToDelete: inout [URL],
 	recordDirectory: URL? = ExpectationRecording.directoryFromEnvironment,
 	sourceLocation: SourceLocation = #_sourceLocation,
@@ -469,8 +476,15 @@ func executeSafeDIToolMultiModuleTest(
 				arguments += ["--dot-file-output", outputDirectory.appendingPathComponent("\(moduleName).dot").path]
 			}
 			arguments.append("--compiler-receives-input-paths-unchanged")
+			let unusedInputsOutput = modulesBeneath == nil ? nil : outputDirectory.appendingPathComponent("\(moduleName)_unused_inputs.txt")
+			if let unusedInputsOutput {
+				arguments += ["--unused-inputs-list-output", unusedInputsOutput.path]
+			}
 			if !module.fixture.omitsModuleName {
 				arguments += ["--module-info-output", output.path, "--module-name", moduleName]
+				if viewsReferToModules {
+					arguments.append("--module-info-views-refer-to-modules")
+				}
 			}
 			if !module.fixture.omitsPackageName {
 				arguments += ["--package-name", module.fixture.packageName]
@@ -579,11 +593,18 @@ func executeSafeDIToolMultiModuleTest(
 			// Call `generate()` rather than `run()`: `run()` prints located errors in compiler format and
 			// rethrows them as an `ExitCode`, which would hide the error from the assertion helpers.
 			do {
-				// Every place's levels must hold its scope struct's fields (`SeamPlaceLevels.pathStructMismatches`).
+				// Every place's levels must hold its scope struct's fields (`SeamPlaceLevels.pathStructMismatches`), and every tree
+				// the same data on every path with the construction memo and without it (`ConstructionMemoChecks`).
 				generateOutput = try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
-					try await tool.generate()
+					try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
+						try await tool.generate()
+					}
 				}
 			} catch {
+				// A run that read a stored seam signature and failed reports what a run computing every signature reports.
+				if !discardsStoredSeamSignatures {
+					try await expectErrorMatchesRunComputingEverySeamSignature(error, arguments: generateArguments, sourceLocation: sourceLocation)
+				}
 				var fixturesByModuleName = outputs.mapValues(\.fixtures)
 				fixturesByModuleName[moduleName] = fixtures
 				throw SafeDIToolMultiModuleTestError(
@@ -596,7 +617,12 @@ func executeSafeDIToolMultiModuleTest(
 			}
 		}
 
-		let moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
+		var moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
+		if discardsStoredSeamSignatures, let moduleInfoOutput, let writtenFile = moduleInfoFile {
+			// The modules above compute every seam's signature again, as the SwiftPM plugin's flow does.
+			moduleInfoFile = writtenFile.withoutSeamSignatures
+			try writtenFile.withoutSeamSignatures.moduleInfoData.write(to: moduleInfoOutput)
+		}
 		if let moduleInfo = moduleInfoFile?.module {
 			expectMockConditionAgrees(configured: moduleInfo.configurations.first?.mockConditionalCompilation, fixture: module.fixture, sourceLocation: sourceLocation)
 		}
@@ -615,6 +641,9 @@ func executeSafeDIToolMultiModuleTest(
 			generatedFiles: try generatedSwiftFiles(in: outputDirectory),
 			generateOutput: generateOutput,
 			dotTree: writesDOTTrees ? try String(contentsOf: outputDirectory.appendingPathComponent("\(moduleName).dot"), encoding: .utf8) : nil,
+			unusedInputs: integration == .moduleInfo && modulesBeneath != nil
+				? try String(contentsOf: outputDirectory.appendingPathComponent("\(moduleName)_unused_inputs.txt"), encoding: .utf8).split(separator: "\n").map(String.init)
+				: nil,
 		)
 	}
 
@@ -637,6 +666,10 @@ func executeSafeDIToolMultiModuleTest(
 		inputs.append(("moduleOrder", modules.map(\.name).joinedForRecording))
 		inputs.append(("writesTargetGraph", "\(writesTargetGraph)"))
 		inputs.append(("scansDuringGenerate", "\(scansDuringGenerate)"))
+		// Recorded only when set, so every record made without it keeps its digest.
+		if viewsReferToModules {
+			inputs.append(("viewsReferToModules", "true"))
+		}
 		inputs.append(("moduleInfoOverrides", moduleInfoOverrides.sorted { $0.key < $1.key }.flatMap { [$0.key, $0.value] }.joinedForRecording))
 		inputs.append(("writesDOTTrees", "\(writesDOTTrees)"))
 		ExpectationRecording.recordGeneration(
@@ -765,4 +798,40 @@ private func generatedSwiftFiles(in outputDirectory: URL) throws -> [String: Str
 		generatedFiles[fileName] = try String(contentsOf: outputDirectory.appendingPathComponent(fileName), encoding: .utf8)
 	}
 	return generatedFiles
+}
+
+/// Runs `generate` with `arguments` again over the module info files they list with every stored seam signature taken
+/// out, and expects it to throw `error`'s description: a run that reads the signatures and fails reruns computing them,
+/// so the two never differ. Each file is restored afterwards.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+private func expectErrorMatchesRunComputingEverySeamSignature(_ error: any Error, arguments: [String], sourceLocation: SourceLocation) async throws {
+	var moduleInfoPaths = [String]()
+	for (index, argument) in arguments.enumerated() where ["--dependent-module-info-file-path", "--transitive-module-info-file-path"].contains(argument) && arguments.indices.contains(index + 1) {
+		let listed = try String(contentsOfFile: arguments[index + 1], encoding: .utf8)
+		moduleInfoPaths += listed.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+	}
+	var originalBytesByPath = [String: Data]()
+	for path in Set(moduleInfoPaths).sorted() where FileManager.default.fileExists(atPath: path) {
+		let data = try Data(contentsOf: URL(fileURLWithPath: path))
+		let file = try ModuleInfoFile(moduleInfoData: data)
+		let withoutSignatures = try file.withoutSeamSignatures.moduleInfoData
+		if withoutSignatures != data {
+			originalBytesByPath[path] = data
+			try withoutSignatures.write(to: URL(fileURLWithPath: path))
+		}
+	}
+	guard !originalBytesByPath.isEmpty else { return }
+	defer {
+		for (path, data) in originalBytesByPath {
+			try? data.write(to: URL(fileURLWithPath: path))
+		}
+	}
+	let computingError: (any Error)?
+	do {
+		try await Generate.parse(arguments).generate()
+		computingError = nil
+	} catch {
+		computingError = error
+	}
+	#expect(computingError.map { "\($0)" } == "\(error)", "a run reading stored seam signatures reports what a run computing them reports", sourceLocation: sourceLocation)
 }

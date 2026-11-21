@@ -104,7 +104,7 @@ extension DependencyTreeGenerator {
 			guard !Self.inaccessibleConstructions(constructions, from: emittingModule, extendedTypes: extendedTypeDeclarations).isEmpty else { continue }
 			calledTypes.append((type, foreignPublicMock))
 		}
-		await computePublicMockPlans(of: calledTypes, into: &foreignPublicMockPlans, modulesReadByRunOfModule: emittingModule.modulesReadByRunOfModule)
+		try await computePublicMockPlans(of: calledTypes, into: &foreignPublicMockPlans, modulesReadByRunOfModule: emittingModule.modulesReadByRunOfModule)
 		var publicMockCalls = [TypeDescription: PublicMockCall]()
 		// The first type in type order whose plan its module cannot compute reports its error.
 		for (type, foreignPublicMock) in calledTypes {
@@ -176,12 +176,15 @@ extension DependencyTreeGenerator {
 	/// Computes the plan of the public mock each module of `calledTypes` generated for each of its types `plans` lacks,
 	/// as that module computed it, from the declarations it sees: one call of a generator over each module's declarations
 	/// builds that module's mock world once, for all of its types. A module SafeDI knows no name of has no plan.
+	/// A deliberate gap beside a foreign seam's signature, which a module info carries (`computeForeignSeamRoots()`): a
+	/// plan is computed again here, only for a mock whose constructions this module cannot reach, and is a whole
+	/// generator's.
 	/// - Parameter modulesReadByRunOfModule: See `EmittingModule.init`.
 	private func computePublicMockPlans(
 		of calledTypes: [(type: TypeDescription, foreignPublicMock: SeamResolution.ForeignPublicMock)],
 		into plans: inout PublicMockPlans,
 		modulesReadByRunOfModule: (@Sendable (_ moduleName: String) -> TypeAccessProof.ModuleReach.ModulesRead)?,
-	) async {
+	) async throws {
 		// The module's generator is made from the public mock of the first of its types, in type order.
 		var typesByModuleName = [String: (foreignPublicMock: SeamResolution.ForeignPublicMock, types: [TypeDescription])]()
 		for (type, foreignPublicMock) in calledTypes where !plans.hasPlan(of: type) {
@@ -190,10 +193,12 @@ extension DependencyTreeGenerator {
 		}
 		for (moduleName, calls) in typesByModuleName.sorted(by: { $0.key < $1.key }) {
 			let foreignPublicMock = calls.foreignPublicMock
+			// Resolved only for a module whose public mock a plan needs, once per module.
+			let visible = try foreignPublicMock.visibleDeclarations()
 			let generator = DependencyTreeGenerator(
 				importStatements: [],
 				mockImportStatements: [],
-				typeDescriptionToFulfillingInstantiableMap: foreignPublicMock.visibleInstantiables,
+				typeDescriptionToFulfillingInstantiableMap: visible.instantiables,
 				aliasDeclarationReferences: aliasDeclarationReferences,
 				compilesGeneratedMocks: compilesGeneratedMocks,
 				// The declaring module's files are not this run's own: its declarations record its name.
@@ -213,14 +218,14 @@ extension DependencyTreeGenerator {
 					// Read from that module's view of the modules it depends on, or, under the target graph, from every
 					// module's.
 					foreignPublicMocks: seams.foreignDeclarations(seenByModuleNamed: moduleName).publicMocks.filter { entry in
-						entry.value.declaringModule.moduleName != moduleName && foreignPublicMock.visibleInstantiables[entry.key] != nil
+						entry.value.declaringModule.moduleName != moduleName && visible.instantiables[entry.key] != nil
 					},
 					// The views of every module, so that the plans this one computes in turn read what each of those modules
 					// saw, never what this module's filter left: under module info a public mock two modules beneath this one
 					// is not among the public mocks this module sees.
 					foreignDeclarationsSeenByModule: seams.foreignDeclarationsSeenByModule,
 				),
-				plainTypeDeclarations: foreignPublicMock.visiblePlainTypeDeclarations,
+				plainTypeDeclarations: visible.plainTypeDeclarations,
 			)
 			// The generator computes for this run, or for the run this generator computes for in turn.
 			let run = GenerationLayerObservation.runOfOtherModulesGenerator ?? GenerationLayerObservation.Run(moduleName: seams.currentModule.moduleName)
@@ -313,7 +318,7 @@ extension DependencyTreeGenerator {
 	func publicMockPlans(ofOwnTypes types: [TypeDescription]) async -> PublicMockPlans {
 		var plans = PublicMockPlans()
 		var mockScopes: MockScopes?
-		let publicMockContext = makePublicMockContext()
+		let publicMockContext = makePublicMockContext(proof: ownAccessProof().proof)
 		var foreignPublicMockPlans = PublicMockPlans()
 		for type in types {
 			do {
@@ -357,6 +362,7 @@ extension DependencyTreeGenerator {
 		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
+		var constructionMemo = ConstructionMemo()
 		let mockRoot = try await createMockRoot(
 			for: instantiable,
 			scope: scope,
@@ -369,6 +375,7 @@ extension DependencyTreeGenerator {
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 			scopesWithValidatedDeclarations: &scopesWithValidatedDeclarations,
+			constructionMemo: &constructionMemo,
 		)
 		let parameters = await mockRoot.mockRootParameters(instantiable: instantiable, mockDefaults: mockScopes.flatParameterMockDefaults)
 		return OwnPublicMockPlan(

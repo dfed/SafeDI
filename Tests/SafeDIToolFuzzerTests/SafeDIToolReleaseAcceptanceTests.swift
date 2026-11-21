@@ -31,284 +31,80 @@ struct SafeDIToolReleaseAcceptanceTests {
 		enum Kind: String {
 			case knownBreak = "known-break"
 			case exemption = "exempted"
+			/// A graph whose probe spends even `DifferentialValueLimits.isolatedFuzzerGraph`'s traversals on both releases,
+			/// so the comparator describes none of its values beneath that node: class X, as the corpus's own known issue
+			/// lists the seed.
+			case beyondComparator = "beyond-comparator"
 		}
 
+		let corpus: GraphFuzzerReleaseAcceptanceCorpus
 		let seed: UInt64
 		let kind: Kind
 		let verdictClass: GraphFuzzerReleaseAcceptanceClass
 		let reason: String
 	}
 
-	/// #649: an instantiator received only if available inside its own loop of instantiators is that instantiator,
-	/// where 2.2.0 passed `nil`, and each receiver holds a wrapper of its own.
-	static let releaseNotedLoopOfInstantiatorsReason = "#649, a release-noted behavior change"
-
-	/// #743: a type that receives the instantiator that builds it only if available gets it, also beside another receive
-	/// left `nil`, where 2.2.0 passed `nil`; #649's behavior-change line covers it.
-	static let releaseNotedOwnInstantiatorReceiveReason = "#743, covered by #649's release-noted behavior change"
-
-	/// #649's second commit: an instantiator received only if available inside a `@Sendable` builder's loop, which
-	/// 2.2.0 passed `nil` and the same receive outside a loop was already an error.
-	static let releaseNotedSendableLoopReceiveReason = "#649, a release-noted rejection"
-
-	/// #593 and #597: a label received in two forms along one branch of a mock's tree, either required, which no
-	/// production tree builds or where production always passes `nil` and 2.2.0's mock passed a built value.
-	static let releaseNotedHiddenReceiveInMockTreeReason = "#593/#597, a release-noted rejection of a mock production cannot build"
-
-	/// #533: a type a lazy cycle builds again receives each property from the nearest declaration above it, where 2.2.0
-	/// passed the declaration above the cycle, or `nil`.
-	static let nearestDeclarationInLazyCycleReason = "#533, a 2.2.0 defect fixed and release-noted"
-
-	/// #571: a type built inside a dependency it receives, beneath a type forwarding that dependency, is passed the
-	/// forwarded value, where 2.2.0 passed `nil` to a receive only if available.
-	static let forwardedValueInCycleReason = "#571, a 2.2.0 defect fixed and release-noted"
-
-	/// #572: a receive only if available of an instantiator its builder's own scope declares is passed that instantiator
-	/// at every depth of the cycle, where 2.2.0 passed `nil` below the first.
-	static let instantiatorAtEveryDepthReason = "#572, a 2.2.0 defect fixed and release-noted"
-
-	/// #846: a mock passes `nil` to a receive only if available in the place a required receive pins, where production
-	/// passes `nil` too, and 2.2.0's mock passed a value built elsewhere in its tree.
-	static let mockPassesNilAsProductionDoesReason = "#846, a 2.2.0 mock defect fixed and release-noted"
-
-	/// The seeds of the base corpus whose break from each older release is expected, by the release's name. A seed of
+	/// The seeds whose break from each older release is expected, by the release's name, each of its corpus. A seed of
 	/// another class, or one that no longer breaks, fails the run as stale. Each is attributed, never listed to make a
-	/// run pass. 2.2.0's #649 seeds are the graphs whose values differ and whose generated code shows a loop through
-	/// received instantiators (`GraphFuzzerFeature.buildersReceivingEachOther` and its siblings, read from this tree's
-	/// output), where 2.2.0 passed `nil` or shared one wrapper among the loop's receivers. Each other 2.2.0 seed was
-	/// reduced and bisected to the pull request its reason names, whose change was ruled a fix of 2.2.0's behavior.
+	/// run pass: a break is release-noted, or a defect of the older release this tree fixed, and lists the seed in the
+	/// change that makes it.
 	static let listedSeedsByRelease: [String: [ListedSeed]] = [
-		"2.2.0": [
-			ListedSeed(seed: 1, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 21, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 63, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 64, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 94, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 107, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 114, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 145, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 235, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 257, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 294, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 342, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 371, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 381, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 450, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 461, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 472, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 496, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 533, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 622, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 626, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 644, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 662, kind: .knownBreak, verdictClass: .valuesDiffer, reason: nearestDeclarationInLazyCycleReason),
-			ListedSeed(seed: 672, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 685, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 710, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 715, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 749, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 760, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 774, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 775, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 817, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 824, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 835, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 884, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 892, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 897, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 957, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 958, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 963, kind: .knownBreak, verdictClass: .currentRejects, reason: releaseNotedHiddenReceiveInMockTreeReason),
-			ListedSeed(seed: 967, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 997, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 1_005, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_015, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_021, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_025, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_042, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_074, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 1_095, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 1_116, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 1_117, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_142, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_163, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 1_168, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 1_178, kind: .knownBreak, verdictClass: .currentRejects, reason: releaseNotedSendableLoopReceiveReason),
-			ListedSeed(seed: 1_239, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 1_242, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 1_302, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 1_328, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_379, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_393, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_406, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_456, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 1_473, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_477, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_484, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_485, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 1_487, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 1_525, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_545, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_548, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_553, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_561, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 1_589, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 1_633, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 1_655, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 1_656, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_659, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_675, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 1_699, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_717, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_738, kind: .knownBreak, verdictClass: .valuesDiffer, reason: nearestDeclarationInLazyCycleReason),
-			ListedSeed(seed: 1_740, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_742, kind: .knownBreak, verdictClass: .valuesDiffer, reason: nearestDeclarationInLazyCycleReason),
-			ListedSeed(seed: 1_797, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_798, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_802, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 1_809, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 1_812, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_837, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_853, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_879, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 1_902, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_978, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 1_995, kind: .knownBreak, verdictClass: .currentRejects, reason: releaseNotedHiddenReceiveInMockTreeReason),
-			ListedSeed(seed: 2_002, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 2_033, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 2_036, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 2_056, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 2_081, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 2_095, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 2_129, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 2_155, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 2_158, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 2_176, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 2_178, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 2_229, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 2_231, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 2_258, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 2_325, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 2_338, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 2_339, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 2_343, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 2_348, kind: .knownBreak, verdictClass: .valuesDiffer, reason: nearestDeclarationInLazyCycleReason),
-			ListedSeed(seed: 2_397, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 2_441, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 2_444, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 2_461, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 2_467, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 2_475, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 2_483, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 2_502, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 2_507, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 2_514, kind: .knownBreak, verdictClass: .valuesDiffer, reason: nearestDeclarationInLazyCycleReason),
-			ListedSeed(seed: 2_531, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 2_542, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 2_590, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 2_594, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 2_655, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 2_678, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 2_739, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 2_740, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 2_773, kind: .knownBreak, verdictClass: .valuesDiffer, reason: nearestDeclarationInLazyCycleReason),
-			ListedSeed(seed: 2_775, kind: .knownBreak, verdictClass: .valuesDiffer, reason: nearestDeclarationInLazyCycleReason),
-			ListedSeed(seed: 2_794, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 2_841, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 2_983, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 2_994, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 3_025, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 3_048, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 3_113, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 3_114, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 3_142, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 3_178, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 3_180, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 3_195, kind: .knownBreak, verdictClass: .valuesDiffer, reason: nearestDeclarationInLazyCycleReason),
-			ListedSeed(seed: 3_236, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 3_266, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 3_267, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 3_286, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 3_340, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 3_410, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 3_433, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 3_440, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 3_487, kind: .knownBreak, verdictClass: .valuesDiffer, reason: forwardedValueInCycleReason),
-			ListedSeed(seed: 3_506, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 3_547, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 3_553, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 3_563, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 3_564, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 3_580, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 3_589, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 3_594, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 3_634, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 3_638, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 3_641, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 3_646, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 3_673, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 3_687, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 3_698, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 3_718, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 3_823, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 3_843, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 3_907, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 3_924, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 3_926, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 3_956, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 3_957, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 3_985, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 3_997, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 4_025, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 4_036, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 4_044, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 4_056, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 4_087, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 4_134, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 4_147, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 4_194, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 4_257, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 4_388, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 4_397, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 4_405, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 4_424, kind: .knownBreak, verdictClass: .currentRejects, reason: releaseNotedHiddenReceiveInMockTreeReason),
-			ListedSeed(seed: 4_450, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 4_475, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 4_484, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 4_515, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 4_530, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 4_534, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 4_538, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 4_539, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 4_548, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 4_563, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 4_581, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 4_628, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 4_662, kind: .knownBreak, verdictClass: .valuesDiffer, reason: nearestDeclarationInLazyCycleReason),
-			ListedSeed(seed: 4_692, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 4_749, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 4_759, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 4_803, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 4_804, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 4_842, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 4_875, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
-			ListedSeed(seed: 4_894, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedOwnInstantiatorReceiveReason),
-			ListedSeed(seed: 4_922, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 4_931, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 4_938, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 4_962, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
-			ListedSeed(seed: 4_990, kind: .knownBreak, verdictClass: .valuesDiffer, reason: instantiatorAtEveryDepthReason),
-			ListedSeed(seed: 4_999, kind: .knownBreak, verdictClass: .valuesDiffer, reason: releaseNotedLoopOfInstantiatorsReason),
+		"2.3.0": [
+			ListedSeed(corpus: .base, seed: 9, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 175, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 195, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 206, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 210, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 295, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 296, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 515, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 565, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 626, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 711, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 1_180, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 1_269, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 1_401, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 2_254, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 2_270, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 2_298, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 2_388, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 2_413, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 2_637, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 2_674, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 3_042, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 3_302, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 3_405, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 3_608, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 4_227, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 4_420, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 4_522, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 4_548, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 4_664, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 4_692, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 4_803, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .seam, seed: 391, kind: .beyondComparator, verdictClass: .valuesNotCompared, reason: beyondComparatorReason),
+			ListedSeed(corpus: .seam, seed: 1_311, kind: .beyondComparator, verdictClass: .valuesNotCompared, reason: beyondComparatorReason),
 		],
 	]
+
+	/// #892: a mock passes `nil`, as production does, to a receive only if available of the other `LazilyInstantiated`
+	/// kind beside a required wrapper of the same instance, where 2.3.0's mock handed it a wrapper it made.
+	/// Seam seeds 391 and 1311, whose `Root0()` spends even a graph's own traversals through chains of hole draws that
+	/// re-enter `HoleSeam` (`HoleLoop`, `HoleDeep`, and `HoleInner2` or `HoleRelay` and `HolePing`) on both releases, as the
+	/// seam corpus's known issue of them says.
+	static let beyondComparatorReason = "the comparator cannot describe the graph's values within its isolated traversal budget"
+
+	static let mockPassesNilAsProductionDoesReason = "#892, a 2.3.0 mock defect fixed and release-noted"
 
 	@Test
 	func listedSeeds_listEachSeedOnceAsABreak_forEachRelease() {
 		for (release, listedSeeds) in Self.listedSeedsByRelease {
-			let seeds = listedSeeds.map(\.seed)
-			#expect(seeds == seeds.sorted(), "\(release)")
-			#expect(Set(seeds).count == seeds.count, "\(release)")
-			#expect(listedSeeds.allSatisfy { $0.verdictClass.isBreak && $0.seed < UInt64(SafeDIToolGraphFuzzerTests.corpusSeedCount) }, "\(release)")
+			for corpus in GraphFuzzerReleaseAcceptanceCorpus.allCases {
+				let seeds = listedSeeds.filter { $0.corpus == corpus }.map(\.seed)
+				#expect(seeds == seeds.sorted(), "\(release) \(corpus)")
+				#expect(Set(seeds).count == seeds.count, "\(release) \(corpus)")
+			}
+			#expect(listedSeeds.allSatisfy { ($0.kind == .beyondComparator ? $0.verdictClass == .valuesNotCompared : $0.verdictClass.isBreak) && $0.seed < UInt64(ReleaseAcceptanceLongRunConfiguration.seedCount(of: $0.corpus)) }, "\(release)")
 		}
 	}
 
@@ -414,6 +210,15 @@ struct SafeDIToolReleaseAcceptanceTests {
 	}
 
 	@Test
+	func classify_annotatesNothing_whenBothToolsReportOneWarningInTheirOwnForms() {
+		let message = "This #SafeDIConfiguration sets `mockConditionalCompilation` and is not in a file named `SafeDIConfiguration.swift`, so SafeDI had to scan this module’s files twice."
+		let older = GraphFuzzerReleaseRun(outcome: .compiled(generatedFiles: [:], toolWarnings: ["<fixture-directory>/shop/Sources/FuzzFeature/S1_Plain.swift:22:1: warning: \(message)"], compilation: GraphFuzzerReleaseCompilation(exitCode: 0, stderr: "")))
+		let current = GraphFuzzerReleaseRun(outcome: .compiled(generatedFiles: [:], toolWarnings: ["SourceDiagnostic(severity: SafeDICore.SourceDiagnostic.Severity.warning, location: nil, message: \"\(message)\", fixIts: [])"], compilation: GraphFuzzerReleaseCompilation(exitCode: 0, stderr: "")))
+		let classification = GraphFuzzerReleaseAcceptance.classify(older: older, current: current, probes: Self.noProbes)
+		#expect(classification == .comparesValues(GraphFuzzerReleaseVerdict(verdictClass: .valuesAgree), probes: []))
+	}
+
+	@Test
 	func classify_annotatesSharedGeneratedWarning_whenBothGeneratedCodesDrawTheWarning() {
 		let warning = "/scratch/Generated/S0_Root0+SafeDI.swift:12:7: warning: variable 't3' was never mutated"
 		let classification = GraphFuzzerReleaseAcceptance.classify(older: .compiledRun(stderr: warning), current: .compiledRun(stderr: warning.replacingOccurrences(of: ":12:", with: ":14:")), probes: Self.noProbes)
@@ -430,6 +235,33 @@ struct SafeDIToolReleaseAcceptanceTests {
 		#expect(verdicts.map(\.seed) == [0, 1, 2, 3])
 		#expect(verdicts.allSatisfy { !$0.verdict.verdictClass.isBreak && $0.verdict.verdictClass != .valuesNotCompared }, "\(verdicts)")
 		#expect(verdicts.count(where: { $0.verdict.verdictClass == .valuesAgree }) >= 3, "\(verdicts)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func verdicts_compareGraphOnItsOwnWithIsolatedBudget_whenItsProbeSpendsTheBatchsTraversals() async throws {
+		guard compileVerificationIsEnabled else { return }
+		// Seed 0's probes traverse more than one wrapper, so a batch budget of one traversal spends it, and only the
+		// comparison on its own under `DifferentialValueLimits.isolatedFuzzerGraph` gives the graph a verdict. Without that
+		// second comparison the verdict is class X.
+		let verdicts = try await GraphFuzzerReleaseAcceptance.verdicts(
+			forSeeds: [0],
+			older: .currentTree,
+			batchLimits: DifferentialValueLimits(probeTimeLimitInSeconds: 60, traversalsPerProbe: 1),
+		)
+		#expect(verdicts.map(\.seed) == [0])
+		#expect(verdicts.allSatisfy { $0.verdict.verdictClass == .valuesAgree }, "\(verdicts)")
+	}
+
+	@Test(arguments: [GraphFuzzerReleaseAcceptanceCorpus.seam, .publicMock])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func verdicts_reportNoBreak_whenCurrentTreeIsComparedWithItselfOverGraphsSplitAcrossModules(corpus: GraphFuzzerReleaseAcceptanceCorpus) async throws {
+		guard compileVerificationIsEnabled else { return }
+		let seeds = Self.splitSeeds[corpus] ?? []
+		#expect(seeds.allSatisfy { GraphFuzzerGenerator.fixture(forSeed: $0, features: corpus.features, storingEveryParameter: true).modules != nil })
+		let verdicts = try await GraphFuzzerReleaseAcceptance.verdicts(forSeeds: seeds, of: corpus, older: .currentTree)
+		#expect(verdicts.map(\.seed) == seeds)
+		#expect(verdicts.allSatisfy { $0.verdict.verdictClass == .valuesAgree }, "\(verdicts)")
 	}
 
 	@Test
@@ -512,14 +344,14 @@ struct SafeDIToolReleaseAcceptanceTests {
 			report.append("problem \(problem)")
 			Issue.record(Comment(rawValue: problem))
 		}
-		report.append("release-acceptance release=\(configuration.release.name) seeds=\(configuration.seeds.lowerBound)..<\(configuration.seeds.upperBound)")
+		report.append("release-acceptance release=\(configuration.release.name) corpus=\(configuration.corpus.rawValue) seeds=\(configuration.seeds.lowerBound)..<\(configuration.seeds.upperBound)")
 		guard compileVerificationIsEnabled else {
 			reportProblem("Release acceptance compiles generated code. Unset SAFEDI_SKIP_COMPILE_CHECK.")
 			return
 		}
 		let start = Date()
-		let verdicts = try await GraphFuzzerReleaseAcceptance.verdicts(forSeeds: Array(configuration.seeds), older: configuration.release)
-		let listedSeeds = Self.listedSeedsByRelease[configuration.release.name] ?? []
+		let verdicts = try await GraphFuzzerReleaseAcceptance.verdicts(forSeeds: Array(configuration.seeds), of: configuration.corpus, older: configuration.release)
+		let listedSeeds = (Self.listedSeedsByRelease[configuration.release.name] ?? []).filter { $0.corpus == configuration.corpus }
 		let listedSeedBySeed = Dictionary(grouping: listedSeeds, by: \.seed).compactMapValues(\.first)
 		var classCounts = [GraphFuzzerReleaseAcceptanceClass: Int]()
 		var rejectionCounts = [GraphFuzzerReleaseRejection: Int]()
@@ -565,7 +397,7 @@ struct SafeDIToolReleaseAcceptanceTests {
 				} else {
 					let failure = "failure \(seed) \(verdict.verdictClass.rawValue) \(verdict.details.split(separator: "\n").first ?? "")"
 					report.append(failure)
-					Issue.record(Comment(rawValue: "Seed \(seed) of release acceptance against \(configuration.release.name): class \(verdict.verdictClass.rawValue)\n\(verdict.details)"))
+					Issue.record(Comment(rawValue: "Seed \(seed) of the \(configuration.corpus.rawValue) corpus's release acceptance against \(configuration.release.name): class \(verdict.verdictClass.rawValue)\n\(verdict.details)"))
 				}
 			} else if let listedSeed {
 				report.append("stale \(seed) \(listedSeed.verdictClass.rawValue) \(listedSeed.reason)")
@@ -587,6 +419,13 @@ struct SafeDIToolReleaseAcceptanceTests {
 
 	// MARK: Helpers
 
+	/// Seeds of the seam and public mock corpora whose graphs are split across modules and accepted, so that a
+	/// self-comparison runs every module's tool, compile and probes.
+	private static let splitSeeds: [GraphFuzzerReleaseAcceptanceCorpus: [UInt64]] = [
+		.seam: [18, 24],
+		.publicMock: [0, 2],
+	]
+
 	private static func noProbes(_: [String: String]) -> [DifferentialValueProbe] {
 		[]
 	}
@@ -599,6 +438,7 @@ struct ReleaseAcceptanceLongRunConfiguration {
 	}
 
 	let release: GraphFuzzerRelease
+	let corpus: GraphFuzzerReleaseAcceptanceCorpus
 	let seeds: Range<UInt64>
 	let reportPath: String
 
@@ -610,8 +450,9 @@ struct ReleaseAcceptanceLongRunConfiguration {
 	/// The configuration a requested run reads, or the problem that keeps it from running: `SAFEDI_RELEASE_ACCEPTANCE_TOOL`
 	/// (the older release's built `SafeDITool`), `SAFEDI_RELEASE_ACCEPTANCE_MACROS_TOOL` (its `SafeDIMacros-tool`),
 	/// `SAFEDI_RELEASE_ACCEPTANCE_RUNTIME_SOURCES` (its `Sources/SafeDI`) and `SAFEDI_RELEASE_ACCEPTANCE_REPORT` must
-	/// each be set and exist (the report's directory, for the report); `SAFEDI_RELEASE_ACCEPTANCE_SHARD`, when set to
-	/// `<index>/<count>`, runs only that shard of the base corpus's seeds.
+	/// each be set and exist (the report's directory, for the report); `SAFEDI_RELEASE_ACCEPTANCE_CORPUS`, when set, names
+	/// the corpus (`base`, `seam` or `public-mock`; `base` when unset); `SAFEDI_RELEASE_ACCEPTANCE_SHARD`, when set to
+	/// `<index>/<count>`, runs only that shard of the corpus's seeds.
 	static var current: Result<ReleaseAcceptanceLongRunConfiguration, Problem> {
 		let environment = ProcessInfo.processInfo.environment
 		var problems = [String]()
@@ -638,7 +479,15 @@ struct ReleaseAcceptanceLongRunConfiguration {
 		if reportPath.isEmpty || !FileManager.default.fileExists(atPath: URL(fileURLWithPath: reportPath).deletingLastPathComponent().path) {
 			problems.append("SAFEDI_RELEASE_ACCEPTANCE_REPORT must name a file in a directory that exists.")
 		}
-		let corpusSeedCount = SafeDIToolGraphFuzzerTests.corpusSeedCount
+		var corpus = GraphFuzzerReleaseAcceptanceCorpus.base
+		if let corpusName = environment["SAFEDI_RELEASE_ACCEPTANCE_CORPUS"], !corpusName.isEmpty {
+			if let namedCorpus = GraphFuzzerReleaseAcceptanceCorpus(rawValue: corpusName) {
+				corpus = namedCorpus
+			} else {
+				problems.append("SAFEDI_RELEASE_ACCEPTANCE_CORPUS must be one of \(GraphFuzzerReleaseAcceptanceCorpus.allCases.map(\.rawValue).joined(separator: ", ")).")
+			}
+		}
+		let corpusSeedCount = seedCount(of: corpus)
 		var seeds = UInt64(0)..<UInt64(corpusSeedCount)
 		if let shardDescription = environment["SAFEDI_RELEASE_ACCEPTANCE_SHARD"] {
 			let parts = shardDescription.split(separator: "/", omittingEmptySubsequences: false).map { Int($0) }
@@ -657,9 +506,22 @@ struct ReleaseAcceptanceLongRunConfiguration {
 				tool: .executable(tool),
 				runtimeSource: DifferentialValueRuntimeSource(runtimeSourcesDirectory: runtimeSources, macrosToolPath: macrosTool),
 			),
+			corpus: corpus,
 			seeds: seeds,
 			reportPath: reportPath,
 		))
+	}
+
+	/// The number of seeds of `corpus`, as the graph fuzzer's long run judges it.
+	static func seedCount(of corpus: GraphFuzzerReleaseAcceptanceCorpus) -> Int {
+		switch corpus {
+		case .base:
+			SafeDIToolGraphFuzzerTests.corpusSeedCount
+		case .seam:
+			SafeDIToolGraphFuzzerTests.seamCorpusSeedCount
+		case .publicMock:
+			SafeDIToolGraphFuzzerTests.publicMockCorpusSeedCount
+		}
 	}
 }
 
