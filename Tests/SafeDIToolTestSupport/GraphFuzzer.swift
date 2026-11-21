@@ -12726,6 +12726,9 @@ struct GraphFuzzerFailure: Equatable {
 		case generatedCodeDrawsWarning = "generated code draws a compiler warning"
 		case fixtureDoesNotCompile = "fixture does not compile on its own"
 		case runsDiffer = "two runs of the tool differ"
+		/// The run that skips no clean subtree in the validation walk gives other results than the run that skips them
+		/// (`GraphFuzzerToolRuns.cleanSubtreeSkipFailure`).
+		case cleanSubtreeSkipChangesOutcome = "skipping clean subtrees in the validation walk changes the tool's outcome"
 		case runsDifferAcrossProcesses = "the tool's output differs between two processes"
 		case compilerCrashedOnGeneratedCode = "the Swift compiler crashed on generated code"
 		case renamedGraphDiffers = "the graph renamed to change an order gives other results"
@@ -13050,6 +13053,7 @@ struct GraphFuzzerResult {
 		isComparedWithReadTwin: Bool = false,
 		isComparedWithoutSecondHolePlace: Bool = false,
 		isComparedWithoutSecondPath: Bool = false,
+		isComparedWithCleanSubtreeSkipOff: Bool = false,
 		retentionCounts: GraphFuzzerRetentionCounts = GraphFuzzerRetentionCounts(),
 		valueOracle: GraphFuzzerValueOracleRun? = nil,
 		remedyRuns: [GraphFuzzerRemedyRun] = [],
@@ -13061,6 +13065,7 @@ struct GraphFuzzerResult {
 		self.builderSurfaceFloorKinds = builderSurfaceFloorKinds
 		self.isComparedWithoutSecondHolePlace = isComparedWithoutSecondHolePlace
 		self.isComparedWithoutSecondPath = isComparedWithoutSecondPath
+		self.isComparedWithCleanSubtreeSkipOff = isComparedWithCleanSubtreeSkipOff
 		self.remedyRuns = remedyRuns
 		self.fixture = fixture
 		self.outcome = outcome
@@ -13117,6 +13122,9 @@ struct GraphFuzzerResult {
 	/// the graph with those of the graph without its second path to a type that holds a place
 	/// (`GraphFuzzerToolRuns.secondPathFailure`): the tool accepts both.
 	let isComparedWithoutSecondPath: Bool
+	/// Whether the oracle ran the graph again with no skip of a clean subtree in the validation walk and compared the two
+	/// (`GraphFuzzerToolRuns.cleanSubtreeSkipFailure`): its first run skipped one.
+	let isComparedWithCleanSubtreeSkipOff: Bool
 	/// What the retention oracle judged of the graph (`GraphFuzzerOracle.ValueComparisons.retentionCounts`), each count
 	/// 0 or 1 but the unpaired experiments'.
 	let retentionCounts: GraphFuzzerRetentionCounts
@@ -13698,6 +13706,7 @@ struct GraphFuzzerToolRuns {
 		fixture: GraphFuzzerFixture,
 		firstOutcome: GraphFuzzerToolOutcome,
 		secondOutcome: GraphFuzzerToolOutcome,
+		cleanSubtreeSkipOffOutcome: GraphFuzzerToolOutcome? = nil,
 		renamedOutcomes: [(renaming: GraphFuzzerRenaming, outcome: GraphFuzzerToolOutcome)] = [],
 		inlineOutcome: GraphFuzzerToolOutcome? = nil,
 		visibleOutcome: GraphFuzzerToolOutcome? = nil,
@@ -13726,6 +13735,7 @@ struct GraphFuzzerToolRuns {
 		self.fixture = fixture
 		self.firstOutcome = firstOutcome
 		self.secondOutcome = secondOutcome
+		self.cleanSubtreeSkipOffOutcome = cleanSubtreeSkipOffOutcome
 		self.renamedOutcomes = renamedOutcomes
 		self.inlineOutcome = inlineOutcome
 		self.visibleOutcome = visibleOutcome
@@ -13741,6 +13751,8 @@ struct GraphFuzzerToolRuns {
 	let fixture: GraphFuzzerFixture
 	let firstOutcome: GraphFuzzerToolOutcome
 	let secondOutcome: GraphFuzzerToolOutcome
+	/// The outcome of a run that skips no clean subtree in the validation walk, when the first run skipped one.
+	let cleanSubtreeSkipOffOutcome: GraphFuzzerToolOutcome?
 	let renamedOutcomes: [(renaming: GraphFuzzerRenaming, outcome: GraphFuzzerToolOutcome)]
 	let inlineOutcome: GraphFuzzerToolOutcome?
 	let visibleOutcome: GraphFuzzerToolOutcome?
@@ -14238,6 +14250,19 @@ struct GraphFuzzerToolRuns {
 		}
 	}
 
+	/// The failure of a graph whose run with no skip of a clean subtree in the validation walk gives other results than its
+	/// first run, which skipped one, or `nil`: a skipped subtree's walk along another path completed with an equal context and
+	/// found nothing, so walking it again would find nothing either (`cycle-validation.md`, "Clean subtrees"). Seeds 10 and 17
+	/// of the seam corpus fail it when the walk remembers a subtree whose walk raised `memoBlockingEventCount`.
+	var cleanSubtreeSkipFailure: GraphFuzzerFailure? {
+		guard let cleanSubtreeSkipOffOutcome, cleanSubtreeSkipOffOutcome != firstOutcome else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .cleanSubtreeSkipChangesOutcome,
+			details: "Skipping clean subtrees:\n\(firstOutcome.description)\nSkipping none:\n\(cleanSubtreeSkipOffOutcome.description)",
+		)
+	}
+
 	var runsDifferFailure: GraphFuzzerFailure? {
 		guard firstOutcome != secondOutcome else { return nil }
 		return GraphFuzzerFailure(
@@ -14538,7 +14563,7 @@ enum GraphFuzzerOracle {
 		}
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
-			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.storedSeamSignaturesDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.publicMockOverridesOrderFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
+			var failures = [runs.runsDifferFailure, runs.cleanSubtreeSkipFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.storedSeamSignaturesDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.publicMockOverridesOrderFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
 			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
@@ -14576,6 +14601,7 @@ enum GraphFuzzerOracle {
 				isComparedWithReadTwin: runs.readTwinOutcome != nil,
 				isComparedWithoutSecondHolePlace: runs.isComparedWithoutSecondHolePlace,
 				isComparedWithoutSecondPath: runs.isComparedWithoutSecondPath,
+				isComparedWithCleanSubtreeSkipOff: runs.cleanSubtreeSkipOffOutcome != nil,
 				retentionCounts: valueComparisons.retentionCounts[runs.fixture.seed] ?? GraphFuzzerRetentionCounts(),
 				valueOracle: runs.valueOracle,
 				remedyRuns: runs.remedyRuns,
@@ -15243,9 +15269,28 @@ enum GraphFuzzerOracle {
 		// (`placeLevelsFailure`).
 		// The paths of the places the first run computes must repeat no declaration (`placeChainFailure`), and their cases
 		// must be the ones the generated scope enums declare (`scopeCaseFailures`).
+		// The validation walk skips a subtree whose walk along an equal context completed and found nothing. A graph whose
+		// first run skipped one is run again with no skip, which must give the same outcome (`cleanSubtreeSkipFailure`).
+		let (skippedSubtrees, skippedSubtreesContinuation) = AsyncStream.makeStream(of: Void.self)
 		let ((firstOutcome, placeLevelDisagreements), placeFacts) = try await collectingPlaceFacts(during: {
-			try await collectingPlaceLevelDisagreements(during: { try await toolOutcome(of: fixture) })
+			try await collectingPlaceLevelDisagreements(during: {
+				try await ValidationWalkObservation.$observer.withValue({ observation in
+					if case .skippedCleanSubtree = observation {
+						skippedSubtreesContinuation.yield()
+					}
+				}) {
+					try await toolOutcome(of: fixture)
+				}
+			})
 		})
+		skippedSubtreesContinuation.finish()
+		var skippedSubtreeCount = 0
+		for await _ in skippedSubtrees {
+			skippedSubtreeCount += 1
+		}
+		let cleanSubtreeSkipOffOutcome: GraphFuzzerToolOutcome? = skippedSubtreeCount > 0
+			? try await ValidationWalkObservation.$skipsCleanSubtrees.withValue(false) { try await toolOutcome(of: fixture) }
+			: nil
 		// A graph with a seam is run again with no seam: a rejection inline does not make is either a seam's own error
 		// or a defect (`differentialFailure`), and an accepted graph must pass no receiver `nil` that inline passes a
 		// value (`nilArgumentFailure`).
@@ -15340,6 +15385,7 @@ enum GraphFuzzerOracle {
 					try await toolOutcome(of: fixture)
 				}
 			},
+			cleanSubtreeSkipOffOutcome: cleanSubtreeSkipOffOutcome,
 			renamedOutcomes: renamedOutcomes,
 			inlineOutcome: inlineOutcome,
 			visibleOutcome: visibleOutcome,
