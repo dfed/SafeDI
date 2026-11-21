@@ -24,11 +24,11 @@ concurrency:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    # The Swift analysis runs on macOS because CodeQL extracts Swift only
-    # from a build it traces on macOS, with Xcode's toolchain: there is no
-    # Swift extractor for Linux. The Actions-workflow analysis builds
-    # nothing and runs on Linux, and macOS runners are capped at five
-    # concurrent jobs.
+    # The Swift analysis runs on macOS because CodeQL analyzes Swift only
+    # on macOS runners, from a build it traces there with Xcode's
+    # toolchain (the Build step below). The Actions-workflow analysis
+    # builds nothing and runs on Linux, and macOS runners are capped at
+    # five concurrent jobs.
     runs-on: ${{ matrix.runs-on }}
     permissions:
       security-events: write
