@@ -4909,7 +4909,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if let finishedRootMockParameterTree {
 				return finishedRootMockParameterTree
 			}
-			let rootMockParameterTreeTask = rootMockParameterTreeTask ?? Task { await collectMockParameterTree() }
+			let rootMockParameterTreeTask = rootMockParameterTreeTask ?? Task { await collectMockParameterTree(constructions: MockConstructions()).items }
 			self.rootMockParameterTreeTask = rootMockParameterTreeTask
 			let tree = await rootMockParameterTreeTask.value
 			// A reader that awaited the same task, or the release, may have run in the meantime.
@@ -10040,6 +10040,128 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return readsLabelByName
 	}
 
+	// MARK: MockConstruction
+
+	/// How a mock builds one type: the initializer or hand-written mock it calls and the values worked out from it,
+	/// which do not depend on the property a node builds. Every node of a type built the same way within one mock root's
+	/// tree shares one (`MockConstructions`), so a tree with a node per path holds these once per type, not once per
+	/// node.
+	final class MockConstruction: Sendable {
+		/// The declaration the construction was worked out from, which a node that shares it must equal.
+		let instantiable: Instantiable
+		/// Whether a compatible user-defined mock method exists for this type.
+		let useMockInitializer: Bool
+		/// `PublicMockCall.typesDeclaredEscaping` of the node's call, which `builderParameterTypes` reads.
+		let builderTypesDeclaredEscaping: Set<TypeDescription>
+		let isExtensionBased: Bool
+		let defaultParameters: [MockParameterNode.DefaultParameter]
+		let constructionArguments: [Initializer.Argument]
+		let constructionIsolation: String?
+		let dependencies: [Dependency]
+		let constructionReturnType: TypeDescription
+		let customMockName: String?
+		let concreteType: TypeDescription
+		let sourceFilePath: String?
+		let mockDeclarationLocation: Dependency.DeclarationLocation?
+		let forwardedProperties: Set<Property>
+		/// The labels of `dependencies`.
+		let dependencyInnerLabels: Set<String>
+		/// Construction arguments surfaced at the mock call site, with elided non-dependency defaults removed (`MockParameterNode.isElidedInCallSite`).
+		let callSiteArguments: [Initializer.Argument]
+		/// The parameter types of the builder closures that override how a node is built, one per call-site argument.
+		let builderParameterTypes: [TypeDescription]
+
+		init(
+			instantiable: Instantiable,
+			useMockInitializer: Bool,
+			builderTypesDeclaredEscaping: Set<TypeDescription>,
+		) {
+			self.instantiable = instantiable
+			self.useMockInitializer = useMockInitializer
+			self.builderTypesDeclaredEscaping = builderTypesDeclaredEscaping
+			let constructionInitializer: Initializer? = if useMockInitializer, let mockInitializer = instantiable.mockInitializer {
+				mockInitializer
+			} else {
+				instantiable.initializer
+			}
+			if let constructionInitializer {
+				constructionArguments = constructionInitializer.arguments
+				defaultParameters = MockParameterNode.DefaultParameter.defaultParameters(
+					of: constructionInitializer,
+					dependencies: instantiable.dependencies,
+				)
+			} else {
+				constructionArguments = []
+				defaultParameters = []
+			}
+			constructionIsolation = constructionInitializer?.spelledIsolation
+			isExtensionBased = instantiable.declarationType.isExtension
+			dependencies = instantiable.dependencies
+			constructionReturnType = (useMockInitializer ? instantiable.mockCallReturnType : nil) ?? instantiable.concreteInstantiable
+			customMockName = instantiable.customMockName
+			concreteType = instantiable.concreteInstantiable
+			sourceFilePath = instantiable.sourceFilePath
+			mockDeclarationLocation = instantiable.mockDeclarationLocation
+			// Collect forwarded properties for Instantiator edges.
+			forwardedProperties = Set(
+				instantiable.dependencies
+					.filter { $0.source == .forwarded }
+					.map(\.property),
+			)
+			let dependencyInnerLabels = Set(instantiable.dependencies.map(\.property.label))
+			self.dependencyInnerLabels = dependencyInnerLabels
+			let callSiteArguments = constructionArguments.filter { argument in
+				!MockParameterNode.isElidedInCallSite(argument, dependencyInnerLabels: dependencyInnerLabels)
+			}
+			self.callSiteArguments = callSiteArguments
+			// The override closure of a call of another module's public mock passes what it is handed on to that `mock()`, so
+			// a function spelled as a name, such as an erased instantiator's `Builder`, is handed `@escaping` where the called
+			// mock takes it so (`PublicMockCall.typesDeclaredEscaping`).
+			// A deliberate gap beside `MockedTypeSpellings`, which spells what the mock root binds as the mocked type does, or
+			// as the most explicit of the tree's receivers does: the closure takes each argument as the initializer declares
+			// it, so a protocol the type spells without `any`, which the mocked type or another receiver spells with it, warns
+			// here in a module that enables the `ExistentialAny` upcoming feature. The argument reads whichever declaration of
+			// its label is nearest above the node, which a type between the node and the mock root can declare in a spelling of
+			// its own, and which the node is not told. The bindings of the arguments in the type's builder function share the
+			// gap (`emitReceiverBindings`).
+			builderParameterTypes = callSiteArguments.map { argument in
+				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription).asFunctionParameter(amongTypesDeclaredEscaping: builderTypesDeclaredEscaping)
+			}
+		}
+	}
+
+	/// The constructions one mock root's tree has worked out so far, by concrete type and whether the hand-written mock
+	/// builds it, so that a node shares the construction of an earlier node of its type built the same way. A value,
+	/// handed down the tree's walk and back, so no task shares it.
+	struct MockConstructions: Sendable {
+		private struct Key: Hashable {
+			let concreteType: TypeDescription
+			let useMockInitializer: Bool
+		}
+
+		private var constructionsByKey = [Key: [MockConstruction]]()
+
+		/// The construction of `instantiable` built as `useMockInitializer` says, an earlier one where the declaration and
+		/// the call's escaping types are equal to its, else a new one, which later nodes share.
+		mutating func construction(
+			of instantiable: Instantiable,
+			useMockInitializer: Bool,
+			builderTypesDeclaredEscaping: Set<TypeDescription>,
+		) -> MockConstruction {
+			let key = Key(concreteType: instantiable.concreteInstantiable, useMockInitializer: useMockInitializer)
+			for construction in constructionsByKey[key, default: []] where construction.builderTypesDeclaredEscaping == builderTypesDeclaredEscaping && construction.instantiable == instantiable {
+				return construction
+			}
+			let construction = MockConstruction(
+				instantiable: instantiable,
+				useMockInitializer: useMockInitializer,
+				builderTypesDeclaredEscaping: builderTypesDeclaredEscaping,
+			)
+			constructionsByKey[key, default: []].append(construction)
+			return construction
+		}
+	}
+
 	// MARK: MockParameterNode
 
 	/// A node in the mock parameter tree. Each node represents one property edge
@@ -10050,6 +10172,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// property nodes, retain one reference rather than copying every field. Every stored property is a `let`, so a
 	/// node is a value nothing changes, and `Sendable`.
 	final class MockParameterNode: Sendable {
+		/// How the node's type is constructed, which every node of the type built the same way shares (`MockConstruction`).
+		let construction: MockConstruction
 		/// The property label on the parent type's init (e.g., "service", "childBuilder").
 		let propertyLabel: String
 		/// The position of this node among its siblings in the inline build's order: declaration order, each after the
@@ -10072,7 +10196,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Whether this property is an Instantiator/ErasedInstantiator/Sendable variant.
 		let isInstantiator: Bool
 		/// Whether the concrete type uses extension-based `instantiate(...)` instead of `init(...)`.
-		let isExtensionBased: Bool
+		var isExtensionBased: Bool {
+			construction.isExtensionBased
+		}
 		/// Whether this property requires erased-to-concrete existential wrapping.
 		let erasedToConcreteExistential: Bool
 		/// Child items in the dependency tree (instantiated sub-properties and aliased
@@ -10085,15 +10211,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Holds `children`, or `nil` when there are none, as at most nodes.
 		let childItems: MockTreeItems?
 		/// Non-dependency default-valued parameters from this type's init or customMock.
-		let defaultParameters: [DefaultParameter]
+		var defaultParameters: [DefaultParameter] {
+			construction.defaultParameters
+		}
 		/// All arguments from the init or customMock that will be used for construction.
 		/// Determines the builder closure signature (positional unlabeled parameters).
-		let constructionArguments: [Initializer.Argument]
+		var constructionArguments: [Initializer.Argument] {
+			construction.constructionArguments
+		}
 		/// The isolation the init or customMock spells (`Initializer.spelledIsolation`), which a public mock's
 		/// construction function that calls it mirrors.
-		let constructionIsolation: String?
+		var constructionIsolation: String? {
+			construction.constructionIsolation
+		}
 		/// The type's declared dependencies.
-		let dependencies: [Dependency]
+		var dependencies: [Dependency] {
+			construction.dependencies
+		}
 		/// The received dependencies that are in scope only as the instance of a `LazilyInstantiated` property.
 		/// Construction arguments for them read that instance.
 		let lazilyInstantiatedInstanceProperties: Set<Property>
@@ -10102,21 +10236,33 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// not build them before it. They are passed `nil`.
 		let unavailableProperties: Set<Property>
 		/// Whether a compatible user-defined mock method exists for this type.
-		let useMockInitializer: Bool
+		var useMockInitializer: Bool {
+			construction.useMockInitializer
+		}
 		/// The type the construction returns: what the user-defined mock method returns (`Instantiable.mockCallReturnType`)
 		/// when `useMockInitializer`, else `concreteType`. Unlike `instantiatedTypeDescription`, it does not depend on the
 		/// property the node builds, so a public mock's construction function, which every node of the type built this way
 		/// shares, returns it (`publicConstructionFunctions`).
-		let constructionReturnType: TypeDescription
+		var constructionReturnType: TypeDescription {
+			construction.constructionReturnType
+		}
 		/// The custom mock method name (e.g., "customMock"), if any.
-		let customMockName: String?
+		var customMockName: String? {
+			construction.customMockName
+		}
 		/// The concrete type (e.g., `ConcreteService`), which may differ from `instantiatedTypeDescription`
 		/// when the property uses an existential wrapper (e.g., `AnyService` fulfilled by `ConcreteService`).
-		let concreteType: TypeDescription
+		var concreteType: TypeDescription {
+			construction.concreteType
+		}
 		/// The file that declares `concreteType`, as `Instantiable.sourceFilePath` records it.
-		let sourceFilePath: String?
+		var sourceFilePath: String? {
+			construction.sourceFilePath
+		}
 		/// Where the hand-written mock `useMockInitializer` selects is declared, when the type has one.
-		let mockDeclarationLocation: Dependency.DeclarationLocation?
+		var mockDeclarationLocation: Dependency.DeclarationLocation? {
+			construction.mockDeclarationLocation
+		}
 		/// How the node calls the public mock another module generated for its type, which the tree cannot build
 		/// itself, or `nil` for a node built as its type's own module would build it.
 		let publicMockCall: PublicMockCall?
@@ -10161,7 +10307,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// `ScopeGenerator.referencedFillNamesByKey`), which no builder function declared around them may share.
 		let referencedFillNames: Set<String>
 		/// Forwarded properties on this type (relevant for Instantiator edges).
-		let forwardedProperties: Set<Property>
+		var forwardedProperties: Set<Property> {
+			construction.forwardedProperties
+		}
 		/// `ScopeGenerator.typesDeclaredEscaping` of the scope this node builds.
 		let typesDeclaredEscaping: Set<TypeDescription>
 		/// Set when this property's label repeats in the ancestor stack during
@@ -10215,26 +10363,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let isReadOutsideItsLoop: Bool
 
 		init(
+			construction: MockConstruction,
 			propertyLabel: String,
 			inlineOrderPosition: Int,
 			typeDescription: TypeDescription,
 			instantiatedTypeDescription: TypeDescription,
 			isInstantiator: Bool,
-			isExtensionBased: Bool,
 			erasedToConcreteExistential: Bool,
 			childItems: MockTreeItems?,
-			defaultParameters: [DefaultParameter],
-			constructionArguments: [Initializer.Argument],
-			constructionIsolation: String?,
-			dependencies: [Dependency],
 			lazilyInstantiatedInstanceProperties: Set<Property>,
 			unavailableProperties: Set<Property>,
-			useMockInitializer: Bool,
-			constructionReturnType: TypeDescription,
-			customMockName: String?,
-			concreteType: TypeDescription,
-			sourceFilePath: String?,
-			mockDeclarationLocation: Dependency.DeclarationLocation?,
 			publicMockCall: PublicMockCall?,
 			valuesBindings: [ValuesBinding],
 			memberCallsInsideBuilderFunction: [ValuesBinding] = [],
@@ -10244,7 +10382,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			publicMockOverrideBuilders: [String: ScopeGenerator.PublicMockOverrideBuilder]? = nil,
 			fillPropertiesGeneratedLater: Set<Property>,
 			referencedFillNames: Set<String>,
-			forwardedProperties: Set<Property>,
 			typesDeclaredEscaping: Set<TypeDescription>,
 			isPropertyCycle: Bool,
 			closedOnDeclaration: ScopeGenerator.BuiltDeclaration?,
@@ -10259,26 +10396,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			reboundProperties: [Property],
 			isReadOutsideItsLoop: Bool,
 		) {
+			self.construction = construction
 			self.propertyLabel = propertyLabel
 			self.inlineOrderPosition = inlineOrderPosition
 			self.typeDescription = typeDescription
 			self.instantiatedTypeDescription = instantiatedTypeDescription
 			self.isInstantiator = isInstantiator
-			self.isExtensionBased = isExtensionBased
 			self.erasedToConcreteExistential = erasedToConcreteExistential
 			self.childItems = childItems
-			self.defaultParameters = defaultParameters
-			self.constructionArguments = constructionArguments
-			self.constructionIsolation = constructionIsolation
-			self.dependencies = dependencies
 			self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
 			self.unavailableProperties = unavailableProperties
-			self.useMockInitializer = useMockInitializer
-			self.constructionReturnType = constructionReturnType
-			self.customMockName = customMockName
-			self.concreteType = concreteType
-			self.sourceFilePath = sourceFilePath
-			self.mockDeclarationLocation = mockDeclarationLocation
 			self.publicMockCall = publicMockCall
 			self.valuesBindings = valuesBindings
 			self.memberCallsInsideBuilderFunction = memberCallsInsideBuilderFunction
@@ -10288,7 +10415,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			self.publicMockOverrideBuilders = publicMockOverrideBuilders
 			self.fillPropertiesGeneratedLater = fillPropertiesGeneratedLater
 			self.referencedFillNames = referencedFillNames
-			self.forwardedProperties = forwardedProperties
 			self.typesDeclaredEscaping = typesDeclaredEscaping
 			self.isPropertyCycle = isPropertyCycle
 			self.closedOnDeclaration = closedOnDeclaration
@@ -10302,28 +10428,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			self.loop = loop
 			self.reboundProperties = reboundProperties
 			self.isReadOutsideItsLoop = isReadOutsideItsLoop
-			// Generation reads these for every node many times, so they are worked out once here.
-			let dependencyInnerLabels = Set(dependencies.map(\.property.label))
-			self.dependencyInnerLabels = dependencyInnerLabels
-			let callSiteArguments = constructionArguments.filter { argument in
-				!Self.isElidedInCallSite(argument, dependencyInnerLabels: dependencyInnerLabels)
-			}
-			self.callSiteArguments = callSiteArguments
-			// The override closure of a call of another module's public mock passes what it is handed on to that `mock()`, so
-			// a function spelled as a name, such as an erased instantiator's `Builder`, is handed `@escaping` where the called
-			// mock takes it so (`PublicMockCall.typesDeclaredEscaping`).
-			let builderTypesDeclaredEscaping = publicMockCall?.typesDeclaredEscaping ?? []
-			// A deliberate gap beside `MockedTypeSpellings`, which spells what the mock root binds as the mocked type does, or
-			// as the most explicit of the tree's receivers does: the closure takes each argument as the initializer declares
-			// it, so a protocol the type spells without `any`, which the mocked type or another receiver spells with it, warns
-			// here in a module that enables the `ExistentialAny` upcoming feature. The argument reads whichever declaration of
-			// its label is nearest above the node, which a type between the node and the mock root can declare in a spelling of
-			// its own, and which the node is not told. The bindings of the arguments in the type's builder function share the
-			// gap (`emitReceiverBindings`).
-			builderParameterTypes = callSiteArguments.map { argument in
-				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription).asFunctionParameter(amongTypesDeclaredEscaping: builderTypesDeclaredEscaping)
-			}
-			needsConfigurationStruct = childItems?.containsPropertyNode == true || !defaultParameters.isEmpty || isPropertyCycle
+			needsConfigurationStruct = childItems?.containsPropertyNode == true || !construction.defaultParameters.isEmpty || isPropertyCycle
 			subtreeCallsPublicMock = publicMockCall != nil || childItems?.propertyNodes.contains(where: \.subtreeCallsPublicMock) == true
 		}
 
@@ -10331,25 +10436,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// from its children included, so the copy describes the node's construction and configuration as `node` does.
 		private init(copying node: MockParameterNode, childItems: MockTreeItems?) {
 			self.childItems = childItems
+			construction = node.construction
 			propertyLabel = node.propertyLabel
 			inlineOrderPosition = node.inlineOrderPosition
 			typeDescription = node.typeDescription
 			instantiatedTypeDescription = node.instantiatedTypeDescription
 			isInstantiator = node.isInstantiator
-			isExtensionBased = node.isExtensionBased
 			erasedToConcreteExistential = node.erasedToConcreteExistential
-			defaultParameters = node.defaultParameters
-			constructionArguments = node.constructionArguments
-			constructionIsolation = node.constructionIsolation
-			dependencies = node.dependencies
 			lazilyInstantiatedInstanceProperties = node.lazilyInstantiatedInstanceProperties
 			unavailableProperties = node.unavailableProperties
-			useMockInitializer = node.useMockInitializer
-			constructionReturnType = node.constructionReturnType
-			customMockName = node.customMockName
-			concreteType = node.concreteType
-			sourceFilePath = node.sourceFilePath
-			mockDeclarationLocation = node.mockDeclarationLocation
 			publicMockCall = node.publicMockCall
 			valuesBindings = node.valuesBindings
 			memberCallsInsideBuilderFunction = node.memberCallsInsideBuilderFunction
@@ -10359,7 +10454,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			publicMockOverrideBuilders = node.publicMockOverrideBuilders
 			fillPropertiesGeneratedLater = node.fillPropertiesGeneratedLater
 			referencedFillNames = node.referencedFillNames
-			forwardedProperties = node.forwardedProperties
 			typesDeclaredEscaping = node.typesDeclaredEscaping
 			isPropertyCycle = node.isPropertyCycle
 			closedOnDeclaration = node.closedOnDeclaration
@@ -10373,10 +10467,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			loop = node.loop
 			reboundProperties = node.reboundProperties
 			isReadOutsideItsLoop = node.isReadOutsideItsLoop
-			generatorIdentifier = node.generatorIdentifier
-			dependencyInnerLabels = node.dependencyInnerLabels
-			callSiteArguments = node.callSiteArguments
-			builderParameterTypes = node.builderParameterTypes
 			needsConfigurationStruct = node.needsConfigurationStruct
 			subtreeCallsPublicMock = node.subtreeCallsPublicMock
 		}
@@ -10506,17 +10596,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// `validateUnlabeledDefaultShape` on the macro rejects the shapes
 		/// where eliding would produce an uncallable signature (non-trailing
 		/// `_`-labeled default).
-		private static func isElidedInCallSite(_ argument: Initializer.Argument, dependencyInnerLabels: Set<String>) -> Bool {
+		fileprivate static func isElidedInCallSite(_ argument: Initializer.Argument, dependencyInnerLabels: Set<String>) -> Bool {
 			argument.isLeftToItsDefault
 				&& !dependencyInnerLabels.contains(argument.innerLabel)
 		}
 
 		/// The labels of `dependencies`.
-		private let dependencyInnerLabels: Set<String>
+		private var dependencyInnerLabels: Set<String> {
+			construction.dependencyInnerLabels
+		}
 
 		/// Construction arguments surfaced at the mock call site, with elided
 		/// non-dependency defaults removed (`isElidedInCallSite`).
-		let callSiteArguments: [Initializer.Argument]
+		var callSiteArguments: [Initializer.Argument] {
+			construction.callSiteArguments
+		}
 
 		/// The builder closure type as a Swift source string (unlabeled parameters).
 		/// Uses the property type (not the concrete fulfilling type) so the override
@@ -10569,7 +10663,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The parameter types of the builder closures that override how this node is built, one per call-site argument:
 		/// the argument's type, or the type of the value an `@autoclosure` argument takes, which the mock evaluates before
 		/// it calls the builder, as it does before it calls the construction.
-		let builderParameterTypes: [TypeDescription]
+		var builderParameterTypes: [TypeDescription] {
+			construction.builderParameterTypes
+		}
 
 		/// Call-site arguments with labeled non-dependency defaults also elided,
 		/// for the pruned-back-edge / unreachable-override case where Swift's
@@ -11219,11 +11315,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `onlyIfAvailable` alias of one is not bound, as in the production tree. The
 	/// same holds for a receive of an ancestor that is still being built (see
 	/// `Scope.createScopeGenerator`).
+	/// The mock parameter tree beneath this scope, and `constructions` with those its nodes worked out added, which the
+	/// walk hands on to the next sibling.
 	private func collectMockParameterTree(
 		insideSendableScope: Bool = false,
 		propertiesGeneratedLater: Set<Property> = [],
-	) async -> [MockTreeItem] {
+		constructions: MockConstructions,
+	) async -> (items: [MockTreeItem], constructions: MockConstructions) {
 		var items = [MockTreeItem]()
+		var constructions = constructions
 		// The loop of builders each child is on, and the members of loops on a mock root that nothing outside their loop
 		// reads (see `ReceivedBuilderLoops`). Nearly every scope holds no loop.
 		// A child is told apart from its siblings by its index, never by its generator, which a sibling can hold too.
@@ -11278,67 +11378,38 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// Recurse into children to build the subtree. The child's builder function's own parameters hide the
 				// declarations of their labels inside it.
 				let childBodyPropertiesGeneratedLater = childGenerator.bodyPropertiesGeneratedLater(childPropertiesGeneratedLater)
-				let childItems = await childGenerator.collectMockParameterTree(
+				let childTree = await childGenerator.collectMockParameterTree(
 					insideSendableScope: childInsideSendable,
 					propertiesGeneratedLater: childBodyPropertiesGeneratedLater,
+					constructions: constructions,
 				)
+				let childItems = childTree.items
+				constructions = childTree.constructions
 				let childConstructionUnavailableProperties = childGenerator.bodyUnavailableProperties(childUnavailableProperties)
 
-				// Determine which initializer to use for construction arguments and defaults.
-				// When the child has a compatible mock method, it fully controls the
-				// construction signature — its parameter list wins even when empty.
-				// Init-only default-valued parameters are intentionally hidden behind
-				// the mock.
-				// The mock is compatible when it returns the type the property builds — the
-				// return type of the builder closure — rather than the property's own type, so
-				// an `ErasedInstantiator<_, Protocol>` property, like a `Protocol` property, is
-				// built with a mock that returns `Protocol`.
-				let useMockInitializer = childInstantiable.mockReturnTypeIsCompatible(withPropertyType: childProperty.typeDescription.asInstantiatedType)
-				let constructionInitializer: Initializer? = if useMockInitializer, let mockInitializer = childInstantiable.mockInitializer {
-					mockInitializer
-				} else {
-					childInstantiable.initializer
-				}
-
-				// Collect non-dependency default-valued parameters and construction arguments.
-				var defaultParameters = [MockParameterNode.DefaultParameter]()
-				var constructionArguments = [Initializer.Argument]()
-				if let constructionInitializer {
-					constructionArguments = constructionInitializer.arguments
-					defaultParameters = MockParameterNode.DefaultParameter.defaultParameters(
-						of: constructionInitializer,
-						dependencies: childInstantiable.dependencies,
-					)
-				}
-
-				// Collect forwarded properties for Instantiator edges.
-				let forwardedProperties = Set(
-					childInstantiable.dependencies
-						.filter { $0.source == .forwarded }
-						.map(\.property),
+				// The construction the child's compatible mock method decides when it has one: it fully controls the
+				// construction signature — its parameter list wins even when empty. Init-only default-valued parameters are
+				// intentionally hidden behind the mock. The mock is compatible when it returns the type the property builds —
+				// the return type of the builder closure — rather than the property's own type, so an
+				// `ErasedInstantiator<_, Protocol>` property, like a `Protocol` property, is built with a mock that returns
+				// `Protocol`.
+				let construction = constructions.construction(
+					of: childInstantiable,
+					useMockInitializer: childInstantiable.mockReturnTypeIsCompatible(withPropertyType: childProperty.typeDescription.asInstantiatedType),
+					builderTypesDeclaredEscaping: childGenerator.publicMockCall?.typesDeclaredEscaping ?? [],
 				)
 
 				items.append(.property(MockParameterNode(
+					construction: construction,
 					propertyLabel: childProperty.label,
 					inlineOrderPosition: inlineOrderPositionByIndex[childIndex],
 					typeDescription: childProperty.typeDescription,
 					instantiatedTypeDescription: childProperty.typeDescription.asInstantiatedType,
 					isInstantiator: isInstantiator,
-					isExtensionBased: childInstantiable.declarationType.isExtension,
 					erasedToConcreteExistential: erasedToConcreteExistential,
 					childItems: childItems.isEmpty ? nil : MockTreeItems(childItems),
-					defaultParameters: defaultParameters,
-					constructionArguments: constructionArguments,
-					constructionIsolation: constructionInitializer?.spelledIsolation,
-					dependencies: childInstantiable.dependencies,
 					lazilyInstantiatedInstanceProperties: childGenerator.lazilyInstantiatedInstanceProperties,
 					unavailableProperties: childConstructionUnavailableProperties,
-					useMockInitializer: useMockInitializer,
-					constructionReturnType: (useMockInitializer ? childInstantiable.mockCallReturnType : nil) ?? childInstantiable.concreteInstantiable,
-					customMockName: childInstantiable.customMockName,
-					concreteType: childInstantiable.concreteInstantiable,
-					sourceFilePath: childInstantiable.sourceFilePath,
-					mockDeclarationLocation: childInstantiable.mockDeclarationLocation,
 					publicMockCall: childGenerator.publicMockCall,
 					valuesBindings: childGenerator.valuesBindingsBeforeBuilderFunction,
 					memberCallsInsideBuilderFunction: childGenerator.memberCallsInsideBuilderFunction,
@@ -11348,7 +11419,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					publicMockOverrideBuilders: childGenerator.publicMockOverrideBuilders,
 					fillPropertiesGeneratedLater: childBodyPropertiesGeneratedLater,
 					referencedFillNames: Set(childGenerator.referencedFillNamesByKey.values),
-					forwardedProperties: forwardedProperties,
 					typesDeclaredEscaping: childGenerator.typesDeclaredEscaping,
 					isPropertyCycle: isPropertyCycle,
 					closedOnDeclaration: childGenerator.closedOnDeclaration,
@@ -11366,7 +11436,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
-		return items
+		return (items, constructions)
 	}
 
 	/// The `@Instantiated` dependencies of a mock's types that the mock cannot build, which `mock()` takes as
