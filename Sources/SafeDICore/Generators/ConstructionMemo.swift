@@ -515,14 +515,12 @@ struct ConstructionLog {
 		return true
 	}
 
-	/// This log's reads when they are one run of distinct reads, every one of which a walk reads: those it recorded, or the
-	/// one part of reads a place's copy (`reads(answeredAbove:)`) holds.
+	/// This log's reads when they are one run of distinct reads, every one of which a walk reads: the one part of reads a
+	/// place's copy (`reads(answeredAbove:)`) holds, or the reads it recorded.
 	private var distinctReadsInOneRun: [RecordedRead]? {
-		guard ownReads.isEmpty else {
-			return parts.isEmpty ? ownReads : nil
-		}
-		guard parts.count == 1, case let .reads(reads) = parts[0] else {
-			return parts.isEmpty ? [] : nil
+		let allParts = allParts
+		guard allParts.count == 1, case let .reads(reads) = allParts[0] else {
+			return allParts.isEmpty ? [] : nil
 		}
 		return reads
 	}
