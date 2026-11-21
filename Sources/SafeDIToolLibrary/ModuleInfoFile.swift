@@ -337,6 +337,21 @@ extension ModuleInfoFile {
 			try BinaryFile.data(.moduleInfo, holding: self)
 		}
 	}
+
+	/// This module as a module info file, as `moduleInfoData` writes it with every seam signature's `withoutPositions()`:
+	/// the signatures a run computes carry the positions of the declarations they name, which the file writes as absent
+	/// (``BinaryWriter/writingPositionsAsAbsent(_:)``). Copying every signature without them instead allocated several
+	/// times the file's size at the run's end, on pages the run had not used yet, which raised its peak resident memory
+	/// by a third on a module of two hundred seams although its peak heap held.
+	public var moduleInfoDataWritingSeamSignaturesWithoutPositions: Data {
+		get throws(BinaryFileWriteError) {
+			try BinaryFile.data(.moduleInfo) { writer in
+				write(to: &writer) { writer in
+					writer.writingPositionsAsAbsent { writer in writer.write(seamSignatures) }
+				}
+			}
+		}
+	}
 }
 
 /// The modules a run of `generate` reads through the module info files it was given: each file's own module, and the

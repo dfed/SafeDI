@@ -980,6 +980,10 @@ extension Dependency.Source: BinarySchemaMember {
 	}
 }
 
+extension Dependency.SourceRange: BinaryPosition {}
+
+extension Dependency.DeclarationLocation: BinaryPosition {}
+
 extension Dependency.SourceRange: BinarySchemaMember {
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
@@ -1374,6 +1378,12 @@ extension ModuleInfoFile: BinarySchemaMember {
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		write(to: &writer) { writer in writer.write(seamSignatures) }
+	}
+
+	/// Writes the file with `writeSeamSignatures` in place of writing `seamSignatures`, which it writes as their array
+	/// does, each type description at the outermost level of each written once.
+	func write(to writer: inout BinaryWriter, writingSeamSignatures writeSeamSignatures: (inout BinaryWriter) -> Void) {
 		writer.write(moduleName)
 		writer.write(ownEntryChecksum)
 		writer.write(packageName)
@@ -1386,7 +1396,8 @@ extension ModuleInfoFile: BinarySchemaMember {
 		writer.write(conditionalCompilationDecisions)
 		writer.write(instantiableTypeNamesInAnyClause)
 		writer.write(plainTypeDeclarations)
-		writer.write(seamSignaturesSharingTypeDescriptions)
+		// As `seamSignaturesSharingTypeDescriptions` writes them.
+		writer.writeSharingTypeDescriptions(writeSeamSignatures)
 		writer.write(view)
 	}
 
