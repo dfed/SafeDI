@@ -224,17 +224,23 @@ extension DependencyTreeGenerator {
 	/// seam's own module, which cannot see the fill, judged the parameter without them. So a fill that receives the label
 	/// in a form no one parameter carries together with the forms the seam's tree receives is rejected as its inline build
 	/// is, with the same error. A hole this module does not fill has no scope, and its tree ends there.
-	func inlineTreesOfForeignSeamsWithHoles(in typeDescriptionToScopeMap: [TypeDescription: Scope], foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?]) throws -> [ScopeGenerator] {
-		try foreignSeamTypesWithHoles(among: foreignSeamRoots).compactMap { typeDescriptionToScopeMap[$0] }.map { scope in
-			try scope.createScopeGenerator(
+	func inlineTreesOfForeignSeamsWithHoles(in typeDescriptionToScopeMap: [TypeDescription: Scope], validatedWorld: ValidatedWorld, foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?]) throws -> [ScopeGenerator] {
+		var constructionMemo = ConstructionMemo()
+		var generators = [ScopeGenerator]()
+		for scope in foreignSeamTypesWithHoles(among: foreignSeamRoots).compactMap({ typeDescriptionToScopeMap[$0] }) {
+			let (table, record) = validatedWorld.frozenScopeMap.freezing(rootScope: scope)
+			try generators.append(record.createScopeGenerator(
+				in: table,
 				for: nil,
 				lazilyInstantiatedInstanceProperties: [],
 				erasedToConcreteExistential: false,
 				startsCodeGeneration: false,
 				validatesForwardedProperties: false,
 				declaredTypeNames: declaredTypeNames,
-			)
+				constructionMemo: &constructionMemo,
+			))
 		}
+		return generators
 	}
 
 	/// An alias that a receive of its property resolves to: the nearest scope above the receiver that provides the
@@ -454,6 +460,62 @@ extension DependencyTreeGenerator {
 		let mockRootForwardedProperties: Set<Property>?
 	}
 
+	/// What a root of `validatePropertiesAreFulfillable(onRootScopes:…)` gives every scope of its tree, beside the scope's
+	/// own context, that a walk of a subtree reads.
+	private struct CleanSubtreeRootContext: Hashable {
+		let boundProperties: Set<Property>
+		let mockRootForwardedProperties: Set<Property>?
+		let validatesCycles: Bool
+		let validatesHiddenProperties: Bool
+	}
+
+	/// What a walk of a scope's subtree reads of the declaration that is closest above it for a label: whether a receive is
+	/// hidden (`LabelDeclaration.fulfills(anyOf:)`), an alias's binding, and the nearest declaration the cycle checks read.
+	/// Where it is declared and by which type only a diagnostic reads.
+	private struct CleanSubtreeDeclaration: Hashable {
+		let property: Property
+		let lazilyInstantiatedInstanceProperty: Property?
+		let isForwarded: Bool
+	}
+
+	/// An element of the instantiation stack of a scope, root first, as a walk of its subtree can read it.
+	private enum CleanSubtreeStackToken: Hashable {
+		/// The labels the subtree reads whose closest declaration is made by the scope the next entry is built in.
+		case declarations([String])
+		/// An entry whose label the subtree reads, with the concrete type of the scope built for it.
+		case entry(Property, TypeDescription)
+		/// One entry or more whose labels the subtree does not read.
+		case gap
+	}
+
+	/// An alias declared above a scope, as a walk of its subtree reads it: every field but what only a diagnostic reads.
+	private struct CleanSubtreeAlias: Hashable {
+		let fulfillingProperty: Property
+		let onlyIfAvailable: Bool
+		let fulfillingOnlyIfAvailableAliases: [DependencyTreeGeneratorError.RequiredOnlyIfAvailableAlias]
+		let binding: ReceivableAlias.AliasBinding?
+		let declaringType: TypeDescription
+		let lastAliasDeclaringType: TypeDescription
+		let lastAliasDeclaringInstantiationStack: [Property]
+	}
+
+	/// Everything a walk of `scope`'s subtree reads of the path it is reached by, projected to what that walk can read: the
+	/// labels its scopes and the scopes they receive from declare or read (see `cycle-validation.md`, "Clean subtrees"). Two
+	/// walks of one key judge every receive alike, so a subtree whose walk completed and found nothing is skipped on every
+	/// other path with its key.
+	private struct CleanSubtreeKey: Hashable {
+		let scope: Scope
+		let property: Property?
+		let rootContextIndex: Int
+		let receivableProperties: Set<Property>
+		let closestDeclarations: [String: CleanSubtreeDeclaration]
+		let stack: [CleanSubtreeStackToken]
+		let receivableAliases: [Property: CleanSubtreeAlias]
+		/// The whole stack, where an alias above is receivable: an alias's declaring stack is absolute.
+		let aliasStack: [Property]
+		let aliasParentTypeStack: [TypeDescription]
+	}
+
 	/// A scope whose required received properties `validateNoCycleInReceivedProperties` is walking.
 	private struct ReceivedPropertyWalk {
 		let requiredReceivedProperties: [Scope.RequiredReceivedProperty]
@@ -597,6 +659,11 @@ extension DependencyTreeGenerator {
 		/// which the walk of a tree a cycle builds again prunes.
 		var hiddenReceivedProperties = [HiddenReceiveInTree: HiddenReceiveChain]()
 		var renamesContradictingOwnProperties = Set<DependencyTreeGeneratorError.RenameContradictingOwnProperty>()
+		/// How many times a walk recorded something, or met a judgement that reads more of its path than `CleanSubtreeKey`
+		/// holds: a cycle, a receive of a property on the instantiation stack, or a tree a cycle builds again. A subtree whose
+		/// walk leaves it unchanged is clean (see `cycle-validation.md`, "Clean subtrees"). Any new judgement in the walk must
+		/// read only what the key holds, or add to this count where it fires.
+		var memoBlockingEventCount = 0
 		/// The properties a scope of `typeDescriptionToScopeMap` builds – instantiates, or renames another property to –
 		/// as cycle validation sees them. Most walks never ask, so the set is built the first time one does.
 		lazy var propertiesBuiltByAScope: Set<Property> = {
@@ -719,6 +786,9 @@ extension DependencyTreeGenerator {
 						requiredOnlyIfAvailableAliases: [],
 					)
 				}
+				if childProperty == property {
+					memoBlockingEventCount += 1
+				}
 				guard !receivedPropertyStack.contains(childProperty) else {
 					// We've found a cycle, but it's not our cycle. Bail and let a future loop find this.
 					// The remaining received properties on this scope go unwalked, so a later visit
@@ -728,7 +798,11 @@ extension DependencyTreeGenerator {
 					continue
 				}
 				let memoizedStackPropertiesReliedOn = stackPropertiesReliedOnByWalkedProperty[childProperty]
-				if let cycleIndex = instantiationStack.firstIndex(of: childProperty),
+				let cycleIndex = instantiationStack.firstIndex(of: childProperty)
+				if cycleIndex != nil {
+					memoBlockingEventCount += 1
+				}
+				if let cycleIndex,
 				   !Self.isFulfilledByNearerDeclaration([childProperty], thanEntryAt: cycleIndex, of: instantiationStack, nearestDeclaration: nearestDeclaration)
 				{
 					let instantiationProperties = Array(instantiationStack[0...cycleIndex])
@@ -909,6 +983,304 @@ extension DependencyTreeGenerator {
 				return labels
 			}
 		}
+		/// The walk skips nothing when a test or the graph fuzzer's oracle compares its outcome with and without the skip.
+		let skipsCleanSubtrees = ValidationWalkObservation.skipsCleanSubtrees
+		let validationWalkObserver = ValidationWalkObservation.observer
+		/// The keys of the subtrees whose walk completed and left `memoBlockingEventCount` unchanged, shared by every root,
+		/// since a key holds its root's context.
+		var cleanSubtrees = Set<CleanSubtreeKey>()
+		/// The scopes the walks reached, which alone are keyed when reached again.
+		var validationWalkScopesReached = Set<Scope>()
+		/// An index for each root context, so that a key holds one integer for it.
+		var cleanSubtreeRootContextIndices = [CleanSubtreeRootContext: Int]()
+		/// See `labelsDeclaredOrRead(beneath:)`.
+		var labelsDeclaredOrReadBeneathScope = [Scope: Set<String>]()
+		/// See `labelsReadThroughReceives(by:)`.
+		var labelsReadThroughReceivesByScope = [Scope: Set<String>]()
+		/// See `labelsReadFromAbove(by:)`.
+		var labelsReadFromAboveByScope = [Scope: Set<String>]()
+		/// See `reachesInstantiationCycle(from:)`.
+		var reachesInstantiationCycleByScope = [Scope: Bool]()
+		/// The scopes whose receives a walk of `scope` follows: the scopes of the types it receives or renames.
+		func receivedScopes(of scope: Scope) -> [Scope] {
+			var scopes = [Scope]()
+			for dependency in scope.instantiable.dependencies {
+				let receivedProperty: Property
+				switch dependency.source {
+				case .received:
+					receivedProperty = dependency.property
+				case let .aliased(fulfillingProperty, _, _):
+					receivedProperty = fulfillingProperty
+				case .instantiated, .forwarded:
+					continue
+				}
+				for typeDescription in [receivedProperty.typeDescription, receivedProperty.asValidatedForDependencyCycles.typeDescription] {
+					if let receivedScope = typeDescriptionToScopeMap[typeDescription] {
+						scopes.append(receivedScope)
+					}
+				}
+			}
+			return scopes
+		}
+		/// The scopes `scope` instantiates.
+		func instantiatedScopes(of scope: Scope) -> [Scope] {
+			var scopes = [Scope]()
+			for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
+				scopes.append(childScope)
+			}
+			return scopes
+		}
+		/// The union, for `start` and every scope `successors` reaches from it, of `labels` of each, remembered in `cache` for
+		/// each scope reached.
+		func labelsReached(
+			from start: Scope,
+			successors: (Scope) -> [Scope],
+			labels: (Scope) -> Set<String>,
+			cache: inout [Scope: Set<String>],
+		) -> Set<String> {
+			valueReached(
+				from: start,
+				successors: successors,
+				componentValue: { component, _ in
+					var componentLabels = Set<String>()
+					for member in component {
+						componentLabels.formUnion(labels(member))
+					}
+					return componentLabels
+				},
+				combining: { $0.formUnion($1) },
+				empty: [],
+				cache: &cache,
+			)
+		}
+		/// Whether a walk of `scope`'s subtree closes a dependency cycle wherever it is reached: whether a cycle of
+		/// instantiated scopes is reachable from it, which the walk follows until a child repeats an entry of its instantiation
+		/// stack. Such a walk raises `memoBlockingEventCount` where it closes the cycle, so it is never remembered, and keying it
+		/// is work for nothing.
+		func reachesInstantiationCycle(from scope: Scope) -> Bool {
+			valueReached(
+				from: scope,
+				successors: instantiatedScopes(of:),
+				componentValue: { component, successorsByScope in
+					component.count > 1 || component.contains { successorsByScope[$0, default: []].contains($0) }
+				},
+				combining: { $0 = $0 || $1 },
+				empty: false,
+				cache: &reachesInstantiationCycleByScope,
+			)
+		}
+		/// For `start` and every scope `successors` reaches from it, `componentValue` of its strongly connected component
+		/// (given the component and each member's successors) combined with the values of the components it reaches,
+		/// remembered in `cache` for each scope reached. Tarjan's strongly connected components on an explicit stack, so each
+		/// component shares one answer and a deep graph needs no recursion.
+		func valueReached<Value>(
+			from start: Scope,
+			successors: (Scope) -> [Scope],
+			componentValue: (_ component: Set<Scope>, _ successorsByScope: [Scope: [Scope]]) -> Value,
+			combining combine: (inout Value, Value) -> Void,
+			empty: Value,
+			cache: inout [Scope: Value],
+		) -> Value {
+			if let cached = cache[start] {
+				return cached
+			}
+			var nextIndex = 0
+			var indexByScope = [Scope: Int]()
+			var lowLinkByScope = [Scope: Int]()
+			var successorsByScope = [Scope: [Scope]]()
+			var componentStack = [Scope]()
+			var onComponentStack = Set<Scope>()
+			var visits = [(scope: Scope, nextSuccessor: Int)]()
+			func visit(_ scope: Scope) {
+				indexByScope[scope] = nextIndex
+				lowLinkByScope[scope] = nextIndex
+				nextIndex += 1
+				successorsByScope[scope] = successors(scope)
+				componentStack.append(scope)
+				onComponentStack.insert(scope)
+				visits.append((scope, 0))
+			}
+			visit(start)
+			while let (scope, nextSuccessor) = visits.last {
+				let scopeSuccessors = successorsByScope[scope, default: []]
+				if nextSuccessor < scopeSuccessors.count {
+					visits[visits.count - 1].nextSuccessor += 1
+					let successor = scopeSuccessors[nextSuccessor]
+					if let successorIndex = indexByScope[successor] {
+						if onComponentStack.contains(successor) {
+							lowLinkByScope[scope] = min(lowLinkByScope[scope, default: 0], successorIndex)
+						}
+					} else if cache[successor] == nil {
+						visit(successor)
+					}
+				} else {
+					visits.removeLast()
+					let lowLink = lowLinkByScope[scope, default: 0]
+					if let (parent, _) = visits.last {
+						lowLinkByScope[parent] = min(lowLinkByScope[parent, default: 0], lowLink)
+					}
+					if lowLink == indexByScope[scope] {
+						var component = [Scope]()
+						while let member = componentStack.popLast() {
+							onComponentStack.remove(member)
+							component.append(member)
+							if member == scope {
+								break
+							}
+						}
+						let componentScopes = Set(component)
+						var value = componentValue(componentScopes, successorsByScope)
+						for member in component {
+							for successor in successorsByScope[member, default: []] where !componentScopes.contains(successor) {
+								combine(&value, cache[successor, default: empty])
+							}
+						}
+						for member in component {
+							cache[member] = value
+						}
+					}
+				}
+			}
+			return cache[start, default: empty]
+		}
+		/// Every label a walk of `scope`'s subtree can compare with an entry of its instantiation stack, or look up in what is
+		/// receivable there: each label a scope it instantiates, or a scope it follows a receive to, declares, receives,
+		/// renames, provides or builds.
+		func labelsDeclaredOrRead(beneath scope: Scope) -> Set<String> {
+			labelsReached(
+				from: scope,
+				successors: { instantiatedScopes(of: $0) + receivedScopes(of: $0) },
+				labels: { reachedScope in
+					var labels = Set<String>()
+					for dependency in reachedScope.instantiable.dependencies {
+						labels.insert(dependency.property.label)
+						if let fulfillingProperty = dependency.source.fulfillingProperty {
+							labels.insert(fulfillingProperty.label)
+						}
+					}
+					for providedProperty in reachedScope.providedProperties {
+						labels.insert(providedProperty.label)
+					}
+					for propertyToGenerate in reachedScope.propertiesToGenerate {
+						labels.insert(propertyToGenerate.property.label)
+					}
+					return labels
+				},
+				cache: &labelsDeclaredOrReadBeneathScope,
+			)
+		}
+		/// The labels `scope`, and each scope a walk follows its receives to, receives or renames: those whose closest
+		/// declaration above `scope` its walk reads.
+		func labelsReadThroughReceives(by scope: Scope) -> Set<String> {
+			labelsReached(
+				from: scope,
+				successors: receivedScopes(of:),
+				labels: { reachedScope in
+					var labels = Set<String>()
+					for dependency in reachedScope.instantiable.dependencies {
+						switch dependency.source {
+						case .received:
+							labels.insert(dependency.property.label)
+						case let .aliased(fulfillingProperty, _, _):
+							labels.insert(fulfillingProperty.label)
+						case .instantiated, .forwarded:
+							break
+						}
+					}
+					return labels
+				},
+				cache: &labelsReadThroughReceivesByScope,
+			)
+		}
+		/// The labels whose closest declaration above `scope` a walk of its subtree reads: its own reads, and those of the
+		/// scopes it instantiates that it does not declare itself. A scope whose walk is in progress counts as reading
+		/// nothing: a subtree that reaches it closes a cycle, which a walk of it meets, so it is never clean.
+		func labelsReadFromAbove(by scope: Scope) -> Set<String> {
+			if let cached = labelsReadFromAboveByScope[scope] {
+				return cached
+			}
+			var inProgress: Set<Scope> = [scope]
+			var visits = [(scope: scope, children: instantiatedScopes(of: scope), nextChild: 0)]
+			while let (visitedScope, children, nextChild) = visits.last {
+				if nextChild < children.count {
+					visits[visits.count - 1].nextChild += 1
+					let child = children[nextChild]
+					if labelsReadFromAboveByScope[child] == nil, inProgress.insert(child).inserted {
+						visits.append((child, instantiatedScopes(of: child), 0))
+					}
+				} else {
+					visits.removeLast()
+					var declaredLabels = Set<String>()
+					for dependency in visitedScope.instantiable.dependencies where visitedScope.createdProperties.contains(dependency.property) {
+						declaredLabels.insert(dependency.property.label)
+					}
+					var labels = labelsReadThroughReceives(by: visitedScope)
+					for child in children {
+						labels.formUnion(labelsReadFromAboveByScope[child, default: []].subtracting(declaredLabels))
+					}
+					labelsReadFromAboveByScope[visitedScope] = labels
+					inProgress.remove(visitedScope)
+				}
+			}
+			return labelsReadFromAboveByScope[scope, default: []]
+		}
+		/// What a walk of `scopeToValidate`'s subtree reads of the path it is reached by (see `CleanSubtreeKey`).
+		func cleanSubtreeKey(of scopeToValidate: ScopeToValidate, rootContextIndex: Int) -> CleanSubtreeKey {
+			let scope = scopeToValidate.scope
+			let labelsBeneath = labelsDeclaredOrRead(beneath: scope)
+			let labelsReadAbove = labelsReadFromAbove(by: scope)
+			var closestDeclarations = [String: CleanSubtreeDeclaration]()
+			var labelsByDeclaringDepth = [Int: [String]]()
+			for label in labelsReadAbove {
+				if let declaration = scopeToValidate.closestDeclarationByLabel[label] {
+					closestDeclarations[label] = CleanSubtreeDeclaration(
+						property: declaration.property,
+						lazilyInstantiatedInstanceProperty: declaration.lazilyInstantiatedInstanceProperty,
+						isForwarded: declaration.isForwarded,
+					)
+					labelsByDeclaringDepth[scopeToValidate.closestDeclarationDepthByLabel[label, default: 0], default: []].append(label)
+				}
+			}
+			// The instantiation stack root first, ending with the property `scope` is built for.
+			var entries = Array(zip(scopeToValidate.propertyStack, scopeToValidate.parentTypeStack).reversed())
+			if let property = scopeToValidate.property {
+				entries.append((property, scope.instantiable.concreteInstantiable))
+			}
+			var stack = [CleanSubtreeStackToken]()
+			for (depth, (entryProperty, entryType)) in entries.enumerated() {
+				if let labels = labelsByDeclaringDepth[depth] {
+					stack.append(.declarations(labels.sorted()))
+				}
+				if labelsBeneath.contains(entryProperty.label) {
+					stack.append(.entry(entryProperty, entryType))
+				} else if stack.last != .gap {
+					stack.append(.gap)
+				}
+			}
+			var receivableAliases = [Property: CleanSubtreeAlias]()
+			for (aliasProperty, alias) in scopeToValidate.receivableAliases where labelsBeneath.contains(aliasProperty.label) {
+				receivableAliases[aliasProperty] = CleanSubtreeAlias(
+					fulfillingProperty: alias.fulfillingProperty,
+					onlyIfAvailable: alias.onlyIfAvailable,
+					fulfillingOnlyIfAvailableAliases: alias.fulfillingOnlyIfAvailableAliases,
+					binding: alias.binding,
+					declaringType: alias.declaringType,
+					lastAliasDeclaringType: alias.lastAliasDeclaringType,
+					lastAliasDeclaringInstantiationStack: alias.lastAliasDeclaringInstantiationStack,
+				)
+			}
+			return CleanSubtreeKey(
+				scope: scope,
+				property: scopeToValidate.property,
+				rootContextIndex: rootContextIndex,
+				receivableProperties: scopeToValidate.receivableProperties.filter { labelsBeneath.contains($0.label) },
+				closestDeclarations: closestDeclarations,
+				stack: stack,
+				receivableAliases: receivableAliases,
+				aliasStack: receivableAliases.isEmpty ? [] : scopeToValidate.propertyStack,
+				aliasParentTypeStack: receivableAliases.isEmpty ? [] : scopeToValidate.parentTypeStack,
+			)
+		}
 		/// Validates the tree rooted at `rootScope`, scope by scope, depth first in the order each scope declares its
 		/// children. It keeps its own stack of the scopes left to validate, since a tree can be as deep as the module
 		/// has types.
@@ -922,7 +1294,28 @@ extension DependencyTreeGenerator {
 			validatesCycles: Bool,
 			validatesHiddenProperties: Bool,
 		) throws {
-			var scopesToValidate = [TreeValidationStep.scope(ScopeToValidate(
+			/// A step left to validate, with its key where it is a scope whose subtree's walk may be skipped or remembered; or the end of a
+			/// keyed scope's subtree, with the count of memo-blocking events when its walk began.
+			enum WalkItem {
+				case step(TreeValidationStep, key: CleanSubtreeKey?)
+				case finished(CleanSubtreeKey, memoBlockingEventCount: Int)
+			}
+			let mockRootForwardedProperties: Set<Property>? = rootScope.isMock ? rootScope.scope.instantiable.forwardedReceivableProperties : nil
+			let rootContext = CleanSubtreeRootContext(
+				boundProperties: rootScope.boundProperties,
+				mockRootForwardedProperties: mockRootForwardedProperties,
+				validatesCycles: validatesCycles,
+				validatesHiddenProperties: validatesHiddenProperties,
+			)
+			let rootContextIndex: Int
+			if let index = cleanSubtreeRootContextIndices[rootContext] {
+				rootContextIndex = index
+			} else {
+				rootContextIndex = cleanSubtreeRootContextIndices.count
+				cleanSubtreeRootContextIndices[rootContext] = rootContextIndex
+			}
+			validationWalkScopesReached.insert(rootScope.scope)
+			var walkItems = [WalkItem.step(.scope(ScopeToValidate(
 				scope: rootScope.scope,
 				receivableProperties: Set(rootScope.scope.properties).union(rootScope.receivedFromOutside),
 				receivableAliases: [:],
@@ -933,12 +1326,14 @@ extension DependencyTreeGenerator {
 				propertyStack: [],
 				parentTypeStack: [],
 				lazilyInstantiatedDeclarations: [:],
-			))]
-			let mockRootForwardedProperties: Set<Property>? = rootScope.isMock ? rootScope.scope.instantiable.forwardedReceivableProperties : nil
+			)), key: nil)]
 			let root = rootScope.scope.instantiable.concreteInstantiable
-			while let step = scopesToValidate.popLast() {
-				switch step {
-				case let .scope(scopeToValidate):
+			while let walkItem = walkItems.popLast() {
+				switch walkItem {
+				case let .step(.scope(scopeToValidate), key):
+					validationWalkObserver?(.validatedScope)
+					let eventCountBeforeScope = memoBlockingEventCount
+					var children = [TreeValidationStep]()
 					try validatePropertiesAreFulfillable(
 						on: scopeToValidate,
 						boundProperties: rootScope.boundProperties,
@@ -946,9 +1341,36 @@ extension DependencyTreeGenerator {
 						validatesCycles: validatesCycles,
 						validatesHiddenProperties: validatesHiddenProperties,
 						root: root,
-						scopesToValidate: &scopesToValidate,
+						scopesToValidate: &children,
 					)
-				case let .cycleClosingScope(cycleClosingScope):
+					if let key {
+						walkItems.append(.finished(key, memoBlockingEventCount: eventCountBeforeScope))
+					}
+					// `children` holds the first child last, so it is validated next.
+					for child in children {
+						switch child {
+						case let .scope(childToValidate):
+							// A scope reached once is never keyed: only a scope reached again can be skipped. Nor is one whose walk
+							// closes a cycle, which is never remembered.
+							// This skip consults a memo inside the walk. Its planned replacement walks each distinct subtree context
+							// once by construction, as a node of its own that every equal visit shares, once a measurement shows
+							// that node pays for itself; it then takes this memo's place and `skipsCleanSubtrees` goes with it.
+							if skipsCleanSubtrees, !validationWalkScopesReached.insert(childToValidate.scope).inserted, !reachesInstantiationCycle(from: childToValidate.scope) {
+								let childKey = cleanSubtreeKey(of: childToValidate, rootContextIndex: rootContextIndex)
+								if cleanSubtrees.contains(childKey) {
+									validationWalkObserver?(.skippedCleanSubtree)
+								} else {
+									walkItems.append(.step(child, key: childKey))
+								}
+							} else {
+								walkItems.append(.step(child, key: nil))
+							}
+						case .cycleClosingScope:
+							// The scope that closed the cycle raised the memo-blocking count, so no walk above it is remembered.
+							walkItems.append(.step(child, key: nil))
+						}
+					}
+				case let .step(.cycleClosingScope(cycleClosingScope), _):
 					// The type the cycle-closing scope builds receives the nearest declaration of each label, which a scope
 					// between it and the scope it closes on can make: the generated code passes that declaration where the tree
 					// is built again.
@@ -967,6 +1389,11 @@ extension DependencyTreeGenerator {
 						validatesHiddenProperties: validatesHiddenProperties,
 						root: root,
 					)
+				case let .finished(key, eventCountBeforeScope):
+					// A walk that throws never gets here, so only a completed walk is remembered.
+					if memoBlockingEventCount == eventCountBeforeScope {
+						cleanSubtrees.insert(key)
+					}
 				}
 			}
 		}
@@ -1037,6 +1464,7 @@ extension DependencyTreeGenerator {
 						|| !cyclesOnly && acceptedProperties.isDisjoint(with: firstBuildReceivableProperties)
 					else { continue }
 				}
+				memoBlockingEventCount += 1
 				let hiddenReceive = HiddenReceiveInTree(
 					property: receivedProperty,
 					declarationLocation: dependency.declarationLocation,
@@ -1535,6 +1963,9 @@ extension DependencyTreeGenerator {
 				let fulfillingSiblingBeingBuilt = instantiationStack.indices.contains(declaringChildIndex)
 					? formsOnStack(of: fulfillingProperty.asValidatedForDependencyCycles).first(where: { $0 == instantiationStack[declaringChildIndex] })
 					: nil
+				if fulfillingSiblingBeingBuilt != nil {
+					memoBlockingEventCount += 1
+				}
 				// A rename that does not erase an instantiator still being built, required or only if available, is rebound
 				// inside the instantiator's builder function, as the instantiator is (see `ScopeGenerator.ReceivedBuilderLoops`).
 				// The instantiator is the one whose tree this walk is in, so nothing is left to walk.
@@ -1621,6 +2052,7 @@ extension DependencyTreeGenerator {
 					// A mock binds every property its tree receives from above it, so there only a property still
 					// being built is unfulfillable. A non-optional one is a cycle, reported below.
 					// This property is in a dependency tree and is unfulfillable. Record the problem.
+					memoBlockingEventCount += 1
 					unfulfillableProperties.insert(.init(
 						property: receivedProperty,
 						declarationLocation: requiredReceivedProperty.declarationLocation,
@@ -1659,7 +2091,11 @@ extension DependencyTreeGenerator {
 
 			if validatesHiddenProperties {
 				// A rename of a label this scope's type declares refers to that declaration, before any ancestor's.
-				renamesContradictingOwnProperties.formUnion(Self.renamesContradictingOwnProperties(in: scope))
+				let renames = Self.renamesContradictingOwnProperties(in: scope)
+				if !renames.isEmpty {
+					memoBlockingEventCount += 1
+					renamesContradictingOwnProperties.formUnion(renames)
+				}
 				recordHiddenReceives(
 					of: scope,
 					closestDeclarationByLabel: closestDeclarationByLabel,
@@ -1696,6 +2132,7 @@ extension DependencyTreeGenerator {
 				) else {
 					continue
 				}
+				memoBlockingEventCount += 1
 				let propertiesInCycle = [propertyForDependency] + childPropertyStack[0...cycleIndex]
 				try throwIfInvalidCycle(
 					propertiesInCycle: propertiesInCycle,
@@ -1745,6 +2182,7 @@ extension DependencyTreeGenerator {
 					}) {
 						// There is a cycle in our scope tree. Do not re-enter it: walk the tree the cycle-closing scope builds
 						// again, in its turn.
+						memoBlockingEventCount += 1
 						scopesToValidate.append(.cycleClosingScope(CycleClosingScopeToValidate(
 							scope: childScope,
 							property: childProperty,

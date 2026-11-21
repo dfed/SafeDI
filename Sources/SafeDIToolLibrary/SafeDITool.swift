@@ -47,6 +47,11 @@ public struct SafeDITool: AsyncParsableCommand {
 	}
 
 	@TaskLocal public static var fileFinder: FileFinder = FileManager.default
+
+	/// Whether the process ends once the command it runs returns, as the `SafeDITool` executable's does: `generate` then
+	/// keeps what it built rather than releasing it, which the process's end does at once. A test that runs a command in
+	/// its own process leaves this `false`.
+	@TaskLocal public static var processEndsWithCommand = false
 }
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -61,6 +66,18 @@ extension Data {
 	func writeIfChanged(toPath filePath: String) throws {
 		guard (try? Data(contentsOf: filePath.asFileURL)) != self else { return }
 		try write(toPath: filePath)
+	}
+}
+
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+extension [UInt8] {
+	/// Writes these bytes as `Data.writeIfChanged(toPath:)` does, without copying them into a `Data` first.
+	func writeIfChanged(toPath filePath: String) throws {
+		try withUnsafeBufferPointer { bytes in
+			// The `Data` only lends the array's bytes for the write, and is gone before the array can change.
+			let data = bytes.baseAddress.map { Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: $0), count: bytes.count, deallocator: .none) } ?? Data()
+			try data.writeIfChanged(toPath: filePath)
+		}
 	}
 }
 

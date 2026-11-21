@@ -73,7 +73,10 @@ extension DependencyTreeGenerator {
 			let declarationsHiddenByFields: [SeamSignature.Hole.DeclarationHiddenByField]
 		}
 		var declarationsBetweenByClosedOnScope = [ObjectIdentifier: [DeclarationBetween]]()
-		var placesByGenerator = [ObjectIdentifier: [SeamSignature.Hole.Site]]()
+		var placesByTreePath = [[Property]: [SeamSignature.Hole.Site]]()
+		var dependenciesByGenerator = [ObjectIdentifier: DependenciesByProperty]()
+		var childDeclarationsByGenerator = [ObjectIdentifier: ChildDeclarations]()
+		let seamDependencies = DependenciesByProperty(of: seam)
 		let siteContents = sites.compactMap { site -> SiteContent? in
 			guard let owner = site.frames.last?.generator.builtInstantiable else { return nil }
 			let content = fields(
@@ -87,7 +90,10 @@ extension DependencyTreeGenerator {
 				proof: proof,
 				instantiables: instantiables,
 				declarationsBetweenByClosedOnScope: &declarationsBetweenByClosedOnScope,
-				placesByGenerator: &placesByGenerator,
+				placesByTreePath: &placesByTreePath,
+				seamDependencies: seamDependencies,
+				dependenciesByGenerator: &dependenciesByGenerator,
+				childDeclarationsByGenerator: &childDeclarationsByGenerator,
 			)
 			return SiteContent(
 				site: site,
@@ -765,10 +771,47 @@ extension DependencyTreeGenerator {
 	/// as the production twin's fill reads the seam's required parameter. The mocked type's own dependencies are bound as
 	/// they are declared.
 	static func mockRootBinding(ofChild property: Property, of mockedType: Instantiable) -> Property {
-		guard case .optional = property.typeDescription,
-		      !mockedType.dependencies.contains(where: { $0.property == property })
-		else { return property }
+		mockRootBinding(ofChild: property, isDependencyOfMockedType: { mockedType.dependencies.contains { $0.property == property } })
+	}
+
+	/// The value a mock's root binds for its child `property`, as `mockRootBinding(ofChild:of:)` says, given whether
+	/// `property` is a dependency of the mocked type.
+	static func mockRootBinding(ofChild property: Property, isDependencyOfMockedType: () -> Bool) -> Property {
+		guard case .optional = property.typeDescription, !isDependencyOfMockedType() else { return property }
 		return property.asUnwrappedProperty
+	}
+
+	/// What a scope on a site's path declares for each of its children, as `fields(of:)` finds it before it knows where the
+	/// site is among them, and the children that hold a place.
+	private struct ChildDeclarations {
+		/// Each child's declaration, in the scope's child order, or `nil` for a child that declares nothing there.
+		let declarations: [PathDeclaration?]
+		/// The properties of the children that start as carriers (`ScopeGenerator.startsAsCarrier(_:)`).
+		let carrierProperties: [Property]
+	}
+
+	/// A type's dependencies, looked up by property: what a scan of them in declaration order for the first of a property
+	/// finds, and the labels the type declares other than by receiving them.
+	struct DependenciesByProperty {
+		init(of instantiable: Instantiable) {
+			var dependencyByProperty = [Property: Dependency]()
+			var labelsNotReceived = Set<String>()
+			for dependency in instantiable.dependencies {
+				if dependencyByProperty[dependency.property] == nil {
+					dependencyByProperty[dependency.property] = dependency
+				}
+				if !dependency.source.isReceived {
+					labelsNotReceived.insert(dependency.property.label)
+				}
+			}
+			self.dependencyByProperty = dependencyByProperty
+			self.labelsNotReceived = labelsNotReceived
+		}
+
+		/// The first dependency of each property, in declaration order.
+		let dependencyByProperty: [Property: Dependency]
+		/// The labels of the dependencies that are not received.
+		let labelsNotReceived: Set<String>
 	}
 
 	/// Whether a mock binds `dependency`, a dependency of a scope beneath its root, again under its label at the top of that
@@ -808,7 +851,7 @@ extension DependencyTreeGenerator {
 	/// A declaration on a site's path: the value it binds and whether it is bound before the site.
 	private struct PathDeclaration {
 		let property: Property
-		let isBoundBeforeSite: Bool
+		var isBoundBeforeSite: Bool
 		/// How many `@Sendable` functions on the path enclose it.
 		let sendableDepth: Int
 		let access: AccessLevel
@@ -861,7 +904,13 @@ extension DependencyTreeGenerator {
 	///     `receivesBoundAgainOfAnyBuild(inTreeRootedAt:rootFields:namesApartAtRoot:)` says too.
 	///   - declarationsBetweenByClosedOnScope: The `declarationsBetween(closedOnScope:)` of each scope already asked, by the
 	///     scope's identity.
-	///   - placesByGenerator: The `places(inTreeOf:…)` of each tree already asked, by its generator's identity.
+	///   - placesByTreePath: The `places(inTreeOf:…)` of each tree already asked, by the path to its place: the declaring
+	///     scope's path and the property. A generator can be shared between places, and a tree's places are read at its own path.
+	///   - seamDependencies: The seam's dependencies by property.
+	///   - dependenciesByGenerator: The dependencies by property of the type each scope already asked builds, by its
+	///     generator's identity.
+	///   - childDeclarationsByGenerator: What each scope already asked declares for its children on every site's path through
+	///     it, by its generator's identity.
 	private static func fields(
 		of site: BuildSite,
 		seam: Instantiable,
@@ -873,7 +922,10 @@ extension DependencyTreeGenerator {
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
 		declarationsBetweenByClosedOnScope: inout [ObjectIdentifier: [DeclarationBetween]],
-		placesByGenerator: inout [ObjectIdentifier: [SeamSignature.Hole.Site]],
+		placesByTreePath: inout [[Property]: [SeamSignature.Hole.Site]],
+		seamDependencies: DependenciesByProperty,
+		dependenciesByGenerator: inout [ObjectIdentifier: DependenciesByProperty],
+		childDeclarationsByGenerator: inout [ObjectIdentifier: ChildDeclarations],
 	) -> (fields: [SeamSignature.Hole.Field], uncarriedDeclarations: [SeamSignature.Hole.UncarriedDeclaration], cycleReentryDeclarations: [SeamSignature.Hole.CycleReentryDeclaration], levels: [SeamPlaceLevels.Level], pathFields: [Property], pathUncarriedProperties: [Property], declarationsHiddenByFields: [SeamSignature.Hole.DeclarationHiddenByField]) {
 		// A field is as visible as the narrowest type it names, which the declarations of the seam's module and of the
 		// module of the type that declares the value prove, capped at the seam's type.
@@ -921,9 +973,11 @@ extension DependencyTreeGenerator {
 			var marked = uncarriedDeclaration
 			marked.isBuildableAboveSeam = true
 			marked.labelsHeldAboveSeam = receivedLabels.union([declaration.property.label])
-			// Each site whose path the tree is beside asks again.
-			let treePlaces = placesByGenerator[ObjectIdentifier(tree.generator)] ?? places(inTreeOf: tree.generator, building: declaration.property, declaredAt: tree.pathToDeclaringScope, seamType: seam.concreteInstantiable)
-			placesByGenerator[ObjectIdentifier(tree.generator)] = treePlaces
+			// Each site whose path the tree is beside asks again. The places are read at the tree's own path, so they are keyed
+			// by that path, never by the generator, which a construction memo can share between paths.
+			let treePath = tree.pathToDeclaringScope + [declaration.property]
+			let treePlaces = placesByTreePath[treePath] ?? places(inTreeOf: tree.generator, building: declaration.property, declaredAt: tree.pathToDeclaringScope, seamType: seam.concreteInstantiable)
+			placesByTreePath[treePath] = treePlaces
 			marked.placesInTree = treePlaces
 			return marked
 		}
@@ -937,7 +991,7 @@ extension DependencyTreeGenerator {
 				access: parameter.tierAccess,
 				accessCause: parameter.accessCause,
 				declaringType: firstReceiver?.declaringType ?? seam.concreteInstantiable,
-				declarationLocation: firstReceiver?.declarationLocation ?? seam.dependencies.first { $0.property == parameter.property }?.declarationLocation ?? seam.declarationLocation,
+				declarationLocation: firstReceiver?.declarationLocation ?? seamDependencies.dependencyByProperty[parameter.property]?.declarationLocation ?? seam.declarationLocation,
 				isReceivedOnlyIfAvailable: parameter.isOnlyIfAvailable,
 			)
 			parameterDeclaration.deferral = parameter.deferral
@@ -971,6 +1025,7 @@ extension DependencyTreeGenerator {
 		var childDeclaringType = seam.concreteInstantiable
 		// The type whose scope declares the children of the frame being visited: the one the frame before built.
 		var loopDeclaringInstantiable = seam
+		var loopDeclaringDependencies = seamDependencies
 		// The properties from the seam's root to the frame being visited, as a site's path spells them (`BuildSite.sitePath`).
 		var pathToFrame = [Property]()
 		for (level, frame) in site.frames.enumerated() {
@@ -1064,6 +1119,9 @@ extension DependencyTreeGenerator {
 			}
 			guard let instantiable = frame.generator.builtInstantiable else { continue }
 			childDeclaringType = instantiable.concreteInstantiable
+			// Each child of a type looks its declaration up, so the type's dependencies are indexed once across the sites.
+			let dependencies = dependenciesByGenerator[ObjectIdentifier(frame.generator)] ?? DependenciesByProperty(of: instantiable)
+			dependenciesByGenerator[ObjectIdentifier(frame.generator)] = dependencies
 			// A `@Sendable` builder function on the path encloses what it binds: what binds it before is outside.
 			if level > 0, let property = frame.generator.property, frame.generator.buildsInSendableFunction {
 				sendableDepth += 1
@@ -1085,7 +1143,7 @@ extension DependencyTreeGenerator {
 					access: propertyAccess.level,
 					accessCause: propertyAccess.cause,
 					declaringType: instantiable.concreteInstantiable,
-					declarationLocation: instantiable.dependencies.first { $0.property == property }?.declarationLocation,
+					declarationLocation: dependencies.dependencyByProperty[property]?.declarationLocation,
 					frameLevel: level,
 				)
 			}
@@ -1108,7 +1166,7 @@ extension DependencyTreeGenerator {
 						access: reboundAccess.level,
 						accessCause: reboundAccess.cause,
 						declaringType: loopDeclaringInstantiable.concreteInstantiable,
-						declarationLocation: loopDeclaringInstantiable.dependencies.first { $0.property == reboundProperty }?.declarationLocation,
+						declarationLocation: loopDeclaringDependencies.dependencyByProperty[reboundProperty]?.declarationLocation,
 						frameLevel: level,
 					)
 					reboundDeclaration.isReboundByBuilderFunction = true
@@ -1167,35 +1225,50 @@ extension DependencyTreeGenerator {
 			}
 			let pathPosition = frame.nextPosition - 1
 			let pathProperty = frame.orderedChildren[pathPosition].generator.property
-			let carrierProperties = frame.orderedChildren.compactMap { frame.generator.startsAsCarrier($0.generator) ? $0.generator.property : nil }
+			// What a child declares does not depend on the site, but for where the site is among the children: each scope's are
+			// found once across the sites through it, keyed by its generator. A scope on a site's path holds a place beneath it,
+			// so no construction memo shares its generator between paths, and its level, its `@Sendable` depth and the path to
+			// it are the same at every site through it.
+			let childDeclarations = childDeclarationsByGenerator[ObjectIdentifier(frame.generator)] ?? ChildDeclarations(
+				declarations: frame.orderedChildren.map { child -> PathDeclaration? in
+					guard let childProperty = child.generator.property, level > 0 || !labelsNoRootChildDeclares.contains(childProperty.label) else { return nil }
+					// A mock's root binds what it promotes as the non-optional value it builds.
+					let property = level == 0 && bindsReceivesAgain ? mockRootBinding(ofChild: childProperty, isDependencyOfMockedType: { dependencies.dependencyByProperty[childProperty] != nil }) : childProperty
+					// An `onlyIfAvailable` alias is bound, to `nil` where its fulfilling property is unavailable, as every other
+					// child is. Whether it is bound before the site is the site's.
+					var pathDeclaration = declaration(of: property, isBoundBeforeSite: false)
+					// A public mock's root binds each received dependency it promotes, which it builds where its caller passes `nil`,
+					// among the mocked type's own children.
+					pathDeclaration.isBoundByPublicMockRoot = bindsReceivesAgain && level == 0
+						&& !dependencies.labelsNotReceived.contains(property.label)
+					let source = dependencies.dependencyByProperty[property]?.source
+					if case let .aliased(fulfillingProperty, _, _)? = source {
+						// An alias binds its label to `fulfillingProperty`: the seam's, to the caller's, and any other type's, to one
+						// the seam's tree binds.
+						pathDeclaration.alias = .init(fulfillingProperty: fulfillingProperty, isSeams: level == 0)
+					} else if child.generator.receivedProperties.allSatisfy({ receivedLabels.contains($0.label) || $0.label == property.label }) {
+						// A type above the seam can build what the tree instantiates when the seam's caller holds everything its
+						// tree receives, or the tree receives what that type would then declare.
+						pathDeclaration.treeBuildableAboveSeam = (child.generator, pathToFrame)
+					}
+					// A public mock's root child that the mocked type or a type in its tree receives, which the mock promoted, is
+					// bound from the optional parameter `mock()` takes, which a calling mock passes its own nearest declaration of
+					// the label.
+					pathDeclaration.isBoundFromCallersArgument = bindsReceivesAgain && level == 0 && source?.isReceived ?? true
+					return pathDeclaration
+				},
+				carrierProperties: frame.orderedChildren.compactMap { frame.generator.startsAsCarrier($0.generator) ? $0.generator.property : nil },
+			)
+			childDeclarationsByGenerator[ObjectIdentifier(frame.generator)] = childDeclarations
+			let carrierProperties = childDeclarations.carrierProperties
 			for (position, child) in frame.orderedChildren.enumerated() {
-				guard let childProperty = child.generator.property, level > 0 || !labelsNoRootChildDeclares.contains(childProperty.label) else { continue }
-				// A mock's root binds what it promotes as the non-optional value it builds.
-				let property = level == 0 && bindsReceivesAgain ? mockRootBinding(ofChild: childProperty, of: instantiable) : childProperty
-				// An `onlyIfAvailable` alias is bound, to `nil` where its fulfilling property is unavailable, as every other
-				// child is.
+				guard var pathDeclaration = childDeclarations.declarations[position] else { continue }
+				let property = pathDeclaration.property
 				// A member of the loop of builders the scope on the path is on (`ScopeGenerator.ReceivedBuilderLoops`) is still
 				// being built where the loop's payloads are bound, before the loop's first function.
 				let isLoopMemberBuildingSite = position < pathPosition
-					&& frame.generator.areMembersOfOneLoop(child.generator, frame.orderedChildren[pathPosition].generator)
-				var pathDeclaration = declaration(of: property, isBoundBeforeSite: position < pathPosition && !isLoopMemberBuildingSite)
-				// A public mock's root binds each received dependency it promotes, which it builds where its caller passes `nil`, among
-				// the mocked type's own children.
-				pathDeclaration.isBoundByPublicMockRoot = bindsReceivesAgain && level == 0
-					&& !instantiable.dependencies.contains { $0.property.label == property.label && !$0.source.isReceived }
-				let source = instantiable.dependencies.first(where: { $0.property == property })?.source
-				if case let .aliased(fulfillingProperty, _, _)? = source {
-					// An alias binds its label to `fulfillingProperty`: the seam's, to the caller's, and any other type's, to one
-					// the seam's tree binds.
-					pathDeclaration.alias = .init(fulfillingProperty: fulfillingProperty, isSeams: level == 0)
-				} else if child.generator.receivedProperties.allSatisfy({ receivedLabels.contains($0.label) || $0.label == property.label }) {
-					// A type above the seam can build what the tree instantiates when the seam's caller holds everything its
-					// tree receives, or the tree receives what that type would then declare.
-					pathDeclaration.treeBuildableAboveSeam = (child.generator, pathToFrame)
-				}
-				// A public mock's root child that the mocked type or a type in its tree receives, which the mock promoted, is bound
-				// from the optional parameter `mock()` takes, which a calling mock passes its own nearest declaration of the label.
-				pathDeclaration.isBoundFromCallersArgument = bindsReceivesAgain && level == 0 && source?.isReceived ?? true
+					&& frame.generator.areMembersOfOneLoop(childAt: child.index, frame.orderedChildren[pathPosition].index)
+				pathDeclaration.isBoundBeforeSite = position < pathPosition && !isLoopMemberBuildingSite
 				if position == pathPosition && ScopeGenerator.isBuilder(property) || isLoopMemberBuildingSite {
 					// An instantiator on the path, or a member of its loop, is building the site: inline, a receive of it in a
 					// fill's tree would read a wrapper made again of the function the seam's initializer declares.
@@ -1216,6 +1289,7 @@ extension DependencyTreeGenerator {
 				declare(pathDeclaration)
 			}
 			loopDeclaringInstantiable = instantiable
+			loopDeclaringDependencies = dependencies
 			endLevel(builtType: instantiable.concreteInstantiable, nextProperty: pathProperty)
 		}
 		// A `Sendable` wrapper the seam builds around the builder is built in a `@Sendable` function of its own, which binds
@@ -1279,6 +1353,8 @@ extension DependencyTreeGenerator {
 		// at each level. Any other value a fill reads is the same at every level.
 		var cycleReentryDeclarations = [SeamSignature.Hole.CycleReentryDeclaration]()
 		for (level, generator, closedOnDeclaration, closedOnDeclaringType) in scopesACycleClosesOn {
+			// Keyed by the generator's identity: a closed-on scope on a site's path holds a hole, so no construction memo
+			// shares it between places.
 			let declarationsBetween = declarationsBetweenByClosedOnScope[ObjectIdentifier(generator)] ?? declarationsBetween(closedOnScope: generator, closedOnDeclaration: closedOnDeclaration)
 			declarationsBetweenByClosedOnScope[ObjectIdentifier(generator)] = declarationsBetween
 			/// Whether the site reads the value of `label` bound inside the function. A place nested by type reads a parameter
@@ -1403,6 +1479,8 @@ extension DependencyTreeGenerator {
 				}
 			} else if generator.closesPropertyCycle, let nestedClosedOnScope = nestedClosedOnScopes.last(where: { $0.declaration == generator.closedOnDeclaration }) {
 				// A nested cycle passes each parameter of the function it closes on its nearest declaration beneath that scope.
+				// Keyed by the nested closed-on scope's generator: a generator a construction memo shares between two places
+				// beneath one closed-on scope has the same subtree at both, so the first place's binding is the binding at each.
 				let declarationsBeneath = pathDeclarations[nestedClosedOnScope.firstDeclarationBeneath...]
 				for label in nestedClosedOnScope.parameterLabels
 					where bindingByNestedCycleParameter[NestedCycleParameter(scope: nestedClosedOnScope.scope, label: label)] == nil

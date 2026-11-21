@@ -80,7 +80,8 @@ struct SafeDIToolGenerationLayerTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_computesEachLayerOnce_whenRunCallsForeignSeam() async throws {
 		// `App` generates the seam `Screen` and calls `Feature`'s seam `Service`, writes a mock and the DOT graph. Each
-		// module's run computes the signatures of each module's seams it reads once, and builds each tree it generates once.
+		// module's run computes the signatures of its own seams once, reads `Service`'s from `Feature`'s module info
+		// rather than computing it, and builds each tree it generates once.
 		var output: MultiModuleTestOutput?
 		let layers = try await Self.countLayers {
 			output = try await executeSafeDIToolMultiModuleTest(
@@ -93,7 +94,6 @@ struct SafeDIToolGenerationLayerTests: ~Copyable {
 		#expect(layers == [
 			"Feature: seam signatures of Feature": 1,
 			"Feature: tree of Service": 1,
-			"App: seam signatures of Feature": 1,
 			"App: seam signatures of App": 1,
 			"App: tree of Root": 1,
 			"App: tree of Screen": 1,
