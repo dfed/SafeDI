@@ -801,7 +801,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 				}
 				continuation.resume(returning: readType)
 			}
-			thread.stackSize = 256 * 1024
+			thread.stackSize = 256 * 1_024
 			thread.start()
 		}
 
