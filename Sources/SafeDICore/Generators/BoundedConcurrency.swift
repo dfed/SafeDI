@@ -90,6 +90,7 @@ enum BoundedConcurrency {
 		guard width > 1 else {
 			var index = 0
 			while let element = remaining.popLast() {
+				BoundedTaskStart.record(jobsRunning: 1)
 				do {
 					outcomes[index] = try await .finished(transform(element, 1))
 				} catch {
@@ -108,6 +109,7 @@ enum BoundedConcurrency {
 		) { taskGroup in
 			var nextIndex = 0
 			var runningCost = 0
+			var jobsRunning = 0
 			var admits = true
 			// The cost of the next job to admit, once asked, so a job that waits for room is asked its cost only once.
 			var nextJobCost: Int?
@@ -130,12 +132,15 @@ enum BoundedConcurrency {
 							return (index: index, cost: jobCost, outcome: .failed(error))
 						}
 					}
+					jobsRunning += 1
+					BoundedTaskStart.record(jobsRunning: jobsRunning)
 				}
 			}
 			admitWhatFits()
 			while let result = await taskGroup.next() {
 				outcomes[result.index] = result.outcome
 				runningCost -= result.cost
+				jobsRunning -= 1
 				if case .failed = result.outcome, case .stopAdmittingAtFirstFailure = failurePolicy {
 					admits = false
 				}
@@ -172,6 +177,22 @@ enum BoundedConcurrency {
 			throw lowestFailure
 		} else {
 			return results
+		}
+	}
+}
+
+/// A job `BoundedConcurrency` starts, with the jobs of the same call then running. Each of a module's mock roots holds its
+/// whole parameter tree while its job runs, so starting every root's job at once held every root's tree together, and peak
+/// memory grew with the mock roots. The tests check that the jobs running never exceed the processors. Handed to
+/// `observer`, which the tests set, never the tool.
+public enum BoundedTaskStart {
+	/// Called each time a job starts, with the jobs then running, when set: by the tests, never by the tool.
+	@TaskLocal public static var observer: (@Sendable (_ jobsRunning: Int) -> Void)?
+
+	/// Tells `observer`, when set, that a job started with `jobsRunning` running.
+	static func record(jobsRunning: Int) {
+		if let observer {
+			observer(jobsRunning)
 		}
 	}
 }
