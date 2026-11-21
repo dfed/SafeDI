@@ -67,7 +67,7 @@ struct PassedCompileCheckCache: Sendable {
 	///   (`GITHUB_RUN_ID`), or `nil` outside one. Only letters, digits and hyphens name a run.
 	init(file: URL, run: String? = ProcessInfo.processInfo.environment["GITHUB_RUN_ID"]) {
 		self.file = file
-		if let run, !run.isEmpty, run.unicodeScalars.allSatisfy({ $0.isASCII && (CharacterSet.alphanumerics.contains($0) || $0 == "-") }) {
+		if let run = Self.nameOfRun(run) {
 			fileOfPassesInThisRun = file.deletingLastPathComponent().appendingPathComponent("passed-in-run-\(run).txt")
 		} else {
 			fileOfPassesInThisRun = nil
@@ -77,6 +77,15 @@ struct PassedCompileCheckCache: Sendable {
 				.split(separator: "\n")
 				.map(String.init),
 		)
+	}
+
+	/// `run` when it can name a file of the run: when it is not empty and holds only letters, digits and hyphens.
+	/// Otherwise `nil`, and the process keeps no file of what its run did.
+	static func nameOfRun(_ run: String?) -> String? {
+		guard let run, !run.isEmpty, run.unicodeScalars.allSatisfy({ $0.isASCII && (CharacterSet.alphanumerics.contains($0) || $0 == "-") }) else {
+			return nil
+		}
+		return run
 	}
 
 	/// The file of passed checks: one key per line.
@@ -171,7 +180,7 @@ struct PassedCompileCheckCache: Sendable {
 
 	/// Appends `key` to `file`. One `write` of one line to a file opened for appending, so test processes that share
 	/// the file do not interleave their lines.
-	private static func append(_ key: String, to file: URL) throws {
+	static func append(_ key: String, to file: URL) throws {
 		try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
 		let descriptor = open(file.path, O_WRONLY | O_APPEND | O_CREAT, 0o644)
 		guard descriptor >= 0 else {

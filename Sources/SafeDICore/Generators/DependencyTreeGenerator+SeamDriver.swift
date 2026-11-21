@@ -112,6 +112,7 @@ extension DependencyTreeGenerator {
 		}
 		var computedModules = Set<String>()
 		var expandedModules = Set<String>()
+		var visibleDeclarationsByModuleName = [String: SeamResolution.VisibleDeclarations]()
 		var modulesToCompute = Array(foreignModules(reachedFrom: reachableTypeDescriptions, in: typeDescriptionToFulfillingInstantiableMap, seenBy: nil).reversed())
 		while let module = modulesToCompute.last {
 			guard !computedModules.contains(module.moduleName) else {
@@ -119,10 +120,32 @@ extension DependencyTreeGenerator {
 				continue
 			}
 			let moduleSeam = module.seams[0].seam
+			// A module info carries the signatures its module's own run computed, beside the declarations it computed them
+			// from and only once every validation passed, so a module whose every seam has one is read, never computed again.
+			// A foreign public mock's plan is computed again (`computePublicMockPlans`), a deliberate gap.
+			let storedSeamRoots = module.seams.compactMap { seam in
+				seam.seam.storedSignature.map { (type: seam.type, seamRoot: $0.signature.map { ScopeGenerator.SeamRoot(signature: $0) }) }
+			}
+			if storedSeamRoots.count == module.seams.count {
+				modulesToCompute.removeLast()
+				computedModules.insert(module.moduleName)
+				for (seamType, seamRoot) in storedSeamRoots {
+					seamRoots[seamType] = seamRoot
+				}
+				continue
+			}
+			// Resolved once per module, on its first visit.
+			let visible: SeamResolution.VisibleDeclarations
+			if let resolved = visibleDeclarationsByModuleName[module.moduleName] {
+				visible = resolved
+			} else {
+				visible = try moduleSeam.visibleDeclarations()
+				visibleDeclarationsByModuleName[module.moduleName] = visible
+			}
 			// A module's reached modules are pushed above it on its first visit only; on its second it is computed
 			// with the signatures found by then, so the loop ends whatever the module infos claim to reach.
 			if expandedModules.insert(module.moduleName).inserted {
-				let dependencies = foreignModules(reachedFrom: Set(module.seams.map(\.type)), in: moduleSeam.visibleInstantiables, seenBy: module.moduleName)
+				let dependencies = foreignModules(reachedFrom: Set(module.seams.map(\.type)), in: visible.instantiables, seenBy: module.moduleName)
 					.filter { !computedModules.contains($0.moduleName) }
 				if !dependencies.isEmpty {
 					modulesToCompute.append(contentsOf: dependencies.reversed())
@@ -137,8 +160,9 @@ extension DependencyTreeGenerator {
 			GenerationLayerObservation.record(.seamSignatures(ofModule: module.moduleName, inCallersView: false), inRunOf: seams.currentModule.moduleName)
 			let computation = try Self.seamSignatures(
 				forSeams: Set(module.seams.map(\.type)),
-				in: moduleSeam.visibleInstantiables,
-				plainTypeDeclarations: moduleSeam.visiblePlainTypeDeclarations,
+				construction: .foreignModule,
+				in: visible.instantiables,
+				plainTypeDeclarations: visible.plainTypeDeclarations,
 				aliasDeclarationReferences: aliasDeclarationReferences,
 				fixedSignatures: seamRoots.compactMapValues(\.self),
 				callerModule: moduleSeam.declaringModule,
@@ -165,11 +189,12 @@ extension DependencyTreeGenerator {
 	/// generated signature would equal its own initializer's – one with no `@Instantiated` or aliased dependency and
 	/// no pass-through – which is built with that initializer wherever a tree reaches it, as any other type is, and
 	/// whose file holds no code. Computed once per run, from the signatures of the foreign seams, `foreignSeamRoots`.
-	private func computeSeamRoots(foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?]) throws -> [TypeDescription: ScopeGenerator.SeamRoot?] {
+	private func computeSeamRoots(validatedWorld: ValidatedWorld, foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?]) throws -> [TypeDescription: ScopeGenerator.SeamRoot?] {
 		var seamRoots = foreignSeamRoots
 		GenerationLayerObservation.record(.seamSignatures(ofModule: seams.currentModule.moduleName, inCallersView: false), inRunOf: seams.currentModule.moduleName)
 		let ownComputation = try Self.seamSignatures(
 			forSeams: generatedSeamTypes,
+			construction: .ownSeams(validatedWorld),
 			in: typeDescriptionToFulfillingInstantiableMap,
 			plainTypeDeclarations: plainTypeDeclarations,
 			aliasDeclarationReferences: aliasDeclarationReferences,
@@ -196,6 +221,7 @@ extension DependencyTreeGenerator {
 			GenerationLayerObservation.record(.seamSignatures(ofModule: seams.currentModule.moduleName, inCallersView: true), inRunOf: seams.currentModule.moduleName)
 			let callersComputation = try Self.seamSignatures(
 				forSeams: generatedSeamTypes,
+				construction: .ownSeams(validatedWorld),
 				in: callersVisibleInstantiables,
 				plainTypeDeclarations: seams.callersVisiblePlainTypeDeclarations,
 				aliasDeclarationReferences: aliasDeclarationReferences,
@@ -375,10 +401,11 @@ extension DependencyTreeGenerator {
 	///   - foreignSeamRoots: The signatures of the foreign seams this module's trees reach (`computeForeignSeamRoots()`).
 	///   - unreadTypeComment: The comment the `public` initializers of the seams this module generates carry.
 	func seamWorldRootScopeGenerators(
+		validatedWorld: ValidatedWorld,
 		foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?],
 		unreadTypeComment: UnreadTypeComment?,
-	) throws -> (roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable]) {
-		let seamRoots = try computeSeamRoots(foreignSeamRoots: foreignSeamRoots)
+	) throws -> (roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable], storedSeamSignatures: [StoredSeamSignature]) {
+		let seamRoots = try computeSeamRoots(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots)
 		// The generated code ends each construction with the comment the validated scopes would carry, the call of a
 		// seam's tier included, whose construction the leaf's initializer at the tier's level describes.
 		let seamScopeMap = Self.createSeamScopeMapping(
@@ -400,6 +427,8 @@ extension DependencyTreeGenerator {
 			viewInstantiablesByModuleName: viewInstantiablesByModuleName,
 			isReadableFile: emittingModule?.isReadableFile,
 		)
+		// Every tree of the seam world reads its scopes frozen, once.
+		let seamWorld = SeamWorld(validatedWorld: validatedWorld, frozenScopeMap: FrozenScopeMap(freezing: seamScopeMap.lazy.map { (key: $0.key, scope: $0.value) }))
 		// A seam whose signature equals its own initializer's generates no code: its file holds the header alone.
 		var generatedSeams = [(seam: Instantiable, seamRoot: ScopeGenerator.SeamRoot, rootScope: Scope)]()
 		// Once for every seam: taken for each, it copied every scope's declaration once per seam.
@@ -419,18 +448,23 @@ extension DependencyTreeGenerator {
 			},
 			checkingSeamTrees: generatedSeams.map { (instantiable: $0.seam, scope: $0.rootScope) },
 		)
-		var rootScopeGenerators = try rootScopesToGenerate.rootScopes.map { typeDescription, scope in
-			try RootScopeInfo(
+		var constructionMemo = ConstructionMemo()
+		var rootScopeGenerators = [RootScopeInfo]()
+		for (typeDescription, scope) in rootScopesToGenerate.rootScopes {
+			let (table, record) = seamWorld.frozenScopeMap.freezing(rootScope: scope)
+			try rootScopeGenerators.append(RootScopeInfo(
 				typeDescription: typeDescription,
 				instantiable: scope.instantiable,
 				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
-				scopeGenerator: scope.createScopeGenerator(
+				scopeGenerator: record.createScopeGenerator(
+					in: table,
 					for: nil,
 					lazilyInstantiatedInstanceProperties: [],
 					erasedToConcreteExistential: false,
 					declaredTypeNames: declaredTypeNames,
+					constructionMemo: &constructionMemo,
 				),
-			)
+			))
 		}
 		for (seam, seamRoot, seamRootScope) in generatedSeams {
 			var seamRoot = seamRoot
@@ -442,13 +476,70 @@ extension DependencyTreeGenerator {
 				sourceFilePath: seam.sourceFilePath,
 				scopeGenerator: Self.seamRootGenerator(
 					rootScope: seamRootScope,
+					in: .seamWorld(seamWorld),
 					seamRoot: seamRoot,
 					startsCodeGeneration: true,
 					declaredTypeNames: declaredTypeNames,
 				),
 			))
 		}
-		return (rootScopeGenerators, rootScopesToGenerate.rootsOfOtherModules)
+		// The signature of each seam this module generates, sorted by seam, which its module info carries for the modules
+		// that call the seams (`SeamResolution.ForeignSeam.storedSignature`).
+		let storedSeamSignatures = generatedSeamTypes.sorted().compactMap { seamType in
+			seamRoots[seamType].map { StoredSeamSignature(seamType: seamType, signature: $0?.signature) }
+		}
+		return (rootScopeGenerators, rootScopesToGenerate.rootsOfOtherModules, storedSeamSignatures)
+	}
+
+	/// The seam world's scopes, frozen, in which every reach of a seam with a signature calls its generated initializer.
+	/// Made only in this file, from a `ValidatedWorld`, once the seams' signatures have settled and
+	/// `validateRootsFillEveryHole` has passed, and handed to each tree of a root or seam this module generates. As
+	/// `ValidatedWorld` is, a convention the compiler enforces by access.
+	struct SeamWorld {
+		fileprivate init(validatedWorld _: ValidatedWorld, frozenScopeMap: FrozenScopeMap) {
+			self.frozenScopeMap = frozenScopeMap
+		}
+
+		/// The seam world's table.
+		let frozenScopeMap: FrozenScopeMap
+	}
+
+	/// Whose seams a computation of signatures builds trees for, which decides the guard those trees are built under.
+	enum SignatureConstruction {
+		/// This module's own seams, once the validated world's walks have passed.
+		case ownSeams(ValidatedWorld)
+		/// Another module's seams, which read the declarations alone: exempt, since that module's own run validated
+		/// them, and bounded by the passes a component may take.
+		case foreignModule
+
+		/// The world a signature pass over `frozenScopeMap` builds its seams' trees in.
+		func signaturePass(over frozenScopeMap: FrozenScopeMap) -> SeamTreeWorld {
+			switch self {
+			case let .ownSeams(validatedWorld):
+				.ownSignaturePass(frozenScopeMap, validatedBy: validatedWorld)
+			case .foreignModule:
+				.foreignSignaturePass(frozenScopeMap)
+			}
+		}
+	}
+
+	/// The table a seam's tree is built from, with the guard that has passed before it.
+	enum SeamTreeWorld {
+		/// A signature pass of this module's own seams.
+		case ownSignaturePass(FrozenScopeMap, validatedBy: ValidatedWorld)
+		/// A signature pass of another module's seams.
+		case foreignSignaturePass(FrozenScopeMap)
+		/// The seam world, for a seam this module generates.
+		case seamWorld(SeamWorld)
+
+		var frozenScopeMap: FrozenScopeMap {
+			switch self {
+			case let .ownSignaturePass(frozenScopeMap, _), let .foreignSignaturePass(frozenScopeMap):
+				frozenScopeMap
+			case let .seamWorld(seamWorld):
+				seamWorld.frozenScopeMap
+			}
+		}
 	}
 
 	/// The declaration a receiver is: one type's receive of one property, declared at one location.
@@ -560,6 +651,7 @@ extension DependencyTreeGenerator {
 	///   another module declares.
 	private static func seamSignatures(
 		forSeams seamTypes: Set<TypeDescription>,
+		construction: SignatureConstruction,
 		in instantiables: [TypeDescription: Instantiable],
 		plainTypeDeclarations: [PlainTypeDeclaration],
 		aliasDeclarationReferences: AliasDeclarationReferences,
@@ -581,6 +673,20 @@ extension DependencyTreeGenerator {
 		guard !seamInstantiables.isEmpty else { return SeamSignatureComputation(seamRoots: [:], errors: [], failedSeams: [], proof: proof) }
 		let ownSeamTypes = Set(seamInstantiables.map(\.concreteInstantiable))
 		let declaredTypeNames = namesOfTypesDeclaredAtFileScope(instantiables: Array(instantiables.values), plainTypeDeclarations: plainTypeDeclarations)
+		// The base of every pass's table: the seam world of every declaration, in which every seam is built and none is
+		// called. A record of a type that is no seam depends on the declarations alone, so every pass reads it from here; a
+		// pass overlays the records of the seams it calls (`FrozenScopeMap.overlaying`).
+		let baseScopeMap = Self.createSeamScopeMapping(
+			in: instantiables,
+			reachableTypeDescriptions: Set(instantiables.keys),
+			seamRoots: [:],
+			ownSeamTypes: ownSeamTypes,
+			callerModule: callerModule,
+			seams: seams,
+			aliasDeclarationReferences: aliasDeclarationReferences,
+			checkingModule: checkingModule,
+		)
+		let baseFrozenScopeMap = FrozenScopeMap(freezing: baseScopeMap.lazy.map { (key: $0.key, scope: $0.value) })
 		func initialSeamRoot(of seam: Instantiable) -> ScopeGenerator.SeamRoot {
 			let parameters = Self.ownParameters(of: seam, proof: proof)
 			return ScopeGenerator.SeamRoot(
@@ -647,17 +753,42 @@ extension DependencyTreeGenerator {
 					checkingModule: checkingModule,
 				)
 				let scopeInstantiables = scopeMap.mapValues(\.instantiable)
+				let rootScopes = componentSeams.map { seam in
+					Self.seamRootScope(of: seam, in: scopeMap, instantiables: scopeInstantiables, aliasDeclarationReferences: aliasDeclarationReferences)
+				}
+				let fulfillingKey = { (hole: SeamSignature.Hole) in
+					Self.fulfillingInstantiable(of: hole, in: instantiables)?.concreteInstantiable
+				}
+				let frozenScopeMap = baseFrozenScopeMap.overlaying(passScopeMap: scopeMap, rootScopes: rootScopes, fulfillingKey: fulfillingKey)
+				if let overlayOracle = ScopeTableObservation.overlayOracle {
+					// The table every pass's map would freeze to, compared by key: what the pass's map holds and its seams
+					// reach, the same record; what it does not hold, no record. A key whose scope the seams do not reach
+					// keeps the base's record, which construction never reads.
+					let passTable = FrozenScopeMap(freezing: scopeMap.lazy.map { (key: $0.key, scope: $0.value) }).table
+					let reachedScopes = Set(FrozenScopeMap.scopesReached(from: rootScopes, passScopeMap: scopeMap, fulfillingKey: fulfillingKey).map(ObjectIdentifier.init))
+					let passKeys = scopeMap.compactMap { reachedScopes.contains(ObjectIdentifier($0.value)) ? $0.key : nil }
+					let expected = passTable.projectionByKey(passKeys)
+					let assembled = frozenScopeMap.table.projectionByKey(passKeys)
+					var mismatches = [String]()
+					for key in passKeys.sorted() where assembled[key] != expected[key] {
+						mismatches.append("\(key.asSource): \(assembled[key] ?? "absent") instead of \(expected[key] ?? "absent")")
+					}
+					for key in instantiables.keys.sorted() where scopeMap[key] == nil && frozenScopeMap.table.id(forKey: key) != nil {
+						mismatches.append("\(key.asSource): present outside the pass")
+					}
+					overlayOracle(mismatches)
+				}
 				var changed = false
 				var passErrors = [DependencyTreeGeneratorError]()
 				var passFailedSeams = Set<TypeDescription>()
-				for seam in componentSeams {
-					let rootScope = Self.seamRootScope(of: seam, in: scopeMap, instantiables: scopeInstantiables, aliasDeclarationReferences: aliasDeclarationReferences)
+				for (seam, rootScope) in zip(componentSeams, rootScopes) {
 					// A seam found to equal its own initializer is computed again from that initializer's parameters:
 					// a change to the trees of the module's other seams can make it a seam after all.
 					let previousSeamRoot = seamRoots[seam.concreteInstantiable] ?? nil
 					do {
 						let generator = try Self.seamRootGenerator(
 							rootScope: rootScope,
+							in: construction.signaturePass(over: frozenScopeMap),
 							seamRoot: previousSeamRoot ?? initialSeamRoot(of: seam),
 							startsCodeGeneration: false,
 							declaredTypeNames: declaredTypeNames,
@@ -1103,6 +1234,7 @@ extension DependencyTreeGenerator {
 	/// as hidden, from the seam's own chain.
 	private static func seamRootGenerator(
 		rootScope: Scope,
+		in world: SeamTreeWorld,
 		seamRoot: ScopeGenerator.SeamRoot,
 		startsCodeGeneration: Bool,
 		declaredTypeNames: DeclaredTypeNames,
@@ -1128,7 +1260,12 @@ extension DependencyTreeGenerator {
 				lazilyInstantiatedInstanceProperties.insert(property.asUnwrappedProperty)
 			}
 		}
-		return try rootScope.createScopeGenerator(
+		// A seam's tree reads its own `SeamHoles`, constant within the tree but not across trees, so it keeps a memo of its
+		// own, for one pass: a seam without holes reuses its places within a pass, and one with holes stores none.
+		var constructionMemo = ConstructionMemo()
+		let (table, rootRecord) = world.frozenScopeMap.freezing(rootScope: rootScope)
+		return try rootRecord.createScopeGenerator(
+			in: table,
 			for: nil,
 			nearestDeclarations: nearestDeclarations,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -1136,6 +1273,7 @@ extension DependencyTreeGenerator {
 			erasedToConcreteExistential: false,
 			startsCodeGeneration: startsCodeGeneration,
 			declaredTypeNames: declaredTypeNames,
+			constructionMemo: &constructionMemo,
 		)
 	}
 
@@ -1314,7 +1452,7 @@ extension DependencyTreeGenerator {
 					fillsBindingLabels: childFillsBindingLabels,
 				))
 			}
-			generatorsToVisit[firstChildIndex...].reverse()
+			generatorsToVisit.reverseElements(from: firstChildIndex)
 		}
 		return (receivers, parameterReads)
 	}
@@ -1388,10 +1526,21 @@ extension DependencyTreeGenerator {
 		// Every label's collision and every tier's omission is collected, so the seam reports each of its errors.
 		var errors = [DependencyTreeGeneratorError]()
 		func labelCollision(_ label: String, among collidingReceivers: [SeamReceiver]) -> DependencyTreeGeneratorError {
-			.seam(.init(seam: seam, kind: .parameters(.parametersShareLabel(
+			var remedy = Self.labelCollisionRemedy(among: collidingReceivers.map(\.property), requiredProperties: requiredProperties)
+			if case .declareProvidingForm = remedy,
+			   let requiredForm = Self.requiredFormOfWrapperOnlySeamReceives(
+			   	among: collidingReceivers.map { ($0.property, $0.declaringType) },
+			   	seam: seam.concreteInstantiable,
+			   	requiredProperties: requiredProperties,
+			   	instantiables: instantiables,
+			   )
+			{
+				remedy = .declareRequiredForm(requiredForm.typeDescription.asSource)
+			}
+			return .seam(.init(seam: seam, kind: .parameters(.parametersShareLabel(
 				label: label,
 				receivers: collidingReceivers.map(\.asErrorReceiver),
-				remedy: Self.labelCollisionRemedy(among: collidingReceivers.map(\.property), requiredProperties: requiredProperties),
+				remedy: remedy,
 			))))
 		}
 
@@ -1687,6 +1836,42 @@ extension DependencyTreeGenerator {
 		guard wrapperKinds.isEmpty || !hasRequiredOptionalValue else { return .receiveTheSameWay }
 		let providingForm = forms.first(where: isWrapper) ?? forms[0]
 		return .declareProvidingForm(providingForm.typeDescription.unwrapped.asSource)
+	}
+
+	/// The by-value form of one label that a type of a seam's tree requires, where every wrapper form of the label is the
+	/// seam's own receive and no declaration `instantiables` holds outside the seam provides that wrapper: then
+	/// `labelCollisionRemedy(among:requiredProperties:)`'s providing form, the wrapper, is one nothing proves a caller
+	/// holds, while the tree's requirement of the value is a fact of the graph in hand. `nil` otherwise. Only the seam's
+	/// own collision asks: a fill's collision keeps the providing form, since its caller is the module that fills it.
+	static func requiredFormOfWrapperOnlySeamReceives(
+		among receivers: [(property: Property, declaringType: TypeDescription)],
+		seam: TypeDescription,
+		requiredProperties: Set<Property>,
+		instantiables: [TypeDescription: Instantiable],
+	) -> Property? {
+		let wrappers = receivers.filter { $0.property.typeDescription.unwrapped.lazilyInstantiatedInstanceType != nil }
+		guard !wrappers.isEmpty,
+		      wrappers.allSatisfy({ $0.declaringType == seam }),
+		      let requiredForm = receivers.first(where: { receiver in
+		      	receiver.property.typeDescription.lazilyInstantiatedInstanceType == nil
+		      		&& !receiver.property.typeDescription.isOptional
+		      		&& requiredProperties.contains(receiver.property)
+		      })?.property
+		else { return nil }
+		let wrapperProperties = Set(wrappers.map(\.property.asUnwrappedProperty))
+		// Whether any declaration outside the seam provides the wrapper; the answer, not an element, is what is used, so
+		// the dictionary's order decides nothing.
+		let wrapperProvidedOutsideSeam = instantiables.values.contains { instantiable in
+			instantiable.concreteInstantiable != seam && instantiable.dependencies.contains { dependency in
+				switch dependency.source {
+				case .instantiated, .forwarded, .aliased:
+					wrapperProperties.contains(dependency.property)
+				case .received:
+					false
+				}
+			}
+		}
+		return wrapperProvidedOutsideSeam ? nil : requiredForm
 	}
 
 	/// The one form that provides each of `forms`, the forms of one label a seam's tree receives from outside it that the

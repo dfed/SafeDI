@@ -60,21 +60,23 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		self.declarationType = declarationType
 		self.access = access
 		self.enclosingTypeAccess = enclosingTypeAccess
-		self.enclosingExtensionAccess = enclosingExtensionAccess
 		self.generatedInitializerAttributes = generatedInitializerAttributes
 		self.mockAttributes = mockAttributes
 		self.declarationIsolation = declarationIsolation
 		self.generateMock = generateMock
-		self.mockGenerationArgumentRange = mockGenerationArgumentRange
 		self.mockOnly = mockOnly
-		self.mockInitializer = mockInitializer
-		self.mockReturnType = mockReturnType
-		self.customMockName = customMockName
-		self.mockDeclarationLocation = mockDeclarationLocation
-		self.mockDeclarationAccess = mockDeclarationAccess
-		self.mockDeclarationModuleName = mockDeclarationModuleName
-		self.mockDeclarationPackageName = mockDeclarationPackageName
 		self.moduleName = moduleName
+		rarelySetFields = RarelySetFieldsBox(holding: RarelySetFields(
+			enclosingExtensionAccess: enclosingExtensionAccess,
+			mockGenerationArgumentRange: mockGenerationArgumentRange,
+			mockInitializer: mockInitializer,
+			mockReturnType: mockReturnType,
+			customMockName: customMockName,
+			mockDeclarationLocation: mockDeclarationLocation,
+			mockDeclarationAccess: mockDeclarationAccess,
+			mockDeclarationModuleName: mockDeclarationModuleName,
+			mockDeclarationPackageName: mockDeclarationPackageName,
+		))
 		self.packageName = packageName
 	}
 
@@ -125,7 +127,10 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// modifier (its `modifierRange` is `nil`), with `fileprivate` as a `private` extension's default. The extended
 	/// type's own access is declared elsewhere and unknown to the tool. `nil` for an extension-based Instantiable, whose
 	/// own `access` is the extension's.
-	public let enclosingExtensionAccess: AccessDeclaration?
+	public var enclosingExtensionAccess: AccessDeclaration? {
+		rarelySetFields?.fields.enclosingExtensionAccess
+	}
+
 	/// Attributes to add to the initializers SafeDI generates for this type (e.g. `"@MainActor"`) – a root's `init()`,
 	/// and each tier of a type with `generateDependencyTree: true`: the macro's
 	/// `generatedAttributes` when it is given, else its `generatedInitializerAttributes`. The declaration's own: a
@@ -154,7 +159,10 @@ public struct Instantiable: Codable, Hashable, Sendable {
 
 	/// The range of the `generateMock:` argument's value in the file of `declarationLocation`, where a diagnostic about
 	/// the requested mock points and its fix-its edit. `nil` when the declaration spells no `generateMock:` argument.
-	public let mockGenerationArgumentRange: Dependency.SourceRange?
+	public var mockGenerationArgumentRange: Dependency.SourceRange? {
+		rarelySetFields?.fields.mockGenerationArgumentRange
+	}
+
 	/// Where a diagnostic about the requested mock points: the `generateMock:` argument's value, else the declaration.
 	public var mockGenerationArgumentLocation: Dependency.DeclarationLocation? {
 		declarationLocation.map { declarationLocation in
@@ -167,31 +175,58 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public let mockOnly: Bool
 	/// A user-defined `static func mock(...)` method, if one exists.
 	/// When present, mock generation calls this method instead of `init` or `instantiate`.
-	public var mockInitializer: Initializer?
+	public var mockInitializer: Initializer? {
+		get { rarelySetFields?.fields.mockInitializer }
+		set { updateRarelySetFields { $0.mockInitializer = newValue } }
+	}
+
 	/// The return type of the user-defined `mock()` method, if one exists.
 	/// Used to determine whether to use the mock method or fall through to `init` based on the property type.
-	public var mockReturnType: TypeDescription?
+	public var mockReturnType: TypeDescription? {
+		get { rarelySetFields?.fields.mockReturnType }
+		set { updateRarelySetFields { $0.mockReturnType = newValue } }
+	}
+
 	/// The name of the user's custom mock method. With `generateMock`, the generated `mock()` calls
 	/// through to this method. With `mockOnly`, SafeDI uses this method as the mock provider.
-	public var customMockName: String?
+	public var customMockName: String? {
+		rarelySetFields?.fields.customMockName
+	}
+
 	/// Where the user-defined mock method begins in source: its first attribute or modifier. Travels with
 	/// `mockInitializer` when a `mockOnly` declaration's mock is merged into a production entry, so diagnostics
 	/// about the hand-written mock point at the method rather than at the production declaration.
-	public var mockDeclarationLocation: Dependency.DeclarationLocation?
+	public var mockDeclarationLocation: Dependency.DeclarationLocation? {
+		get { rarelySetFields?.fields.mockDeclarationLocation }
+		set { updateRarelySetFields { $0.mockDeclarationLocation = newValue } }
+	}
+
 	/// The access spelled on the declaration that declares the user-defined mock method: the declaration this
 	/// Instantiable was found on (the type, or the `@Instantiable` extension), or a `mockOnly` extension merged into it,
 	/// whose members default to it (`fileprivate` for a `private` extension). Travels with `mockInitializer` when a
 	/// `mockOnly` declaration's mock is merged into a production entry. `nil` when there is no user-defined mock.
-	public var mockDeclarationAccess: AccessDeclaration?
+	public var mockDeclarationAccess: AccessDeclaration? {
+		get { rarelySetFields?.fields.mockDeclarationAccess }
+		set { updateRarelySetFields { $0.mockDeclarationAccess = newValue } }
+	}
+
 	/// The module that declares the user-defined mock method, as `moduleName` names a module, or `nil` when there is no
 	/// user-defined mock or SafeDITool does not know the module. A `mockOnly` declaration in a module of its own, such as
 	/// a test-support module, declares a mock the production declaration's module does not, so this travels with
 	/// `mockInitializer` when that declaration's mock is merged into a production entry.
-	public var mockDeclarationModuleName: String?
+	public var mockDeclarationModuleName: String? {
+		get { rarelySetFields?.fields.mockDeclarationModuleName }
+		set { updateRarelySetFields { $0.mockDeclarationModuleName = newValue } }
+	}
+
 	/// The package of the module that declares the user-defined mock method, as `packageName` names a package, or `nil`
 	/// when there is no user-defined mock or SafeDITool does not know the package. Travels with `mockInitializer` as
 	/// `mockDeclarationModuleName` does.
-	public var mockDeclarationPackageName: String?
+	public var mockDeclarationPackageName: String? {
+		get { rarelySetFields?.fields.mockDeclarationPackageName }
+		set { updateRarelySetFields { $0.mockDeclarationPackageName = newValue } }
+	}
+
 	/// The module that declares this Instantiable: the name the compiler gives the module that compiles the declaration's
 	/// file. `nil` when SafeDITool does not know it, which is always the case for a declaration the visitors just walked:
 	/// SafeDITool records it when it reads a module, from what the build system tells it. `query` records instead the
@@ -209,26 +244,31 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// Used when merging a production `@Instantiable` with a `mockOnly` declaration for the same type.
 	public func mergedWithMockProvider(_ mockProvider: Instantiable) -> Instantiable {
 		var merged = self
-		merged.mockInitializer = mockProvider.mockInitializer
-		merged.mockReturnType = mockProvider.mockReturnType
-		merged.customMockName = mockProvider.customMockName
-		merged.mockDeclarationLocation = mockProvider.mockDeclarationLocation
-		merged.mockDeclarationAccess = mockProvider.mockDeclarationAccess
-		merged.mockDeclarationModuleName = mockProvider.mockDeclarationModuleName
-		merged.mockDeclarationPackageName = mockProvider.mockDeclarationPackageName
+		let mockProviderFields = mockProvider.rarelySetFields?.fields ?? RarelySetFields()
+		merged.updateRarelySetFields { fields in
+			fields.mockInitializer = mockProviderFields.mockInitializer
+			fields.mockReturnType = mockProviderFields.mockReturnType
+			fields.customMockName = mockProviderFields.customMockName
+			fields.mockDeclarationLocation = mockProviderFields.mockDeclarationLocation
+			fields.mockDeclarationAccess = mockProviderFields.mockDeclarationAccess
+			fields.mockDeclarationModuleName = mockProviderFields.mockDeclarationModuleName
+			fields.mockDeclarationPackageName = mockProviderFields.mockDeclarationPackageName
+		}
 		return merged
 	}
 
 	/// This declaration without its hand-written mock, as production builds the type: with `init` or `instantiate()`.
 	public var withoutHandWrittenMock: Instantiable {
 		var instantiable = self
-		instantiable.mockInitializer = nil
-		instantiable.mockReturnType = nil
-		instantiable.customMockName = nil
-		instantiable.mockDeclarationLocation = nil
-		instantiable.mockDeclarationAccess = nil
-		instantiable.mockDeclarationModuleName = nil
-		instantiable.mockDeclarationPackageName = nil
+		instantiable.updateRarelySetFields { fields in
+			fields.mockInitializer = nil
+			fields.mockReturnType = nil
+			fields.customMockName = nil
+			fields.mockDeclarationLocation = nil
+			fields.mockDeclarationAccess = nil
+			fields.mockDeclarationModuleName = nil
+			fields.mockDeclarationPackageName = nil
+		}
 		return instantiable
 	}
 
@@ -389,7 +429,10 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// with the module's name, as `ModA.Store`, because another module also declares a type of that name and the module the
 	/// run looks from cannot name this one (`distinguishingTypesUnnameable(from:among:plainTypeDeclarations:modulesRead:)`).
 	/// `nil` otherwise. Never recorded in a `.safedi` file or scan's cache: it describes one run's view of the declaration.
-	public var declaredName: TypeDescription?
+	public var declaredName: TypeDescription? {
+		get { rarelySetFields?.fields.declaredName }
+		set { updateRarelySetFields { $0.declaredName = newValue } }
+	}
 
 	/// The path to the source file that declared this Instantiable, as the build system supplied it.
 	/// `scan` rewrites it to a project-relative form so cached module info matches manifest entries;
@@ -400,6 +443,53 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// declaration – and such values never reach the dependency tree generator, which only consumes
 	/// instantiables that `SafeDITool` parsed from files.
 	public let declarationLocation: Dependency.DeclarationLocation?
+
+	// MARK: Rarely set fields
+
+	/// The fields few declarations set – a hand-written mock's, an enclosing extension's access, a `generateMock:`
+	/// argument's range, a name a run distinguishes the type by – behind one reference, `nil` while every one is `nil`:
+	/// a module's declarations are held at once, and storing these in every `Instantiable` more than doubled its size.
+	private var rarelySetFields: RarelySetFieldsBox?
+
+	/// Sets the rarely set fields to what `update` makes of them, keeping no box while every one is `nil`.
+	private mutating func updateRarelySetFields(_ update: (inout RarelySetFields) -> Void) {
+		var fields = rarelySetFields?.fields ?? RarelySetFields()
+		update(&fields)
+		rarelySetFields = RarelySetFieldsBox(holding: fields)
+	}
+
+	private struct RarelySetFields: Hashable, Sendable {
+		var enclosingExtensionAccess: AccessDeclaration?
+		var mockGenerationArgumentRange: Dependency.SourceRange?
+		var mockInitializer: Initializer?
+		var mockReturnType: TypeDescription?
+		var customMockName: String?
+		var mockDeclarationLocation: Dependency.DeclarationLocation?
+		var mockDeclarationAccess: AccessDeclaration?
+		var mockDeclarationModuleName: String?
+		var mockDeclarationPackageName: String?
+		var declaredName: TypeDescription?
+	}
+
+	/// `RarelySetFields` behind a reference, compared and hashed by its fields, so an `Instantiable` equals another
+	/// exactly when it did with the fields stored inline.
+	private final class RarelySetFieldsBox: Hashable, Sendable {
+		/// A box of `fields`, or `nil` when every field is `nil`, so that two instantiables that set none are equal.
+		init?(holding fields: RarelySetFields) {
+			guard fields != RarelySetFields() else { return nil }
+			self.fields = fields
+		}
+
+		let fields: RarelySetFields
+
+		static func == (lhs: RarelySetFieldsBox, rhs: RarelySetFieldsBox) -> Bool {
+			lhs.fields == rhs.fields
+		}
+
+		func hash(into hasher: inout Hasher) {
+			hasher.combine(fields)
+		}
+	}
 
 	/// The type of declaration where this Instantiable was defined.
 	public enum DeclarationType: Codable, Hashable, Sendable {
@@ -431,5 +521,116 @@ extension [Instantiable] {
 				(lhs.element.sourceFilePath ?? "", lhs.offset) < (rhs.element.sourceFilePath ?? "", rhs.offset)
 			}
 			.map(\.element)
+	}
+}
+
+// MARK: - Codable
+
+/// What `dump` prints: every field under its own name, as when each was stored in the struct, the rarely set ones included.
+extension Instantiable {
+	private enum CodingKeys: String, CodingKey {
+		case instantiableTypes
+		case isRoot
+		case generatesDependencyTree
+		case initializer
+		case otherInitializers
+		case dependencies
+		case declarationType
+		case access
+		case enclosingTypeAccess
+		case enclosingExtensionAccess
+		case generatedInitializerAttributes
+		case mockAttributes
+		case declarationIsolation
+		case generateMock
+		case mockGenerationArgumentRange
+		case mockOnly
+		case mockInitializer
+		case mockReturnType
+		case customMockName
+		case mockDeclarationLocation
+		case mockDeclarationAccess
+		case mockDeclarationModuleName
+		case mockDeclarationPackageName
+		case moduleName
+		case packageName
+		case isInsideCompilerDecidedBlock
+		case dependencyLabelsInUnselectedClauses
+		case dependencyLabelsInsideConditionalBlocks
+		case declaredName
+		case sourceFilePath
+		case declarationLocation
+	}
+
+	public init(from decoder: any Decoder) throws {
+		let container = try decoder.container(keyedBy: CodingKeys.self)
+		instantiableTypes = try container.decode([TypeDescription].self, forKey: .instantiableTypes)
+		isRoot = try container.decode(Bool.self, forKey: .isRoot)
+		generatesDependencyTree = try container.decode(Bool.self, forKey: .generatesDependencyTree)
+		initializer = try container.decodeIfPresent(Initializer.self, forKey: .initializer)
+		otherInitializers = try container.decode([Initializer].self, forKey: .otherInitializers)
+		dependencies = try container.decode([Dependency].self, forKey: .dependencies)
+		declarationType = try container.decode(DeclarationType.self, forKey: .declarationType)
+		access = try container.decode(AccessDeclaration.self, forKey: .access)
+		enclosingTypeAccess = try container.decode([AccessDeclaration].self, forKey: .enclosingTypeAccess)
+		generatedInitializerAttributes = try container.decode(String.self, forKey: .generatedInitializerAttributes)
+		mockAttributes = try container.decode(String.self, forKey: .mockAttributes)
+		declarationIsolation = try container.decodeIfPresent(String.self, forKey: .declarationIsolation)
+		generateMock = try container.decode(MockGeneration.self, forKey: .generateMock)
+		mockOnly = try container.decode(Bool.self, forKey: .mockOnly)
+		moduleName = try container.decodeIfPresent(String.self, forKey: .moduleName)
+		packageName = try container.decodeIfPresent(String.self, forKey: .packageName)
+		isInsideCompilerDecidedBlock = try container.decode(Bool.self, forKey: .isInsideCompilerDecidedBlock)
+		dependencyLabelsInUnselectedClauses = try container.decode([DependencyLabelInUnselectedClause].self, forKey: .dependencyLabelsInUnselectedClauses)
+		dependencyLabelsInsideConditionalBlocks = try container.decode([String].self, forKey: .dependencyLabelsInsideConditionalBlocks)
+		sourceFilePath = try container.decodeIfPresent(String.self, forKey: .sourceFilePath)
+		declarationLocation = try container.decodeIfPresent(Dependency.DeclarationLocation.self, forKey: .declarationLocation)
+		rarelySetFields = RarelySetFieldsBox(holding: RarelySetFields(
+			enclosingExtensionAccess: try container.decodeIfPresent(AccessDeclaration.self, forKey: .enclosingExtensionAccess),
+			mockGenerationArgumentRange: try container.decodeIfPresent(Dependency.SourceRange.self, forKey: .mockGenerationArgumentRange),
+			mockInitializer: try container.decodeIfPresent(Initializer.self, forKey: .mockInitializer),
+			mockReturnType: try container.decodeIfPresent(TypeDescription.self, forKey: .mockReturnType),
+			customMockName: try container.decodeIfPresent(String.self, forKey: .customMockName),
+			mockDeclarationLocation: try container.decodeIfPresent(Dependency.DeclarationLocation.self, forKey: .mockDeclarationLocation),
+			mockDeclarationAccess: try container.decodeIfPresent(AccessDeclaration.self, forKey: .mockDeclarationAccess),
+			mockDeclarationModuleName: try container.decodeIfPresent(String.self, forKey: .mockDeclarationModuleName),
+			mockDeclarationPackageName: try container.decodeIfPresent(String.self, forKey: .mockDeclarationPackageName),
+			declaredName: try container.decodeIfPresent(TypeDescription.self, forKey: .declaredName),
+		))
+	}
+
+	public func encode(to encoder: any Encoder) throws {
+		var container = encoder.container(keyedBy: CodingKeys.self)
+		try container.encode(instantiableTypes, forKey: .instantiableTypes)
+		try container.encode(isRoot, forKey: .isRoot)
+		try container.encode(generatesDependencyTree, forKey: .generatesDependencyTree)
+		try container.encodeIfPresent(initializer, forKey: .initializer)
+		try container.encode(otherInitializers, forKey: .otherInitializers)
+		try container.encode(dependencies, forKey: .dependencies)
+		try container.encode(declarationType, forKey: .declarationType)
+		try container.encode(access, forKey: .access)
+		try container.encode(enclosingTypeAccess, forKey: .enclosingTypeAccess)
+		try container.encodeIfPresent(enclosingExtensionAccess, forKey: .enclosingExtensionAccess)
+		try container.encode(generatedInitializerAttributes, forKey: .generatedInitializerAttributes)
+		try container.encode(mockAttributes, forKey: .mockAttributes)
+		try container.encodeIfPresent(declarationIsolation, forKey: .declarationIsolation)
+		try container.encode(generateMock, forKey: .generateMock)
+		try container.encodeIfPresent(mockGenerationArgumentRange, forKey: .mockGenerationArgumentRange)
+		try container.encode(mockOnly, forKey: .mockOnly)
+		try container.encodeIfPresent(mockInitializer, forKey: .mockInitializer)
+		try container.encodeIfPresent(mockReturnType, forKey: .mockReturnType)
+		try container.encodeIfPresent(customMockName, forKey: .customMockName)
+		try container.encodeIfPresent(mockDeclarationLocation, forKey: .mockDeclarationLocation)
+		try container.encodeIfPresent(mockDeclarationAccess, forKey: .mockDeclarationAccess)
+		try container.encodeIfPresent(mockDeclarationModuleName, forKey: .mockDeclarationModuleName)
+		try container.encodeIfPresent(mockDeclarationPackageName, forKey: .mockDeclarationPackageName)
+		try container.encodeIfPresent(moduleName, forKey: .moduleName)
+		try container.encodeIfPresent(packageName, forKey: .packageName)
+		try container.encode(isInsideCompilerDecidedBlock, forKey: .isInsideCompilerDecidedBlock)
+		try container.encode(dependencyLabelsInUnselectedClauses, forKey: .dependencyLabelsInUnselectedClauses)
+		try container.encode(dependencyLabelsInsideConditionalBlocks, forKey: .dependencyLabelsInsideConditionalBlocks)
+		try container.encodeIfPresent(declaredName, forKey: .declaredName)
+		try container.encodeIfPresent(sourceFilePath, forKey: .sourceFilePath)
+		try container.encodeIfPresent(declarationLocation, forKey: .declarationLocation)
 	}
 }

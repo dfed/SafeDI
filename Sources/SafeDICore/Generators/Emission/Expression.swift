@@ -80,11 +80,20 @@ struct ConstructionOverride: Hashable, Sendable {
 	var returnsConstructedType = false
 }
 
-/// The overrides of one configurable body, keyed by the scope whose construction each replaces.
+/// The overrides of one place of a configurable body and of the places beneath it, which the emitter descends by child
+/// index (`ScopeGenerator.OrderedChild.index`): one generator can sit at several places, each with its own overrides.
 struct ConstructionOverrides: Sendable {
-	let byScope: [ObjectIdentifier: ConstructionOverride]
-	/// The body's naming policy: the names each scope binds and reads where they are not its labels.
-	var namesByScope: [ObjectIdentifier: ScopeNames] = [:]
+	/// The override of this place's construction, where it is replaced.
+	var construction: ConstructionOverride?
+	/// This place's naming policy: the names it binds and reads where they are not its labels.
+	var names: ScopeNames?
+	/// The overrides of the places beneath this one, by their index among its scope's `propertiesToGenerate`.
+	var children = [Int: ConstructionOverrides]()
+
+	/// The overrides of the place beneath this one at `childIndex`, empty where it has none.
+	func child(at childIndex: Int) -> ConstructionOverrides {
+		children[childIndex] ?? ConstructionOverrides()
+	}
 }
 
 /// The names one scope of a configurable body binds and reads where they differ from its labels: a body whose siblings

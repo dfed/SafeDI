@@ -490,8 +490,9 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("dependencyLabelsInUnselectedClauses", \.dependencyLabelsInUnselectedClauses),
 				BinaryLayoutField("dependencyLabelsInsideConditionalBlocks", \.dependencyLabelsInsideConditionalBlocks),
 			],
-			// `declaredName` is what one run makes of the declaration, so no file records it.
-			unwrittenProperties: ["instantiableTypes", "declaredName"],
+			// `rarelySetFields` holds fields written under their own names above, and `declaredName`, what one run makes
+			// of the declaration, which no file records.
+			unwrittenProperties: ["instantiableTypes", "rarelySetFields"],
 		)
 	}
 
@@ -1087,6 +1088,14 @@ extension TypeDescription: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		if reader.sharesTypeDescriptions {
+			self = try reader.readSharedByBytes { reader throws(BinaryDecodingError) in try Self(readingUnsharedFrom: &reader) }
+		} else {
+			try self.init(readingUnsharedFrom: &reader)
+		}
+	}
+
+	private init(readingUnsharedFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		self = try reader.readNested { reader throws(BinaryDecodingError) in
 			switch try reader.readTag() as Tag {
 			case .void:
@@ -1126,6 +1135,14 @@ extension TypeDescription: BinarySchemaMember {
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		if writer.sharesTypeDescriptions {
+			writer.writeSharedByBytes { writeUnshared(to: &$0) }
+		} else {
+			writeUnshared(to: &writer)
+		}
+	}
+
+	private func writeUnshared(to writer: inout BinaryWriter) {
 		writer.writeNested { writer in
 			writeCase(to: &writer)
 		}
@@ -1296,6 +1313,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 		.structure(
 			fields: [
 				BinaryLayoutField("moduleName", \.moduleName),
+				BinaryLayoutField("ownEntryChecksum", \.ownEntryChecksum),
 				BinaryLayoutField("packageName", \.packageName),
 				BinaryLayoutField("dependencyModuleNames", \.dependencyModuleNames),
 				BinaryLayoutField("imports", \.imports),
@@ -1306,6 +1324,8 @@ extension ModuleInfoFile: BinarySchemaMember {
 				BinaryLayoutField("conditionalCompilationDecisions", \.conditionalCompilationDecisions),
 				BinaryLayoutField("instantiableTypeNamesInAnyClause", \.instantiableTypeNamesInAnyClause),
 				BinaryLayoutField("plainTypeDeclarations", \.plainTypeDeclarations),
+				// A signature names the same few types at many places.
+				BinaryLayoutField("seamSignatures", \.seamSignaturesSharingTypeDescriptions),
 				BinaryLayoutField("view", \.view),
 			],
 			unwrittenProperties: [],
@@ -1316,6 +1336,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 		let fileWithoutView = try ModuleInfoFile(readingAllButViewFrom: &reader)
 		try self.init(
 			moduleName: fileWithoutView.moduleName,
+			ownEntryChecksum: fileWithoutView.ownEntryChecksum,
 			packageName: fileWithoutView.packageName,
 			dependencyModuleNames: fileWithoutView.dependencyModuleNames,
 			imports: fileWithoutView.imports,
@@ -1326,6 +1347,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 			conditionalCompilationDecisions: fileWithoutView.conditionalCompilationDecisions,
 			instantiableTypeNamesInAnyClause: fileWithoutView.instantiableTypeNamesInAnyClause,
 			plainTypeDeclarations: fileWithoutView.plainTypeDeclarations,
+			seamSignatures: fileWithoutView.seamSignatures,
 			view: reader.read(),
 		)
 	}
@@ -1335,6 +1357,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 	init(readingAllButViewFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
 			moduleName: reader.read(),
+			ownEntryChecksum: reader.read() as UInt64?,
 			packageName: reader.read() as String?,
 			dependencyModuleNames: reader.read(),
 			imports: reader.read(),
@@ -1345,12 +1368,14 @@ extension ModuleInfoFile: BinarySchemaMember {
 			conditionalCompilationDecisions: reader.read(),
 			instantiableTypeNamesInAnyClause: reader.read(),
 			plainTypeDeclarations: reader.read(),
+			seamSignatures: (reader.read() as BinarySharingTypeDescriptions<[StoredSeamSignature]>).value,
 			view: .empty,
 		)
 	}
 
 	func write(to writer: inout BinaryWriter) {
 		writer.write(moduleName)
+		writer.write(ownEntryChecksum)
 		writer.write(packageName)
 		writer.write(dependencyModuleNames)
 		writer.write(imports)
@@ -1361,7 +1386,12 @@ extension ModuleInfoFile: BinarySchemaMember {
 		writer.write(conditionalCompilationDecisions)
 		writer.write(instantiableTypeNamesInAnyClause)
 		writer.write(plainTypeDeclarations)
+		writer.write(seamSignaturesSharingTypeDescriptions)
 		writer.write(view)
+	}
+
+	private var seamSignaturesSharingTypeDescriptions: BinarySharingTypeDescriptions<[StoredSeamSignature]> {
+		BinarySharingTypeDescriptions(seamSignatures)
 	}
 }
 
@@ -1371,18 +1401,41 @@ extension ModuleInfoView: BinarySchemaMember {
 			fields: [
 				BinaryLayoutField("moduleGraph", \.moduleGraph),
 				BinaryLayoutField("declarations", \.declarations),
+				BinaryLayoutField("references", \.references),
 			],
 			unwrittenProperties: [],
 		)
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
-		try self.init(moduleGraph: reader.read(), declarations: reader.read())
+		try self.init(moduleGraph: reader.read(), declarations: reader.read(), references: reader.read())
 	}
 
 	func write(to writer: inout BinaryWriter) {
 		writer.write(moduleGraph)
 		writer.write(declarations)
+		writer.write(references)
+	}
+}
+
+extension ViewedModuleReference: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("moduleName", \.moduleName),
+				BinaryLayoutField("checksum", \.checksum),
+			],
+			unwrittenProperties: [],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(moduleName: reader.read(), checksum: reader.read())
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.write(moduleName)
+		writer.write(checksum)
 	}
 }
 
@@ -1425,6 +1478,7 @@ extension ViewedModule: BinarySchemaMember {
 				BinaryLayoutField("mockImports", \.mockImports),
 				BinaryLayoutField("instantiables", \.instantiables),
 				BinaryLayoutField("plainTypeDeclarations", \.plainTypeDeclarations),
+				BinaryLayoutField("seamSignatures", \.seamSignaturesSharingTypeDescriptions),
 			],
 			unwrittenProperties: [],
 		)
@@ -1437,6 +1491,7 @@ extension ViewedModule: BinarySchemaMember {
 			mockImports: reader.read(),
 			instantiables: reader.read(),
 			plainTypeDeclarations: reader.read(),
+			seamSignatures: (reader.read() as BinarySharingTypeDescriptions<[StoredSeamSignature]>).value,
 		)
 	}
 
@@ -1446,5 +1501,10 @@ extension ViewedModule: BinarySchemaMember {
 		writer.write(mockImports)
 		writer.write(instantiables)
 		writer.write(plainTypeDeclarations)
+		writer.write(seamSignaturesSharingTypeDescriptions)
+	}
+
+	private var seamSignaturesSharingTypeDescriptions: BinarySharingTypeDescriptions<[StoredSeamSignature]> {
+		BinarySharingTypeDescriptions(seamSignatures)
 	}
 }

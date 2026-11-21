@@ -526,6 +526,13 @@ struct SafeDIToolMockKeywordLabelTests: ~Copyable {
 		    public static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
 		        let Type = if let safeDIBuilder = safeDIOverrides.Type { safeDIBuilder() } else { Kind() }
 		        func __safeDI_Protocol() -> Holder {
 		            let Type = if let safeDIBuilder = safeDIOverrides.Protocol.Type { safeDIBuilder() } else { Kind() }

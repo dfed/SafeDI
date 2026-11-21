@@ -2478,6 +2478,14 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		        session: Session,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
+		        Root.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        session: Session,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
 		        func __safeDI_detailBuilder() -> Detail {
 		            func __safeDI_apiBuilder_Detail_api(session: Session) -> any Api {
 		                let api: any Api = Live(session: session)
@@ -2948,6 +2956,14 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		    }
 
 		    public static func mock(
+		        session: Session,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        Root.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
 		        session: Session,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
@@ -3907,6 +3923,14 @@ struct SafeDIToolPublicMockStaticCallTests: ~Copyable {
 		    }
 
 		    public static func mock(
+		        session: Session,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        Root.__safeDI_mock(session: session, safeDIOverrides: safeDIOverrides)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
 		        session: Session,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {

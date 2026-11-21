@@ -891,6 +891,14 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 		        onTap: @escaping OnTap,
 		        onDone: @escaping OnTap
 		    ) -> Screen {
+		        Screen.__safeDI_mock(onTap: onTap, onDone: onDone)
+		    }
+
+		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+		    public static func __safeDI_mock(
+		        onTap: @escaping OnTap,
+		        onDone: @escaping OnTap
+		    ) -> Screen {
 		        return Screen(onTap: onTap, onDone: onDone)
 		    }
 		}
@@ -1073,7 +1081,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Middle {
 				        _ = Inner.__safeDI_Inner_mock_DE28F65876F78D79.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				        let inner = Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
+				        let inner = Inner.__safeDI_mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
 				        return Middle(inner: inner)
 				    }
 				}
@@ -1119,7 +1127,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Middle {
 				        _ = Inner.__safeDI_Inner_mock_DE28F65876F78D79.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
-				        let inner = Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
+				        let inner = Inner.__safeDI_mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
 				        return Middle(inner: inner)
 				    }
 				}
@@ -1186,8 +1194,16 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        onTap: @escaping OnTap,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Middle {
+				        Middle.__safeDI_mock(onTap: onTap, safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        onTap: @escaping OnTap,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Middle {
 				        _ = Inner.__safeDI_Inner_mock_DE28F65876F78D79.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				        let inner = Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
+				        let inner = Inner.__safeDI_mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
 				        return Middle(inner: inner)
 				    }
 				}
@@ -1236,8 +1252,16 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        onTap: @escaping OnTap,
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Middle {
+				        Middle.__safeDI_mock(onTap: onTap, safeDIOverrides: safeDIOverrides)
+				    }
+
+				    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+				    public static func __safeDI_mock(
+				        onTap: @escaping OnTap,
+				        safeDIOverrides: SafeDIOverrides = .init()
+				    ) -> Middle {
 				        _ = Inner.__safeDI_Inner_mock_DE28F65876F78D79.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
-				        let inner = Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
+				        let inner = Inner.__safeDI_mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
 				        return Middle(inner: inner)
 				    }
 				}
@@ -1309,7 +1333,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Middle {
 				        _ = Inner.__safeDI_Inner_mock_DE28F65876F78D79.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				        let inner = Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
+				        let inner = Inner.__safeDI_mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
 				        return Middle(inner: inner)
 				    }
 				}
@@ -1355,7 +1379,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Middle {
 				        _ = Inner.__safeDI_Inner_mock_DE28F65876F78D79.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
-				        let inner = Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
+				        let inner = Inner.__safeDI_mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
 				        return Middle(inner: inner)
 				    }
 				}
@@ -1424,7 +1448,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				    ) -> Middle {
 				        _ = Inner.__safeDI_Inner_mock_DE28F65876F78D79.self // \(Self.guardComment(under: integration, moduleName: "Feature", typeName: "Inner"))
 				        func __safeDI_innerBuilder() -> Inner {
-				            Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.innerBuilder)
+				            Inner.__safeDI_mock(onTap: onTap, safeDIOverrides: safeDIOverrides.innerBuilder)
 				        }
 				        let innerBuilder = Instantiator<Inner>(__safeDI_innerBuilder)
 				        return Middle(innerBuilder: innerBuilder)
@@ -1473,7 +1497,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				    ) -> Middle {
 				        _ = Inner.__safeDI_Inner_mock_DE28F65876F78D79.self // \(Self.guardComment(under: integration, moduleName: "Feature", typeName: "Inner"))
 				        func __safeDI_innerBuilder() -> Inner {
-				            Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.innerBuilder)
+				            Inner.__safeDI_mock(onTap: onTap, safeDIOverrides: safeDIOverrides.innerBuilder)
 				        }
 				        let innerBuilder = Instantiator<Inner>(__safeDI_innerBuilder)
 				        return Middle(innerBuilder: innerBuilder)
@@ -1543,7 +1567,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Middle {
 				        _ = Inner.__safeDI_Inner_mock_9E97244FDF6BDF5D.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				        let inner = Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
+				        let inner = Inner.__safeDI_mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
 				        return Middle(inner: inner)
 				    }
 				}
@@ -1589,7 +1613,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Middle {
 				        _ = Inner.__safeDI_Inner_mock_9E97244FDF6BDF5D.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
-				        let inner = Inner.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
+				        let inner = Inner.__safeDI_mock(onTap: onTap, safeDIOverrides: safeDIOverrides.inner)
 				        return Middle(inner: inner)
 				    }
 				}
@@ -1673,7 +1697,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Outer {
 				        _ = Middle.__safeDI_Middle_mock_DE28F65876F78D79.self // \(Self.guardComment(under: integration, moduleName: "Mid", typeName: "Middle"))
-				        let middle = Middle.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.middle)
+				        let middle = Middle.__safeDI_mock(onTap: onTap, safeDIOverrides: safeDIOverrides.middle)
 				        return Outer(middle: middle)
 				    }
 				}
@@ -1722,7 +1746,7 @@ struct SafeDIToolMockEscapingTypealiasParameterTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Outer {
 				        _ = Middle.__safeDI_Middle_mock_DE28F65876F78D79.self // \(Self.guardComment(under: integration, moduleName: "Mid", typeName: "Middle"))
-				        let middle = Middle.mock(onTap: onTap, safeDIOverrides: safeDIOverrides.middle)
+				        let middle = Middle.__safeDI_mock(onTap: onTap, safeDIOverrides: safeDIOverrides.middle)
 				        return Outer(middle: middle)
 				    }
 				}

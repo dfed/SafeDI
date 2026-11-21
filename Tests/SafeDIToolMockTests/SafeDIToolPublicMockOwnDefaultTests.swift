@@ -93,6 +93,15 @@ struct SafeDIToolPublicMockOwnDefaultTests: ~Copyable {
 			        note: String? = Banner.__safeDI_publicMockDefault_note(),
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Banner {
+			        Banner.__safeDI_mock(title: title, note: note, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
+			        title: String? = nil,
+			        note: String? = Banner.__safeDI_publicMockDefault_note(),
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Banner {
 			        let title = title ?? ("Hello")
 			        let logger = if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder() } else { Logger() }
 			        return Banner(logger: logger, title: title, note: note)
@@ -112,6 +121,14 @@ struct SafeDIToolPublicMockOwnDefaultTests: ~Copyable {
 			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_note() -> String? { "x" }
 
 			    public static func mock(
+			        title: String? = nil,
+			        note: String? = BannerModel.__safeDI_publicMockDefault_note()
+			    ) -> BannerModel {
+			        BannerModel.__safeDI_mock(title: title, note: note)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        title: String? = nil,
 			        note: String? = BannerModel.__safeDI_publicMockDefault_note()
 			    ) -> BannerModel {
@@ -155,6 +172,15 @@ struct SafeDIToolPublicMockOwnDefaultTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        title: String? = nil,
+			        note: String? = BannerView.__safeDI_publicMockDefault_note(),
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> BannerView {
+			        BannerView.__safeDI_mock(title: title, note: note, safeDIOverrides: safeDIOverrides)
+			    }
+
+			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
+			    public static func __safeDI_mock(
 			        title: String? = nil,
 			        note: String? = BannerView.__safeDI_publicMockDefault_note(),
 			        safeDIOverrides: SafeDIOverrides = .init()
@@ -220,7 +246,7 @@ struct SafeDIToolPublicMockOwnDefaultTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Shelf {
 			        _ = Banner.__safeDI_Banner_mock_0B93BE1CE3B20378.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			        let banner = Banner.mock(safeDIOverrides: safeDIOverrides.banner)
+			        let banner = Banner.__safeDI_mock(safeDIOverrides: safeDIOverrides.banner)
 			        return Shelf(banner: banner)
 			    }
 			}

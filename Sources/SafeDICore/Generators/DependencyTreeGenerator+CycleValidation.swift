@@ -345,7 +345,7 @@ extension DependencyTreeGenerator {
 							scopesToValidate.append((scope: childScope, parentIndex: walkedScopeIndex))
 						}
 						// The scope validated next is the last one on the stack, so the first child goes last.
-						scopesToValidate[firstChildIndex...].reverse()
+						scopesToValidate.reverseElements(from: firstChildIndex)
 					}
 				}
 			} catch let error as DependencyTreeGeneratorError {
@@ -376,6 +376,8 @@ extension DependencyTreeGenerator {
 	static func renamesContradictingOwnProperties(
 		in scope: Scope,
 	) -> [DependencyTreeGeneratorError.RenameContradictingOwnProperty] {
+		// Most types rename nothing, and every walk of every tree asks of each of its scopes.
+		guard scope.instantiable.dependencies.contains(where: { $0.source.fulfillingProperty != nil }) else { return [] }
 		var ownDependencyByLabel = [String: Dependency]()
 		for dependency in scope.instantiable.dependencies {
 			switch dependency.source {
@@ -499,7 +501,7 @@ extension DependencyTreeGenerator {
 				for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
 					scopesToSearch.append((childScope, searchedProperty, requiredOnlyIfAvailableAliases))
 				}
-				scopesToSearch[firstChildIndex...].reverse()
+				scopesToSearch.reverseElements(from: firstChildIndex)
 			}
 		}
 		return receiver
@@ -629,7 +631,7 @@ extension DependencyTreeGenerator {
 		declarationLocation: Dependency.DeclarationLocation?,
 		directParent: TypeDescription,
 		closingReceive: CycleClosingReceive?,
-		lazilyInstantiatedProperties: [Property],
+		lazilyInstantiatedProperties: @autoclosure () -> [Property],
 	) throws {
 		// A receive of an instantiator that is still being built reads a wrapper the instantiator's builder function makes
 		// again of that function (see `ScopeGenerator.ReceivedBuilderLoops`): a loop through that instantiator alone, which
@@ -645,7 +647,7 @@ extension DependencyTreeGenerator {
 				declarationLocation: declarationLocation,
 				directParent: directParent,
 				closingReceive: closingReceive,
-				lazilyInstantiatedProperties: lazilyInstantiatedProperties,
+				lazilyInstantiatedProperties: lazilyInstantiatedProperties(),
 			)
 		}
 	}
@@ -681,6 +683,93 @@ extension DependencyTreeGenerator {
 			return .constantDependencyCycleDetected(cycle, closingDependency: .instantiated(hops: propertiesInCycle.reversed().dropLast()))
 		} else {
 			return .constantDependencyCycleDetected(cycle, closingDependency: .received(declaredProperty, receiver: directParent))
+		}
+	}
+
+	/// The repairs of an unfulfilled receive of `receivedProperty`, a non-optional `Instantiator` or `LazilyInstantiated`,
+	/// inside the `@Sendable` function of the innermost `Sendable` wrapper on its chain, which cannot capture a declaration
+	/// made outside it; `nil` where no such wrapper is on the chain. Each repair is offered only where it passes what it
+	/// would meet: the wrapper's `Sendable` twin, declared beside the `Sendable` wrapper, where the tree of the type it
+	/// builds, now built in a `@Sendable` function, receives no `Instantiator`, `ErasedInstantiator` or
+	/// `LazilyInstantiated` it would capture; a declaration on a type inside the function where that tree requires no
+	/// value of the chain that function is still building, which would close a dependency cycle. A receive of an
+	/// optional wrapper, or of an `ErasedInstantiator`, whose declaration names the type it builds, keeps today's advice.
+	/// - Parameters:
+	///   - instantiationStack: The properties of `receiver` and of the scopes it is built inside, innermost first, each
+	///     lazily instantiated one as declared.
+	///   - parentTypeStack: The concrete types of the scopes `receiver` is built inside, innermost first.
+	static func sendableBoundaryAdvice(
+		for receivedProperty: Property,
+		receivedBy receiver: Scope,
+		instantiationStack: [Property],
+		parentTypeStack: [TypeDescription],
+		root: TypeDescription,
+		typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
+	) -> DependencyTreeGeneratorError.UnfulfillableProperty.SendableBoundaryAdvice? {
+		let sendableTwinName: String
+		switch receivedProperty.propertyType {
+		case .instantiator:
+			sendableTwinName = Dependency.sendableInstantiatorType
+		case .lazilyInstantiated:
+			sendableTwinName = Dependency.sendableLazilyInstantiatedType
+		case .constant, .erasedInstantiator, .sendableInstantiator, .sendableErasedInstantiator, .sendableLazilyInstantiated:
+			return nil
+		}
+		guard case let .simple(_, generics) = receivedProperty.typeDescription,
+		      let boundaryIndex = instantiationStack.firstIndex(where: \.propertyType.isSendable),
+		      let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[receivedProperty.typeDescription.asInstantiatedType]
+		else { return nil }
+		func builtType(at index: Int) -> TypeDescription {
+			index == 0 ? receiver.instantiable.concreteInstantiable : parentTypeStack[index - 1]
+		}
+		let boundaryDeclaringType = boundaryIndex + 1 < instantiationStack.count ? builtType(at: boundaryIndex + 1) : root
+		let builtTreeCapturesNothing = !treeReceivesNonSendableWrapper(from: builtInstantiable, typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap)
+		let builtTreeRequiresNothingBeingBuilt = !instantiationStack[...boundaryIndex].contains { stackProperty in
+			!stackProperty.propertyType.isInstantiator
+				&& !stackProperty.propertyType.isErasedInstantiator
+				&& treeRequires(stackProperty.asValidatedForDependencyCycles, from: builtInstantiable, typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap)
+		}
+		return .init(
+			boundary: instantiationStack[boundaryIndex],
+			boundaryDeclaringType: boundaryDeclaringType,
+			builtType: builtType(at: boundaryIndex),
+			sendableForm: builtTreeCapturesNothing ? .simple(name: sendableTwinName, generics: generics) : nil,
+			typesInsideFunction: builtTreeRequiresNothingBeingBuilt ? (0...boundaryIndex).reversed().map(builtType(at:)) : [],
+		)
+	}
+
+	/// Whether the tree of `instantiable` receives an `Instantiator`, `ErasedInstantiator` or `LazilyInstantiated`, in
+	/// any form, that no type of the tree declares: a value a `@Sendable` function that builds `instantiable` would capture.
+	private static func treeReceivesNonSendableWrapper(
+		from instantiable: Instantiable,
+		typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
+	) -> Bool {
+		var reachedTypes: Set<TypeDescription> = [instantiable.concreteInstantiable]
+		var instantiablesToVisit = [instantiable]
+		var receivedWrappers = Set<Property>()
+		var declaredProperties = Set<Property>()
+		while let reachedInstantiable = instantiablesToVisit.popLast() {
+			for dependency in reachedInstantiable.dependencies {
+				switch dependency.source {
+				case .received:
+					receivedWrappers.insert(dependency.property.asUnwrappedProperty)
+				case let .aliased(fulfillingProperty, _, _):
+					receivedWrappers.insert(fulfillingProperty.asUnwrappedProperty)
+					declaredProperties.insert(dependency.property.asUnwrappedProperty)
+				case .instantiated:
+					declaredProperties.insert(dependency.property)
+					if let builtInstantiable = typeDescriptionToFulfillingInstantiableMap[dependency.asInstantiatedType],
+					   reachedTypes.insert(builtInstantiable.concreteInstantiable).inserted
+					{
+						instantiablesToVisit.append(builtInstantiable)
+					}
+				case .forwarded:
+					declaredProperties.insert(dependency.property.asUnwrappedProperty)
+				}
+			}
+		}
+		return receivedWrappers.subtracting(declaredProperties).contains { property in
+			!property.propertyType.isConstant && !property.propertyType.isSendable
 		}
 	}
 
@@ -772,7 +861,7 @@ extension DependencyTreeGenerator {
 	///   - closesByReceive: Whether `dependency` closes a cycle by receiving (see `closingReceive(of:in:)`).
 	///   - propertyStack: The properties of `scope` and of the scopes it is built inside, innermost first, as cycle
 	///     validation sees them.
-	///   - concreteTypeStack: The concrete types of those scopes, beside `propertyStack`.
+	///   - concreteTypeOfEntry: The concrete type of the scope built for the entry at an index of `propertyStack`.
 	///   - nearestDeclaration: The properties the nearest declarations of a label above `scope` declare, as cycle
 	///     validation sees them – one, but for a mock root's promoted forms of one label – with how many scopes the declaring
 	///     scope is built inside, or `nil` when no scope above declares the label. The entry at index `i` of `propertyStack`
@@ -783,7 +872,7 @@ extension DependencyTreeGenerator {
 		receivedForms: [Property],
 		closesByReceive: Bool,
 		propertyStack: [Property],
-		concreteTypeStack: [TypeDescription],
+		concreteTypeOfEntry: (Int) -> TypeDescription,
 		nearestDeclaration: (String) -> (properties: [Property], depth: Int)?,
 	) -> Int? {
 		if closesByReceive {
@@ -798,7 +887,7 @@ extension DependencyTreeGenerator {
 			// no property with an entry built from a scope.
 			guard propertyStack.contains(receivedForms[0]) else { return nil }
 			let builtType = scope.propertiesToGenerate.first { $0.property == fulfillingProperty }?.builtScope?.instantiable.concreteInstantiable
-			return propertyStack.indices.first { propertyStack[$0] == receivedForms[0] && concreteTypeStack[$0] == builtType }
+			return propertyStack.indices.first { propertyStack[$0] == receivedForms[0] && concreteTypeOfEntry($0) == builtType }
 		}
 	}
 

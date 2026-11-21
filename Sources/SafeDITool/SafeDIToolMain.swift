@@ -25,6 +25,8 @@ import SafeDIToolLibrary
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 enum SafeDIToolMain {
 	static func main() async {
-		await SafeDIToolCommandLine.rootCommand.main()
+		await SafeDITool.$processEndsWithCommand.withValue(true) {
+			await SafeDIToolCommandLine.rootCommand.main()
+		}
 	}
 }
