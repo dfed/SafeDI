@@ -173,6 +173,7 @@ extension DependencyTreeGenerator {
 				// Another module's seams are computed from its named module's declarations.
 				isOwnFile: nil,
 				modulesReadByRunOfModule: emittingModule?.modulesReadByRunOfModule,
+				internerSpace: internerSpace,
 			)
 			errors += computation.errors
 			for (seamType, seamRoot) in computation.seamRoots where !computation.failedSeams.contains(seamType) {
@@ -204,6 +205,7 @@ extension DependencyTreeGenerator {
 			checkingModule: emittingModuleToCheck,
 			isOwnFile: emittingModule?.isOwnFile,
 			modulesReadByRunOfModule: emittingModule?.modulesReadByRunOfModule,
+			internerSpace: internerSpace,
 		)
 		var errors = ownComputation.errors
 		// Each generated seam is computed again over the declarations its callers see, when those differ from this
@@ -231,6 +233,7 @@ extension DependencyTreeGenerator {
 				checkingModule: emittingModuleToCheck,
 				isOwnFile: emittingModule?.isOwnFile,
 				modulesReadByRunOfModule: emittingModule?.modulesReadByRunOfModule,
+				internerSpace: internerSpace,
 			)
 			for seamType in generatedSeamTypes.sorted() {
 				guard let seam = typeDescriptionToFulfillingInstantiableMap[seamType],
@@ -428,7 +431,7 @@ extension DependencyTreeGenerator {
 			isReadableFile: emittingModule?.isReadableFile,
 		)
 		// Every tree of the seam world reads its scopes frozen, once.
-		let seamWorld = SeamWorld(validatedWorld: validatedWorld, frozenScopeMap: FrozenScopeMap(freezing: seamScopeMap.lazy.map { (key: $0.key, scope: $0.value) }))
+		let seamWorld = SeamWorld(validatedWorld: validatedWorld, frozenScopeMap: FrozenScopeMap(freezing: seamScopeMap.lazy.map { (key: $0.key, scope: $0.value) }, interningIn: internerSpace))
 		// A seam whose signature equals its own initializer's generates no code: its file holds the header alone.
 		var generatedSeams = [(seam: Instantiable, seamRoot: ScopeGenerator.SeamRoot, rootScope: Scope)]()
 		// Once for every seam: taken for each, it copied every scope's declaration once per seam.
@@ -458,7 +461,6 @@ extension DependencyTreeGenerator {
 				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
 				scopeGenerator: record.createScopeGenerator(
 					in: table,
-					for: nil,
 					lazilyInstantiatedInstanceProperties: [],
 					erasedToConcreteExistential: false,
 					declaredTypeNames: declaredTypeNames,
@@ -661,6 +663,7 @@ extension DependencyTreeGenerator {
 		checkingModule: EmittingModule?,
 		isOwnFile: (@Sendable (String) -> Bool)?,
 		modulesReadByRunOfModule: (@Sendable (_ moduleName: String) -> TypeAccessProof.ModuleReach.ModulesRead)?,
+		internerSpace: ConstructionInternerSpace,
 	) throws -> SeamSignatureComputation {
 		let seamInstantiables = seamTypes.sorted().compactMap { instantiables[$0] }.filter(\.generatesDependencyTree)
 		// One proof of every type's access per declaration map, which every seam of the computation reads.
@@ -673,6 +676,9 @@ extension DependencyTreeGenerator {
 		guard !seamInstantiables.isEmpty else { return SeamSignatureComputation(seamRoots: [:], errors: [], failedSeams: [], proof: proof) }
 		let ownSeamTypes = Set(seamInstantiables.map(\.concreteInstantiable))
 		let declaredTypeNames = namesOfTypesDeclaredAtFileScope(instantiables: Array(instantiables.values), plainTypeDeclarations: plainTypeDeclarations)
+		// The declarations of this map are given the interner before any of its scopes is frozen, as the generator's own
+		// are: a seam module's view, or the callers', can hold declarations the generator's map does not.
+		internerSpace.internDeclarations(of: declarationsInInterningOrder(of: instantiables))
 		// The base of every pass's table: the seam world of every declaration, in which every seam is built and none is
 		// called. A record of a type that is no seam depends on the declarations alone, so every pass reads it from here; a
 		// pass overlays the records of the seams it calls (`FrozenScopeMap.overlaying`).
@@ -686,7 +692,7 @@ extension DependencyTreeGenerator {
 			aliasDeclarationReferences: aliasDeclarationReferences,
 			checkingModule: checkingModule,
 		)
-		let baseFrozenScopeMap = FrozenScopeMap(freezing: baseScopeMap.lazy.map { (key: $0.key, scope: $0.value) })
+		let baseFrozenScopeMap = FrozenScopeMap(freezing: baseScopeMap.lazy.map { (key: $0.key, scope: $0.value) }, interningIn: internerSpace)
 		func initialSeamRoot(of seam: Instantiable) -> ScopeGenerator.SeamRoot {
 			let parameters = Self.ownParameters(of: seam, proof: proof)
 			return ScopeGenerator.SeamRoot(
@@ -764,7 +770,7 @@ extension DependencyTreeGenerator {
 					// The table every pass's map would freeze to, compared by key: what the pass's map holds and its seams
 					// reach, the same record; what it does not hold, no record. A key whose scope the seams do not reach
 					// keeps the base's record, which construction never reads.
-					let passTable = FrozenScopeMap(freezing: scopeMap.lazy.map { (key: $0.key, scope: $0.value) }).table
+					let passTable = FrozenScopeMap(freezing: scopeMap.lazy.map { (key: $0.key, scope: $0.value) }, interningIn: internerSpace).table
 					let reachedScopes = Set(FrozenScopeMap.scopesReached(from: rootScopes, passScopeMap: scopeMap, fulfillingKey: fulfillingKey).map(ObjectIdentifier.init))
 					let passKeys = scopeMap.compactMap { reachedScopes.contains(ObjectIdentifier($0.value)) ? $0.key : nil }
 					let expected = passTable.projectionByKey(passKeys)
@@ -1266,7 +1272,6 @@ extension DependencyTreeGenerator {
 		let (table, rootRecord) = world.frozenScopeMap.freezing(rootScope: rootScope)
 		return try rootRecord.createScopeGenerator(
 			in: table,
-			for: nil,
 			nearestDeclarations: nearestDeclarations,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			seamRoot: seamRoot,

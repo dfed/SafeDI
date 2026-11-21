@@ -87,6 +87,9 @@ public actor DependencyTreeGenerator {
 		importAccess = importAccessSpellingOwnLevels([:])
 		self.readOwnFiles = readOwnFiles
 		self.typeDescriptionToFulfillingInstantiableMap = typeDescriptionToFulfillingInstantiableMap
+		// What the declarations spell is interned first, in the order of their keys, which no arrival order decides. The
+		// order assigns the IDs, which only an `==` reads, never output: the tests intern in other orders to show it.
+		internerSpace = ConstructionInternerSpace(declarationsOf: Self.declarationsInInterningOrder(of: typeDescriptionToFulfillingInstantiableMap))
 		self.aliasDeclarationReferences = aliasDeclarationReferences
 		self.compilesGeneratedMocks = compilesGeneratedMocks
 		self.emittingModule = emittingModule
@@ -464,6 +467,19 @@ public actor DependencyTreeGenerator {
 	private let importAccessSpellingOwnLevels: @Sendable ([String: Set<AccessLevel>]) -> GeneratedImportAccess
 	private let readOwnFiles: (@Sendable () async -> FulfillerImports.OwnFiles)?
 	let typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]
+	/// The generator's one ID space: every map it freezes interns its records' values here, so that every ID a tree or a
+	/// construction memo compares means one value however many maps and tables the generator makes. Only the generator's
+	/// serial code reaches it.
+	let internerSpace: ConstructionInternerSpace
+
+	/// The declarations of `instantiables` in the order a generator interns them: the order of their keys, which no arrival
+	/// order decides, or the order the tests set (`ConstructionInternerObservation.declarationOrder`).
+	static func declarationsInInterningOrder(of instantiables: [TypeDescription: Instantiable]) -> [Instantiable] {
+		let declarations = instantiables.sorted { TypeDescription.precedesInScopeOrder($0.key, $1.key) }.map(\.value)
+		guard let declarationOrder = ConstructionInternerObservation.declarationOrder else { return declarations }
+		return declarationOrder(declarations.count).map { declarations[$0] }
+	}
+
 	let aliasDeclarationReferences: AliasDeclarationReferences
 	/// See `init`.
 	let compilesGeneratedMocks: Bool
@@ -570,7 +586,7 @@ public actor DependencyTreeGenerator {
 				throw error.markingCyclesClosedInSeamFills(DependencyTreeGeneratorError.SeamFillDeclarations.ofFills(ofHolesOf: foreignSeamHoles, in: typeDescriptionToScopeMap))
 			}
 			// Every tree built from the validated scopes reads them frozen, once.
-			let validatedWorld = ValidatedWorld(frozenScopeMap: FrozenScopeMap(freezing: typeDescriptionToScopeMap.lazy.map { (key: $0.key, scope: $0.value) }))
+			let validatedWorld = ValidatedWorld(frozenScopeMap: FrozenScopeMap(freezing: typeDescriptionToScopeMap.lazy.map { (key: $0.key, scope: $0.value) }, interningIn: internerSpace))
 			inlineForeignSeamTrees = try inlineTreesOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap, validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots)
 			validatedScopes = Set(typeDescriptionToScopeMap.values)
 			// A module whose declarations hold no seam generates from the validated scopes.
@@ -597,7 +613,6 @@ public actor DependencyTreeGenerator {
 						sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
 						scopeGenerator: record.createScopeGenerator(
 							in: table,
-							for: nil,
 							lazilyInstantiatedInstanceProperties: [],
 							erasedToConcreteExistential: false,
 							declaredTypeNames: declaredTypeNames,
