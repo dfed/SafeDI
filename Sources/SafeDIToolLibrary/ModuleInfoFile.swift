@@ -36,6 +36,7 @@ import SafeDICore
 public struct ModuleInfoFile: Codable, Sendable {
 	init(
 		moduleName: String,
+		ownEntryChecksum: UInt64? = nil,
 		packageName: String?,
 		dependencyModuleNames: [String],
 		imports: [ImportStatement],
@@ -46,9 +47,11 @@ public struct ModuleInfoFile: Codable, Sendable {
 		conditionalCompilationDecisions: [ConditionalCompilationDecision],
 		instantiableTypeNamesInAnyClause: [String],
 		plainTypeDeclarations: [PlainTypeDeclaration],
+		seamSignatures: [StoredSeamSignature],
 		view: ModuleInfoView,
 	) {
 		self.moduleName = moduleName
+		self.ownEntryChecksum = ownEntryChecksum
 		self.packageName = packageName
 		self.dependencyModuleNames = dependencyModuleNames
 		self.imports = imports
@@ -59,11 +62,14 @@ public struct ModuleInfoFile: Codable, Sendable {
 		self.conditionalCompilationDecisions = conditionalCompilationDecisions
 		self.instantiableTypeNamesInAnyClause = instantiableTypeNamesInAnyClause
 		self.plainTypeDeclarations = plainTypeDeclarations
+		self.seamSignatures = seamSignatures
 		self.view = view
 	}
 
 	/// The file of `module`, named `moduleName`, which a run that writes a module info file always knows.
-	public init(module: ModuleInfo, moduleName: String, view: ModuleInfoView) {
+	/// - Parameter storesOwnEntryChecksum: Whether the file stores the checksum of its own entry, which a view that refers to
+	///   the module holds: written by a run whose view refers to modules, so that every file a reference can name has it.
+	public init(module: ModuleInfo, moduleName: String, seamSignatures: [StoredSeamSignature], view: ModuleInfoView, storesOwnEntryChecksum: Bool = false) {
 		self.init(
 			moduleName: moduleName,
 			packageName: module.packageName,
@@ -76,12 +82,20 @@ public struct ModuleInfoFile: Codable, Sendable {
 			conditionalCompilationDecisions: module.conditionalCompilationDecisions,
 			instantiableTypeNamesInAnyClause: module.instantiableTypeNamesInAnyClause,
 			plainTypeDeclarations: module.plainTypeDeclarations,
+			seamSignatures: seamSignatures,
 			view: view,
 		)
+		if storesOwnEntryChecksum {
+			ownEntryChecksum = ownEntry.checksum
+		}
 	}
 
 	/// The module the file describes.
 	let moduleName: String
+	/// The checksum of the bytes of `ownEntry`, which a view that refers to this module holds, when the run that wrote the
+	/// file stored it. Written right after `moduleName`, so a reader finds both without reading the rest of the file
+	/// (`ModuleInfoFile.Head`).
+	private(set) var ownEntryChecksum: UInt64?
 	/// See `ModuleInfo.packageName`.
 	let packageName: String?
 	/// See `ModuleInfo.dependencyModuleNames`.
@@ -102,6 +116,9 @@ public struct ModuleInfoFile: Codable, Sendable {
 	let instantiableTypeNamesInAnyClause: [String]
 	/// See `ModuleInfo.plainTypeDeclarations`.
 	let plainTypeDeclarations: [PlainTypeDeclaration]
+	/// The signature of each seam the module declares, sorted by seam, as the module's run computed it: a module that
+	/// calls one reads it here rather than computing it again. Empty for a module that declares no seam.
+	let seamSignatures: [StoredSeamSignature]
 	/// What the module's dependents need of the modules it depends on, directly or not.
 	let view: ModuleInfoView
 
@@ -133,6 +150,26 @@ public struct ModuleInfoFile: Codable, Sendable {
 		)
 	}
 
+	/// This file with `view` in place of its own.
+	func replacingView(with view: ModuleInfoView) -> ModuleInfoFile {
+		ModuleInfoFile(
+			moduleName: moduleName,
+			ownEntryChecksum: ownEntryChecksum,
+			packageName: packageName,
+			dependencyModuleNames: dependencyModuleNames,
+			imports: imports,
+			mockImports: mockImports,
+			instantiables: instantiables,
+			configurations: configurations,
+			filesWithUnexpectedNodes: filesWithUnexpectedNodes,
+			conditionalCompilationDecisions: conditionalCompilationDecisions,
+			instantiableTypeNamesInAnyClause: instantiableTypeNamesInAnyClause,
+			plainTypeDeclarations: plainTypeDeclarations,
+			seamSignatures: seamSignatures,
+			view: view,
+		)
+	}
+
 	/// The module's declarations as its dependents' views hold them.
 	var ownEntry: ViewedModule {
 		ViewedModule(
@@ -141,6 +178,32 @@ public struct ModuleInfoFile: Codable, Sendable {
 			mockImports: mockImports,
 			instantiables: instantiables.map { $0.withoutPositions() },
 			plainTypeDeclarations: plainTypeDeclarations.map { $0.withoutPositions() },
+			seamSignatures: seamSignatures,
+		)
+	}
+
+	/// This file without the seam signatures it and its view carry, which leaves each module that reads it to compute them
+	/// from the declarations, as a run under the SwiftPM plugin's target graph does: the graph fuzzer compares the two.
+	public var withoutSeamSignatures: ModuleInfoFile {
+		ModuleInfoFile(
+			moduleName: moduleName,
+			ownEntryChecksum: ownEntryChecksum,
+			packageName: packageName,
+			dependencyModuleNames: dependencyModuleNames,
+			imports: imports,
+			mockImports: mockImports,
+			instantiables: instantiables,
+			configurations: configurations,
+			filesWithUnexpectedNodes: filesWithUnexpectedNodes,
+			conditionalCompilationDecisions: conditionalCompilationDecisions,
+			instantiableTypeNamesInAnyClause: instantiableTypeNamesInAnyClause,
+			plainTypeDeclarations: plainTypeDeclarations,
+			seamSignatures: [],
+			view: ModuleInfoView(
+				moduleGraph: view.moduleGraph,
+				declarations: view.declarations.map { ViewedModule(moduleName: $0.moduleName, imports: $0.imports, mockImports: $0.mockImports, instantiables: $0.instantiables, plainTypeDeclarations: $0.plainTypeDeclarations, seamSignatures: []) },
+				references: view.references,
+			),
 		)
 	}
 
@@ -156,13 +219,46 @@ public struct ModuleInfoFile: Codable, Sendable {
 public struct ModuleInfoView: Codable, Sendable {
 	/// The modules of the closure, without their declarations: names only, so this changes when a module is added,
 	/// renamed or depends on others, never on an edit.
+	/// Always a copy, even where `references` stand for the declarations: a reference's checksum leaves out the seam
+	/// signatures, which read the graph (`ViewedModule.checksum`).
 	let moduleGraph: [ViewedModuleIdentity]
 	/// The declarations of each module in the closure that declares a seam or a public mock, and of each module such a
 	/// module depends on directly, each once.
 	let declarations: [ViewedModule]
+	/// The modules whose declarations the view carries by reference instead: each module's name and the checksum of its
+	/// own entry, which a reader finds in that module's own file.
+	let references: [ViewedModuleReference]
+
+	init(moduleGraph: [ViewedModuleIdentity], declarations: [ViewedModule], references: [ViewedModuleReference] = []) {
+		self.moduleGraph = moduleGraph
+		self.declarations = declarations
+		self.references = references
+	}
 
 	/// The view of a module that depends on nothing.
 	public static let empty = ModuleInfoView(moduleGraph: [], declarations: [])
+}
+
+extension ViewedModule {
+	/// The checksum a reference to this entry's module holds: of the bytes the entry is written as without its seam
+	/// signatures. Each signature follows from the declarations of the module and of the modules its run read, the
+	/// signatures of the seams it reaches, and the module graph (each module's dependencies, package and mock condition,
+	/// which the access proofs read). A view that refers to this module refers to those modules as well, and carries the
+	/// module graph as a copy, so a change that changes a signature changes some reference's checksum or the graph; and a
+	/// file whose signatures are taken out (`ModuleInfoFile.withoutSeamSignatures`) keeps its references. A view that
+	/// referred to the module graph instead would need this checksum to cover it.
+	var checksum: UInt64 {
+		MergedModuleInfoView.encoded(
+			ViewedModule(moduleName: moduleName, imports: imports, mockImports: mockImports, instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, seamSignatures: []),
+		).withUnsafeBytes(BinaryFile.checksum(of:))
+	}
+}
+
+/// A module whose declarations a view carries by reference: its name, and the checksum of the bytes of its own entry
+/// (`ModuleInfoFile.ownEntry`), which has no positions, so a position-only edit leaves it unchanged.
+struct ViewedModuleReference: Codable {
+	let moduleName: String
+	let checksum: UInt64
 }
 
 /// A module in a view's module graph.
@@ -186,6 +282,8 @@ struct ViewedModule: Codable {
 	let mockImports: [ImportStatement]
 	let instantiables: [Instantiable]
 	let plainTypeDeclarations: [PlainTypeDeclaration]
+	/// See `ModuleInfoFile.seamSignatures`.
+	let seamSignatures: [StoredSeamSignature]
 
 	/// Whether the module declares a seam or a public mock.
 	var declaresSeamOrPublicMock: Bool {
@@ -207,6 +305,25 @@ extension ModuleInfoFile {
 		self = try BinaryFile.value(.moduleInfo, from: data)
 	}
 
+	/// The fields a module info file writes first: the module it describes and, when stored, the checksum of its own
+	/// entry. Read without the body's checksum or any later field, so finding which file describes a module costs little
+	/// whatever the file holds; a file a reference resolves to is then read whole, which checks it.
+	struct Head {
+		let moduleName: String
+		let ownEntryChecksum: UInt64?
+
+		init(moduleInfoData data: Data) throws(BinaryFileReadError) {
+			self = try BinaryFile.value(.moduleInfo, from: data, checksBody: false) { (reader: inout BinaryReader) throws(BinaryDecodingError) in
+				try Head(moduleName: reader.read(), ownEntryChecksum: reader.read() as UInt64?)
+			}
+		}
+
+		private init(moduleName: String, ownEntryChecksum: UInt64?) {
+			self.moduleName = moduleName
+			self.ownEntryChecksum = ownEntryChecksum
+		}
+	}
+
 	/// Reads the module info file `data` holds without its view, which is left empty.
 	init(moduleInfoDataWithoutView data: Data) throws(BinaryFileReadError) {
 		self = try BinaryFile.value(.moduleInfo, from: data) { (reader: inout BinaryReader) throws(BinaryDecodingError) in
@@ -220,6 +337,21 @@ extension ModuleInfoFile {
 			try BinaryFile.data(.moduleInfo, holding: self)
 		}
 	}
+
+	/// This module as a module info file, as `moduleInfoData` writes it with every seam signature's `withoutPositions()`:
+	/// the signatures a run computes carry the positions of the declarations they name, which the file writes as absent
+	/// (``BinaryWriter/writingPositionsAsAbsent(_:)``). Copying every signature without them instead allocated several
+	/// times the file's size at the run's end, on pages the run had not used yet, which raised its peak resident memory
+	/// by a third on a module of two hundred seams although its peak heap held.
+	public var moduleInfoDataWritingSeamSignaturesWithoutPositions: Data {
+		get throws(BinaryFileWriteError) {
+			try BinaryFile.data(.moduleInfo) { writer in
+				write(to: &writer) { writer in
+					writer.writingPositionsAsAbsent { writer in writer.write(seamSignatures) }
+				}
+			}
+		}
+	}
 }
 
 /// The modules a run of `generate` reads through the module info files it was given: each file's own module, and the
@@ -231,7 +363,7 @@ struct MergedModuleInfoView {
 	///   - ownModuleDeclaresSeamOrPublicMock: Whether the module the run generates code for declares a seam or a public
 	///     mock, whose signature its dependents compute from the modules it depends on directly.
 	/// - Throws: `ModuleInfoDisagreementError` when two files describe one module differently.
-	init(directModules: [(file: ModuleInfoFile, path: String)], ownModuleDeclaresSeamOrPublicMock: Bool) throws(ModuleInfoDisagreementError) {
+	init(directModules: [(file: ModuleInfoFile, path: String)], ownModuleDeclaresSeamOrPublicMock: Bool, viewsReferToModules: Bool = false) throws(ModuleInfoDisagreementError) {
 		// Two entries of one module are compared by the bytes they are written as, which are computed only once a module's
 		// name repeats, and then once for the entry kept: most modules are named once.
 		var identities = [String: (identity: ViewedModuleIdentity, path: String)]()
@@ -280,15 +412,32 @@ struct MergedModuleInfoView {
 				writtenDeclarationNames.insert(entry.moduleName)
 			}
 		}
+		// A module's file and every view carry the same signatures of its seams, without positions.
+		let directModuleNames = Set(directModules.map(\.file.moduleName))
+		var storedSeamSignatures = [String: [StoredSeamSignature]]()
+		for (moduleName, declaration) in declarations where !declaration.entry.seamSignatures.isEmpty {
+			storedSeamSignatures[moduleName] = declaration.entry.seamSignatures
+		}
+		storedSeamSignaturesByModuleName = storedSeamSignatures
 		identitiesByModuleName = identities.mapValues(\.identity)
 		declarationsByModuleName = declarations.mapValues(\.entry)
-		directModuleNames = Set(directModules.map(\.file.moduleName))
-		view = ModuleInfoView(
-			moduleGraph: identities.values.map(\.identity).sorted { Array($0.moduleName.utf8).lexicographicallyPrecedes(Array($1.moduleName.utf8)) },
-			declarations: writtenDeclarationNames
-				.compactMap { declarations[$0]?.entry }
-				.sorted { Array($0.moduleName.utf8).lexicographicallyPrecedes(Array($1.moduleName.utf8)) },
-		)
+		self.directModuleNames = directModuleNames
+		let moduleGraph = identities.values.map(\.identity).sorted { Array($0.moduleName.utf8).lexicographicallyPrecedes(Array($1.moduleName.utf8)) }
+		let writtenNames = writtenDeclarationNames.sorted { Array($0.utf8).lexicographicallyPrecedes(Array($1.utf8)) }
+		view = if viewsReferToModules {
+			ModuleInfoView(
+				moduleGraph: moduleGraph,
+				declarations: [],
+				references: writtenNames.compactMap { name in
+					declarations[name].map { ViewedModuleReference(moduleName: name, checksum: $0.entry.checksum) }
+				},
+			)
+		} else {
+			ModuleInfoView(
+				moduleGraph: moduleGraph,
+				declarations: writtenNames.compactMap { declarations[$0]?.entry },
+			)
+		}
 	}
 
 	/// Every module the files name or carry, by name.
@@ -298,6 +447,9 @@ struct MergedModuleInfoView {
 	let declarationsByModuleName: [String: ViewedModule]
 	/// The modules whose files the run was given.
 	let directModuleNames: Set<String>
+	/// The signatures of the seams of each module the files carry the declarations of, by module name: the file's own,
+	/// with positions, for a module whose file the run was given.
+	let storedSeamSignaturesByModuleName: [String: [StoredSeamSignature]]
 	/// The view the run's own module info file carries.
 	let view: ModuleInfoView
 
@@ -311,7 +463,7 @@ struct MergedModuleInfoView {
 	/// The bytes `value` is written as, with each string where it is written, which two entries for one module must
 	/// share: `==` ignores `any` at every depth and the order inside an `UnorderedEquatingCollection`, which the bytes
 	/// do not.
-	private static func encoded(_ value: some BinaryCodable) -> [UInt8] {
+	static func encoded(_ value: some BinaryCodable) -> [UInt8] {
 		var writer = BinaryWriter.writingStringsInline()
 		writer.write(value)
 		return writer.bytes
@@ -332,5 +484,16 @@ struct ModuleInfoDisagreementError: Error, CustomStringConvertible {
 
 	var description: String {
 		"SafeDI was given two module infos that describe module `\(moduleName)` differently: \(filePaths.map { "`\($0)`" }.joined(separator: " and ")) were written against two different builds of `\(moduleName)`. Build `\(moduleName)` and the modules that depend on it again, so that every module info is written against the current one."
+	}
+}
+
+/// A view refers to a module whose own file the run was not given.
+struct UnresolvableModuleReferenceError: Error, CustomStringConvertible {
+	let moduleName: String
+	/// The files whose views refer to the module, sorted.
+	let referringFilePaths: [String]
+
+	var description: String {
+		"SafeDI could not find the module info of module `\(moduleName)`, which \(referringFilePaths.map { "`\($0)`" }.joined(separator: " and ")) \(referringFilePaths.count == 1 ? "refers" : "refer") to: a view that refers to modules is read with the module info of every module beneath, which SafeDI’s Bazel rule passes with `--transitive-module-info-file-path`. Pass the module info of `\(moduleName)` that way, or build the modules without `--module-info-views-refer-to-modules`."
 	}
 }

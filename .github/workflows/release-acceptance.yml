@@ -1,8 +1,8 @@
 name: Release Acceptance
 
-# Checks that every base corpus graph SafeDI 2.2.0 accepts still compiles and
-# builds the same values: it builds 2.2.0's tool, macros and runtime sources
-# once, runs the base corpus through 2.2.0 and through this commit in four
+# Checks that every base corpus graph SafeDI 2.3.0 accepts still compiles and
+# builds the same values: it builds 2.3.0's tool, macros and runtime sources
+# once, runs the base corpus through 2.3.0 and through this commit in four
 # shards (SafeDIToolReleaseAcceptanceTests/longRun), and combines their
 # reports (.github/scripts/combine-release-acceptance-reports.py). See
 # .claude/rules/fuzzer-release-acceptance.md.
@@ -33,11 +33,11 @@ permissions: {}
 jobs:
   # Builds the
   # older release's tool, macros and runtime sources, which every comparing
-  # shard needs and none rebuilds. It builds the commit tag 2.2.0 names, which
+  # shard needs and none rebuilds. It builds the commit tag 2.3.0 names, which
   # this file fixes, never one an input names, so the cache it writes holds
   # only that release's build.
   release-acceptance-older-release:
-    name: Build SafeDI 2.2.0 for Release Acceptance on Linux
+    name: Build SafeDI 2.3.0 for Release Acceptance on Linux
     runs-on: ubuntu-latest
     container: swift:6.2
     timeout-minutes: 60
@@ -47,14 +47,14 @@ jobs:
       run:
         shell: bash
     env:
-      OLDER_RELEASE: 2.2.0
-      # The commit tag 2.2.0 names.
-      OLDER_RELEASE_COMMIT: 8596f075f46ea1a4043d5c2c2d0a0b99ea50cd46
+      OLDER_RELEASE: 2.3.0
+      # The commit tag 2.3.0 names.
+      OLDER_RELEASE_COMMIT: d2afff7db1fe2f11d386d69416988c2a7f00a7c9
     steps:
       # This commit, for its retry action.
       - name: Checkout Repo
         uses: actions/checkout@v7
-      - name: Checkout SafeDI 2.2.0
+      - name: Checkout SafeDI 2.3.0
         uses: actions/checkout@v7
         with:
           ref: ${{ env.OLDER_RELEASE_COMMIT }}
@@ -85,17 +85,17 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: swift package resolve --package-path older-release
-      # Only the tool and the macros, never 2.2.0's tests, which write into the
-      # system temporary directory. Measured on a 4-core cloud machine with
-      # Swift 6.2: 7 min 57 s for the tool and 6 min 58 s for the macros (a
-      # cloud-machine figure; confirm on CI and set each limit to twice it).
+      # Only the tool and the macros, never 2.3.0's tests, which write into the
+      # system temporary directory. Measured on CI (run 44690981519): 8 min 13 s
+      # for the tool and 8 min 49 s for the macros, so each limit is about twice
+      # its time.
       - name: Build Older Release Tool
         if: ${{ steps.older-release-cache.outputs.cache-hit != 'true' }}
-        timeout-minutes: 16
+        timeout-minutes: 17
         run: swift build -c release --traits sourceBuild --package-path older-release --product SafeDITool
       - name: Build Older Release Macros
         if: ${{ steps.older-release-cache.outputs.cache-hit != 'true' }}
-        timeout-minutes: 14
+        timeout-minutes: 18
         run: swift build -c release --traits sourceBuild --package-path older-release --product SafeDI
       - name: Save Older Release Build
         if: ${{ github.ref == 'refs/heads/main' && steps.older-release-cache.outputs.cache-hit != 'true' }}
@@ -171,14 +171,14 @@ jobs:
   # Four shards of the base corpus's 5000 seeds. combine-release-acceptance
   # checks that they cover it once.
   release-acceptance:
-    name: Compare with SafeDI 2.2.0 on Linux (shard ${{ matrix.shard }} of 4)
+    name: Compare with SafeDI 2.3.0 on Linux (shard ${{ matrix.shard }} of 4)
     needs: [release-acceptance-older-release, release-acceptance-build]
     if: ${{ !cancelled() && needs.release-acceptance-older-release.result == 'success' && (needs.release-acceptance-build.result == 'success' || inputs.bundle) }}
     runs-on: ubuntu-latest
     container: swift:6.2
-    # The job's parts sum to about 25 minutes at their longest: the
+    # The job's parts sum to about 27 minutes at their longest: the
     # container's start (11 minutes once, run 43879263598), two downloads
-    # and an unpack, and the comparison under its own limit of 11.
+    # and an unpack, and the comparison under its own limit of 13.
     timeout-minutes: 30
     permissions:
       contents: read
@@ -211,12 +211,13 @@ jobs:
           tar -xzf "$BUNDLE.tar.gz"
           tar -xzf older-release.tar.gz
           mkdir -p release-acceptance
-      # Measured on CI (run 43739187246): the four shards of 1250 seeds took
-      # 3 min 28 s to 5 min 24 s each, so about twice the longest.
+      # Measured on CI against 2.3.0 (run 44690981519): the four shards of
+      # 1250 seeds took 5 min 8 s to 6 min 31 s each, so about twice the
+      # longest.
       - name: Compare with the Older Release
-        timeout-minutes: 11
+        timeout-minutes: 13
         env:
-          SAFEDI_RELEASE_ACCEPTANCE_RELEASE: '2.2.0'
+          SAFEDI_RELEASE_ACCEPTANCE_RELEASE: '2.3.0'
           SAFEDI_RELEASE_ACCEPTANCE_TOOL: ${{ github.workspace }}/older-release-package/SafeDITool
           SAFEDI_RELEASE_ACCEPTANCE_MACROS_TOOL: ${{ github.workspace }}/older-release-package/SafeDIMacros-tool
           SAFEDI_RELEASE_ACCEPTANCE_RUNTIME_SOURCES: ${{ github.workspace }}/older-release-package/SafeDIRuntimeSources
@@ -264,4 +265,6 @@ jobs:
           pattern: release-acceptance-report-*
           path: reports
       - name: Combine
-        run: python3 .github/scripts/combine-release-acceptance-reports.py reports 4 >> "$GITHUB_STEP_SUMMARY"
+        # Into the log as well as the summary, so the counts can be read
+        # through the API, which serves no step summary.
+        run: python3 .github/scripts/combine-release-acceptance-reports.py reports 4 | tee -a "$GITHUB_STEP_SUMMARY"

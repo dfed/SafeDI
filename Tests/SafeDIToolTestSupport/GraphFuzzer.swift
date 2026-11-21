@@ -316,8 +316,8 @@ struct GraphFuzzerFixture: Equatable {
 		return [DifferentialValueSample(type: "\(screenName).ForwardedProperties", expression: "7")]
 	}
 
-	/// Whether this graph declares a root of `addingFillCallShapes`, `addingCarriedLevelShapes` or
-	/// `addingReenteredFillShapes`, whose tree reaches a place through a seam beneath the seam's module, read from the
+	/// Whether this graph declares a root of `addingFillCallShapes`, `addingCarriedLevelShapes`,
+	/// `addingReenteredFillShapes` or `addingWrapperMixShapes`, whose tree reaches a place through a seam beneath the seam's module, read from the
 	/// roots' names whatever a renaming does to the prefix.
 	var declaresRootOfDrawBeneathSeamsModule: Bool {
 		swiftFileContent.contains(where: Self.declaresRootOfDrawBeneathSeamsModule(in:))
@@ -364,7 +364,7 @@ struct GraphFuzzerFixture: Equatable {
 	}
 
 	/// The roots `declaresRootOfDrawBeneathSeamsModule` reads.
-	private static let rootsOfDrawsBeneathTheSeamsModule = ["FillCallRoot", "CarriedRoot", "ReenteredRoot"]
+	private static let rootsOfDrawsBeneathTheSeamsModule = ["FillCallRoot", "CarriedRoot", "ReenteredRoot", "MixRoot"]
 
 	/// The visible build of a graph with a hole: every file whose first line says it fills a hole declared in the seam's
 	/// module instead, which can then see the fulfilling type and builds it inline, so the seam takes no builder.
@@ -1154,6 +1154,8 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// The spelled existential's rename naming the protocol without `any` in `ofType:`, on the seam or on the child before
 	/// the child's receive of the value: the alias-spelling roll.
 	case spelledAliasNamingProtocolWithoutAny
+	/// That rename on `SpellChild`, which generates its mock, as its only receive of the value: the alias-only roll.
+	case spelledAliasOnlyReceiveOfMockedChild
 	/// The spelled value's optional form received only if available by a second child, `SpellSibling`, beside the
 	/// form `SpellChild` receives.
 	case spelledOptionalFormOnSibling
@@ -1850,6 +1852,17 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// `SendableLazilyInstantiated` `CarriedRoot` declares as its own property, which provides the read: rejected by design
 	/// too, as `CarriedInner`'s tree receiving `carriedToken` in two forms, where the fill once passed the reader `nil`.
 	case carriedLevelFillReadsOptionalSendableWrapperOuterReceives
+	/// `addingWrapperMixShapes`' tree, reading the value alone, or the wrapper alone where no seam on the route declares it
+	/// and no route hands a plain memo.
+	case wrapperMix
+	/// The fill's tree reads the value and its `SendableLazilyInstantiated` where every memo route is `@Sendable`: accepted.
+	case wrapperMixValueAndSendableWrapper
+	/// The fill's tree reads the `SendableLazilyInstantiated` where `MixSeam` hands a plain memo: rejected by design.
+	case wrapperMixSendableWrapperBesidePlainMemo
+	/// `MixOuter` declares the wrapper the fill's tree reads above its call: rejected by design.
+	case wrapperMixWrapperDeclaredAboveCall
+	/// `MixThingImpl` builds the reader in a `SendableInstantiator`.
+	case wrapperMixWrapperReadInSendableFunction
 	/// `addingPassingUpCopyShapes`' tree: `Copy1Root` calls `Copy1Inner`, whose places in two files the roots' module fills,
 	/// each fill building a seam of its own that calls `Copy1Inner` again and passes both fills on.
 	case passingUpCopies
@@ -1888,6 +1901,10 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// Either read where `ReenteredSecondImpl` declares `reenteredTag` above the place, nearer the reader on every route.
 	/// Accepted.
 	case reenteredFillReadsPlaceFieldDeclaredInFill
+	/// `ReenteredRelay`, which the fill of `reenteredFirst` calls, binds `reenteredTag` before its call of `ReenteredSubB`,
+	/// and `ReenteredHost` binds it above its call of `ReenteredTop`, so the place carries `ReenteredHost`'s as a field while
+	/// the relay's copy of the hole binds the label nearer: both builds reject the read with `declarationBoundAfterSite`.
+	case reenteredFillReadsLabelPassingUpSeamBinds
 	/// `ReenteredFirstImpl`, the enclosing fill, holds a place of `ReenteredGadget` of its own.
 	case reenteredFillEnclosingFillHoldsPlace
 	/// `ReenteredSecondImpl` calls `ReenteredSubB` again, re-entering the fill that encloses the call.
@@ -1909,7 +1926,7 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// Whether `addingSpelledProperties`' alias-spelling roll draws this shape, whose count in accepted graphs the seam
 	/// corpus pins too (`acceptedDrawFeatureCounts`), at least ten.
 	var isAliasSpellingRollShape: Bool {
-		self == .spelledAliasNamingProtocolWithoutAny
+		self == .spelledAliasNamingProtocolWithoutAny || self == .spelledAliasOnlyReceiveOfMockedChild
 	}
 
 	/// Whether `addingCycleParameterShapes` draws this shape, whose count in accepted graphs the seam corpus pins too
@@ -1948,7 +1965,8 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 		rawValue.hasPrefix("holePassedUpPlaceReads")
 	}
 
-	/// Whether `addingFillCallShapes`, `addingCarriedLevelShapes`, `addingPassingUpCopyShapes` or `addingReenteredFillShapes` draws this shape of a fixed
+	/// Whether `addingFillCallShapes`, `addingCarriedLevelShapes`, `addingPassingUpCopyShapes`, `addingReenteredFillShapes` or
+	/// `addingWrapperMixShapes` draws this shape of a fixed
 	/// generator defect, whose count in accepted graphs the seam corpus pins (`acceptedDrawFeatureCounts`), at least ten
 	/// each: every shape but those the tool rejects by design – `passingUpCopiesHideLabel`, which the renamings judge, and
 	/// the unremedied reads of a value one route holds, which `toolRuns_rejectBothBuildsWithDeclarationBoundOnPathToReenteringCall_whenFillReadsValueOnlyOneRouteHoldsUnremedied` judges,
@@ -1956,15 +1974,18 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// `toolRuns_rejectBothBuildsWithFieldOfReenteringPlace_whenCallerFillsPlaceInsideFillBuiltAgainUnremedied` judges, and
 	/// the optional wrapper a carried level's fill reads beside a plain memo, whether `CarriedOuter` declares, receives or
 	/// passes on the wrapper, which
-	/// `toolRuns_rejectBothBuildsWithEachDeferringSeamsTwoForms_whenCarriedLevelsFillReadsOptionalSendableWrapper` judges.
+	/// `toolRuns_rejectBothBuildsWithEachDeferringSeamsTwoForms_whenCarriedLevelsFillReadsOptionalSendableWrapper` judges,
+	/// and a passing-up seam's binding of the label a place inside its re-entered fill reads, a wrapper read beside a plain
+	/// memo, and a wrapper a seam on the route declares above its call, whose rejections the builds' comparison judges.
 	var isFixedSeamCallDefectShape: Bool {
 		switch self {
 		case .passingUpCopiesHideLabel, .reenteredFillReadsValueOfOneRoute, .reenteredFillReadsValueOfOneRouteBoundAboveCall,
 		     .reenteredFillReadsPlaceField, .reenteredFillReadsPlaceFieldBoundAboveCall, .reenteredFillRequiresPlaceField,
-		     .carriedLevelFillReadsOptionalSendableWrapper, .carriedLevelFillReadsOptionalSendableWrapperOuterReceives:
+		     .carriedLevelFillReadsOptionalSendableWrapper, .carriedLevelFillReadsOptionalSendableWrapperOuterReceives,
+		     .reenteredFillReadsLabelPassingUpSeamBinds, .wrapperMixSendableWrapperBesidePlainMemo, .wrapperMixWrapperDeclaredAboveCall:
 			false
 		default:
-			["fillCallReadsOwnLevel", "carriedLevel", "passingUpCopies", "reenteredFill"].contains { rawValue.hasPrefix($0) }
+			["fillCallReadsOwnLevel", "carriedLevel", "passingUpCopies", "reenteredFill", "wrapperMix"].contains { rawValue.hasPrefix($0) }
 		}
 	}
 
@@ -2733,6 +2754,7 @@ enum GraphFuzzerGenerator {
 			seamRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.seamRandomSeedMask)
 			spellingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.spellingRandomSeedMask)
 			aliasSpellingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.aliasSpellingRandomSeedMask)
+			aliasOnlyReceiverRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.aliasOnlyReceiverRandomSeedMask)
 			uncreatedAliasRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.uncreatedAliasRandomSeedMask)
 			generatedNameRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.generatedNameRandomSeedMask)
 			unbuildableDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unbuildableDependencyRandomSeedMask)
@@ -2772,10 +2794,13 @@ enum GraphFuzzerGenerator {
 			carriedLevelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.carriedLevelRandomSeedMask)
 			passingUpCopyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.passingUpCopyRandomSeedMask)
 			reenteredFillRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredFillRandomSeedMask)
+			wrapperMixRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperMixRandomSeedMask)
 			reenteredPlaceFieldRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredPlaceFieldRandomSeedMask)
+			reenteredRelayTagRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.reenteredRelayTagRandomSeedMask)
 			repeatedAncestorRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.repeatedAncestorRandomSeedMask)
 			guardedMockParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.guardedMockParameterRandomSeedMask)
 			differingPinsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.differingPinsRandomSeedMask)
+			wrapperKindsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperKindsRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -2854,6 +2879,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingGuardedMockParameterShapes(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingTypeBuiltTwiceWithDifferingPins(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingLabelReceivedAsBothWrapperKinds(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -2881,6 +2908,7 @@ enum GraphFuzzerGenerator {
 				finalDeclarations = addingCarriedLevelShapes(to: finalDeclarations)
 				finalDeclarations = addingPassingUpCopyShapes(to: finalDeclarations)
 				finalDeclarations = addingReenteredFillShapes(to: finalDeclarations)
+				finalDeclarations = addingWrapperMixShapes(to: finalDeclarations)
 				presentModules = Set(finalDeclarations.compactMap(\.module))
 			}
 			// Left out after every draw, so that the graph without its second place is drawn, and split, as the graph with it.
@@ -3180,6 +3208,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only how `addingSpelledProperties` spells and places an existential's rename, which only a graph that draws
 		/// one reaches, so every other graph is drawn as it was before the roll existed.
 		private var aliasSpellingRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether `addingSpelledProperties` makes the child's rename that names the protocol without `any` its only
+		/// receive of the value, which only a graph that draws such a rename on the child reaches.
+		private var aliasOnlyReceiverRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingUncreatedAliasShapes`, which draws only with the `generateDependencyTree`
 		/// feature on, last of every pass, so a seam graph it leaves plain is drawn as it was before the pass existed.
 		private var uncreatedAliasRandom: GraphFuzzerRandomNumberGenerator
@@ -3268,9 +3299,13 @@ enum GraphFuzzerGenerator {
 		private var carriedLevelRandom: GraphFuzzerRandomNumberGenerator
 		private var passingUpCopyRandom: GraphFuzzerRandomNumberGenerator
 		private var reenteredFillRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingWrapperMixShapes`' choices.
+		private var wrapperMixRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingReenteredFillShapes`' choices of `reenteredTag`, which `ReenteredSubA` binds before the place whose
 		/// fill builds `ReenteredSubB` again: whether the graph reads it, and how.
 		private var reenteredPlaceFieldRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether `addingReenteredFillShapes` has `ReenteredRelay` bind `reenteredTag`.
+		private var reenteredRelayTagRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only `addingRepeatedAncestorShapes`' choices: whether a graph gains `RepeatRoot`'s tree, in which a type is
 		/// built only beneath a cycle edge that repeats an ancestor, and every shape of that tree.
 		private var repeatedAncestorRandom: GraphFuzzerRandomNumberGenerator
@@ -3278,6 +3313,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingTypeBuiltTwiceWithDifferingPins`' choices: whether a graph gains `PinHost`'s tree, and every
 		/// shape of that tree.
 		private var differingPinsRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingLabelReceivedAsBothWrapperKinds`' choices: whether a graph gains `WrapKindsHost`'s tree, and
+		/// every shape of that tree.
+		private var wrapperKindsRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -4915,6 +4953,7 @@ enum GraphFuzzerGenerator {
 			// so a walk of the tree meets the rename's spelling first: the seam's parameter and a mock's take the most
 			// explicit of their receivers' spellings, never the first a walk meets.
 			let drawsRename = spelling.canBeRenamed && !type.hasSuffix("?") && spellingRandom.percentChance(30)
+			var aliasIsChildsOnlyReceive = false
 			let drawsExistentialRename = !drawsRename && spelling == .existential && aliasSpellingRandom.percentChance(80)
 			if drawsRename || drawsExistentialRename {
 				let namesProtocolWithoutAny = spelling == .existential && aliasSpellingRandom.percentChance(70)
@@ -4923,7 +4962,15 @@ enum GraphFuzzerGenerator {
 					label: "\(label)Alias",
 					type: type,
 				)
-				if drawsRename ? spellingRandom.percentChance(50) : aliasSpellingRandom.percentChance(50) {
+				let drawsOnSeam = drawsRename ? spellingRandom.percentChance(50) : aliasSpellingRandom.percentChance(50)
+				// The alias-only roll (`aliasOnlyReceiverRandom`): three renames in five that name the protocol without `any`
+				// become `SpellChild`'s only receive of the value, and the child generates its mock, which binds the value it
+				// receives only through the alias as the alias's property spells it, `any` included, never as `ofType:` does.
+				aliasIsChildsOnlyReceive = namesProtocolWithoutAny && aliasOnlyReceiverRandom.percentChance(60)
+				if aliasIsChildsOnlyReceive {
+					child.properties.removeAll { $0.label == label }
+					child.properties.insert(alias, at: 0)
+				} else if drawsOnSeam {
 					seam.properties.append(alias)
 				} else if namesProtocolWithoutAny {
 					child.properties.insert(alias, at: 0)
@@ -4931,7 +4978,7 @@ enum GraphFuzzerGenerator {
 					child.properties.append(alias)
 				}
 			}
-			if spellingRandom.percentChance(20) {
+			if spellingRandom.percentChance(20) || aliasIsChildsOnlyReceive {
 				child.instantiableArguments.append("generateMock: true")
 			} else if spellingRandom.percentChance(15) {
 				seam.instantiableArguments.append("generateMock: true")
@@ -4941,6 +4988,7 @@ enum GraphFuzzerGenerator {
 
 		private static let spellingRandomSeedMask: UInt64 = 0x7370656C6C696E67
 		private static let aliasSpellingRandomSeedMask: UInt64 = 0x616C696173537065
+		private static let aliasOnlyReceiverRandomSeedMask: UInt64 = 0x616C6961734F6E6C
 
 		// MARK: Uncreated aliases
 
@@ -7784,6 +7832,68 @@ enum GraphFuzzerGenerator {
 
 		private static let differingPinsRandomSeedMask: UInt64 = 0x64696666506E6E73
 
+		// MARK: One label received as both wrapper kinds
+
+		/// The base corpus's draw, in mixed graphs, of a mock whose tree receives one label as a `LazilyInstantiated` and
+		/// as a `SendableLazilyInstantiated`. `WrapKindsHost`, whose mock is generated, instantiates `WrapKindsSource` and
+		/// `WrapKindsPinner`, in either order. `WrapKindsSource` receives `wrapKindsToken: WrapKindsToken` by value and
+		/// instantiates `WrapKindsLeaf`, which receives the label as one wrapper kind, required or only if available;
+		/// `WrapKindsPinner` requires the other kind and, half the time where the leaf's receive is only if available,
+		/// instantiates `WrapKindsSource` again. Where the leaf requires its wrapper, the mock root promotes a wrapper of each
+		/// kind, both of which create the instance the source reads, so the source must be built after both: with the source
+		/// declared first, a mock that waited on one of them read the other before declaring it, which Swift 6.2.4 crashed
+		/// compiling (seeds 78 and 317); no root reaches the tree, and its mirror holds two forms of one label, so the compile
+		/// is the oracle. Where the leaf's receive is only if available, the pinner's wrapper provides the source's instance,
+		/// so the mock promotes no wrapper of the leaf's kind and passes the leaf `nil` where the pinner pins it, as
+		/// production does: a mock that promoted it fails the mirror model's count (seeds 9, 175 and 195).
+		/// `wrapperKindsRandom` draws only for this pass, after every other, and only in the base corpus.
+		private mutating func addingLabelReceivedAsBothWrapperKinds(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, wrapperKindsRandom.percentChance(16), sendability == .mixed else { return declarations }
+			var declarations = declarations
+			let pinnerRequiresSendable = wrapperKindsRandom.percentChance(50)
+			let sourceComesFirst = wrapperKindsRandom.percentChance(50)
+			let pinnerMayBuildSource = wrapperKindsRandom.percentChance(50)
+			// A leaf that requires its wrapper makes the mock promote both kinds; one that receives it only if available
+			// beside the pinner's required wrapper promotes one, and is passed `nil` where the pinner pins it. A required leaf
+			// beneath a pinner that requires the other kind is rejected as hidden, so the pinner then builds no source.
+			let leafRequiresWrapper = wrapperKindsRandom.percentChance(50)
+			let pinnerBuildsSource = pinnerMayBuildSource && !leafRequiresWrapper
+			func append(_ name: String, generatesMock: Bool = false, _ properties: [PropertyDeclaration]) {
+				declarations.append(TypeDeclaration(
+					name: name,
+					instantiableArguments: generatesMock ? ["generateMock: true"] : [],
+					properties: properties,
+					declaresHelperTypes: false,
+					additionalConformances: ["@unchecked Sendable"],
+				))
+			}
+			let tokenName = "\(prefix)WrapKindsToken"
+			let leafName = "\(prefix)WrapKindsLeaf"
+			let sourceName = "\(prefix)WrapKindsSource"
+			let pinnerName = "\(prefix)WrapKindsPinner"
+			let pinnedWrapper = pinnerRequiresSendable ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			let leafWrapper = pinnerRequiresSendable ? "LazilyInstantiated" : "SendableLazilyInstantiated"
+			let source = PropertyDeclaration(attribute: "@Instantiated", label: "wrapKindsSource", type: sourceName)
+			let pinner = PropertyDeclaration(attribute: "@Instantiated", label: "wrapKindsPinner", type: pinnerName)
+			append(tokenName, [])
+			append(leafName, [leafRequiresWrapper
+					? PropertyDeclaration(attribute: "@Received", label: "wrapKindsToken", type: "\(leafWrapper)<\(tokenName)>")
+					: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "wrapKindsToken", type: "\(leafWrapper)<\(tokenName)>?")])
+			append(sourceName, [
+				PropertyDeclaration(attribute: "@Received", label: "wrapKindsToken", type: tokenName),
+				PropertyDeclaration(attribute: "@Instantiated", label: "wrapKindsLeaf", type: leafName),
+			])
+			var pinnerProperties = [PropertyDeclaration(attribute: "@Received", label: "wrapKindsToken", type: "\(pinnedWrapper)<\(tokenName)>")]
+			if pinnerBuildsSource {
+				pinnerProperties.append(source)
+			}
+			append(pinnerName, pinnerProperties)
+			append("\(prefix)WrapKindsHost", generatesMock: true, sourceComesFirst ? [source, pinner] : [pinner, source])
+			return declarations
+		}
+
+		private static let wrapperKindsRandomSeedMask: UInt64 = 0x7772704B696E6473
+
 		// MARK: Cycle parameters
 
 		/// How a property of `addingCycleParameterShapes`' cycle builds its type.
@@ -9025,6 +9135,9 @@ enum GraphFuzzerGenerator {
 			let readsPlaceField = reenteredPlaceFieldRandom.percentChance(75)
 			let placeFieldReadIsRequired = reenteredPlaceFieldRandom.percentChance(40)
 			let placeFieldVariantRoll = reenteredPlaceFieldRandom.integer(in: 0...9)
+			// On a generator of its own, so that every shape above draws as it did: where the call is of `ReenteredRelay`, the
+			// relay binds `reenteredTag` before its call of `ReenteredSubB` in place of `ReenteredSubA`'s binding.
+			let relayBindsTagRoll = reenteredRelayTagRandom.percentChance(75)
 			guard !modulesOmittingPackageName.contains(.seamModule) else { return declarations }
 			// A graph with a hole draws the remedied read where a roll draws one of the reads the tool rejects by design, which
 			// would throw away the hole graph the rest of the draw has it accept: here and for the sibling read only one route
@@ -9040,12 +9153,16 @@ enum GraphFuzzerGenerator {
 				case boundAboveCall
 				case receivedBySeamBuiltAgain
 				case declaredInFill
+				/// `ReenteredRelay` binds the label before its call of `ReenteredSubB`, and `ReenteredHost` above its call of
+				/// `ReenteredTop`, while `ReenteredSubA` binds none: the relay's copy of the hole binds the label nearer the place
+				/// than the field `ReenteredHost`'s binding gives it, which both builds reject.
+				case boundByPassingUpSeam
 			}
 			// A required read needs a value on `ReenteredTop`'s own route too, which `ReenteredHost` binds above its call. The
 			// remedy takes the largest share, since the graph's other draws reject most graphs it lands in, and the corpus floors
 			// the graphs of it the tool accepts.
 			// In a graph with a hole, the remedy stands in for both rejected reads.
-			let placeFieldVariant: PlaceFieldVariant? = if !readsPlaceField {
+			let drawnPlaceFieldVariant: PlaceFieldVariant? = if !readsPlaceField {
 				nil
 			} else if placeFieldVariantRoll >= 7 {
 				.declaredInFill
@@ -9056,6 +9173,11 @@ enum GraphFuzzerGenerator {
 			} else {
 				.unremedied
 			}
+			// Three in four unremedied reads in a graph that calls `ReenteredRelay` are bound by the relay, in place of
+			// `ReenteredSubA`, and by `ReenteredHost` above its call of `ReenteredTop`,
+			// where no `@Sendable` fill makes the call: there `ReenteredHost`'s binding draws an error of its own beside the
+			// relay's, whose remedy leaves the relay's error, which the remedy oracle reads as a remedy that does not work.
+			let placeFieldVariant = (drawnPlaceFieldVariant == .boundAboveCall || drawnPlaceFieldVariant == .unremedied) && callThroughRelay && !relayCallInSendableFill && relayBindsTagRoll ? .boundByPassingUpSeam : drawnPlaceFieldVariant
 			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
 			let callInstantiator = switch sendability {
 			case .nonSendable: "Instantiator"
@@ -9097,7 +9219,7 @@ enum GraphFuzzerGenerator {
 				? PropertyDeclaration(attribute: "@Received", label: "reenteredTag", type: tag.name)
 				: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "reenteredTag", type: tag.name + "?")
 			let tagDeclaration = PropertyDeclaration(attribute: "@Instantiated", label: "reenteredTag", type: tag.name)
-			if placeFieldVariant != nil {
+			if placeFieldVariant != nil, placeFieldVariant != .boundByPassingUpSeam {
 				// Bound before the place whose fill builds `ReenteredSubB` again.
 				subA.properties.insert(tagDeclaration, at: subA.properties.count - 1)
 			}
@@ -9122,7 +9244,7 @@ enum GraphFuzzerGenerator {
 			top.additionalDeclarations.append("public protocol \(firstName)\(sendableSuffix) {}\npublic protocol \(secondName)\(sendableSuffix) {}")
 			// The seam the call builds: `ReenteredSubB`, or `ReenteredRelay`, which calls it and passes its place up, so the level
 			// function the call declares leads to the enclosing call's, which it reuses.
-			let relay = seam("ReenteredRelay", module: .seamDependency, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubB", type: subB.name)])
+			let relay = seam("ReenteredRelay", module: .seamDependency, properties: (placeFieldVariant == .boundByPassingUpSeam ? [tagDeclaration] : []) + [PropertyDeclaration(attribute: "@Instantiated", label: "reenteredSubB", type: subB.name)])
 			let calledSeam = callThroughRelay ? relay : subB
 			let calledLabel = callThroughRelay ? "reenteredRelay" : "reenteredSubB"
 			let seamCall = callThroughInstantiator
@@ -9174,7 +9296,7 @@ enum GraphFuzzerGenerator {
 				// A field of the label above the seam call, which lifts no rejection.
 				host.properties.insert(PropertyDeclaration(attribute: "@Instantiated", label: "reenteredMark", type: mark.name), at: 0)
 			}
-			if placeFieldVariant == .boundAboveCall || (placeFieldReadIsRequired && placeFieldVariant != nil) {
+			if placeFieldVariant == .boundAboveCall || placeFieldVariant == .boundByPassingUpSeam || (placeFieldReadIsRequired && placeFieldVariant != nil) {
 				// The value a required read gets on `ReenteredTop`'s own route, and, for any read, a field of the label above
 				// the seam call, which lifts no rejection.
 				host.properties.insert(tagDeclaration, at: 0)
@@ -9205,6 +9327,141 @@ enum GraphFuzzerGenerator {
 
 		private static let reenteredFillRandomSeedMask: UInt64 = 0x7265456E74657246
 		private static let reenteredPlaceFieldRandomSeedMask: UInt64 = 0x7265506C61636546
+		private static let reenteredRelayTagRandomSeedMask: UInt64 = 0x72656C6179546167
+
+		// MARK: A fill reading a value and its wrapper through a passed-up place
+
+		/// With the `generateDependencyTree` feature on, every graph already split across modules, but for those of
+		/// all-`Sendable` wrappers, gains a place passed up twice whose fill's tree reads a deferred value, its wrapper, or both,
+		/// across four modules, as `SafeDIToolSeamPassedUpDeferredFieldTests`' `chainTokenModules` lays them out: `MixSeam` and
+		/// `MixSeamB`, seams of `FuzzSession`, hold a place of `MixHoleService` and build `MixLeaf`, which receives `mixToken`,
+		/// `MixSeam` through an `Instantiator`, so it defers the value in a `LazilyInstantiated`, `MixSeamB` through a
+		/// `SendableInstantiator`, so it defers it `@Sendable`; `MixOuter`, a seam of `FuzzSession`, builds `MixSeamB`, `MixSeam`
+		/// or both and passes their places up; `MixMid`, a seam of the seam's module, builds `MixOuter` and fills the place with
+		/// `MixHoleImpl`, which builds `MixWorker` through an `Instantiator`, whose place of `MixThing` `MixMid` passes up, and
+		/// now and then builds `MixWorker` on its own route too; `MixThingImpl`, beside `MixRoot` in the roots' module, fills
+		/// it, reading `mixToken` by value, its `SendableLazilyInstantiated` through `MixWrapperReader`, or both, where
+		/// `MixRoot` declares the value in a `SendableLazilyInstantiated` or a `LazilyInstantiated`. Now and then `MixOuter`
+		/// declares the wrapper above its calls instead, and now and then `MixThingImpl` builds the reader in a
+		/// `SendableInstantiator`, so the wrapper is read inside a `@Sendable` function. Each combination is one the 2.3.0
+		/// wrapper-mix fixes made compile or report: the fill takes the `Sendable` memo every route hands and the root dispatcher
+		/// hands the caller's own wrapper (`fillTakesSendableMemo`); a wrapper a seam on the route declares above its call is
+		/// reported at the reader (`declarationHiddenByField`); and a `SendableLazilyInstantiated` read beside `MixSeam`'s plain
+		/// memo is reported (`sendableWrapperReadBesidePlainMemo`), inside a `@Sendable` function too. The rejected
+		/// combinations are never drawn in a graph with a hole (`HoleSeam`'s or `CycleSeam`'s), whose other draws they would
+		/// throw away: it draws the accepted variant instead. A graph with another gating draw's root still draws them: nearly
+		/// every split graph has one, so sparing those graphs too drew none of the rejected combinations.
+		///
+		/// `wrapperMixRandom` draws only for this pass, which runs after `addingReenteredFillShapes` and only in a graph
+		/// another pass split, so that every graph in one module, and every other draw of a graph it draws in, draws as
+		/// before. A graph whose seam's module has no package gains none, as for `addingFillCallShapes`.
+		private mutating func addingWrapperMixShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// `build()` calls this pass only for a graph split across modules.
+			guard features.contains(.generateDependencyTree) else { return declarations }
+			// Every roll is made before any is read, so that each draws as it does whatever the others draw.
+			let routeRoll = wrapperMixRandom.integer(in: 0...3)
+			let rootDeclaresSendableWrapper = wrapperMixRandom.percentChance(70)
+			let midBuildsWorkerToo = wrapperMixRandom.percentChance(60)
+			let readRoll = wrapperMixRandom.integer(in: 0...3)
+			let outerDeclaresWrapper = wrapperMixRandom.percentChance(45)
+			let readerInSendableFunction = wrapperMixRandom.percentChance(40)
+			guard !modulesOmittingPackageName.contains(.seamModule), sendability != .sendable else { return declarations }
+			// A graph with a hole holds shapes the tool accepts that a rejection by design here would throw away, so it draws
+			// the accepted variant of each rejected roll instead. Sparing every graph with another gating draw's root as well
+			// left no graph to draw the rejected rolls in.
+			let holeSeamNames = ["HoleSeam", GraphFuzzerCycleNames.seam].map { self.prefix + $0 }
+			let drawsOnlyAcceptedVariants = declarations.contains { holeSeamNames.contains($0.name) }
+			// The value and the reader in two graphs in four, the reader alone in one, and the value alone in one.
+			let readsValue = readRoll != 2
+			let readsWrapper = readRoll != 3
+			// `MixSeamB` alone in two graphs in four, beside `MixSeam` in one, and `MixSeam` alone in one. A
+			// `SendableLazilyInstantiated` read beside `MixSeam`'s plain memo, a wrapper `MixOuter` declares above its calls,
+			// and a root's plain wrapper beside the `Sendable` read are rejected by design.
+			let holdsSeam = routeRoll >= 2 && !(drawsOnlyAcceptedVariants && readsWrapper)
+			let holdsSeamB = routeRoll != 3 || !holdsSeam
+			let declaresWrapperOnOuter = outerDeclaresWrapper && readsWrapper && !holdsSeam && !drawsOnlyAcceptedVariants
+			let conformances = ["@unchecked Sendable"]
+			let prefix = prefix
+			func instantiable(_ suffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+				declaration.module = module
+				return declaration
+			}
+			func seam(_ suffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration]) -> TypeDeclaration {
+				var declaration = instantiable(suffix, module: module, properties: properties)
+				declaration.instantiableArguments = ["generateDependencyTree: true"]
+				return declaration
+			}
+			func fill(_ suffix: String, fulfilling protocolName: String, module: GraphFuzzerModule, properties: [PropertyDeclaration]) -> TypeDeclaration {
+				var declaration = instantiable(suffix, module: module, properties: properties)
+				declaration.instantiableArguments = ["fulfillingAdditionalTypes: [\(protocolName).self]"]
+				declaration.additionalConformances.append(protocolName)
+				return declaration
+			}
+			let holeServiceName = "\(prefix)MixHoleService"
+			let thingName = "\(prefix)MixThing"
+			let token = instantiable("MixToken", module: .seamDependency)
+			let leaf = instantiable("MixLeaf", module: .seamDependency, properties: [PropertyDeclaration(attribute: "@Received", label: "mixToken", type: token.name)])
+			let holePlace = PropertyDeclaration(attribute: "@Instantiated", label: "mixHoleService", type: "any \(holeServiceName)")
+			var mixSeam = seam("MixSeam", module: .seamDependency, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "mixLeafBuilder", type: "Instantiator<\(leaf.name)>"), holePlace])
+			mixSeam.additionalDeclarations.append("public protocol \(holeServiceName): Sendable {}\npublic protocol \(thingName): Sendable {}")
+			let mixSeamB = seam("MixSeamB", module: .seamDependency, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "mixLeafBuilder", type: "SendableInstantiator<\(leaf.name)>"), holePlace])
+			// A reader built in a `@Sendable` function beside a root's plain wrapper is rejected with advice to receive the
+			// plain wrapper there, which that function cannot capture: a remedy shape `fuzzer-remedy-oracle.md` records, which
+			// this draw does not repeat. A root's plain wrapper is also rejected where `MixMid`'s tree reads the value in a
+			// `@Sendable` function, so a graph that draws only accepted variants declares the `Sendable` one (seeds 146,
+			// 670, 990, 1156 and 1849 lost their hole graphs to it).
+			// Where `MixOuter` declares the wrapper above its calls, the root declares the same `Sendable` one, so that
+			// `MixMid`'s own route to `MixWorker` reads it and the reader's one error is the field `MixOuter`'s hides: without
+			// it, the advice to declare it on the root left that error at the reader (seeds 1044 and 1856).
+			let tokenWrapper = rootDeclaresSendableWrapper || drawsOnlyAcceptedVariants || declaresWrapperOnOuter || (readsWrapper && readerInSendableFunction) ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			var outerProperties = [PropertyDeclaration]()
+			if declaresWrapperOnOuter {
+				outerProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "mixToken", type: "SendableLazilyInstantiated<\(token.name)>"))
+			}
+			if holdsSeam {
+				outerProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "mixSeam", type: mixSeam.name))
+			}
+			if holdsSeamB {
+				outerProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "mixSeamB", type: mixSeamB.name))
+			}
+			let outer = seam("MixOuter", module: .seamDependency, properties: outerProperties)
+			let worker = instantiable("MixWorker", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "mixThing", type: "any \(thingName)")])
+			let workerBuilder = PropertyDeclaration(attribute: "@Instantiated", label: "mixWorkerBuilder", type: "Instantiator<\(worker.name)>")
+			let holeImplementation = fill("MixHoleImpl", fulfilling: holeServiceName, module: .seamModule, properties: [workerBuilder])
+			let mid = seam("MixMid", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "mixOuter", type: outer.name)] + (midBuildsWorkerToo ? [PropertyDeclaration(attribute: "@Instantiated", label: "mixMidWorkerBuilder", type: "Instantiator<\(worker.name)>")] : []))
+			var reader = instantiable("MixWrapperReader", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Received", label: "mixToken", type: "SendableLazilyInstantiated<\(token.name)>")])
+			reader.imports.append(GraphFuzzerModule.seamDependency.name)
+			// The visible build declares it beside `MixThingImpl`, whose tree builds it.
+			reader.fillsHole = true
+			var thingProperties = [PropertyDeclaration]()
+			if readsValue {
+				thingProperties.append(PropertyDeclaration(attribute: "@Received", label: "mixToken", type: token.name))
+			}
+			if readsWrapper {
+				thingProperties.append(readerInSendableFunction
+					? PropertyDeclaration(attribute: "@Instantiated", label: "mixWrapperReaderBuilder", type: "SendableInstantiator<\(reader.name)>")
+					: PropertyDeclaration(attribute: "@Instantiated", label: "mixWrapperReader", type: reader.name))
+			}
+			var thingImplementation = fill("MixThingImpl", fulfilling: thingName, module: .samePackageCaller, properties: thingProperties)
+			thingImplementation.fillsHole = true
+			// `MixToken` is a type of the module beneath the seam's module, which the roots' module does not import.
+			thingImplementation.imports.append(GraphFuzzerModule.seamDependency.name)
+			var root = instantiable("MixRoot", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "mixToken", type: "\(tokenWrapper)<\(token.name)>"), PropertyDeclaration(attribute: "@Instantiated", label: "mixMid", type: mid.name)])
+			root.instantiableArguments = ["isRoot: true"]
+			root.imports.append(GraphFuzzerModule.seamDependency.name)
+			var added = [token, leaf, mixSeam]
+			if holdsSeamB {
+				added.append(mixSeamB)
+			}
+			added += [outer, worker, holeImplementation, mid]
+			if readsWrapper {
+				added.append(reader)
+			}
+			return declarations + added + [thingImplementation, root]
+		}
+
+		private static let wrapperMixRandomSeedMask: UInt64 = 0x777261704D697821
 
 		// MARK: Access proof extensions
 
@@ -10514,6 +10771,14 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		if propertiesByType.keys.contains(where: { $0.hasSuffix("SpellSibling") }) {
 			features.insert(.spelledOptionalFormOnSibling)
 		}
+		// The alias-only roll: `SpellChild`, which generates its mock, receives the value only through its rename that names the
+		// protocol without `any`.
+		for (typeName, properties) in propertiesByType where typeName.hasSuffix("SpellChild") && mockedTypeNames.contains(typeName)
+			&& !properties.contains(where: { $0.label == GraphFuzzerSpelling.label })
+			&& properties.contains(where: { aliasedLabel(of: $0.attribute) == GraphFuzzerSpelling.label && $0.attribute.hasSuffix("SpellProtocol.self)") })
+		{
+			features.insert(.spelledAliasOnlyReceiveOfMockedChild)
+		}
 		if mockedTypeNames.contains(where: { $0.hasSuffix("SpellChild") || $0.hasSuffix("SpellSeam") }) {
 			features.insert(.spelledTreeMocked)
 		}
@@ -10802,6 +11067,23 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				}
 			}
 		}
+		if let thingProperties = propertiesByType[prefix + "MixThingImpl"] {
+			let outerProperties = propertiesByType[prefix + "MixOuter"] ?? []
+			let readsValue = thingProperties.contains { $0.label == "mixToken" }
+			let readsWrapper = thingProperties.contains { $0.label.hasPrefix("mixWrapperReader") }
+			if outerProperties.contains(where: { $0.label == "mixToken" }) {
+				features.insert(.wrapperMixWrapperDeclaredAboveCall)
+			} else if readsWrapper, outerProperties.contains(where: { $0.label == "mixSeam" }) {
+				features.insert(.wrapperMixSendableWrapperBesidePlainMemo)
+			} else if readsValue, readsWrapper {
+				features.insert(.wrapperMixValueAndSendableWrapper)
+			} else {
+				features.insert(.wrapperMix)
+			}
+			if thingProperties.contains(where: { $0.label == "mixWrapperReaderBuilder" }) {
+				features.insert(.wrapperMixWrapperReadInSendableFunction)
+			}
+		}
 		if propertiesByType[prefix + "Copy1Root"] != nil {
 			features.insert(.passingUpCopies)
 			let fillReadsLabel = propertiesByType[prefix + "Copy1UserServiceImpl"]?.contains(where: { $0.label == "copyLogger" }) == true
@@ -10832,7 +11114,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				}
 			}
 			if let tagRead = gadgetProperties.first(where: { $0.label == "reenteredTag" }) {
-				if propertiesByType[prefix + "ReenteredSubB"]?.contains(where: { $0.label == "reenteredTag" }) == true {
+				if propertiesByType[prefix + "ReenteredRelay"]?.contains(where: { $0.label == "reenteredTag" }) == true {
+					features.insert(.reenteredFillReadsLabelPassingUpSeamBinds)
+				} else if propertiesByType[prefix + "ReenteredSubB"]?.contains(where: { $0.label == "reenteredTag" }) == true {
 					features.insert(.reenteredFillReadsPlaceFieldRemedied)
 				} else if propertiesByType[prefix + "ReenteredSecondImpl"]?.contains(where: { $0.label == "reenteredTag" }) == true {
 					features.insert(.reenteredFillReadsPlaceFieldDeclaredInFill)
@@ -12658,6 +12942,9 @@ struct GraphFuzzerFailure: Equatable {
 		case generatedCodeDrawsWarning = "generated code draws a compiler warning"
 		case fixtureDoesNotCompile = "fixture does not compile on its own"
 		case runsDiffer = "two runs of the tool differ"
+		/// The run that skips no clean subtree in the validation walk gives other results than the run that skips them
+		/// (`GraphFuzzerToolRuns.cleanSubtreeSkipFailure`).
+		case cleanSubtreeSkipChangesOutcome = "skipping clean subtrees in the validation walk changes the tool's outcome"
 		case runsDifferAcrossProcesses = "the tool's output differs between two processes"
 		case compilerCrashedOnGeneratedCode = "the Swift compiler crashed on generated code"
 		case renamedGraphDiffers = "the graph renamed to change an order gives other results"
@@ -12665,6 +12952,9 @@ struct GraphFuzzerFailure: Equatable {
 		/// Generated code calls a function SafeDI generates for code people write – a generated `mock()` or a seam's plain
 		/// initializer – rather than the one only generated code calls (`GraphFuzzerOracle.callsOfEntriesMeantForPeople(in:)`).
 		case generatedCodeCallsEntryMeantForPeople = "generated code calls a generated mock() or plain initializer meant for code people write"
+		/// An initializer only generated code calls – a seam tier's, or a builder struct's – gives a parameter a default
+		/// (`GraphFuzzerGeneratedOnlyInitializerDefaults.parametersWithDefaults(in:)`).
+		case generatedOnlyInitializerTakesDefault = "an initializer only generated code calls gives a parameter a default"
 		/// A base corpus graph's generated mock builds a type that has a hand-written mock with the type's initializer,
 		/// where it calls the hand-written mock.
 		case generatedMockBypassesHandWrittenMock = "a generated mock builds a type with its initializer rather than its hand-written mock"
@@ -12680,6 +12970,9 @@ struct GraphFuzzerFailure: Equatable {
 		/// signature, tier and public mock from source, than when it runs as Bazel runs it, reading the dependencies'
 		/// `.safedi` files (`.moduleInfo`).
 		case integrationsDisagree = "the SwiftPM plugin flow and the module-info flow give other results"
+		/// The module-info flow gives a split graph other results when each module reads the signatures of the seams it
+		/// calls from their modules' `.safedi` files than when it computes them again from the declarations.
+		case storedSeamSignaturesDisagree = "reading the stored seam signatures and computing them again give other results"
 		case seamPassesNilWhereInlinePassesValue = "the generated code passes a literal nil more often with the seam than without it"
 		/// The tool rejects the alias draw's seam, with an error about that seam, where it accepts the graph with no seam.
 		case seamRejectedWhereInlineAccepts = "the tool rejects the alias draw's seam where it accepts the graph with no seam"
@@ -12972,9 +13265,11 @@ struct GraphFuzzerResult {
 		isInspectedByValueOracle: Bool = false,
 		isComparedByValueOracle: Bool = false,
 		isComparedAcrossIntegrations: Bool = false,
+		isComparedWithRecomputedSignatures: Bool = false,
 		isComparedWithReadTwin: Bool = false,
 		isComparedWithoutSecondHolePlace: Bool = false,
 		isComparedWithoutSecondPath: Bool = false,
+		isComparedWithCleanSubtreeSkipOff: Bool = false,
 		retentionCounts: GraphFuzzerRetentionCounts = GraphFuzzerRetentionCounts(),
 		valueOracle: GraphFuzzerValueOracleRun? = nil,
 		remedyRuns: [GraphFuzzerRemedyRun] = [],
@@ -12986,6 +13281,7 @@ struct GraphFuzzerResult {
 		self.builderSurfaceFloorKinds = builderSurfaceFloorKinds
 		self.isComparedWithoutSecondHolePlace = isComparedWithoutSecondHolePlace
 		self.isComparedWithoutSecondPath = isComparedWithoutSecondPath
+		self.isComparedWithCleanSubtreeSkipOff = isComparedWithCleanSubtreeSkipOff
 		self.remedyRuns = remedyRuns
 		self.fixture = fixture
 		self.outcome = outcome
@@ -12996,6 +13292,7 @@ struct GraphFuzzerResult {
 		self.isInspectedByValueOracle = isInspectedByValueOracle
 		self.isComparedByValueOracle = isComparedByValueOracle
 		self.isComparedAcrossIntegrations = isComparedAcrossIntegrations
+		self.isComparedWithRecomputedSignatures = isComparedWithRecomputedSignatures
 		self.isComparedWithReadTwin = isComparedWithReadTwin
 		self.valueOracle = valueOracle
 	}
@@ -13027,6 +13324,9 @@ struct GraphFuzzerResult {
 	/// (`GraphFuzzerToolRuns.integrationsDisagreeFailure`): the graph is split across modules, and no module of it is run
 	/// without its package's name.
 	let isComparedAcrossIntegrations: Bool
+	/// Whether the oracle ran the graph with every module info's seam signatures discarded and compared the two runs
+	/// (`GraphFuzzerToolRuns.storedSeamSignaturesDisagreeFailure`): the graph is split across modules and declares a seam.
+	let isComparedWithRecomputedSignatures: Bool
 	/// Whether the oracle ran the graph's read twin and compared it with the graph (`GraphFuzzerToolRuns.readTwinFailure`):
 	/// the graph names a type no declaration SafeDI reads declares.
 	let isComparedWithReadTwin: Bool
@@ -13038,6 +13338,9 @@ struct GraphFuzzerResult {
 	/// the graph with those of the graph without its second path to a type that holds a place
 	/// (`GraphFuzzerToolRuns.secondPathFailure`): the tool accepts both.
 	let isComparedWithoutSecondPath: Bool
+	/// Whether the oracle ran the graph again with no skip of a clean subtree in the validation walk and compared the two
+	/// (`GraphFuzzerToolRuns.cleanSubtreeSkipFailure`): its first run skipped one.
+	let isComparedWithCleanSubtreeSkipOff: Bool
 	/// What the retention oracle judged of the graph (`GraphFuzzerOracle.ValueComparisons.retentionCounts`), each count
 	/// 0 or 1 but the unpaired experiments'.
 	let retentionCounts: GraphFuzzerRetentionCounts
@@ -13595,6 +13898,8 @@ struct GraphFuzzerToolRuns {
 	///   - multiModuleRuns: What the two multi-module integrations produced for the graph split across modules.
 	///   - pluginOutcome: The outcome of a graph split across modules as the SwiftPM plugin runs the tool, when no module
 	///     of it is run without its package's name: `firstOutcome` is how Bazel runs it.
+	///   - recomputedSignaturesOutcome: The outcome of a graph split across modules that declares a seam, run as
+	///     `firstOutcome` was with every module info's seam signatures discarded.
 	///   - readTwinOutcome: The outcome of the graph's read twin (`GraphFuzzerFixture.readTwin`) as `firstOutcome` was
 	///     run, with its rename undone, when the graph names a type no declaration SafeDI reads declares.
 	///   - readTwinPluginOutcome: The outcome of the read twin as `pluginOutcome` was run, with its rename undone, when the
@@ -13617,12 +13922,14 @@ struct GraphFuzzerToolRuns {
 		fixture: GraphFuzzerFixture,
 		firstOutcome: GraphFuzzerToolOutcome,
 		secondOutcome: GraphFuzzerToolOutcome,
+		cleanSubtreeSkipOffOutcome: GraphFuzzerToolOutcome? = nil,
 		renamedOutcomes: [(renaming: GraphFuzzerRenaming, outcome: GraphFuzzerToolOutcome)] = [],
 		inlineOutcome: GraphFuzzerToolOutcome? = nil,
 		visibleOutcome: GraphFuzzerToolOutcome? = nil,
 		knownRightOutcome: GraphFuzzerToolOutcome? = nil,
 		multiModuleRuns: [GraphFuzzerMultiModuleRuns] = [],
 		pluginOutcome: GraphFuzzerToolOutcome? = nil,
+		recomputedSignaturesOutcome: GraphFuzzerToolOutcome? = nil,
 		readTwinOutcome: GraphFuzzerToolOutcome? = nil,
 		readTwinPluginOutcome: GraphFuzzerToolOutcome? = nil,
 		valueOracle: GraphFuzzerValueOracleRun? = nil,
@@ -13644,12 +13951,14 @@ struct GraphFuzzerToolRuns {
 		self.fixture = fixture
 		self.firstOutcome = firstOutcome
 		self.secondOutcome = secondOutcome
+		self.cleanSubtreeSkipOffOutcome = cleanSubtreeSkipOffOutcome
 		self.renamedOutcomes = renamedOutcomes
 		self.inlineOutcome = inlineOutcome
 		self.visibleOutcome = visibleOutcome
 		self.knownRightOutcome = knownRightOutcome
 		self.multiModuleRuns = multiModuleRuns
 		self.pluginOutcome = pluginOutcome
+		self.recomputedSignaturesOutcome = recomputedSignaturesOutcome
 		self.readTwinOutcome = readTwinOutcome
 		self.readTwinPluginOutcome = readTwinPluginOutcome
 		self.valueOracle = valueOracle
@@ -13658,12 +13967,17 @@ struct GraphFuzzerToolRuns {
 	let fixture: GraphFuzzerFixture
 	let firstOutcome: GraphFuzzerToolOutcome
 	let secondOutcome: GraphFuzzerToolOutcome
+	/// The outcome of a run that skips no clean subtree in the validation walk, when the first run skipped one.
+	let cleanSubtreeSkipOffOutcome: GraphFuzzerToolOutcome?
 	let renamedOutcomes: [(renaming: GraphFuzzerRenaming, outcome: GraphFuzzerToolOutcome)]
 	let inlineOutcome: GraphFuzzerToolOutcome?
 	let visibleOutcome: GraphFuzzerToolOutcome?
 	let knownRightOutcome: GraphFuzzerToolOutcome?
 	let multiModuleRuns: [GraphFuzzerMultiModuleRuns]
 	let pluginOutcome: GraphFuzzerToolOutcome?
+	/// The outcome of a graph split across modules that declares a seam, run as `firstOutcome` was with every `.safedi`
+	/// file's seam signatures discarded, so that each module computes the signatures of the seams it calls.
+	let recomputedSignaturesOutcome: GraphFuzzerToolOutcome?
 	let readTwinOutcome: GraphFuzzerToolOutcome?
 	let readTwinPluginOutcome: GraphFuzzerToolOutcome?
 	let valueOracle: GraphFuzzerValueOracleRun?
@@ -13943,6 +14257,18 @@ struct GraphFuzzerToolRuns {
 		)
 	}
 
+	/// The failure of a graph split across modules whose modules generate other code or report other diagnostics when each
+	/// reads the signatures of the seams it calls from their modules' `.safedi` files than when it computes them again from
+	/// the declarations those files carry, or `nil`: a module's stored signature must be the one each caller would compute.
+	var storedSeamSignaturesDisagreeFailure: GraphFuzzerFailure? {
+		guard let recomputedSignaturesOutcome, recomputedSignaturesOutcome != firstOutcome else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .storedSeamSignaturesDisagree,
+			details: "Reading the stored signatures:\n\(firstOutcome.description)\nComputing them again:\n\(recomputedSignaturesOutcome.description)",
+		)
+	}
+
 	/// The failure of a graph whose `addingUncreatedAliasShapes` seam the tool rejects, with an error about that seam,
 	/// where it accepts the graph with no seam, or `nil`. The seam binds an `onlyIfAvailable` alias of a parameter from
 	/// that parameter as inline binds it from the caller's nearest declaration of its label, and that seam's tree has no
@@ -14138,6 +14464,19 @@ struct GraphFuzzerToolRuns {
 			else { return nil }
 			return (index, generatedFiles)
 		}
+	}
+
+	/// The failure of a graph whose run with no skip of a clean subtree in the validation walk gives other results than its
+	/// first run, which skipped one, or `nil`: a skipped subtree's walk along another path completed with an equal context and
+	/// found nothing, so walking it again would find nothing either (`cycle-validation.md`, "Clean subtrees"). Seeds 10 and 17
+	/// of the seam corpus fail it when the walk remembers a subtree whose walk raised `memoBlockingEventCount`.
+	var cleanSubtreeSkipFailure: GraphFuzzerFailure? {
+		guard let cleanSubtreeSkipOffOutcome, cleanSubtreeSkipOffOutcome != firstOutcome else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .cleanSubtreeSkipChangesOutcome,
+			details: "Skipping clean subtrees:\n\(firstOutcome.description)\nSkipping none:\n\(cleanSubtreeSkipOffOutcome.description)",
+		)
 	}
 
 	var runsDifferFailure: GraphFuzzerFailure? {
@@ -14440,9 +14779,9 @@ enum GraphFuzzerOracle {
 		}
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
-			var failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.publicMockOverridesOrderFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
+			var failures = [runs.runsDifferFailure, runs.cleanSubtreeSkipFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.storedSeamSignaturesDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.publicMockOverridesOrderFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
-			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
+			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
 			// Whether a closure a level function returns keeps a level's values, read from the generated text, so it judges
 			// with compiles and without.
@@ -14474,9 +14813,11 @@ enum GraphFuzzerOracle {
 				isInspectedByValueOracle: runs.isInspectedByValueOracle,
 				isComparedByValueOracle: compileVerificationIsEnabled && runs.isInspectedByValueOracle && runs.runsDifferFailure == nil && codeCompilationFailures[runs.fixture.seed] == nil && isValueOracleGraphCompared,
 				isComparedAcrossIntegrations: runs.pluginOutcome != nil,
+				isComparedWithRecomputedSignatures: runs.recomputedSignaturesOutcome != nil,
 				isComparedWithReadTwin: runs.readTwinOutcome != nil,
 				isComparedWithoutSecondHolePlace: runs.isComparedWithoutSecondHolePlace,
 				isComparedWithoutSecondPath: runs.isComparedWithoutSecondPath,
+				isComparedWithCleanSubtreeSkipOff: runs.cleanSubtreeSkipOffOutcome != nil,
 				retentionCounts: valueComparisons.retentionCounts[runs.fixture.seed] ?? GraphFuzzerRetentionCounts(),
 				valueOracle: runs.valueOracle,
 				remedyRuns: runs.remedyRuns,
@@ -15144,9 +15485,28 @@ enum GraphFuzzerOracle {
 		// (`placeLevelsFailure`).
 		// The paths of the places the first run computes must repeat no declaration (`placeChainFailure`), and their cases
 		// must be the ones the generated scope enums declare (`scopeCaseFailures`).
+		// The validation walk skips a subtree whose walk along an equal context completed and found nothing. A graph whose
+		// first run skipped one is run again with no skip, which must give the same outcome (`cleanSubtreeSkipFailure`).
+		let (skippedSubtrees, skippedSubtreesContinuation) = AsyncStream.makeStream(of: Void.self)
 		let ((firstOutcome, placeLevelDisagreements), placeFacts) = try await collectingPlaceFacts(during: {
-			try await collectingPlaceLevelDisagreements(during: { try await toolOutcome(of: fixture) })
+			try await collectingPlaceLevelDisagreements(during: {
+				try await ValidationWalkObservation.$observer.withValue({ observation in
+					if case .skippedCleanSubtree = observation {
+						skippedSubtreesContinuation.yield()
+					}
+				}) {
+					try await toolOutcome(of: fixture)
+				}
+			})
 		})
+		skippedSubtreesContinuation.finish()
+		var skippedSubtreeCount = 0
+		for await _ in skippedSubtrees {
+			skippedSubtreeCount += 1
+		}
+		let cleanSubtreeSkipOffOutcome: GraphFuzzerToolOutcome? = skippedSubtreeCount > 0
+			? try await ValidationWalkObservation.$skipsCleanSubtrees.withValue(false) { try await toolOutcome(of: fixture) }
+			: nil
 		// A graph with a seam is run again with no seam: a rejection inline does not make is either a seam's own error
 		// or a defect (`differentialFailure`), and an accepted graph must pass no receiver `nil` that inline passes a
 		// value (`nilArgumentFailure`).
@@ -15167,6 +15527,12 @@ enum GraphFuzzerOracle {
 		// module run without its package's name models Tuist or Bazel alone, since the plugin always knows the package.
 		let pluginOutcome: GraphFuzzerToolOutcome? = fixture.modules != nil && fixture.modulesOmittingPackageName.isEmpty
 			? try await toolOutcome(of: fixture, integration: .swiftPackagePlugin)
+			: nil
+		// A graph split across modules that declares a seam is run again with every `.safedi` file's seam signatures
+		// discarded, so each module computes the signatures of the seams it calls from the declarations: the two must
+		// agree byte for byte (`storedSeamSignaturesDisagreeFailure`).
+		let recomputedSignaturesOutcome: GraphFuzzerToolOutcome? = fixture.modules != nil && fixture.declaresSeam
+			? try await toolOutcome(of: fixture, discardingStoredSeamSignatures: true)
 			: nil
 		// A graph that names a type no declaration SafeDI reads declares is run again as its read twin, which declares that
 		// type `public` where SafeDI reads it, under each flow the graph is run under: SafeDI counts the type as `public`, so
@@ -15235,12 +15601,14 @@ enum GraphFuzzerOracle {
 					try await toolOutcome(of: fixture)
 				}
 			},
+			cleanSubtreeSkipOffOutcome: cleanSubtreeSkipOffOutcome,
 			renamedOutcomes: renamedOutcomes,
 			inlineOutcome: inlineOutcome,
 			visibleOutcome: visibleOutcome,
 			knownRightOutcome: knownRightOutcome,
 			multiModuleRuns: multiModuleRuns,
 			pluginOutcome: pluginOutcome,
+			recomputedSignaturesOutcome: recomputedSignaturesOutcome,
 			readTwinOutcome: readTwinOutcome,
 			readTwinPluginOutcome: readTwinPluginOutcome,
 			valueOracle: valueOracle,
@@ -15262,16 +15630,18 @@ enum GraphFuzzerOracle {
 	///   - listsTransitiveDependencies: Whether each module of a graph split across modules lists every module it depends
 	///     on rather than the modules it imports and those its mocks reach, for a build that constructs in a caller what a
 	///     seam or public mock would.
-	static func toolOutcome(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil, integration: MultiModuleIntegration = .moduleInfo, listsTransitiveDependencies: Bool = false) async throws -> GraphFuzzerToolOutcome {
-		try await toolRun(of: fixture, fileNames: fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies).outcome
+	///   - discardingStoredSeamSignatures: Whether each module of a graph split across modules computes the signatures of
+	///     the seams it calls from the declarations, rather than reading them from their modules' `.safedi` files.
+	static func toolOutcome(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil, integration: MultiModuleIntegration = .moduleInfo, listsTransitiveDependencies: Bool = false, discardingStoredSeamSignatures: Bool = false) async throws -> GraphFuzzerToolOutcome {
+		try await toolRun(of: fixture, fileNames: fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies, discardingStoredSeamSignatures: discardingStoredSeamSignatures).outcome
 	}
 
 	/// The tool's outcome for `fixture`, as `toolOutcome(of:fileNames:integration:listsTransitiveDependencies:)` gives it,
 	/// with the name of the module whose `generate` rejected a graph split across modules: `nil` where the tool accepts the
 	/// graph, or where the graph is in one module, which is then the module that rejects it.
-	static func toolRun(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil, integration: MultiModuleIntegration = .moduleInfo, listsTransitiveDependencies: Bool = false) async throws -> (outcome: GraphFuzzerToolOutcome, rejectingModuleName: String?) {
+	static func toolRun(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil, integration: MultiModuleIntegration = .moduleInfo, listsTransitiveDependencies: Bool = false, discardingStoredSeamSignatures: Bool = false) async throws -> (outcome: GraphFuzzerToolOutcome, rejectingModuleName: String?) {
 		if let modules = fixture.modules {
-			return try await splitToolRun(of: fixture, modules: modules, fileNames: fileNames ?? fixture.fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies)
+			return try await splitToolRun(of: fixture, modules: modules, fileNames: fileNames ?? fixture.fileNames, integration: integration, listsTransitiveDependencies: listsTransitiveDependencies, discardingStoredSeamSignatures: discardingStoredSeamSignatures)
 		}
 		var filesToDelete = [URL]()
 		defer {
@@ -15318,7 +15688,7 @@ enum GraphFuzzerOracle {
 	/// reaches a place through a seam beneath the seam's module (`GraphFuzzerFixture.modulesListingEveryModuleBeneath`).
 	/// Each generated file is keyed by its module's name and its own (`FuzzFeature/Type+SafeDI.swift`), and the outcome is
 	/// the first module's error, if any, with that module's name.
-	private static func splitToolRun(of fixture: GraphFuzzerFixture, modules: [GraphFuzzerModule], fileNames: [String], integration: MultiModuleIntegration, listsTransitiveDependencies: Bool) async throws -> (outcome: GraphFuzzerToolOutcome, rejectingModuleName: String?) {
+	private static func splitToolRun(of fixture: GraphFuzzerFixture, modules: [GraphFuzzerModule], fileNames: [String], integration: MultiModuleIntegration, listsTransitiveDependencies: Bool, discardingStoredSeamSignatures: Bool) async throws -> (outcome: GraphFuzzerToolOutcome, rejectingModuleName: String?) {
 		var filesToDelete = [URL]()
 		defer {
 			for fileToDelete in filesToDelete {
@@ -15338,7 +15708,7 @@ enum GraphFuzzerOracle {
 		}
 		do {
 			// The fuzzer's graphs are no test's expectations, so a record run never writes them.
-			let output = try await executeSafeDIToolMultiModuleTest(modules: moduleFixtures, integration: integration, compileVerification: .skipped, filesToDelete: &filesToDelete, recordDirectory: nil)
+			let output = try await executeSafeDIToolMultiModuleTest(modules: moduleFixtures, integration: integration, compileVerification: .skipped, discardsStoredSeamSignatures: discardingStoredSeamSignatures, filesToDelete: &filesToDelete, recordDirectory: nil)
 			let normalize = normalizer(fixtureDirectory: output.fixtureRoot.path)
 			var generatedFiles = [String: String]()
 			var warnings = [String]()

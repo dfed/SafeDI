@@ -551,42 +551,39 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 			    /// Overrides for the mock dependency tree.
 			    struct SafeDIOverrides {
 			        init(
-			            token_LazilyInstantiated__Token: (() -> Token)? = nil,
+			            token: (() -> Token)? = nil,
 			            pinner: Pinner.SafeDIMockConfiguration = .init(),
-			            token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)? = nil,
-			            leaf: ((SendableLazilyInstantiated<Token>?) -> Leaf)? = nil
+			            leaf: ((SendableLazilyInstantiated<Token>?) -> Leaf)? = nil,
+			            token_SendableLazilyInstantiated__Token: SendableLazilyInstantiated<Token>? = nil
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
-			                token_LazilyInstantiated__Token: token_LazilyInstantiated__Token,
+			                token: token,
 			                pinner: pinner,
-			                token_SendableLazilyInstantiated__Token: token_SendableLazilyInstantiated__Token,
 			                leaf: leaf
 			            )
+			            self.token_SendableLazilyInstantiated__Token = token_SendableLazilyInstantiated__Token
 			        }
 
-			        var token_LazilyInstantiated__Token: (() -> Token)? { __safeDI_storage.token_LazilyInstantiated__Token }
+			        var token: (() -> Token)? { __safeDI_storage.token }
 			        var pinner: Pinner.SafeDIMockConfiguration { __safeDI_storage.pinner }
-			        var token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)? { __safeDI_storage.token_SendableLazilyInstantiated__Token }
 			        var leaf: ((SendableLazilyInstantiated<Token>?) -> Leaf)? { __safeDI_storage.leaf }
+			        let token_SendableLazilyInstantiated__Token: SendableLazilyInstantiated<Token>?
 
 			        private let __safeDI_storage: __safeDI_Storage
 
 			        private final class __safeDI_Storage {
 			            init(
-			                token_LazilyInstantiated__Token: (() -> Token)?,
+			                token: (() -> Token)?,
 			                pinner: Pinner.SafeDIMockConfiguration,
-			                token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)?,
 			                leaf: ((SendableLazilyInstantiated<Token>?) -> Leaf)?
 			            ) {
-			                self.token_LazilyInstantiated__Token = token_LazilyInstantiated__Token
+			                self.token = token
 			                self.pinner = pinner
-			                self.token_SendableLazilyInstantiated__Token = token_SendableLazilyInstantiated__Token
 			                self.leaf = leaf
 			            }
 
-			            let token_LazilyInstantiated__Token: (() -> Token)?
+			            let token: (() -> Token)?
 			            let pinner: Pinner.SafeDIMockConfiguration
-			            let token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)?
 			            let leaf: ((SendableLazilyInstantiated<Token>?) -> Leaf)?
 			        }
 			    }
@@ -594,14 +591,13 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> A {
-			        func __safeDI_token_LazilyInstantiated__Token() -> Token {
-			            if let safeDIBuilder = safeDIOverrides.token_LazilyInstantiated__Token { safeDIBuilder() } else { Token() }
+			        let token_SendableLazilyInstantiated__Token: SendableLazilyInstantiated<Token>? = safeDIOverrides.token_SendableLazilyInstantiated__Token
+			        func __safeDI_token() -> Token {
+			            if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 			        }
-			        let token_LazilyInstantiated__Token = LazilyInstantiated<Token>(__safeDI_token_LazilyInstantiated__Token)
+			        let token = LazilyInstantiated<Token>(__safeDI_token)
 			        func __safeDI_pinner() -> Pinner {
-			            let token: LazilyInstantiated<Token> = token_LazilyInstantiated__Token
 			            func __safeDI_source() -> Source {
-			                let token: LazilyInstantiated<Token> = token_LazilyInstantiated__Token
 			                let leaf = if let safeDIBuilder = safeDIOverrides.pinner.source.leaf { safeDIBuilder(nil) } else { Leaf(token: nil) }
 			                return if let safeDIBuilder = safeDIOverrides.pinner.source.safeDIBuilder { safeDIBuilder(token.instance, leaf) } else { Source(token: token.instance, leaf: leaf) }
 			            }
@@ -609,11 +605,6 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 			            return if let safeDIBuilder = safeDIOverrides.pinner.safeDIBuilder { safeDIBuilder(token, source) } else { Pinner(token: token, source: source) }
 			        }
 			        let pinner: Pinner = __safeDI_pinner()
-			        let __safeDI_token_SendableLazilyInstantiated__Token__safeDIBuilder = safeDIOverrides.token_SendableLazilyInstantiated__Token
-			        @Sendable func __safeDI_token_SendableLazilyInstantiated__Token() -> Token {
-			            if let safeDIBuilder = __safeDI_token_SendableLazilyInstantiated__Token__safeDIBuilder { safeDIBuilder() } else { Token() }
-			        }
-			        let token_SendableLazilyInstantiated__Token = SendableLazilyInstantiated<Token>(__safeDI_token_SendableLazilyInstantiated__Token)
 			        func __safeDI_leaf() -> Leaf {
 			            let token: SendableLazilyInstantiated<Token>? = token_SendableLazilyInstantiated__Token
 			            return if let safeDIBuilder = safeDIOverrides.leaf { safeDIBuilder(token) } else { Leaf(token: token) }
@@ -635,52 +626,49 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 			    struct SafeDIOverrides {
 			        init(
 			            innerOther: ((Other?) -> InnerOther)? = nil,
-			            token_LazilyInstantiated__Token: (() -> Token)? = nil,
+			            token: (() -> Token)? = nil,
 			            reader: ((LazilyInstantiated<Token>) -> Reader)? = nil,
-			            token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)? = nil,
 			            source: Source.SafeDIMockConfiguration = .init(),
-			            other: (() -> Other)? = nil
+			            other: (() -> Other)? = nil,
+			            token_SendableLazilyInstantiated__Token: SendableLazilyInstantiated<Token>? = nil
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
 			                innerOther: innerOther,
-			                token_LazilyInstantiated__Token: token_LazilyInstantiated__Token,
+			                token: token,
 			                reader: reader,
-			                token_SendableLazilyInstantiated__Token: token_SendableLazilyInstantiated__Token,
 			                source: source,
 			                other: other
 			            )
+			            self.token_SendableLazilyInstantiated__Token = token_SendableLazilyInstantiated__Token
 			        }
 
 			        var innerOther: ((Other?) -> InnerOther)? { __safeDI_storage.innerOther }
-			        var token_LazilyInstantiated__Token: (() -> Token)? { __safeDI_storage.token_LazilyInstantiated__Token }
+			        var token: (() -> Token)? { __safeDI_storage.token }
 			        var reader: ((LazilyInstantiated<Token>) -> Reader)? { __safeDI_storage.reader }
-			        var token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)? { __safeDI_storage.token_SendableLazilyInstantiated__Token }
 			        var source: Source.SafeDIMockConfiguration { __safeDI_storage.source }
 			        var other: (() -> Other)? { __safeDI_storage.other }
+			        let token_SendableLazilyInstantiated__Token: SendableLazilyInstantiated<Token>?
 
 			        private let __safeDI_storage: __safeDI_Storage
 
 			        private final class __safeDI_Storage {
 			            init(
 			                innerOther: ((Other?) -> InnerOther)?,
-			                token_LazilyInstantiated__Token: (() -> Token)?,
+			                token: (() -> Token)?,
 			                reader: ((LazilyInstantiated<Token>) -> Reader)?,
-			                token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)?,
 			                source: Source.SafeDIMockConfiguration,
 			                other: (() -> Other)?
 			            ) {
 			                self.innerOther = innerOther
-			                self.token_LazilyInstantiated__Token = token_LazilyInstantiated__Token
+			                self.token = token
 			                self.reader = reader
-			                self.token_SendableLazilyInstantiated__Token = token_SendableLazilyInstantiated__Token
 			                self.source = source
 			                self.other = other
 			            }
 
 			            let innerOther: ((Other?) -> InnerOther)?
-			            let token_LazilyInstantiated__Token: (() -> Token)?
+			            let token: (() -> Token)?
 			            let reader: ((LazilyInstantiated<Token>) -> Reader)?
-			            let token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)?
 			            let source: Source.SafeDIMockConfiguration
 			            let other: (() -> Other)?
 			        }
@@ -689,23 +677,14 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> B {
+			        let token_SendableLazilyInstantiated__Token: SendableLazilyInstantiated<Token>? = safeDIOverrides.token_SendableLazilyInstantiated__Token
 			        let innerOther = if let safeDIBuilder = safeDIOverrides.innerOther { safeDIBuilder(nil) } else { InnerOther(other: nil) }
-			        func __safeDI_token_LazilyInstantiated__Token() -> Token {
-			            if let safeDIBuilder = safeDIOverrides.token_LazilyInstantiated__Token { safeDIBuilder() } else { Token() }
+			        func __safeDI_token() -> Token {
+			            if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 			        }
-			        let token_LazilyInstantiated__Token = LazilyInstantiated<Token>(__safeDI_token_LazilyInstantiated__Token)
-			        func __safeDI_reader() -> Reader {
-			            let token: LazilyInstantiated<Token> = token_LazilyInstantiated__Token
-			            return if let safeDIBuilder = safeDIOverrides.reader { safeDIBuilder(token) } else { Reader(token: token) }
-			        }
-			        let reader: Reader = __safeDI_reader()
-			        let __safeDI_token_SendableLazilyInstantiated__Token__safeDIBuilder = safeDIOverrides.token_SendableLazilyInstantiated__Token
-			        @Sendable func __safeDI_token_SendableLazilyInstantiated__Token() -> Token {
-			            if let safeDIBuilder = __safeDI_token_SendableLazilyInstantiated__Token__safeDIBuilder { safeDIBuilder() } else { Token() }
-			        }
-			        let token_SendableLazilyInstantiated__Token = SendableLazilyInstantiated<Token>(__safeDI_token_SendableLazilyInstantiated__Token)
+			        let token = LazilyInstantiated<Token>(__safeDI_token)
+			        let reader = if let safeDIBuilder = safeDIOverrides.reader { safeDIBuilder(token) } else { Reader(token: token) }
 			        func __safeDI_source() -> Source {
-			            let token: LazilyInstantiated<Token> = token_LazilyInstantiated__Token
 			            func __safeDI_leaf() -> Leaf {
 			                let token: SendableLazilyInstantiated<Token>? = token_SendableLazilyInstantiated__Token
 			                return if let safeDIBuilder = safeDIOverrides.source.leaf { safeDIBuilder(token) } else { Leaf(token: token) }
@@ -757,42 +736,39 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 			    /// Overrides for the mock dependency tree.
 			    struct SafeDIOverrides {
 			        init(
-			            token_LazilyInstantiated__Token: (() -> Token)? = nil,
+			            token: (() -> Token)? = nil,
 			            pinner: Pinner.SafeDIMockConfiguration = .init(),
-			            token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)? = nil,
-			            source: Source.SafeDIMockConfiguration = .init()
+			            source: Source.SafeDIMockConfiguration = .init(),
+			            token_SendableLazilyInstantiated__Token: SendableLazilyInstantiated<Token>? = nil
 			        ) {
 			            __safeDI_storage = __safeDI_Storage(
-			                token_LazilyInstantiated__Token: token_LazilyInstantiated__Token,
+			                token: token,
 			                pinner: pinner,
-			                token_SendableLazilyInstantiated__Token: token_SendableLazilyInstantiated__Token,
 			                source: source
 			            )
+			            self.token_SendableLazilyInstantiated__Token = token_SendableLazilyInstantiated__Token
 			        }
 
-			        var token_LazilyInstantiated__Token: (() -> Token)? { __safeDI_storage.token_LazilyInstantiated__Token }
+			        var token: (() -> Token)? { __safeDI_storage.token }
 			        var pinner: Pinner.SafeDIMockConfiguration { __safeDI_storage.pinner }
-			        var token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)? { __safeDI_storage.token_SendableLazilyInstantiated__Token }
 			        var source: Source.SafeDIMockConfiguration { __safeDI_storage.source }
+			        let token_SendableLazilyInstantiated__Token: SendableLazilyInstantiated<Token>?
 
 			        private let __safeDI_storage: __safeDI_Storage
 
 			        private final class __safeDI_Storage {
 			            init(
-			                token_LazilyInstantiated__Token: (() -> Token)?,
+			                token: (() -> Token)?,
 			                pinner: Pinner.SafeDIMockConfiguration,
-			                token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)?,
 			                source: Source.SafeDIMockConfiguration
 			            ) {
-			                self.token_LazilyInstantiated__Token = token_LazilyInstantiated__Token
+			                self.token = token
 			                self.pinner = pinner
-			                self.token_SendableLazilyInstantiated__Token = token_SendableLazilyInstantiated__Token
 			                self.source = source
 			            }
 
-			            let token_LazilyInstantiated__Token: (() -> Token)?
+			            let token: (() -> Token)?
 			            let pinner: Pinner.SafeDIMockConfiguration
-			            let token_SendableLazilyInstantiated__Token: (@Sendable () -> Token)?
 			            let source: Source.SafeDIMockConfiguration
 			        }
 			    }
@@ -800,14 +776,13 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 			    static func mock(
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> C {
-			        func __safeDI_token_LazilyInstantiated__Token() -> Token {
-			            if let safeDIBuilder = safeDIOverrides.token_LazilyInstantiated__Token { safeDIBuilder() } else { Token() }
+			        let token_SendableLazilyInstantiated__Token: SendableLazilyInstantiated<Token>? = safeDIOverrides.token_SendableLazilyInstantiated__Token
+			        func __safeDI_token() -> Token {
+			            if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
 			        }
-			        let token_LazilyInstantiated__Token = LazilyInstantiated<Token>(__safeDI_token_LazilyInstantiated__Token)
+			        let token = LazilyInstantiated<Token>(__safeDI_token)
 			        func __safeDI_pinner() -> Pinner {
-			            let token: LazilyInstantiated<Token> = token_LazilyInstantiated__Token
 			            func __safeDI_source() -> Source {
-			                let token: LazilyInstantiated<Token> = token_LazilyInstantiated__Token
 			                let leaf = if let safeDIBuilder = safeDIOverrides.pinner.source.leaf { safeDIBuilder(nil) } else { Leaf(token: nil) }
 			                return if let safeDIBuilder = safeDIOverrides.pinner.source.safeDIBuilder { safeDIBuilder(token.instance, leaf) } else { Source(token: token.instance, leaf: leaf) }
 			            }
@@ -815,13 +790,7 @@ struct SafeDIToolMockConstructionMemoTests: ~Copyable {
 			            return if let safeDIBuilder = safeDIOverrides.pinner.safeDIBuilder { safeDIBuilder(token, source) } else { Pinner(token: token, source: source) }
 			        }
 			        let pinner: Pinner = __safeDI_pinner()
-			        let __safeDI_token_SendableLazilyInstantiated__Token__safeDIBuilder = safeDIOverrides.token_SendableLazilyInstantiated__Token
-			        @Sendable func __safeDI_token_SendableLazilyInstantiated__Token() -> Token {
-			            if let safeDIBuilder = __safeDI_token_SendableLazilyInstantiated__Token__safeDIBuilder { safeDIBuilder() } else { Token() }
-			        }
-			        let token_SendableLazilyInstantiated__Token = SendableLazilyInstantiated<Token>(__safeDI_token_SendableLazilyInstantiated__Token)
 			        func __safeDI_source() -> Source {
-			            let token: LazilyInstantiated<Token> = token_LazilyInstantiated__Token
 			            func __safeDI_leaf() -> Leaf {
 			                let token: SendableLazilyInstantiated<Token>? = token_SendableLazilyInstantiated__Token
 			                return if let safeDIBuilder = safeDIOverrides.source.leaf { safeDIBuilder(token) } else { Leaf(token: token) }

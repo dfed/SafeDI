@@ -69,6 +69,18 @@ extension Data {
 	}
 }
 
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+extension [UInt8] {
+	/// Writes these bytes as `Data.writeIfChanged(toPath:)` does, without copying them into a `Data` first.
+	func writeIfChanged(toPath filePath: String) throws {
+		try withUnsafeBufferPointer { bytes in
+			// The `Data` only lends the array's bytes for the write, and is gone before the array can change.
+			let data = bytes.baseAddress.map { Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: $0), count: bytes.count, deallocator: .none) } ?? Data()
+			try data.writeIfChanged(toPath: filePath)
+		}
+	}
+}
+
 extension String {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func write(toPath filePath: String) throws {

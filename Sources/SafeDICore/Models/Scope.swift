@@ -206,21 +206,7 @@ final class Scope: Hashable {
 			.flatMap(\.receivableProperties),
 	)
 
-	/// The property this scope's type creates – instantiates, is forwarded, or declares by an alias – that a dependency
-	/// of the type reads for `property`, which it receives only if available: the first form of `property` (see
-	/// `Property.formsReadByOnlyIfAvailableReceive`) that a created property provides (see
-	/// `CycleParameter.forms(providedBy:)`). `nil` when the type creates none, and the dependency reads the nearest
-	/// declaration above the scope.
-	func createdBinding(of property: Property) -> Property? {
-		for form in property.formsReadByOnlyIfAvailableReceive {
-			if let binding = createdBindings[form] {
-				return binding
-			}
-		}
-		return nil
-	}
-
-	/// The created property that provides each form, for `createdBinding(of:)`. A type's labels are distinct, so no two
+	/// The created property that provides each form, for `ScopeRecord.createdBinding(of:)`. A type's labels are distinct, so no two
 	/// of its created properties provide one form.
 	private(set) lazy var createdBindings: [Property: Property] = {
 		var createdBindings = [Property: Property]()
@@ -515,7 +501,7 @@ extension ScopeRecord {
 		let sharesMemo = seamRoot == nil && mockBuilders == nil
 		var placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?
 		var scopeGenerator: ScopeGenerator
-		var generatorsToStart: [ScopeGenerator]?
+		var generatorsToStart: [[ScopeGenerator]]?
 		// Every scope of the tree is enclosed by these, so they are held in storage each scope's copy shares.
 		let nearestDeclarations = nearestDeclarations.sharingDeclarations()
 		var startOrderChanged: Bool
@@ -595,8 +581,8 @@ extension ScopeRecord {
 				}
 			}
 		} while startOrderChanged || scopeGenerator.cycleParametersChangedInTree || scopeGenerator.fillStructBoundLabelsChangedInTree || scopeGenerator.receivedBuilderLoopsChangedInTree || scopeGenerator.publicMockLevelReentriesChangedInTree
-		for generator in generatorsToStart ?? [] {
-			ScopeGeneratorUnderConstruction.startCodeGeneration(of: generator)
+		for group in generatorsToStart ?? [] {
+			ScopeGeneratorUnderConstruction.startCodeGeneration(of: group)
 		}
 		// The entries of a tree are kept only once its construction returns. A mock root whose construction throws keeps
 		// none, and its error, `ErasedInstantiatorForwardedPropertiesMismatchError`, the only one construction throws, ends
@@ -612,7 +598,7 @@ extension ScopeRecord {
 	/// One pass of `createScopeGenerator`, which reads the parameters of the builder functions lazy cycles close on
 	/// from `previousPassGenerator`, the tree the pass before created, or finds none when there is no pass before.
 	/// - Parameter generatorsToStart: `nil` to start each generator's code as it is created, or where to collect the
-	///   generators whose code to start, in the order they are created.
+	///   generators whose code to start, in the order they are created, in the groups that each start on one task.
 	/// - Parameter memo: The generators already finished, which a later place of the same key whose context answers their
 	///   reads alike reuses, and where this pass stores the generators it finishes (see `ConstructionMemo`).
 	/// - Parameter scopesBuiltAtOnePlace: The scopes the tree builds at one place only, whose places are not keyed, looked up
@@ -632,7 +618,7 @@ extension ScopeRecord {
 		validatesForwardedProperties: Bool,
 		declaredTypeNames: DeclaredTypeNames,
 		previousPassGenerator: ScopeGenerator?,
-		generatorsToStart: inout [ScopeGenerator]?,
+		generatorsToStart: inout [[ScopeGenerator]]?,
 		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?,
 		memo: inout ConstructionMemo,
 		settledPassMemo: ConstructionMemo?,
@@ -693,9 +679,11 @@ extension ScopeRecord {
 					} else if let key, let reuse = settledPassMemo?.settledReuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property)) {
 						// The pass before built this place's generator settled: building the place again would build it again.
 						// Its code starts as the build would have started it, and the memo holds it for the places after it.
-						for generator in reuse.entry.startedBeneath.generators where startedGenerators.insert(ObjectIdentifier(generator)).inserted {
-							generatorsToStart?.append(generator)
-							startLog.append(generator)
+						for group in reuse.entry.startedBeneath.groups {
+							let group = group.filter { startedGenerators.insert(ObjectIdentifier($0)).inserted }
+							guard !group.isEmpty else { continue }
+							generatorsToStart?.append(group)
+							startLog.append(group)
 						}
 						memo.store(reuse.entry, for: key, keepingAlive: scope.identity)
 						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
@@ -707,7 +695,7 @@ extension ScopeRecord {
 							isKeyed: key != nil,
 						)
 						child.memoKey = key
-						child.startLogIndex = startLog.generators.count
+						child.startLogIndex = startLog.groups.count
 						scopeGeneratorsUnderConstruction.append(child)
 					}
 				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
@@ -743,7 +731,7 @@ extension ScopeRecord {
 							reads: readsAnsweredAbove,
 							generator: scopeGenerator,
 							subtreeScopeCount: createdScope.subtreeScopeCount,
-							startedBeneath: ConstructionMemo.StartedGenerators(log: startLog, positions: createdScope.startLogIndex..<startLog.generators.count),
+							startedBeneath: ConstructionMemo.StartedGenerators(log: startLog, positions: createdScope.startLogIndex..<startLog.groups.count),
 							isSettled: isSettled,
 							cycleClosingRedeclaredLabels: createdScope.cycleClosingRedeclaredLabels,
 						), for: key, keepingAlive: createdScope.builtScope.identity)
@@ -1424,15 +1412,22 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// which generates a line or two, is not counted.
 	private(set) var subtreeScopeCount = 1
 	/// The generators among `childGenerators` whose code starts early only if this scope's subtree is large (see
-	/// `startsCodeBeneathALargeSubtree`).
-	private var childGeneratorsStartingBeneathALargeSubtree = [ScopeGenerator]()
+	/// `startsCodeBeneathALargeSubtree`), each with the number of scopes in its subtree.
+	private var childGeneratorsStartingBeneathALargeSubtree = [SmallSubtree]()
+
+	/// A small subtree directly beneath a scope, whose code starts early when that scope's subtree is large.
+	private struct SmallSubtree {
+		let generator: ScopeGenerator
+		let scopeCount: Int
+	}
 
 	/// The smallest subtree, in scopes, whose root starts generating its code as soon as the tree exists, and starts the
-	/// code of each small subtree directly beneath it as well. Every other scope's code starts when the scope above it asks
-	/// for it, on a task created then and released once the code is done. A running task holds its code's async frames, so
-	/// where scopes wait on one another, as in #646's graphs of instantiators, starting every scope's code at once ran most
-	/// of the tree's frames together; a small subtree's scopes now run one after another, as each is asked for, while large
-	/// subtrees, and the small subtrees beneath each, still generate in parallel.
+	/// code of the small subtrees directly beneath it as well, in groups of at least this many scopes, one task each
+	/// (`groupsOfLargeSubtreeSize(_:)`). Every other scope's code starts when the scope above it asks for it, on a task
+	/// created then and released once the code is done. A running task holds its code's async frames, so where scopes wait
+	/// on one another, as in #646's graphs of instantiators, starting every scope's code at once ran most of the tree's
+	/// frames together; a small subtree's scopes now run one after another, as each is asked for, while large subtrees,
+	/// and the groups of small subtrees beneath each, still generate in parallel.
 	///
 	/// Measured with release builds, median of three runs, against every scope starting early: #646's 16 screens peaked at
 	/// 727 MB with 16, 634 MB with 64 and 639 MB with 256, rather than 1,054 MB, and took 2.43, 2.53 and 2.63 s rather than
@@ -1454,7 +1449,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		}
 		subtreeScopeCount += child.subtreeScopeCount
 		if child.startsCodeBeneathALargeSubtree {
-			childGeneratorsStartingBeneathALargeSubtree.append(childGenerator)
+			childGeneratorsStartingBeneathALargeSubtree.append(SmallSubtree(generator: childGenerator, scopeCount: child.subtreeScopeCount))
 		}
 		log.formUnion(readsAnsweredAbove)
 		if !isSettled {
@@ -1480,7 +1475,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		merge(childCycleClosingRedeclaredLabels: reuse.entry.cycleClosingRedeclaredLabels)
 		subtreeScopeCount += reuse.entry.subtreeScopeCount
 		if mayStartCodeEarly, reuse.entry.subtreeScopeCount < Self.scopeCountOfLargeSubtree {
-			childGeneratorsStartingBeneathALargeSubtree.append(reuse.entry.generator)
+			childGeneratorsStartingBeneathALargeSubtree.append(SmallSubtree(generator: reuse.entry.generator, scopeCount: reuse.entry.subtreeScopeCount))
 		}
 		log.formUnion(reuse.reads)
 		if !reuse.entry.isSettled {
@@ -1508,7 +1503,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// not cover (see `memoKey(ofChildBuilding:as:erasedToConcreteExistential:)`).
 	var memoKey: ConstructionMemo.Key?
 
-	/// How many generators the pass had started or collected when this scope's build began (see `createScopeGenerator`'s
+	/// How many groups of generators the pass had started or collected when this scope's build began (see `createScopeGenerator`'s
 	/// `startLog`).
 	var startLogIndex = 0
 
@@ -2216,11 +2211,11 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	}
 
 	/// Creates the scope's generator once `childGenerators` holds a generator for each of `propertiesToGenerate`, and starts
-	/// its code, or adds it to `generatorsToStart` when that is not `nil`.
+	/// its code, or adds it to `generatorsToStart`, in the groups that each start on one task, when that is not `nil`.
 	/// - Parameter startedGenerators: The generators whose code the pass started or collected, which grows by those this
 	///   scope starts or collects: a generator several places share starts once.
-	/// - Parameter startLog: Every generator the pass started or collected, in order, which grows as `startedGenerators` does.
-	mutating func scopeGenerator(collectingGeneratorsToStartInto generatorsToStart: inout [ScopeGenerator]?, startedGenerators: inout Set<ObjectIdentifier>, startLog: ConstructionMemo.StartLog) -> ScopeGenerator {
+	/// - Parameter startLog: Every group the pass started or collected, in order, which grows as `startedGenerators` does.
+	mutating func scopeGenerator(collectingGeneratorsToStartInto generatorsToStart: inout [[ScopeGenerator]]?, startedGenerators: inout Set<ObjectIdentifier>, startLog: ConstructionMemo.StartLog) -> ScopeGenerator {
 		// Every fill this call passes is an enclosing call's or its own.
 		let fillNames = holeArguments.isEmpty ? [:] : GenerationWork.taking(enclosingFillsOfThisCall, by: .gatheringFillsOfACall)
 		let builtGenerator = ScopeGenerator(
@@ -2321,39 +2316,70 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		} else {
 			builtGenerator
 		}
-		// A large subtree starts its own code and that of each small subtree directly beneath it. The code of every other
-		// scope starts when the scope above it, or the caller of a small tree's root, asks for it.
+		// A large subtree starts its own code and that of the small subtrees directly beneath it, in groups. The code of
+		// every other scope starts when the scope above it, or the caller of a small tree's root, asks for it.
 		if subtreeScopeCount >= Self.scopeCountOfLargeSubtree {
-			var generatorsStartingNow = childGeneratorsStartingBeneathALargeSubtree
+			var groupsStartingNow = Self.groupsOfLargeSubtreeSize(childGeneratorsStartingBeneathALargeSubtree)
 			if mayStartCodeEarly {
-				generatorsStartingNow.append(scopeGenerator)
+				groupsStartingNow.append([scopeGenerator])
 			}
-			for generator in generatorsStartingNow where startedGenerators.insert(ObjectIdentifier(generator)).inserted {
-				startLog.append(generator)
+			for group in groupsStartingNow {
+				let group = group.filter { startedGenerators.insert(ObjectIdentifier($0)).inserted }
+				guard !group.isEmpty else { continue }
+				startLog.append(group)
 				if generatorsToStart != nil {
-					generatorsToStart?.append(generator)
+					generatorsToStart?.append(group)
 				} else {
-					Self.startCodeGeneration(of: generator)
+					Self.startCodeGeneration(of: group)
 				}
 			}
 		}
 		return scopeGenerator
 	}
 
-	/// Kicks off the generation of `scopeGenerator`'s code, which a later request for the code reads from its cache.
-	static func startCodeGeneration(of scopeGenerator: ScopeGenerator) {
+	/// `smallSubtrees` in order, split into consecutive groups that each hold at least `scopeCountOfLargeSubtree` scopes,
+	/// but for the last, which holds what is left. Each group's code starts on one task, which generates its subtrees one
+	/// after another, so a group runs as a large subtree does. A task holds its code's async frames while it runs, so a
+	/// scope with hundreds of small subtrees beneath it that started a task for each ran them all together: about 27 KB
+	/// of frames for each scope of the module's tree, most of `generate`'s peak memory on a wide tree.
+	private static func groupsOfLargeSubtreeSize(_ smallSubtrees: [SmallSubtree]) -> [[ScopeGenerator]] {
+		var groups = [[ScopeGenerator]]()
+		var group = [ScopeGenerator]()
+		var groupScopeCount = 0
+		for smallSubtree in smallSubtrees {
+			group.append(smallSubtree.generator)
+			groupScopeCount += smallSubtree.scopeCount
+			if groupScopeCount >= scopeCountOfLargeSubtree {
+				groups.append(group)
+				group = []
+				groupScopeCount = 0
+			}
+		}
+		if !group.isEmpty {
+			groups.append(group)
+		}
+		return groups
+	}
+
+	/// Kicks off the generation of the code of each of `scopeGenerators`, one after another on one task, which a later
+	/// request for the code reads from its cache.
+	static func startCodeGeneration(of scopeGenerators: [ScopeGenerator]) {
 		CodeTaskStart.record()
 		// A detached task inherits no task-local, so the work observer of the task that starts the code is handed on: the
 		// code a later request reads from the cache then counts its work whichever task asks for it first.
 		if let observer = GenerationWork.observer {
 			_ = Task.detached {
 				try await GenerationWork.$observer.withValue(observer) {
-					try await scopeGenerator.generateCode()
+					for scopeGenerator in scopeGenerators {
+						_ = try await scopeGenerator.generateCode()
+					}
 				}
 			}
 		} else {
 			_ = Task.detached {
-				try await scopeGenerator.generateCode()
+				for scopeGenerator in scopeGenerators {
+					_ = try await scopeGenerator.generateCode()
+				}
 			}
 		}
 	}
@@ -2549,11 +2575,12 @@ extension Property {
 	/// - Parameter declaringModuleNames: The modules, beside `Swift` and the built type's, whose name it sees through as a
 	///   qualifier of either spelling, of a type no other module declares a type of the name of.
 	func firstGenericMatchesForwardedProperties(of builtInstantiable: Instantiable, declaringModuleNames: [String], declaredTypeNames: DeclaredTypeNames) -> Bool {
-		let forwardedProperties = builtInstantiable.forwardedProperties
+		// Most properties are no erased instantiator, so the built type's forwarded properties are listed only for one.
 		guard propertyType.isErasedInstantiator,
-		      !forwardedProperties.isEmpty,
 		      let forwardedArgument = generics?.first
 		else { return true }
+		let forwardedProperties = builtInstantiable.forwardedProperties
+		guard !forwardedProperties.isEmpty else { return true }
 		let modulesNames = ["Swift"] + (builtInstantiable.moduleName.map { [$0] } ?? [])
 		// The forwarded argument is the same as `InstantiableName.ForwardedProperties`, or names the `ForwardedProperties` of a
 		// type the fulfiller also fulfills: that type's conformance is trusted, as at an `Instantiator` of it. A mock does not
@@ -2576,11 +2603,12 @@ extension Property {
 	/// received property of either as a `mock()` parameter, as it did when SafeDI rejected a declaration of it. Building it would remove the parameter that callers of the mock pass,
 	/// and bring the built type's tree into the mock, whose cycles, hidden labels, and access no tree had to pass.
 	func mockBuildsFirstGeneric(of builtInstantiable: Instantiable) -> Bool {
-		let forwardedProperties = builtInstantiable.forwardedProperties
+		// Most properties are no erased instantiator, so the built type's forwarded properties are listed only for one.
 		guard propertyType.isErasedInstantiator,
-		      !forwardedProperties.isEmpty,
 		      let forwardedArgument = generics?.first
 		else { return true }
+		let forwardedProperties = builtInstantiable.forwardedProperties
+		guard !forwardedProperties.isEmpty else { return true }
 		return forwardedArgument == .nested(name: "ForwardedProperties", parentType: builtInstantiable.concreteInstantiable)
 			|| (forwardedProperties.count == 1 && forwardedArgument == forwardedProperties[0].typeDescription)
 			|| forwardedArgument == forwardedProperties.asTupleTypeDescriptionOfBareElements
