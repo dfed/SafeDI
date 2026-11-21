@@ -18,7 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
 /// The properties being built above a place of a tree, innermost first, each with the concrete type it is built for and
 /// the depth of the scope that put it on the stack (see `ConstructionContext`).
 ///
