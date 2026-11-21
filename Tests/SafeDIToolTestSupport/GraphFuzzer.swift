@@ -14477,6 +14477,10 @@ struct GraphFuzzerToolRuns {
 	/// for a label – a cycle parameter of a function a lazy cycle closes on – counts at each construction in the function's
 	/// body that passes the parameter on by name (`GraphFuzzerOracle.nilArgumentCountsThroughBuilderFunctions`), on both
 	/// sides: inline's `nil` reaches those constructions through the parameter, where a seam's fill can write it at each.
+	/// Where inline passes an argument `nil` in a shared builder function, whose code stands for places its text does not
+	/// count (`GraphFuzzerOracle.nilArgumentKeysInSharedBuilderFunctions`), only a seam that passes it `nil` where inline
+	/// never does fails; the value oracle compares what each place builds. The seam's count is the number of times its
+	/// text passes `nil`, which is at most its number of places, so comparing it with an exact inline count is sound.
 	var nilArgumentFailure: GraphFuzzerFailure? {
 		guard case let .accepted(seamFiles, _) = firstOutcome, case let .accepted(inlineFiles, _) = inlineOutcome else { return nil }
 		let seamTypeNames = Set(fixture.swiftFileContent.flatMap { content -> [String] in
@@ -14503,7 +14507,9 @@ struct GraphFuzzerToolRuns {
 				uniquingKeysWith: +,
 			)
 		}
-		let differences = GraphFuzzerOracle.nilArgumentCountsExceeding(counts(in: seamFiles), counts(in: inlineFiles))
+		let inlineSharedKeys = GraphFuzzerOracle.nilArgumentKeysInSharedBuilderFunctions(in: inlineFiles, typeNamePrefix: fixture.typeNamePrefix, excluding: seamTypeNames)
+		let inlineCounts = counts(in: inlineFiles)
+		let differences = GraphFuzzerOracle.nilArgumentCountsExceeding(counts(in: seamFiles).filter { !inlineSharedKeys.contains($0.key) }, inlineCounts)
 		guard !differences.isEmpty else { return nil }
 		return GraphFuzzerFailure(
 			seed: fixture.seed,
@@ -15233,161 +15239,13 @@ enum GraphFuzzerOracle {
 	static func nilArgumentCounts(in generatedFiles: [String: String], typeNamePrefix: String, excluding excludedTypeNames: Set<String>) -> [String: Int] {
 		var counts = [String: Int]()
 		for (fileName, contents) in generatedFiles where !fileName.hasSuffix("+SafeDISeamCaller.swift") {
-			let places = BuilderFunctionPlaces(of: contents)
 			for call in calls(in: contents, calleeExpression: constructionExpression(typeNamePrefix: typeNamePrefix)) where !excludedTypeNames.contains(call.callee) {
 				for argument in call.arguments where argument.value == "nil" {
-					counts["\(call.callee)(\(argument.label):)", default: 0] += places.count(at: call.location)
+					counts["\(call.callee)(\(argument.label):)", default: 0] += 1
 				}
 			}
 		}
 		return counts
-	}
-
-	/// How many places of a tree the code at each location of one generated file stands for. A construction in the
-	/// root's body stands for one place. One in the body of a builder function stands for as many places as the
-	/// references that reach the function from outside its own loop: the type key builds a type that several places
-	/// build alike in one function, which each of those places calls, where the path key wrote the type's code at each
-	/// place. A reference from inside the function's strongly connected component closes a cycle on the function: under
-	/// a label that a reference from outside the component binds, it adds no place, and under any other label it adds one
-	/// at each place the component stands for, as the path key wrote the loop once more before a label repeated.
-	struct BuilderFunctionPlaces {
-		init(of contents: String) {
-			let source = contents as NSString
-			// The expressions are this file's own.
-			let declarationExpression = try! NSRegularExpression(pattern: #"\bfunc (__safeDI_[A-Za-z0-9_]+)\("#)
-			let declarations = declarationExpression.matches(in: contents, range: NSRange(location: 0, length: source.length)).compactMap { match -> Declaration? in
-				let parametersEnd = GraphFuzzerOracle.closingDelimiterEnd(in: source, after: match.range.location + match.range.length)
-				let bodyStart = source.range(of: "{", range: NSRange(location: parametersEnd, length: source.length - parametersEnd)).location
-				guard bodyStart != NSNotFound else { return nil }
-				let bodyEnd = GraphFuzzerOracle.closingDelimiterEnd(in: source, after: bodyStart + 1)
-				return Declaration(name: source.substring(with: match.range(at: 1)), start: match.range.location, nameRange: match.range(at: 1), body: NSRange(location: bodyStart + 1, length: max(0, bodyEnd - bodyStart - 2)))
-			}
-			// A reference calls the function or passes it: a name followed by an argument list, or by the end of the one it is
-			// passed in. A generated-only argument label, `__safeDI_<label>:`, is no reference.
-			let referenceExpression = try! NSRegularExpression(pattern: #"(?<![A-Za-z0-9_.])(__safeDI_[A-Za-z0-9_]+)(?=\s*[(),])"#)
-			// The label of the property or argument a reference binds the function to, as the line before it spells it.
-			let labelExpression = try! NSRegularExpression(pattern: #"(?:\blet ([A-Za-z0-9_]+)\s*(?::[^=]*)?=|\b([A-Za-z0-9_]+):\s)"#)
-			var callers = [[(caller: Int?, label: String?)]](repeating: [], count: declarations.count)
-			var callees = [[Int]](repeating: [], count: declarations.count)
-			for match in referenceExpression.matches(in: contents, range: NSRange(location: 0, length: source.length)) {
-				let name = source.substring(with: match.range(at: 1))
-				let location = match.range.location
-				guard !declarations.contains(where: { $0.nameRange.location == location }) else { continue }
-				let namesakes = declarations.indices.filter { declarations[$0].name == name }
-				guard let target = namesakes.last(where: { NSLocationInRange(location, declarations[$0].body) })
-					?? namesakes.last(where: { declarations[$0].start < location })
-					?? namesakes.first
-				else { continue }
-				let enclosing = Self.enclosingDeclaration(at: location, among: declarations)
-				let lineStart = source.lineRange(for: NSRange(location: location, length: 0)).location
-				let label = labelExpression.matches(in: contents, range: NSRange(location: lineStart, length: location - lineStart)).last.map { match in
-					source.substring(with: match.range(at: 1).location != NSNotFound ? match.range(at: 1) : match.range(at: 2))
-				}
-				callers[target].append((enclosing, label))
-				if let enclosing {
-					callees[enclosing].append(target)
-				}
-			}
-			let components = Self.stronglyConnectedComponents(of: callees)
-			var counts = [Int?](repeating: nil, count: declarations.count)
-			func count(of declaration: Int) -> Int {
-				if let known = counts[declaration] {
-					return known
-				}
-				// Guards a reference cycle the components did not join, which the sum below never follows.
-				counts[declaration] = 0
-				let component = components[declaration]
-				var total = 0
-				var outsideLabels = Set<String>()
-				var insideLabels = Set<String>()
-				for member in declarations.indices where components[member] == component {
-					for (caller, label) in callers[member] {
-						guard let caller else {
-							total += 1
-							label.map { outsideLabels.insert($0) }
-							continue
-						}
-						if components[caller] != component {
-							total += count(of: caller)
-							label.map { outsideLabels.insert($0) }
-						} else {
-							label.map { insideLabels.insert($0) }
-						}
-					}
-				}
-				// A reference from inside the loop under a label no reference from outside it binds is one more place at each
-				// place the loop stands for: the path key closes a cycle only where a label repeats.
-				total *= 1 + insideLabels.subtracting(outsideLabels).count
-				counts[declaration] = total
-				return total
-			}
-			let placeCounts = declarations.indices.map(count(of:))
-			self.declarations = declarations
-			self.placeCounts = placeCounts
-		}
-
-		/// The number of places the code at `location` stands for.
-		func count(at location: Int) -> Int {
-			Self.enclosingDeclaration(at: location, among: declarations).map { placeCounts[$0] } ?? 1
-		}
-
-		private struct Declaration {
-			let name: String
-			let start: Int
-			let nameRange: NSRange
-			let body: NSRange
-		}
-
-		private let declarations: [Declaration]
-		private let placeCounts: [Int]
-
-		/// The innermost declaration whose body holds `location`.
-		private static func enclosingDeclaration(at location: Int, among declarations: [Declaration]) -> Int? {
-			declarations.indices
-				.filter { NSLocationInRange(location, declarations[$0].body) }
-				.min { declarations[$0].body.length < declarations[$1].body.length }
-		}
-
-		/// Each declaration's component, numbered by Tarjan's algorithm over `callees`.
-		private static func stronglyConnectedComponents(of callees: [[Int]]) -> [Int] {
-			var index = 0
-			var indices = [Int?](repeating: nil, count: callees.count)
-			var lowLinks = [Int](repeating: 0, count: callees.count)
-			var onStack = [Bool](repeating: false, count: callees.count)
-			var stack = [Int]()
-			var components = [Int](repeating: -1, count: callees.count)
-			var componentCount = 0
-			func visit(_ node: Int) {
-				indices[node] = index
-				lowLinks[node] = index
-				index += 1
-				stack.append(node)
-				onStack[node] = true
-				for callee in callees[node] {
-					if let calleeIndex = indices[callee] {
-						if onStack[callee] {
-							lowLinks[node] = min(lowLinks[node], calleeIndex)
-						}
-					} else {
-						visit(callee)
-						lowLinks[node] = min(lowLinks[node], lowLinks[callee])
-					}
-				}
-				guard lowLinks[node] == indices[node] else { return }
-				while let member = stack.popLast() {
-					onStack[member] = false
-					components[member] = componentCount
-					if member == node {
-						break
-					}
-				}
-				componentCount += 1
-			}
-			for node in callees.indices where indices[node] == nil {
-				visit(node)
-			}
-			return components
-		}
 	}
 
 	/// How many constructions in the code in `generatedFiles` a literal `nil` reaches through a builder function it
@@ -15403,7 +15261,6 @@ enum GraphFuzzerOracle {
 		let declarationExpression = try! NSRegularExpression(pattern: #"\bfunc (__safeDI_[A-Za-z0-9_]+)\("#)
 		for (fileName, contents) in generatedFiles where !fileName.hasSuffix("+SafeDISeamCaller.swift") {
 			let source = contents as NSString
-			let places = BuilderFunctionPlaces(of: contents)
 			let declarations = declarationExpression.matches(in: contents, range: NSRange(location: 0, length: source.length)).compactMap { match -> (name: String, start: Int, body: NSRange)? in
 				let parametersEnd = closingDelimiterEnd(in: source, after: match.range.location + match.range.length)
 				let bodyStart = source.range(of: "{", range: NSRange(location: parametersEnd, length: source.length - parametersEnd)).location
@@ -15419,10 +15276,9 @@ enum GraphFuzzerOracle {
 				      ?? namesakes.last(where: { $0.start < call.location })
 				      ?? namesakes.first
 				else { continue }
-				let callPlaces = places.count(at: call.location)
 				for construction in calls(in: source.substring(with: declaration.body), calleeExpression: constructionExpression(typeNamePrefix: typeNamePrefix)) where !excludedTypeNames.contains(construction.callee) {
-					for argument in construction.arguments where labels.contains(argument.label) && argument.value == argument.label {
-						counts["\(construction.callee)(\(argument.label):)", default: 0] += callPlaces
+					for argument in construction.arguments where labels.contains(argument.label) && handsOn(argument.value, argument.label) {
+						counts["\(construction.callee)(\(argument.label):)", default: 0] += 1
 					}
 				}
 			}
@@ -15430,15 +15286,145 @@ enum GraphFuzzerOracle {
 		return counts
 	}
 
+	/// The keys, as `nilArgumentCounts(in:typeNamePrefix:excluding:)` keys them, that the code in `generatedFiles` passes a
+	/// `nil` to in a shared builder function (`SharedBuilderFunctions`), literally or through a call that hands the
+	/// function a `nil`, as `nilArgumentCountsThroughBuilderFunctions(in:typeNamePrefix:excluding:)` follows one, and on
+	/// through each function that function hands it to by the same label. Such code stands for
+	/// as many places as reach it, which its text does not show, so its count is no count of places. The oracle's own seam
+	/// callers are not generated code and are skipped.
+	static func nilArgumentKeysInSharedBuilderFunctions(in generatedFiles: [String: String], typeNamePrefix: String, excluding excludedTypeNames: Set<String>) -> Set<String> {
+		var keys = Set<String>()
+		for (fileName, contents) in generatedFiles where !fileName.hasSuffix("+SafeDISeamCaller.swift") {
+			let shared = SharedBuilderFunctions(of: contents)
+			for call in calls(in: contents, calleeExpression: constructionExpression(typeNamePrefix: typeNamePrefix)) where !excludedTypeNames.contains(call.callee) && shared.isShared(at: call.location) {
+				for argument in call.arguments where argument.value == "nil" {
+					keys.insert("\(call.callee)(\(argument.label):)")
+				}
+			}
+			// A function hands on a `nil` it is given to the functions it calls with `label: label`, so the walk follows each
+			// such call to the constructions at its end.
+			let builderCallExpression = #"(?<![A-Za-z0-9_.])(__safeDI_[A-Za-z0-9_]+)\("#
+			var pending = calls(in: contents, calleeExpression: builderCallExpression).compactMap { call -> (callee: String, location: Int, labels: Set<String>)? in
+				let labels = Set(call.arguments.filter { $0.value == "nil" }.map(\.label))
+				return labels.isEmpty ? nil : (call.callee, call.location, labels)
+			}
+			var visited = Set<String>()
+			while let (callee, location, labels) = pending.popLast() {
+				guard let declaration = shared.declaration(calledBy: callee, at: location) else { continue }
+				let body = (contents as NSString).substring(with: declaration.body)
+				for label in labels.sorted() where visited.insert("\(declaration.body.location) \(label)").inserted {
+					for construction in calls(in: body, calleeExpression: constructionExpression(typeNamePrefix: typeNamePrefix)) where !excludedTypeNames.contains(construction.callee) && shared.isShared(at: declaration.body.location + construction.location) {
+						for argument in construction.arguments where argument.label == label && handsOn(argument.value, label) {
+							keys.insert("\(construction.callee)(\(label):)")
+						}
+					}
+					for call in calls(in: body, calleeExpression: builderCallExpression) where call.arguments.contains(where: { $0.label == label && handsOn($0.value, label) }) {
+						pending.append((call.callee, declaration.body.location + call.location, [label]))
+					}
+				}
+			}
+		}
+		return keys
+	}
+
+	/// The builder functions of one generated file whose code stands for more than one place, read from its text: the type
+	/// key builds a type that several places build alike in one function, which each of those places calls, and the path
+	/// key calls the function of an earlier place to close a cycle. A function is shared unless it is referenced exactly
+	/// once, from the root's body or from a function that is not shared; code in a function declared inside a shared one is
+	/// shared too, as each place of the outer function declares it again.
+	struct SharedBuilderFunctions {
+		struct Declaration {
+			let name: String
+			let start: Int
+			let nameRange: NSRange
+			let body: NSRange
+		}
+
+		init(of contents: String) {
+			let source = contents as NSString
+			let whole = NSRange(location: 0, length: source.length)
+			// The expressions are this file's own.
+			let declarationExpression = try! NSRegularExpression(pattern: #"\bfunc (__safeDI_[A-Za-z0-9_]+)\("#)
+			let declarations = declarationExpression.matches(in: contents, range: whole).compactMap { match -> Declaration? in
+				let parametersEnd = GraphFuzzerOracle.closingDelimiterEnd(in: source, after: match.range.location + match.range.length)
+				let bodyStart = source.range(of: "{", range: NSRange(location: parametersEnd, length: source.length - parametersEnd)).location
+				guard bodyStart != NSNotFound else { return nil }
+				let bodyEnd = GraphFuzzerOracle.closingDelimiterEnd(in: source, after: bodyStart + 1)
+				return Declaration(name: source.substring(with: match.range(at: 1)), start: match.range.location, nameRange: match.range(at: 1), body: NSRange(location: bodyStart + 1, length: max(0, bodyEnd - bodyStart - 2)))
+			}
+			self.declarations = declarations
+			// A reference calls the function or passes it: a name followed by an argument list, or by the end of the one it is
+			// passed in. A generated-only argument label, `__safeDI_<label>:`, is no reference.
+			let referenceExpression = try! NSRegularExpression(pattern: #"(?<![A-Za-z0-9_.])(__safeDI_[A-Za-z0-9_]+)(?=\s*[(),])"#)
+			var referencingBodies = [[Int?]](repeating: [], count: declarations.count)
+			for match in referenceExpression.matches(in: contents, range: whole) where !declarations.contains(where: { $0.nameRange.location == match.range.location }) {
+				guard let target = Self.declaration(named: source.substring(with: match.range(at: 1)), at: match.range.location, among: declarations) else { continue }
+				referencingBodies[target].append(Self.enclosingDeclaration(at: match.range.location, among: declarations))
+			}
+			var isShared = [Bool?](repeating: nil, count: declarations.count)
+			func shared(_ declaration: Int) -> Bool {
+				if let known = isShared[declaration] {
+					return known
+				}
+				// A function that reaches itself again is shared, which this guard also answers while the walk is inside it.
+				isShared[declaration] = true
+				let result: Bool
+				if referencingBodies[declaration].count == 1, let referencingBody = referencingBodies[declaration][0] {
+					result = shared(referencingBody)
+				} else {
+					result = referencingBodies[declaration].count != 1
+				}
+				let enclosing = Self.enclosingDeclaration(at: declarations[declaration].start, among: declarations)
+				isShared[declaration] = result || enclosing.map(shared) == true
+				return isShared[declaration] ?? true
+			}
+			self.isShared = declarations.indices.map(shared)
+		}
+
+		/// Whether the code at `location` is in a shared function.
+		func isShared(at location: Int) -> Bool {
+			Self.enclosingDeclaration(at: location, among: declarations).map { isShared[$0] } ?? false
+		}
+
+		/// The declaration a call of `name` at `location` reaches: the one of its name whose body holds it, else the last
+		/// one before it, else the first after it.
+		func declaration(calledBy name: String, at location: Int) -> Declaration? {
+			Self.declaration(named: name, at: location, among: declarations).map { declarations[$0] }
+		}
+
+		private let declarations: [Declaration]
+		private let isShared: [Bool]
+
+		private static func declaration(named name: String, at location: Int, among declarations: [Declaration]) -> Int? {
+			let namesakes = declarations.indices.filter { declarations[$0].name == name }
+			return namesakes.last(where: { NSLocationInRange(location, declarations[$0].body) })
+				?? namesakes.last(where: { declarations[$0].start < location })
+				?? namesakes.first
+		}
+
+		/// The innermost declaration whose body holds `location`.
+		private static func enclosingDeclaration(at location: Int, among declarations: [Declaration]) -> Int? {
+			declarations.indices
+				.filter { NSLocationInRange(location, declarations[$0].body) }
+				.min { declarations[$0].body.length < declarations[$1].body.length }
+		}
+	}
+
+	/// Whether an argument whose value is `value` hands on the parameter `label` a builder function takes: by name, or,
+	/// for a lazy cycle's optional wrapper, by the instance it holds, `label?.instance`.
+	private static func handsOn(_ value: String, _ label: String) -> Bool {
+		value == label || value == label + "?.instance"
+	}
+
 	/// The expression whose first capture is the callee of a construction of a type whose name begins with
 	/// `typeNamePrefix`, which the call's arguments follow.
-	private static func constructionExpression(typeNamePrefix: String) -> String {
+	fileprivate static func constructionExpression(typeNamePrefix: String) -> String {
 		"(?<![A-Za-z0-9_.])(" + NSRegularExpression.escapedPattern(for: typeNamePrefix) + "[A-Za-z0-9_]+)\\("
 	}
 
 	/// Each call in `contents` whose callee `calleeExpression` matches, the callee its first capture and the call's
 	/// arguments after it: the callee, where the call begins, and each top-level argument's label and value.
-	private static func calls(in contents: String, calleeExpression: String) -> [(callee: String, location: Int, arguments: [(label: String, value: String)])] {
+	fileprivate static func calls(in contents: String, calleeExpression: String) -> [(callee: String, location: Int, arguments: [(label: String, value: String)])] {
 		// The expressions are this file's, built from escaped names.
 		let expression = try! NSRegularExpression(pattern: calleeExpression)
 		let source = contents as NSString
@@ -15457,7 +15443,7 @@ enum GraphFuzzerOracle {
 
 	/// The location just past the delimiter that closes the one opened just before `start` in `source`, or the end of
 	/// `source`.
-	private static func closingDelimiterEnd(in source: NSString, after start: Int) -> Int {
+	fileprivate static func closingDelimiterEnd(in source: NSString, after start: Int) -> Int {
 		var depth = 1
 		var end = start
 		while end < source.length, depth > 0 {
