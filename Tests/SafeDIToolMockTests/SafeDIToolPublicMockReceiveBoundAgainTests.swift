@@ -276,16 +276,19 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            user: (() -> User)? = nil,
-		            hub: Hub.SafeDIOverrides = .init()
+		            hub: Hub.SafeDIOverrides = .init(),
+		            x: X? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                user: user,
 		                hub: hub
 		            )
+		            self.x = x
 		        }
 
 		        var user: (() -> User)? { __safeDI_storage.user }
 		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+		        let x: X?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -308,6 +311,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		        user_Draft: Draft,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let x: X? = safeDIOverrides.x
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_hub() -> Hub {
 		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.SafeDISendableMockScope_Api.__safeDI_Builder<any Api> {
@@ -323,7 +327,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		                })
 		            }
 		            _ = Hub.__safeDI_Hub_mock_BF59370D78E87A91.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiSendableBuilder: apiSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiSendableBuilder_Hub(), user: user, x: nil, safeDIOverrides: safeDIOverrides.hub)
+		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiSendableBuilder: apiSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiSendableBuilder_Hub(), user: user, x: x, safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Screen(hub: hub)
@@ -354,16 +358,19 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            user: (() -> User)? = nil,
-		            hub: Hub.SafeDIOverrides = .init()
+		            hub: Hub.SafeDIOverrides = .init(),
+		            x: X? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                user: user,
 		                hub: hub
 		            )
+		            self.x = x
 		        }
 
 		        var user: (() -> User)? { __safeDI_storage.user }
 		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+		        let x: X?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -386,6 +393,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		        user_Draft: Draft,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let x: X? = safeDIOverrides.x
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_hub() -> Hub {
 		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.SafeDISendableMockScope_Api.__safeDI_Builder<any Api> {
@@ -402,7 +410,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		                })
 		            }
 		            _ = Hub.__safeDI_Hub_mock_BF59370D78E87A91.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiSendableBuilder: apiSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiSendableBuilder_Hub(), user: user, x: nil, safeDIOverrides: safeDIOverrides.hub)
+		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiSendableBuilder: apiSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiSendableBuilder_Hub(), user: user, x: x, safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Screen(hub: hub)
@@ -644,16 +652,19 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            user: (() -> User)? = nil,
-		            hub: Hub.SafeDIOverrides = .init()
+		            hub: Hub.SafeDIOverrides = .init(),
+		            x: X? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                user: user,
 		                hub: hub
 		            )
+		            self.x = x
 		        }
 
 		        var user: (() -> User)? { __safeDI_storage.user }
 		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+		        let x: X?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -676,6 +687,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		        user_Draft: Draft,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let x: X? = safeDIOverrides.x
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_hub() -> Hub {
 		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.SafeDISendableMockScope_Api.__safeDI_Builder<any Api> {
@@ -691,7 +703,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		                })
 		            }
 		            _ = Hub.__safeDI_Hub_mock_BF59370D78E87A91.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiSendableBuilder: apiSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiSendableBuilder_Hub(), user: user, x: nil, safeDIOverrides: safeDIOverrides.hub)
+		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiSendableBuilder: apiSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiSendableBuilder_Hub(), user: user, x: x, safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Screen(hub: hub)
@@ -722,16 +734,19 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            user: (() -> User)? = nil,
-		            hub: Hub.SafeDIOverrides = .init()
+		            hub: Hub.SafeDIOverrides = .init(),
+		            x: X? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                user: user,
 		                hub: hub
 		            )
+		            self.x = x
 		        }
 
 		        var user: (() -> User)? { __safeDI_storage.user }
 		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+		        let x: X?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -754,6 +769,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		        user_Draft: Draft,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let x: X? = safeDIOverrides.x
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_hub() -> Hub {
 		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.SafeDISendableMockScope_Api.__safeDI_Builder<any Api> {
@@ -770,7 +786,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		                })
 		            }
 		            _ = Hub.__safeDI_Hub_mock_BF59370D78E87A91.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiSendableBuilder: apiSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiSendableBuilder_Hub(), user: user, x: nil, safeDIOverrides: safeDIOverrides.hub)
+		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiSendableBuilder: apiSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiSendableBuilder_Hub(), user: user, x: x, safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Screen(hub: hub)
@@ -915,16 +931,19 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            user: (() -> User)? = nil,
-		            hub: Hub.SafeDIOverrides = .init()
+		            hub: Hub.SafeDIOverrides = .init(),
+		            bBuilder: SendableInstantiator<B>? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                user: user,
 		                hub: hub
 		            )
+		            self.bBuilder = bBuilder
 		        }
 
 		        var user: (() -> User)? { __safeDI_storage.user }
 		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+		        let bBuilder: SendableInstantiator<B>?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -947,6 +966,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		        user_Draft: Draft,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let bBuilder: SendableInstantiator<B>? = safeDIOverrides.bBuilder
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_hub() -> Hub {
 		            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.SafeDISendableMockScope_Api.__safeDI_Builder<any Api> {
@@ -959,7 +979,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		                })
 		            }
 		            _ = Hub.__safeDI_Hub_mock_F3FC3EE051794EEE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiSendableBuilder: apiSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiSendableBuilder_Hub(), bBuilder: nil, user: user, safeDIOverrides: safeDIOverrides.hub)
+		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiSendableBuilder: apiSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiSendableBuilder_Hub(), bBuilder: bBuilder, user: user, safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Screen(hub: hub)
@@ -1200,16 +1220,19 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            user: (() -> User)? = nil,
-		            hub: Hub.SafeDIOverrides = .init()
+		            hub: Hub.SafeDIOverrides = .init(),
+		            x: X? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                user: user,
 		                hub: hub
 		            )
+		            self.x = x
 		        }
 
 		        var user: (() -> User)? { __safeDI_storage.user }
 		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+		        let x: X?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -1232,6 +1255,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		        user_Draft: Draft,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let x: X? = safeDIOverrides.x
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_hub() -> Hub {
 		            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
@@ -1247,7 +1271,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		                })
 		            }
 		            _ = Hub.__safeDI_Hub_mock_C92FAC1B9AC96ECD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Hub(), user: user, x: nil, safeDIOverrides: safeDIOverrides.hub)
+		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Hub(), user: user, x: x, safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Screen(hub: hub)
@@ -1278,16 +1302,19 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            user: (() -> User)? = nil,
-		            hub: Hub.SafeDIOverrides = .init()
+		            hub: Hub.SafeDIOverrides = .init(),
+		            x: X? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                user: user,
 		                hub: hub
 		            )
+		            self.x = x
 		        }
 
 		        var user: (() -> User)? { __safeDI_storage.user }
 		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+		        let x: X?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -1310,6 +1337,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		        user_Draft: Draft,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let x: X? = safeDIOverrides.x
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_hub() -> Hub {
 		            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
@@ -1326,7 +1354,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		                })
 		            }
 		            _ = Hub.__safeDI_Hub_mock_C92FAC1B9AC96ECD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Hub(), user: user, x: nil, safeDIOverrides: safeDIOverrides.hub)
+		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Hub(), user: user, x: x, safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Screen(hub: hub)
@@ -1470,16 +1498,19 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            user: (() -> User)? = nil,
-		            hub: Hub.SafeDIOverrides = .init()
+		            hub: Hub.SafeDIOverrides = .init(),
+		            bBuilder: Instantiator<B>? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                user: user,
 		                hub: hub
 		            )
+		            self.bBuilder = bBuilder
 		        }
 
 		        var user: (() -> User)? { __safeDI_storage.user }
 		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+		        let bBuilder: Instantiator<B>?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -1502,6 +1533,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		        user_Draft: Draft,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let bBuilder: Instantiator<B>? = safeDIOverrides.bBuilder
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_hub() -> Hub {
 		            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
@@ -1514,7 +1546,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		                })
 		            }
 		            _ = Hub.__safeDI_Hub_mock_AC7AE65B2B9A4A12.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Hub(), bBuilder: nil, user: user, safeDIOverrides: safeDIOverrides.hub)
+		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Hub(), bBuilder: bBuilder, user: user, safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Screen(hub: hub)
@@ -1545,16 +1577,19 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            user: (() -> User)? = nil,
-		            hub: Hub.SafeDIOverrides = .init()
+		            hub: Hub.SafeDIOverrides = .init(),
+		            bBuilder: Instantiator<B>? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                user: user,
 		                hub: hub
 		            )
+		            self.bBuilder = bBuilder
 		        }
 
 		        var user: (() -> User)? { __safeDI_storage.user }
 		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+		        let bBuilder: Instantiator<B>?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -1577,6 +1612,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		        user_Draft: Draft,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let bBuilder: Instantiator<B>? = safeDIOverrides.bBuilder
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_hub() -> Hub {
 		            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
@@ -1590,7 +1626,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		                })
 		            }
 		            _ = Hub.__safeDI_Hub_mock_AC7AE65B2B9A4A12.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Hub(), bBuilder: nil, user: user, safeDIOverrides: safeDIOverrides.hub)
+		            return Hub.__safeDI_mock(user_Draft: user_Draft, apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Hub(), bBuilder: bBuilder, user: user, safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Screen(hub: hub)
@@ -1622,16 +1658,19 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            user: (() -> User)? = nil,
-		            hub: Hub.SafeDIOverrides = .init()
+		            hub: Hub.SafeDIOverrides = .init(),
+		            x: X? = nil
 		        ) {
 		            __safeDI_storage = __safeDI_Storage(
 		                user: user,
 		                hub: hub
 		            )
+		            self.x = x
 		        }
 
 		        var user: (() -> User)? { __safeDI_storage.user }
 		        var hub: Hub.SafeDIOverrides { __safeDI_storage.hub }
+		        let x: X?
 
 		        private let __safeDI_storage: __safeDI_Storage
 
@@ -1653,6 +1692,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		        apiBuilder: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let x: X? = safeDIOverrides.x
 		        let user = if let safeDIBuilder = safeDIOverrides.user { safeDIBuilder() } else { User() }
 		        func __safeDI_hub() -> Hub {
 		            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
@@ -1669,7 +1709,7 @@ struct SafeDIToolPublicMockReceiveBoundAgainTests: ~Copyable {
 		                })
 		            }
 		            _ = Hub.__safeDI_Hub_mock_06EB73166E9429F2.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Hub.__safeDI_mock(apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Hub(), user: user, x: nil, safeDIOverrides: safeDIOverrides.hub)
+		            return Hub.__safeDI_mock(apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Hub(), user: user, x: x, safeDIOverrides: safeDIOverrides.hub)
 		        }
 		        let hub: Hub = __safeDI_hub()
 		        return Screen(hub: hub)

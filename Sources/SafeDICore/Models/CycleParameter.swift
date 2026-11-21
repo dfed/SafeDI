@@ -215,4 +215,6 @@ struct UnpassableCycleLabel: Hashable, Sendable {
 struct CycleParameterContext: Sendable {
 	/// The function's parameters.
 	let parameters: [CycleParameter]
+	/// The depth in the tree of the scope whose builder function this is (see `ConstructionMemo`).
+	let depth: Int
 }

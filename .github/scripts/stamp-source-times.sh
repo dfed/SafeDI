@@ -28,8 +28,15 @@ set -euo pipefail
 # check, a build every later run rebuilds whole.
 top_level=$(git rev-parse --show-toplevel)
 cd "$top_level"
+# GNU's `touch` reads a time in seconds since 1970 (`-d @seconds`). macOS's does not, so there the time is spelled
+# out, in UTC, by its `date`, which reads seconds with `-r`.
 entries=$(mktemp)
 trap 'rm -f "$entries"' EXIT
+if touch -d @86400 -- "$entries" 2>/dev/null; then
+  touch_reads_seconds=true
+else
+  touch_reads_seconds=false
+fi
 git ls-files --stage -z > "$entries"
 count=0
 while IFS= read -r -d '' entry; do
@@ -42,7 +49,12 @@ while IFS= read -r -d '' entry; do
   if [[ ${metadata%% *} == 160000 || ! ( -e $path || -L $path ) ]]; then
     continue
   fi
-  touch -h -d "@$((86400 + (16#${hash:0:8} >> 2)))" -- "$path"
+  seconds=$((86400 + (16#${hash:0:8} >> 2)))
+  if [[ $touch_reads_seconds == true ]]; then
+    touch -h -d "@$seconds" -- "$path"
+  else
+    TZ=UTC touch -h -t "$(TZ=UTC date -r "$seconds" +%Y%m%d%H%M.%S)" -- "$path"
+  fi
   count=$((count + 1))
 done < "$entries"
 if (( count == 0 )); then

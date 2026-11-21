@@ -67,6 +67,186 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	@Test
+	func writingStringsInline_writesSameBytesForTwoValues_exactlyWhenWriterWithTableDoes() {
+		// Merging module infos compares two entries for one module by the bytes a writer that writes each string in
+		// place writes, which must tell the entries apart exactly when the bytes of the file do: the order in which
+		// strings first appear, a string's own bytes, and every value besides strings.
+		let values: [[String]] = [
+			["Clock", "Calendar", "Clock"],
+			["Calendar", "Clock", "Calendar"],
+			["Clock", "Calendar", "Calendar"],
+			["Clock", "Calendar"],
+			[Self.precomposedCafe, Self.decomposedCafe],
+			[Self.decomposedCafe, Self.precomposedCafe],
+			[Self.precomposedCafe, Self.precomposedCafe],
+			["ab", "c"],
+			["a", "bc"],
+			[],
+		]
+		func tableBytes(of value: [String]) -> [UInt8] {
+			var writer = BinaryWriter()
+			writer.write(value)
+			return writer.encoded
+		}
+		func inlineBytes(of value: [String]) -> [UInt8] {
+			var writer = BinaryWriter.writingStringsInline()
+			writer.write(value)
+			return writer.bytes
+		}
+
+		for first in values {
+			for second in values {
+				#expect((inlineBytes(of: first) == inlineBytes(of: second)) == (tableBytes(of: first) == tableBytes(of: second)))
+				#expect((inlineBytes(of: first) == inlineBytes(of: second)) == (first.map { Array($0.utf8) } == second.map { Array($0.utf8) }))
+			}
+		}
+	}
+
+	@Test
+	func binaryWriter_writesSharedValueOnce_whenValueRepeats() throws {
+		var writer = BinaryWriter()
+		writer.write([BinaryShared(["a", "b"]), BinaryShared(["c"]), BinaryShared(["a", "b"])])
+		let encoded = writer.encoded
+
+		let values = try encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let values: [BinaryShared<[String]>] = try reader.read()
+			try reader.finish()
+			return values
+		}
+
+		// The string table (three strings), then three elements: the first two written in full, the third a reference
+		// to the first.
+		#expect(encoded == [3, 1, 97, 1, 98, 1, 99] + [3, 0, 2, 0, 1, 0, 1, 2, 1])
+		#expect(values.map(\.value) == [["a", "b"], ["c"], ["a", "b"]])
+	}
+
+	@Test
+	func binaryWriter_writesEachSpellingOfPlaces_whenPlacesDifferOnlyInAny() throws {
+		// `==` calls `any Service` and `Service` equal, but each list of places reads back as written.
+		let places = [TypeDescription.any(.simple(name: "Service")), .simple(name: "Service"), .any(.simple(name: "Service"))].map { type in
+			BinaryShared([SeamSignature.Hole.Site(seamType: .simple(name: "Host"), path: [Property(label: "service", typeDescription: type)])])
+		}
+		var writer = BinaryWriter()
+		writer.write(places)
+
+		let readPlaces = try writer.encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let readPlaces: [BinaryShared<[SeamSignature.Hole.Site]>] = try reader.read()
+			try reader.finish()
+			return readPlaces
+		}
+
+		#expect(readPlaces.map { $0.value.map { $0.path.map(\.typeDescription.asSource) } } == [[["any Service"]], [["Service"]], [["any Service"]]])
+	}
+
+	@Test
+	func binaryReader_throws_whenSharedValueReferenceComesBeforeTheValue() {
+		// An empty string table, then a reference to the first shared value, which no value before it holds.
+		let bytes: [UInt8] = [0, 1]
+
+		#expect(throws: BinaryDecodingError.sharedValueReferenceOutOfRange(reference: 1, offset: 1)) {
+			try bytes.withUnsafeBytes { bytes in
+				var reader = try BinaryReader(bytes: bytes)
+				let _: BinaryShared<[String]> = try reader.read()
+			}
+		}
+	}
+
+	@Test
+	func binaryWriter_writesEachTypeDescriptionOnce_whenSharingTypeDescriptionsAndKeepsSpellingsEqualityIgnores() throws {
+		// `==` calls `any Service` and `Service` equal, but each reads back as written.
+		let types: [TypeDescription] = [
+			.any(.simple(name: "Service")),
+			.simple(name: "Service"),
+			.any(.simple(name: "Service")),
+			.simple(name: "Service"),
+		]
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(types))
+		let encoded = writer.encoded
+
+		let readTypes = try encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let readTypes: BinarySharingSignatureValues<[TypeDescription]> = try reader.read()
+			try reader.finish()
+			return readTypes.value
+		}
+
+		#expect(readTypes.map(\.asSource) == ["any Service", "Service", "any Service", "Service"])
+		// The string table, then four elements: two written in full, then a reference to each.
+		#expect(encoded.count == Self.encoded(Array(types.prefix(2))).count + 2 + 2)
+	}
+
+	@Test
+	func binaryWriter_writesEachHoleFieldOnce_whenSharingSignatureValues() throws {
+		let fields = try [false, true, false, true].map { isDistinct in try SeamSignature.Hole.Field.sample(isDistinct: isDistinct) }
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(fields))
+		let encoded = writer.encoded
+
+		let readFields: BinarySharingSignatureValues<[SeamSignature.Hole.Field]> = try read(encoded)
+
+		#expect(Self.encoded(readFields.value) == Self.encoded(fields))
+		// The string table, then four elements: two written in full, then a reference to each.
+		#expect(encoded.count == Self.encoded(Array(fields.prefix(2))).count + 2 + 2)
+	}
+
+	@Test
+	func binaryWriter_writesEachUncarriedDeclarationReasonOnce_whenSharingSignatureValues() throws {
+		let reasons = try [false, true, false, true].map { isDistinct in try SeamSignature.Hole.UncarriedDeclaration.Reason.sample(isDistinct: isDistinct) }
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(reasons))
+		let encoded = writer.encoded
+
+		let readReasons: BinarySharingSignatureValues<[SeamSignature.Hole.UncarriedDeclaration.Reason]> = try read(encoded)
+
+		#expect(Self.encoded(readReasons.value) == Self.encoded(reasons))
+		// The string table, then four elements: two written in full, then a reference to each.
+		#expect(encoded.count == Self.encoded(Array(reasons.prefix(2))).count + 2 + 2)
+	}
+
+	@Test
+	func binaryReader_readsRepeatedPlaces_whenPlacesHoldTypeDescriptionNotSeenBefore() throws {
+		// The first list of places is the first to name `Service`, so its type is read, and takes its index, before the
+		// list does. The second list refers to the first.
+		let site = SeamSignature.Hole.Site(seamType: .simple(name: "Service"), path: [])
+		let places = [BinaryShared([site]), BinaryShared([site])]
+		var writer = BinaryWriter()
+		writer.write(BinarySharingSignatureValues(places))
+
+		let readPlaces = try writer.encoded.withUnsafeBytes { bytes in
+			var reader = try BinaryReader(bytes: bytes)
+			let readPlaces: BinarySharingSignatureValues<[BinaryShared<[SeamSignature.Hole.Site]>]> = try reader.read()
+			try reader.finish()
+			return readPlaces.value
+		}
+
+		#expect(readPlaces.map(\.value) == [[site], [site]])
+	}
+
+	@Test
+	func binaryReader_throws_whenSharedTypeDescriptionReferenceComesBeforeTheType() {
+		// An empty string table, then one element whose type refers to the first shared value, which no value before it
+		// holds.
+		let bytes: [UInt8] = [0, 1, 1]
+
+		#expect(throws: BinaryDecodingError.sharedValueReferenceOutOfRange(reference: 1, offset: 2)) {
+			try bytes.withUnsafeBytes { bytes in
+				var reader = try BinaryReader(bytes: bytes)
+				let _: BinarySharingSignatureValues<[TypeDescription]> = try reader.read()
+			}
+		}
+	}
+
+	@Test
+	func binaryFileReadError_explains_whenBodyRefersToSharedValueNotYetRead() {
+		let error = BinaryFileReadError(kind: .moduleInfo, reason: .malformedBody(.sharedValueReferenceOutOfRange(reference: 3, offset: 12)))
+
+		#expect(error.description == "The module info file’s body refers to shared value 3 at byte 12, which no value before it holds.")
+	}
+
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_writesEachSpellingOfLabel_whenLabelsAreCanonicallyEquivalentAndGenerateReadsScanCache() async throws {
 		let output = try await executeSafeDIToolTest(
@@ -167,14 +347,19 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		// before the change are not read after it.
 		let project = try await scannedKitchenSinkProject()
 		// A module info file holds the module's declarations, as the cache does, and a view of other modules'.
-		let moduleInfoFile = ModuleInfoFile(module: project.scannedModuleInfo.moduleInfo, moduleName: "Kitchen", view: .empty)
+		let moduleInfoFile = ModuleInfoFile(module: project.scannedModuleInfo.moduleInfo, moduleName: "Kitchen", seamSignatures: [], view: .empty)
 		let moduleInfoFileWithView = ModuleInfoFile(
 			module: project.scannedModuleInfo.moduleInfo,
 			moduleName: "Sink",
-			view: ModuleInfoView(moduleGraph: [moduleInfoFile.ownIdentity], declarations: [moduleInfoFile.ownEntry]),
+			seamSignatures: [],
+			view: ModuleInfoView(
+				moduleGraph: [moduleInfoFile.ownIdentity],
+				declarations: [moduleInfoFile.ownEntry],
+				references: [ViewedModuleReference(moduleName: "Kitchen", checksum: 1)],
+			),
 		)
 		var foundTypeNames = Set<String>()
-		for value in reflectedStructuresAndEnumerations(in: project.scannedModuleInfo) + reflectedStructuresAndEnumerations(in: moduleInfoFileWithView) {
+		for value in Self.cachedStructuresAndEnumerations(in: project.scannedModuleInfo) + Self.cachedStructuresAndEnumerations(in: moduleInfoFileWithView) {
 			let typeName = String(reflecting: type(of: value))
 			foundTypeNames.insert(typeName)
 			guard let schemaMember = value as? any BinarySchemaMember else {
@@ -186,8 +371,111 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			}
 		}
 
-		#expect(Set(BinaryFile.schemaMembers.map { String(reflecting: $0) }) == foundTypeNames)
+		// A kitchen sink of declarations computes no seam's signature, whose types `seamSignatureSchema_listsEveryStoredPropertyOfEverySignatureStruct` checks.
+		#expect(Set(BinaryFile.schemaMembers.map { String(reflecting: $0) }) == foundTypeNames.union(Self.seamSignatureMembers.map { String(reflecting: $0) }))
 	}
+
+	@Test
+	func moduleInfoDataWritingSeamSignaturesWithoutPositions_writesWhatModuleInfoDataWritesOfTheSignaturesWithoutPositions_whenTheSignaturesCarryPositions() throws {
+		// A run writes the signatures it computed, which carry their declarations' positions, without making their
+		// copies without positions: the bytes must be those of the copies.
+		// A distinct sample holds a value in each optional field it declares, so its hole and receiver carry positions.
+		var signatureWriter = BinaryWriter()
+		try signatureWriter.write(TypeDescription.sample(isDistinct: true))
+		try signatureWriter.write([SeamSignature.Parameter(property: Property.sample(isDistinct: true), isPassThrough: false, access: .public, isOnlyIfAvailable: false, receivers: [SeamSignature.Receiver.sample(isDistinct: true)])])
+		signatureWriter.write([AccessLevel]())
+		signatureWriter.write([SeamSignature.Parameter]())
+		try signatureWriter.write([SeamSignature.Hole.sample(isDistinct: true)])
+		signatureWriter.write([SeamSignature.Builder]())
+		signatureWriter.write([SeamSignature.ScopeEnum]())
+		signatureWriter.write([SeamSignature.CallRoute]())
+		signatureWriter.write(Set<TypeDescription>())
+		let signature: SeamSignature = try read(signatureWriter.encoded)
+		let signatures = try [StoredSeamSignature(seamType: TypeDescription.sample(isDistinct: true), signature: signature), StoredSeamSignature.sample(isDistinct: false)]
+		func file(holding seamSignatures: [StoredSeamSignature]) -> ModuleInfoFile {
+			ModuleInfoFile(
+				moduleName: "Module",
+				packageName: nil,
+				dependencyModuleNames: [],
+				imports: [],
+				mockImports: [],
+				instantiables: [],
+				configurations: [],
+				filesWithUnexpectedNodes: nil,
+				conditionalCompilationDecisions: [],
+				instantiableTypeNamesInAnyClause: [],
+				plainTypeDeclarations: [],
+				seamSignatures: seamSignatures,
+				view: .empty,
+			)
+		}
+		let fileWithoutPositions = try file(holding: signatures.map { $0.withoutPositions() }).moduleInfoData
+		// The samples carry positions, so writing them as they are writes other bytes.
+		#expect(try file(holding: signatures).moduleInfoData != fileWithoutPositions)
+		#expect(try file(holding: signatures).moduleInfoDataWritingSeamSignaturesWithoutPositions == fileWithoutPositions)
+	}
+
+	@Test
+	func seamSignatureSchema_listsEveryStoredPropertyOfEverySignatureStruct() throws {
+		// A stored property added to a type a seam's signature holds without being listed in its `binaryLayout` fails
+		// here: every module that calls the seam reads the signature its module's run wrote, so a property left
+		// unwritten would reach the callers empty.
+		for member in Self.seamSignatureMembers {
+			guard let sampleType = member as? any BinarySample.Type else {
+				Issue.record("\(member) has no sample value")
+				continue
+			}
+			let sample = try sampleType.sample(isDistinct: true)
+			if Mirror(reflecting: sample).displayStyle == .struct, let schemaMember = sample as? any BinarySchemaMember {
+				Self.expectLayoutListsEveryStoredProperty(of: schemaMember)
+			}
+		}
+	}
+
+	/// The types a module info file writes only inside the signature of a seam its module declares.
+	private static let seamSignatureMembers: [any BinarySchemaMember.Type] = [
+		StoredSeamSignature.self,
+		SeamSignature.self,
+		SeamSignature.Receiver.self,
+		SeamSignature.NestedSeamCall.self,
+		SeamSignature.Parameter.self,
+		SeamSignature.Parameter.Deferral.self,
+		SeamSignature.Hole.self,
+		SeamSignature.Hole.Field.self,
+		SeamSignature.Hole.Field.SeamParameterOrigin.self,
+		SeamSignature.Hole.UncarriedDeclaration.self,
+		SeamSignature.Hole.UncarriedDeclaration.Reason.self,
+		SeamSignature.Hole.UncarriedDeclaration.SendableFunction.self,
+		SeamSignature.Hole.UncarriedDeclaration.AliasOrigin.self,
+		SeamSignature.Hole.UncarriedDeclaration.CycleParameterOrigin.self,
+		SeamSignature.Hole.UncarriedDeclaration.PresentedPlace.self,
+		SeamSignature.Hole.CycleReentryDeclaration.self,
+		SeamSignature.Hole.ReenteringCallDeclaration.self,
+		SeamSignature.Hole.FieldOfReenteringPlace.self,
+		SeamSignature.Hole.ReenteringPlaceField.self,
+		SeamSignature.Hole.DeclarationHiddenByField.self,
+		SeamSignature.Hole.PathType.self,
+		SeamSignature.Hole.EnumPlace.self,
+		SeamSignature.Hole.RouteStep.self,
+		SeamSignature.Hole.RouteStep.Member.self,
+		SeamSignature.Hole.RouteStep.Values.self,
+		SeamSignature.Hole.RouteStep.InnerScope.self,
+		SeamSignature.Hole.DeclaredProperty.self,
+		SeamSignature.Hole.Site.self,
+		SeamSignature.CallRoute.self,
+		SeamSignature.HoleType.self,
+		SeamSignature.ScopeEnum.self,
+		SeamSignature.ScopeEnum.Key.self,
+		SeamSignature.ScopeEnum.Values.self,
+		SeamSignature.ScopeEnum.Case.self,
+		SeamSignature.ScopeEnum.Case.Kind.self,
+		SeamSignature.Builder.self,
+		TypeAccessProof.Cause.self,
+		TypeAccessProof.Prover.self,
+		TypeAccessProof.MemberKind.self,
+		ModuleIdentity.self,
+		AccessRequirement.self,
+	]
 
 	@Test
 	func binaryLayout_matchesBytesEachCachedStructWritesAndReads_whenEachFieldInTurnHoldsADistinctValue() throws {
@@ -394,10 +682,10 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func dumpScanCache_explains_whenFormatVersionDiffers() async throws {
 		try await assertDumpThrows(
-			"The scan cache is in format version 2, but this SafeDITool reads format version 1.",
+			"The scan cache is in format version 3, but this SafeDITool reads format version 2.",
 			whenCacheIs: { cache in
 				var cache = cache
-				cache[cache.startIndex + 4] = 2
+				cache[cache.startIndex + 4] = 3
 				return cache
 			},
 		)
@@ -584,7 +872,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		)
 
 		#expect {
-			try ModuleInfoFile(module: moduleInfo, moduleName: "Deep", view: .empty).moduleInfoData
+			try ModuleInfoFile(module: moduleInfo, moduleName: "Deep", seamSignatures: [], view: .empty).moduleInfoData
 		} throws: { error in
 			// Named by its outermost type: spelling the nested type recurses as deeply as it nests.
 			"\(error)" == "SafeDI cannot write `Level0` to a module info file: a type its declaration names nests more than 128 types deep, which is more than SafeDI reads back. To fix this, declare a typealias for part of that type, so that no type in the declaration nests more than 128 types deep."
@@ -600,7 +888,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		// unchanged, and keeps every fact a signature reads: which file holds each declaration, and whether each spells an
 		// access modifier. A position field added later is caught here, and so is a fact stripped by mistake.
 		let module = try await scannedKitchenSinkProject().scannedModuleInfo.moduleInfo
-		let file = ModuleInfoFile(module: module, moduleName: "Kitchen", view: .empty)
+		let file = ModuleInfoFile(module: module, moduleName: "Kitchen", seamSignatures: [], view: .empty)
 		func positions(in value: Any) -> [Any] {
 			reflectedStructuresAndEnumerations(in: value).filter { $0 is Dependency.DeclarationLocation || $0 is Dependency.SourceRange }
 		}
@@ -635,6 +923,86 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		let dumped = try JSONDecoder().decode(ModuleInfo.self, from: Data(json.utf8))
 		#expect(dumped.instantiables.map(\.concreteInstantiable) == [.simple(name: "UpstreamService")])
 		#expect(try reflectedDescription(of: dumped) == reflectedDescription(of: upstream.writtenModuleInfo))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func dump_printsEverySeamSignatureModuleInfoFileHoldsAsJSON() async throws {
+		// `Badge`, `package`, receives `serviceBuilder` only if available, so `Host`'s `package` tier takes the builder of
+		// its hole `service` under another label than its `public` tier.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Service {}",
+				"package struct Thing {}",
+				"""
+				@Instantiable
+				package struct Badge: Instantiable {
+				    package init(serviceBuilder: Thing?) {
+				        self.serviceBuilder = serviceBuilder
+				    }
+
+				    @Received(onlyIfAvailable: true) let serviceBuilder: Thing?
+				}
+				""",
+				"""
+				@Instantiable(generateDependencyTree: true)
+				public struct Host: Instantiable {
+				    init(service: any Service, badge: Badge) {
+				        self.service = service
+				        self.badge = badge
+				    }
+
+				    @Instantiated let service: any Service
+				    @Instantiated let badge: Badge
+				}
+				""",
+			])],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		let seamModule = try #require(output.modules["Feature"])
+
+		let json = try Dump.parse([#require(seamModule.moduleInfoOutputPath)]).json()
+
+		let dumped = try JSONDecoder().decode(ModuleInfoFile.self, from: Data(json.utf8))
+		let written = try #require(seamModule.moduleInfoFile)
+		#expect(dumped.seamSignatures.first?.signature?.holes.map(\.narrowerTierBuilderLabels) == [[.package: "serviceBuilder_"]])
+		#expect(reflectedDescription(of: dumped.seamSignatures) == reflectedDescription(of: written.seamSignatures))
+	}
+
+	@Test
+	func encode_writesLabelsInSortedOrder_whenValuesBindLabelsLater() throws {
+		let labels = (0..<24).map { "label\($0)" }
+		let values = SeamSignature.ScopeEnum.Values(typeName: "Values", fields: [], labelsBoundLater: Set(labels))
+
+		let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(values)) as? [String: Any]
+
+		#expect(json?["labelsBoundLater"] as? [String] == labels.sorted())
+	}
+
+	@Test
+	func encode_writesNarrowerTierLabelsWidestTierFirst_whenBuilderTakesLabelOnEveryTier() throws {
+		let tiers: [AccessLevel] = [.open, .public, .package, .internal, .fileprivate, .private]
+		let builder = SeamSignature.Builder(
+			enumKey: .init(seamType: .simple(name: "Host"), holeType: .init(instantiatedType: .simple(name: "Service"), builtType: .simple(name: "Service")), isSendable: false),
+			label: "serviceBuilder",
+			internalName: "serviceBuilder",
+			parameterType: .simple(name: "Service"),
+			readableParameterType: .simple(name: "Service"),
+			takesBuilderStruct: false,
+			tierAccess: .open,
+			accessCause: nil,
+			narrowingInnerSeam: nil,
+			narrowerTierLabels: Dictionary(uniqueKeysWithValues: tiers.reversed().map { ($0, "serviceBuilder_\($0)") }),
+		)
+
+		let encoded = try JSONEncoder().encode(builder)
+
+		let decoded = try JSONDecoder().decode(SeamSignature.Builder.self, from: encoded)
+		let json = try JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+		let pairs = try #require(json?["narrowerTierLabels"] as? [Any])
+		#expect(pairs.enumerated().filter { $0.offset.isMultiple(of: 2) == false }.map { $0.element as? String } == tiers.map { "serviceBuilder_\($0)" })
+		#expect(decoded.narrowerTierLabels == builder.narrowerTierLabels)
 	}
 
 	@Test
@@ -806,6 +1174,41 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	/// The number of cases an enum's layout lists.
+	/// The structs and enums `value` holds, as `reflectedStructuresAndEnumerations(in:)` finds them, except the storage
+	/// of a property its layout lists as unwritten: a type held there that is no schema member, such as the box
+	/// `Instantiable` keeps its rarely set fields in, holds fields written under their own names, so only the schema
+	/// members it holds are cached values.
+	private static func cachedStructuresAndEnumerations(in value: Any, isInsideUnwrittenProperty: Bool = false) -> [Any] {
+		let mirror = Mirror(reflecting: value)
+		let unwrittenProperties = unwrittenProperties(of: value)
+		let nested = mirror.children.flatMap { child in
+			cachedStructuresAndEnumerations(
+				in: child.value,
+				isInsideUnwrittenProperty: isInsideUnwrittenProperty || unwrittenProperties.contains(child.label ?? ""),
+			)
+		}
+		guard mirror.displayStyle == .struct || mirror.displayStyle == .enum,
+		      !isInsideUnwrittenProperty || value is any BinarySchemaMember
+		else {
+			return nested
+		}
+		return [value] + nested
+	}
+
+	/// The properties the layout of `value`'s type lists as unwritten, when it is a schema member's struct.
+	private static func unwrittenProperties(of value: Any) -> [String] {
+		func unwrittenProperties<Member: BinarySchemaMember>(ofMember _: Member) -> [String] {
+			guard case let .structure(_, unwrittenProperties) = Member.binaryLayout else {
+				return []
+			}
+			return unwrittenProperties
+		}
+		guard let member = value as? any BinarySchemaMember else {
+			return []
+		}
+		return unwrittenProperties(ofMember: member)
+	}
+
 	private static func caseCount<Member: BinarySchemaMember>(of _: Member.Type) -> Int {
 		switch Member.binaryLayout {
 		case .structure:
@@ -1286,6 +1689,12 @@ extension Int: BinarySample {
 	}
 }
 
+extension UInt64: BinarySample {
+	fileprivate static func sample(isDistinct: Bool) -> UInt64 {
+		isDistinct ? 1 : 0
+	}
+}
+
 extension Int64: BinarySample {
 	fileprivate static func sample(isDistinct: Bool) -> Int64 {
 		isDistinct ? 1 : 0
@@ -1304,9 +1713,27 @@ extension Optional: BinarySample where Wrapped: BinarySample {
 	}
 }
 
+extension BinarySharingSignatureValues: BinarySample where Value: BinarySample {
+	fileprivate static func sample(isDistinct: Bool) throws -> BinarySharingSignatureValues<Value> {
+		try BinarySharingSignatureValues(Value.sample(isDistinct: isDistinct))
+	}
+}
+
+extension BinaryShared: BinarySample where Value: BinarySample {
+	fileprivate static func sample(isDistinct: Bool) throws -> BinaryShared<Value> {
+		try BinaryShared(Value.sample(isDistinct: isDistinct))
+	}
+}
+
 extension Array: BinarySample where Element: BinarySample {
 	fileprivate static func sample(isDistinct: Bool) throws -> [Element] {
 		isDistinct ? [try Element.sample(isDistinct: false)] : []
+	}
+}
+
+extension Dictionary: BinarySample where Key: BinarySample & Comparable, Value: BinarySample {
+	fileprivate static func sample(isDistinct: Bool) throws -> [Key: Value] {
+		isDistinct ? [try Key.sample(isDistinct: false): try Value.sample(isDistinct: false)] : [:]
 	}
 }
 
@@ -1328,6 +1755,7 @@ extension ModuleInfoFile: BinarySample {}
 extension ModuleInfoView: BinarySample {}
 extension ViewedModuleIdentity: BinarySample {}
 extension ViewedModule: BinarySample {}
+extension ViewedModuleReference: BinarySample {}
 extension ImportStatement: BinarySample {}
 extension FileVisitor.ImportSegment: BinarySample {}
 extension ConditionalCompilationDecision: BinarySample {}
@@ -1352,3 +1780,44 @@ extension TypeDescription: BinarySample {}
 extension TypeDescription.VoidSpelling: BinarySample {}
 extension TypeDescription.TupleElement: BinarySample {}
 extension UnorderedEquatingCollection: BinarySample where Element: BinarySample {}
+extension StoredSeamSignature: BinarySample {}
+extension SeamSignature: BinarySample {}
+extension SeamSignature.Receiver: BinarySample {}
+extension SeamSignature.NestedSeamCall: BinarySample {}
+extension SeamSignature.Parameter: BinarySample {}
+extension SeamSignature.Parameter.Deferral: BinarySample {}
+extension SeamSignature.Hole: BinarySample {}
+extension SeamSignature.Hole.Field: BinarySample {}
+extension SeamSignature.Hole.Field.SeamParameterOrigin: BinarySample {}
+extension SeamSignature.Hole.UncarriedDeclaration: BinarySample {}
+extension SeamSignature.Hole.UncarriedDeclaration.Reason: BinarySample {}
+extension SeamSignature.Hole.UncarriedDeclaration.SendableFunction: BinarySample {}
+extension SeamSignature.Hole.UncarriedDeclaration.AliasOrigin: BinarySample {}
+extension SeamSignature.Hole.UncarriedDeclaration.CycleParameterOrigin: BinarySample {}
+extension SeamSignature.Hole.UncarriedDeclaration.PresentedPlace: BinarySample {}
+extension SeamSignature.Hole.CycleReentryDeclaration: BinarySample {}
+extension SeamSignature.Hole.ReenteringCallDeclaration: BinarySample {}
+extension SeamSignature.Hole.FieldOfReenteringPlace: BinarySample {}
+extension SeamSignature.Hole.ReenteringPlaceField: BinarySample {}
+extension SeamSignature.Hole.DeclarationHiddenByField: BinarySample {}
+extension SeamSignature.Hole.PathType: BinarySample {}
+extension SeamSignature.Hole.EnumPlace: BinarySample {}
+extension SeamSignature.Hole.RouteStep: BinarySample {}
+extension SeamSignature.Hole.RouteStep.Member: BinarySample {}
+extension SeamSignature.Hole.RouteStep.Values: BinarySample {}
+extension SeamSignature.Hole.RouteStep.InnerScope: BinarySample {}
+extension SeamSignature.Hole.DeclaredProperty: BinarySample {}
+extension SeamSignature.Hole.Site: BinarySample {}
+extension SeamSignature.CallRoute: BinarySample {}
+extension SeamSignature.HoleType: BinarySample {}
+extension SeamSignature.ScopeEnum: BinarySample {}
+extension SeamSignature.ScopeEnum.Key: BinarySample {}
+extension SeamSignature.ScopeEnum.Values: BinarySample {}
+extension SeamSignature.ScopeEnum.Case: BinarySample {}
+extension SeamSignature.ScopeEnum.Case.Kind: BinarySample {}
+extension SeamSignature.Builder: BinarySample {}
+extension TypeAccessProof.Cause: BinarySample {}
+extension TypeAccessProof.Prover: BinarySample {}
+extension TypeAccessProof.MemberKind: BinarySample {}
+extension ModuleIdentity: BinarySample {}
+extension AccessRequirement: BinarySample {}

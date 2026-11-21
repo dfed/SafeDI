@@ -481,9 +481,18 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 
 		// Step 2: `App`’s `LivePair` instantiates `feedBuilder` and `settings`, and `SignedIn` instantiates it in their place,
 		// as W4’s error says. `Feed` and its initializer are `internal`, which the code built in `App` cannot reach; each
-		// error’s fix-it makes them `public`. This step asserts the twin’s errors only: the calling mock, which cannot build
-		// `Feed` either, passes the place up and is accepted here, a deliberate gap from its twin that the calling-mock mirror
-		// work in 2.3.1 closes (`seam-and-mock-contract.md`, rule 7).
+		// error’s fix-it makes them `public`. The calling mock, whose fill builds `Feed` as the twin’s does, reports the same
+		// declarations in a build that tells the tool `DEBUG`, the mock condition.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["FeatureTypes.swift"]):16:1: error: `Feed` is `internal`, so the mock of `Root`, generated in module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Feed` `public` to fix.
+			\(fixtures["Feature"]!["FeatureTypes.swift"]):16:1-16:1: fixit: public\(" ")
+			\(fixtures["Feature"]!["FeatureTypes.swift"]):17:5: error: `Feed`’s initializer is `internal`, so the mock of `Root`, generated in module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(fixtures["Feature"]!["FeatureTypes.swift"]):17:5-17:5: fixit: public\(" ")
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.w4ConstantCycleOptionalRestructuredModules(caller: caller.attribute, callee: calledTypes.attribute, feedIsPublic: false, appActiveCompilationConditions: ["DEBUG"]), integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["Feature"]!["FeatureTypes.swift"]):16:1: error: `Feed` is `internal`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Feed` `public` to fix.
@@ -7101,7 +7110,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 	/// The plain W4 cycle received only if available, then W4’s first remedy as worded: `SignedIn` instantiates `pair`,
 	/// which `App`’s `LivePair` fills, and whose tree builds `feedBuilder` and `settings` in their place. `Feed`, which
 	/// `LivePair` builds, is `public` with its initializer where `feedIsPublic`, as its access errors’ fix-its make it.
-	private static func w4ConstantCycleOptionalRestructuredModules(caller: String, callee: String, feedIsPublic: Bool) -> [ModuleFixture] {
+	private static func w4ConstantCycleOptionalRestructuredModules(caller: String, callee: String, feedIsPublic: Bool, appActiveCompilationConditions: [String] = []) -> [ModuleFixture] {
 		[
 			ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContentByFilePath: [
 				"FeatureTypes.swift": """
@@ -7178,7 +7187,7 @@ struct SafeDIToolCallingMockMirrorsProductionTests: ~Copyable {
 				    @Instantiated private let signedInBuilder: Instantiator<SignedIn>
 				}
 				""",
-			], dependencies: ["Feature"]),
+			], dependencies: ["Feature"], activeCompilationConditions: appActiveCompilationConditions),
 		]
 	}
 

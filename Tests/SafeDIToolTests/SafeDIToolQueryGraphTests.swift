@@ -404,7 +404,7 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		let filePaths = Set(fixtures.map { NormalizedFilePath($0.path).path })
 		let parsed = try await parseModule(filePaths: filePaths, configurationFilePaths: filePaths, activeCompilationConditions: [])
 		let moduleInfoFile = directory.appendingPathComponent("App.safedi")
-		try ModuleInfoFile(module: parsed.module.moduleInfo, moduleName: "App", view: .empty)
+		try ModuleInfoFile(module: parsed.module.moduleInfo, moduleName: "App", seamSignatures: [], view: .empty)
 			.moduleInfoData
 			.write(to: moduleInfoFile)
 

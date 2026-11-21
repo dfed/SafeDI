@@ -3374,6 +3374,9 @@ extension GraphFuzzerOracle {
 	///   its caller holds reads that instance before the probe's value is built. The leaf wraps the instance again, a
 	///   second wrapper where the known-right path shares the caller's, which the comparator compares by its instance, so
 	///   the re-made wrapper over the caller's instance agrees and one over another instance differs at that instance.
+	///   It also covers a called mock that takes the value as a plain `x: T` or `x: T? = nil`, which is API: the instance
+	///   is then created at the call, before a called tree that reads it only behind an instantiator would create it. A
+	///   deliberate gap, the other site of which is the call's construction in `ScopeGenerator` (`public-mock-builders.md`).
 	/// - A dependency the calling tree does not provide, which includes one its module cannot name, is built by each call
 	///   of a public mock that builds it, and is `nil` in one that receives it only if available (`isInstancePerLeafCall`,
 	///   M8.9b widened): a dependency a leaf's tree receives

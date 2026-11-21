@@ -190,7 +190,7 @@ func executeSafeDIToolQuery(
 		let moduleInfoFile = moduleDirectories[module.name]!
 			.appendingPathComponent(fileName ?? "\((module.name as NSString).lastPathComponent).safedi")
 		// Named as the module's directory names it, as `generate --module-name` records it.
-		try ModuleInfoFile(module: parsed.module.moduleInfo, moduleName: (module.name as NSString).lastPathComponent, view: .empty)
+		try ModuleInfoFile(module: parsed.module.moduleInfo, moduleName: (module.name as NSString).lastPathComponent, seamSignatures: [], view: .empty)
 			.moduleInfoData
 			.write(to: moduleInfoFile)
 		moduleInfoFiles[module.name] = moduleInfoFile

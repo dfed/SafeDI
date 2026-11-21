@@ -169,14 +169,15 @@ public struct QueryNeeds: AsyncParsableCommand {
 			))
 		}
 
-		// Each view builds the scope map its types' mock roots are built from once, for every type named. The mock view's
-		// results are read first, type by type, so that a missing name is reported from the full map.
-		let mockResults = await mockGenerator.requirements(of: mockQueries)
-		let productionResults = await productionGenerator.requirements(of: typeEntries.map {
+		// Each view builds the scope map its types' mock roots are built from once, for every type named. The two views are
+		// separate generators, so they are built side by side; the mock view's results are read first, type by type, so that
+		// a missing name is reported from the full map, whichever view finishes first.
+		async let productionResults = productionGenerator.requirements(of: typeEntries.map {
 			DependencyTreeGenerator.RequirementsQuery(typeName: $0.typeName, generatesMock: $0.generatesMock, mockEmittingModule: nil)
 		})
+		let mockResults = await mockGenerator.requirements(of: mockQueries)
 		var typeReports = [TypeReport]()
-		for (typeEntry, productionResult) in zip(typeEntries, productionResults) {
+		for (typeEntry, productionResult) in await zip(typeEntries, productionResults) {
 			let typeName = typeEntry.typeName
 			let mockMethodName = typeEntry.mockMethodName
 			let generatingModuleNames = typeEntry.generatingModuleNames
@@ -228,6 +229,7 @@ public struct QueryNeeds: AsyncParsableCommand {
 	/// The included modules, each read as `generate` reads it: a directory as a module's own files, with its own
 	/// configuration, and a module info file as a dependent module's. Ordered by name, whatever order their reads
 	/// finished in, which is the order their declarations are combined in.
+	/// - Throws: The error of the module first by name whose read fails, whatever order the reads finish in.
 	func readIncludedModules() async throws -> [ParsedQueryModule] {
 		try await Self.readIncludedModules(including: include, moduleInfo: moduleInfo, activeCompilationConditions: activeCompilationConditions)
 	}
@@ -241,21 +243,30 @@ public struct QueryNeeds: AsyncParsableCommand {
 			throw QueryError.noModuleIncluded
 		}
 		let activeCompilationConditions = Set(activeCompilationConditions)
-		return try await withThrowingTaskGroup(
-			of: ParsedQueryModule.self,
-			returning: [ParsedQueryModule].self,
+		let reads = await withTaskGroup(
+			of: (name: String, read: Result<ParsedQueryModule, any Error>).self,
+			returning: [(name: String, read: Result<ParsedQueryModule, any Error>)].self,
 		) { taskGroup in
 			for includedModule in includedModules {
 				taskGroup.addTask {
-					try await ParsedQueryModule(reading: includedModule, activeCompilationConditions: activeCompilationConditions)
+					do {
+						return try await (name: includedModule.name, read: .success(ParsedQueryModule(reading: includedModule, activeCompilationConditions: activeCompilationConditions)))
+					} catch {
+						return (name: includedModule.name, read: .failure(error))
+					}
 				}
 			}
-			var parsedModules = [ParsedQueryModule]()
-			for try await parsedModule in taskGroup {
-				parsedModules.append(parsedModule)
+			var reads = [(name: String, read: Result<ParsedQueryModule, any Error>)]()
+			for await read in taskGroup {
+				reads.append(read)
 			}
-			return parsedModules.sorted { $0.includedModule.name < $1.includedModule.name }
+			return reads
 		}
+		// The modules are read in parallel, so their failures arrive in any order: the one reported is that of the module
+		// first by name.
+		return try reads
+			.sorted { $0.name < $1.name }
+			.map { try $0.read.get() }
 	}
 
 	/// How the report attributes each file the modules hold, keyed by the file's path as read.
