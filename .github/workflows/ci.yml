@@ -1910,13 +1910,13 @@ jobs:
   # after another in one job they took 9.7 to 25.3 minutes and ended run
   # 43755152593. Coverage is not collected: the bundle is built for
   # coverage, so its profiles go to the runner's temporary directory.
-  # Checks that every base corpus graph SafeDI 2.3.0 accepts still compiles
-  # and builds the same values, on every pull request and push to main, so a
+  # Checks that every graph of the base, seam and public mock corpora that
+  # SafeDI 2.3.0 accepts still compiles and builds the same values, on every pull request and push to main, so a
   # break is attributed or fixed in the change that makes it rather than
   # found before a release candidate. release-acceptance.yml's jobs run in
   # this run from the bundle "Build Tests on Linux" built: one job that
-  # builds 2.3.0 (restored from a cache after its first run on main), four
-  # shards and the job that combines their reports. No required check.
+  # builds 2.3.0 (restored from a cache after its first run on main), the
+  # shards of each corpus and the job that combines their reports. No required check.
   # graph-fuzzer.yml's `release_acceptance` input checks a branch by hand.
   release-acceptance:
     name: Release Acceptance

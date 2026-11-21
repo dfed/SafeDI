@@ -33,3 +33,22 @@ extension DependencyTreeGenerator {
 		return supplies.uniqued()
 	}
 }
+
+/// The value one receive is handed in one place of a dependency tree: a received dependency's, or an alias's, which
+/// receives its fulfilling property.
+public struct ReceivedValueSupply: Hashable, Sendable {
+	/// The type that declares the receive.
+	public let receivingType: TypeDescription
+	/// The receive's label: a received dependency's, or an alias's own.
+	public let label: String
+	/// The declaration whose value the receive is handed, or `nil` where generated code hands it `nil`.
+	public let supplier: Supplier?
+
+	/// A declaration a type makes for the scopes it builds: a dependency it instantiates, forwards or aliases.
+	public struct Supplier: Hashable, Sendable {
+		/// The type that makes the declaration.
+		public let declaringType: TypeDescription
+		/// The declaration's label.
+		public let label: String
+	}
+}
