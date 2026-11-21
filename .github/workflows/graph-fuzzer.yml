@@ -35,7 +35,7 @@ name: Graph Fuzzer
 # tests a commit and fuzzes it; the build job below is then skipped.
 #
 # With `release_acceptance`, the run instead checks that every base corpus
-# graph SafeDI 2.2.0 accepts still builds the same values, by calling
+# graph SafeDI 2.3.0 accepts still builds the same values, by calling
 # release-acceptance.yml, which ci.yml also calls on every pull request and
 # push to main; see .claude/rules/fuzzer-release-acceptance.md.
 #
@@ -75,7 +75,7 @@ on:
         required: false
         default: ''
       release_acceptance:
-        description: Instead of the fuzzing above, check that every base corpus graph SafeDI 2.2.0 accepts still compiles and builds the same values. The inputs above are ignored.
+        description: Instead of the fuzzing above, check that every base corpus graph SafeDI 2.3.0 accepts still compiles and builds the same values. The inputs above are ignored.
         type: boolean
         default: false
   # From verify.yml, in whose run the jobs below then run: they read the
@@ -246,7 +246,7 @@ jobs:
     if: ${{ !cancelled() && inputs.coverage && (needs.coverage-build.result == 'success' || inputs.bundle) }}
     runs-on: ubuntu-latest
     container: swift:6.2
-    timeout-minutes: 30
+    timeout-minutes: 55
     permissions:
       contents: read
     defaults:
@@ -267,7 +267,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/unit-suite-profiles" unit-suite
       - name: Run Unit Suite
         id: suite
-        timeout-minutes: 25
+        # About twice the measured duration. The step took 24m05s on the
+        # 2.3.1 trim (Verify run 44714429086, 2026-11-20), where the seam
+        # smoke seeds alone ran 1,442 s; an added oracle that runs the tool
+        # again on some graphs made every fuzzer test 8 to 12% slower and
+        # passed the old limit of 25 minutes (run 44738763289).
+        timeout-minutes: 50
         env:
           SAFEDI_SKIP_COMPILE_CHECK: 1
           LLVM_PROFILE_FILE: ${{ runner.temp }}/unit-suite-profiles/unit-suite-%p.profraw

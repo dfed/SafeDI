@@ -28,7 +28,7 @@ import SafeDICore
 struct Query: AsyncParsableCommand {
 	static let configuration = CommandConfiguration(
 		abstract: "Answer a question about the `@Instantiable` types in a set of modules (beta).",
-		subcommands: [QueryNeeds.self],
+		subcommands: [QueryNeeds.self, QueryGraph.self],
 	)
 }
 
@@ -77,22 +77,7 @@ public struct QueryNeeds: AsyncParsableCommand {
 	/// Throws errors as-is so tests can inspect them; `run()` formats them.
 	public func query() async throws -> QueryReport {
 		let parsedModules = try await readIncludedModules()
-
-		// Every declaration the query reports was read from one of these files, under this spelling.
-		var attributionsByFilePath = [String: FileAttribution]()
-		for parsedModule in parsedModules {
-			for (filePath, attribution) in parsedModule.fileAttributions {
-				if let otherModuleName = attributionsByFilePath[filePath]?.moduleName {
-					throw QueryError.fileInTwoModules(filePath: filePath, moduleNames: [otherModuleName, parsedModule.includedModule.name])
-				} else {
-					attributionsByFilePath[filePath] = attribution
-				}
-			}
-		}
-		let filesWithUnexpectedNodes = parsedModules.flatMap { $0.moduleInfo.filesWithUnexpectedNodes ?? [] }
-		guard filesWithUnexpectedNodes.isEmpty else {
-			throw QueryError.filesWithUnexpectedNodes(filesWithUnexpectedNodes)
-		}
+		let attributionsByFilePath = try Self.attributionsByFilePath(of: parsedModules)
 
 		let typeDescriptionToFulfillingInstantiableMap = try resolveSafeDIFulfilledTypes(
 			instantiables: normalizingInstantiableTypes(
@@ -123,7 +108,9 @@ public struct QueryNeeds: AsyncParsableCommand {
 		// without the declarations that exist only for mocks.
 		let productionGenerator = generator(over: typeDescriptionToFulfillingInstantiableMap.compactMapValues { $0.mockOnly ? nil : $0.withoutHandWrittenMock })
 
-		var typeReports = [TypeReport]()
+		// What the report says of each type named, each once, before either view is built.
+		var typeEntries = [QueriedType]()
+		var mockQueries = [DependencyTreeGenerator.RequirementsQuery]()
 		var reportedTypeNames = Set<String>()
 		for typeName in typeNames where reportedTypeNames.insert(typeName).inserted {
 			let declarationsOfType = typeDescriptionToFulfillingInstantiableMap.values.filter { $0.concreteInstantiable.asSource == typeName }
@@ -168,10 +155,37 @@ public struct QueryNeeds: AsyncParsableCommand {
 			} else {
 				nil
 			}
+			var mock: (kind: TypeReport.Mock.Kind, queryIndex: Int)?
+			if let mockKind {
+				mock = (mockKind, mockQueries.count)
+				mockQueries.append(DependencyTreeGenerator.RequirementsQuery(typeName: typeName, generatesMock: generatesMock, mockEmittingModule: mockEmittingModule))
+			}
+			typeEntries.append(QueriedType(
+				typeName: typeName,
+				generatesMock: generatesMock,
+				mock: mock,
+				mockMethodName: mockMethodName,
+				generatingModuleNames: generatingModuleNames,
+			))
+		}
+
+		// Each view builds the scope map its types' mock roots are built from once, for every type named. The two views are
+		// separate generators, so they are built side by side; the mock view's results are read first, type by type, so that
+		// a missing name is reported from the full map, whichever view finishes first.
+		async let productionResults = productionGenerator.requirements(of: typeEntries.map {
+			DependencyTreeGenerator.RequirementsQuery(typeName: $0.typeName, generatesMock: $0.generatesMock, mockEmittingModule: nil)
+		})
+		let mockResults = await mockGenerator.requirements(of: mockQueries)
+		var typeReports = [TypeReport]()
+		for (typeEntry, productionResult) in await zip(typeEntries, productionResults) {
+			let typeName = typeEntry.typeName
+			let mockMethodName = typeEntry.mockMethodName
+			let generatingModuleNames = typeEntry.generatingModuleNames
 			// What the type's mock needs, or would need: built from every declaration.
 			let mockReport: TypeReport.MockReport
-			if let mockKind {
-				guard let mockRequirements = try await mockGenerator.requirements(forTypeNamed: typeName, generatesMock: generatesMock, mockEmittingModule: mockEmittingModule) else {
+			if let (mockKind, mockQueryIndex) = typeEntry.mock {
+				// `requirements(of:)` returns a result for every query.
+				guard let mockRequirements = try mockResults[mockQueryIndex].get() else {
 					let fulfilledBy = Set(typeDescriptionToFulfillingInstantiableMap.filter { $0.key.asSource == typeName }.map(\.value.concreteInstantiable.asSource)).sorted()
 					throw QueryError.noInstantiableNamed(
 						typeName,
@@ -192,7 +206,7 @@ public struct QueryNeeds: AsyncParsableCommand {
 					reason: "`\(typeName)` has no mock: no module generates `\(typeName).\(InstantiableVisitor.mockMethodName)()`, and a hand-written `\(typeName).\(InstantiableVisitor.mockMethodName)` that returns another type would collide with a generated one, so no #\(SafeDIConfigurationVisitor.macroName) can list `\(typeName)` in `additionalMocksToGenerate`.",
 				))
 			}
-			guard let productionRequirements = try await productionGenerator.requirements(forTypeNamed: typeName, generatesMock: generatesMock, mockEmittingModule: nil) else {
+			guard let productionRequirements = try productionResult.get() else {
 				throw QueryError.onlyMockOnlyDeclarationNamed(typeName)
 			}
 			typeReports.append(TypeReport(productionRequirements, mockReport: mockReport, attributionsByFilePath: attributionsByFilePath))
@@ -200,33 +214,119 @@ public struct QueryNeeds: AsyncParsableCommand {
 		return QueryReport(types: typeReports)
 	}
 
+	/// A type `query()` reports, with what decides its mock.
+	private struct QueriedType {
+		let typeName: String
+		let generatesMock: Bool
+		/// The mock reported, with the index of the type's query among the mock view's, or `nil` when SafeDI can build no
+		/// mock for the type.
+		let mock: (kind: TypeReport.Mock.Kind, queryIndex: Int)?
+		let mockMethodName: String
+		/// The modules that generate `mock()` for the type.
+		let generatingModuleNames: [String]
+	}
+
 	/// The included modules, each read as `generate` reads it: a directory as a module's own files, with its own
 	/// configuration, and a module info file as a dependent module's. Ordered by name, whatever order their reads
 	/// finished in, which is the order their declarations are combined in.
+	/// - Throws: The error of the module first by name whose read fails, whatever order the reads finish in.
 	func readIncludedModules() async throws -> [ParsedQueryModule] {
-		// A module info file names the module it describes.
-		let moduleInfoFiles = try moduleInfo.map { path in
-			(path: path, recordedModuleName: try ParsedQueryModule.readModuleInfoFile(at: path).moduleName)
-		}
+		try await Self.readIncludedModules(including: include, moduleInfo: moduleInfo, activeCompilationConditions: activeCompilationConditions)
+	}
+
+	/// The modules the `--include` directories and `--module-info` files name, each read as `generate` reads it, ordered by
+	/// name. `query graph` reads its modules through this too.
+	static func readIncludedModules(including include: [String], moduleInfo: [String], activeCompilationConditions: [String]) async throws -> [ParsedQueryModule] {
+		let moduleInfoFiles = try await readModuleInfoFiles(at: moduleInfo)
 		let includedModules = try IncludedModule.modules(including: include, moduleInfo: moduleInfoFiles)
 		guard !includedModules.isEmpty else {
 			throw QueryError.noModuleIncluded
 		}
 		let activeCompilationConditions = Set(activeCompilationConditions)
-		return try await withThrowingTaskGroup(
-			of: ParsedQueryModule.self,
-			returning: [ParsedQueryModule].self,
+		let reads = await withTaskGroup(
+			of: (name: String, read: Result<ParsedQueryModule, any Error>).self,
+			returning: [(name: String, read: Result<ParsedQueryModule, any Error>)].self,
 		) { taskGroup in
 			for includedModule in includedModules {
 				taskGroup.addTask {
-					try await ParsedQueryModule(reading: includedModule, activeCompilationConditions: activeCompilationConditions)
+					do {
+						return try await (name: includedModule.name, read: .success(ParsedQueryModule(reading: includedModule, activeCompilationConditions: activeCompilationConditions)))
+					} catch {
+						return (name: includedModule.name, read: .failure(error))
+					}
 				}
 			}
-			var parsedModules = [ParsedQueryModule]()
-			for try await parsedModule in taskGroup {
-				parsedModules.append(parsedModule)
+			var reads = [(name: String, read: Result<ParsedQueryModule, any Error>)]()
+			for await read in taskGroup {
+				reads.append(read)
 			}
-			return parsedModules.sorted { $0.includedModule.name < $1.includedModule.name }
+			return reads
+		}
+		// The modules are read in parallel, so their failures arrive in any order: the one reported is that of the module
+		// first by name.
+		return try reads
+			.sorted { $0.name < $1.name }
+			.map { try $0.read.get() }
+	}
+
+	/// How the report attributes each file the modules hold, keyed by the file's path as read.
+	/// - Throws: When a file belongs to two modules, or a file holds a declaration SafeDI cannot read.
+	static func attributionsByFilePath(of parsedModules: [ParsedQueryModule]) throws -> [String: FileAttribution] {
+		// Every declaration the query reports was read from one of these files, under this spelling.
+		var attributionsByFilePath = [String: FileAttribution]()
+		for parsedModule in parsedModules {
+			for (filePath, attribution) in parsedModule.fileAttributions {
+				if let otherModuleName = attributionsByFilePath[filePath]?.moduleName {
+					throw QueryError.fileInTwoModules(filePath: filePath, moduleNames: [otherModuleName, parsedModule.includedModule.name])
+				} else {
+					attributionsByFilePath[filePath] = attribution
+				}
+			}
+		}
+		let filesWithUnexpectedNodes = parsedModules.flatMap { $0.moduleInfo.filesWithUnexpectedNodes ?? [] }
+		guard filesWithUnexpectedNodes.isEmpty else {
+			throw QueryError.filesWithUnexpectedNodes(filesWithUnexpectedNodes)
+		}
+		return attributionsByFilePath
+	}
+
+	/// The module info file each of `paths` names, in the order of `paths`. Each file is read once, however many
+	/// arguments name it, and the files are read in parallel.
+	/// - Throws: The error of the first path, in the order of `paths`, whose file cannot be read, whatever order the
+	///   reads finish in.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	static func readModuleInfoFiles(at paths: [String]) async throws -> [(path: String, file: ModuleInfoFile)] {
+		// Each file is read under the first argument that names it, so an error names the file as that argument spells it.
+		var pathsToRead = [String]()
+		var readIndexesByFile = [NormalizedFilePath: Int]()
+		let readIndexes = paths.map { path in
+			let file = NormalizedFilePath(path)
+			if let readIndex = readIndexesByFile[file] {
+				return readIndex
+			} else {
+				readIndexesByFile[file] = pathsToRead.count
+				pathsToRead.append(path)
+				return pathsToRead.count - 1
+			}
+		}
+		let reads = await withTaskGroup(
+			of: (index: Int, read: Result<ModuleInfoFile, any Error>).self,
+			returning: [Result<ModuleInfoFile, any Error>].self,
+		) { taskGroup in
+			for (index, path) in pathsToRead.enumerated() {
+				taskGroup.addTask {
+					(index: index, read: Result { try ParsedQueryModule.readModuleInfoFile(at: path) })
+				}
+			}
+			var indexedReads = [(index: Int, read: Result<ModuleInfoFile, any Error>)]()
+			for await indexedRead in taskGroup {
+				indexedReads.append(indexedRead)
+			}
+			return indexedReads.sorted { $0.index < $1.index }.map(\.read)
+		}
+		let files = try reads.map { try $0.get() }
+		return zip(paths, readIndexes).map { path, readIndex in
+			(path: path, file: files[readIndex])
 		}
 	}
 
@@ -248,7 +348,7 @@ public struct QueryNeeds: AsyncParsableCommand {
 }
 
 /// A module named with `--include` or `--module-info`: what it is read from, and the arguments that name it.
-struct IncludedModule: Equatable {
+struct IncludedModule {
 	/// A directory's module is named by the last component of its path, or as many of its trailing components as tell it
 	/// apart from the other directories, joined by `/`. A module info file's module is the module the file records.
 	let name: String
@@ -257,19 +357,24 @@ struct IncludedModule: Equatable {
 	let paths: [String]
 
 	/// What a module is read from.
-	enum Source: Hashable {
+	enum Source {
 		/// The Swift files under a directory named with `--include`, or named directly: the directory, and the
 		/// directory as the first of `paths` spelled it, under which the module's files are reported.
 		case directory(NormalizedFilePath, spelling: String)
-		/// A `.safedi` module info file named with `--module-info`.
-		case moduleInfo(NormalizedFilePath)
+		/// A `.safedi` module info file named with `--module-info`, and the file as read without its view.
+		case moduleInfo(NormalizedFilePath, file: ModuleInfoFile)
 	}
 
 	/// The modules the arguments name, ordered by name. Arguments naming one directory, or one file, are one module.
-	/// - Parameter moduleInfoFiles: Each `--module-info` argument, with the module its file records.
+	/// - Parameter moduleInfoFiles: Each `--module-info` argument, with its file, which names the module it records.
 	/// - Throws: When two module info files record one module, or a directory's module is named like a module a module
 	///   info file records: one module included twice.
-	static func modules(including directoryPaths: [String], moduleInfo moduleInfoFiles: [(path: String, recordedModuleName: String)]) throws(QueryError) -> [IncludedModule] {
+	static func modules(including directoryPaths: [String], moduleInfo moduleInfoFiles: [(path: String, file: ModuleInfoFile)]) throws(QueryError) -> [IncludedModule] {
+		/// What tells two included modules apart: the file a module is read from, and not what was read from it.
+		enum SourceKey: Hashable {
+			case directory(NormalizedFilePath, spelling: String)
+			case moduleInfo(NormalizedFilePath)
+		}
 		struct Entry {
 			let source: Source
 			var paths: [String]
@@ -278,27 +383,30 @@ struct IncludedModule: Equatable {
 		}
 		var directoryEntries = [Entry]()
 		var moduleInfoEntries = [Entry]()
-		var entryIndexesBySource = [Source: Int]()
+		var entryIndexesBySource = [SourceKey: Int]()
 		for path in directoryPaths {
 			// `generate --include` reads a Swift file named directly, as it reads the files of a directory.
 			let directorySpelling = path.hasSuffix(".swift") ? (path as NSString).deletingLastPathComponent : path
 			let spelling = directorySpelling.isEmpty ? "." : directorySpelling
 			let directory = NormalizedFilePath(spelling)
 			let source = Source.directory(directory, spelling: spelling)
-			if let index = entryIndexesBySource[source] {
+			let sourceKey = SourceKey.directory(directory, spelling: spelling)
+			if let index = entryIndexesBySource[sourceKey] {
 				directoryEntries[index].paths.append(path)
 			} else {
-				entryIndexesBySource[source] = directoryEntries.count
+				entryIndexesBySource[sourceKey] = directoryEntries.count
 				directoryEntries.append(Entry(source: source, paths: [path], nameComponents: directory.path.split(separator: "/").map(String.init)))
 			}
 		}
-		for (path, recordedModuleName) in moduleInfoFiles {
-			let source = Source.moduleInfo(NormalizedFilePath(path))
-			if let index = entryIndexesBySource[source] {
+		for (path, file) in moduleInfoFiles {
+			let moduleInfoPath = NormalizedFilePath(path)
+			let sourceKey = SourceKey.moduleInfo(moduleInfoPath)
+			if let index = entryIndexesBySource[sourceKey] {
 				moduleInfoEntries[index].paths.append(path)
 			} else {
-				entryIndexesBySource[source] = moduleInfoEntries.count
-				moduleInfoEntries.append(Entry(source: source, paths: [path], nameComponents: [recordedModuleName]))
+				entryIndexesBySource[sourceKey] = moduleInfoEntries.count
+				// A module info file names the module it describes.
+				moduleInfoEntries.append(Entry(source: .moduleInfo(moduleInfoPath, file: file), paths: [path], nameComponents: [file.moduleName]))
 			}
 		}
 		// Two layouts need more than the last component: `Modules/Home/Sources` and `Modules/Settings/Sources`
@@ -361,10 +469,9 @@ struct ParsedQueryModule {
 					),
 				)
 			}
-		case .moduleInfo:
-			let path = includedModule.paths[0]
-			// The file's view of the modules it depends on is not read: the query includes every module it reads.
-			let readModuleInfo = try Self.readModuleInfoFile(at: path).module
+		case let .moduleInfo(_, file):
+			// The file's view of the modules it depends on was not read: the query includes every module it reads.
+			let readModuleInfo = file.module
 			// Every declaration the file holds belongs to the module, named, with its package, as the build that wrote the
 			// file named them. They decide only which hand-written mocks a module that generates a mock can call.
 			identity = ModuleIdentity(moduleName: includedModule.name, packageName: readModuleInfo.packageName)
@@ -386,7 +493,8 @@ struct ParsedQueryModule {
 		}
 	}
 
-	/// The module info file at `path`, as given.
+	/// The module info file at `path`, as given, without its view of the modules it depends on: the query includes every
+	/// module it reads, and a view grows with the modules beneath the file's module.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	static func readModuleInfoFile(at path: String) throws -> ModuleInfoFile {
 		guard FileManager.default.fileExists(atPath: path) else {
@@ -395,7 +503,7 @@ struct ParsedQueryModule {
 		// A file that cannot be opened reports the file system's error as `generate` does.
 		let data = try Data(contentsOf: path.asFileURL)
 		do {
-			return try ModuleInfoFile(moduleInfoData: data)
+			return try ModuleInfoFile(moduleInfoDataWithoutView: data)
 		} catch {
 			throw QueryError.moduleInfoNotReadable(path: path, reason: "\(error) \(BinaryFile.unreadableFileExplanation)")
 		}
