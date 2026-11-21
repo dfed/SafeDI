@@ -41,6 +41,12 @@ import Foundation
 /// - **Nesting.** A job is handed the width it was granted, its cost, so a call it makes inside takes that as its width
 ///   and the nested calls never run more jobs at once than the outer call's width.
 enum BoundedConcurrency {
+	/// How many of a module's mock roots `generateMockCode` reads at once: one per processor the process may run on, so the
+	/// processors stay busy while only that many roots' parameter trees are alive, each of which holds a node per path.
+	static var mockRootWidth: Int {
+		max(1, ProcessInfo.processInfo.activeProcessorCount)
+	}
+
 	/// What became of one job.
 	enum Outcome<Transformed: Sendable>: Sendable {
 		/// The job returned this value.
