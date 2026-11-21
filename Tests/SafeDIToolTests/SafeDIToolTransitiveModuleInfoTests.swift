@@ -599,6 +599,58 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func resolvingReferences_keepsFileUnchanged_whenItsViewRefersToNoModuleBesideFileThatRefersToOne() async throws {
+		let modulesBeneathCSV = try writeModulesBeneath([Self.moduleInfoFile(named: "Deep", ownEntryChecksum: 1)])
+		let resolved = try await ModuleReferenceResolver(transitiveModuleInfoListPath: modulesBeneathCSV).resolvingReferences(in: [
+			(Self.fileReferringToDeep, "/App.safedi"),
+			(Self.moduleInfoFile(named: "Zed"), "/Zed.safedi"),
+		])
+		#expect(resolved.map(\.path) == ["/App.safedi", "/Zed.safedi"])
+		#expect(resolved[0].file.view.references.isEmpty)
+		#expect(resolved[0].file.view.declarations.map(\.moduleName) == ["Deep"])
+		#expect(resolved[1].file.moduleName == "Zed")
+		#expect(resolved[1].file.view.references.isEmpty)
+		#expect(resolved[1].file.view.declarations.isEmpty)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func resolvingReferences_readsEachModuleBeneathOnce_whenSecondCallRefersToModuleFirstDidNot() async throws {
+		let modulesBeneathCSV = try writeModulesBeneath([
+			Self.moduleInfoFile(named: "Deep", ownEntryChecksum: 1),
+			Self.moduleInfoFile(named: "Other", ownEntryChecksum: 2),
+		])
+		let resolver = ModuleReferenceResolver(transitiveModuleInfoListPath: modulesBeneathCSV)
+		_ = try await resolver.resolvingReferences(in: [(Self.fileReferringToDeep, "/App.safedi")])
+		let headReadPathsAfterFirstCall = await resolver.headReadPaths
+		let fileReferringToOther = Self.moduleInfoFile(
+			named: "Middle",
+			view: ModuleInfoView(moduleGraph: [], declarations: [], references: [ViewedModuleReference(moduleName: "Other", checksum: 2)]),
+		)
+		let resolved = try await resolver.resolvingReferences(in: [(fileReferringToOther, "/Middle.safedi")])
+		#expect(resolved.map { $0.file.view.declarations.map(\.moduleName) } == [["Other"]])
+		#expect(await resolver.headReadPaths == headReadPathsAfterFirstCall)
+		#expect(headReadPathsAfterFirstCall.count == 2)
+	}
+
+	/// Writes each of `files` to a module info file of its own, and a list of them as a run's modules beneath names them,
+	/// and returns the list's path.
+	private mutating func writeModulesBeneath(_ files: [ModuleInfoFile]) throws -> String {
+		var paths = [String]()
+		for file in files {
+			let path = URL.temporaryFile.appendingPathExtension("safedi")
+			try file.moduleInfoData.write(to: path)
+			filesToDelete.append(path)
+			paths.append(path.path)
+		}
+		let modulesBeneathCSV = URL.temporaryFile
+		try paths.joined(separator: ",").write(to: modulesBeneathCSV, atomically: true, encoding: .utf8)
+		filesToDelete.append(modulesBeneathCSV)
+		return modulesBeneathCSV.path
+	}
+
 	// MARK: Tests – Mocks
 
 	@Test

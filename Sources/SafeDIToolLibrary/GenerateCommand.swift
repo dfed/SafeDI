@@ -38,7 +38,7 @@ public struct Generate: AsyncParsableCommand {
 
 	@Option(parsing: .upToNextOption, help: "Deprecated, and removed in SafeDI 3.0: list these modules in the module’s `#SafeDIConfiguration(additionalImportedModules:)` instead. The names of modules to import in the generated code, in addition to the import statements found in files that declare @Instantiable types.") var additionalImportedModules: [String] = []
 
-	@Option(help: "The desired output location of a file a SafeDI representation of this module. Only include this option when running on a project’s non-root module. Must have a `.safedi` suffix. Requires '--module-name': a module info file names the module it describes. Written only when the run succeeds, and only when its bytes change.") var moduleInfoOutput: String?
+	@Option(help: "Where to write this module’s `.safedi` module info file, which the modules that list this one read through '--dependent-module-info-file-path' or '--transitive-module-info-file-path'. Pass it in every module’s run, a module that declares a root included, as SafeDI’s Bazel rule and Tuist plugin do. Name the file with the `.safedi` extension, which `query needs --module-info` drops to name the module. Requires '--module-name': a module info file names the module it describes. Written only when the run succeeds, and only when its bytes change.") var moduleInfoOutput: String?
 
 	@Option(help: "A path to a CSV file containing paths of SafeDI representations of other modules to parse: the `.safedi` file of each module this module depends on – each module whose types this module or the code SafeDI generates for its roots and mocks uses, so a module that declares a root lists every module beneath it, except those '--transitive-module-info-file-path' names that its dependency trees need. Each carries what a seam or public mock of a module it depends on needs, so a module is never listed only for another module’s seam or public mock.") var dependentModuleInfoFilePath: String?
 
@@ -62,7 +62,7 @@ public struct Generate: AsyncParsableCommand {
 
 	@Option(help: "When set, SafeDITool concatenates every generated Swift file (dependency trees + mocks + mock configuration) into this one path — one header, bodies joined in source-file order, deterministic for stable inputs. Intended for build systems that need rule outputs statically declared at analysis time (Bazel). Requires 'swift-sources-file-path' or '--include'. Cannot be combined with '--output-directory' or '--swift-manifest' — those are per-file emission modes. May be combined with '--module-info-output'. The combined file is written only when its bytes change, so a build that compares modification times recompiles only what changed.") var combinedOutput: String?
 
-	@Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project’s root module.") var dotFileOutput: String?
+	@Option(help: "The desired output location of the DOT file expressing the dependency trees of the roots and seams (`generateDependencyTree: true`) this module declares. A module that declares neither writes an empty graph.") var dotFileOutput: String?
 
 	@Option(help: "The name of the module this run generates code for: the module that compiles the files the input CSV and '--include' name. Each of those files’ declarations, and the '--module-info-output' file, record it, so a module that reads the file knows which module declares each type. Files reached through a #SafeDIConfiguration’s additionalDirectoriesToInclude belong to another module. Without this option and '--package-name', a run with '--swift-manifest' or '--output-directory' reads the module of each file from the target graph the SafeDIGenerator plugin writes beside its input CSV. Either way, the '--module-info-output' file also records, as modules this one depends on, the module each '--dependent-module-info-file-path' file, and each '--transitive-module-info-file-path' file this run reads, records.") var moduleName: String?
 
@@ -837,33 +837,36 @@ public struct Generate: AsyncParsableCommand {
 					// output is populated. A file that holds mocks imports
 					// what both the dependency tree and the mocks need.
 					let bodies = writes.map(\.body).filter { !$0.isEmpty }
-					// One comment names the types the file's `public` declarations name that SafeDI reads no declaration of.
-					let combinedBody = UnreadTypeComment.resolvingMarkers(in: bodies.joined(separator: "\n\n"))
 					// The header reads the dependency-tree code apart from the mock code, which compiles only under the mock
-					// condition.
+					// condition. It reads the code only where its imports spell levels, so each text is joined only then.
+					let dependencyTreeBodies = writes.filter { !$0.holdsMockCode }.map(\.body)
+					let mockBodies = writes.filter(\.holdsMockCode).map(\.body)
 					let combinedContent: DependencyTreeGenerator.GeneratedFileContent = if hasAnyMockGeneration {
 						.dependencyTreeAndMock(
-							dependencyTreeCode: UnreadTypeComment.resolvingMarkers(in: writes.filter { !$0.holdsMockCode }.map(\.body).joined(separator: "\n\n")),
-							mockCode: UnreadTypeComment.resolvingMarkers(in: writes.filter(\.holdsMockCode).map(\.body).joined(separator: "\n\n")),
+							dependencyTreeCode: { UnreadTypeComment.resolvingMarkers(in: dependencyTreeBodies.joined(separator: "\n\n")) },
+							mockCode: { UnreadTypeComment.resolvingMarkers(in: mockBodies.joined(separator: "\n\n")) },
 							mockConditionalCompilation: mockConditionalCompilation,
 						)
 					} else {
-						.dependencyTree(code: combinedBody)
+						.dependencyTree(code: { UnreadTypeComment.resolvingMarkers(in: bodies.joined(separator: "\n\n")) })
 					}
 					let headers = await generator.fileHeaders(for: [DependencyTreeGenerator.GeneratedFile(content: combinedContent, fulfillers: Set(writes.flatMap(\.fulfillers)))])
-					let code = headers.joined() + compileTimeAssertions + combinedBody
+					// The header, then the bodies, one blank line between each, written once into bytes of the file's exact
+					// size: the output can be tens of megabytes, and each copy of it would add to the run's peak memory. One
+					// comment names the types the file's `public` declarations name that SafeDI reads no declaration of.
+					let code = UnreadTypeComment.resolvingMarkers(joining: bodies, separator: "\n\n", after: headers.joined() + compileTimeAssertions)
 					// Written only when its bytes change, so a build that compares modification times, as Xcode does for a
 					// script phase's outputs, recompiles the module only when its generated code changed. Bazel removes an
 					// action's outputs before it runs, so every Bazel run writes the file it declares.
-					try Data(code.utf8).writeIfChanged(toPath: combinedOutput)
+					try code.writeIfChanged(toPath: combinedOutput)
 				} else {
 					// Every file's header in one call, which reads the module's own files at most once.
 					let filesToWrite = writes.compactMap { write in write.destination.map { (destination: $0, write: write) } }
 					let headers = await generator.fileHeaders(for: filesToWrite.map { file in
 						DependencyTreeGenerator.GeneratedFile(
 							content: file.write.holdsMockCode
-								? .mock(code: file.write.body, mockConditionalCompilation: mockConditionalCompilation)
-								: .dependencyTree(code: file.write.body),
+								? .mock(code: { [body = file.write.body] in body }, mockConditionalCompilation: mockConditionalCompilation)
+								: .dependencyTree(code: { [body = file.write.body] in body }),
 							fulfillers: file.write.fulfillers,
 						)
 					})
@@ -895,8 +898,8 @@ public struct Generate: AsyncParsableCommand {
 		// read; and only when its bytes change, so a dependent whose build compares modification times reruns only when
 		// what the file describes changed.
 		if let moduleInfoDestination {
-			try ModuleInfoFile(module: module, moduleName: moduleInfoDestination.moduleName, seamSignatures: storedSeamSignatures.map { $0.withoutPositions() }, view: moduleInfoViewToWrite, storesOwnEntryChecksum: moduleInfoViewsReferToModules)
-				.moduleInfoData
+			try ModuleInfoFile(module: module, moduleName: moduleInfoDestination.moduleName, seamSignatures: storedSeamSignatures, view: moduleInfoViewToWrite, storesOwnEntryChecksum: moduleInfoViewsReferToModules)
+				.moduleInfoDataWritingSeamSignaturesWithoutPositions
 				.writeIfChanged(toPath: moduleInfoDestination.path)
 		}
 		if let unusedInputsListOutput {
@@ -1924,28 +1927,25 @@ public struct Generate: AsyncParsableCommand {
 
 	static func loadSafeDIModuleInfo(at paths: [String], readingViews: Bool = true) async throws -> [(file: ModuleInfoFile, path: String)] {
 		let moduleInfoURLs = paths.map(\.asFileURL)
-		return try await withThrowingTaskGroup(
-			of: (index: Int, file: ModuleInfoFile).self,
-			returning: [(file: ModuleInfoFile, path: String)].self,
+		let reads = await withTaskGroup(
+			of: (index: Int, read: Result<ModuleInfoFile, any Error>).self,
+			returning: [(index: Int, read: Result<ModuleInfoFile, any Error>)].self,
 		) { taskGroup in
 			for (index, moduleInfoURL) in moduleInfoURLs.enumerated() {
 				taskGroup.addTask {
-					do {
-						let data = try Data(contentsOf: moduleInfoURL)
-						return try (index: index, file: readingViews ? ModuleInfoFile(moduleInfoData: data) : ModuleInfoFile(moduleInfoDataWithoutView: data))
-					} catch let error as BinaryFileReadError {
-						throw UnreadableModuleInfoError(path: moduleInfoURL.path, reason: error)
-					}
+					(index: index, read: Result { try UnreadableModuleInfoError.reading(moduleInfoURL, readingViews: readingViews) })
 				}
 			}
-			var indexedModuleInfoFiles = [(index: Int, file: ModuleInfoFile)]()
-			for try await moduleInfoFile in taskGroup {
-				indexedModuleInfoFiles.append(moduleInfoFile)
+			var reads = [(index: Int, read: Result<ModuleInfoFile, any Error>)]()
+			for await read in taskGroup {
+				reads.append(read)
 			}
-			return indexedModuleInfoFiles
-				.sorted { $0.index < $1.index }
-				.map { (file: $0.file, path: moduleInfoURLs[$0.index].path) }
+			return reads
 		}
+		// The files are read in parallel, so their failures arrive in any order: the one reported is that of the first path.
+		return try reads
+			.sorted { $0.index < $1.index }
+			.map { try (file: $0.read.get(), path: moduleInfoURLs[$0.index].path) }
 	}
 
 	/// `listedFiles`, read from `listedPaths`, with those of the files `--transitive-module-info-file-path` lists that
@@ -2107,9 +2107,30 @@ struct MockOnlySeamError: SourceLocatedError {
 /// A `.safedi` file named by `--dependent-module-info-file-path` that this SafeDITool cannot read.
 struct UnreadableModuleInfoError: Error, CustomStringConvertible {
 	let path: String
-	let reason: BinaryFileReadError
+	/// Why the file could not be read, the same on every run: never Foundation’s own error, which prints its details in
+	/// the hash order of a dictionary.
+	let reason: String
 
 	var description: String {
-		"Could not read the SafeDI module info file at \(path): \(reason) \(BinaryFile.unreadableFileExplanation)"
+		"Could not read the SafeDI module info file at \(path): \(reason)"
+	}
+
+	/// The module info file at `url`, with its view when `readingViews`.
+	/// - Throws: `UnreadableModuleInfoError` when the file is missing, cannot be opened, or is not a module info file.
+	static func reading(_ url: URL, readingViews: Bool) throws -> ModuleInfoFile {
+		let data: Data
+		do {
+			data = try Data(contentsOf: url)
+		} catch {
+			throw UnreadableModuleInfoError(
+				path: url.path,
+				reason: FileManager.default.fileExists(atPath: url.path) ? "The path names a directory, or a file SafeDI may not open." : "No file exists at that path.",
+			)
+		}
+		do {
+			return try readingViews ? ModuleInfoFile(moduleInfoData: data) : ModuleInfoFile(moduleInfoDataWithoutView: data)
+		} catch {
+			throw UnreadableModuleInfoError(path: url.path, reason: "\(error) \(BinaryFile.unreadableFileExplanation)")
+		}
 	}
 }

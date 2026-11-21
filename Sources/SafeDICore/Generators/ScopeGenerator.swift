@@ -149,58 +149,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.property = property
 		let declaration = property.map { BuiltDeclaration(property: $0, concreteType: instantiable.concreteInstantiable) }
 		self.declaration = declaration
-		self.propertiesToGenerate = propertiesToGenerate
+		propertiesToGenerateSlot = DeferredReleaseSlot(propertiesToGenerate)
 		fillFieldSelection = fill.flatMap { fill in
 			propertiesToGenerate.first.flatMap { child in
 				FillFieldSelection(hole: fill.hole, boundLabels: fill.boundLabels, fields: fill.fields, child: child)
 			}
 		}
 		// What the code generated for the call's dispatchers decides, from the fills its children generate.
-		let levelFunctions: PublicMockLevelFunctions?
-		if publicMockCall != nil, !fillDispatchers.isEmpty {
-			var fillParametersByKey = [String: [SeamSignature.Hole.Field]]()
-			var fillNames = Set<String>()
-			// What the root level functions read of the caller's scope, as a seam's root dispatcher reads it: each label in the
-			// form `FillDispatcher.dispatcherParameters(of:fillReads:)` types a dispatcher's parameter by, the form no fill
-			// reads optionally first, then in `Property` order, so neither the order of the fills nor of their cases decides it,
-			// handed as a fill that takes that form reads it: the caller's declaration in one form is the same for every fill of
-			// the call, which each read of the one scope enclosing the call (`Scope.Fill.callerNearestDeclarations`).
-			var callerReadFormsByLabel = [String: [Property: (field: SeamSignature.Hole.Field, argument: String)]]()
-			for child in propertiesToGenerate {
-				if let key = child.fillKey, child.fillEmitsCode {
-					fillParametersByKey[key] = child.fillParameterFields
-					for (label, argument) in child.fillCallerReads.argumentByLabel {
-						guard let field = child.fillCallerReads.parameterByLabel[label] else { continue }
-						callerReadFormsByLabel[label, default: [:]].merge([field.property: (field, argument)]) { form, _ in form }
-					}
-				}
-				if case let .fill(_, functionName) = child.scopeData {
-					fillNames.insert(functionName)
-				}
-			}
-			var callerReads = [String: (field: SeamSignature.Hole.Field, argument: String)]()
-			for (label, forms) in callerReadFormsByLabel {
-				let properties = forms.keys.sorted()
-				guard let property = properties.first(where: { !$0.typeDescription.isOptional }) ?? properties.first,
-				      let form = forms[property]
-				else { continue }
-				callerReads[label] = form
-			}
-			levelFunctions = PublicMockLevelFunctions(
-				dispatchers: fillDispatchers,
-				fillParametersByKey: fillParametersByKey,
-				roots: builderCallArguments.compactMap { builderCallArgument in
-					builderCallArgument.builderStruct.flatMap { builderStruct in
-						builderStruct.rootDispatcherKey.map { PublicMockLevelFunctions.Root(label: builderCallArgument.label, dispatcherKey: $0, carriedStructs: builderStruct.carriedStructs) }
-					}
-				},
-				reservedNames: namesTakenByCall.union(fillNames),
-				callerReads: callerReads,
-				enclosingLevelCalls: enclosingLevelCalls,
-			)
-		} else {
-			levelFunctions = nil
-		}
+		let levelFunctions = Self.publicMockLevelFunctions(
+			publicMockCall: publicMockCall,
+			fillDispatchers: fillDispatchers,
+			builderCallArguments: builderCallArguments,
+			namesTakenByCall: namesTakenByCall,
+			enclosingLevelCalls: enclosingLevelCalls,
+			children: propertiesToGenerate,
+		)
 		publicMockLevelFunctions = levelFunctions
 		publicMockOverrideBuilders = Self.publicMockOverrideBuilders(
 			publicMockCall: publicMockCall,
@@ -210,17 +173,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			children: propertiesToGenerate,
 		)
 		containsBuildSite = propertiesToGenerate.contains(where: \.containsBuildSite)
-		if containsBuildSite {
-			// A site's field of a label declared here reads this scope's declaration, or the site carries no field of it.
-			let labelsDeclaredHere = if let fill {
-				fill.boundLabels.union(fill.caseHoles.flatMap(\.uncarriedDeclarations).map(\.property.label))
-			} else {
-				Set(propertiesToGenerate.compactMap(\.property?.label) + instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property.label))
-			}
-			fieldsCarriedBySites = Set(propertiesToGenerate.flatMap(\.fieldsCarriedBySites).filter { !labelsDeclaredHere.contains($0.label) })
-		} else {
-			fieldsCarriedBySites = []
-		}
+		fieldsCarriedBySites = Self.fieldsCarriedBySites(
+			containsBuildSite: containsBuildSite,
+			fill: fill.map { (boundLabels: $0.boundLabels, caseHoles: $0.caseHoles) },
+			instantiable: instantiable,
+			children: propertiesToGenerate,
+		)
 		passesUpBuilder = !passedUpHoles.isEmpty || propertiesToGenerate.contains(where: \.passesUpBuilder)
 		holdsCallReenteringEnclosingFill = holeCallArguments.contains { $0.enclosingFillKey != nil } || propertiesToGenerate.contains(where: \.holdsCallReenteringEnclosingFill)
 		treeHoldsCallOrFill = seamCall != nil || publicMockCall != nil || fill != nil || propertiesToGenerate.contains(where: \.treeHoldsCallOrFill)
@@ -372,26 +330,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			|| propertiesToGenerate.contains(where: \.receivedBuilderLoopsChangedInTree)
 		// In a seam's own tree, a loop whose members bind two or more payloads or levels holds them in one box, unless a
 		// member's function is `@Sendable`, which could not capture the box (see `boxedLoops`).
-		var boxedLoops = [Int: String]()
-		var loopLevelsTypesInTree = [String: String]()
-		if holdsLoopPayloadsInBoxes, !receivedBuilderLoops.loopByChildIndex.isEmpty {
-			// Each loop's bindings in index order, the order the body generates its members in (`orderedPropertiesToGenerate`).
-			var bindingsByLoop = [Int: [SeamHoles.ValuesBinding]]()
-			for (index, loop) in receivedBuilderLoops.loopByChildIndex.sorted(by: { $0.key < $1.key }) where !propertiesToGenerate[index].isAlias {
-				bindingsByLoop[loop, default: []] += propertiesToGenerate[index].valuesBindings
-			}
-			let loopsWithSendableFunction = Set(receivedBuilderLoops.loopByChildIndex.filter { propertiesToGenerate[$0.key].buildsInSendableFunction }.values)
-			for (loop, bindings) in bindingsByLoop where bindings.count > 1 && !loopsWithSendableFunction.contains(loop) {
-				let loopLevelsType = LoopLevelsType(holding: bindings)
-				boxedLoops[loop] = loopLevelsType.name
-				loopLevelsTypesInTree[loopLevelsType.name] = loopLevelsType.declaration
-			}
-		}
-		for child in propertiesToGenerate where !child.loopLevelsTypesInTree.isEmpty {
-			loopLevelsTypesInTree.merge(child.loopLevelsTypesInTree) { declaration, _ in declaration }
-		}
-		self.boxedLoops = boxedLoops
-		self.loopLevelsTypesInTree = loopLevelsTypesInTree
+		let loopBoxes = Self.loopBoxes(
+			holdsLoopPayloadsInBoxes: holdsLoopPayloadsInBoxes,
+			receivedBuilderLoops: receivedBuilderLoops,
+			children: propertiesToGenerate,
+		)
+		boxedLoops = loopBoxes.boxedLoops
+		loopLevelsTypesInTree = loopBoxes.loopLevelsTypesInTree
 		self.reboundProperties = if let property, let declaration, !isPropertyCycle, !reboundProperties.isEmpty {
 			Self.reboundProperties(
 				reboundProperties,
@@ -411,6 +356,108 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	// Each part of what the initializer works out from a scope's children is a function of its own, kept out of the
 	// initializer: as one function, the initializer took most of the time an optimized build of this module takes.
+
+	/// The fields the build sites in this scope's subtree carry of labels declared above this scope (see
+	/// `fieldsCarriedBySites`).
+	@inline(never)
+	nonisolated private static func fieldsCarriedBySites(
+		containsBuildSite: Bool,
+		fill: (boundLabels: Set<String>, caseHoles: [SeamSignature.Hole])?,
+		instantiable: Instantiable,
+		children propertiesToGenerate: [ScopeGenerator],
+	) -> Set<Property> {
+		guard containsBuildSite else { return [] }
+		// A site's field of a label declared here reads this scope's declaration, or the site carries no field of it.
+		let labelsDeclaredHere = if let fill {
+			fill.boundLabels.union(fill.caseHoles.flatMap(\.uncarriedDeclarations).map(\.property.label))
+		} else {
+			Set(propertiesToGenerate.compactMap(\.property?.label) + instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property.label))
+		}
+		return Set(propertiesToGenerate.flatMap(\.fieldsCarriedBySites).filter { !labelsDeclaredHere.contains($0.label) })
+	}
+
+	/// The level functions of a call of another module's public mock, from the fills its children generate, or `nil` for any
+	/// other scope (see `PublicMockLevelFunctions`).
+	@inline(never)
+	nonisolated private static func publicMockLevelFunctions(
+		publicMockCall: PublicMockCall?,
+		fillDispatchers: [FillDispatcher],
+		builderCallArguments: [BuilderCallArgument],
+		namesTakenByCall: Set<String>,
+		enclosingLevelCalls: [String: PublicMockLevelFunctions.EnclosingLevelCall],
+		children propertiesToGenerate: [ScopeGenerator],
+	) -> PublicMockLevelFunctions? {
+		guard publicMockCall != nil, !fillDispatchers.isEmpty else { return nil }
+		var fillParametersByKey = [String: [SeamSignature.Hole.Field]]()
+		var fillNames = Set<String>()
+		// What the root level functions read of the caller's scope, as a seam's root dispatcher reads it: each label in the
+		// form `FillDispatcher.dispatcherParameters(of:fillReads:)` types a dispatcher's parameter by, the form no fill
+		// reads optionally first, then in `Property` order, so neither the order of the fills nor of their cases decides it,
+		// handed as a fill that takes that form reads it: the caller's declaration in one form is the same for every fill of
+		// the call, which each read of the one scope enclosing the call (`Scope.Fill.callerNearestDeclarations`).
+		var callerReadFormsByLabel = [String: [Property: (field: SeamSignature.Hole.Field, argument: String)]]()
+		for child in propertiesToGenerate {
+			if let key = child.fillKey, child.fillEmitsCode {
+				fillParametersByKey[key] = child.fillParameterFields
+				for (label, argument) in child.fillCallerReads.argumentByLabel {
+					guard let field = child.fillCallerReads.parameterByLabel[label] else { continue }
+					callerReadFormsByLabel[label, default: [:]].merge([field.property: (field, argument)]) { form, _ in form }
+				}
+			}
+			if case let .fill(_, functionName) = child.scopeData {
+				fillNames.insert(functionName)
+			}
+		}
+		var callerReads = [String: (field: SeamSignature.Hole.Field, argument: String)]()
+		for (label, forms) in callerReadFormsByLabel {
+			let properties = forms.keys.sorted()
+			guard let property = properties.first(where: { !$0.typeDescription.isOptional }) ?? properties.first,
+			      let form = forms[property]
+			else { continue }
+			callerReads[label] = form
+		}
+		return PublicMockLevelFunctions(
+			dispatchers: fillDispatchers,
+			fillParametersByKey: fillParametersByKey,
+			roots: builderCallArguments.compactMap { builderCallArgument in
+				builderCallArgument.builderStruct.flatMap { builderStruct in
+					builderStruct.rootDispatcherKey.map { PublicMockLevelFunctions.Root(label: builderCallArgument.label, dispatcherKey: $0, carriedStructs: builderStruct.carriedStructs) }
+				}
+			},
+			reservedNames: namesTakenByCall.union(fillNames),
+			callerReads: callerReads,
+			enclosingLevelCalls: enclosingLevelCalls,
+		)
+	}
+
+	/// The loops among `children` whose levels one box holds, each with its box type's name, and the box types declared
+	/// anywhere in this scope's tree (see `boxedLoops`).
+	@inline(never)
+	nonisolated private static func loopBoxes(
+		holdsLoopPayloadsInBoxes: Bool,
+		receivedBuilderLoops: ReceivedBuilderLoops,
+		children propertiesToGenerate: [ScopeGenerator],
+	) -> (boxedLoops: [Int: String], loopLevelsTypesInTree: [String: String]) {
+		var boxedLoops = [Int: String]()
+		var loopLevelsTypesInTree = [String: String]()
+		if holdsLoopPayloadsInBoxes, !receivedBuilderLoops.loopByChildIndex.isEmpty {
+			// Each loop's bindings in index order, the order the body generates its members in (`orderedPropertiesToGenerate`).
+			var bindingsByLoop = [Int: [SeamHoles.ValuesBinding]]()
+			for (index, loop) in receivedBuilderLoops.loopByChildIndex.sorted(by: { $0.key < $1.key }) where !propertiesToGenerate[index].isAlias {
+				bindingsByLoop[loop, default: []] += propertiesToGenerate[index].valuesBindings
+			}
+			let loopsWithSendableFunction = Set(receivedBuilderLoops.loopByChildIndex.filter { propertiesToGenerate[$0.key].buildsInSendableFunction }.values)
+			for (loop, bindings) in bindingsByLoop where bindings.count > 1 && !loopsWithSendableFunction.contains(loop) {
+				let loopLevelsType = LoopLevelsType(holding: bindings)
+				boxedLoops[loop] = loopLevelsType.name
+				loopLevelsTypesInTree[loopLevelsType.name] = loopLevelsType.declaration
+			}
+		}
+		for child in propertiesToGenerate where !child.loopLevelsTypesInTree.isEmpty {
+			loopLevelsTypesInTree.merge(child.loopLevelsTypesInTree) { declaration, _ in declaration }
+		}
+		return (boxedLoops, loopLevelsTypesInTree)
+	}
 
 	/// The names this scope's subtree declares `@escaping` (see `typesDeclaredEscaping`).
 	@inline(never)
@@ -1220,7 +1267,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		publicMockLevelReentriesChangedInTree = false
 		reboundProperties = []
 		description = property.asSource
-		propertiesToGenerate = []
+		propertiesToGenerateSlot = DeferredReleaseSlot([])
 		propertiesToDeclare = []
 		instantiatedDependenciesNotGenerated = []
 		self.unavailableOptionalProperties = unavailableOptionalProperties
@@ -1333,7 +1380,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		publicMockLevelReentriesChangedInTree = false
 		reboundProperties = []
 		description = holeProperty.asSource
-		propertiesToGenerate = []
+		propertiesToGenerateSlot = DeferredReleaseSlot([])
 		propertiesToDeclare = []
 		instantiatedDependenciesNotGenerated = []
 		unavailableOptionalProperties = []
@@ -2667,14 +2714,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// What identifies the case a fill fills: one fill of a call generates the code of every place of a case nested by type.
 	static func fillCaseKey(of hole: SeamSignature.Hole) -> String {
 		"\(hole.scopeSeamType.asSource) \(hole.enumPlace.map { $0.enumType(qualifiedBy: nil).asSource } ?? hole.scopeTypeName) \(hole.enumPlace?.caseName ?? "")"
-	}
-
-	deinit {
-		// A tree of generators can be as deep as the module has types, so the generators this one holds the last
-		// references to are released one at a time rather than from within this deinitializer.
-		var propertiesToGenerate = [ScopeGenerator]()
-		swap(&propertiesToGenerate, &self.propertiesToGenerate)
-		DeferredRelease.release(consume propertiesToGenerate)
 	}
 
 	// MARK: CustomStringConvertible
@@ -4300,8 +4339,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let unavailableProperties: [Property]
 	}
 
-	/// Properties that will be generated as `let` constants. Mutated only by `deinit`, which has the only access.
-	nonisolated(unsafe) private var propertiesToGenerate: [ScopeGenerator]
+	/// Properties that will be generated as `let` constants.
+	nonisolated private var propertiesToGenerate: [ScopeGenerator] {
+		propertiesToGenerateSlot.value
+	}
+
+	/// `propertiesToGenerate`, held in a slot that releases them one level at a time: a tree of generators can be as
+	/// deep as the module has types.
+	private let propertiesToGenerateSlot: DeferredReleaseSlot<[ScopeGenerator]>
 	/// Properties that this scope declares as a `let` constant, and those its type instantiates that a mock is
 	/// passed instead (see `Scope.propertiesToDeclare`).
 	let propertiesToDeclare: Set<Property>
@@ -10822,24 +10867,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// within it, which would nest a release for each level of the tree.
 	final class MockTreeItems: Sendable {
 		init(_ items: [MockTreeItem]) {
-			self.items = items
-			propertyNodes = items.propertyNodes
+			itemsSlot = DeferredReleaseSlot(items)
+			propertyNodesSlot = DeferredReleaseSlot(items.propertyNodes)
 		}
 
-		deinit {
-			var items = [MockTreeItem]()
-			swap(&items, &self.items)
-			DeferredRelease.release(consume items)
-			var propertyNodes = [MockParameterNode]()
-			swap(&propertyNodes, &self.propertyNodes)
-			DeferredRelease.release(consume propertyNodes)
+		var items: [MockTreeItem] {
+			itemsSlot.value
 		}
 
-		/// Mutated only by `deinit`, which has the only access.
-		nonisolated(unsafe) private(set) var items: [MockTreeItem]
 		/// The property nodes among `items` (`[MockTreeItem].propertyNodes`), which generation reads for every node many
-		/// times. Mutated only by `deinit`, which has the only access.
-		nonisolated(unsafe) private(set) var propertyNodes: [MockParameterNode]
+		/// times.
+		var propertyNodes: [MockParameterNode] {
+			propertyNodesSlot.value
+		}
+
+		private let itemsSlot: DeferredReleaseSlot<[MockTreeItem]>
+		private let propertyNodesSlot: DeferredReleaseSlot<[MockParameterNode]>
 
 		/// Whether any of `items` is a property node.
 		var containsPropertyNode: Bool {

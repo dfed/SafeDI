@@ -87,7 +87,11 @@ final class ScopeRecord: Sendable {
 		seamCall?.calledBuilders ?? publicMockCall?.calledBuilders
 	}
 
-	/// See `Scope.createdBinding(of:)`.
+	/// The property this scope's type creates – instantiates, is forwarded, or declares by an alias – that a dependency
+	/// of the type reads for `property`, which it receives only if available: the first form of `property` (see
+	/// `Property.formsReadByOnlyIfAvailableReceive`) that a created property provides (see
+	/// `CycleParameter.forms(providedBy:)`). `nil` when the type creates none, and the dependency reads the nearest
+	/// declaration above the scope.
 	func createdBinding(of property: Property) -> Property? {
 		for form in property.formsReadByOnlyIfAvailableReceive {
 			if let binding = createdBindings[form] {
