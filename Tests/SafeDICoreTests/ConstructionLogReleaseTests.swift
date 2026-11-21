@@ -52,7 +52,7 @@ struct ConstructionLogReleaseTests {
 				continuation.finish()
 				finished.resume()
 			}
-			thread.stackSize = 512 * 1024
+			thread.stackSize = 512 * 1_024
 			thread.start()
 		}
 		var elementCounts = [Int: Int]()
@@ -64,5 +64,5 @@ struct ConstructionLogReleaseTests {
 		#expect(elementCounts == [33: 1, 2: Self.chainDepth - 1])
 	}
 
-	private static let chainDepth = 10000
+	private static let chainDepth = 10_000
 }
