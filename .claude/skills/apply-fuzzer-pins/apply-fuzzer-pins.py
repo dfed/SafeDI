@@ -2,6 +2,8 @@
 """Write the graph fuzzer's new pins into the test sources, from the analysis of a corpus run.
 
   python3 -I apply-fuzzer-pins.py PINS.json [--checkout DIRECTORY] [--dry-run]
+  python3 -I apply-fuzzer-pins.py JOB.log [--checkout DIRECTORY] [--dry-run]
+  python3 -I apply-fuzzer-pins.py --print-for-log PINS.json
   python3 -I apply-fuzzer-pins.py --self-test DIRECTORY
 
 PINS.json is the `pins.json` the analysis of a corpus run writes (schema 1): the commit the run built, where the
@@ -9,6 +11,15 @@ reports came from (`provenance`), and under `pins` every pinned value the run mo
 holds it, its key in that constant (none, a key of the report, or an index), the value pinned and the value the run
 derived. The script replaces each pinned literal with the derived one, in the files under `Tests/SafeDIToolFuzzerTests`
 and `Tests/SafeDIToolTestSupport` of the checkout, and changes nothing else.
+
+JOB.log is the saved log of the job that checked the corpora ("Check Graph Fuzzer Corpus on Linux"), or any part of it
+that holds the whole pins block: that job prints the same `pins.json` with `--print-for-log`, as lines
+`safedi-fuzzer-pins <index> of <count> <part of the JSON>` and a last line `safedi-fuzzer-pins sha256 <digest>`,
+without the analysis's `observed` (every value the run reported, most of the file, which this script never reads). A
+file that is not a JSON object is read as such a log, whatever each line starts with (a log's timestamps), and so is
+a JSON object whose `logs_content` is the log's text, as a tool that fetches a job's log saves it. It is refused unless it holds every part once and their digest matches, so a log cut short, or one whose lines were
+shortened, is never applied in part; a log that holds the block twice (two attempts' logs in one file) is refused
+unless both are the same.
 
 It refuses the whole file, and writes nothing (status 2), unless all of these hold:
   - `schema` is 1, and `provenance.validForHead` is exactly `true`: the reports are known to be of the commit itself,
@@ -50,6 +61,7 @@ A number written as `GraphFuzzerSeedSetSum(value: 0x…)` is the argument that c
 (a `_` inside a hexadecimal literal is not kept).
 """
 
+import hashlib
 import json
 import os
 import io
@@ -69,6 +81,14 @@ SINGLE_LITERAL = re.compile(r"%s|\w+\(\s*value\s*:\s*%s\s*\)" % (LITERAL, LITERA
 NUMBER = re.compile(r"(?<![\w.])(0x[0-9A-Fa-f_]+|\d[\d_]*)(?![\w.])")
 NAME_BEFORE = re.compile(r"(\.?\w+)\s*:\s*(?:\w+\(\s*value\s*:\s*)?$")
 OPENERS = {"(": ")", "[": "]", "{": "}"}
+
+
+LOG_MARKER = "safedi-fuzzer-pins"
+LOG_PART_LENGTH = 2000
+LOG_OMITS = "observed"
+LOG_CONTENT = "logs_content"
+LOG_PART = re.compile(r"%s (\d+) of (\d+) (.*)$" % LOG_MARKER)
+LOG_DIGEST = re.compile(r"%s sha256 ([0-9a-f]{64})\s*$" % LOG_MARKER)
 
 
 class Refusal(Exception):
@@ -322,10 +342,66 @@ def check_provenance(document, checkout):
             raise Refusal("the analysis could not read every report (`%s` lists %d): its sums may be partial" % (name, len(document[name])))
 
 
+def lines_for_log(text):
+    """The lines that carry `text`, the JSON of an analysis, through a job log: ASCII only, in parts short enough
+    that no log viewer shortens a line, then the digest of the whole."""
+    document = json.loads(text)
+    document.pop(LOG_OMITS, None)
+    text = json.dumps(document, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+    parts = [text[start:start + LOG_PART_LENGTH] for start in range(0, len(text), LOG_PART_LENGTH)]
+    lines = ["%s %d of %d %s" % (LOG_MARKER, index + 1, len(parts), part) for index, part in enumerate(parts)]
+    lines.append("%s sha256 %s" % (LOG_MARKER, hashlib.sha256(text.encode("ascii")).hexdigest()))
+    return lines
+
+
+def document_in_log(text):
+    """The analysis a job log holds between its `safedi-fuzzer-pins` lines."""
+    blocks = []  # (count, {index: part}), each closed by its digest line
+    parts = {}
+    count = None
+    for line in text.splitlines():
+        part = LOG_PART.search(line)
+        digest = LOG_DIGEST.search(line)
+        if digest:
+            if count is None or sorted(parts) != list(range(1, count + 1)):
+                raise Refusal("the log holds parts %s of the %s its pins block has: it was cut short, so nothing from it is read" % (", ".join(map(str, sorted(parts))) or "none", count if count is not None else "unknown number"))
+            joined = "".join(parts[index] for index in range(1, count + 1))
+            if hashlib.sha256(joined.encode("utf-8")).hexdigest() != digest.group(1):
+                raise Refusal("the log's pins block does not have the digest its last line states: a line was shortened or changed")
+            blocks.append(joined)
+            parts = {}
+            count = None
+        elif part:
+            index, of = int(part.group(1)), int(part.group(2))
+            if (count is not None and of != count) or index in parts:
+                raise Refusal("the log holds part %d of its pins block twice, or parts of two blocks mixed" % index)
+            count = of
+            parts[index] = part.group(3)
+    if parts:
+        raise Refusal("the log's pins block has no digest line: it was cut short, so nothing from it is read")
+    if not blocks:
+        raise Refusal("neither a JSON object nor a log with a `%s` block" % LOG_MARKER)
+    if len(set(blocks)) != 1:
+        raise Refusal("the log holds %d pins blocks that differ: give the log of one attempt of one job" % len(blocks))
+    return json.loads(blocks[0])
+
+
+def load_document(pins_path):
+    with open(pins_path, encoding="utf-8") as file:
+        text = file.read()
+    if text.lstrip().startswith("{"):
+        document = json.loads(text)
+        if isinstance(document, dict) and isinstance(document.get(LOG_CONTENT), str):
+            return document_in_log(document[LOG_CONTENT])
+        else:
+            return document
+    else:
+        return document_in_log(text)
+
+
 def apply(pins_path, checkout, dry_run, out=sys.stdout):
     try:
-        with open(pins_path, encoding="utf-8") as file:
-            document = json.load(file)
+        document = load_document(pins_path)
         if not isinstance(document, dict) or not isinstance(document.get("pins"), list):
             raise Refusal("no `pins` list")
         check_provenance(document, checkout)
@@ -454,7 +530,7 @@ def self_test(root):
     failures = []
     counter = [0]
 
-    def run(pins, expected_status, expected_changes, name, mutate=None, dirty=False, dry_run=False, says=(), prepare=None, without_sources=False):
+    def run(pins, expected_status, expected_changes, name, mutate=None, dirty=False, dry_run=False, says=(), prepare=None, without_sources=False, as_log=None):
         counter[0] += 1
         checkout = os.path.join(root, "%02d" % counter[0])
         directory = os.path.join(checkout, SOURCE_DIRECTORIES[0])
@@ -478,7 +554,10 @@ def self_test(root):
             mutate(document)
         pins_path = os.path.join(root, "%02d.json" % counter[0])
         with open(pins_path, "w", encoding="utf-8") as file:
-            json.dump(document, file)
+            if as_log:
+                file.write(as_log(json.dumps(document)))
+            else:
+                json.dump(document, file)
         if dirty:
             with open(source_path, "a", encoding="utf-8") as file:
                 file.write("// edited\n")
@@ -587,6 +666,22 @@ def self_test(root):
     run([pin("sums", "judged", 77, 5), pin("sums", "drawn", 78, 5), pin("sums", "total", "0x4F", "0x5")], 1, [], "an argument that is more than a literal is left", says=["0 pins written", ", 3 left"])
     run([pin("oracle", "skip.plain", 5, 4)], 1, [("skipCounts: [\n\t\t\t.plain: 5", "skipCounts: [\n\t\t\t.plain: 4")], "a group picks its dictionary and no other that starts alike", says=["1 pins written", ", 0 left"])
     run(one, 1, one_change, "other work in the analysis", mutate=lambda document: document.update(stale=[{"seed": 1}]), says=["1 stale known-issue seeds"])
+    # The analysis read from a job log.
+    def log_of(text, change=lambda lines: lines):
+        return "".join("2026-01-02T03:04:05.0000000Z %s\n" % line for line in ["Run the analysis"] + change(lines_for_log(text)) + ["Post job cleanup."])
+
+    long_note = "’ and a note long enough that the block has several parts " + "x" * (2 * LOG_PART_LENGTH)
+    noted = [pin("plainCount", None, 321, 5, long_note), pin("qualifiedCount", None, 321, 5)]
+    run(noted, 1, one_change, "a log holds the analysis", as_log=log_of, says=["1 pins written", ", 0 left"])
+    run(noted, 1, one_change, "a log that holds the same block twice", as_log=lambda text: log_of(text) + log_of(text), says=["1 pins written"])
+    run(noted, 2, [], "a log cut short before the digest", as_log=lambda text: log_of(text, lambda lines: lines[:-1]), says=["no digest line"])
+    run(noted, 2, [], "a log without one part", as_log=lambda text: log_of(text, lambda lines: lines[:1] + lines[2:]), says=["cut short"])
+    run(noted, 2, [], "a log with a shortened line", as_log=lambda text: log_of(text, lambda lines: [lines[0][:-10]] + lines[1:]), says=["does not have the digest"])
+    run(noted, 2, [], "a log with a part twice", as_log=lambda text: log_of(text, lambda lines: lines[:1] + lines), says=["twice"])
+    run(noted, 2, [], "a log with two blocks that differ", as_log=lambda text: log_of(text) + log_of(text.replace("321", "322")), says=["blocks that differ"])
+    run(noted, 1, one_change, "a fetched log saved as JSON", as_log=lambda text: json.dumps({"job_id": 1, LOG_CONTENT: log_of(text)}), says=["1 pins written"])
+    run(noted, 1, one_change, "a log leaves out what the run observed", mutate=lambda document: document.update(observed={"base": ["x" * 10]}), as_log=lambda text: log_of(text, lambda lines: lines if not any("observed" in line for line in lines) else []), says=["1 pins written"])
+    run(noted, 2, [], "a log with no block", as_log=lambda text: "2026-01-02T03:04:05.0000000Z nothing\n", says=["neither a JSON object nor a log"])
     for failure in failures:
         print("self-test: %s" % failure, file=sys.stderr)
     print("self-test: %d cases, %d failures" % (counter[0], len(failures)))
@@ -600,6 +695,10 @@ def self_test(root):
 def main(arguments):
     if len(arguments) == 2 and arguments[0] == "--self-test":
         return self_test(arguments[1])
+    if len(arguments) == 2 and arguments[0] == "--print-for-log":
+        with open(arguments[1], encoding="utf-8") as file:
+            print("\n".join(lines_for_log(file.read())))
+        return 0
     dry_run = "--dry-run" in arguments
     arguments = [argument for argument in arguments if argument != "--dry-run"]
     checkout = "."
