@@ -65,6 +65,11 @@ struct SourceRuleTests {
 	}
 
 	@Test
+	func sources_declareNoUncheckedConcurrency_exceptWhereDanApproved() throws {
+		#expect(try findings(of: [.uncheckedConcurrency]) == [])
+	}
+
+	@Test
 	func toolTestSupport_importsNoModuleTestably() throws {
 		let checkedFiles = try Self.checkedFiles.get()
 		#expect(Set(checkedFiles.map(\.file.path)).isSuperset(of: [
@@ -646,7 +651,7 @@ struct SourceRuleTests {
 	func sourceRuleCheck_findsSiteAndWaiver_whenAWaiverNamesNoRule() {
 		#expect(findings(in: "_ = value! // safedi-source-rule: allow forceUnwrapping — `value` is set before this line") == [
 			"Sources/SafeDICore/Models/Fixture.swift:1: forceUnwrap: a force unwrap traps on `nil`",
-			"Sources/SafeDICore/Models/Fixture.swift:1: waiver: a waiver reads `safedi-source-rule: allow <rule> — <reason>`, where the rule is one of `forceUnwrap`, `forceTry`, `forceCast`, `trap`, `uniqueKeysWithValues`, `optionalTry`, `generatedTrap`, `builderFunctionNamePrefix`, `backtick`, `apostrophe`, `testableImport`",
+			"Sources/SafeDICore/Models/Fixture.swift:1: waiver: a waiver reads `safedi-source-rule: allow <rule> — <reason>`, where the rule is one of `forceUnwrap`, `forceTry`, `forceCast`, `trap`, `uniqueKeysWithValues`, `optionalTry`, `generatedTrap`, `builderFunctionNamePrefix`, `backtick`, `apostrophe`, `testableImport`, `uncheckedConcurrency`",
 		])
 	}
 
@@ -667,6 +672,66 @@ struct SourceRuleTests {
 		""") == [
 			"Sources/SafeDICore/Models/Fixture.swift:1: waiver: the waiver of `forceUnwrap` waives no site on line 2",
 			"Sources/SafeDICore/Models/Fixture.swift:3: forceUnwrap: a force unwrap traps on `nil`",
+		])
+	}
+
+	@Test(arguments: [
+		(declaration: "nonisolated(unsafe) var cache = [Int]()", line: 1),
+		(declaration: "final class Owner: Sendable {\n    nonisolated(unsafe) private var children: [Owner] = []\n}", line: 2),
+		(declaration: "enum Shared {\n    nonisolated(unsafe) static var count = 0\n}", line: 2),
+		(declaration: "func run() {\n    nonisolated(unsafe) let box = Box()\n    _ = box\n}", line: 2),
+	])
+	func sourceRuleCheck_findsUncheckedConcurrency_whenCodeDeclaresNonisolatedUnsafe(declaration: String, line: Int) {
+		#expect(findings(in: declaration) == [
+			"Sources/SafeDICore/Models/Fixture.swift:\(line): uncheckedConcurrency: `nonisolated(unsafe)` opts out of the compiler’s proof of concurrency safety",
+		])
+	}
+
+	@Test(arguments: [
+		"final class Box: @unchecked Sendable {}",
+		"struct Box: Hashable, @unchecked Sendable {}",
+		"extension Box: @unchecked Sendable {}",
+	])
+	func sourceRuleCheck_findsUncheckedConcurrency_whenTypeConformsToUncheckedSendable(declaration: String) {
+		#expect(findings(in: declaration) == [
+			"Sources/SafeDICore/Models/Fixture.swift:1: uncheckedConcurrency: `@unchecked Sendable` opts out of the compiler’s proof of concurrency safety",
+		])
+	}
+
+	@Test
+	func sourceRuleCheck_findsUncheckedConcurrency_whenPluginDeclaresNonisolatedUnsafe() {
+		#expect(findings(in: "nonisolated(unsafe) var cache = [Int]()", at: "Plugins/Shared.swift") == [
+			"Plugins/Shared.swift:1: uncheckedConcurrency: `nonisolated(unsafe)` opts out of the compiler’s proof of concurrency safety",
+		])
+	}
+
+	@Test
+	func sourceRuleCheck_findsNoUncheckedConcurrency_whenCodeIsNonisolatedOrSendable() {
+		#expect(findings(in: """
+		nonisolated func run() {}
+		final class Box: Sendable {
+		    nonisolated var name: String { "" }
+		}
+		struct Value: @MainActor Equatable {}
+		_ = "nonisolated(unsafe) @unchecked Sendable"
+		""") == [])
+	}
+
+	@Test
+	func sourceRuleCheck_findsNothing_whenWaiverOfUncheckedConcurrencyCitesDansOK() {
+		#expect(findings(in: """
+		// safedi-source-rule: allow uncheckedConcurrency — Dan’s OK: pull request 930, for this cache alone.
+		nonisolated(unsafe) var cache = [Int]()
+		""") == [])
+	}
+
+	@Test
+	func sourceRuleCheck_findsWaiver_whenWaiverOfUncheckedConcurrencyCitesNoOKFromDan() {
+		#expect(findings(in: """
+		// safedi-source-rule: allow uncheckedConcurrency — only `deinit` mutates it.
+		nonisolated(unsafe) var cache = [Int]()
+		""") == [
+			"Sources/SafeDICore/Models/Fixture.swift:1: waiver: the waiver of `uncheckedConcurrency` must cite Dan’s explicit OK for this site: `— Dan’s OK: <where he gave it>`",
 		])
 	}
 
