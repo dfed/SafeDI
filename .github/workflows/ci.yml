@@ -2039,7 +2039,10 @@ jobs:
   # both measured in this job, on this runner, in alternating runs
   # (Scripts/generate-time-check.py). It fails when a graph takes twice as
   # long, because a generator that slowed down several times over passed
-  # every other check and was found only by a benchmark run by hand.
+  # every other check and was found only by a benchmark run by hand, or when
+  # its `generate` processes' median peak memory is 1.3 times the base's and
+  # 8 MB more: main's tool against itself differed by 1% at most on every
+  # shape (45 to 308 MB, 2026-11-20).
   # The base is the main commit a pull request branched from, and for a push
   # to main the commit before the push. Its tool comes from the cache the
   # push to main that built it saved; when the cache has none, the job builds
