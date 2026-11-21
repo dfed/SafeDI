@@ -2063,7 +2063,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			decidesPerRoute: Bool = false,
 		) -> [FillDispatcher] {
 			let enumsByKey = calledBuilders.enumsByKey
-			let holesBySite = Dictionary(calledBuilders.holes.map { ($0.site, $0) }, uniquingKeysWith: { first, _ in first })
+			let holesBySite = calledBuilders.holeBySite
 			let builtTypeByHoleType = calledBuilders.holes.builtTypeByHoleType
 			let calledSeamTypes = Set(calledBuilders.builders.map(\.enumKey.seamType))
 			var sitesReachedByKey = [SeamSignature.ScopeEnum.Key: Set<SeamSignature.Hole.Site>]()
@@ -2195,7 +2195,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					key: dispatcherKey,
 					functionName: dispatcherNames[dispatcherKey] ?? "",
 					enumType: scopeEnum.type,
-					// The most explicit of the places' spellings, as the called seam's builder spells it (`builtType(of:)`).
+					// The most explicit of the places' spellings, as the called seam's builder spells it (`builtTypeByHoleType`).
 					returnType: builtTypeByHoleType[key.holeType] ?? key.holeType.builtType,
 					isSendableFamily: key.isSendable,
 					takesPassUp: takesPassUp(key, onRoutesOf: family),
