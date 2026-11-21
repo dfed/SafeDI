@@ -61,6 +61,10 @@ enum SourceRule: String, CaseIterable {
 	/// target in release without `-enable-testing`, which rejects the import, so its helpers import `SafeDIToolLibrary`
 	/// plainly, through the declarations the library makes `public` for them.
 	case testableImport
+	/// `nonisolated(unsafe)` or `@unchecked Sendable`, each of which opts out of the compiler's proof that SafeDI's own
+	/// code is safe to run concurrently, a deinit-only field included. Only Dan admits one, for one site: its waiver cites
+	/// his OK (`— Dan’s OK: <where he gave it>`), and no invariant stated in a waiver stands in for it.
+	case uncheckedConcurrency
 
 	/// Whether the rule applies to the file at `path`, relative to the repository root. SafeDI ships its sources and
 	/// plugins, so neither traps; the Tuist plugin's build script prints SafeDI's errors too, so it spells their
@@ -81,6 +85,8 @@ enum SourceRule: String, CaseIterable {
 			path.hasPrefix("Sources/") || path.hasPrefix("Plugins/") || path.hasPrefix("TuistPlugins/")
 		case .testableImport:
 			path.hasPrefix("Tests/SafeDIToolTestSupport/")
+		case .uncheckedConcurrency:
+			path.hasPrefix("Sources/") || path.hasPrefix("Plugins/")
 		}
 	}
 }
@@ -181,11 +187,27 @@ enum SourceRuleCheck {
 				: ""
 			if words.first == "allow", words.count > 1, let rule = SourceRule(rawValue: String(words[1])) {
 				self.rule = rule
-				problem = reason.isEmpty ? "the waiver of `\(rule.rawValue)` gives no reason" : nil
+				problem = if reason.isEmpty {
+					"the waiver of `\(rule.rawValue)` gives no reason"
+				} else if rule == .uncheckedConcurrency, !Self.citesDansOK(reason) {
+					"the waiver of `\(rule.rawValue)` must cite Dan’s explicit OK for this site: `— \(Self.dansOKMarker) <where he gave it>`"
+				} else {
+					nil
+				}
 			} else {
 				rule = nil
 				problem = "a waiver reads `\(SourceRuleCheck.waiverMarker) allow <rule> — <reason>`, where the rule is one of \(SourceRule.allCases.map { "`\($0.rawValue)`" }.joined(separator: ", "))"
 			}
+		}
+
+		/// What a waiver of `uncheckedConcurrency` begins its reason with, before where Dan gave his OK.
+		private static let dansOKMarker = "Dan’s OK:"
+
+		/// Whether `reason` begins with `dansOKMarker`, its apostrophe straight or curly, and says where he gave it.
+		private static func citesDansOK(_ reason: Substring) -> Bool {
+			let reason = reason.replacingOccurrences(of: "'", with: "’")
+			guard reason.hasPrefix(dansOKMarker) else { return false }
+			return !reason.dropFirst(dansOKMarker.count).trimmingCharacters(in: .whitespaces).isEmpty
 		}
 
 		/// The line of the comment.
@@ -313,7 +335,17 @@ private final class SourceRuleVisitor: SyntaxVisitor {
 		return .visitChildren
 	}
 
+	override func visit(_ node: DeclModifierSyntax) -> SyntaxVisitorContinueKind {
+		if node.name.tokenKind == .keyword(.nonisolated), node.detail?.detail.text == "unsafe" {
+			record(.uncheckedConcurrency, at: node.name, "`nonisolated(unsafe)` opts out of the compiler’s proof of concurrency safety")
+		}
+		return .visitChildren
+	}
+
 	override func visit(_ node: AttributeSyntax) -> SyntaxVisitorContinueKind {
+		if node.attributeName.trimmedDescription == "unchecked" {
+			record(.uncheckedConcurrency, at: node.atSign, "`@unchecked Sendable` opts out of the compiler’s proof of concurrency safety")
+		}
 		// `@testable` in an import's attributes, directly or inside an `#if` among them, reported at the `import` keyword's
 		// line, where a waiver goes.
 		if node.attributeName.trimmedDescription == "testable", let importDeclaration = Self.importDeclaration(whoseAttributesHold: node) {

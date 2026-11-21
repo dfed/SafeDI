@@ -82,6 +82,81 @@ public struct UnreadTypeComment: Sendable {
 		return resolvedCode ?? code
 	}
 
+	/// The UTF-8 bytes of `prefix` followed by `pieces` joined by `separator`, with the joined text's markers resolved as
+	/// `resolvingMarkers(in:)` resolves them: the same bytes as `Array((prefix + resolvingMarkers(in:
+	/// pieces.joined(separator: separator))).utf8)`.
+	///
+	/// Builds no joined text and no second copy of it: it finds every piece's marker lines first, so it can reserve the
+	/// result's exact size, and then writes each piece once. A module's whole output can be tens of megabytes, which each
+	/// copy of it adds to `generate`'s peak memory.
+	/// - Parameter separator: Text that ends in a line break, so no line of the joined text spans two pieces.
+	public static func resolvingMarkers(joining pieces: [String], separator: String, after prefix: String) -> [UInt8] {
+		var markerLinesByPiece = [[MarkerLine]]()
+		var typeNames = Set<String>()
+		var joinedByteCount = 0
+		for piece in pieces {
+			var piece = piece
+			let pieceMarkerLines = piece.withUTF8 { bytes in
+				let pieceMarkerLines = Self.markerLines(in: bytes)
+				for markerLine in pieceMarkerLines {
+					for typeName in bytes[markerLine.markerStart + markerPrefixBytes.count..<markerLine.lineEnd].split(separator: markerSeparatorByte) {
+						typeNames.insert(String(decoding: typeName, as: UTF8.self))
+					}
+				}
+				return pieceMarkerLines
+			}
+			markerLinesByPiece.append(pieceMarkerLines)
+			joinedByteCount += piece.utf8.count
+		}
+		joinedByteCount += separator.utf8.count * max(pieces.count - 1, 0)
+
+		let markerComment = typeNames.isEmpty ? [] : Array(comment(naming: typeNames.sorted()).utf8)
+		var resolvedByteCount = prefix.utf8.count + joinedByteCount
+		var isFirstMarker = true
+		for markerLine in markerLinesByPiece.joined() {
+			if isFirstMarker {
+				// The comment takes the first marker's place, after its line's indentation.
+				resolvedByteCount += markerComment.count - (markerLine.lineEnd - markerLine.markerStart)
+				isFirstMarker = false
+			} else {
+				// Every other marker line goes with the line break before it.
+				resolvedByteCount -= markerLine.lineEnd - markerLine.lineStart + 1
+			}
+		}
+
+		var resolvedBytes = [UInt8]()
+		resolvedBytes.reserveCapacity(resolvedByteCount)
+		resolvedBytes.append(contentsOf: prefix.utf8)
+		isFirstMarker = true
+		for (pieceIndex, piece) in pieces.enumerated() {
+			let pieceMarkerLines = markerLinesByPiece[pieceIndex]
+			if pieceIndex > 0 {
+				// A marker line other than the first that begins a piece goes with the separator's line break before it.
+				if !isFirstMarker, pieceMarkerLines.first?.lineStart == 0 {
+					resolvedBytes.append(contentsOf: separator.utf8.dropLast())
+				} else {
+					resolvedBytes.append(contentsOf: separator.utf8)
+				}
+			}
+			var piece = piece
+			piece.withUTF8 { bytes in
+				var copiedEnd = 0
+				for markerLine in pieceMarkerLines {
+					if isFirstMarker {
+						resolvedBytes.append(contentsOf: bytes[copiedEnd..<markerLine.markerStart])
+						resolvedBytes.append(contentsOf: markerComment)
+						isFirstMarker = false
+					} else if markerLine.lineStart > 0 {
+						resolvedBytes.append(contentsOf: bytes[copiedEnd..<markerLine.lineStart - 1])
+					}
+					copiedEnd = markerLine.lineEnd
+				}
+				resolvedBytes.append(contentsOf: bytes[copiedEnd...])
+			}
+		}
+		return resolvedBytes
+	}
+
 	// MARK: Internal
 
 	/// The marker line above a `public` declaration whose signature names `types`, indented by `indent`, which names the
