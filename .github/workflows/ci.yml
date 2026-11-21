@@ -33,6 +33,14 @@ jobs:
     # be computed) the answer is "everything changed", and the gates
     # below treat a missing answer the same way.
     #
+    # Two paths are classified by who reads them, not by their extension.
+    # `Documentation/Manual.md` is a source change: three tests take their
+    # fixtures and expected output from its code blocks. A file under
+    # `.claude/` is not: no source, test or build reads one, and the
+    # scripts there have their fixture self-tests in "Check Agent Skill
+    # Scripts on Linux", which always runs. A path joins this list only
+    # when no job that would skip reads it.
+    #
     # `integrations` is false when every changed file is Markdown or
     # under `Tests/` or `.claude/`. The two macOS jobs that build SafeDI
     # for Apple platforms and build the examples compile only products
@@ -93,7 +101,8 @@ jobs:
                 *.docc/*) docc=true ;;
               esac
               case "$file" in
-                *.md) ;;
+                Documentation/Manual.md) source=true ;;
+                *.md | .claude/*) ;;
                 *) source=true ;;
               esac
               case "$file" in
@@ -2525,8 +2534,7 @@ jobs:
   # jobs run, so a Markdown-only pull request skips it, and a skipped job
   # that is not a matrix job reports success under its own name, so it
   # needs no stand-in. It only reads reports with Python, as "Check Graph
-  # Fuzzer Corpus on Linux" does, so it runs on Linux with no container. It
-  # also runs the expectation regenerator's fixture self-test, last.
+  # Fuzzer Corpus on Linux" does, so it runs on Linux with no container.
   line-coverage:
     name: Check Line Coverage on Linux
     needs: [changes, spm, linux]
@@ -2537,35 +2545,11 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
-      # .claude/skills/apply-fuzzer-pins/apply-fuzzer-pins.py writes a corpus
-      # run's values into the fuzzer's pins, so it proves on fixtures that it
-      # refuses values that are not known to be of the commit it edits.
-      - name: Check the Fuzzer Pins Script Against Its Fixtures
-        run: python3 -I .claude/skills/apply-fuzzer-pins/apply-fuzzer-pins.py --self-test "$RUNNER_TEMP/apply-fuzzer-pins-self-test"
-      # .claude/skills/verify-touched/verify-touched.py chooses the suites a
-      # local run tests before a full Verify, so it proves on fixtures which
-      # suites a change selects and which lines of a run it reports.
-      - name: Check the Touched Suites Script Against Its Fixtures
-        run: python3 -I .claude/skills/verify-touched/verify-touched.py --self-test
-      # .claude/skills/pre-review/pre-review.py prints the block a hand-back
-      # carries, so it proves on fixtures which changes owe a pins run, which
-      # run it accepts as one, and what makes a block say it is not ready.
-      - name: Check the Pre-Review Script Against Its Fixtures
-        run: python3 -I .claude/skills/pre-review/pre-review.py --self-test
-      # .claude/skills/ci-step-limits/step-limits.py says which step limits a
-      # larger suite has outgrown, so it proves on fixtures which steps it
-      # measures, how it matches a matrix job, and each verdict.
-      - name: Check the Step Limits Script Against Its Fixtures
-        run: python3 -I .claude/skills/ci-step-limits/step-limits.py --self-test
       # The check is the only thing between an unexecuted line and main, so
       # its script proves on fixtures that it unions the platforms, resolves
       # symbolic links and refuses missing data before it reads the reports.
       - name: Check the Script Against Its Fixtures
         run: python3 -I Scripts/unexecuted-lines.py --self-test "$RUNNER_TEMP/unexecuted-lines-self-test"
-      # This job has no container, so it does not run as the superuser, and
-      # the script's read-only file case runs here.
-      - name: Check the Edit Script Against Its Fixtures
-        run: python3 -I .claude/skills/apply-edit/apply-edit.py --self-test "$RUNNER_TEMP/apply-edit-self-test"
       # .github/actions/restore-shared-compile-checks/restore-from-artifacts.js
       # decides which other runs' passed compile checks a test job skips, so
       # it proves on fixtures that it takes no line from a fork, another
@@ -2589,16 +2573,6 @@ jobs:
           path: ${{ runner.temp }}/line-coverage
       - name: Find Lines No Test Executes
         run: python3 -I Scripts/unexecuted-lines.py --summary "$GITHUB_STEP_SUMMARY" --commit "$GITHUB_SHA" linux="$RUNNER_TEMP/line-coverage/line-coverage-linux" macos="$RUNNER_TEMP/line-coverage/line-coverage-macos"
-      # .claude/skills/regenerate-expectations/regenerate-expectations.py rewrites test expectations from
-      # what the test helpers record, so its fixtures prove it rewrites only
-      # literals that equalled a recorded output and refuses records made over
-      # other test sources. It reads no report and runs here only because this
-      # job already runs Python self-tests, so it adds no job. It runs last and
-      # whatever the coverage steps concluded, so a failure here never hides
-      # which lines no test executes, and still fails the job.
-      - name: Check the Expectation Regenerator Against Its Fixtures
-        if: ${{ !cancelled() }}
-        run: python3 -I .claude/skills/regenerate-expectations/regenerate-expectations.py --self-test "$RUNNER_TEMP/regenerate-expectations-self-test"
 
   # Lists the generator lines the change adds or modifies that no graph of the
   # fuzzer's corpora executed, from the shards' coverage profiles, split by
@@ -2924,6 +2898,65 @@ jobs:
             echo "::error::The lines above are merge conflict markers. Resolve the conflict and remove them."
             exit 1
           fi
+
+  # Runs the fixture self-test of each script under `.claude/skills`. It runs
+  # on every change, with no `if:`, because the classifier above leaves a
+  # change under `.claude/` out of `source`: these steps are the only thing
+  # in this workflow that reads a file there, so nothing a `.claude/` change
+  # can alter goes unchecked when the build and test jobs skip, and its first
+  # step fails when another job starts to read one. Each step
+  # runs whatever the others concluded, so one run names every script that
+  # fails. The scripts need only Python, so the job runs on Linux with no
+  # container, in about half a minute.
+  skill-self-tests:
+    name: Check Agent Skill Scripts on Linux
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      # The skip is sound only while nothing the build and test jobs run
+      # reads a file under `.claude/`. This step fails when a step of another
+      # job, or Swift code under Sources, Plugins or Tests, names one.
+      - name: Check That No Skipped Job Reads a Skipped Path
+        run: python3 -I .github/scripts/check-skipped-paths.py --self-test && python3 -I .github/scripts/check-skipped-paths.py
+      # .claude/skills/apply-fuzzer-pins/apply-fuzzer-pins.py writes a corpus
+      # run's values into the fuzzer's pins, so it proves on fixtures that it
+      # refuses values that are not known to be of the commit it edits.
+      - name: Check the Fuzzer Pins Script Against Its Fixtures
+        if: ${{ !cancelled() }}
+        run: python3 -I .claude/skills/apply-fuzzer-pins/apply-fuzzer-pins.py --self-test "$RUNNER_TEMP/apply-fuzzer-pins-self-test"
+      # .claude/skills/verify-touched/verify-touched.py chooses the suites a
+      # local run tests before a full Verify, so it proves on fixtures which
+      # suites a change selects and which lines of a run it reports.
+      - name: Check the Touched Suites Script Against Its Fixtures
+        if: ${{ !cancelled() }}
+        run: python3 -I .claude/skills/verify-touched/verify-touched.py --self-test
+      # .claude/skills/pre-review/pre-review.py prints the block a hand-back
+      # carries, so it proves on fixtures which changes owe a pins run, which
+      # run it accepts as one, and what makes a block say it is not ready.
+      - name: Check the Pre-Review Script Against Its Fixtures
+        if: ${{ !cancelled() }}
+        run: python3 -I .claude/skills/pre-review/pre-review.py --self-test
+      # .claude/skills/ci-step-limits/step-limits.py says which step limits a
+      # larger suite has outgrown, so it proves on fixtures which steps it
+      # measures, how it matches a matrix job, and each verdict.
+      - name: Check the Step Limits Script Against Its Fixtures
+        if: ${{ !cancelled() }}
+        run: python3 -I .claude/skills/ci-step-limits/step-limits.py --self-test
+      # This job has no container, so it does not run as the superuser, and
+      # the script's read-only file case runs here.
+      - name: Check the Edit Script Against Its Fixtures
+        if: ${{ !cancelled() }}
+        run: python3 -I .claude/skills/apply-edit/apply-edit.py --self-test "$RUNNER_TEMP/apply-edit-self-test"
+      # .claude/skills/regenerate-expectations/regenerate-expectations.py rewrites test expectations from
+      # what the test helpers record, so its fixtures prove it rewrites only
+      # literals that equalled a recorded output and refuses records made over
+      # other test sources.
+      - name: Check the Expectation Regenerator Against Its Fixtures
+        if: ${{ !cancelled() }}
+        run: python3 -I .claude/skills/regenerate-expectations/regenerate-expectations.py --self-test "$RUNNER_TEMP/regenerate-expectations-self-test"
 
   lint-swift:
     name: Lint Swift
