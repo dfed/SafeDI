@@ -42,8 +42,47 @@ struct SafeDIToolReleaseAcceptanceTests {
 	/// The seeds of the base corpus whose break from each older release is expected, by the release's name. A seed of
 	/// another class, or one that no longer breaks, fails the run as stale. Each is attributed, never listed to make a
 	/// run pass: a break is release-noted, or a defect of the older release this tree fixed, and lists the seed in the
-	/// change that makes it. Against 2.3.0 no seed breaks.
-	static let listedSeedsByRelease: [String: [ListedSeed]] = [:]
+	/// change that makes it.
+	static let listedSeedsByRelease: [String: [ListedSeed]] = [
+		"2.3.0": [
+			ListedSeed(seed: 9, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 175, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 195, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 206, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 210, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 295, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 296, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 515, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 565, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 626, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 711, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 1_180, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 1_269, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 1_401, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 2_254, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 2_270, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 2_298, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 2_388, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 2_413, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 2_637, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 2_674, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 3_042, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 3_302, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 3_405, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 3_608, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 4_227, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 4_420, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 4_522, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 4_548, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 4_664, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 4_692, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(seed: 4_803, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+		],
+	]
+
+	/// #892: a mock passes `nil`, as production does, to a receive only if available of the other `LazilyInstantiated`
+	/// kind beside a required wrapper of the same instance, where 2.3.0's mock handed it a wrapper it made.
+	static let mockPassesNilAsProductionDoesReason = "#892, a 2.3.0 mock defect fixed and release-noted"
 
 	@Test
 	func listedSeeds_listEachSeedOnceAsABreak_forEachRelease() {

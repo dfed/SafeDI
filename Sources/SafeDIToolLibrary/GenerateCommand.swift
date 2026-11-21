@@ -1921,28 +1921,25 @@ public struct Generate: AsyncParsableCommand {
 
 	static func loadSafeDIModuleInfo(at paths: [String], readingViews: Bool = true) async throws -> [(file: ModuleInfoFile, path: String)] {
 		let moduleInfoURLs = paths.map(\.asFileURL)
-		return try await withThrowingTaskGroup(
-			of: (index: Int, file: ModuleInfoFile).self,
-			returning: [(file: ModuleInfoFile, path: String)].self,
+		let reads = await withTaskGroup(
+			of: (index: Int, read: Result<ModuleInfoFile, any Error>).self,
+			returning: [(index: Int, read: Result<ModuleInfoFile, any Error>)].self,
 		) { taskGroup in
 			for (index, moduleInfoURL) in moduleInfoURLs.enumerated() {
 				taskGroup.addTask {
-					do {
-						let data = try Data(contentsOf: moduleInfoURL)
-						return try (index: index, file: readingViews ? ModuleInfoFile(moduleInfoData: data) : ModuleInfoFile(moduleInfoDataWithoutView: data))
-					} catch let error as BinaryFileReadError {
-						throw UnreadableModuleInfoError(path: moduleInfoURL.path, reason: error)
-					}
+					(index: index, read: Result { try UnreadableModuleInfoError.reading(moduleInfoURL, readingViews: readingViews) })
 				}
 			}
-			var indexedModuleInfoFiles = [(index: Int, file: ModuleInfoFile)]()
-			for try await moduleInfoFile in taskGroup {
-				indexedModuleInfoFiles.append(moduleInfoFile)
+			var reads = [(index: Int, read: Result<ModuleInfoFile, any Error>)]()
+			for await read in taskGroup {
+				reads.append(read)
 			}
-			return indexedModuleInfoFiles
-				.sorted { $0.index < $1.index }
-				.map { (file: $0.file, path: moduleInfoURLs[$0.index].path) }
+			return reads
 		}
+		// The files are read in parallel, so their failures arrive in any order: the one reported is that of the first path.
+		return try reads
+			.sorted { $0.index < $1.index }
+			.map { try (file: $0.read.get(), path: moduleInfoURLs[$0.index].path) }
 	}
 
 	/// `listedFiles`, read from `listedPaths`, with those of the files `--transitive-module-info-file-path` lists that
@@ -2104,9 +2101,30 @@ struct MockOnlySeamError: SourceLocatedError {
 /// A `.safedi` file named by `--dependent-module-info-file-path` that this SafeDITool cannot read.
 struct UnreadableModuleInfoError: Error, CustomStringConvertible {
 	let path: String
-	let reason: BinaryFileReadError
+	/// Why the file could not be read, the same on every run: never Foundation’s own error, which prints its details in
+	/// the hash order of a dictionary.
+	let reason: String
 
 	var description: String {
-		"Could not read the SafeDI module info file at \(path): \(reason) \(BinaryFile.unreadableFileExplanation)"
+		"Could not read the SafeDI module info file at \(path): \(reason)"
+	}
+
+	/// The module info file at `url`, with its view when `readingViews`.
+	/// - Throws: `UnreadableModuleInfoError` when the file is missing, cannot be opened, or is not a module info file.
+	static func reading(_ url: URL, readingViews: Bool) throws -> ModuleInfoFile {
+		let data: Data
+		do {
+			data = try Data(contentsOf: url)
+		} catch {
+			throw UnreadableModuleInfoError(
+				path: url.path,
+				reason: FileManager.default.fileExists(atPath: url.path) ? "The path names a directory, or a file SafeDI may not open." : "No file exists at that path.",
+			)
+		}
+		do {
+			return try readingViews ? ModuleInfoFile(moduleInfoData: data) : ModuleInfoFile(moduleInfoDataWithoutView: data)
+		} catch {
+			throw UnreadableModuleInfoError(path: url.path, reason: "\(error) \(BinaryFile.unreadableFileExplanation)")
+		}
 	}
 }
