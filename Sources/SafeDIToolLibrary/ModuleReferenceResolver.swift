@@ -135,7 +135,7 @@ actor ModuleReferenceResolver {
 						do {
 							return try (index, ModuleInfoFile.Head(moduleInfoData: Data(contentsOf: path.asFileURL)))
 						} catch let error as BinaryFileReadError {
-							throw UnreadableModuleInfoError(path: path.asFileURL.path, reason: error)
+							throw UnreadableModuleInfoError(path: path.asFileURL.path, reason: "\(error) \(BinaryFile.unreadableFileExplanation)")
 						}
 					}
 				}
