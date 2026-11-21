@@ -2906,6 +2906,15 @@ jobs:
       # `.claude/rules` within the limits the root CLAUDE.md states.
       - name: Check Claude Instruction Files
         run: Scripts/check-claude-instruction-files.sh
+      # A merge resolved by hand can commit its conflict markers, and in a
+      # Markdown file nothing else fails on them: main once held them in a rules
+      # file. This job runs for Markdown-only changes too, so the check is here.
+      - name: Check for Merge Conflict Markers
+        run: |
+          if git grep -nI -E '^(<{7}|>{7}) ' -- . ; then
+            echo "::error::The lines above are merge conflict markers. Resolve the conflict and remove them."
+            exit 1
+          fi
 
   lint-swift:
     name: Lint Swift
