@@ -387,7 +387,7 @@ To build a value SafeDI cannot build, later or more than once, forward a closure
 
 Property declarations within `@Instantiable` types decorated with [`@Received`](../Sources/SafeDI/Decorators/Received.swift) are injected into the enclosing type’s initializer. SafeDI fills a `@Received` property from the nearest type above it that instantiates, forwards, or [renames](#renaming-and-retyping-dependencies) a property with the same label. If no type above provides the property, the build fails.
 
-Do not declare a label again beneath a type that already declares it on the same path from a root: give the inner declaration its own label. Types on separate branches may share a label. SafeDI accepts some graphs that redeclare a label on one path today, but a future feature release may reject them.
+Do not declare a label again beneath a type that already declares it on the same path from a root: give the inner declaration its own label. Types on separate branches may share a label.
 
 That property must have the received type, with two exceptions:
 
@@ -1685,7 +1685,7 @@ Your integration already has a `SafeDITool`; a [custom build system](#custom-bui
 - **Bazel:** `bazel run @safedi//:SafeDITool -- <arguments>` runs the `SafeDITool` your build runs, prebuilt or built from source, in the directory you run it from, so relative paths among the arguments work. A build writes `bazel-bin/<package>/<name>_safedi.safedi`, though when the action’s result comes from a cache, such as `--disk_cache`, only for a build passed `--remote_download_regex='.*\.safedi$'`.
 - **Tuist:** `Tuist/.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool` from the directory that holds `Tuist/Package.swift`; a build writes `$BUILT_PRODUCTS_DIR/SafeDI/<PRODUCT_MODULE_NAME>.safedi`.
 
-On an Intel Mac, the bundle’s directory is `SafeDITool-macos-x86_64`.
+On an Intel Mac, the bundle’s directory is `SafeDITool-macos-x86_64`, and on Linux, `SafeDITool-linux-x86_64` or `SafeDITool-linux-arm64`.
 
 ### Finding the generated code
 
