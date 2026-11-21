@@ -149,7 +149,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.property = property
 		let declaration = property.map { BuiltDeclaration(property: $0, concreteType: instantiable.concreteInstantiable) }
 		self.declaration = declaration
-		self.propertiesToGenerate = propertiesToGenerate
+		propertiesToGenerateSlot = DeferredReleaseSlot(propertiesToGenerate)
 		fillFieldSelection = fill.flatMap { fill in
 			propertiesToGenerate.first.flatMap { child in
 				FillFieldSelection(hole: fill.hole, boundLabels: fill.boundLabels, fields: fill.fields, child: child)
@@ -1267,7 +1267,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		publicMockLevelReentriesChangedInTree = false
 		reboundProperties = []
 		description = property.asSource
-		propertiesToGenerate = []
+		propertiesToGenerateSlot = DeferredReleaseSlot([])
 		propertiesToDeclare = []
 		instantiatedDependenciesNotGenerated = []
 		self.unavailableOptionalProperties = unavailableOptionalProperties
@@ -1380,7 +1380,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		publicMockLevelReentriesChangedInTree = false
 		reboundProperties = []
 		description = holeProperty.asSource
-		propertiesToGenerate = []
+		propertiesToGenerateSlot = DeferredReleaseSlot([])
 		propertiesToDeclare = []
 		instantiatedDependenciesNotGenerated = []
 		unavailableOptionalProperties = []
@@ -2714,14 +2714,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// What identifies the case a fill fills: one fill of a call generates the code of every place of a case nested by type.
 	static func fillCaseKey(of hole: SeamSignature.Hole) -> String {
 		"\(hole.scopeSeamType.asSource) \(hole.enumPlace.map { $0.enumType(qualifiedBy: nil).asSource } ?? hole.scopeTypeName) \(hole.enumPlace?.caseName ?? "")"
-	}
-
-	deinit {
-		// A tree of generators can be as deep as the module has types, so the generators this one holds the last
-		// references to are released one at a time rather than from within this deinitializer.
-		var propertiesToGenerate = [ScopeGenerator]()
-		swap(&propertiesToGenerate, &self.propertiesToGenerate)
-		DeferredRelease.release(consume propertiesToGenerate)
 	}
 
 	// MARK: CustomStringConvertible
@@ -4347,8 +4339,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let unavailableProperties: [Property]
 	}
 
-	/// Properties that will be generated as `let` constants. Mutated only by `deinit`, which has the only access.
-	nonisolated(unsafe) private var propertiesToGenerate: [ScopeGenerator]
+	/// Properties that will be generated as `let` constants.
+	nonisolated private var propertiesToGenerate: [ScopeGenerator] {
+		propertiesToGenerateSlot.value
+	}
+
+	/// `propertiesToGenerate`, held in a slot that releases them one level at a time: a tree of generators can be as
+	/// deep as the module has types.
+	private let propertiesToGenerateSlot: DeferredReleaseSlot<[ScopeGenerator]>
 	/// Properties that this scope declares as a `let` constant, and those its type instantiates that a mock is
 	/// passed instead (see `Scope.propertiesToDeclare`).
 	let propertiesToDeclare: Set<Property>
@@ -10869,24 +10867,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// within it, which would nest a release for each level of the tree.
 	final class MockTreeItems: Sendable {
 		init(_ items: [MockTreeItem]) {
-			self.items = items
-			propertyNodes = items.propertyNodes
+			itemsSlot = DeferredReleaseSlot(items)
+			propertyNodesSlot = DeferredReleaseSlot(items.propertyNodes)
 		}
 
-		deinit {
-			var items = [MockTreeItem]()
-			swap(&items, &self.items)
-			DeferredRelease.release(consume items)
-			var propertyNodes = [MockParameterNode]()
-			swap(&propertyNodes, &self.propertyNodes)
-			DeferredRelease.release(consume propertyNodes)
+		var items: [MockTreeItem] {
+			itemsSlot.value
 		}
 
-		/// Mutated only by `deinit`, which has the only access.
-		nonisolated(unsafe) private(set) var items: [MockTreeItem]
 		/// The property nodes among `items` (`[MockTreeItem].propertyNodes`), which generation reads for every node many
-		/// times. Mutated only by `deinit`, which has the only access.
-		nonisolated(unsafe) private(set) var propertyNodes: [MockParameterNode]
+		/// times.
+		var propertyNodes: [MockParameterNode] {
+			propertyNodesSlot.value
+		}
+
+		private let itemsSlot: DeferredReleaseSlot<[MockTreeItem]>
+		private let propertyNodesSlot: DeferredReleaseSlot<[MockParameterNode]>
 
 		/// Whether any of `items` is a property node.
 		var containsPropertyNode: Bool {
