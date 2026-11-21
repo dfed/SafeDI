@@ -12096,7 +12096,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for child in node.propertyChildren {
 				await walk(child, isBeneathRepeatedAncestor: isBeneathRepeatedAncestor || repeatsAncestor)
 			}
-			if !repeatsAncestor { ancestorTypes.remove(key) }
+			if !repeatsAncestor {
+				ancestorTypes.remove(key)
+			}
 			// Skip leaf nodes that don't need a SafeDIMockConfiguration struct, and nodes whose type repeats an ancestor's,
 			// such as a cycle-closer (isPropertyCycle == true), whose property appears earlier in the stack.
 			guard node.needsConfigurationStruct, !repeatsAncestor else { return }
@@ -12812,7 +12814,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						bindingNamesPassedByName: bindingNamesPassedByName,
 						enclosingBindingNamesPassedByName: enclosingBindingNamesPassedByName,
 					)
-					if insertedAncestor { ancestorTypes.remove(nodeTypeKey) }
+					if insertedAncestor {
+						ancestorTypes.remove(nodeTypeKey)
+					}
 					if let loop = node.loop {
 						appendToLoopUnit(loop, bindingLines)
 					} else {
@@ -12910,7 +12914,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						publicMock: publicMock?.beneathRoot,
 						enclosingBindingNamesPassedByName: bindingNamesPassedByName,
 					)
-					if insertedAncestor { ancestorTypes.remove(nodeTypeKey) }
+					if insertedAncestor {
+						ancestorTypes.remove(nodeTypeKey)
+					}
 
 					let functionConstructionExpression = if let startedSendableOverrideExtractor {
 						// The caller read this node's own override and arguments outside any `@Sendable` function; the
@@ -13685,7 +13691,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				publicMock: publicMock?.beneathRoot,
 				enclosingBindingNamesPassedByName: bindingNamesPassedByName,
 			)
-			if insertedAncestor { ancestorTypes.remove(node.cycleNodeKey) }
+			if insertedAncestor {
+				ancestorTypes.remove(node.cycleNodeKey)
+			}
 
 			let nodeHandWrittenMockDefaultParameters = handWrittenMockDefaultParameters[node.concreteType, default: []]
 			let functionOverrideExpression: String?
