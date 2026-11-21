@@ -971,6 +971,8 @@ extension DependencyTreeGenerator {
 				guard first.property.label == initial.property.label,
 				      first.property.typeDescription.asSource == initial.property.typeDescription.asSource,
 				      first.deferral == initial.deferral,
+				      // Implied today by the checks above: the first pass adds no parameter, and a seam's own parameters are never
+				      // deferred (`ownParameter`), so none is renamed apart from the tree's builder functions. Kept as a guard.
 				      first.internalName == initial.internalName
 				else { return false }
 			}
@@ -978,6 +980,11 @@ extension DependencyTreeGenerator {
 		var visited = Set<ObjectIdentifier>()
 		var generatorsToVisit = [generator]
 		while let visiting = generatorsToVisit.popLast() {
+			// No shape found today needs this check: the seams a call reaches are in components settled before this one, and
+			// the seam does not call itself (`seamsReachingThemselves`), so a call reads no signature the first pass changed,
+			// and no seam test or seam corpus seed differs without it, even where the seam's fill of another seam's hole
+			// builds a place that is a hole of this seam. Kept as a guard, since the reads of `SeamHoles` it excludes were
+			// never shown not to reach a signature.
 			guard visiting.seamCall == nil, visiting.publicMockCall == nil, visiting.fillKey == nil, visiting.passedUpHoles.isEmpty else { return false }
 			for child in visiting.children where visited.insert(ObjectIdentifier(child)).inserted {
 				generatorsToVisit.append(child)
