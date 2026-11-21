@@ -3389,6 +3389,132 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return findings
 	}
 
+	/// The value each receive in the tree rooted at this scope, a root of the dependency tree, is handed in each place the
+	/// tree builds its type, as generated code resolves its label: the nearest declaration of the label where the receive's
+	/// type is constructed, in the order the tree's code is generated, or `nil` where generation passes `nil`
+	/// (`unavailableProperties`). Where that declaration is a parameter of a builder function a lazy cycle closes on, the
+	/// value is the one each call of the function passes (see `OmissionFindings`).
+	func receivedValueSupplies(ofTreeRootedAt instantiable: Instantiable) async -> [ReceivedValueSupply] {
+		await receivedValueSupplies(
+			of: instantiable,
+			unavailableProperties: [],
+			propertiesGeneratedLater: [],
+			declarationsByLabel: [:],
+			enclosingCycleFunctions: [:],
+			visitNumber: 0,
+		).judged()
+	}
+
+	/// - Parameters:
+	///   - unavailableProperties: This scope's `unavailableProperties`, as `generateCode` takes them.
+	///   - declarationsByLabel: The declarations each label names where this scope's type is constructed.
+	///   - enclosingCycleFunctions: The builder functions enclosing this scope that lazy cycles close on and that take
+	///     parameters (see `CycleParameter`), by the declaration each builds.
+	///   - visitNumber: The number the walk gives this visit, which names the builder function this scope's body is.
+	private func receivedValueSupplies(
+		of instantiable: Instantiable,
+		unavailableProperties: Set<Property>,
+		propertiesGeneratedLater: Set<Property>,
+		declarationsByLabel: [String: [VisibleDeclaration]],
+		enclosingCycleFunctions: [BuiltDeclaration: Int],
+		visitNumber: Int,
+	) async -> OmissionFindings<ReceivedValueSupply> {
+		let declaringType = instantiable.concreteInstantiable
+		var findings = OmissionFindings<ReceivedValueSupply>(nextVisitNumber: visitNumber + 1)
+		/// Records what the receive of `receivedProperty` under `label` reads among `declarationsByLabel`, or `nil` when
+		/// generation passes it `nil`.
+		func recordSupply(of receivedProperty: Property, label: String, among declarationsByLabel: [String: [VisibleDeclaration]], isPassedNil: Bool) {
+			let unwrappedProperty = receivedProperty.asUnwrappedProperty
+			let passedNil = ReceivedValueSupply(receivingType: declaringType, label: label, supplier: nil)
+			guard !isPassedNil, let provider = declarationsByLabel[receivedProperty.label]?.first(where: { $0.provides(unwrappedProperty) }) else {
+				findings.append(passedNil)
+				return
+			}
+			findings.append(reading: unwrappedProperty, from: provider, passedNothing: passedNil) { provider in
+				ReceivedValueSupply(
+					receivingType: declaringType,
+					label: label,
+					supplier: provider.declaringType.map { ReceivedValueSupply.Supplier(declaringType: $0, label: provider.property.label) },
+				)
+			}
+		}
+		// The type is constructed in its builder function, which binds its parameters and what it rebinds before anything
+		// in it reads them.
+		let ownUnavailableProperties = bodyUnavailableProperties(unavailableProperties)
+		for dependency in instantiable.dependencies where dependency.source.isReceived {
+			recordSupply(of: dependency.property, label: dependency.property.label, among: declarationsByLabel, isPassedNil: ownUnavailableProperties.contains(dependency.property))
+		}
+
+		func visibleDeclaration(of property: Property, instanceProperty: Property?) -> VisibleDeclaration {
+			VisibleDeclaration(
+				property: property,
+				instanceProperty: instanceProperty,
+				declaringType: declaringType,
+				declarationLocation: nil,
+				sendableBuilderDepth: 0,
+			)
+		}
+		var scopeDeclarationsByLabel = [String: [VisibleDeclaration]]()
+		for dependency in instantiable.dependencies where dependency.source == .forwarded {
+			scopeDeclarationsByLabel[dependency.property.label, default: []].append(visibleDeclaration(
+				of: dependency.property,
+				instanceProperty: dependency.lazilyInstantiatedInstanceProperty,
+			))
+		}
+		let orderedChildren = orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater)
+		// An `onlyIfAvailable` alias is declared even where it is bound to `nil`.
+		for child in orderedChildren {
+			if let property = child.generator.property {
+				scopeDeclarationsByLabel[property.label, default: []].append(visibleDeclaration(
+					of: property,
+					instanceProperty: child.generator.declaredLazilyInstantiatedInstanceProperty,
+				))
+			}
+		}
+		var childDeclarationsByLabel = declarationsByLabel
+		childDeclarationsByLabel.merge(scopeDeclarationsByLabel) { _, scopeDeclarations in scopeDeclarations }
+		let loopMembersByChildIndex = loopMembersPassedByReceivedFunctions(of: orderedChildren)
+
+		for child in orderedChildren {
+			if case let .alias(property, fulfillingProperty, _, onlyIfAvailable, _) = child.generator.scopeData {
+				// The alias is bound in this scope's code, where its fulfilling property is read. An alias that keeps its
+				// fulfilling property's label is not in scope where that property is read.
+				var fulfillingDeclarationsByLabel = childDeclarationsByLabel
+				if fulfillingProperty.label == property.label {
+					fulfillingDeclarationsByLabel[property.label] = declarationsByLabel[property.label]
+				}
+				recordSupply(
+					of: fulfillingProperty,
+					label: property.label,
+					among: fulfillingDeclarationsByLabel,
+					isPassedNil: Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: child.unavailableProperties),
+				)
+			} else if case let .property(childInstantiable, _, _, _, isPropertyCycle, _) = child.generator.scopeData {
+				if isPropertyCycle {
+					// A scope that closes a cycle constructs nothing: it calls the builder function of the declaration it repeats.
+					findings.recordCalls(by: child, of: child.generator.closedOnDeclaration.flatMap { enclosingCycleFunctions[$0] }, among: childDeclarationsByLabel, loopMembers: loopMembersByChildIndex[child.index, default: []])
+				} else {
+					// This scope calls the child's builder function, which, when a lazy cycle closes on it and it takes
+					// parameters, it passes them as each cycle-closing scope does. The function's body reads its parameters,
+					// which hide every declaration of their labels where it is called, as generation's do.
+					// The function is told apart by the walk's visit of the child, never by its generator, which several places of
+					// the tree can share (see `ConstructionMemo`): each place's calls are of a function of its own.
+					let function = findings.nextVisitNumber
+					findings.recordCalls(by: child, of: function, among: childDeclarationsByLabel, loopMembers: loopMembersByChildIndex[child.index, default: []])
+					await findings.append(contentsOf: child.generator.receivedValueSupplies(
+						of: childInstantiable,
+						unavailableProperties: child.unavailableProperties,
+						propertiesGeneratedLater: child.generator.bodyPropertiesGeneratedLater(child.propertiesGeneratedLater),
+						declarationsByLabel: child.generator.bodyDeclarations(function: function, enclosing: childDeclarationsByLabel),
+						enclosingCycleFunctions: child.generator.bodyEnclosingCycleFunctions(function: function, enclosing: enclosingCycleFunctions),
+						visitNumber: function,
+					))
+				}
+			}
+		}
+		return findings
+	}
+
 	/// A value a mock tree holds for a parameter that the tier of a public mock it calls omits, which the call passes
 	/// `nil` for although the receivers inside the public mock's tree, built inline, would be handed the value.
 	struct PublicMockTierOmission: Sendable {
@@ -3713,7 +3839,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// What a walk finds of the values a tree passes the calls it makes of seams' tiers (`seamTierOmissions`) or of other
-	/// modules' public mocks (`publicMockTierOmissions`). A builder function a lazy cycle closes on reads its parameters
+	/// modules' public mocks (`publicMockTierOmissions`), or of the value each receive is handed (`receivedValueSupplies`).
+	/// A builder function a lazy cycle closes on reads its parameters
 	/// (see `CycleParameter`), which the scope that declares it passes as each scope that closes the cycle on it does, so
 	/// a call in its body that omits one is judged at the calls of the function, by the declarations they pass, never by
 	/// the declarations above the function, as `nonSendableWrapperCaptures` judges a capture of one.
@@ -3727,10 +3854,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let unwrappedProperty: Property
 			/// The omission, given the declaration that provides the value.
 			let omission: @Sendable (VisibleDeclaration) -> Omission
+			/// What a call that passes the parameter `nil`, or a value of no form the read reads, finds: nothing for an
+			/// omission, which needs a value to omit.
+			let passedNothing: Omission?
 		}
 
-		/// A call of a builder function a lazy cycle closes on that passes its parameter of `label` a value: the
-		/// declarations of the label where the call is made.
+		/// A call of a builder function a lazy cycle closes on that passes its parameter of `label` the declarations of
+		/// the label where the call is made, or none where it passes `nil`.
 		struct Call: Sendable {
 			let function: Int
 			let label: String
@@ -3750,21 +3880,39 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		/// Records the omission of a value of `unwrappedProperty` that `provider`, the declaration the omitting call's leaf
 		/// would read, provides.
-		mutating func append(reading unwrappedProperty: Property, from provider: VisibleDeclaration, omission: @escaping @Sendable (VisibleDeclaration) -> Omission) {
+		/// - Parameter passedNothing: What a call of the function `provider` is a parameter of finds where it passes the
+		///   parameter `nil`, or `nil` to find nothing there.
+		mutating func append(
+			reading unwrappedProperty: Property,
+			from provider: VisibleDeclaration,
+			passedNothing: Omission? = nil,
+			omission: @escaping @Sendable (VisibleDeclaration) -> Omission,
+		) {
 			if let function = provider.cycleFunction {
-				parameterReads.append(ParameterRead(function: function, label: provider.property.label, unwrappedProperty: unwrappedProperty, omission: omission))
+				parameterReads.append(ParameterRead(function: function, label: provider.property.label, unwrappedProperty: unwrappedProperty, omission: omission, passedNothing: passedNothing))
 			} else {
 				omissions.append(omission(provider))
 			}
 		}
 
+		/// Records a finding no declaration provides.
+		mutating func append(_ omission: Omission) {
+			omissions.append(omission)
+		}
+
 		/// Records the call `child` makes of `function`, which it declares or closes a cycle on, with the declarations of
-		/// each parameter's label among `declarationsByLabel`, where the call is made, but for those it passes `nil`.
+		/// each parameter's label among `declarationsByLabel`, where the call is made, and none for those it passes `nil`.
 		/// `function` is `nil` for a function that takes no parameters.
-		mutating func recordCalls(by child: OrderedChild, of function: Int?, among declarationsByLabel: [String: [VisibleDeclaration]]) {
+		/// - Parameter loopMembers: The members of the loop of builders `child` is a member of, where the scope hands its
+		///   wrappers a `__safeDI_<label>_received` function: that function passes a parameter that one of them provides the
+		///   member's wrapper made again, whatever `child`'s `unavailableProperties` say (see `ReceivedBuilderLoops`).
+		mutating func recordCalls(by child: OrderedChild, of function: Int?, among declarationsByLabel: [String: [VisibleDeclaration]], loopMembers: Set<Property> = []) {
 			guard let function else { return }
-			for parameter in child.generator.cycleParameters where !child.unavailableProperties.contains(parameter.property) {
-				calls.append(Call(function: function, label: parameter.property.label, declarations: declarationsByLabel[parameter.property.label, default: []]))
+			for parameter in child.generator.cycleParameters {
+				let unwrappedProperty = parameter.property.asUnwrappedProperty
+				let isPassedLoopMember = loopMembers.contains(unwrappedProperty) || loopMembers.contains(unwrappedProperty.asOptionalProperty)
+				let declarations = !isPassedLoopMember && child.unavailableProperties.contains(parameter.property) ? [] : declarationsByLabel[parameter.property.label, default: []]
+				calls.append(Call(function: function, label: parameter.property.label, declarations: declarations))
 			}
 		}
 
@@ -3792,7 +3940,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				var functionsToJudge = [read.function]
 				while let function = functionsToJudge.popLast() {
 					for call in callsByFunction[function, default: []] where call.label == read.label {
-						guard let provider = call.declarations.first(where: { $0.provides(read.unwrappedProperty) }) else { continue }
+						guard let provider = call.declarations.first(where: { $0.provides(read.unwrappedProperty) }) else {
+							if let passedNothing = read.passedNothing {
+								omissions.append(passedNothing)
+							}
+							continue
+						}
 						if let enclosingFunction = provider.cycleFunction {
 							// A call that passes a function's parameter passes what that function's calls pass.
 							if judgedFunctions.insert(enclosingFunction).inserted {
@@ -5907,6 +6060,35 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// The forms the parameters of this scope's builder function provide to the function's body, or none when it takes
 	/// no parameters a lazy cycle needs.
+	/// The members of each child's loop of builders whose wrappers the `__safeDI_<label>_received` function the body
+	/// declares for that child makes again for the parameters a lazy cycle needs, by the child's index, as
+	/// `bodyChildren(propertiesGeneratedLater:enclosingFunctionNames:)` declares them: a member that takes such parameters
+	/// is a loop's non-alias child with cycle parameters, and the members are the loop's non-alias children and the renames
+	/// the body declares of them. Empty for nearly every body.
+	nonisolated private func loopMembersPassedByReceivedFunctions(of orderedChildren: [OrderedChild]) -> [Int: Set<Property>] {
+		let loopByChildIndex = receivedBuilderLoops.loopByChildIndex
+		guard !loopByChildIndex.isEmpty else { return [:] }
+		var membersByLoop = [Int: Set<Property>]()
+		for child in orderedChildren where !child.generator.isAlias {
+			guard let property = child.generator.property, let loop = loopByChildIndex[child.index] else { continue }
+			membersByLoop[loop, default: []].insert(property)
+		}
+		for child in orderedChildren where child.generator.isAlias {
+			if case let .alias(property, fulfillingProperty, _, _, _) = child.generator.scopeData,
+			   let loop = loopByChildIndex[child.index],
+			   membersByLoop[loop, default: []].contains(fulfillingProperty)
+			{
+				membersByLoop[loop, default: []].insert(property)
+			}
+		}
+		var membersByChildIndex = [Int: Set<Property>]()
+		for child in orderedChildren where !child.generator.isAlias && !child.generator.cycleParameters.isEmpty {
+			guard let loop = loopByChildIndex[child.index] else { continue }
+			membersByChildIndex[child.index] = membersByLoop[loop, default: []]
+		}
+		return membersByChildIndex
+	}
+
 	nonisolated private var cycleParameterProvidedForms: Set<Property> {
 		declaresCycleParameters ? Set(cycleParameters.flatMap(\.providedForms)) : []
 	}

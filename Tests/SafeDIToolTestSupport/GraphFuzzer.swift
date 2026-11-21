@@ -13044,6 +13044,9 @@ struct GraphFuzzerFailure: Equatable {
 		/// A root's generated `mock()` takes a parameter: a root receives nothing and forwards nothing, so its mock takes
 		/// none but its overrides.
 		case rootMockTakesParameter = "a root's generated mock takes a parameter"
+		/// `query graph` names other suppliers for a receive than the generated code hands it, or the oracle cannot follow
+		/// a read of the generated code (`GraphFuzzerToolRuns.querySuppliersFailure`).
+		case querySuppliersDifferFromGeneratedCode = "query graph names other suppliers for a receive than the generated code hands it"
 		/// The graph names a type no declaration SafeDI reads declares, and its read twin (`GraphFuzzerFixture.readTwin`),
 		/// which declares that type `public` where SafeDI reads it, gets another verdict, other diagnostics, or other
 		/// generated code: SafeDI counts the type otherwise than as `public` (decision 54).
@@ -13267,6 +13270,7 @@ struct GraphFuzzerResult {
 		isComparedAcrossIntegrations: Bool = false,
 		isComparedWithRecomputedSignatures: Bool = false,
 		isComparedWithReadTwin: Bool = false,
+		isJudgedByQueryOracle: Bool = false,
 		isComparedWithoutSecondHolePlace: Bool = false,
 		isComparedWithoutSecondPath: Bool = false,
 		isComparedWithCleanSubtreeSkipOff: Bool = false,
@@ -13294,6 +13298,7 @@ struct GraphFuzzerResult {
 		self.isComparedAcrossIntegrations = isComparedAcrossIntegrations
 		self.isComparedWithRecomputedSignatures = isComparedWithRecomputedSignatures
 		self.isComparedWithReadTwin = isComparedWithReadTwin
+		self.isJudgedByQueryOracle = isJudgedByQueryOracle
 		self.valueOracle = valueOracle
 	}
 
@@ -13330,6 +13335,9 @@ struct GraphFuzzerResult {
 	/// Whether the oracle ran the graph's read twin and compared it with the graph (`GraphFuzzerToolRuns.readTwinFailure`):
 	/// the graph names a type no declaration SafeDI reads declares.
 	let isComparedWithReadTwin: Bool
+	/// Whether the query oracle compared the suppliers `query graph` exports with the generated code
+	/// (`GraphFuzzerToolRuns.querySuppliersFailure`): the tool accepts the graph, which is in one module and no public mock's.
+	let isJudgedByQueryOracle: Bool
 	/// Whether the oracle compared the builder labels and case names the tool generates for the graph with those it generates
 	/// for the graph without its second place of a hole (`GraphFuzzerToolRuns.holeNameStabilityFailure`): the tool accepts
 	/// both.
@@ -13918,6 +13926,8 @@ struct GraphFuzzerToolRuns {
 	///     (`GraphFuzzerBuilderSurfaceEdit`).
 	///   - drawnHolePlaces: The places of holes the draw put beneath a lazy wrapper or made forward a value
 	///     (`GraphFuzzerGenerator.drawnHolePlaces(forSeed:features:)`), which the builder surface's floors count.
+	///   - queryExport: The JSON `query graph` exports for a graph in one module the tool accepts, which
+	///     `querySuppliersFailure` compares with the generated code.
 	init(
 		fixture: GraphFuzzerFixture,
 		firstOutcome: GraphFuzzerToolOutcome,
@@ -13940,7 +13950,9 @@ struct GraphFuzzerToolRuns {
 		remedyRuns: [GraphFuzzerRemedyRun] = [],
 		builderSurfaceRuns: [GraphFuzzerBuilderSurfaceRun] = [],
 		drawnHolePlaces: [GraphFuzzerDrawnHolePlace] = [],
+		queryExport: String? = nil,
 	) {
+		self.queryExport = queryExport
 		self.builderSurfaceRuns = builderSurfaceRuns
 		self.drawnHolePlaces = drawnHolePlaces
 		self.withoutSecondHolePlaceOutcome = withoutSecondHolePlaceOutcome
@@ -13988,6 +14000,7 @@ struct GraphFuzzerToolRuns {
 	let remedyRuns: [GraphFuzzerRemedyRun]
 	let builderSurfaceRuns: [GraphFuzzerBuilderSurfaceRun]
 	let drawnHolePlaces: [GraphFuzzerDrawnHolePlace]
+	let queryExport: String?
 
 	/// The failure of a graph some place of whose seam's tree has a path that repeats a declaration, or `nil`: the tree
 	/// closes a cycle where a declaration is already being built above, and a build that closes a cycle is the first build,
@@ -14781,7 +14794,7 @@ enum GraphFuzzerOracle {
 			let renamedGraphFailures = runs.renamedGraphFailures(refutingOrderOf: valueComparisons.listOrderRefutations[runs.fixture.seed] ?? [:])
 			var failures = [runs.runsDifferFailure, runs.cleanSubtreeSkipFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.storedSeamSignaturesDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.seamRejectedWhereInlineAcceptsFailure, runs.nilArgumentFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.publicMockRootLevelFailure, runs.publicMockOverrideClosureFailure, runs.publicMockOverridesOrderFailure, runs.omittedValueFailure, codeCompilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure].compactMap(\.self)
 			failures.append(contentsOf: valueComparisons.failures[runs.fixture.seed] ?? [])
-			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure].compactMap(\.self))
+			failures.append(contentsOf: [runs.wrapperParameterFailure, runs.generatedCodeCallsEntryMeantForPeopleFailure, runs.generatedOnlyInitializerTakesDefaultFailure, runs.configurationStorageFailure, runs.handWrittenMockBypassFailure, runs.readTwinFailure, runs.holeNameStabilityFailure, runs.builderSurfaceFailure, builderCallFailures[runs.fixture.seed], runs.builderLabelFailure, runs.sameSupplyFailure, runs.sameSupplyEditRejectedFailure, runs.addedSupplyFailure, runs.forwardedValuesFailure, runs.forwardingRemedyFailure, runs.remedyBuildersFailure, runs.callingMockFailure, runs.placeLevelsFailure, runs.placeChainFailure, runs.secondPathFailure, runs.multiModuleFailures.first, runs.remedyFailure, runs.querySuppliersFailure].compactMap(\.self))
 			failures.append(contentsOf: runs.scopeCaseFailures)
 			// Whether a closure a level function returns keeps a level's values, read from the generated text, so it judges
 			// with compiles and without.
@@ -14815,6 +14828,7 @@ enum GraphFuzzerOracle {
 				isComparedAcrossIntegrations: runs.pluginOutcome != nil,
 				isComparedWithRecomputedSignatures: runs.recomputedSignaturesOutcome != nil,
 				isComparedWithReadTwin: runs.readTwinOutcome != nil,
+				isJudgedByQueryOracle: runs.queryExport != nil,
 				isComparedWithoutSecondHolePlace: runs.isComparedWithoutSecondHolePlace,
 				isComparedWithoutSecondPath: runs.isComparedWithoutSecondPath,
 				isComparedWithCleanSubtreeSkipOff: runs.cleanSubtreeSkipOffOutcome != nil,
@@ -15590,6 +15604,12 @@ enum GraphFuzzerOracle {
 			}
 			drawnHolePlaces = GraphFuzzerGenerator.drawnHolePlaces(forSeed: fixture.seed, features: drawnFeatures)
 		}
+		// A graph in one module the tool accepts is exported by `query graph`, whose suppliers must be what the generated code
+		// hands each receive (`querySuppliersFailure`).
+		var queryExport: String?
+		if fixture.modules == nil, !drawnFeatures.contains(.generateMockPublic), case .accepted = firstOutcome {
+			queryExport = try await GraphFuzzerQuerySupplies.export(of: fixture)
+		}
 		return try await GraphFuzzerToolRuns(
 			fixture: fixture,
 			firstOutcome: firstOutcome,
@@ -15619,6 +15639,7 @@ enum GraphFuzzerOracle {
 			remedyRuns: remedyRuns,
 			builderSurfaceRuns: builderSurfaceRuns,
 			drawnHolePlaces: drawnHolePlaces,
+			queryExport: queryExport,
 		)
 	}
 
