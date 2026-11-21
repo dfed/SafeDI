@@ -1313,6 +1313,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 		.structure(
 			fields: [
 				BinaryLayoutField("moduleName", \.moduleName),
+				BinaryLayoutField("ownEntryChecksum", \.ownEntryChecksum),
 				BinaryLayoutField("packageName", \.packageName),
 				BinaryLayoutField("dependencyModuleNames", \.dependencyModuleNames),
 				BinaryLayoutField("imports", \.imports),
@@ -1335,6 +1336,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 		let fileWithoutView = try ModuleInfoFile(readingAllButViewFrom: &reader)
 		try self.init(
 			moduleName: fileWithoutView.moduleName,
+			ownEntryChecksum: fileWithoutView.ownEntryChecksum,
 			packageName: fileWithoutView.packageName,
 			dependencyModuleNames: fileWithoutView.dependencyModuleNames,
 			imports: fileWithoutView.imports,
@@ -1355,6 +1357,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 	init(readingAllButViewFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
 			moduleName: reader.read(),
+			ownEntryChecksum: reader.read() as UInt64?,
 			packageName: reader.read() as String?,
 			dependencyModuleNames: reader.read(),
 			imports: reader.read(),
@@ -1372,6 +1375,7 @@ extension ModuleInfoFile: BinarySchemaMember {
 
 	func write(to writer: inout BinaryWriter) {
 		writer.write(moduleName)
+		writer.write(ownEntryChecksum)
 		writer.write(packageName)
 		writer.write(dependencyModuleNames)
 		writer.write(imports)
@@ -1397,18 +1401,41 @@ extension ModuleInfoView: BinarySchemaMember {
 			fields: [
 				BinaryLayoutField("moduleGraph", \.moduleGraph),
 				BinaryLayoutField("declarations", \.declarations),
+				BinaryLayoutField("references", \.references),
 			],
 			unwrittenProperties: [],
 		)
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
-		try self.init(moduleGraph: reader.read(), declarations: reader.read())
+		try self.init(moduleGraph: reader.read(), declarations: reader.read(), references: reader.read())
 	}
 
 	func write(to writer: inout BinaryWriter) {
 		writer.write(moduleGraph)
 		writer.write(declarations)
+		writer.write(references)
+	}
+}
+
+extension ViewedModuleReference: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("moduleName", \.moduleName),
+				BinaryLayoutField("checksum", \.checksum),
+			],
+			unwrittenProperties: [],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(moduleName: reader.read(), checksum: reader.read())
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.write(moduleName)
+		writer.write(checksum)
 	}
 }
 
