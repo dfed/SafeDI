@@ -584,11 +584,15 @@ public actor DependencyTreeGenerator {
 
 	/// Validates the dependency tree and builds the trees this module generates, computing the signatures of the seams
 	/// this module calls or generates once, here, and handing them down.
-	/// - Parameter unreadTypeComment: The comment the `public` initializers of the seams this module generates carry
-	///   (`PublicMockContext.unreadTypeComment`).
-	/// - Parameter ownAccessProof: The proof of every type's access over the module's declarations, which the signatures
-	///   of the seams this module generates read (`ownAccessProof()`).
-	private func dependencyTrees(unreadTypeComment: UnreadTypeComment?, ownAccessProof: OwnAccessProof) throws -> DependencyTrees {
+	/// - Parameters:
+	///   - unreadTypeComment: The comment the `public` initializers of the seams this module generates carry
+	///     (`PublicMockContext.unreadTypeComment`).
+	///   - ownAccessProof: The proof of every type's access over the module's declarations, which the signatures of the
+	///     seams this module generates read (`ownAccessProof()`).
+	///   - startsCodeGeneration: Whether each generator of a root's tree starts generating its code as it is created,
+	///     which trees built only to be read skip. Read only where no module holds a seam: a module that holds one always
+	///     generates code.
+	func dependencyTrees(unreadTypeComment: UnreadTypeComment?, ownAccessProof: OwnAccessProof, startsCodeGeneration: Bool = true) throws -> DependencyTrees {
 		// The trees of the foreign seams with holes, built inline with the fills this module generates.
 		var inlineForeignSeamTrees = [ScopeGenerator]()
 		var validatedScopes = Set<Scope>()
@@ -664,6 +668,7 @@ public actor DependencyTreeGenerator {
 							for: nil,
 							lazilyInstantiatedInstanceProperties: [],
 							erasedToConcreteExistential: false,
+							startsCodeGeneration: startsCodeGeneration,
 							declaredTypeNames: declaredTypeNames,
 							constructionMemo: &constructionMemo,
 						),
