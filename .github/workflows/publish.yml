@@ -67,6 +67,14 @@ jobs:
         run: chmod +x .build/*/release/SafeDITool
       - name: Smoke test
         run: .build/*/release/SafeDITool --version
+      # The binary as it will ship (stripped, before signing), run as a user
+      # runs it: a release build can miscompile what every test passed, as
+      # 2.3.1's did for `query`. The x86_64 binary runs under Rosetta on this
+      # arm64 runner, as the smoke test above already does. A failure stops
+      # the publish before anything is uploaded. The limit is for a hang.
+      - name: Run generate and query with the Release SafeDITool
+        timeout-minutes: 5
+        run: Scripts/query-release-smoke-test.sh .build/*/release/SafeDITool
       - name: Make codesigning folder
         run: |
           mkdir codesign
@@ -133,6 +141,13 @@ jobs:
         run: strip -s .build/release/SafeDITool
       - name: Smoke test
         run: .build/release/SafeDITool --version
+      # The binary as it will ship (stripped), run as a user runs it: a
+      # release build can miscompile what every test passed, as 2.3.1's did
+      # for `query`. A failure stops the publish before anything is uploaded.
+      # The limit is for a hang.
+      - name: Run generate and query with the Release SafeDITool
+        timeout-minutes: 5
+        run: Scripts/query-release-smoke-test.sh .build/release/SafeDITool
       - name: Upload SafeDITool artifact
         uses: actions/upload-artifact@v7
         with:
@@ -172,6 +187,13 @@ jobs:
         run: strip -s .build/release/SafeDITool
       - name: Smoke test
         run: .build/release/SafeDITool --version
+      # The binary as it will ship (stripped), run as a user runs it: a
+      # release build can miscompile what every test passed, as 2.3.1's did
+      # for `query`. A failure stops the publish before anything is uploaded.
+      # The limit is for a hang.
+      - name: Run generate and query with the Release SafeDITool
+        timeout-minutes: 5
+        run: Scripts/query-release-smoke-test.sh .build/release/SafeDITool
       - name: Upload SafeDITool artifact
         uses: actions/upload-artifact@v7
         with:
