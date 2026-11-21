@@ -1849,6 +1849,37 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(runs(seamFile: "let first = S7_Reader(token: nil, mark: nil)").nilArgumentFailure?.details.prefix { $0 != "\n" } == "`S7_Reader(token:)` is passed `nil` 1 times with the seam and 0 without it.")
 	}
 
+	@Test
+	func nilArgumentFailure_countsANilInASharedBuilderFunctionOncePerPlace_whenTwoPlacesCallTheFunction() {
+		// The type key builds a type that two places build alike in one function, which each place calls, where the seam
+		// writes the type's code at each place: the `nil` in the function's body stands for both places, so a seam that
+		// writes it at both matches inline, and one that writes it at a third construction does not.
+		let fixture = GraphFuzzerFixture(seed: 7, swiftFileContent: [
+			"@Instantiable(generateDependencyTree: true)\npublic final class S7_Screen: Instantiable {\n\tpublic init(reader: S7_Reader) {\n\t\tself.reader = reader\n\t}\n\n\t@Instantiated let reader: S7_Reader\n}\n",
+		])
+		let inlineFiles = [
+			"S7_Root+SafeDI.swift": "func __safeDI_S7_Reader() -> S7_Reader {\n    let mark = S7_Mark(token: nil)\n    return S7_Reader(mark: mark)\n}\nlet first = __safeDI_S7_Reader()\nlet second = __safeDI_S7_Reader()",
+		]
+		#expect(GraphFuzzerOracle.nilArgumentCounts(in: inlineFiles, typeNamePrefix: "S7_", excluding: []) == ["S7_Mark(token:)": 2])
+		let inline = GraphFuzzerToolOutcome.accepted(generatedFiles: inlineFiles, warnings: [])
+		func runs(seamFile: String) -> GraphFuzzerToolRuns {
+			let seam = GraphFuzzerToolOutcome.accepted(generatedFiles: ["S7_Root+SafeDI.swift": seamFile], warnings: [])
+			return GraphFuzzerToolRuns(fixture: fixture, firstOutcome: seam, secondOutcome: seam, inlineOutcome: inline)
+		}
+		#expect(runs(seamFile: "let first = S7_Mark(token: nil)\nlet second = S7_Mark(token: nil)").nilArgumentFailure == nil)
+		#expect(runs(seamFile: "let first = S7_Mark(token: nil)\nlet second = S7_Mark(token: nil)\nlet third = S7_Mark(token: nil)").nilArgumentFailure?.details.prefix { $0 != "\n" } == "`S7_Mark(token:)` is passed `nil` 3 times with the seam and 2 without it.")
+	}
+
+	@Test
+	func nilArgumentFailure_countsANilInABuilderFunctionOnce_whenOnlyTheFunctionItselfCallsItAgain() {
+		// A reference from inside a builder function's own loop closes a cycle on it and stands for no further place, as
+		// a generated-only argument label that spells `__safeDI_` is no reference at all.
+		let inlineFiles = [
+			"S7_Root+SafeDI.swift": "func __safeDI_S7_Reader(__safeDI_mark: S7_Mark?) -> S7_Reader {\n    let mark = S7_Mark(token: nil)\n    return S7_Reader(mark: mark, next: { __safeDI_S7_Reader(__safeDI_mark: mark) })\n}\nlet first = __safeDI_S7_Reader(__safeDI_mark: nil)",
+		]
+		#expect(GraphFuzzerOracle.nilArgumentCounts(in: inlineFiles, typeNamePrefix: "S7_", excluding: []) == ["S7_Mark(token:)": 1])
+	}
+
 	/// A seam's generated file whose plain enum holds `cases`, each `case <name>(<name>_Values)`, and whose initializer
 	/// takes `builderLabel` over it, as a module that does not set `generatePlainDependencyTreeInitializers` generates it:
 	/// only the initializer generated code calls, with its labels prefixed.
