@@ -271,26 +271,24 @@ struct ConstructionMemo {
 /// The context a place of a tree inherits from the scopes above it, which its subtree reads (see `ConstructionMemo`).
 struct ConstructionContext {
 	/// The properties being built above the place, innermost first.
-	let propertyStack: [Property]
-	/// The concrete types the properties of `propertyStack` are built for, beside it.
-	let concreteTypeStack: [TypeDescription]
-	/// The depth in the tree of the scope that put each entry of `propertyStack` on it, beside it.
-	let depthStack: [Int]
+	let stack: ConstructionStack
 	let nearestDeclarations: NearestDeclarations
 	let cycleParameterContexts: [ScopeGenerator.BuiltDeclaration: CycleParameterContext]
 
 	/// The declaration a scope that builds `property` for `concreteType` repeats, when it closes a cycle, with its index on
-	/// `propertyStack` and the depth of the scope that built it: the innermost entry of the same property as cycle
+	/// `stack` and the depth of the scope that built it: the innermost entry of the same property as cycle
 	/// validation sees it (a lazily instantiated property as the constant it stands for), built for the same concrete type,
 	/// and, where that entry is a lazily instantiated declaration's instance, the declaration, which the same scope put on
 	/// the stack just outside it.
 	func declarationClosedOn(by property: Property, concreteType: TypeDescription) -> (declaration: ScopeGenerator.BuiltDeclaration, index: Int, depth: Int)? {
 		let validatedProperty = property.asValidatedForDependencyCycles
-		guard let entryIndex = propertyStack.indices.first(where: {
-			propertyStack[$0].asValidatedForDependencyCycles == validatedProperty && concreteTypeStack[$0] == concreteType
+		guard let found = stack.innermostEntry(where: {
+			$0.property.asValidatedForDependencyCycles == validatedProperty && $0.concreteType == concreteType
 		}) else { return nil }
-		let index = propertyStack.indices.contains(entryIndex + 1) && propertyStack[entryIndex + 1].asLazilyInstantiatedInstanceProperty == propertyStack[entryIndex] ? entryIndex + 1 : entryIndex
-		return (ScopeGenerator.BuiltDeclaration(property: propertyStack[index], concreteType: concreteType), index, depthStack[index])
+		guard let outer = found.outer, outer.property.asLazilyInstantiatedInstanceProperty == found.entry.property else {
+			return (ScopeGenerator.BuiltDeclaration(property: found.entry.property, concreteType: concreteType), found.index, found.entry.depth)
+		}
+		return (ScopeGenerator.BuiltDeclaration(property: outer.property, concreteType: concreteType), found.index + 1, outer.depth)
 	}
 
 	/// The answer `context` gives `read`, with the depth of the scope whose declaration gives it.
