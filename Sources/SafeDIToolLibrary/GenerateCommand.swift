@@ -837,33 +837,36 @@ public struct Generate: AsyncParsableCommand {
 					// output is populated. A file that holds mocks imports
 					// what both the dependency tree and the mocks need.
 					let bodies = writes.map(\.body).filter { !$0.isEmpty }
-					// One comment names the types the file's `public` declarations name that SafeDI reads no declaration of.
-					let combinedBody = UnreadTypeComment.resolvingMarkers(in: bodies.joined(separator: "\n\n"))
 					// The header reads the dependency-tree code apart from the mock code, which compiles only under the mock
-					// condition.
+					// condition. It reads the code only where its imports spell levels, so each text is joined only then.
+					let dependencyTreeBodies = writes.filter { !$0.holdsMockCode }.map(\.body)
+					let mockBodies = writes.filter(\.holdsMockCode).map(\.body)
 					let combinedContent: DependencyTreeGenerator.GeneratedFileContent = if hasAnyMockGeneration {
 						.dependencyTreeAndMock(
-							dependencyTreeCode: UnreadTypeComment.resolvingMarkers(in: writes.filter { !$0.holdsMockCode }.map(\.body).joined(separator: "\n\n")),
-							mockCode: UnreadTypeComment.resolvingMarkers(in: writes.filter(\.holdsMockCode).map(\.body).joined(separator: "\n\n")),
+							dependencyTreeCode: { UnreadTypeComment.resolvingMarkers(in: dependencyTreeBodies.joined(separator: "\n\n")) },
+							mockCode: { UnreadTypeComment.resolvingMarkers(in: mockBodies.joined(separator: "\n\n")) },
 							mockConditionalCompilation: mockConditionalCompilation,
 						)
 					} else {
-						.dependencyTree(code: combinedBody)
+						.dependencyTree(code: { UnreadTypeComment.resolvingMarkers(in: bodies.joined(separator: "\n\n")) })
 					}
 					let headers = await generator.fileHeaders(for: [DependencyTreeGenerator.GeneratedFile(content: combinedContent, fulfillers: Set(writes.flatMap(\.fulfillers)))])
-					let code = headers.joined() + compileTimeAssertions + combinedBody
+					// The header, then the bodies, one blank line between each, written once into bytes of the file's exact
+					// size: the output can be tens of megabytes, and each copy of it would add to the run's peak memory. One
+					// comment names the types the file's `public` declarations name that SafeDI reads no declaration of.
+					let code = UnreadTypeComment.resolvingMarkers(joining: bodies, separator: "\n\n", after: headers.joined() + compileTimeAssertions)
 					// Written only when its bytes change, so a build that compares modification times, as Xcode does for a
 					// script phase's outputs, recompiles the module only when its generated code changed. Bazel removes an
 					// action's outputs before it runs, so every Bazel run writes the file it declares.
-					try Data(code.utf8).writeIfChanged(toPath: combinedOutput)
+					try code.writeIfChanged(toPath: combinedOutput)
 				} else {
 					// Every file's header in one call, which reads the module's own files at most once.
 					let filesToWrite = writes.compactMap { write in write.destination.map { (destination: $0, write: write) } }
 					let headers = await generator.fileHeaders(for: filesToWrite.map { file in
 						DependencyTreeGenerator.GeneratedFile(
 							content: file.write.holdsMockCode
-								? .mock(code: file.write.body, mockConditionalCompilation: mockConditionalCompilation)
-								: .dependencyTree(code: file.write.body),
+								? .mock(code: { [body = file.write.body] in body }, mockConditionalCompilation: mockConditionalCompilation)
+								: .dependencyTree(code: { [body = file.write.body] in body }),
 							fulfillers: file.write.fulfillers,
 						)
 					})

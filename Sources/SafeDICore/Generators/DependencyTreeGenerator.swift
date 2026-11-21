@@ -201,13 +201,14 @@ public actor DependencyTreeGenerator {
 
 	/// The code a generated file holds, which decides what its header imports.
 	public enum GeneratedFileContent: Sendable {
-		/// Dependency-tree code.
-		case dependencyTree(code: String)
+		/// Dependency-tree code. Each case holds its code as a function, which the header calls only where the file's
+		/// imports spell levels, since a module's whole output can be tens of megabytes to join.
+		case dependencyTree(code: @Sendable () -> String)
 		/// Mock code, as each generated mock file and the shared mock configuration file hold, which only builds in
 		/// which `mockConditionalCompilation` is active compile, or every build when it is `nil`.
-		case mock(code: String, mockConditionalCompilation: String?)
+		case mock(code: @Sendable () -> String, mockConditionalCompilation: String?)
 		/// Both dependency-tree code and mock code, as one file that holds a module's whole output does.
-		case dependencyTreeAndMock(dependencyTreeCode: String, mockCode: String, mockConditionalCompilation: String?)
+		case dependencyTreeAndMock(dependencyTreeCode: @Sendable () -> String, mockCode: @Sendable () -> String, mockConditionalCompilation: String?)
 	}
 
 	/// A generated file whose header `fileHeaders(for:)` makes: its code, and the types the trees it holds build that the
@@ -235,7 +236,7 @@ public actor DependencyTreeGenerator {
 				await imports(importStatements, building: file.fulfillers, forUnconditionalCode: code, mockCode: nil, ownFilesRead: &ownFilesRead)
 			case let .mock(code, mockConditionalCompilation):
 				if let mockConditionalCompilation {
-					await imports(mockImportStatements, building: file.fulfillers, forUnconditionalCode: "", mockCode: (code, mockConditionalCompilation), ownFilesRead: &ownFilesRead)
+					await imports(mockImportStatements, building: file.fulfillers, forUnconditionalCode: { "" }, mockCode: (code, mockConditionalCompilation), ownFilesRead: &ownFilesRead)
 				} else {
 					await imports(mockImportStatements, building: file.fulfillers, forUnconditionalCode: code, mockCode: nil, ownFilesRead: &ownFilesRead)
 				}
@@ -243,7 +244,7 @@ public actor DependencyTreeGenerator {
 				if let mockConditionalCompilation {
 					await imports(importStatements + mockImportStatements, building: file.fulfillers, forUnconditionalCode: dependencyTreeCode, mockCode: (mockCode, mockConditionalCompilation), ownFilesRead: &ownFilesRead)
 				} else {
-					await imports(importStatements + mockImportStatements, building: file.fulfillers, forUnconditionalCode: dependencyTreeCode + "\n\n" + mockCode, mockCode: nil, ownFilesRead: &ownFilesRead)
+					await imports(importStatements + mockImportStatements, building: file.fulfillers, forUnconditionalCode: { dependencyTreeCode() + "\n\n" + mockCode() }, mockCode: nil, ownFilesRead: &ownFilesRead)
 				}
 			}
 			headers.append(Self.fileHeader(importing: imports))
@@ -737,8 +738,8 @@ public actor DependencyTreeGenerator {
 	private func imports(
 		_ importStatements: [ImportStatement],
 		building fulfillers: Set<FulfillerImports.Fulfiller>,
-		forUnconditionalCode unconditionalCode: String,
-		mockCode: (code: String, condition: String)?,
+		forUnconditionalCode unconditionalCode: () -> String,
+		mockCode: (code: () -> String, condition: String)?,
 		ownFilesRead ownFilesReadByEarlierFile: inout OwnFilesRead?,
 	) async -> String {
 		let fulfillersToImport = FulfillerImports.fulfillers(among: fulfillers, notMadeVisibleBy: importStatements, emittingModuleName: emittingModule?.identity.moduleName)
@@ -764,8 +765,8 @@ public actor DependencyTreeGenerator {
 		}
 		let namedTypes: GeneratedImportAccess.FileNamedTypes? = if importAccess.spellsAccessLevels || !moduleNamesSpellingOwnFilesLevels.isEmpty {
 			GeneratedImportAccess.FileNamedTypes(
-				unconditional: importAccess.namedTypes(inGeneratedCode: unconditionalCode),
-				underMockCondition: mockCode.map { mockCode in (mockCode.condition, importAccess.namedTypes(inGeneratedCode: mockCode.code)) },
+				unconditional: importAccess.namedTypes(inGeneratedCode: unconditionalCode()),
+				underMockCondition: mockCode.map { mockCode in (mockCode.condition, importAccess.namedTypes(inGeneratedCode: mockCode.code())) },
 			)
 		} else {
 			nil
