@@ -595,9 +595,12 @@ func executeSafeDIToolMultiModuleTest(
 			do {
 				// Every place's levels must hold its scope struct's fields (`SeamPlaceLevels.pathStructMismatches`), and every tree
 				// the same data on every path with the construction memo and without it (`ConstructionMemoChecks`).
+				// Every seam settled without its confirming signature pass must have the signature that pass finds (`SkippedConfirmingPassChecks`).
 				generateOutput = try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
 					try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
-						try await tool.generate()
+						try await SeamSignatureObservation.$confirmsSkippedPasses.withValue(SkippedConfirmingPassChecks.recordingDifferences(handingOn: SeamSignatureObservation.confirmsSkippedPasses)) {
+							try await tool.generate()
+						}
 					}
 				}
 			} catch {
