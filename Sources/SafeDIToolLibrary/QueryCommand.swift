@@ -169,14 +169,15 @@ public struct QueryNeeds: AsyncParsableCommand {
 			))
 		}
 
-		// Each view builds the scope map its types' mock roots are built from once, for every type named. The mock view's
-		// results are read first, type by type, so that a missing name is reported from the full map.
-		let mockResults = await mockGenerator.requirements(of: mockQueries)
-		let productionResults = await productionGenerator.requirements(of: typeEntries.map {
+		// Each view builds the scope map its types' mock roots are built from once, for every type named. The two views are
+		// separate generators, so they are built side by side; the mock view's results are read first, type by type, so that
+		// a missing name is reported from the full map, whichever view finishes first.
+		async let productionResults = productionGenerator.requirements(of: typeEntries.map {
 			DependencyTreeGenerator.RequirementsQuery(typeName: $0.typeName, generatesMock: $0.generatesMock, mockEmittingModule: nil)
 		})
+		let mockResults = await mockGenerator.requirements(of: mockQueries)
 		var typeReports = [TypeReport]()
-		for (typeEntry, productionResult) in zip(typeEntries, productionResults) {
+		for (typeEntry, productionResult) in await zip(typeEntries, productionResults) {
 			let typeName = typeEntry.typeName
 			let mockMethodName = typeEntry.mockMethodName
 			let generatingModuleNames = typeEntry.generatingModuleNames
