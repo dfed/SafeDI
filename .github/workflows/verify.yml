@@ -226,6 +226,25 @@ jobs:
                 return false
               }
             }
+            // The newest commit of main this branch holds, or nothing when
+            // git cannot say.
+            let newestMainCommit = ''
+            try {
+              newestMainCommit = git('merge-base', 'HEAD', 'origin/main').toString().trim()
+            } catch {
+              core.info('No merge base with main.')
+            }
+            // Whether a file SwiftPM compiles differs between a commit and
+            // this one. A failure counts as a difference, which keeps the
+            // choice as it was.
+            const changesWhatIsCompiled = (since) => {
+              try {
+                git('diff', '--quiet', since, 'HEAD', '--', 'Package.swift', 'Package.resolved', 'Sources', 'Plugins', 'Tests')
+                return false
+              } catch {
+                return true
+              }
+            }
             const { data } = await github.rest.actions.listArtifactsForRepo({
               ...context.repo,
               name: process.env.ARTIFACT_NAME,
@@ -242,6 +261,15 @@ jobs:
               if (isAncestor(commit, 'origin/main')) {
                 core.info(`The build of ${commit} is of a commit on main; the cache is at least as new.`)
                 break
+              }
+              // A build from before this branch last merged main lacks what
+              // main changed since. When the branch itself changes nothing
+              // that is compiled, main's cache already is this commit's
+              // build, and such a build unpacked over it made the run compile
+              // nearly everything again (run 44905423108).
+              if (newestMainCommit !== '' && !isAncestor(newestMainCommit, commit) && !changesWhatIsCompiled(newestMainCommit) && changesWhatIsCompiled(commit)) {
+                core.info(`The build of ${commit} is from before this branch last merged main, and nothing compiled differs from main; the cache is nearer.`)
+                continue
               }
               const { data: run } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: artifact.workflow_run.id })
               if (run.path !== '.github/workflows/verify.yml' || run.event !== 'workflow_dispatch' || !run.head_repository || run.head_repository.id !== run.repository.id) {
