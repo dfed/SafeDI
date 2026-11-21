@@ -1063,11 +1063,14 @@ public struct Generate: AsyncParsableCommand {
 
 	/// Whether a file a declaration records is one of the module's own files (see `ownProjectFilePaths`), so that the
 	/// generated code needs only `internal` access to a declaration in it.
+	/// A run with a seam asks this about every declaration its access proof and its seams' tier checks read, many times
+	/// each, so a path is spelled for comparison only when its file name is an own file's (`ProjectFileSet`).
 	private static func isOwnFile(
 		ownProjectFilePaths: Set<ProjectFilePath>,
 		comparisonFilePaths: ProjectFilePaths,
 	) -> @Sendable (String) -> Bool {
-		{ filePath in ownProjectFilePaths.contains(comparisonFilePaths.projectFilePath(of: filePath)) }
+		let ownFiles = ProjectFileSet(ownProjectFilePaths, spelledBy: comparisonFilePaths)
+		return { filePath in ownFiles.contains(filePathAsRecorded: filePath) }
 	}
 
 	/// What the module's own files (see `ownProjectFilePaths`) say that decides an import added for a fulfiller. A build

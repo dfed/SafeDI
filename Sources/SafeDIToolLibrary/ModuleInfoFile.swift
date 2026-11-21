@@ -338,7 +338,7 @@ extension ModuleInfoFile {
 		}
 	}
 
-	/// This module as a module info file, as `moduleInfoData` writes it with every seam signature's `withoutPositions()`:
+	/// This module as a module info file, as `moduleInfoData` writes it with every position in its seam signatures absent:
 	/// the signatures a run computes carry the positions of the declarations they name, which the file writes as absent
 	/// (``BinaryWriter/writingPositionsAsAbsent(_:)``). Copying every signature without them instead allocated several
 	/// times the file's size at the run's end, on pages the run had not used yet, which raised its peak resident memory
