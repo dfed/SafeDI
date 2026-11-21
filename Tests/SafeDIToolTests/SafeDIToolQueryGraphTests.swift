@@ -88,6 +88,7 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		    "App"
 		  ],
 		  "resolved" : true,
+		  "treesBuilt" : true,
 		  "types" : [
 		    {
 		      "declarationKind" : "extension",
@@ -130,6 +131,12 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		          "label" : "cache",
 		          "line" : 8,
 		          "onlyIfAvailable" : true,
+		          "suppliers" : [
+		            {
+		              "label" : "cache",
+		              "type" : "App.Root"
+		            }
+		          ],
 		          "type" : "Cache?"
 		        },
 		        {
@@ -142,6 +149,12 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		          "kind" : "alias",
 		          "label" : "anyCache",
 		          "line" : 9,
+		          "suppliers" : [
+		            {
+		              "label" : "cache",
+		              "type" : "App.Root"
+		            }
+		          ],
 		          "type" : "AnyCache"
 		        }
 		      ],
@@ -188,7 +201,7 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		          "fulfilledBy" : "App.DefaultService",
 		          "kind" : "instantiated",
 		          "label" : "service",
-		          "line" : 12,
+		          "line" : 11,
 		          "type" : "any Service"
 		        },
 		        {
@@ -197,7 +210,7 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		          "fulfilledBy" : "App.Log",
 		          "kind" : "builder",
 		          "label" : "logBuilder",
-		          "line" : 13,
+		          "line" : 12,
 		          "type" : "Instantiator<Log>",
 		          "wrapper" : "Instantiator"
 		        },
@@ -207,17 +220,9 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		          "fulfilledBy" : "App.Cache",
 		          "kind" : "lazy",
 		          "label" : "cache",
-		          "line" : 14,
+		          "line" : 13,
 		          "type" : "LazilyInstantiated<Cache>",
 		          "wrapper" : "LazilyInstantiated"
-		        },
-		        {
-		          "builds" : "Missing",
-		          "filePath" : "\(path)/Root.swift",
-		          "kind" : "instantiated",
-		          "label" : "missing",
-		          "line" : 15,
-		          "type" : "Missing"
 		        }
 		      ],
 		      "filePath" : "\(path)/Root.swift",
@@ -333,6 +338,7 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		    "App"
 		  ],
 		  "resolved" : false,
+		  "treesBuilt" : false,
 		  "types" : [
 		    {
 		      "declarationKind" : "class",
@@ -393,6 +399,552 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		  ]
 		}
 		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_listsEveryDeclarationACallPasses_whenLazyCycleBuildsReceiverAgainBeneathAnotherDeclaration() async throws {
+		// A flow instantiates a per-step session: the screen a step builds again receives the step's session, not the app's,
+		// and so does the screen's alias of it.
+		let report = try await graph(of: [
+			"App.swift": """
+			@Instantiable(isRoot: true)
+			public final class App: Instantiable {
+			    public init(session: Session, screenBuilder: Instantiator<Screen>) {
+			        self.session = session
+			        self.screenBuilder = screenBuilder
+			    }
+
+			    @Instantiated let session: Session
+			    @Instantiated let screenBuilder: Instantiator<Screen>
+			}
+			""",
+			"Screen.swift": """
+			@Instantiable
+			public final class Screen: Instantiable {
+			    public init(session: Session, currentSession: Session, stepBuilder: Instantiator<Step>) {
+			        self.session = session
+			        self.currentSession = currentSession
+			        self.stepBuilder = stepBuilder
+			    }
+
+			    @Received let session: Session
+			    @Received(fulfilledByDependencyNamed: "session", ofType: Session.self) let currentSession: Session
+			    @Instantiated let stepBuilder: Instantiator<Step>
+			}
+			""",
+			"Step.swift": """
+			@Instantiable
+			public final class Step: Instantiable {
+			    public init(session: Session, screenBuilder: Instantiator<Screen>) {
+			        self.session = session
+			        self.screenBuilder = screenBuilder
+			    }
+
+			    @Instantiated let session: Session
+			    @Instantiated let screenBuilder: Instantiator<Screen>
+			}
+			""",
+			"Session.swift": """
+			@Instantiable
+			public final class Session: Instantiable {
+			    public init() {}
+			}
+			""",
+		])
+
+		#expect(Self.supplies(in: report) == [
+			"App.Screen.currentSession": "App.App.session, App.Step.session",
+			"App.Screen.session": "App.App.session, App.Step.session",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_namesLoopMemberEachCallPasses_whenLoopOfBuildersMemberTakesLazyCycleParameter() async throws {
+		// The editor's and the preview's builders receive each other, a loop of builders, and the sheet builds both again,
+		// so the editor's builder function takes the preview's builder as a parameter. Each loop hands it through a function
+		// that passes the preview's builder made again, though the editor's own receive of it is generated before it.
+		let report = try await graph(of: [
+			"App.swift": """
+			@Instantiable(isRoot: true)
+			public final class App: Instantiable {
+			    public init(editorBuilder: Instantiator<Editor>, previewBuilder: Instantiator<Preview>) {
+			        self.editorBuilder = editorBuilder
+			        self.previewBuilder = previewBuilder
+			    }
+
+			    @Instantiated let editorBuilder: Instantiator<Editor>
+			    @Instantiated let previewBuilder: Instantiator<Preview>
+			}
+			""",
+			"Editor.swift": """
+			@Instantiable
+			public final class Editor: Instantiable {
+			    public init(previewBuilder: Instantiator<Preview>?, sheetBuilder: Instantiator<Sheet>) {
+			        self.previewBuilder = previewBuilder
+			        self.sheetBuilder = sheetBuilder
+			    }
+
+			    @Received(onlyIfAvailable: true) let previewBuilder: Instantiator<Preview>?
+			    @Instantiated let sheetBuilder: Instantiator<Sheet>
+			}
+			""",
+			"Preview.swift": """
+			@Instantiable
+			public final class Preview: Instantiable {
+			    public init(editorBuilder: Instantiator<Editor>) {
+			        self.editorBuilder = editorBuilder
+			    }
+
+			    @Received let editorBuilder: Instantiator<Editor>
+			}
+			""",
+			"Sheet.swift": """
+			@Instantiable
+			public final class Sheet: Instantiable {
+			    public init(editorBuilder: Instantiator<Editor>, previewBuilder: Instantiator<Preview>) {
+			        self.editorBuilder = editorBuilder
+			        self.previewBuilder = previewBuilder
+			    }
+
+			    @Instantiated let editorBuilder: Instantiator<Editor>
+			    @Instantiated let previewBuilder: Instantiator<Preview>
+			}
+			""",
+		])
+
+		#expect(Self.supplies(in: report) == [
+			"App.Editor.previewBuilder": "App.App.previewBuilder, App.Sheet.previewBuilder",
+			"App.Preview.editorBuilder": "App.App.editorBuilder, App.Sheet.editorBuilder",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_namesLoopMembersRenameEachCallPasses_whenLoopOfBuildersMemberTakesRenameAsLazyCycleParameter() async throws {
+		// As above, but the editor receives a rename of the preview's builder, which each loop makes again of the preview's
+		// builder function and hands the editor's.
+		let report = try await graph(of: [
+			"App.swift": """
+			@Instantiable(isRoot: true)
+			public final class App: Instantiable {
+			    public init(editorBuilder: Instantiator<Editor>, previewBuilder: Instantiator<Preview>, draftPreviewBuilder: Instantiator<Preview>) {
+			        self.editorBuilder = editorBuilder
+			        self.previewBuilder = previewBuilder
+			        self.draftPreviewBuilder = draftPreviewBuilder
+			    }
+
+			    @Instantiated let editorBuilder: Instantiator<Editor>
+			    @Instantiated let previewBuilder: Instantiator<Preview>
+			    @Received(fulfilledByDependencyNamed: "previewBuilder", ofType: Instantiator<Preview>.self) let draftPreviewBuilder: Instantiator<Preview>
+			}
+			""",
+			"Editor.swift": """
+			@Instantiable
+			public final class Editor: Instantiable {
+			    public init(draftPreviewBuilder: Instantiator<Preview>?, sheetBuilder: Instantiator<Sheet>) {
+			        self.draftPreviewBuilder = draftPreviewBuilder
+			        self.sheetBuilder = sheetBuilder
+			    }
+
+			    @Received(onlyIfAvailable: true) let draftPreviewBuilder: Instantiator<Preview>?
+			    @Instantiated let sheetBuilder: Instantiator<Sheet>
+			}
+			""",
+			"Preview.swift": """
+			@Instantiable
+			public final class Preview: Instantiable {
+			    public init(editorBuilder: Instantiator<Editor>) {
+			        self.editorBuilder = editorBuilder
+			    }
+
+			    @Received let editorBuilder: Instantiator<Editor>
+			}
+			""",
+			"Sheet.swift": """
+			@Instantiable
+			public final class Sheet: Instantiable {
+			    public init(editorBuilder: Instantiator<Editor>, previewBuilder: Instantiator<Preview>, draftPreviewBuilder: Instantiator<Preview>) {
+			        self.editorBuilder = editorBuilder
+			        self.previewBuilder = previewBuilder
+			        self.draftPreviewBuilder = draftPreviewBuilder
+			    }
+
+			    @Instantiated let editorBuilder: Instantiator<Editor>
+			    @Instantiated let previewBuilder: Instantiator<Preview>
+			    @Received(fulfilledByDependencyNamed: "previewBuilder", ofType: Instantiator<Preview>.self) let draftPreviewBuilder: Instantiator<Preview>
+			}
+			""",
+		])
+
+		#expect(Self.supplies(in: report) == [
+			"App.App.draftPreviewBuilder": "App.App.previewBuilder",
+			"App.Editor.draftPreviewBuilder": "App.App.draftPreviewBuilder, App.Sheet.draftPreviewBuilder",
+			"App.Preview.editorBuilder": "App.App.editorBuilder, App.Sheet.editorBuilder",
+			"App.Sheet.draftPreviewBuilder": "App.Sheet.previewBuilder",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_namesDeclarationsEnclosingFunctionsCallsPass_whenLazyCycleCallPassesParameterOfEnclosingFunction() async throws {
+		// `B`'s builder function takes `theme`, which `Mid` declares before closing the cycle on it, and is declared in the body
+		// of `A`'s, which takes `theme` too, since `X` declares it before closing the cycle on `A`: `A`'s function passes its
+		// parameter on to `B`'s, so `B` is handed what `Shell` and `X`'s cycle-closing scope pass `A`'s, and what `Mid` passes.
+		let report = try await graph(of: [
+			"A.swift": """
+			@Instantiable
+			public final class A: Instantiable {
+			    public init(bBuilder: Instantiator<B>, xBuilder: Instantiator<X>) {
+			        self.bBuilder = bBuilder
+			        self.xBuilder = xBuilder
+			    }
+
+			    @Instantiated let bBuilder: Instantiator<B>
+			    @Instantiated let xBuilder: Instantiator<X>
+			}
+			""",
+			"B.swift": """
+			@Instantiable
+			public final class B: Instantiable {
+			    public init(theme: Theme, midBuilder: Instantiator<Mid>) {
+			        self.theme = theme
+			        self.midBuilder = midBuilder
+			    }
+
+			    @Received let theme: Theme
+			    @Instantiated let midBuilder: Instantiator<Mid>
+			}
+			""",
+			"Mid.swift": """
+			@Instantiable
+			public final class Mid: Instantiable {
+			    public init(theme: Theme, bBuilder: Instantiator<B>) {
+			        self.theme = theme
+			        self.bBuilder = bBuilder
+			    }
+
+			    @Forwarded let theme: Theme
+			    @Instantiated let bBuilder: Instantiator<B>
+			}
+			""",
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(shellBuilder: Instantiator<Shell>) {
+			        self.shellBuilder = shellBuilder
+			    }
+
+			    @Instantiated let shellBuilder: Instantiator<Shell>
+			}
+			""",
+			"Shell.swift": """
+			@Instantiable
+			public final class Shell: Instantiable {
+			    public init(theme: Theme, aBuilder: Instantiator<A>) {
+			        self.theme = theme
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Forwarded let theme: Theme
+			    @Instantiated let aBuilder: Instantiator<A>
+			}
+			""",
+			"Theme.swift": """
+			public struct Theme {}
+			""",
+			"X.swift": """
+			@Instantiable
+			public final class X: Instantiable {
+			    public init(theme: Theme, aBuilder: Instantiator<A>) {
+			        self.theme = theme
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Forwarded let theme: Theme
+			    @Instantiated let aBuilder: Instantiator<A>
+			}
+			""",
+		])
+
+		#expect(Self.supplies(in: report) == [
+			"App.B.theme": "App.Mid.theme, App.Shell.theme, App.X.theme",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_marksReceivesNil_whenLazyCyclePassesNilFromOneCall() async throws {
+		// The app declares no session, so its call of the screen's builder function passes `nil`; the step's passes its own.
+		let report = try await graph(of: [
+			"App.swift": """
+			@Instantiable(isRoot: true)
+			public final class App: Instantiable {
+			    public init(screenBuilder: Instantiator<Screen>) {
+			        self.screenBuilder = screenBuilder
+			    }
+
+			    @Instantiated let screenBuilder: Instantiator<Screen>
+			}
+			""",
+			"Screen.swift": """
+			@Instantiable
+			public final class Screen: Instantiable {
+			    public init(session: Session?, stepBuilder: Instantiator<Step>) {
+			        self.session = session
+			        self.stepBuilder = stepBuilder
+			    }
+
+			    @Received(onlyIfAvailable: true) let session: Session?
+			    @Instantiated let stepBuilder: Instantiator<Step>
+			}
+			""",
+			"Step.swift": """
+			@Instantiable
+			public final class Step: Instantiable {
+			    public init(session: Session, screenBuilder: Instantiator<Screen>) {
+			        self.session = session
+			        self.screenBuilder = screenBuilder
+			    }
+
+			    @Instantiated let session: Session
+			    @Instantiated let screenBuilder: Instantiator<Screen>
+			}
+			""",
+			"Session.swift": """
+			@Instantiable
+			public final class Session: Instantiable {
+			    public init() {}
+			}
+			""",
+		])
+
+		#expect(Self.supplies(in: report) == [
+			"App.Screen.session": "App.Step.session, nil",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_marksReceivesNil_whenSiblingThatDeclaresReceiveIsBuiltAfterReceiver() async throws {
+		// `c` receives `b`, so `b` is built first, and its receive of `c` only if available is handed `nil`.
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(b: B, c: C) {
+			        self.b = b
+			        self.c = c
+			    }
+
+			    @Instantiated let b: B
+			    @Instantiated let c: C
+			}
+			""",
+			"B.swift": """
+			@Instantiable
+			public final class B: Instantiable {
+			    public init(c: C?) {
+			        self.c = c
+			    }
+
+			    @Received(onlyIfAvailable: true) let c: C?
+			}
+			""",
+			"C.swift": """
+			@Instantiable
+			public final class C: Instantiable {
+			    public init(b: B) {
+			        self.b = b
+			    }
+
+			    @Received let b: B
+			}
+			""",
+		])
+
+		#expect(Self.supplies(in: report) == [
+			"App.B.c": "nil",
+			"App.C.b": "App.Root.b",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_namesAliasAsSupplier_whenReceiveReadsAliasDeclaredAbove() async throws {
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(service: Service, feature: Feature) {
+			        self.service = service
+			        self.feature = feature
+			    }
+
+			    @Instantiated let service: Service
+			    @Instantiated let feature: Feature
+			}
+			""",
+			"Feature.swift": """
+			@Instantiable
+			public final class Feature: Instantiable {
+			    public init(renamedService: Service, screen: Screen) {
+			        self.renamedService = renamedService
+			        self.screen = screen
+			    }
+
+			    @Received(fulfilledByDependencyNamed: "service", ofType: Service.self) let renamedService: Service
+			    @Instantiated let screen: Screen
+			}
+			""",
+			"Screen.swift": """
+			@Instantiable
+			public final class Screen: Instantiable {
+			    public init(renamedService: Service) {
+			        self.renamedService = renamedService
+			    }
+
+			    @Received let renamedService: Service
+			}
+			""",
+			"Service.swift": """
+			@Instantiable
+			public final class Service: Instantiable {
+			    public init() {}
+			}
+			""",
+		])
+
+		#expect(Self.supplies(in: report) == [
+			"App.Feature.renamedService": "App.Root.service",
+			"App.Screen.renamedService": "App.Feature.renamedService",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_namesDeclarationAboveAsAliasSupplier_whenAliasKeepsLabelItRetypes() async throws {
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(service: Service, feature: Feature) {
+			        self.service = service
+			        self.feature = feature
+			    }
+
+			    @Instantiated let service: Service
+			    @Instantiated let feature: Feature
+			}
+			""",
+			"Feature.swift": """
+			@Instantiable
+			public final class Feature: Instantiable {
+			    public init(service: any ServiceProtocol, screen: Screen) {
+			        self.service = service
+			        self.screen = screen
+			    }
+
+			    @Received(fulfilledByDependencyNamed: "service", ofType: Service.self) let service: any ServiceProtocol
+			    @Instantiated let screen: Screen
+			}
+			""",
+			"Screen.swift": """
+			@Instantiable
+			public final class Screen: Instantiable {
+			    public init(service: any ServiceProtocol) {
+			        self.service = service
+			    }
+
+			    @Received let service: any ServiceProtocol
+			}
+			""",
+			"Service.swift": """
+			public protocol ServiceProtocol {}
+
+			@Instantiable
+			public final class Service: Instantiable, ServiceProtocol {
+			    public init() {}
+			}
+			""",
+		])
+
+		#expect(Self.supplies(in: report) == [
+			"App.Feature.service": "App.Root.service",
+			"App.Screen.service": "App.Feature.service",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_leavesSuppliersOut_whenNoRootBuildsType() async throws {
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(service: Service) {
+			        self.service = service
+			    }
+
+			    @Instantiated let service: Service
+			}
+			""",
+			"Service.swift": """
+			@Instantiable
+			public final class Service: Instantiable {
+			    public init() {}
+			}
+			""",
+			"Unreached.swift": """
+			@Instantiable
+			public final class Unreached: Instantiable {
+			    public init(service: Service) {
+			        self.service = service
+			    }
+
+			    @Received let service: Service
+			}
+			""",
+		])
+
+		#expect(report.treesBuilt)
+		#expect(report.types.flatMap(\.edges).filter { $0.kind == .received }.map(\.suppliers) == [nil])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_reportsTreeErrorWithoutSuppliers_whenTreeInstantiatesTypeNoDeclarationFulfills() async throws {
+		let report = try await graph(of: [
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(service: Service, missing: Missing) {
+			        self.service = service
+			        self.missing = missing
+			    }
+
+			    @Instantiated let service: Service
+			    @Instantiated let missing: Missing
+			}
+			""",
+			"Service.swift": """
+			@Instantiable
+			public final class Service: Instantiable {
+			    public init(missing: Missing) {
+			        self.missing = missing
+			    }
+
+			    @Received let missing: Missing
+			}
+			""",
+		])
+
+		#expect(report.resolved)
+		#expect(!report.treesBuilt)
+		#expect(report.errors.map(\.line) == [9])
+		#expect(report.errors.map(\.message).allSatisfy { $0.hasPrefix("No @Instantiable type or extension fulfills `Missing`") })
+		#expect(report.types.flatMap(\.edges).map(\.suppliers) == [nil, nil, nil])
 	}
 
 	@Test
@@ -466,6 +1018,27 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
+	/// The export of one module, `App`, of the files `filesByName` holds.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func graph(of filesByName: [String: String]) async throws -> QueryGraphReport {
+		let moduleDirectory = try temporaryDirectory().appendingPathComponent("App")
+		_ = try createSwiftFixtureFiles(atFilePaths: filesByName, in: moduleDirectory, alongside: [])
+		return try await QueryGraph.parse(["--include", moduleDirectory.path]).graph()
+	}
+
+	/// What each received edge or alias of `report` that has suppliers is handed, by `<type id>.<label>`: its suppliers as
+	/// `<type id>.<label>`, then `nil` where it receives `nil`, joined.
+	private static func supplies(in report: QueryGraphReport) -> [String: String] {
+		var supplies = [String: String]()
+		for type in report.types {
+			for edge in type.edges {
+				guard let suppliers = edge.suppliers else { continue }
+				supplies["\(type.id).\(edge.label)"] = (suppliers.map { "\($0.type).\($0.label)" } + (edge.receivesNil == true ? ["nil"] : [])).joined(separator: ", ")
+			}
+		}
+		return supplies
+	}
+
 	private mutating func temporaryDirectory() throws -> URL {
 		let directory = TestTemporaryDirectory.root.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -473,8 +1046,8 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		return directory
 	}
 
-	/// A module with every kind of edge: instantiated (through `fulfilledByType:`), a builder, a lazy value, one
-	/// that no declaration fulfills, a receive only if available, an erased alias, and a forwarded value; an extension
+	/// A module with every kind of edge: instantiated (through `fulfilledByType:`), a builder, a lazy value, a
+	/// receive only if available, an erased alias, and a forwarded value; an extension
 	/// declaration, an actor, a seam, and a `mockOnly` declaration the graph leaves out.
 	private static let appModule = [
 		"Root.swift": """
@@ -482,17 +1055,15 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 
 		@Instantiable(isRoot: true)
 		public final class Root: Instantiable {
-		    public init(service: any Service, logBuilder: Instantiator<Log>, cache: LazilyInstantiated<Cache>, missing: Missing) {
+		    public init(service: any Service, logBuilder: Instantiator<Log>, cache: LazilyInstantiated<Cache>) {
 		        self.service = service
 		        self.logBuilder = logBuilder
 		        self.cache = cache
-		        self.missing = missing
 		    }
 
 		    @Instantiated(fulfilledByType: "DefaultService") let service: any Service
 		    @Instantiated let logBuilder: Instantiator<Log>
 		    @Instantiated let cache: LazilyInstantiated<Cache>
-		    @Instantiated let missing: Missing
 		}
 		""",
 		"DefaultService.swift": """

@@ -1382,7 +1382,7 @@ To add the SafeDI framework as a dependency to a package utilizing [Swift Packag
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.0"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.1"),
 ]
 ```
 
@@ -1489,7 +1489,7 @@ Unlike the Xcode project plugin, the Swift package plugin finds the source files
 
 #### Bazel
 
-Add `bazel_dep(name = "safedi", version = "2.3.0")` to your `MODULE.bazel`, then declare each first-party Swift module ([Generating your dependency tree](#generating-your-dependency-tree)) with `safedi_swift_library` in place of `swift_library`:
+Add `bazel_dep(name = "safedi", version = "2.3.1")` to your `MODULE.bazel`, then declare each first-party Swift module ([Generating your dependency tree](#generating-your-dependency-tree)) with `safedi_swift_library` in place of `swift_library`:
 
 ```python
 load("@safedi//bazel:safedi.bzl", "safedi_swift_library")
@@ -1547,7 +1547,7 @@ Depend on SafeDI in `Tuist/Package.swift`, so that `tuist install` fetches the S
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.0"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.1"),
 ]
 ```
 
@@ -2072,7 +2072,7 @@ This plugin will:
 ### Manual migration
 
 1. Update your `swift-tools-version` to 6.2 or later
-2. Update your SafeDI dependency to `from: "2.3.0"`
+2. Update your SafeDI dependency to `from: "2.3.1"`
 3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, add a `#SafeDIConfiguration` in your root module with the equivalent values and delete the CSV files
 4. If you don’t have CSV configuration files and do not need other SafeDI configuration options, no `#SafeDIConfiguration()` declaration is required
 
@@ -2153,7 +2153,7 @@ It then reports the same for the type’s mock. [The `query needs` report](Query
 
 > `query graph` is in alpha. Its options and JSON may change in any release; the JSON’s `formatVersion` is `0`.
 
-A tool or a coding agent that needs a question SafeDI has no command for – which types use a service, what a new type would receive, which declarations a feature is built from – can answer it from one JSON document. `SafeDITool query graph` exports every production `@Instantiable` declaration with its module, file and line, each of its dependencies with its kind, and the type that fulfills each type. It takes the modules as `query needs` takes them:
+A tool or a coding agent that needs a question SafeDI has no command for – which types use a service, what a new type would receive, which declarations a feature is built from – can answer it from one JSON document. `SafeDITool query graph` exports every production `@Instantiable` declaration with its module, file and line, each of its dependencies with its kind, the type that fulfills each type, and, for each received dependency, the declarations whose values it is handed. It takes the modules as `query needs` takes them:
 
 ```bash
 .build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool query graph --include Sources/Foundations Sources/Services Sources/HomeFeature --output graph.json

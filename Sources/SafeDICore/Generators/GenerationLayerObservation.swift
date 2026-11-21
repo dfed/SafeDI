@@ -27,6 +27,9 @@ public enum GenerationLayerObservation {
 		/// The signatures of the seams of the module named `moduleName`, computed over the declarations that module sees,
 		/// or over those the modules that call this run's module see when `inCallersView`.
 		case seamSignatures(ofModule: String?, inCallersView: Bool)
+		/// A proof of every type's access (`TypeAccessProof`) over the declarations the module named `moduleName` sees,
+		/// or over those the modules that call this run's module see when `inCallersView`.
+		case accessProof(ofModule: String?, inCallersView: Bool)
 		/// The tree of a root, or of a seam this module generates, of the type `TypeDescription`.
 		case dependencyTree(of: TypeDescription)
 		/// The mock scopes of the module named `moduleName`, which its mocks, or the plans of its public mocks, are built
