@@ -403,8 +403,11 @@ struct BinaryReader {
 
 	/// Far deeper than any type written in practice. Reading bytes that nest without a limit could exhaust the
 	/// stack, so a ``BinaryWriter`` notes a value nested more deeply than this, and ``BinaryFile`` refuses to
-	/// write a file that holds one rather than write a file no SafeDITool reads.
-	static let maximumNestingDepth = 128
+	/// write a file that holds one rather than write a file no SafeDITool reads. Reading recurses once for each
+	/// level, which a debug build of Swift 6.2 or 6.4.2 compiles to about 4.4 KB of stack on Linux (0.6 KB in a
+	/// release build), so 32 levels take about 140 KB: under half of the 512 KB stack of a Swift concurrency thread
+	/// on Apple platforms, whereas 128 levels overflowed it.
+	static let maximumNestingDepth = 32
 
 	/// Throws unless every byte has been read.
 	func finish() throws(BinaryDecodingError) {
