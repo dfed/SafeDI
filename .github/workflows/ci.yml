@@ -2208,6 +2208,140 @@ jobs:
           path: .generate-time/cached
           key: generate-time-tool-${{ runner.os }}-swift-6.2-${{ steps.commits.outputs.head }}
 
+  # Builds the SafeDITool of the pull request's base, which each fuzzer shard
+  # below runs beside this commit's over the shard's graphs
+  # (SafeDIToolBaseComparisonTests/longRun), comparing exit statuses,
+  # diagnostics, generated files and `.safedi` bytes; "Check Graph Fuzzer
+  # Corpus on Linux" judges the result. A rewrite that means to change no
+  # output says `Generated output: unchanged` in its description and then
+  # fails on any difference, so it can delete the code it replaces rather
+  # than keep both in the tree to compare them. See
+  # .claude/rules/fuzzer-base-comparison.md.
+  #
+  # The base is `github.event.pull_request.base.sha`: the tip of the branch
+  # beneath a stacked pull request, or of main. ci.yml's jobs otherwise
+  # build `github.sha` alone, to keep a cache from holding a build of a
+  # commit nobody reviewed; the base is always a commit of this repository,
+  # and the one cache this job saves holds only the tool, under a key made
+  # of the base's tree hashes of what the tool is built from (`Sources`,
+  # `Package.swift`, `Package.resolved`) and the compiler, so a restack
+  # that leaves the parent's sources alone reuses it. Main's own tool,
+  # which "Check Generate Time on Linux" saves on every push to main, is the
+  # second place it looks.
+  #
+  # Also prints the generator's lines of code at the base and the head
+  # (Swift under Sources/SafeDICore/Generators, blank and comment-only
+  # lines left out), as information that fails nothing.
+  base-tool:
+    name: Build the Base SafeDITool on Linux
+    needs: changes
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.changes.outputs.source != 'false' }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    # A cold build is the job's long pole: 8.6 minutes locally, and 10 to 11
+    # on CI for "Check Generate Time on Linux"'s build of the same product.
+    # The build step keeps its own 25; this bounds the fetch, cache and
+    # upload steps around it.
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      BASE: ${{ github.event.pull_request.base.sha }}
+      HEAD: ${{ github.event.pull_request.head.sha }}
+    steps:
+      # This commit, for its scripts and its retry action; the base and the
+      # head beside it, for their trees.
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Fetch the Base and the Head
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git fetch --no-tags --depth=1 origin "$BASE" "$HEAD"
+      - name: Count Generator Lines
+        run: |
+          base_lines=$(.github/scripts/count-generator-lines.sh "$BASE")
+          head_lines=$(.github/scripts/count-generator-lines.sh "$HEAD")
+          {
+            echo "## Generator lines of code"
+            echo ""
+            echo "Swift under \`Sources/SafeDICore/Generators\`, blank and comment-only lines left out. Information only."
+            echo ""
+            echo "| Base | Head | Change |"
+            echo "| ---: | ---: | ---: |"
+            printf '| %s | %s | %+d |\n' "$base_lines" "$head_lines" "$((head_lines - base_lines))"
+          } >> "$GITHUB_STEP_SUMMARY"
+      # The key names every input to the tool's build: the trees of the
+      # base's `Sources`, `Package.swift` and `Package.resolved`, the runner's
+      # operating system, the container image, and a hash of the compiler's
+      # `swift --version`, which tells two compilers that image tag has named
+      # apart.
+      - name: Compute Base Tool Cache Key
+        id: key
+        run: |
+          compiler=$(swift --version 2>&1 | sha256sum | cut -c1-16)
+          test "${#compiler}" -eq 16
+          sources=$(git rev-parse "$BASE:Sources" "$BASE:Package.swift" "$BASE:Package.resolved" | sha256sum | cut -c1-16)
+          test "${#sources}" -eq 16
+          echo "key=base-safedi-tool-$RUNNER_OS-swift-6.2-$compiler-$sources" >> "$GITHUB_OUTPUT"
+      - name: Restore the Base Tool
+        id: cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .base-tool
+          key: ${{ steps.key.outputs.key }}
+      # The tool "Check Generate Time on Linux" saved for this commit when it
+      # was main's, built the same way.
+      - name: Restore Main's Tool
+        id: main-cache
+        if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/restore@v6
+        with:
+          path: .generate-time/cached
+          key: generate-time-tool-${{ runner.os }}-swift-6.2-${{ github.event.pull_request.base.sha }}
+      - name: Check Out the Base
+        if: ${{ steps.cache.outputs.cache-hit != 'true' && steps.main-cache.outputs.cache-hit != 'true' }}
+        run: git worktree add --detach base "$BASE"
+      - name: Resolve Package Dependencies
+        if: ${{ steps.cache.outputs.cache-hit != 'true' && steps.main-cache.outputs.cache-hit != 'true' }}
+        uses: ./.github/actions/retry
+        with:
+          command: swift package resolve --package-path base
+      # As "Check Generate Time on Linux" builds it, whose build of a base
+      # from nothing took 10.3 and 11.2 minutes (runs 44053665790 and
+      # 44055931063); the limit is about twice that.
+      - name: Build the Base Tool
+        if: ${{ steps.cache.outputs.cache-hit != 'true' && steps.main-cache.outputs.cache-hit != 'true' }}
+        timeout-minutes: 25
+        run: swift build -c release --package-path base --product SafeDITool
+      - name: Stage the Base Tool
+        if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+        run: |
+          mkdir -p .base-tool
+          if [ -x .generate-time/cached/SafeDITool ]; then
+            cp .generate-time/cached/SafeDITool .base-tool/SafeDITool
+          else
+            cp base/.build/release/SafeDITool .base-tool/SafeDITool
+          fi
+      # Saved from a pull request too: the cache serves the restacks of this
+      # pull request, whose base keeps its sources, and holds one binary.
+      - name: Save the Base Tool
+        if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .base-tool
+          key: ${{ steps.key.outputs.key }}
+      - name: Check the Base Tool
+        run: .base-tool/SafeDITool --version
+      - name: Upload the Base Tool
+        uses: actions/upload-artifact@v7
+        with:
+          name: base-safedi-tool
+          path: .base-tool/SafeDITool
+          retention-days: 3
+
   # Fails when the compiler spends too long on one function of SafeDICore in
   # a release build (Scripts/function-compile-time-check.py): one initializer
   # took 40% of the module's release compile, in every release build of every
@@ -2299,14 +2433,18 @@ jobs:
   # that caused it.
   graph-fuzzer:
     name: Fuzz Dependency Graphs on Linux (${{ matrix.corpus }} seeds ${{ matrix.starting-seed }}+${{ matrix.iterations }})
-    needs: [changes, linux-build]
+    # The base tool, which only a pull request builds, is waited for but not
+    # required: a shard runs whatever its build's result, and compares with
+    # the base only when it built.
+    needs: [changes, linux-build, base-tool]
     if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
     runs-on: ubuntu-latest
     container: swift:6.2
-    # Above the fuzzer step's limit by more than the longest the job's other
-    # steps have taken, so that a shard that runs out of time still uploads:
-    # one job spent 11 minutes initializing its container (run 43879263598).
-    timeout-minutes: 40
+    # Above the fuzzer's and the base comparison's limits together by more
+    # than the longest the job's other steps have taken, so that a shard that
+    # runs out of time still uploads: one job spent 11 minutes initializing
+    # its container (run 43879263598).
+    timeout-minutes: 45
     permissions:
       contents: read
     strategy:
@@ -2452,6 +2590,34 @@ jobs:
           SAFEDI_GRAPH_FUZZER_REPORT: ${{ github.workspace }}/graph-fuzzer/report.txt
           LLVM_PROFILE_FILE: ${{ runner.temp }}/graph-fuzzer-profiles/graph-fuzzer-%p.profraw
         run: .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing --filter 'SafeDIToolGraphFuzzerTests/longRun'
+      - name: Download the Base Tool
+        if: ${{ !cancelled() && needs.base-tool.result == 'success' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: base-safedi-tool
+          path: base-tool
+      # Runs the shard's graphs through the base's SafeDITool and this
+      # commit's, the one the bundle holds, and writes what differs to
+      # base-comparison.txt, which "Check Graph Fuzzer Corpus on Linux"
+      # judges. It fails only when it cannot compare every seed. Its
+      # profiles go to a folder of their own, so the fuzzer's coverage
+      # report reads the fuzzer's alone. Measured across the 22 shards of run
+      # 44878123154: 1.1 minutes at most (base seeds 3750+1250), 0.5 on
+      # average; the limit is about twice the longest.
+      - name: Compare with the Base Tool
+        if: ${{ !cancelled() && needs.base-tool.result == 'success' }}
+        timeout-minutes: 3
+        env:
+          SAFEDI_BASE_COMPARISON_BASE_TOOL: ${{ github.workspace }}/base-tool/SafeDITool
+          SAFEDI_BASE_COMPARISON_HEAD_TOOL: ${{ github.workspace }}/.build/x86_64-unknown-linux-gnu/release/SafeDITool
+          SAFEDI_BASE_COMPARISON_FEATURES: ${{ matrix.features }}
+          SAFEDI_BASE_COMPARISON_STARTING_SEED: ${{ matrix.starting-seed }}
+          SAFEDI_BASE_COMPARISON_ITERATIONS: ${{ matrix.iterations }}
+          SAFEDI_BASE_COMPARISON_REPORT: ${{ github.workspace }}/graph-fuzzer/base-comparison.txt
+          LLVM_PROFILE_FILE: ${{ runner.temp }}/base-comparison-profiles/base-comparison-%p.profraw
+        run: |
+          chmod +x base-tool/SafeDITool
+          .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing --filter 'SafeDIToolBaseComparisonTests/longRun'
       - name: Summarize
         if: ${{ !cancelled() }}
         run: .github/scripts/summarize-graph-fuzzer-report.sh "$REPORT" "$SUMMARY" ${{ matrix.starting-seed }} ${{ matrix.iterations }} "${{ matrix.features }}"
@@ -2485,11 +2651,13 @@ jobs:
   # This is the one check to require for the fuzzer.
   graph-fuzzer-corpus:
     name: Check Graph Fuzzer Corpus on Linux
-    needs: [changes, graph-fuzzer]
+    needs: [changes, graph-fuzzer, base-tool]
     if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # To read the pull request's current description (below).
+      pull-requests: read
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
@@ -2500,6 +2668,32 @@ jobs:
           path: reports
       - name: Combine Shard Reports
         run: python3 .github/scripts/combine-graph-fuzzer-reports.py "$RUNNER_TEMP/graph-fuzzer-corpus.md" reports/*/report.txt
+      # Judges the shards' comparisons with the base's SafeDITool: a pull
+      # request whose description holds the line `Generated output:
+      # unchanged` fails on any difference; any other pull request gets the
+      # list in the summary. The description is read as it is now, not as
+      # the event that started the run carried it, so a re-run of this job
+      # after the line is added judges it; it is read through the
+      # environment, never spelled into the script.
+      - name: Compare Generated Output with the Base
+        if: ${{ !cancelled() }}
+        env:
+          BASE_TOOL_RESULT: ${{ needs.base-tool.result }}
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+          EVENT_PULL_REQUEST_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python3 -I .github/scripts/combine-base-comparison-reports.py --self-test
+          PULL_REQUEST_BODY="$EVENT_PULL_REQUEST_BODY"
+          if [ -n "$PULL_REQUEST" ]; then
+            if live_body=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PULL_REQUEST" --jq '.body // ""'); then
+              PULL_REQUEST_BODY="$live_body"
+            else
+              echo "::warning::Could not read the pull request's current description; judging the one the run's event carried."
+            fi
+          fi
+          export PULL_REQUEST_BODY
+          python3 -I .github/scripts/combine-base-comparison-reports.py reports >> "$GITHUB_STEP_SUMMARY"
 
   # Fails on any line under Sources/ or Plugins/ that no test executes on
   # Linux or macOS, over the whole tree, from the lcov reports the two test
