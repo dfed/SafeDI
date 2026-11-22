@@ -111,7 +111,7 @@ extension ScopeGenerator {
 		guard propertiesToGenerate.isEmpty,
 		      instantiable.dependencies.isEmpty,
 		      (instantiable.mockInitializer ?? instantiable.initializer)?.arguments.contains(where: \.hasDefaultValue) == false
-		else { return lowerMockRootWithTree(of: instantiable, context: context) }
+		else { return await lowerMockRootWithTree(of: instantiable, context: context) }
 		return .lowered(Self.mockWithoutTree(of: instantiable, context: context))
 	}
 
