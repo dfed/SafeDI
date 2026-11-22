@@ -110,6 +110,9 @@ struct ConstructionMemo {
 		/// The generator the pass before created for the place, whose children and findings the place's build reads. Two
 		/// places of the pass before that shared a generator share it here too.
 		let previousPassGenerator: ObjectIdentifier?
+		/// The settled cycle parameters the place is built with (`CycleParameterSeed`), which it reads in place of what
+		/// `previousPassGenerator` found, or `nil`.
+		let cycleParameterSeed: ObjectIdentifier?
 
 		/// This key with `previousPassGenerator` replaced.
 		func withPreviousPassGenerator(_ previousPassGenerator: ObjectIdentifier?) -> Key {
@@ -126,6 +129,7 @@ struct ConstructionMemo {
 				reboundProperties: reboundProperties,
 				spellings: spellings,
 				previousPassGenerator: previousPassGenerator,
+				cycleParameterSeed: cycleParameterSeed,
 			)
 		}
 	}
@@ -204,7 +208,9 @@ struct ConstructionMemo {
 	/// building it from `G′` took, which built `G`: the key's other fields and the reads are what the memo compares within a
 	/// pass. This memo is the pass before's.
 	func settledReuse(of key: Key, in context: ConstructionContext) -> Reuse? {
-		guard let previousPassGenerator = key.previousPassGenerator,
+		// A seeded place reads its cycle parameters from the seed, not from `G`.
+		guard key.cycleParameterSeed == nil,
+		      let previousPassGenerator = key.previousPassGenerator,
 		      let (storedKey, entry) = entriesByGenerator[previousPassGenerator],
 		      entry.isSettled,
 		      storedKey == key.withPreviousPassGenerator(storedKey.previousPassGenerator),
@@ -215,11 +221,13 @@ struct ConstructionMemo {
 
 	/// Whether `generator` found the cycle parameters and loops of builders that `previousPassGenerator`, the generator the
 	/// pass before built for its place, found, compared as a memo compares answers: by `==` and by spelling.
-	static func foundAlike(by generator: ScopeGenerator, asBy previousPassGenerator: ScopeGenerator?) -> Bool {
+	/// - Parameter builtWithCycleParameters: The cycle parameters `generator`'s build read: `previousPassGenerator`'s, or a
+	///   seed's in their place.
+	static func foundAlike(by generator: ScopeGenerator, asBy previousPassGenerator: ScopeGenerator?, builtWithCycleParameters: [CycleParameter]) -> Bool {
 		let loops = generator.receivedBuilderLoops
 		let previousPassLoops = previousPassGenerator?.receivedBuilderLoops ?? ScopeGenerator.ReceivedBuilderLoops()
 		return ConstructionLog.Answer.cycleParameterContext(generator.foundCycleParameters)
-			.isAlike(.cycleParameterContext(previousPassGenerator?.foundCycleParameters ?? []))
+			.isAlike(.cycleParameterContext(builtWithCycleParameters))
 			&& loops == previousPassLoops
 			&& loops.reboundPropertiesByChildIndex.allSatisfy { index, properties in
 				previousPassLoops.reboundPropertiesByChildIndex[index].map(properties.isSpelledAlike) ?? false

@@ -283,7 +283,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			propertiesToDeclare: propertiesToDeclare,
 			forwardedProperties: forwardedProperties,
 			cycleParameters: isPropertyCycle ? cycleParameters : [],
-			seamCall: seamCall,
+			seamCallRequiredThroughAliasProperties: seamCall?.requiredThroughAliasProperties ?? [],
 		)
 		requiredOnlyIfAvailableAliasProperties = aliasRequirements.requiredOnlyIfAvailableAliasProperties
 		requiredAliasFulfillingProperties = aliasRequirements.requiredAliasFulfillingProperties
@@ -320,6 +320,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		unpassableCycleLabelsInTree = cycleParameterSearch.unpassableCycleLabelsInTree
 		cycleParametersChangedInTree = cycleParameterSearch.foundCycleParameters != builtCycleParameters
 			|| propertiesToGenerate.contains(where: \.cycleParametersChangedInTree)
+		let holdsCycleClosingScope = isPropertyCycle || propertiesToGenerate.contains(where: \.holdsCycleClosingScope)
+		self.holdsCycleClosingScope = holdsCycleClosingScope
+		cycleParameterSearchInputs = holdsCycleClosingScope
+			? CycleParameterSearchInputs(
+				instantiable: instantiable,
+				forwardedProperties: forwardedProperties,
+				aliasBindingDeclaredProperties: aliasBindingDeclaredProperties,
+				receivesPassedNil: receivesPassedNil,
+				seamCallRequiredThroughAliasProperties: seamCall?.requiredThroughAliasProperties ?? [],
+			)
+			: nil
 		// A scope that closes a cycle builds nothing, so its children are on no loop. A fill's one child is the property it
 		// fills, whose builder function the seam's initializer declares: a receive of that property in the fill's tree is a
 		// fill finding (`receivesInstantiatorBuildingSite`), never a loop the fill rebinds.
@@ -833,7 +844,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// What a scope receives from its ancestors.
-	private struct Receives {
+	struct Receives {
 		let receivedProperties: Set<Property>
 		let requiredReceivedProperties: Set<Property>
 		/// The properties the scope's own dependencies receive.
@@ -843,8 +854,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// - Parameter cycleParameters: For a scope that closes a lazy cycle, the parameters of the function it refers to;
 	///   empty otherwise.
 	@inline(never)
-	nonisolated private static func receives(
-		children: [ScopeGenerator],
+	nonisolated static func receives(
+		children: [some CycleParameterSearchNode],
 		ownDependencies: [Dependency],
 		receivesPassedNil: Set<Property>,
 		propertiesToDeclare: Set<Property>,
@@ -859,8 +870,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var receivedProperties = Set<Property>()
 		var requiredReceivedProperties = Set<Property>()
 		for child in children {
-			for property in child.receivedProperties where isReceivedFromAncestors(property, propertiesToDeclare: propertiesToDeclare, forwardedProperties: forwardedProperties) {
-				let isRequired = child.requiredReceivedProperties.contains(property)
+			let childRequiredReceivedProperties = child.searchRequiredReceivedProperties
+			for property in child.searchReceivedProperties where isReceivedFromAncestors(property, propertiesToDeclare: propertiesToDeclare, forwardedProperties: forwardedProperties) {
+				let isRequired = childRequiredReceivedProperties.contains(property)
 				guard isRequired || !providesAFormReadByOnlyIfAvailableReceive(of: property, propertiesToDeclare: propertiesToDeclare, forwardedProperties: forwardedProperties) else { continue }
 				receivedProperties.insertKeepingMostExplicitSpelling(property)
 				if isRequired {
@@ -965,12 +977,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// - Parameter cycleParameters: For a scope that closes a lazy cycle, the parameters of the function it refers to;
 	///   empty otherwise.
 	@inline(never)
-	nonisolated private static func aliasRequirements(
-		children: [ScopeGenerator],
+	nonisolated static func aliasRequirements(
+		children: [some CycleParameterSearchNode],
 		propertiesToDeclare: Set<Property>,
 		forwardedProperties: Set<Property>,
 		cycleParameters: [CycleParameter],
-		seamCall: SeamCall?,
+		seamCallRequiredThroughAliasProperties: Set<Property>,
 	) -> (requiredOnlyIfAvailableAliasProperties: Set<Property>, requiredAliasFulfillingProperties: Set<Property>) {
 		// A child's tree requires an `onlyIfAvailable` alias this scope declares when a receiver in it requires the alias's
 		// property, or an alias in it that is required is fulfilled by that property. The alias is bound from the nearest
@@ -981,13 +993,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// requirement is the only way.
 		func isRequiredByChild(_ property: Property) -> Bool {
 			children.contains { child in
-				child.requiredReceivedProperties.contains(property)
-					|| child.requiredAliasFulfillingProperties.contains { $0.label == property.label && provides(property, aFormReadBy: $0) }
+				child.searchRequiredReceivedProperties.contains(property)
+					|| child.searchRequiredAliasFulfillingProperties.contains { $0.label == property.label && provides(property, aFormReadBy: $0) }
 			}
 		}
 		var requiredOnlyIfAvailableAliasProperties = Set<Property>()
 		var requiredOnlyIfAvailableAliasFulfillingProperties = Set<Property>()
-		for case let (aliasProperty?, fulfillingProperty?) in children.lazy.map({ ($0.property, $0.onlyIfAvailableAliasFulfillingProperty) })
+		for case let (aliasProperty?, fulfillingProperty?) in children.lazy.map({ ($0.searchProperty, $0.searchOnlyIfAvailableAliasFulfillingProperty) })
 			where isRequiredByChild(aliasProperty)
 		{
 			requiredOnlyIfAvailableAliasProperties.insert(aliasProperty)
@@ -1002,10 +1014,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A call of a seam whose tree requires one of its pass-throughs through an `onlyIfAvailable` alias requires it too
 		// (`SeamSignature.Parameter.requiredThroughAlias`): the seam's alias is bound from that parameter. Validation reads
 		// the same requirement from the seam's tree, which it walks inline, so `collectReceivedProperties` meets no seam call.
-		let requiredAliasFulfillingProperties = Set(children.flatMap(\.requiredAliasFulfillingProperties))
+		let requiredAliasFulfillingProperties = Set(children.flatMap(\.searchRequiredAliasFulfillingProperties))
 			.union(requiredOnlyIfAvailableAliasFulfillingProperties)
 			.union(cycleParameters.flatMap(\.requiredAliasFulfillingForms))
-			.union(seamCall?.requiredThroughAliasProperties ?? [])
+			.union(seamCallRequiredThroughAliasProperties)
 			.filter { !declaredLabels.contains($0.label) }
 		return (requiredOnlyIfAvailableAliasProperties, requiredAliasFulfillingProperties)
 	}
@@ -1013,8 +1025,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// - Parameter cycleParameters: For a scope that closes a lazy cycle, the parameters of the function it refers to;
 	///   empty otherwise.
 	@inline(never)
-	nonisolated private static func onlyIfAvailableUnwrappedReceivedProperties(
-		children: [ScopeGenerator],
+	nonisolated static func onlyIfAvailableUnwrappedReceivedProperties(
+		children: [some CycleParameterSearchNode],
 		ownDependencies: [Dependency],
 		receivesPassedNil: Set<Property>,
 		propertiesToDeclare: Set<Property>,
@@ -1025,7 +1037,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) -> Set<Property> {
 		var onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired = Set<Property>()
 		for propertyToGenerate in children {
-			for property in propertyToGenerate.onlyIfAvailableUnwrappedReceivedProperties
+			for property in propertyToGenerate.searchOnlyIfAvailableUnwrappedReceivedProperties
 				where !providesAFormReadByOnlyIfAvailableReceive(of: property, propertiesToDeclare: propertiesToDeclare, forwardedProperties: forwardedProperties)
 			{
 				onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.insert(property)
@@ -1062,14 +1074,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// The parameters of the builder function a lazy cycle closes on that a scope finds, and what it carries up for them.
-	private struct CycleParameterSearch {
+	struct CycleParameterSearch {
 		let cycleClosingRedeclaredLabels: CycleClosingRedeclaredLabels
 		let foundCycleParameters: [CycleParameter]
 		let unpassableCycleLabelsInTree: [UnpassableCycleLabel]
 	}
 
 	@inline(never)
-	nonisolated private static func cycleParameterSearch(
+	nonisolated static func cycleParameterSearch(
 		instantiable: Instantiable,
 		property: Property?,
 		declaration: BuiltDeclaration?,
@@ -1077,7 +1089,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		isPropertyCycle: Bool,
 		childrenTakePartInCycle: Bool,
 		childrenCycleClosingRedeclaredLabels: CycleClosingRedeclaredLabels,
-		children: [ScopeGenerator],
+		children: [some CycleParameterSearchNode],
 		propertiesToDeclare: Set<Property>,
 		forwardedProperties: Set<Property>,
 		cycleParameters: [CycleParameter],
@@ -1136,8 +1148,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				)
 			}
 		}
-		for child in children where !child.unpassableCycleLabelsInTree.isEmpty {
-			unpassableCycleLabelsInTree.append(contentsOf: child.unpassableCycleLabelsInTree)
+		for child in children {
+			let childUnpassableCycleLabels = child.searchUnpassableCycleLabelsInTree
+			guard !childUnpassableCycleLabels.isEmpty else { continue }
+			unpassableCycleLabelsInTree.append(contentsOf: childUnpassableCycleLabels)
 		}
 		if !isPropertyCycle, !cycleClosingRedeclaredLabels.isEmpty {
 			// This scope's declarations, forwarded properties and own parameters are between each of those cycle-closing
@@ -1255,6 +1269,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		treeHoldsSendableFunction = false
 		declaresBuilderFunction = false
 		childrenTakePartInCycle = false
+		holdsCycleClosingScope = false
+		cycleParameterSearchInputs = nil
 		typesDeclaredEscaping = []
 		cycleParameters = []
 		cycleParameterUnavailableProperties = []
@@ -1335,6 +1351,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		treeHoldsSendableFunction = false
 		declaresBuilderFunction = !holeProperty.propertyType.isConstant
 		childrenTakePartInCycle = false
+		holdsCycleClosingScope = false
+		cycleParameterSearchInputs = nil
 		typesDeclaredEscaping = []
 		cycleParameters = []
 		cycleParameterUnavailableProperties = []
@@ -4664,6 +4682,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// a cycle beneath it closes on. Only then can this scope's body need `builderFunctionNames` to
 	/// rename a builder function or to refer to one by a name other than `functionName(toBuild:)`.
 	private let childrenTakePartInCycle: Bool
+	/// Whether this scope closes a lazy cycle, or a scope of its generated subtree does. Only such a scope can find other
+	/// cycle parameters, or receive other properties, in a pass after the first (see `CycleParameterPlan`).
+	nonisolated let holdsCycleClosingScope: Bool
+	/// What `CycleParameterPlan` reads to search this scope's cycle parameters again, kept only where
+	/// `holdsCycleClosingScope`, which few scopes are; `nil` everywhere else.
+	nonisolated let cycleParameterSearchInputs: CycleParameterSearchInputs?
 	/// The names a parameter of the construction of a type in this subtree declares `@escaping`, each a function type
 	/// (`TypeDescription.nameDeclaredEscaping`). A parameter of a function generated code declares with such a type is
 	/// spelled `@escaping`, or it could not be passed to that construction. Every receiver of a property of such a type
@@ -6206,7 +6230,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		builtDeclaration: BuiltDeclaration,
 		builtType: TypeDescription,
 		ownDependencies: [Dependency],
-		children: [ScopeGenerator],
+		children: [some CycleParameterSearchNode],
 	) -> [(label: String, receiver: CycleParameter.Receiver, value: Value)] {
 		var unmetLabels = labels
 		var firstReceives = [(label: String, receiver: CycleParameter.Receiver, value: Value)]()
@@ -6260,24 +6284,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		while !unmetLabels.isEmpty, let (generator, parentIndex) = generatorsToVisit.popLast() {
 			// An alias is among the dependencies of the type that declares it, which the walk met first.
 			var index = parentIndex
-			if let builtInstantiable = generator.builtInstantiable {
+			if let builtInstantiable = generator.searchBuiltInstantiable {
 				visitedTypes.append((builtInstantiable.concreteInstantiable, parentIndex))
 				index = visitedTypes.count - 1
 				meet(builtInstantiable.dependencies, ofTypeAt: index)
 			}
 			// A cycle-closing scope receives the parameters of the function it refers to, where that function's body does.
-			for parameter in generator.cycleParameters where generator.closesPropertyCycle {
+			for parameter in generator.searchCycleParameters where generator.searchClosesPropertyCycle {
 				// This function's own parameter, whose receive this walk met where the scope was given the parameter: a chain
 				// through the scope would grow with each pass that finds the parameters, which then never settle. A scope
 				// closes on this function when it repeats its declaration, in either form: a lazily instantiated scope repeats a
 				// constant declaration of its label and instance type, and a constant scope a lazily instantiated one, while
 				// their properties differ. A scope of this function's property that closes on a function built for another
 				// concrete type keeps the receiver it was given too; a chain through it would change only diagnostic text.
-				meet(parameter.property.label, receiver: generator.property == builtProperty || generator.closedOnDeclaration == builtDeclaration
+				meet(parameter.property.label, receiver: generator.searchProperty == builtProperty || generator.searchClosedOnDeclaration == builtDeclaration
 					? parameter.receiver
 					: .init(property: parameter.receiver.property, declarationLocation: parameter.receiver.declarationLocation, chain: chain(endingAt: parentIndex) + parameter.receiver.chain))
 			}
-			generatorsToVisit.append(contentsOf: generator.propertiesToGenerate.reversed().map { (generator: $0, parentIndex: index) })
+			generatorsToVisit.append(contentsOf: generator.searchChildren.reversed().map { (generator: $0, parentIndex: index) })
 		}
 		return firstReceives
 	}
@@ -15055,5 +15079,61 @@ extension TypeDescription {
 		      attributes.contains("autoclosure")
 		else { return self }
 		return .attributed(.closure(arguments: arguments, isAsync: isAsync, doesThrow: false, thrownType: nil, returnType: returnType), specifiers: specifiers, attributes: attributes)
+	}
+}
+
+extension ScopeGenerator: CycleParameterSearchNode {
+	nonisolated var searchProperty: Property? {
+		property
+	}
+
+	nonisolated var searchReceivedProperties: Set<Property> {
+		receivedProperties
+	}
+
+	nonisolated var searchRequiredReceivedProperties: Set<Property> {
+		requiredReceivedProperties
+	}
+
+	nonisolated var searchRequiredAliasFulfillingProperties: Set<Property> {
+		requiredAliasFulfillingProperties
+	}
+
+	nonisolated var searchOnlyIfAvailableAliasFulfillingProperty: Property? {
+		onlyIfAvailableAliasFulfillingProperty
+	}
+
+	nonisolated var searchOnlyIfAvailableUnwrappedReceivedProperties: Set<Property> {
+		onlyIfAvailableUnwrappedReceivedProperties
+	}
+
+	nonisolated var searchUnpassableCycleLabelsInTree: [UnpassableCycleLabel] {
+		unpassableCycleLabelsInTree
+	}
+
+	nonisolated var searchBuiltInstantiable: Instantiable? {
+		builtInstantiable
+	}
+
+	nonisolated var searchCycleParameters: [CycleParameter] {
+		cycleParameters
+	}
+
+	nonisolated var searchClosesPropertyCycle: Bool {
+		closesPropertyCycle
+	}
+
+	nonisolated var searchClosedOnDeclaration: BuiltDeclaration? {
+		closedOnDeclaration
+	}
+
+	nonisolated var searchChildren: [ScopeGenerator] {
+		propertiesToGenerate
+	}
+
+	/// Whether a child's subtree closes a cycle on a scope enclosing the child, or a child is the scope a cycle beneath it
+	/// closes on (see `childrenTakePartInCycle`).
+	nonisolated var searchChildrenTakePartInCycle: Bool {
+		childrenTakePartInCycle
 	}
 }

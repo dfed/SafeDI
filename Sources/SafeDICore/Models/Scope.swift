@@ -448,7 +448,9 @@ extension ScopeRecord {
 				)
 			}
 			constructionMemo.oracleMemo = oracleMemo
-			let treeBuiltWithoutMemo = try ConstructionMemo.$isEnabled.withValue(false) {
+			// The reference tree is built with neither the memo nor the settled cycle parameter seed, so every
+			// graph compares the seeded build with the plain pass loop as well.
+			let treeBuiltWithoutMemo = try ConstructionMemo.$isEnabled.withValue(false) { try CycleParameterPlan.$isEnabled.withValue(false) {
 				var unusedMemo = ConstructionMemo()
 				return try createdTree(
 					in: table,
@@ -463,7 +465,7 @@ extension ScopeRecord {
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &unusedMemo,
 				)
-			}
+			} }
 			observer(treeBuiltWithMemo, treeBuiltWithoutMemo)
 		}
 		return scopeGenerator
@@ -484,6 +486,9 @@ extension ScopeRecord {
 		constructionMemo: inout ConstructionMemo,
 	) throws -> ScopeGenerator {
 		var previousPassGenerator: ScopeGenerator?
+		// The cycle parameters settled on the first pass's tree, which the second pass is built with in place of the first
+		// pass's findings (see `CycleParameterPlan`), or `nil` where the tree is not planned.
+		var cycleParameterSeed: CycleParameterSeed?
 		var firstPassMemo = ConstructionMemo()
 		// The memo of the pass before, whose settled generators a pass reuses (see `ConstructionMemo.settledReuse`), and the
 		// place-holding properties that pass read.
@@ -533,6 +538,7 @@ extension ScopeRecord {
 					validatesForwardedProperties: validatesForwardedProperties,
 					declaredTypeNames: declaredTypeNames,
 					previousPassGenerator: nil,
+					cycleParameterSeed: nil,
 					generatorsToStart: &discardedGeneratorsToStart,
 					placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 					memo: &passMemo,
@@ -552,6 +558,7 @@ extension ScopeRecord {
 				validatesForwardedProperties: validatesForwardedProperties,
 				declaredTypeNames: declaredTypeNames,
 				previousPassGenerator: previousPassGenerator,
+				cycleParameterSeed: cycleParameterSeed,
 				generatorsToStart: &generatorsToStart,
 				placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 				memo: &passMemo,
@@ -561,6 +568,15 @@ extension ScopeRecord {
 			)
 			if previousPassGenerator == nil {
 				firstPassMemo = passMemo
+				cycleParameterSeed = Self.cycleParameterSeed(
+					ofFirstPassTree: scopeGenerator,
+					seamRoot: seamRoot,
+					mockBuilders: mockBuilders,
+					nearestDeclarations: nearestDeclarations,
+					forMockGeneration: forMockGeneration,
+				)
+			} else {
+				cycleParameterSeed = nil
 			}
 			previousPassMemo = passMemo
 			placeHoldingPropertiesOfPreviousPass = placeHoldingPropertiesByType
@@ -588,6 +604,30 @@ extension ScopeRecord {
 		return scopeGenerator
 	}
 
+	/// The cycle parameters `CycleParameterPlan` settles on `tree`, a first pass's, where only they would drive the passes
+	/// after it, or `nil`: a tree with a seam root, a mock root's builders, a receive a mock passes `nil`, a call or fill, or a
+	/// build site keeps the plain passes, as does a tree whose parameters the first pass found settled. So does a mock's
+	/// tree, where settling cost more than the passes it saved: on issue #646's graph of twelve mocks, its later passes
+	/// reuse most of the pass before's generators, while the pass a seed builds reuses few of the first pass's.
+	private static func cycleParameterSeed(
+		ofFirstPassTree tree: ScopeGenerator,
+		seamRoot: ScopeGenerator.SeamRoot?,
+		mockBuilders: DependencyTreeGenerator.ShapedBuilders?,
+		nearestDeclarations: NearestDeclarations,
+		forMockGeneration: Bool,
+	) -> CycleParameterSeed? {
+		guard CycleParameterPlan.isEnabled,
+		      !forMockGeneration,
+		      tree.cycleParametersChangedInTree,
+		      seamRoot == nil,
+		      mockBuilders == nil,
+		      !nearestDeclarations.mayPassNil,
+		      !tree.treeHoldsCallOrFill,
+		      !tree.containsBuildSite
+		else { return nil }
+		return CycleParameterPlan.settledSeed(ofTreeRootedAt: tree)
+	}
+
 	/// One pass of `createScopeGenerator`, which reads the parameters of the builder functions lazy cycles close on
 	/// from `previousPassGenerator`, the tree the pass before created, or finds none when there is no pass before.
 	/// - Parameter generatorsToStart: `nil` to start each generator's code as it is created, or where to collect the
@@ -610,6 +650,7 @@ extension ScopeRecord {
 		validatesForwardedProperties: Bool,
 		declaredTypeNames: DeclaredTypeNames,
 		previousPassGenerator: ScopeGenerator?,
+		cycleParameterSeed: CycleParameterSeed?,
 		generatorsToStart: inout [[ScopeGenerator]]?,
 		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?,
 		memo: inout ConstructionMemo,
@@ -636,6 +677,7 @@ extension ScopeRecord {
 			validatesForwardedProperties: validatesForwardedProperties,
 			declaredTypeNames: declaredTypeNames,
 			previousPassGenerator: previousPassGenerator,
+			cycleParameterSeed: cycleParameterSeed,
 			cycleParameterContexts: [:],
 			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 			// A root's place is never stored.
@@ -768,6 +810,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		buildsWithHandWrittenMocks: Bool = false,
 		declaredTypeNames: DeclaredTypeNames,
 		previousPassGenerator: ScopeGenerator?,
+		cycleParameterSeed: CycleParameterSeed? = nil,
 		cycleParameterContexts: [ScopeGenerator.BuiltDeclaration: CycleParameterContext],
 		reboundProperties: Set<Property> = [],
 		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]? = nil,
@@ -820,7 +863,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		// The parameters of this scope's builder function that the pass before found, when a lazy cycle closes on it,
 		// or those of the function a cycle-closing scope refers to. Nearly every scope has neither.
 		let ownCycleParameters = if !isPropertyCycle, property != nil {
-			previousPassGenerator?.foundCycleParameters ?? []
+			cycleParameterSeed?.foundCycleParameters ?? previousPassGenerator?.foundCycleParameters ?? []
 		} else {
 			[CycleParameter]()
 		}
@@ -922,6 +965,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
 		self.childLazilyInstantiatedInstanceProperties = childLazilyInstantiatedInstanceProperties
 		self.previousPassGenerator = previousPassGenerator
+		self.cycleParameterSeed = cycleParameterSeed
 		self.ownCycleParameters = ownCycleParameters
 		passedCycleParameters = closedOnContext?.parameters ?? ownCycleParameters
 		self.cycleParameterUnavailableProperties = cycleParameterUnavailableProperties
@@ -1462,7 +1506,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// children did, and it found the cycle parameters and loops of builders the pass before's generator for the place
 	/// found, spelled alike.
 	func isSettled(building generator: ScopeGenerator) -> Bool {
-		childrenAreSettled && ConstructionMemo.foundAlike(by: generator, asBy: previousPassGenerator)
+		childrenAreSettled && ConstructionMemo.foundAlike(by: generator, asBy: previousPassGenerator, builtWithCycleParameters: ownCycleParameters)
 	}
 
 	/// What this scope's subtree read of the context above this scope (see `ConstructionMemo`).
@@ -1675,6 +1719,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			buildsWithHandWrittenMocks: buildsWithHandWrittenMocks,
 			declaredTypeNames: declaredTypeNames,
 			previousPassGenerator: previousPassChildGenerator,
+			cycleParameterSeed: cycleParameterSeed?.child(at: childGenerators.count),
 			cycleParameterContexts: childCycleParameterContexts,
 			// The loops the pass before found among this scope's children.
 			reboundProperties: childReboundProperties,
@@ -1714,6 +1759,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			reboundProperties: childReboundProperties,
 			spellings: Property.spellingsForConstructionMemo(of: property, childLazilyInstantiatedInstanceProperties, childReboundProperties),
 			previousPassGenerator: previousPassChildGenerator.map(ObjectIdentifier.init),
+			cycleParameterSeed: cycleParameterSeed?.child(at: childGenerators.count).map(ObjectIdentifier.init),
 		)
 	}
 
@@ -2411,6 +2457,9 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// The parameters of this scope's builder function that the pass before found: those a lazy cycle closing on it
 	/// needs. Empty for nearly every scope.
 	private let ownCycleParameters: [CycleParameter]
+	/// The settled cycle parameters of this place and the places beneath it, which this place reads in place of what
+	/// `previousPassGenerator` found (see `CycleParameterPlan`), or `nil`.
+	private let cycleParameterSeed: CycleParameterSeed?
 	/// The parameters this scope passes a builder function a lazy cycle closes on: its own, or, for a cycle-closing
 	/// scope, those of the function it refers to.
 	private let passedCycleParameters: [CycleParameter]
