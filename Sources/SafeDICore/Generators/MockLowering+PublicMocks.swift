@@ -124,7 +124,16 @@ extension ScopeGenerator {
 			filledCalls.append(contentsOf: fillPlaces.calls)
 			calls.append(.init(generator: generator, propertiesGeneratedLater: child.propertiesGeneratedLater))
 		}
-		guard !calls.isEmpty else { return .lowered(.none) }
+		let namesOfPassedUpBuilders: [Property: String]
+		switch passedUpBuilderNames(of: orderedChildren) {
+		case let .lowered(names):
+			namesOfPassedUpBuilders = names
+		case let .unsupported(rule):
+			return .unsupported(rule)
+		}
+		guard !calls.isEmpty else { return .lowered(MockLowering.FilledCallBuilders(calls: [], parameters: [], fillPlaceBindings: FillPlaceBindings(bindingsByGenerator: [:]), passedUpBuilderNames: namesOfPassedUpBuilders)) }
+		// A builder a call passes up beside the builders the calls fill is not lowered yet.
+		guard namesOfPassedUpBuilders.isEmpty else { return .unsupported(.publicMockCall) }
 		// The labels the tree binds and its types' dependencies have beneath the root's level, which name a builder apart.
 		var namesBoundInTheTree = Set<String>()
 		var generatorsToVisit = orderedChildren.map(\.generator)
@@ -180,6 +189,52 @@ extension ScopeGenerator {
 			parameters: parameters,
 			fillPlaceBindings: FillPlaceBindings(bindingsByGenerator: [:], holeBuildersByCall: holeBuildersByCall, holeBuildersByInlinePlace: holeBuildersByInlinePlaceInFills),
 		))
+	}
+
+	/// The name `mock()` binds each builder a call of another module's public mock in the tree passes up under, by the
+	/// property the call's leaf receives it as, as `seamMockBuilders` names it for a mock that takes no other builder: a
+	/// builder of its own per property, labeled as the leaf receives it, which `mock()` binds apart from the leaf's binding of
+	/// that label before anything else; or the first rule the builders meet. Walked with a stack, since a tree can be as deep
+	/// as the module has types.
+	private func passedUpBuilderNames(of orderedChildren: [OrderedChild]) -> MockLowering.Lowering<[Property: String]> {
+		var holeTypeByProperty = [Property: SeamSignature.HoleType]()
+		var builderFunctionNames = Set<String>()
+		var generatorsToVisit = orderedChildren.map(\.generator)
+		while let generator = generatorsToVisit.popLast() {
+			if let property = generator.property {
+				builderFunctionNames.insert(ScopeGenerator.functionName(toBuildPropertyNamed: property.label))
+			}
+			if let publicMockCall = generator.publicMockCall {
+				let passedUpLabels = Set(publicMockCall.passedUpBuilders.map(\.label))
+				for parameter in publicMockCall.passedParameters {
+					guard let builder = parameter.builder, passedUpLabels.contains(builder.label) else { continue }
+					// A builder of the `@Sendable` family, or one a `@Sendable` builder function captures, is not lowered yet.
+					guard !builder.enumKey.isSendable, !generator.buildsInSendableFunction else { return .unsupported(.publicMockCall) }
+					let property = parameter.dependency.property
+					guard holeTypeByProperty.updateValue(builder.enumKey.holeType, forKey: property).map({ $0 == builder.enumKey.holeType }) ?? true else {
+						return .unsupported(.publicMockCall)
+					}
+				}
+			}
+			generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator))
+		}
+		guard !holeTypeByProperty.isEmpty else { return .lowered([:]) }
+		// One builder per hole type, labeled from its stem as the leaf receives it: a builder joining several properties, or
+		// labeled apart from the leaf's property, is not lowered yet.
+		let properties = holeTypeByProperty.keys.sorted()
+		let holeTypes = properties.compactMap { holeTypeByProperty[$0] }
+		guard Set(holeTypes).count == holeTypes.count else { return .unsupported(.publicMockCall) }
+		let stems = DependencyTreeGenerator.stems(of: holeTypes)
+		var names = [Property: String]()
+		for property in properties {
+			guard let holeType = holeTypeByProperty[property],
+			      DependencyTreeGenerator.plainBuilderLabel(ofStem: stems[holeType, default: ""]) == property.label
+			else { return .unsupported(.publicMockCall) }
+			let name = ScopeGenerator.functionName(toBuildPropertyNamed: property.label)
+			guard !builderFunctionNames.contains(name) else { return .unsupported(.publicMockCall) }
+			names[property] = name
+		}
+		return .lowered(names)
 	}
 
 	/// Whether the tree of `orderedChildren`, outside the fills of its calls, builds inline a place of another module's public
@@ -300,6 +355,7 @@ extension MockLowering.Walk {
 		// the values the call passes, and any other argument as the call passes it.
 		var overrideArguments = [String]()
 		var argumentByLabel = [String: String]()
+		var passedUpBuilderBindings = [String]()
 		func labeled(_ value: String, as argument: Initializer.Argument) -> String {
 			argument.label == "_" ? value : "\(argument.label.spelledAsArgumentLabel): \(value)"
 		}
@@ -312,6 +368,14 @@ extension MockLowering.Walk {
 					guard let overrideBuilder = overrideBuilders[argument.innerLabel], case .fill = overrideBuilder else { return .unsupported(.publicMockCall) }
 					overrideArguments.append(argument.innerLabel)
 				}
+			} else if let dependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }),
+			          let builderName = filledCallBuilders.passedUpBuilderNames[dependency.property]
+			{
+				// A builder the call passes up is the builder `mock()` takes, which the call's builder function binds under the
+				// label the leaf receives it as. An override closure handed it is not lowered yet.
+				guard overrideBuilders == nil, filledCall == nil, property.propertyType.isConstant else { return .unsupported(.publicMockCall) }
+				passedUpBuilderBindings.append("let \(dependency.property.label): \(dependency.property.typeDescription.strippingEscaping.asSource) = \(builderName)")
+				arguments.append(labeled(".init(__safeDI_noScope: \(dependency.property.label))", as: argument))
 			} else {
 				// A value the call passes is the root level's binding of its label, which an optional parameter takes as it is.
 				guard let dependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }),
@@ -346,6 +410,15 @@ extension MockLowering.Walk {
 		let isInstantiator = !property.propertyType.isConstant
 		guard let filledCall else {
 			lines.append("\(indent)\(publicMockCall.guardLine(for: instantiable.concreteInstantiable))")
+			// A call that passes a builder up binds it in a builder function of its own.
+			guard passedUpBuilderBindings.isEmpty else {
+				lines.append("\(indent)func \(functionName)() -> \(typeName) {")
+				lines.append(contentsOf: passedUpBuilderBindings.map { "\(indent)\(ScopeGenerator.standardIndent)\($0)" })
+				lines.append("\(indent)\(ScopeGenerator.standardIndent)return \(call)")
+				lines.append("\(indent)}")
+				lines.append("\(indent)let \(property.label): \(typeName) = \(functionName)()")
+				return .lowered(.publicMockCall(node))
+			}
 			if isInstantiator {
 				lines.append("\(indent)func \(functionName)() -> \(typeName) {")
 				lines.append("\(indent)\(ScopeGenerator.standardIndent)\(call)")
