@@ -6,8 +6,6 @@ paths:
   - "Tests/**/*Mock*.swift"
 ---
 
-<!-- Moved from CLAUDE.md §Mock generation specifics at 337e5e22. Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 # Mock generation specifics
 
 - **Share logic between production and mock paths where possible.** Validation, scope population, and other shared concerns should live in common helpers rather than being duplicated between `createTypeDescriptionToScopeMapping` and `createMockTypeDescriptionToScopeMapping`. When adding validation to one path, check whether the other path needs it too.

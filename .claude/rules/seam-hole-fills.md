@@ -8,8 +8,6 @@ paths:
   - "Tests/**/*UnreadType*.swift"
 ---
 
-<!-- Moved from seam-holes.md, which it continues. Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 # Seams: fills
 
 Continues `seam-holes.md`.
