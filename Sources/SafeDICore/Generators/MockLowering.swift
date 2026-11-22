@@ -61,23 +61,6 @@ public enum MockLoweringShadow {
 		case unsupported(MockLowering.Rule)
 	}
 
-	/// How the configurations lowered from `roots`' records compare with those the emitter generated: one comparison of
-	/// each root's merged code, then one of the module's shared configuration code, `emittedConfigurationCode`.
-	// D1 lane hook (lane D): lowered from the roots' records in `MockLowering+Configurations.swift`.
-	static func configurationComparisons(
-		of roots: [MockLowering.LoweredRoot],
-		emittedConfigurationCode _: String?,
-		mockConditionalCompilation _: String?,
-		sendableConfigurationTypeNames _: Set<String>,
-		publicMockContext _: PublicMockContext?,
-	) -> [Comparison] {
-		var comparisons = roots.map { root in
-			Comparison(mockedType: root.mockedType.asSource, outcome: .unsupported(.configurationStructs), subject: .mergedCode)
-		}
-		comparisons.append(Comparison(mockedType: "", outcome: .unsupported(.configurationStructs), subject: .moduleConfigurations))
-		return comparisons
-	}
-
 	/// How `lowered` compares with `emitted`, byte for byte, line by line.
 	public static func outcome(comparing lowered: MockLowering.Result, with emitted: String) -> Outcome {
 		switch lowered {
@@ -131,8 +114,6 @@ public enum MockLowering {
 		case cycle
 		/// Two nodes of one label.
 		case siblingLabelCollision = "sibling label collision"
-		/// The configuration structs a module's mocks share or merge into their roots.
-		case configurationStructs = "configuration structs"
 	}
 
 	public enum Result: Sendable, Equatable {

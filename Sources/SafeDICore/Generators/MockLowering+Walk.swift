@@ -1081,12 +1081,10 @@ extension MockLowering.ConfigurationRecord {
 		self.init(
 			concreteType: node.instantiable.concreteInstantiable,
 			usesMockInitializer: false,
-			childFields: children.compactMap(\.builtNode).map { child in
-				ChildField(
-					name: child.bindingName,
-					typeSource: child.hasConfiguration ? child.configurationTypeName : "(\(child.builderClosureType))?",
-					defaultValue: child.hasConfiguration ? ".init()" : "nil",
-				)
+			// A child's field is the one the overrides hold for a node at the root: its override, its configuration, or the
+			// overrides of the public mock it calls.
+			childFields: children.compactMap(\.overridesField).map { field in
+				ChildField(name: field.name, typeSource: field.typeSource, defaultValue: field.defaultValue)
 			},
 			concreteBuilderClosureType: node.concreteBuilderClosureType,
 		)
