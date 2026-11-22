@@ -47,6 +47,7 @@ extension ScopeGenerator {
 		// No node binds a parameter’s label again, at any depth: the emitter names the parameter apart.
 		var walk = MockLowering.Walk(cycleEdges: context.cycleEdges, rootLabels: signature.labels, uncoveredProperties: signature.uncoveredProperties)
 		walk.rootFlatReceivedLabels = Set(signature.flatReceivedParameters.map(\.property.label))
+		walk.rootParametersKeepingTheirLabels = (signature.forwardedParameters + signature.rootDefaultParameters).map(\.property)
 		// D1 lane hook (lane D): the defaults a type's hand-written mock declares, which its configuration's fields take.
 		walk.handWrittenMockDefaultParameters = context.handWrittenMockDefaultParameters
 		// D1 lane hook (lane C): a public mock builds each configured node with its type's construction function.
@@ -253,6 +254,13 @@ extension MockLowering {
 		var rootFlatReceivedLabels = Set<String>()
 		/// The names the mock root's level gives the aliases it names apart, which no builder function beneath may declare.
 		var rootAliasNamesApart = Set<String>()
+		/// The properties of `mock()`'s forwarded and default-valued parameters, which keep their labels: a node of the mock
+		/// root's level under one of their labels is named apart from them
+		/// (`ScopeGenerator.disambiguatePropertyLabels(for:besideParametersKeepingTheirLabels:reservedNames:)`).
+		var rootParametersKeepingTheirLabels = [Property]()
+		/// The properties of the mock root's level named apart from a parameter that keeps its label, which may bind a name
+		/// apart from a label `mock()` binds.
+		var rootPropertiesNamedApartFromParameters = Set<Property>()
 		/// The labels of the dependencies of every node the walk built, which a builder function beneath the root binds.
 		var dependencyLabelsInTree = Set<String>()
 		var labels = Set<String>()
@@ -399,6 +407,11 @@ extension MockLowering {
 			for case let property? in propertyNodes where !seenLabels.insert(property.label).inserted {
 				collidingLabels.insert(property.label)
 			}
+			// The mock root's level names its nodes apart from the parameters that keep their labels too.
+			let parametersKeepingTheirLabels = bodyLabels.isEmpty ? rootParametersKeepingTheirLabels : []
+			let parameterLabels = Set(parametersKeepingTheirLabels.map(\.label))
+			let collidingParameterLabels = parameterLabels.intersection(seenLabels)
+			collidingLabels.formUnion(collidingParameterLabels)
 			guard !collidingLabels.isEmpty else { return .lowered(propertyNodes.map { $0?.label }) }
 			// D1 lane hook (lane B): inside a `@Sendable` builder function, the extractor reserved the functions this level
 			// declares under their labels before the level was named.
@@ -411,15 +424,21 @@ extension MockLowering {
 					let instantiatedType = property.typeDescription.asInstantiatedType
 					return (label: property.label, suffixTypes: [instantiatedType.simplified, instantiatedType, property.typeDescription])
 				},
-				reservedNames: seenLabels.subtracting(collidingLabels),
+				besideEntriesKeepingTheirNames: parametersKeepingTheirLabels.compactMap { parameter in
+					guard collidingLabels.contains(parameter.label) else { return nil }
+					let instantiatedType = parameter.typeDescription.asInstantiatedType
+					return (label: parameter.label, suffixTypes: [instantiatedType.simplified, instantiatedType, parameter.typeDescription])
+				},
+				reservedNames: seenLabels.subtracting(collidingLabels).union(parameterLabels),
 			)
 			let nameByProperty = Dictionary(zip(collidingProperties, names), uniquingKeysWith: { first, _ in first })
-			// D1 lane hook (lane D): the mock root's level names its nodes apart from the parameters that keep their labels
-			// too, and from every name a builder function beneath declares.
+			// D1 lane hook (lane D): the mock root's level names its nodes apart from every name a builder function beneath
+			// declares.
 			if bodyLabels.isEmpty {
-				guard rootLabels.isDisjoint(with: names), rootLabels.isDisjoint(with: collidingLabels) else { return .unsupported(.siblingLabelCollision) }
+				guard rootLabels.isDisjoint(with: names), rootLabels.intersection(collidingLabels).isSubset(of: collidingParameterLabels) else { return .unsupported(.siblingLabelCollision) }
 				rootNamesApart.formUnion(names)
 				rootLabelsNamedApart.formUnion(collidingLabels)
+				rootPropertiesNamedApartFromParameters.formUnion(collidingProperties.filter { collidingParameterLabels.contains($0.label) })
 			}
 			return .lowered(propertyNodes.map { property in property.map { nameByProperty[$0] ?? $0.label } })
 		}
@@ -605,7 +624,7 @@ extension MockLowering {
 			// (`ownUnavailableProperties` in `ScopeGenerator`).
 			let unavailableProperties = generator.reboundProperties.isEmpty ? unavailableProperties : unavailableProperties.subtracting(generator.reboundProperties.flatMap(CycleParameter.forms(providedBy:)))
 			guard instantiable.mockInitializer == nil, let initializer = instantiable.initializer else { return .unsupported(.handWrittenMock) }
-			guard !rootLabels.contains(property.label), labels.insert(bindingName).inserted else { return .unsupported(.siblingLabelCollision) }
+			guard !rootLabels.contains(property.label) || (bindingName != property.label && rootPropertiesNamedApartFromParameters.contains(property)), labels.insert(bindingName).inserted else { return .unsupported(.siblingLabelCollision) }
 			dependencyLabelsInTree.formUnion(instantiable.dependencies.map(\.property.label))
 
 			let orderedChildren = generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: propertiesGeneratedLater)
