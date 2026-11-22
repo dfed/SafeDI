@@ -265,7 +265,6 @@ extension MockLowering.Walk {
 		lines.append("\(indent)let \(property.label): \(typeName) = \(functionName)()")
 		return .lowered(.publicMockCall(node))
 	}
-
 }
 
 extension MockLowering {
