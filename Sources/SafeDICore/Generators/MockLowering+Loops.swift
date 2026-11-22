@@ -35,6 +35,11 @@ extension MockLowering {
 	struct LoopMember {
 		/// The member's wrapper type.
 		let typeDescription: TypeDescription
+		/// The name the member's wrappers made again are bound under.
+		let bindingName: String
+		/// For a rename the level declares of a member, the rename as it is bound, wrapping the member's function: its
+		/// binding name and its own type.
+		let rename: Property?
 		/// The name of the function every wrapper of the member that its level makes hands: its builder function, or the
 		/// `_received` function that calls it where it takes parameters a lazy cycle needs.
 		let functionName: String
@@ -71,7 +76,10 @@ extension MockLowering {
 	/// takes parameters a lazy cycle needs is wrapped through `__safeDI_<label>_received`, named apart from the level's
 	/// builder functions, `namesInScope`, and the builder functions, and their `_received` names, of each member's level,
 	/// as the emitter names it (`loopMemberEmissions`).
-	static func loopMembers(among generators: [ScopeGenerator], loops: [LoopMembership?], namesInScope: Set<String>) -> [Property: LoopMember] {
+	///
+	/// A rename the level declares of a member (`isLoopBuilder(amongSiblings:)`) is a member too, under its own property,
+	/// bound under `bindingNames`' entry, wrapping the member's function, as the emitter declares it.
+	static func loopMembers(among generators: [ScopeGenerator], loops: [LoopMembership?], bindingNames: [String?], namesInScope: Set<String>) -> [Property: LoopMember] {
 		var reservedNames = namesInScope
 		var memberGenerators = [ScopeGenerator]()
 		for (generator, membership) in zip(generators, loops) where membership != nil {
@@ -97,6 +105,8 @@ extension MockLowering {
 			let receivedFunctionName = generator.cycleParameters.isEmpty ? nil : names.claim(ReservedName.receivedBuilderFunctionName(of: builderFunctionName))
 			members[property] = LoopMember(
 				typeDescription: property.typeDescription,
+				bindingName: property.label,
+				rename: nil,
 				functionName: receivedFunctionName ?? builderFunctionName,
 				builderFunctionName: builderFunctionName,
 				receivedFunctionName: receivedFunctionName,
@@ -104,7 +114,37 @@ extension MockLowering {
 				cycleParameters: generator.cycleParameters.map(\.property),
 			)
 		}
+		for (index, generator) in generators.enumerated() where index < loops.count && loops[index] != nil {
+			guard case let .alias(property, fulfillingProperty, false, _, _) = generator.scopeData,
+			      let member = members[fulfillingProperty]
+			else { continue }
+			let bindingName = (index < bindingNames.count ? bindingNames[index] : nil) ?? property.label
+			members[property] = LoopMember(
+				typeDescription: member.typeDescription,
+				bindingName: bindingName,
+				rename: Property(label: bindingName, typeDescription: property.typeDescription),
+				functionName: member.functionName,
+				builderFunctionName: member.builderFunctionName,
+				receivedFunctionName: nil,
+				forwardedProperties: member.forwardedProperties,
+				cycleParameters: [],
+			)
+		}
 		return members
+	}
+
+	/// The lines, at `indent`, that bind `member`'s wrapper again, handing `functionName` called with its forwarded
+	/// properties and `cycleParameterArguments`: under its binding name, or, for a rename, as the rename's own type.
+	static func memberBindingLines(of member: LoopMember, handing functionName: String, cycleParameterArguments: [String] = [], indent: String) -> [String] {
+		wrapperBindingLines(
+			of: member.typeDescription,
+			named: member.bindingName,
+			declaredAs: member.rename,
+			handing: functionName,
+			forwardedProperties: member.forwardedProperties,
+			cycleParameterArguments: cycleParameterArguments,
+			indent: indent,
+		)
 	}
 
 	/// The lines that begin a loop member's builder function, at `indent`: a binding of each of `reboundProperties`, the
@@ -115,11 +155,9 @@ extension MockLowering {
 		for property in reboundProperties {
 			guard let member = members[property] else { return nil }
 			let isOwnWithCycleParameters = property == ownProperty && member.receivedFunctionName != nil
-			lines.append(contentsOf: wrapperBindingLines(
-				of: member.typeDescription,
-				named: property.label,
+			lines.append(contentsOf: memberBindingLines(
+				of: member,
 				handing: isOwnWithCycleParameters ? member.builderFunctionName : member.functionName,
-				forwardedProperties: member.forwardedProperties,
 				cycleParameterArguments: isOwnWithCycleParameters ? member.cycleParameters.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" } : [],
 				indent: indent,
 			))
@@ -147,14 +185,8 @@ extension MockLowering {
 			let unwrappedProperty = parameter.asUnwrappedProperty
 			let memberProperty = members[unwrappedProperty] != nil ? unwrappedProperty : unwrappedProperty.asOptionalProperty
 			guard let argumentMember = members[memberProperty] else { return argument }
-			memberLines.append(contentsOf: wrapperBindingLines(
-				of: argumentMember.typeDescription,
-				named: memberProperty.label,
-				handing: argumentMember.functionName,
-				forwardedProperties: argumentMember.forwardedProperties,
-				indent: bodyIndent,
-			))
-			return "\(parameter.label.spelledAsArgumentLabel): \(memberProperty.label)"
+			memberLines.append(contentsOf: memberBindingLines(of: argumentMember, handing: argumentMember.functionName, indent: bodyIndent))
+			return "\(parameter.label.spelledAsArgumentLabel): \(argumentMember.bindingName)"
 		}
 		let parameters = member.forwardedProperties.isEmpty ? "" : member.forwardedProperties.initializerFunctionParametersSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 		let callArguments = member.forwardedProperties.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" } + cycleArguments
