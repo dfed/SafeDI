@@ -37,11 +37,11 @@ enum TypeKeyBody {
 		var layout = TypeKeyLayout()
 		guard layout.read(rootBody) else { return nil }
 		GenerationWork.record(layout.bodies.count - 1, by: .layingOutTypeKeyViews)
-		guard layout.computeReads(),
-		      layout.computeClasses(),
-		      layout.computePlacement(),
-		      layout.computeOutcomes(),
-		      layout.computeParameterTypes(),
+		guard layout.computeReads() else { return nil }
+		layout.computeClasses()
+		guard layout.computePlacement() else { return nil }
+		layout.computeOutcomes()
+		guard layout.computeParameterTypes(),
 		      layout.checkEveryRead()
 		else { return nil }
 		layout.computeDecoratorsAndNames()
@@ -56,18 +56,6 @@ private enum PathValue: Hashable {
 	case statement(body: Int, index: Int)
 	case forwarded(body: Int, label: String)
 	case cycleParameter(body: Int, label: String)
-
-	/// The body that declares the value, or `nil` for none.
-	var body: Int? {
-		switch self {
-		case .none:
-			nil
-		case let .statement(body, _),
-		     let .forwarded(body, _),
-		     let .cycleParameter(body, _):
-			body
-		}
-	}
 }
 
 /// A declaration of the type key's body: a statement of a class's body or the root's (class 0), a forwarded property of a
@@ -207,7 +195,6 @@ private struct TypeKeyLayout {
 			let label: String
 			switch record {
 			case let .built(built):
-				guard Self.areReads(built.arguments), Self.areReads(built.callCycleArguments) else { return false }
 				label = built.property.label
 				if built.hasFunction {
 					guard let domain = domain(of: built) else { return false }
@@ -255,7 +242,6 @@ private struct TypeKeyLayout {
 					statement = .inline(built)
 				}
 			case let .closer(closer):
-				guard Self.areReads(closer.cycleArguments) else { return false }
 				label = closer.property.label
 				// The function a closing scope calls is the nearest enclosing one of its name, as Swift resolves it.
 				var target = body
@@ -348,28 +334,11 @@ private struct TypeKeyLayout {
 	/// The record of a place's code, as a body holds it: indented, around the place's plan.
 	private static func record(of code: GeneratedCode) -> PlaceRecord? {
 		var code = code
-		while true {
-			switch code.node {
-			case let .indented(inner, _):
-				code = inner
-			case let .place(plan):
-				return plan.record
-			case .text, .sequence, .lines, .spelled:
-				return nil
-			}
+		while case let .indented(inner, _) = code.node {
+			code = inner
 		}
-	}
-
-	/// Whether each of `reads` reads a declaration of its label, its lazy wrapper's instance, or `nil`.
-	private static func areReads(_ reads: [PlaceRead]) -> Bool {
-		reads.allSatisfy { read in
-			switch read.source {
-			case .binding, .lazyInstance, .nil:
-				true
-			case .forwardedSpread, .wrapper, .optionalWrapper, .builderArgument, .holeArgument:
-				false
-			}
-		}
+		guard case let .place(plan) = code.node else { return nil }
+		return plan.record
 	}
 
 	func label(of statement: Statement) -> String {
@@ -631,12 +600,17 @@ private struct TypeKeyLayout {
 	private func escapingReadsOfBody(_ body: Int) -> [String: PathValue] {
 		var escaping = [String: PathValue]()
 		func note(_ label: String, _ value: PathValue) {
-			if value == .none {
+			switch value {
+			case .none:
 				if escaping[label] == nil {
 					escaping[label] = PathValue.none
 				}
-			} else if value.body != body, escaping[label] == nil || escaping[label] == PathValue.none {
-				escaping[label] = value
+			case let .statement(declaringBody, _),
+			     let .forwarded(declaringBody, _),
+			     let .cycleParameter(declaringBody, _):
+				if declaringBody != body, escaping[label] == nil || escaping[label] == PathValue.none {
+					escaping[label] = value
+				}
 			}
 		}
 		let statements = bodies[body].statements
@@ -687,7 +661,7 @@ private struct TypeKeyLayout {
 
 	/// Partitions the places into classes: by what each builds and how, its reads, the shape of its body and the classes its
 	/// body calls, and the form of the declaration each read resolves to.
-	mutating func computeClasses() -> Bool {
+	mutating func computeClasses() {
 		let count = bodies.count
 		let families = bodies.map(\.isInSendableFamily)
 		var structuralKeys = [[String]: Int]()
@@ -700,7 +674,7 @@ private struct TypeKeyLayout {
 				return id
 			}()
 		}
-		guard var refined = refine(classes) else { return false }
+		var refined = refine(classes)
 		// Places alike in every other way are one class only where each read resolves to declarations of one form, or none.
 		var groupsByClass = [Int: [[String?]]]()
 		var groupedClasses = [[Int]: Int]()
@@ -725,8 +699,7 @@ private struct TypeKeyLayout {
 				return id
 			}()
 		}
-		guard let final = refine(classesWithForms) else { return false }
-		refined = final
+		refined = refine(classesWithForms)
 		// Classes are numbered in the order the walk first reaches a member.
 		var numbering = [Int: Int]()
 		classByBody = [Int](repeating: 0, count: count)
@@ -741,7 +714,6 @@ private struct TypeKeyLayout {
 			classByBody[body] = id
 			membersByClass[id].append(body)
 		}
-		return true
 	}
 
 	private func structuralKey(of body: Int, isInSendableFamily: Bool) -> [String] {
@@ -781,11 +753,12 @@ private struct TypeKeyLayout {
 	}
 
 	/// `classes` refined until alike places' bodies call alike places: a place's class joins the classes its body's calls
-	/// reach. `nil` where the partition does not settle.
-	private func refine(_ classes: [Int]) -> [Int]? {
+	/// reach. Each pass refines the last, since a body's key starts with its class, so the count of classes grows with
+	/// every pass that changes the partition and the passes end within one per body.
+	private func refine(_ classes: [Int]) -> [Int] {
 		var previous = classes
 		var previousCount = Set(classes.dropFirst()).count
-		for _ in 0...bodies.count {
+		while true {
 			var interned = [[Int]: Int]()
 			var next = [Int](repeating: 0, count: bodies.count)
 			for body in bodies.indices.dropFirst() {
@@ -810,7 +783,6 @@ private struct TypeKeyLayout {
 			previousCount = interned.count
 			previous = next
 		}
-		return nil
 	}
 
 	// MARK: Placement
@@ -868,13 +840,11 @@ private struct TypeKeyLayout {
 			// each level of nested local functions past about twenty.
 			guard let firstSite = externalSites.first else { return false }
 			let owner = 0
-			let index: Int
 			let isAttached = members.count == 1 && externalSites.count == 1 && allSites.count == 1 && firstSite.owner == owner
-			if isAttached {
-				index = firstSite.index
-			} else {
-				guard let firstReaching = firstStatement(of: owner, reaching: memberSet) else { return false }
-				index = firstReaching
+			// The functions are declared before the first statement of the root's body that reaches them: one that calls a
+			// member, or one that reaches a function that calls one, which is placed already, since callers are placed first.
+			let index = externalSites.reduce(Int.max) { first, site in
+				min(first, site.owner == owner ? site.index : placementIndex[site.owner])
 			}
 			for member in members {
 				placementOwner[member] = owner
@@ -899,41 +869,6 @@ private struct TypeKeyLayout {
 			}
 		}
 		return true
-	}
-
-	/// Whether the function of `owner` is declared in the body of `ancestor` or in a body beneath it.
-	private func isDeclared(_ owner: Int, within ancestor: Int) -> Bool {
-		var current = owner
-		while current != 0 {
-			let placed = placementOwner[current]
-			guard placed >= 0 else { return false }
-			if placed == ancestor {
-				return true
-			}
-			current = placed
-		}
-		return ancestor == 0
-	}
-
-	/// The index of the first statement of `owner`'s body whose calls, through the functions declared beneath that body,
-	/// reach a class of `targets`.
-	private func firstStatement(of owner: Int, reaching targets: Set<Int>) -> Int? {
-		var visited = Set<Int>()
-		for (index, statement) in statements(ofClass: owner).enumerated() {
-			guard let start = callee(of: statement) else { continue }
-			var stack = [start]
-			while let current = stack.popLast() {
-				if targets.contains(current) {
-					return index
-				}
-				guard visited.insert(current).inserted,
-				      placementOwner[current] >= 0,
-				      isDeclared(current, within: owner)
-				else { continue }
-				stack.append(contentsOf: calleesByClass[current].sorted())
-			}
-		}
-		return nil
 	}
 
 	// MARK: Outcomes
@@ -974,53 +909,40 @@ private struct TypeKeyLayout {
 		case let .forwarded(body, label):
 			.forwarded(owner: classByBody[body], label: label)
 		case let .cycleParameter(body, label):
-			switch outcomes[classByBody[body]][label] {
-			case let .captured(declaration)?:
-				declaration
-			case .none?:
-				.none
-			case .passed?, nil:
-				.read(owner: classByBody[body], label: label)
-			}
+			// A function reads its cycle parameter from its caller, whatever the outcome of its label: no graph of the
+			// fuzzer's corpora settles one as captured or none, and a layout that reads it so is still checked against the
+			// path key read by read (`checkEveryRead`).
+			.read(owner: classByBody[body], label: label)
 		}
 	}
 
-	/// What each class's function does with each label it reads: `false` where the outcomes do not settle.
-	mutating func computeOutcomes() -> Bool {
-		outcomes = membersByClass.indices.map { owner in
-			guard owner != 0 else { return [:] }
-			return Dictionary(reads[membersByClass[owner][0]].map { ($0, ReadOutcome.passed) }, uniquingKeysWith: { first, _ in first })
-		}
-		for _ in 0..<16 {
-			var changed = false
-			for owner in membersByClass.indices.dropFirst() {
-				for label in reads[membersByClass[owner][0]] {
-					var declarations = [TypeDeclaration]()
-					for member in membersByClass[owner] {
-						declarations.append(typeDeclaration(for: resolution(of: label, atPlace: member)))
-						for closer in closersByTarget[member] ?? [] {
-							declarations.append(typeDeclaration(for: closerValue(of: label, closing: closer, onPlace: member)))
-						}
-					}
-					let outcome: ReadOutcome = if declarations.allSatisfy({ $0 == .none }) {
-						.none
-					} else if let first = declarations.first,
-					          declarations.allSatisfy({ $0 == first }),
-					          typeLookUp(label, inClass: placementOwner[owner], before: placementIndex[owner]) == first
-					{
-						.captured(first)
-					} else {
-						.passed
-					}
-					if outcomes[owner][label] != outcome {
-						outcomes[owner][label] = outcome
-						changed = true
+	/// What each class's function does with each label it reads. Every function is declared in the root's body
+	/// (`computePlacement`), and a cycle parameter is always read from the caller, so no outcome depends on another: one
+	/// pass settles them.
+	mutating func computeOutcomes() {
+		var outcomes = [[String: ReadOutcome]](repeating: [:], count: membersByClass.count)
+		for owner in membersByClass.indices.dropFirst() {
+			for label in reads[membersByClass[owner][0]] {
+				var declarations = [TypeDeclaration]()
+				for member in membersByClass[owner] {
+					declarations.append(typeDeclaration(for: resolution(of: label, atPlace: member)))
+					for closer in closersByTarget[member] ?? [] {
+						declarations.append(typeDeclaration(for: closerValue(of: label, closing: closer, onPlace: member)))
 					}
 				}
+				outcomes[owner][label] = if declarations.allSatisfy({ $0 == .none }) {
+					.none
+				} else if let first = declarations.first,
+				          declarations.allSatisfy({ $0 == first }),
+				          typeLookUp(label, inClass: placementOwner[owner], before: placementIndex[owner]) == first
+				{
+					.captured(first)
+				} else {
+					.passed
+				}
 			}
-			guard changed else { return true }
 		}
-		return false
+		self.outcomes = outcomes
 	}
 
 	/// What the closing statement `closer` passes the function of `place` for `label`: its argument for a cycle parameter,
@@ -1127,22 +1049,16 @@ private struct TypeKeyLayout {
 
 	// MARK: Checking every read
 
-	/// The innermost body of class `owner` that encloses `body`, the body itself included; the root for class 0.
-	private func instance(ofClass owner: Int, enclosing body: Int) -> Int? {
-		guard owner != 0 else { return 0 }
-		var current = body
-		while current != 0 {
-			if classByBody[current] == owner {
-				return current
-			}
-			current = bodies[current].parent
-		}
-		return nil
+	/// The body of class `owner` that encloses `body`, where `owner` is `body`'s class or the root's: what `typeLookUp`
+	/// finds in `body`'s class is declared in `body` itself or, since every function is declared in the root's body
+	/// (`computePlacement`), in the root's.
+	private func instance(ofClass owner: Int, enclosing body: Int) -> Int {
+		owner == 0 ? 0 : body
 	}
 
-	/// What the type key's `declaration`, read in `body`, holds there, as a path declaration; `nil` where it is no
-	/// declaration of the path key's.
-	private func evaluate(_ declaration: TypeDeclaration, inBody body: Int) -> PathValue? {
+	/// What the type key's `declaration`, which `typeLookUp` found in the class of `body`, holds in `body`, as a path
+	/// declaration.
+	private func evaluate(_ declaration: TypeDeclaration, inBody body: Int) -> PathValue {
 		var declaration = declaration
 		var body = body
 		while true {
@@ -1150,11 +1066,11 @@ private struct TypeKeyLayout {
 			case .none:
 				return PathValue.none
 			case let .statement(owner, index):
-				return instance(ofClass: owner, enclosing: body).map { .statement(body: $0, index: index) }
+				return .statement(body: instance(ofClass: owner, enclosing: body), index: index)
 			case let .forwarded(owner, label):
-				return instance(ofClass: owner, enclosing: body).map { .forwarded(body: $0, label: label) }
+				return .forwarded(body: instance(ofClass: owner, enclosing: body), label: label)
 			case let .read(owner, label):
-				guard let place = instance(ofClass: owner, enclosing: body) else { return nil }
+				let place = instance(ofClass: owner, enclosing: body)
 				if bodies[place].cycleParameterLabels.contains(label) {
 					return normalized(.cycleParameter(body: place, label: label))
 				} else {
@@ -1178,18 +1094,15 @@ private struct TypeKeyLayout {
 	private mutating func normalizeCycleParameters() {
 		for body in bodies.indices.dropFirst() {
 			guard let record = bodies[body].record else { continue }
-			for parameter in record.cycleParameters {
-				var values = [PathValue]()
-				if let argument = record.callCycleArguments.first(where: { $0.label == parameter.label }) {
-					values.append(normalized(pathValue(of: argument, inBody: bodies[body].parent, before: bodies[body].position)))
-				} else {
-					values.append(.none)
-				}
+			// The call passes each cycle parameter one argument of its label (`ScopeGenerator.cycleParameterReads`).
+			for argument in record.callCycleArguments {
+				let first = normalized(pathValue(of: argument, inBody: bodies[body].parent, before: bodies[body].position))
+				var values = [first]
 				for closer in closersByTarget[body] ?? [] {
-					values.append(normalized(closerValue(of: parameter.label, closing: closer, onPlace: body)))
+					values.append(normalized(closerValue(of: argument.label, closing: closer, onPlace: body)))
 				}
-				if let first = values.first, values.allSatisfy({ $0 == first }) {
-					normalizedCycleParameters[body, default: [:]][parameter.label] = first
+				if values.allSatisfy({ $0 == first }) {
+					normalizedCycleParameters[body, default: [:]][argument.label] = first
 				}
 			}
 		}
@@ -1217,7 +1130,7 @@ private struct TypeKeyLayout {
 					guard let fulfillingProperty = record.fulfillingProperty else { continue }
 					let expected = normalized(lookUp(fulfillingProperty.label, inBody: body, before: index))
 					let declaration = typeLookUp(fulfillingProperty.label, inClass: owner, before: index)
-					guard evaluate(declaration, inBody: body).map(normalized) == expected,
+					guard normalized(evaluate(declaration, inBody: body)) == expected,
 					      let typeModeType = type(of: declaration),
 					      let pathType = type(of: expected),
 					      typeModeType.asSource == pathType.asSource
@@ -1251,11 +1164,12 @@ private struct TypeKeyLayout {
 		guard !isNilAtEveryMember else { return true }
 		let expected = normalized(pathValue(of: read, inBody: body, before: index))
 		let declaration = typeLookUp(read.label, inClass: owner, before: index)
-		return evaluate(declaration, inBody: body).map(normalized) == expected
+		return normalized(evaluate(declaration, inBody: body)) == expected
 	}
 
 	/// Whether the call of `place`'s function from the statement at `index` of `body` passes each parameter what the path
-	/// key's call does, and, for a closing call, captures what the path key's function captures.
+	/// key's call does. Every function is declared in the root's body (`computePlacement`), so a closing call captures
+	/// what the path key's function captures.
 	private func checkCall(of place: Int, from body: Int, at index: Int, closer: ClosingPlaceRecord?) -> Bool {
 		let callee = classByBody[place]
 		let owner = classByBody[body]
@@ -1266,13 +1180,7 @@ private struct TypeKeyLayout {
 				normalized(resolution(of: label, atPlace: place))
 			}
 			let declaration = typeLookUp(label, inClass: owner, before: index)
-			guard evaluate(declaration, inBody: body).map(normalized) == expected else { return false }
-		}
-		if closer != nil, placementOwner[callee] != 0 {
-			// A closing call captures what the function captured where the path key's function was declared.
-			guard let callerInstance = instance(ofClass: placementOwner[callee], enclosing: body),
-			      callerInstance == instance(ofClass: placementOwner[callee], enclosing: bodies[place].parent)
-			else { return false }
+			guard normalized(evaluate(declaration, inBody: body)) == expected else { return false }
 		}
 		return true
 	}
@@ -1480,16 +1388,11 @@ private struct TypeKeyLayout {
 		let receivedType = read.property.typeDescription
 		if receivedType == declaredType || (receivedType.isOptional && receivedType.unwrapped == declaredType) {
 			return read.label
-		} else if let instanceType = declaredType.lazilyInstantiatedInstanceType {
-			if !declaredType.isOptional, receivedType.unwrapped == instanceType {
-				return "\(read.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
-			} else if declaredType.isOptional, receivedType.isOptional, receivedType == instanceType {
-				return "\(read.label)?.\(Dependency.lazilyInstantiatedInstancePropertyName)"
-			} else {
-				return nil
-			}
+		} else if let instanceType = declaredType.lazilyInstantiatedInstanceType, !declaredType.isOptional, receivedType.unwrapped == instanceType {
+			return "\(read.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 		} else {
-			return nil
+			guard let instanceType = declaredType.lazilyInstantiatedInstanceType, declaredType.isOptional, receivedType.isOptional, receivedType == instanceType else { return nil }
+			return "\(read.label)?.\(Dependency.lazilyInstantiatedInstancePropertyName)"
 		}
 	}
 }
