@@ -1123,7 +1123,11 @@ extension ScopeGenerator {
 		let fillPlaces = fillPlaces(in: parameterTree.propertyNodes)
 		let filledFamilies = filledFamilies(of: fillPlaces.calls)
 		guard !filledFamilies.isEmpty else { return [] }
-		let requiredHoleTypes = requiredBuilders.map(\.enumKey.holeType).uniqued().sorted { ($0.instantiatedType.asSource, $0.builtType.asSource) < ($1.instantiatedType.asSource, $1.builtType.asSource) }
+		let requiredHoleTypes = requiredBuilders.map(\.enumKey.holeType).uniqued().sorted { lhs, rhs in
+			let lhsKey: (String, String) = (lhs.instantiatedType.asSource, lhs.builtType.asSource)
+			let rhsKey: (String, String) = (rhs.instantiatedType.asSource, rhs.builtType.asSource)
+			return lhsKey < rhsKey
+		}
 		let requiredStems = DependencyTreeGenerator.stems(of: requiredHoleTypes)
 		let optionalStems = stemsOfOptionalBuilders(
 			of: filledFamilies.map { ($0.family.holeType, $0.receivedProperty) },
@@ -1132,7 +1136,9 @@ extension ScopeGenerator {
 			requiredStems: requiredStems,
 		)
 		// The names the narrowest tier's function takes the builders under, apart from every name its body declares.
-		var namesInBody = Set(otherParameters.map(\.label)).union(requiredBuilders.map(\.internalName)).union(fillPlaces.declaredLabels)
+		var namesInBody = Set<String>(otherParameters.map(\.label))
+		namesInBody.formUnion(requiredBuilders.map(\.internalName))
+		namesInBody.formUnion(fillPlaces.declaredLabels)
 		var nodesToVisit = parameterTree.propertyNodes
 		while let node = nodesToVisit.popLast() {
 			namesInBody.insert(functionName(toBuildPropertyNamed: node.propertyLabel))
@@ -1146,9 +1152,17 @@ extension ScopeGenerator {
 			let type = TypeDescription.optional(MockRootParameters.SeamMockBuilder.parameterType(ofPlaceProperties: filled.placeProperties, in: filled.family).strippingEscaping)
 			let parameterAccess = access(type)
 			let stem = optionalStems[filled.family.holeType, default: ""]
-			let tiers = [widestTier] + Set((otherParameters + claimedLabels).map(\.access) + [parameterAccess]).filter { $0 < widestTier }.sorted(by: >)
-			let labels = tiers.filter { $0 <= parameterAccess }.map { tier in
-				(tier: tier, label: DependencyTreeGenerator.TierNames(tier: tier, parameterLabels: Set((otherParameters + claimedLabels).filter { $0.access >= tier }.map(\.label))).label(ofStem: stem, isSendable: filled.family.isSendable))
+			var labeledParameters = otherParameters
+			labeledParameters.append(contentsOf: claimedLabels)
+			var narrowerAccesses = Set<AccessLevel>(labeledParameters.map(\.access))
+			narrowerAccesses.insert(parameterAccess)
+			var tiers = [widestTier]
+			tiers.append(contentsOf: narrowerAccesses.filter { $0 < widestTier }.sorted(by: >))
+			var labels = [(tier: AccessLevel, label: String)]()
+			for tier in tiers where tier <= parameterAccess {
+				let parameterLabels = Set<String>(labeledParameters.filter { $0.access >= tier }.map(\.label))
+				let tierNames = DependencyTreeGenerator.TierNames(tier: tier, parameterLabels: parameterLabels)
+				labels.append((tier: tier, label: tierNames.label(ofStem: stem, isSendable: filled.family.isSendable)))
 			}
 			let label = labels.first?.label ?? stem
 			claimedLabels.append((label, parameterAccess))
