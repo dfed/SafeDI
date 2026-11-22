@@ -82,7 +82,7 @@ extension ScopeGenerator {
 	/// at the root's level, fill every place of each builder they take, and hold no place or call in their fills; or the
 	/// first rule the calls meet. Each family of hole type is one builder, labeled from its stem
 	/// (`stemsOfOptionalBuilders`) apart from `safeDIOverrides`, in label order.
-	func filledCallBuilders(of orderedChildren: [OrderedChild], context _: MockContext) -> MockLowering.Lowering<MockLowering.FilledCallBuilders> {
+	func filledCallBuilders(of orderedChildren: [OrderedChild], context: MockContext) -> MockLowering.Lowering<MockLowering.FilledCallBuilders> {
 		var calls = [MockLowering.FilledCallBuilders.Call]()
 		var filledCalls = [FilledCall]()
 		var namesFillsDeclare = Set<String>()
@@ -125,16 +125,6 @@ extension ScopeGenerator {
 			calls.append(.init(generator: generator, propertiesGeneratedLater: child.propertiesGeneratedLater))
 		}
 		guard !calls.isEmpty else { return .lowered(.none) }
-		// Whether a type the tree builds inline may be another module's public mock, whose places read the builders: a module
-		// SafeDI knows no name of counts as another.
-		let ownModuleName: String? = if case let .root(instantiable, _) = scopeData {
-			instantiable.moduleName
-		} else {
-			nil
-		}
-		func isPublicMockOfAnotherModule(_ instantiable: Instantiable) -> Bool {
-			instantiable.generateMock == .public && (ownModuleName == nil || instantiable.moduleName != ownModuleName)
-		}
 		// The labels the tree binds and its types' dependencies have beneath the root's level, which name a builder apart.
 		var namesBoundInTheTree = Set<String>()
 		var generatorsToVisit = orderedChildren.map(\.generator)
@@ -143,9 +133,6 @@ extension ScopeGenerator {
 			case let .property(instantiable, property, _, _, _, _):
 				namesBoundInTheTree.insert(property.label)
 				guard generator.publicMockCall == nil else { continue }
-				// A place of a public mock the tree builds inline reads the builder `mock()` takes for its hole type
-				// (`ScopeGenerator.holeBuildersByInlinePlace`), which is not lowered yet.
-				guard !isPublicMockOfAnotherModule(instantiable) else { return .unsupported(.fill) }
 				namesBoundInTheTree.formUnion(instantiable.dependencies.map(\.property.label))
 			case let .alias(property, _, _, _, _):
 				namesBoundInTheTree.insert(property.label)
@@ -153,14 +140,6 @@ extension ScopeGenerator {
 				break
 			}
 			generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator))
-		}
-		// So does such a place inside a fill (`ScopeGenerator.holeBuildersByInlinePlaceInFills`).
-		var fillGeneratorsToVisit = calls.flatMap { call in call.generator.propertiesToGenerate.filter { $0.fillHole != nil } }
-		while let generator = fillGeneratorsToVisit.popLast() {
-			if case let .property(instantiable, _, _, _, _, _) = generator.scopeData, generator.publicMockCall == nil, isPublicMockOfAnotherModule(instantiable) {
-				return .unsupported(.fill)
-			}
-			fillGeneratorsToVisit.append(contentsOf: generator.propertiesToGenerate)
 		}
 		let families = Self.filledFamilies(of: filledCalls)
 		let stems = Self.stemsOfOptionalBuilders(
@@ -172,6 +151,7 @@ extension ScopeGenerator {
 		var labels = GeneratedNameAllocator(reserving: [ReservedName.mockOverridesParameterName])
 		var parameters = [(label: String, declaration: String)]()
 		var holeBuildersByCall = [ObjectIdentifier: [String: FillPlaceBindings.HoleBuilder]]()
+		var buildersByFamily = [MockRootParameters.SeamMockBuilder.Family: FillPlaceBindings.HoleBuilder]()
 		for filled in families {
 			let stem = stems[filled.family.holeType, default: ""]
 			let label = labels.claim(filled.family.isSendable ? DependencyTreeGenerator.sendableBuilderLabel(ofStem: stem) : DependencyTreeGenerator.plainBuilderLabel(ofStem: stem))
@@ -179,16 +159,59 @@ extension ScopeGenerator {
 			guard !namesFillsDeclare.contains(label), !namesBoundInTheTree.contains(label) else { return .unsupported(.fill) }
 			let parameterType = MockRootParameters.SeamMockBuilder.parameterType(ofPlaceProperties: filled.placeProperties, in: filled.family)
 			parameters.append((label, "\(label): \(TypeDescription.optional(parameterType.strippingEscaping).asSource) = nil"))
+			let holeBuilder = FillPlaceBindings.HoleBuilder(name: label, isOptional: true)
+			buildersByFamily[filled.family] = holeBuilder
 			for callBuilder in filled.callBuilders {
-				holeBuildersByCall[callBuilder.call, default: [:]][callBuilder.label] = FillPlaceBindings.HoleBuilder(name: label, isOptional: true)
+				holeBuildersByCall[callBuilder.call, default: [:]][callBuilder.label] = holeBuilder
 			}
 		}
 		parameters.sort { $0.label < $1.label }
+		// A place of another module's public mock the tree builds inline reads the builder `mock()` takes for its hole type and
+		// family: inside a fill, where the fill's code reads it; outside every fill, where the walk does not lower it yet.
+		let holeBuildersByInlinePlaceInFills: [ObjectIdentifier: FillPlaceBindings.HoleBuilder]
+		do {
+			guard try !treeBuildsInlinePlaceReadingBuilder(of: orderedChildren, holeTypes: Set(buildersByFamily.keys.map(\.holeType)), foreignPublicMocks: context.foreignPublicMocks) else { return .unsupported(.fill) }
+			holeBuildersByInlinePlaceInFills = try Self.holeBuildersByInlinePlaceInFills(of: filledCalls, buildersByFamily: buildersByFamily, foreignPublicMocks: context.foreignPublicMocks)
+		} catch {
+			return .unsupported(.fill)
+		}
 		return .lowered(MockLowering.FilledCallBuilders(
 			calls: calls,
 			parameters: parameters,
-			fillPlaceBindings: FillPlaceBindings(bindingsByGenerator: [:], holeBuildersByCall: holeBuildersByCall),
+			fillPlaceBindings: FillPlaceBindings(bindingsByGenerator: [:], holeBuildersByCall: holeBuildersByCall, holeBuildersByInlinePlace: holeBuildersByInlinePlaceInFills),
 		))
+	}
+
+	/// Whether the tree of `orderedChildren`, outside the fills of its calls, builds inline a place of another module's public
+	/// mock of one of `holeTypes`, a hole of that mock, which reads the builder `mock()` takes for its hole type and family, as
+	/// `holeBuildersByInlinePlace(in:buildersByFamily:foreignPublicMocks:)` finds them. Walked with a stack, since a tree can be
+	/// as deep as the module has types.
+	private func treeBuildsInlinePlaceReadingBuilder(
+		of orderedChildren: [OrderedChild],
+		holeTypes: Set<SeamSignature.HoleType>,
+		foreignPublicMocks: [TypeDescription: SeamResolution.ForeignPublicMock],
+	) throws -> Bool {
+		guard !holeTypes.isEmpty, !foreignPublicMocks.isEmpty else { return false }
+		// Each scope with the public mock built inline nearest above it, and the type its declaration instantiates, which a
+		// `fulfilledByType:` names.
+		var generatorsToVisit = orderedChildren.map { (generator: $0.generator, publicMockBuiltInline: SeamResolution.ForeignPublicMock?.none, instantiatedType: TypeDescription?.none) }
+		while let (generator, publicMockBuiltInline, declaredInstantiatedType) = generatorsToVisit.popLast() {
+			// A scope that closes a cycle builds nothing, and a call's places are the call's.
+			guard case let .property(instantiable, property, _, _, false, _) = generator.scopeData, generator.publicMockCall == nil else { continue }
+			let instantiatedType = declaredInstantiatedType ?? property.typeDescription.asInstantiatedType
+			if let publicMockBuiltInline,
+			   try publicMockBuiltInline.visibleDeclarations().instantiables[instantiatedType] == nil,
+			   holeTypes.contains(SeamSignature.HoleType(instantiatedType: instantiatedType.spelledCanonically, builtType: property.typeDescription.builtTypeOfWrapper.spelledCanonically))
+			{
+				return true
+			}
+			let enclosingPublicMock = foreignPublicMocks[instantiable.concreteInstantiable] ?? publicMockBuiltInline
+			let instantiatedTypes = Dictionary(instantiable.dependencies.map { ($0.property, $0.asInstantiatedType) }, uniquingKeysWith: { first, _ in first })
+			generatorsToVisit += generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map { child in
+				(child.generator, enclosingPublicMock, child.generator.property.flatMap { instantiatedTypes[$0] })
+			}
+		}
+		return false
 	}
 }
 
