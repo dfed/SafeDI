@@ -1,9 +1,12 @@
 #!/bin/zsh
 # Scripts/changed-line-coverage.sh [BASE]   (default origin/main)
 # Runs the full suite with coverage as CI does and prints every added or changed line under Sources/ and Plugins/
-# that no test executed. The plugin compiles SafeDICore and SafeDIToolLibrary files through symlinks; a line counts as
-# executed when either copy executed it. Exit 1 when any line is unexecuted. SAFEDI_SKIP_COMPILE_CHECK=1 and
-# SAFEDI_COMPILE_CHECK_PASSED_CACHE are honored; neither changes what coverage counts.
+# that no test executed, then every Swift file there that the change adds, renames or edits and the report does not
+# record (a file of declarations only), which "Check Line Coverage on Linux" fails on unless
+# Scripts/unmeasured-files.txt lists it. The plugin compiles SafeDICore and SafeDIToolLibrary files through symlinks;
+# a line counts as executed when either copy executed it. Exit 1 when any line is unexecuted or any such file is
+# unrecorded. SAFEDI_SKIP_COMPILE_CHECK=1 and SAFEDI_COMPILE_CHECK_PASSED_CACHE are honored; neither changes what
+# coverage counts.
 # A failing test does not stop the report: the lines are reported from what the tests that ran executed, and the
 # script then exits with `swift test`'s status. A test process that crashed wrote no counts, so its lines read as
 # unexecuted.
@@ -36,6 +39,7 @@ fi
 mkdir -p .build/coverage
 "${llvm_cov[@]}" export -format=lcov "$executable" -instr-profile "$profile" >.build/coverage/full.lcov
 report_status=0
-git diff -U0 --no-color "$base" -- 'Sources/*.swift' 'Plugins/*.swift' | python3 Scripts/changed-line-coverage.py .build/coverage/full.lcov || report_status=$?
+git diff --name-only --diff-filter=ACMR "$base" -- 'Sources/*.swift' 'Plugins/*.swift' >.build/coverage/changed-files.txt
+git diff -U0 --no-color "$base" -- 'Sources/*.swift' 'Plugins/*.swift' | python3 Scripts/changed-line-coverage.py --files .build/coverage/changed-files.txt .build/coverage/full.lcov || report_status=$?
 if (( test_status != 0 )); then exit $test_status; fi
 exit $report_status
