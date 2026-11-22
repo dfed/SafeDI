@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Usage: unexecuted-lines.py [--summary FILE] --commit SHA linux=DIRECTORY macos=DIRECTORY
+"""Usage: unexecuted-lines.py [--summary FILE] --commit SHA linux=DIRECTORY… macos=DIRECTORY…
        unexecuted-lines.py --self-test DIRECTORY
 
 Run from the root of a checkout of commit SHA. Each DIRECTORY holds one platform's test run: `coverage.lcov`, its
 `llvm-cov export -format=lcov`; `checkout-root.txt`, the absolute path of the checkout that run built, which the
 report's `SF:` paths start with; `commit.txt`, the commit that run built; and `platform.txt`, the platform it ran on.
+A platform whose tests ran as several jobs, each running part of them, is given once per job, and each such
+DIRECTORY also holds `part.txt`, `INDEX of COUNT` (`1 of 2`): the parts' counts are summed into the platform's
+report. A directory without `part.txt` is the whole run, `1 of 1`.
 
 Prints `path:line: source` for every line under Sources/ or Plugins/ that a report records and no report records as
 executed, and a total, and exits 1 when there is any. A line counts as executed when either platform executed it in
@@ -21,7 +24,9 @@ also gets an error annotation; --summary FILE appends a Markdown table of them t
 Exits 2 when the reports cannot be trusted, so the check never passes on missing or partial data. It reports every
 such problem it finds, and the unexecuted lines too whenever both reports can be read, before it exits, so one run
 shows everything a commit has to fix:
-- the platforms given are not exactly linux and macos, each once;
+- the platforms given are not exactly linux and macos, or a directory is given twice;
+- a platform's reports are not every part of one run, each once (a job that ran part of the tests uploaded none),
+  or a `part.txt` is not `INDEX of COUNT`;
 - a report, its root, its commit or its platform is missing, the commit is not SHA, or the platform is not the one
   the directory is given for;
 - a report does not end with `end_of_record` (the export was cut short), or has a malformed record;
@@ -143,9 +148,23 @@ def repository_path(recorded_path, checkout_root, checkout):
     return resolved
 
 
+def read_part(platform, part_path):
+    """(index, count) from a report's `part.txt`, `INDEX of COUNT`, or (1, 1) for a report without one, which is a
+    whole run."""
+    if not os.path.isfile(part_path):
+        return 1, 1
+    with open(part_path, encoding="utf-8") as part_file:
+        words = part_file.read().split()
+    if len(words) == 3 and words[1] == "of" and words[0].isdigit() and words[2].isdigit():
+        index, count = int(words[0]), int(words[2])
+        if 1 <= index <= count:
+            return index, count
+    raise UntrustworthyReport(f"{platform}: {part_path} holds {' '.join(words) or 'nothing'}, not INDEX of COUNT")
+
+
 def read_report(platform, directory, checkout, commit):
-    """({repository path: {line: execution count}}, the repository paths it records) for one platform's report, the
-    copies of a file summed."""
+    """({repository path: {line: execution count}}, the repository paths it records, (the part's index, the count of
+    parts)) for one platform's report, the copies of a file summed."""
     lcov_path = os.path.join(directory, "coverage.lcov")
     root_path = os.path.join(directory, "checkout-root.txt")
     commit_path = os.path.join(directory, "commit.txt")
@@ -156,6 +175,7 @@ def read_report(platform, directory, checkout, commit):
                 f"{platform}: {required} is missing: the {platform} test job uploaded no report"
                 " (it failed, was cancelled, or could not export its coverage)"
             )
+    part = read_part(platform, os.path.join(directory, "part.txt"))
     with open(platform_path, encoding="utf-8") as platform_file:
         measured_platform = platform_file.read().strip()
     if measured_platform != platform:
@@ -218,7 +238,7 @@ def read_report(platform, directory, checkout, commit):
             " check checkout-root.txt and the export"
         )
     # A record with no counted line measures nothing, so it does not make its file recorded.
-    return counts, {path for path, line_counts in counts.items() if line_counts}
+    return counts, {path for path, line_counts in counts.items() if line_counts}, part
 
 
 def load_reports(platform_directories, checkout, commit):
@@ -227,25 +247,52 @@ def load_reports(platform_directories, checkout, commit):
     in the module's docstring that applies, so the check fails when it is not empty; the reports are still returned
     beside it when both can be read, so their unexecuted lines can be listed in the same run."""
     platforms = [platform for platform, _ in platform_directories]
-    repeated = sorted({platform for platform in platforms if platforms.count(platform) > 1})
-    if repeated:
-        return None, [f"{', '.join(repeated)} is given more than once"]
-    if sorted(platforms) != sorted(REQUIRED_PLATFORMS):
+    if sorted(set(platforms)) != sorted(REQUIRED_PLATFORMS):
         return None, [
             f"the check needs exactly the platforms {' and '.join(REQUIRED_PLATFORMS)}, not {', '.join(sorted(platforms))}"
         ]
+    given = [(platform, os.path.realpath(directory)) for platform, directory in platform_directories]
+    repeated = sorted(
+        {f"{platform}={directory}" for platform, directory in given if given.count((platform, directory)) > 1}
+    )
+    if repeated:
+        return None, [f"{', '.join(repeated)} is given more than once"]
     problems = []
     reports = {}
+    parts = collections.defaultdict(list)
     recorded_by = collections.defaultdict(list)
+    reports_read = 0
     for platform, directory in sorted(platform_directories):
         try:
-            reports[platform], recorded_files = read_report(platform, directory, checkout, commit)
+            line_counts_by_path, recorded_files, part = read_report(platform, directory, checkout, commit)
         except UntrustworthyReport as error:
             problems.append(str(error))
             continue
+        reports_read += 1
+        parts[platform].append(part)
+        # The parts of one platform's run each measured some of its tests, so their counts add up to the run's.
+        platform_report = reports.setdefault(platform, {})
+        for path, line_counts in line_counts_by_path.items():
+            summed = platform_report.setdefault(path, collections.defaultdict(int))
+            for line, count in line_counts.items():
+                summed[line] += count
         for path in recorded_files:
-            recorded_by[path].append(platform)
-    every_report_was_read = len(reports) == len(platform_directories)
+            if platform not in recorded_by[path]:
+                recorded_by[path].append(platform)
+    every_report_was_read = reports_read == len(platform_directories)
+    # A part that is absent leaves no union to take, as a report that cannot be read does. With a report unread, the
+    # parts that were read say nothing about the one that was not.
+    if every_report_was_read:
+        for platform in sorted(parts):
+            counts = {count for _, count in parts[platform]}
+            indexes = sorted(index for index, _ in parts[platform])
+            if len(counts) != 1 or indexes != list(range(1, max(counts) + 1)):
+                described = ", ".join(f"{index} of {count}" for index, count in sorted(parts[platform]))
+                problems.append(
+                    f"{platform}: the reports given are parts {described}, not every part of one run, each once:"
+                    f" a job that ran part of the {platform} tests uploaded no report, or one is given for another"
+                )
+                every_report_was_read = False
     problems.extend(
         f"{link} is a symbolic link to {target}, outside Sources/ and Plugins/, so no report of it would be checked;"
         " move the file it names under Sources/ or Plugins/ and link to it from where it is needed"
@@ -402,9 +449,12 @@ def self_test(directory):
     os.symlink("../../Plugins/B,%.swift", os.path.join(checkout, "Tests/PluginTests/B,%.swift"))
     checkout = os.path.realpath(checkout)
 
-    def write_report(name, platform, root, records, ending="end_of_record\n", report_commit=commit):
+    def write_report(name, platform, root, records, ending="end_of_record\n", report_commit=commit, part=None):
         report_directory = os.path.join(directory, name)
         os.makedirs(report_directory)
+        if part is not None:
+            with open(os.path.join(report_directory, "part.txt"), "w", encoding="utf-8") as part_file:
+                part_file.write(part + "\n")
         with open(os.path.join(report_directory, "platform.txt"), "w", encoding="utf-8") as platform_file:
             platform_file.write(platform + "\n")
         with open(os.path.join(report_directory, "checkout-root.txt"), "w", encoding="utf-8") as root_file:
@@ -469,7 +519,32 @@ def self_test(directory):
 
     expect_refusal("only linux", [("linux", linux)], "exactly the platforms linux and macos")
     expect_refusal("another platform", both + [("windows", linux)], "exactly the platforms linux and macos")
-    expect_refusal("linux twice", both + [("linux", linux)], "linux is given more than once")
+    expect_refusal("linux twice", both + [("linux", linux)], f"linux={linux} is given more than once")
+
+    # A platform whose tests ran as two jobs gives one report per job, and the two sum to the one report.
+    def macos_part(name, part, executed):
+        return ("macos", write_report(name, "macos", macos_root, [
+            (f"{macos_root}/Sources/Core/A.swift", [(1, 3 if executed == "first" else 0), (3, 0), (4, 0)]),
+            (f"{macos_root}/Sources/Macros/Core/A.swift", [(5, 0 if executed == "first" else 2)]),
+            (f"{macos_root}/Plugins/B,%.swift", [(2, 0), (3, 0 if executed == "first" else 7)]),
+        ], part=part))
+
+    first_part = macos_part("macos-first", "1 of 2", "first")
+    second_part = macos_part("macos-second", "2 of 2", "second")
+    part_reports, problems = load_reports([("linux", linux), first_part, second_part], checkout, commit)
+    if problems or part_reports != reports:
+        failures.append(f"the two parts of macos read as {part_reports} with {problems}, expected {reports}")
+    expect_refusal("one part of two", [("linux", linux), first_part], "macos: the reports given are parts 1 of 2, not")
+    expect_refusal("one part twice", [("linux", linux), first_part, macos_part("macos-first-again", "1 of 2", "first")],
+                   "macos: the reports given are parts 1 of 2, 1 of 2, not")
+    expect_refusal("a part beside a whole run", both + [second_part],
+                   "macos: the reports given are parts 1 of 1, 2 of 2, not")
+    expect_refusal("a part that names no part", [("linux", linux), macos_part("macos-half", "half", "first")],
+                   "holds half, not INDEX of COUNT")
+    expect_refusal("a part past the count", [("linux", linux), macos_part("macos-third", "3 of 2", "first")],
+                   "holds 3 of 2, not INDEX of COUNT")
+    # A missing part is a missing report: nothing is listed as unexecuted from the parts that were read.
+    missing_part_arguments = [f"linux={linux}", f"macos={first_part[1]}", f"macos={directory}/missing-part"]
     expect_refusal("missing", [("linux", os.path.join(directory, "missing")), ("macos", macos)], "is missing")
     expect_refusal("wrong root", [("linux", write_report("wrong-root", "linux", "/home/runner/work/SafeDI/SafeDI", [
         (f"{linux_root}/Sources/Core/A.swift", [(1, 1)]),
@@ -547,6 +622,9 @@ def self_test(directory):
     expect_together("a missing report beside other problems", [f"linux={directory}/missing", f"macos={macos}"], 2,
                     ["::error::linux: ", expected_together[0], expected_together[1]],
                     unexpected_text="no report records")
+    expect_together("a missing part beside other problems", missing_part_arguments, 2,
+                    ["::error::macos: ", expected_together[0], expected_together[1]],
+                    unexpected_text="No test executes this line")
     os.remove(os.path.join(checkout, "Sources/Core/Hidden.swift"))
     write(UNMEASURED_FILES_LIST, sources[UNMEASURED_FILES_LIST])
     os.remove(os.path.join(checkout, "Sources/Core/New.swift"))

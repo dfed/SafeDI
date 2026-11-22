@@ -15,6 +15,10 @@ inputs:
   identity:
     description: What `.github/scripts/compile-check-identity.sh` printed for this job.
     required: true
+  operating-system:
+    description: The operating system whose compiler passed the checks, as `runner.os` spells it, when another job than this one ran them. The default is this runner's.
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -59,7 +63,7 @@ runs:
     - uses: actions/upload-artifact@v7
       continue-on-error: true
       with:
-        name: passed-compile-checks-v1-${{ runner.os }}-${{ inputs.identity }}
+        name: passed-compile-checks-v1-${{ inputs.operating-system || runner.os }}-${{ inputs.identity }}
         path: passed-compile-checks/
         # Other runs read it for as long as it is among the newest of its
         # identity (restore-shared-compile-checks), which a stack needs for

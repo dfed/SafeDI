@@ -1178,12 +1178,31 @@ jobs:
           retention-days: 3
           overwrite: true
 
-  spm:
-    name: Build and Test on Xcode 26
-    needs: changes
+  # The Xcode 26 tests, as one job when most compile checks passed in an
+  # earlier run and as two when few did, which "Choose How the Xcode 26 Tests
+  # Run" decides. A run's time is mostly compile checks when none is skipped:
+  # main's run 44839883136 skipped all 4,260 and tested for 26.5 minutes after
+  # a 16.7-minute build, and run 44843308363, the first of a change to the
+  # sources the macro plugin compiles, compiled all 4,287 and tested for 62.7
+  # after a 26.5-minute build, 91 minutes on the one runner while the Linux
+  # jobs of the same run took 78. Two runners each build, 17 to 27 minutes,
+  # so two jobs spend a second runner to no gain when the checks are skipped,
+  # and macOS runners are what pull requests queue on: only a run that would
+  # compile most checks takes the second.
+  #
+  # The two parts are every test of the two targets whose tests compile the
+  # most, and every other test: the second part skips what the first selects,
+  # so no test runs in neither. With every check compiling, Verify's Linux
+  # groups took 5.5 minutes for the seams and 5.0 for the mocks, 10.5 of the
+  # 19.6 that all seven took (run 43766692766, which verify.yml describes).
+  # No run has measured the parts on macOS yet.
+  spm-tests:
+    name: Build and Test on Xcode 26 (${{ matrix.part }})
+    needs: [changes, spm-plan]
     # Also runs on every push to main, Markdown-only or not, so the
     # Codecov report behind the README badge always comes from a real
-    # test run.
+    # test run. It runs when "Choose How the Xcode 26 Tests Run" failed too,
+    # as one job.
     if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     # Runs on macOS because it builds and tests SafeDI with Xcode's Swift,
     # the compiler adopters use, and compiles every test's generated code
@@ -1195,6 +1214,15 @@ jobs:
       contents: read
       # To read the passed compile checks other runs uploaded.
       actions: read
+    strategy:
+      # A part that fails says nothing about the other's tests.
+      fail-fast: false
+      matrix:
+        # `all`, or `seams-and-mocks` and `the-rest`.
+        part: ${{ fromJSON(needs.spm-plan.outputs.parts || '["all"]') }}
+    outputs:
+      # The same from every part: they build one commit with one compiler.
+      compile-check-identity: ${{ steps.compile-check-identity.outputs.identity }}
     env:
       # What the build step passes `swift build --build-tests` and the test
       # step passes `swift test --skip-build`, which the compile check
@@ -1213,6 +1241,35 @@ jobs:
       # restored the build of their own key).
       - name: Stamp Source Times
         run: .github/scripts/stamp-source-times.sh
+      # What the test step adds to `swift test` for this part, and what the
+      # part's coverage report says it is a part of, which the line coverage
+      # check reads. Before the build, so that a part this step does not know
+      # fails in seconds.
+      - name: Select the Part's Tests
+        id: part
+        env:
+          PART: ${{ matrix.part }}
+        run: |
+          case "$PART" in
+            all)
+              selection=''
+              report_part='1 of 1'
+              ;;
+            seams-and-mocks)
+              selection='--filter ^SafeDIToolSeamTests\. --filter ^SafeDIToolMockTests\.'
+              report_part='1 of 2'
+              ;;
+            the-rest)
+              selection='--skip ^SafeDIToolSeamTests\. --skip ^SafeDIToolMockTests\.'
+              report_part='2 of 2'
+              ;;
+            *)
+              echo "::error::No part of the Xcode 26 tests is named $PART."
+              exit 1
+              ;;
+          esac
+          echo "selection=$selection" >> "$GITHUB_OUTPUT"
+          echo "report-part=$report_part" >> "$GITHUB_OUTPUT"
       # GitHub's macOS images export ImageVersion (for example
       # 20261102.0473.1) from ~/.bashrc; it is not in the `env` context, so
       # a step reads it for the cache key below. The OS build stands in if
@@ -1364,20 +1421,25 @@ jobs:
           xcrun swift build --build-tests $SWIFT_TEST_ARGUMENTS
       # After the build rather than at the job's end, so the cache holds
       # the build alone and a failing test does not lose it.
+      # One part saves it: the two build the same sources, under one key.
       - name: Save Build Directory
-        if: ${{ github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true' }}
+        if: ${{ github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true' && matrix.part != 'the-rest' }}
         uses: actions/cache/save@v6
         with:
           path: .build
           key: ${{ steps.build-cache.outputs.cache-primary-key }}
+      # A part's limit is the whole suite's until a run has measured the two
+      # parts with every check compiling; each should take about half of the
+      # 62.7 minutes the one job took then (run 44843308363).
       - name: Test Framework
         id: tests
         timeout-minutes: 85
         env:
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
+          SELECTION: ${{ steps.part.outputs.selection }}
         run: |
-          # shellcheck disable=SC2086 # The arguments are words to split.
-          xcrun swift test --skip-build $SWIFT_TEST_ARGUMENTS
+          # shellcheck disable=SC2086 # The arguments and the selection are words to split.
+          xcrun swift test --skip-build $SWIFT_TEST_ARGUMENTS $SELECTION
       # A run keeps in its branch's cache only the value comparison outputs it
       # read or printed and those the newest artifacts of its identity hold,
       # since the restore adds other runs' outputs to the directory, and keeps
@@ -1396,13 +1458,35 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: .compile-check-cache
-          key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
+          # Each part saves its own list. The next run restores the newer of
+          # the two and reads the other part's passes from the list "Build
+          # and Test on Xcode 26" uploads to share.
+          key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.part }}
       - name: Upload Passed Compile Checks to Share
-        if: ${{ always() }}
+        if: ${{ always() && matrix.part == 'all' }}
         continue-on-error: true
         uses: ./.github/actions/upload-passed-compile-checks
         with:
           identity: ${{ steps.compile-check-identity.outputs.identity }}
+      # Two parts would upload to share under one name, and the second would
+      # replace the first. Each hands on the checks it passed and the value
+      # comparison outputs it printed, and "Build and Test on Xcode 26" joins
+      # and uploads them, as "Save Passed Compile Checks of Verify" does for
+      # Verify's groups.
+      - name: Upload Passed Compile Checks of the Part
+        if: ${{ always() && matrix.part != 'all' && hashFiles('.compile-check-cache/passed.txt') != '' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: xcode-passed-compile-checks-${{ matrix.part }}
+          path: |
+            .compile-check-cache/passed-in-run-${{ github.run_id }}.txt
+            .compile-check-cache/value-outputs/
+            .compile-check-cache/value-outputs-written-in-run-${{ github.run_id }}.txt
+          retention-days: 1
+          include-hidden-files: true
+          # A re-run of the job replaces what an earlier attempt uploaded.
+          overwrite: true
       - name: Prepare Coverage Reports
         run: ./Scripts/prepare-coverage-reports.sh
       # "Check Line Coverage on Linux" unions this report with the Linux
@@ -1410,16 +1494,19 @@ jobs:
       # never depends on Codecov, and with the root its paths start with,
       # the commit it measured and the platform it ran on.
       - name: Stage Coverage Report for the Line Coverage Check
+        env:
+          REPORT_PART: ${{ steps.part.outputs.report-part }}
         run: |
           mkdir line-coverage
           cp .build/artifacts/SafeDIPackageTests.lcov line-coverage/coverage.lcov
           pwd -P > line-coverage/checkout-root.txt
           echo "$GITHUB_SHA" > line-coverage/commit.txt
           echo macos > line-coverage/platform.txt
+          echo "$REPORT_PART" > line-coverage/part.txt
       - name: Upload Coverage Report for the Line Coverage Check
         uses: actions/upload-artifact@v7
         with:
-          name: line-coverage-macos
+          name: line-coverage-macos${{ matrix.part != 'all' && format('-{0}', matrix.part) || '' }}
           path: line-coverage/
           retention-days: 7
           if-no-files-found: error
@@ -1429,6 +1516,10 @@ jobs:
       # upload the staged copy too.
       - name: Remove the Staged Coverage Report
         run: rm -r line-coverage
+      # Each part uploads under the one flag, and Codecov sums a flag's
+      # uploads. codecov.yml holds its status for one `macos` upload, so with
+      # two parts the status, which gates nothing, is first posted from one
+      # part and then corrected by the other.
       - name: Upload Coverage Reports
         if: success()
         uses: codecov/codecov-action@v7
@@ -1437,6 +1528,66 @@ jobs:
           verbose: true
           os: macos
           flags: macos
+
+  # Reports the parts of the Xcode 26 tests under the name the one job had,
+  # which the required check is, and fails unless every part passed: skipped,
+  # a part would satisfy the check. With two parts it also joins the compile
+  # checks they passed into the one list other runs read, which cannot fail
+  # the job, since sharing only saves compiles. It only reads results and
+  # moves lists, so it runs on Linux and needs no container.
+  spm:
+    name: Build and Test on Xcode 26
+    needs: [changes, spm-plan, spm-tests]
+    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Require Every Part
+        env:
+          PARTS: ${{ needs.spm-plan.outputs.parts || '["all"]' }}
+          PARTS_RESULT: ${{ needs.spm-tests.result }}
+        run: |
+          echo "Build and Test on Xcode 26, parts $PARTS: $PARTS_RESULT"
+          test "$PARTS_RESULT" = success
+      - name: Checkout Repo
+        if: ${{ !cancelled() && needs.spm-plan.outputs.split == 'true' }}
+        uses: actions/checkout@v7
+      # The limits only stop a stalled transfer, as in "Save Passed Compile
+      # Checks of Verify", whose steps these are.
+      - name: Download the Parts' Passed Compile Checks
+        if: ${{ !cancelled() && needs.spm-plan.outputs.split == 'true' }}
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: xcode-passed-compile-checks-*
+          path: part-compile-checks
+      - name: Join the Parts' Passed Compile Checks
+        if: ${{ !cancelled() && needs.spm-plan.outputs.split == 'true' }}
+        continue-on-error: true
+        run: |
+          mkdir -p .compile-check-cache/value-outputs
+          parts=$(find part-compile-checks -name "passed-in-run-$GITHUB_RUN_ID.txt" 2>/dev/null | wc -l)
+          if [ "$parts" -gt 0 ]; then
+            find part-compile-checks -name "passed-in-run-$GITHUB_RUN_ID.txt" -exec cat {} + | LC_ALL=C sort -u > ".compile-check-cache/passed-in-run-$GITHUB_RUN_ID.txt"
+            find part-compile-checks -path '*/value-outputs/*' -type f -exec cp -t .compile-check-cache/value-outputs/ {} +
+            find part-compile-checks -name "value-outputs-written-in-run-$GITHUB_RUN_ID.txt" -exec cat {} + | LC_ALL=C sort -u > ".compile-check-cache/value-outputs-written-in-run-$GITHUB_RUN_ID.txt"
+            echo "Passed compile checks of $parts parts: $(wc -l < ".compile-check-cache/passed-in-run-$GITHUB_RUN_ID.txt") passed in this run."
+          else
+            echo "No part uploaded passed compile checks."
+          fi
+          rm -rf part-compile-checks
+      # Under macOS's name, which this Linux job gives: the parts passed
+      # these checks with Xcode's compiler, under the identity they computed.
+      - name: Upload Passed Compile Checks to Share
+        if: ${{ !cancelled() && needs.spm-plan.outputs.split == 'true' && needs.spm-tests.outputs.compile-check-identity != '' }}
+        continue-on-error: true
+        uses: ./.github/actions/upload-passed-compile-checks
+        with:
+          identity: ${{ needs.spm-tests.outputs.compile-check-identity }}
+          operating-system: macOS
 
   # Builds the test bundle that "Build and Test on Linux", the graph fuzzer's
   # shards and "Repeat Tests on Linux" all run, in a job of its own so that
@@ -1927,6 +2078,89 @@ jobs:
   # builds 2.3.0 (restored from a cache after its first run on main), the
   # shards of each corpus and the job that combines their reports. No required check.
   # graph-fuzzer.yml's `release_acceptance` input checks a branch by hand.
+  # Chooses whether the Xcode 26 tests run as one job or two, which the comment
+  # on "Build and Test on Xcode 26 (…)" explains: two when few of the suite's
+  # compile checks have passed under this commit's identity.
+  #
+  # The macOS jobs' own list of passed checks is keyed on an identity that
+  # hashes Xcode's compiler and SDK, so only a macOS runner can look it up,
+  # and a macOS job that only chose would queue for the runner the choice is
+  # meant to save. This job reads Linux's list instead, as "Build and Test on
+  # Linux" restores it: the two identities hash the same sources, manifest
+  # and verifier, so a change that empties one empties the other. They differ
+  # after a new Xcode or runner image, which empties only macOS's, and such a
+  # run keeps the one job, as every run did before this one existed.
+  #
+  # Both macOS parts and the line coverage check read this one answer, so
+  # they cannot disagree about how many reports there are. A failure here
+  # leaves the answer empty, which each reads as one job.
+  spm-plan:
+    name: Choose How the Xcode 26 Tests Run
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    # About twice what its steps take: the checkout, the two restores, of
+    # which the second stops itself after three minutes, and a count.
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # To read the passed compile checks other runs uploaded.
+      actions: read
+    env: *linux-test-environment
+    outputs:
+      parts: ${{ steps.choose.outputs.parts }}
+      split: ${{ steps.choose.outputs.split }}
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Compute Compile Check Identity
+        id: compile-check-identity
+        run: |
+          # Assign first, so a failing script fails this step, as in "Build
+          # and Test on Linux".
+          # shellcheck disable=SC2086 # The arguments are words to split.
+          identity=$(.github/scripts/compile-check-identity.sh $SWIFT_TEST_ARGUMENTS)
+          test "${#identity}" -eq 64
+          echo "identity=$identity" >> "$GITHUB_OUTPUT"
+      - name: Restore Passed Compile Checks
+        uses: actions/cache/restore@v6
+        with:
+          path: .compile-check-cache
+          key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-
+      - name: Restore Shared Passed Compile Checks
+        continue-on-error: true
+        timeout-minutes: 3
+        uses: ./.github/actions/restore-shared-compile-checks
+        with:
+          identity: ${{ steps.compile-check-identity.outputs.identity }}
+      # Two jobs below half of what a run skips when every check has passed:
+      # main's run 44839883136 skipped 4,260 on macOS, and the first run of a
+      # change to the macro plugin's sources skipped none (run 44843308363).
+      # A list between the two is a run that was cancelled part way, which
+      # the one job finishes in less than a second runner's build takes once
+      # half the checks are skipped.
+      - name: Choose One Job or Two
+        id: choose
+        env:
+          FEWEST_PASSED_CHECKS_FOR_ONE_JOB: 2000
+        run: |
+          passed=0
+          if [ -f .compile-check-cache/passed.txt ]; then
+            passed=$(wc -l < .compile-check-cache/passed.txt)
+          fi
+          if [ "$passed" -lt "$FEWEST_PASSED_CHECKS_FOR_ONE_JOB" ]; then
+            echo "$passed compile checks have passed under this identity, fewer than $FEWEST_PASSED_CHECKS_FOR_ONE_JOB: the Xcode 26 tests run as two jobs."
+            echo 'parts=["seams-and-mocks","the-rest"]' >> "$GITHUB_OUTPUT"
+            echo "split=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "$passed compile checks have passed under this identity: the Xcode 26 tests run as one job."
+            echo 'parts=["all"]' >> "$GITHUB_OUTPUT"
+            echo "split=false" >> "$GITHUB_OUTPUT"
+          fi
+
   release-acceptance:
     name: Release Acceptance
     needs: [changes, linux-build]
@@ -2541,7 +2775,7 @@ jobs:
   # Fuzzer Corpus on Linux" does, so it runs on Linux with no container.
   line-coverage:
     name: Check Line Coverage on Linux
-    needs: [changes, spm, linux]
+    needs: [changes, spm-plan, spm, linux]
     if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-latest
     permissions:
@@ -2575,8 +2809,21 @@ jobs:
         with:
           pattern: line-coverage-*
           path: ${{ runner.temp }}/line-coverage
+      # When the Xcode 26 tests ran as two jobs, each uploaded the report of
+      # its part, and the script sums the two. It refuses a part without the
+      # other, whichever directories this step names, since each report says
+      # which part of how many it is.
       - name: Find Lines No Test Executes
-        run: python3 -I Scripts/unexecuted-lines.py --summary "$GITHUB_STEP_SUMMARY" --commit "$GITHUB_SHA" linux="$RUNNER_TEMP/line-coverage/line-coverage-linux" macos="$RUNNER_TEMP/line-coverage/line-coverage-macos"
+        env:
+          XCODE_TESTS_SPLIT: ${{ needs.spm-plan.outputs.split }}
+        run: |
+          reports="$RUNNER_TEMP/line-coverage"
+          if [ "$XCODE_TESTS_SPLIT" = true ]; then
+            macos=(macos="$reports/line-coverage-macos-seams-and-mocks" macos="$reports/line-coverage-macos-the-rest")
+          else
+            macos=(macos="$reports/line-coverage-macos")
+          fi
+          python3 -I Scripts/unexecuted-lines.py --summary "$GITHUB_STEP_SUMMARY" --commit "$GITHUB_SHA" linux="$reports/line-coverage-linux" "${macos[@]}"
 
   # Lists the generator lines the change adds or modifies that no graph of the
   # fuzzer's corpora executed, from the shards' coverage profiles, split by
