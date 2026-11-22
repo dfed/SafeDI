@@ -11,8 +11,6 @@ paths:
   - "Tests/**/*GraphFuzzerPublicMock*.swift"
 ---
 
-<!-- Moved from CLAUDE.md §Graph fuzzer at 337e5e22. Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 # Graph fuzzer: drawing a change, running seeds, the multi-module partition and the public mock corpus
 
 - **Drawing a change.** The fuzzer finds defects only in shapes it draws, and only once the draw runs under the code. Of the nested stack's late generated-code defects it was silent on, five had no draw for their shape, four had a draw written on a parallel branch with its oracles off, one had a draw whose every graph the tool rejected, and three sat behind oracles a global flag had turned off. So, as TDD asks of unit tests:

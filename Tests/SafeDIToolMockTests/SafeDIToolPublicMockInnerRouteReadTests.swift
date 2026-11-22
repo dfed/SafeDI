@@ -187,14 +187,16 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		    // SafeDI counts `Gadget` as `public`: no module it reads declares it narrower. If `Gadget` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 		    public static func mock(
 		        gadgetBuilder: @escaping () -> any Gadget,
+		        widgetBuilder: (() -> any Widget)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Inner {
-		        Inner.__safeDI_mock(gadgetBuilder: .init(__safeDI_noScope: gadgetBuilder), safeDIOverrides: safeDIOverrides)
+		        Inner.__safeDI_mock(gadgetBuilder: .init(__safeDI_noScope: gadgetBuilder), widgetBuilder: widgetBuilder, safeDIOverrides: safeDIOverrides)
 		    }
 
 		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 		    public static func __safeDI_mock(
 		        gadgetBuilder __safeDI_gadgetBuilder: Inner.SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget>,
+		        widgetBuilder __safeDI_widgetBuilder: (() -> any Widget)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Inner {
 		        let __safeDI_gadgetBuilder_deeper_widgetBuilder = __safeDI_gadgetBuilder.deeper_widgetBuilder(SafeDIMockScope_Gadget.deeper_widgetBuilder_Values())
@@ -214,7 +216,7 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		                .init(widget: { scope in __safeDI_widgetBuilder_Deeper_Screen_Scope_widget(scope, __safeDI_deeper_widgetBuilder: up.widget(scope)) })
 		            }
 		            _ = Deeper.__safeDI_Deeper_mock_B7E2C56CDBAB0D93.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Deeper.__safeDI_mock(widgetBuilder: __safeDI_widgetBuilder_Deeper(up: __safeDI_gadgetBuilder_deeper_widgetBuilder), safeDIOverrides: safeDIOverrides.deeper)
+		            return Deeper.__safeDI_mock(widgetBuilder: __safeDI_widgetBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_widgetBuilder_Deeper(up: __safeDI_gadgetBuilder_deeper_widgetBuilder), safeDIOverrides: safeDIOverrides.deeper)
 		        }
 		        let deeper: Deeper = __safeDI_deeper()
 		        return Inner(deeper: deeper)
@@ -222,7 +224,7 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		}
 
 		extension Inner {
-		    public enum __safeDI_Inner_mock_4BEF19C8E6E05844 {}
+		    public enum __safeDI_Inner_mock_AFEDDAFF5380CF79 {}
 		}
 		#endif
 		""")
@@ -295,17 +297,19 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		        }
 		    }
 
-		    // SafeDI counts `Thing` as `public`: no module it reads declares it narrower. If `Thing` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
+		    // SafeDI counts `Gadget` and `Thing` as `public`: no module it reads declares them narrower. If one is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 		    public static func mock(
 		        thingBuilder: @escaping () -> any Thing,
+		        gadgetBuilder: (() -> any Gadget)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Outer {
-		        Outer.__safeDI_mock(thingBuilder: .init(__safeDI_noScope: thingBuilder), safeDIOverrides: safeDIOverrides)
+		        Outer.__safeDI_mock(thingBuilder: .init(__safeDI_noScope: thingBuilder), gadgetBuilder: gadgetBuilder, safeDIOverrides: safeDIOverrides)
 		    }
 
 		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 		    public static func __safeDI_mock(
 		        thingBuilder __safeDI_thingBuilder: Outer.SafeDIMockScope_Thing.__safeDI_Builder<any Thing>,
+		        gadgetBuilder __safeDI_gadgetBuilder: (() -> any Gadget)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Outer {
 		        let __safeDI_thingBuilder_inner_gadgetBuilder = __safeDI_thingBuilder.inner_gadgetBuilder(SafeDIMockScope_Thing.inner_gadgetBuilder_Values())
@@ -330,8 +334,8 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		            func __safeDI_gadgetBuilder_Inner_DefaultWidget_Scope(up: Inner.SafeDIMockScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<SafeDIMockScope_Thing.DefaultGadget_Scope.__safeDI_Builder<any Thing>>) -> Inner.SafeDIMockScope_Gadget.DefaultWidget_Scope.__safeDI_Builder<any Gadget> {
 		                .init(gadget: { scope in __safeDI_gadgetBuilder_Inner_DefaultWidget_Scope_gadget(scope, __safeDI_inner_gadgetBuilder: up.gadget(scope)) })
 		            }
-		            _ = Inner.__safeDI_Inner_mock_4BEF19C8E6E05844.self // If this line does not compile, compile the code SafeDI generates for module Inside into Inside: under Bazel, add Inside’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Inner.__safeDI_mock(gadgetBuilder: __safeDI_gadgetBuilder_Inner(up: __safeDI_thingBuilder_inner_gadgetBuilder), safeDIOverrides: safeDIOverrides.inner)
+		            _ = Inner.__safeDI_Inner_mock_AFEDDAFF5380CF79.self // If this line does not compile, compile the code SafeDI generates for module Inside into Inside: under Bazel, add Inside’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Inner.__safeDI_mock(gadgetBuilder: __safeDI_gadgetBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_gadgetBuilder_Inner(up: __safeDI_thingBuilder_inner_gadgetBuilder), safeDIOverrides: safeDIOverrides.inner)
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        return Outer(inner: inner)
@@ -339,7 +343,7 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		}
 
 		extension Outer {
-		    public enum __safeDI_Outer_mock_75AD85BDFBD30217 {}
+		    public enum __safeDI_Outer_mock_81539147E67FF5F4 {}
 		}
 		#endif
 		""")
@@ -382,6 +386,7 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        thingBuilder: (() -> any Thing)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_outer() -> Outer {
@@ -407,8 +412,8 @@ struct SafeDIToolPublicMockInnerRouteReadTests: ~Copyable {
 		            func __safeDI_thingBuilder_Outer_DefaultGadget_Scope(token: Token) -> Outer.SafeDIMockScope_Thing.DefaultGadget_Scope.__safeDI_Builder<any Thing> {
 		                .init(thing: { scope in __safeDI_thingBuilder_Outer_DefaultGadget_Scope_thing(scope, token: token) })
 		            }
-		            _ = Outer.__safeDI_Outer_mock_75AD85BDFBD30217.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Outer.__safeDI_mock(thingBuilder: __safeDI_thingBuilder_Outer(), safeDIOverrides: safeDIOverrides.outer)
+		            _ = Outer.__safeDI_Outer_mock_81539147E67FF5F4.self // If this line does not compile, compile the code SafeDI generates for module Middle into Middle: under Bazel, add Middle’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Outer.__safeDI_mock(thingBuilder: thingBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_thingBuilder_Outer(), safeDIOverrides: safeDIOverrides.outer)
 		        }
 		        let outer: Outer = __safeDI_outer()
 		        return Root(outer: outer)

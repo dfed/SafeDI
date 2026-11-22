@@ -8,8 +8,6 @@ paths:
   - "Tests/**/*AccessEnforcement*.swift"
 ---
 
-<!-- Moved from module-membership-and-access.md §Types a module cannot name at 3279bc90. Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 Continues `module-membership-and-access.md`.
 
 # Types a module cannot name

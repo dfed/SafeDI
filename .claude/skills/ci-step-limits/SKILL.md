@@ -14,4 +14,4 @@ A step that can hang has a `timeout-minutes` of about twice its measured duratio
 
 It exits 1 with `--check` when a limit is short or a step ran out of its limit, and 0 otherwise. Only a step that succeeded is measured, and a matrix job's legs are measured together, since they share one limit.
 
-After changing the script, run `python3 -I S --self-test`. "Check Line Coverage on Linux" runs the same.
+After changing the script, run `python3 -I S --self-test`. "Check Agent Skill Scripts on Linux" runs the same.
