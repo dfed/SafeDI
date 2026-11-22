@@ -219,19 +219,26 @@ extension DependencyTreeGenerator {
 				mockRoot: instantiable.concreteInstantiable,
 				cycleEdges: cycleEdges,
 			)
-			async let code = mockRoot.generateCode(
-				codeGeneration: .mock(ScopeGenerator.MockContext(
-					mockConditionalCompilation: mockConditionalCompilation,
-					flatParameterMockDefaults: flatParameterMockDefaults,
-					cycleEdges: cycleEdges,
-					handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
-					sendableConfigurationTypeNames: sendableConfigurationTypeNames,
-					publicMockContext: publicMockContext,
-					foreignPublicMocks: foreignPublicMocks,
-				)),
+			let mockContext = ScopeGenerator.MockContext(
+				mockConditionalCompilation: mockConditionalCompilation,
+				flatParameterMockDefaults: flatParameterMockDefaults,
+				cycleEdges: cycleEdges,
+				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+				sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+				publicMockContext: publicMockContext,
+				foreignPublicMocks: foreignPublicMocks,
 			)
 			async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
-			let generatedRoot = try await GeneratedMockRoot(
+			let code = try await mockRoot.generateCode(codeGeneration: .mock(mockContext))
+			// Stage D1's shadow, which only the tests set: the lowering of the same root, compared with the emitter's code.
+			if let shadowObserver = MockLoweringShadow.observer {
+				let lowered = await mockRoot.lowerMockRoot(context: mockContext)
+				shadowObserver(MockLoweringShadow.Comparison(
+					mockedType: instantiable.concreteInstantiable.asSource,
+					outcome: MockLoweringShadow.outcome(comparing: lowered, with: code),
+				))
+			}
+			let generatedRoot = await GeneratedMockRoot(
 				root: GeneratedRoot(
 					typeDescription: instantiable.concreteInstantiable,
 					sourceFilePath: instantiable.sourceFilePath,

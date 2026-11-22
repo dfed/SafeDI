@@ -4322,7 +4322,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 	}
 
-	private enum ScopeData {
+	enum ScopeData {
 		/// - Parameter seamRoot: What the root emits when it is a seam's, or `nil` for a root of the dependency tree
 		///   or a mock root.
 		case root(instantiable: Instantiable, seamRoot: SeamRoot?)
@@ -4444,7 +4444,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let foreignPublicMocks: [TypeDescription: SeamResolution.ForeignPublicMock]
 	}
 
-	private let scopeData: ScopeData
+	let scopeData: ScopeData
 
 	/// The fields only a seam's tree, a fill, or a call of another module's public mock sets: every other scope, nearly
 	/// all of a tree, holds them at their defaults. A tree has a generator per path, so they are kept behind one
@@ -4685,7 +4685,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// the names (`PublicMockCall.typesDeclaredEscaping`, `SeamCall.typesDeclaredEscaping`).
 	let typesDeclaredEscaping: Set<TypeDescription>
 	/// Received properties that are optional and not created by a parent.
-	private let unavailableOptionalProperties: Set<Property>
+	let unavailableOptionalProperties: Set<Property>
 	/// The `onlyIfAvailable` dependencies of this scope: for a type, those its declaration receives,
 	/// directly or through an alias; for an `onlyIfAvailable` alias, the alias itself.
 	private let onlyIfAvailableDependencies: [OnlyIfAvailableDependency]
@@ -4702,7 +4702,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// Properties that will be generated as `let` constants.
-	nonisolated private var propertiesToGenerate: [ScopeGenerator] {
+	nonisolated var propertiesToGenerate: [ScopeGenerator] {
 		propertiesToGenerateSlot.value
 	}
 

@@ -598,12 +598,15 @@ func executeSafeDIToolMultiModuleTest(
 				// Every seam settled without its confirming signature pass must have the signature that pass finds (`SkippedConfirmingPassChecks`).
 				generateOutput = try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
 					try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
-						try await SeamSignatureObservation.$confirmsSkippedPasses.withValue(SkippedConfirmingPassChecks.recordingDifferences(handingOn: SeamSignatureObservation.confirmsSkippedPasses)) {
-							// Interned in the order `SAFEDI_INTERNER_ORDER` names, if any: the output must not change (`ConstructionInternerOrder`).
-							// Every value a freeze interns must be one the interner is designed to meet there (`ConstructionInternerClosure`).
-							try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
-								try await ConstructionInternerOrder.applying(.fromEnvironment) {
-									try await tool.generate()
+						// Each mock root is lowered again by stage D1's lowering, and the comparison tallied (`MockLoweringShadowChecks`).
+						try await MockLoweringShadow.$observer.withValue(MockLoweringShadowChecks.tallying(handingOn: MockLoweringShadow.observer)) {
+							try await SeamSignatureObservation.$confirmsSkippedPasses.withValue(SkippedConfirmingPassChecks.recordingDifferences(handingOn: SeamSignatureObservation.confirmsSkippedPasses)) {
+								// Interned in the order `SAFEDI_INTERNER_ORDER` names, if any: the output must not change (`ConstructionInternerOrder`).
+								// Every value a freeze interns must be one the interner is designed to meet there (`ConstructionInternerClosure`).
+								try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
+									try await ConstructionInternerOrder.applying(.fromEnvironment) {
+										try await tool.generate()
+									}
 								}
 							}
 						}
