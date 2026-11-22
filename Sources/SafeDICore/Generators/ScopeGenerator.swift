@@ -6437,20 +6437,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// What the construction of `instantiable` in this scope's builder function reads, for the type key, or `nil` where it is
-	/// constructed with anything but its initializer's arguments.
-	nonisolated private func constructionReads(of instantiable: Instantiable, unavailableProperties: Set<Property>) -> [PlaceRead]? {
+	/// constructed with anything but its initializer's arguments. It throws what the path key's construction
+	/// (`constructionArgumentList(of:unavailableProperties:holeBuilders:)`), which makes the same call first, throws.
+	nonisolated private func constructionReads(of instantiable: Instantiable, unavailableProperties: Set<Property>) throws(Initializer.GenerationError) -> [PlaceRead]? {
 		guard publicMockCall == nil, !constructsWithHandWrittenMock, builderCallArguments.isEmpty, let initializer = instantiable.initializer else { return nil }
-		let arguments: [(argument: CallArgument, dependency: Dependency)]
-		do {
-			arguments = try initializer.createInitializerArguments(
-				given: instantiable.dependencies,
-				unavailableProperties: bodyUnavailableProperties(unavailableProperties),
-				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
-			)
-		} catch {
-			// The path key's construction reports the error.
-			return nil
-		}
+		let arguments = try initializer.createInitializerArguments(
+			given: instantiable.dependencies,
+			unavailableProperties: bodyUnavailableProperties(unavailableProperties),
+			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+		)
 		return arguments.map {
 			PlaceRead(argumentLabel: $0.argument.label, label: $0.dependency.property.label, property: $0.dependency.property, source: $0.argument.source)
 		}
@@ -6531,12 +6526,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				builderFunctionNames: builderFunctionNamesOfChild(at: index, in: body),
 			)
 		}
-		let codes: [GeneratedCode] = switch codeGeneration {
-		case .dependencyTree:
-			try await Self.dependencyTreeCode(of: requests, leadingWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
-		case .mock:
-			try await Self.code(of: requests, codeGeneration: codeGeneration, leadingWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
-		}
+		let codes = try await Self.childCode(of: requests, codeGeneration: codeGeneration, leadingWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
 		for (request, code) in zip(requests, codes) {
 			append(code, ofChildAt: request.index, to: &body, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
 		}
@@ -6554,19 +6544,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let builderFunctionNames: BuilderFunctionNames
 	}
 
-	/// The dependency tree code of each of `requests`, in their order. A root of the dependency tree, which starts no code
-	/// early, plans each of its body's children on a task of its own, at most `ConcurrentChildCode.maximumChildrenAtOnce`
+	/// The code of each of `requests`, in their order. A root of the dependency tree, which starts no code early, plans each of its body's children on a task of its own, at most `ConcurrentChildCode.maximumChildrenAtOnce`
 	/// at a time, and the code comes back in the body's order of its children, never in the order the tasks finish. Beneath
 	/// those children, and in every other tree, which starts its large subtrees' code early, a body plans one child after
 	/// another. A child's error is thrown as the roots' task group throws one
 	/// (`DependencyTreeGenerator.plannedCode(of:rootsOfOtherModules:)`).
-	private static func dependencyTreeCode(
+	private static func childCode(
 		of requests: [ChildCodeRequest],
+		codeGeneration: CodeGeneration,
 		leadingWhitespace: String,
 		fillPlaceBindings: FillPlaceBindings,
 	) async throws -> [GeneratedCode] {
 		guard ConcurrentChildCode.plansChildrenAtOnce, requests.count > 1 else {
-			return try await code(of: requests, codeGeneration: .dependencyTree, leadingWhitespace: leadingWhitespace, fillPlaceBindings: fillPlaceBindings)
+			return try await code(of: requests, codeGeneration: codeGeneration, leadingWhitespace: leadingWhitespace, fillPlaceBindings: fillPlaceBindings)
 		}
 		ConcurrentChildCode.record(childCount: requests.count)
 		let maximumChildrenAtOnce = ConcurrentChildCode.maximumChildrenAtOnce
@@ -6586,7 +6576,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// costs more processor time than it saves.
 					try await ConcurrentChildCode.$plansChildrenAtOnce.withValue(false) {
 						try await (position, request.generator.generateCode(
-							codeGeneration: .dependencyTree,
+							codeGeneration: codeGeneration,
 							unavailableProperties: request.unavailableProperties,
 							propertiesGeneratedLater: request.propertiesGeneratedLater,
 							builderFunctionNames: request.builderFunctionNames,
@@ -7434,7 +7424,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				leadingMemberWhitespace: Self.standardIndent,
 				fillPlaceBindings: fillPlaceBindings,
 			)
-			return .place(propertyCode(
+			return try .place(propertyCode(
 				around: childCode,
 				instantiable: instantiable,
 				property: property,
@@ -7709,7 +7699,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		unavailableProperties: Set<Property>,
 		builderFunctionNames: BuilderFunctionNames,
 		fillPlaceBindings: FillPlaceBindings,
-	) -> PlacePlan {
+	) throws(Initializer.GenerationError) -> PlacePlan {
 		let concreteTypeName = instantiable.concreteInstantiable.asSource
 		let constructionTarget: ConstructionTarget = if let publicMockCall {
 			.mock(instantiable.concreteInstantiable, name: publicMockCall.functionName)
@@ -7754,8 +7744,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// What the type key reads of the place, where it plans it: a place built by its own construction, with nothing but
 		// its children in its function's body.
 		let isPlannedByTypeKey = seamCall == nil && isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings)
-		func builtRecord(functionName: String, isNonisolated: Bool, hasFunction: Bool) -> PlaceRecord? {
-			guard isPlannedByTypeKey, let arguments = constructionReads(of: instantiable, unavailableProperties: unavailableProperties) else { return nil }
+		func builtRecord(functionName: String, isNonisolated: Bool, hasFunction: Bool) throws(Initializer.GenerationError) -> PlaceRecord? {
+			guard isPlannedByTypeKey, let arguments = try constructionReads(of: instantiable, unavailableProperties: unavailableProperties) else { return nil }
 			return .built(BuiltPlaceRecord(
 				property: property,
 				isErased: erasedToConcreteExistential,
@@ -7773,6 +7763,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				lineEnd: constructionLineEnd,
 				hasFunction: hasFunction,
 				children: childCode,
+				node: PlanNode(),
 			))
 		}
 
@@ -7927,7 +7918,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					fillPlaceBindings: fillPlaceBindings,
 				) : nil
 			} else {
-				builtRecord(functionName: functionName, isNonisolated: sendableFunctionsAreNonisolated, hasFunction: true)
+				try builtRecord(functionName: functionName, isNonisolated: sendableFunctionsAreNonisolated, hasFunction: true)
 			}
 			return place(code: .sequence([.text(valuesBindingLines), functionDeclaration, .text(instantiatorDeclaration(handing: functionName, forwardedArguments: forwardedArguments, inlinePlaceBuilder: inlinePlaceBuilder))])).with(record: record)
 		case .lazilyInstantiated,
@@ -7958,7 +7949,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 
 			return PlacePlan(code: function.spelled(after: valuesBindingLines, followedBy: lastLine),
-			                 record: builtRecord(functionName: functionName, isNonisolated: sendableFunctionsAreNonisolated, hasFunction: true))
+			                 record: try builtRecord(functionName: functionName, isNonisolated: sendableFunctionsAreNonisolated, hasFunction: true))
 		case .constant:
 			let callArguments = cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", ")
 			let generatedProperties = memberCallCode + seamGuardLines + fillPlaceBindingLines + childCode
@@ -8006,7 +7997,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 			// The payloads a seam's tree binds before building a scope that leads to a place.
 			return PlacePlan(code: .sequence([.text(valuesBindingLines), functionDeclaration, binding.spelled, .text("\n")]),
-			                 record: builtRecord(functionName: functionName, isNonisolated: sendableFunctionsAreNonisolated, hasFunction: hasGeneratedContent))
+			                 record: try builtRecord(functionName: functionName, isNonisolated: sendableFunctionsAreNonisolated, hasFunction: hasGeneratedContent))
 		}
 	}
 

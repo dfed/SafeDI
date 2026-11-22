@@ -75,7 +75,7 @@ struct BuiltPlaceRecord: Sendable {
 	let children: [GeneratedCode]
 	/// The place's code as one node of the plan: made once each time a generator writes its code for a context, and
 	/// shared by every place that reads that code from the generator's cache.
-	let node = PlanNode()
+	let node: PlanNode
 }
 
 /// The identity of one node of a root's plan (`BuiltPlaceRecord.node`), compared by identity.
