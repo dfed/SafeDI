@@ -32,7 +32,7 @@ extension ScopeGenerator {
 		      initializer.arguments.isEmpty
 		else {
 			// The calls of other modules' public mocks in a public mock's tree, and the builders it takes, are not lowered yet.
-			guard mockBuilders == nil, !treeCallsPublicMock(of: orderedChildrenComputedAfresh(propertiesGeneratedLater: [])) else {
+			guard !treeCallsPublicMock(of: orderedChildrenComputedAfresh(propertiesGeneratedLater: [])) else {
 				return .unsupported(.publicMockRoot)
 			}
 			return await lowerMockRootWithTree(of: instantiable, context: context)
@@ -143,16 +143,40 @@ extension ScopeGenerator {
 			onlyIfAvailableOverrides: [],
 			wrapperParameterByInstance: [:],
 			parameterTree: [],
-			builders: nil,
+			builders: mockBuilders,
 			hasOverrides: hasOverrides,
 			typesDeclaredEscaping: signature.typesDeclaredEscaping,
 			context: publicMockContext,
 		)
 		var lines = ["extension \(typeName) {"]
+		if !plan.builders.isEmpty {
+			// The scope types the builders `mock()` takes are handed, as a seam declares them.
+			for declaration in Self.ownScopeTypeDeclarations(
+				builders: plan.builders,
+				scopeEnums: plan.scopeEnums,
+				holes: plan.holes,
+				typesDeclaredEscaping: signature.typesDeclaredEscaping,
+				unreadTypeComment: publicMockContext.unreadTypeComment,
+				namesForwardedTypes: true,
+			) {
+				lines.append(declaration)
+				lines.append("")
+			}
+		}
 		if hasOverrides {
-			// The members are in inline order, which a tree that holds no place builds its root's level in.
+			// The members are in inline order: the build's order without a child that holds a place starting after its
+			// siblings (`MockParameterNode.inlineOrderPosition`).
+			let children = propertiesToGenerate
+			var inlinePositionByProperty = [Property: Int]()
+			for (position, index) in computeOrderedPropertyToGenerateIndices(startingCarriersLast: false).enumerated() {
+				guard let property = children[index].property, inlinePositionByProperty[property] == nil else { continue }
+				inlinePositionByProperty[property] = position
+			}
+			let inlineOrderedNodes = nodes.enumerated().sorted { lhs, rhs in
+				(inlinePositionByProperty[lhs.element.property] ?? Int.max, lhs.offset) < (inlinePositionByProperty[rhs.element.property] ?? Int.max, rhs.offset)
+			}.map(\.element)
 			lines.append(MockLowering.publicOverridesStruct(
-				members: nodes.compactMap(MockLowering.PublicConstructionRecord.ChildMember.init(of:)),
+				members: inlineOrderedNodes.compactMap(MockLowering.PublicConstructionRecord.ChildMember.init(of:)),
 				mockedTypeModuleName: instantiable.moduleName,
 				context: publicMockContext,
 				indent: indent,
@@ -425,14 +449,33 @@ extension MockLowering.Walk {
 		of generator: ScopeGenerator,
 		inScope _: Set<Property>,
 		path _: String,
-		indent _: String,
-		lines _: inout [String],
+		indent: String,
+		lines: inout [String],
 	) async -> MockLowering.Lowering<MockLowering.TreeNode> {
 		switch generator.scopeData {
-		case .hole:
-			.unsupported(.holeSite)
+		case let .hole(property, erasedToConcreteExistential, site):
+			guard let site else { return .unsupported(.holeSite) }
+			guard !rootLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
+			// The site calls its place's member on the struct its route leads to, handed the values in scope there, as the
+			// emitter's `MockAliasNode.holeSite` does.
+			lines.append(GeneratedCodeText.indentingNonEmptyLines(
+				of: ScopeGenerator.buildSiteCode(
+					of: property,
+					at: site,
+					functionName: nil,
+					readingInstancesOf: generator.mockLoweringCallSiteLazilyInstantiatedInstanceProperties,
+				),
+				by: indent,
+			))
+			// The site binds its property from the builder, as an alias binds its own: no override reads it.
+			return .lowered(.alias(MockLowering.AliasBinding(
+				property: property,
+				fulfillingProperty: Property(label: site.builderLabel, typeDescription: site.builtType),
+				isErased: erasedToConcreteExistential,
+				declarationReference: nil,
+			)))
 		case .root, .fill, .property, .alias:
-			.unsupported(.fill)
+			return .unsupported(.fill)
 		}
 	}
 
