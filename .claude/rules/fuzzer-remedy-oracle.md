@@ -7,8 +7,6 @@ paths:
   - "Scripts/fuzz-corpus.sh"
 ---
 
-<!-- Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 # Remedy oracle
 
 Every error SafeDI reports names its fix. The remedy oracle (`Tests/SafeDIToolTestSupport/GraphFuzzerRemedies.swift`) follows that advice on the graphs the base corpus rejects, about half of it, which no other oracle judges beyond determinism and renaming: for each error of the families it reads (the three users see most, a mock parameter an inactive `#if` clause declares, a type two declarations fulfill, an `@Instantiated` type no declaration fulfills, a capture a `@Sendable` function cannot make, and in the seam corpus a seam's label collision and a fill that reads a value its builder is not handed), it applies the remedy the error states to the graph's declarations, runs the tool again, and requires that no error is left at the declaration the error was at (`GraphFuzzerToolRuns.remedyFailure`, `remedyLeavesErrorAtSite`). An error elsewhere is allowed: a remedy can expose an error the tool's walk stopped before, or change what another type receives. It runs only the tool, never the compiler, so it adds about one tool run per remedied site, and a few more where it forwards a receive.

@@ -239,6 +239,37 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 		#expect(output.mockConfigurationFile == Self.instantiatorChainMockConfiguration(depth: 20))
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_keepsReadLogsGrowingWithTheChain_whenTypeWhoseMockIsGeneratedStartsAChainOfFeaturesEachInstantiatingTheNext() async throws {
+		// Every place of the chain reads whether a cycle closes on its own property, which is answered above the chain, so a
+		// place keeps a read for each place beneath it. Copying those reads into each place's log held reads that grew
+		// with the square of the depth: 4× for each doubling.
+		var elementCounts = [Int]()
+		for depth in [100, 200, 400] {
+			let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
+			try await ConstructionLogStorage.$observer.withValue({ continuation.yield($0) }) {
+				_ = try await executeSafeDIToolTest(
+					swiftFileContent: Self.featureChain(depth: depth, rootAttribute: "@Instantiable(generateMock: true)", featuresAreConstant: false),
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+					// The chain of twenty above is compiled: the compiler's time grows exponentially with the depth of nested builder functions.
+					skipCompileVerification: true,
+				)
+			}
+			continuation.finish()
+			var elementCount = 0
+			for await elements in stream {
+				elementCount += elements
+			}
+			elementCounts.append(elementCount)
+		}
+		for (smaller, larger) in zip(elementCounts, elementCounts.dropFirst()) {
+			#expect(smaller > 0)
+			#expect(Double(larger) <= Double(smaller) * 2.2, "The logs keep \(smaller) elements, then \(larger) for a chain twice as deep")
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
