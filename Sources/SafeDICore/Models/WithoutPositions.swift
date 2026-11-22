@@ -311,7 +311,7 @@ extension SeamSignature.Hole.RouteStep {
 
 extension SeamSignature.CallRoute {
 	func withoutPositions() -> SeamSignature.CallRoute {
-		SeamSignature.CallRoute(sitePath: sitePath, innerKey: innerKey, rootKey: rootKey, route: route.map { $0.withoutPositions() }, caseName: caseName, memberValuesType: memberValuesType, memberIsLetChild: memberIsLetChild, handsFillLevelStruct: handsFillLevelStruct, reentersEnclosingFill: reentersEnclosingFill)
+		SeamSignature.CallRoute(sitePath: sitePath, innerKey: innerKey, rootKey: rootKey, route: route.map { $0.withoutPositions() }, caseName: caseName, memberValuesType: memberValuesType, handsFillLevelStruct: handsFillLevelStruct, reentersEnclosingFill: reentersEnclosingFill)
 	}
 }
 

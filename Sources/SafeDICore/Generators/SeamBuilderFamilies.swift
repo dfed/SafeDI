@@ -447,7 +447,6 @@ extension DependencyTreeGenerator {
 				route: namedRoute(callRoute.route, ofHoleType: callRoute.rootKey.holeType, isSendable: callRoute.rootKey.isSendable),
 				caseName: callRoute.caseName,
 				memberValuesType: callRoute.memberValuesType,
-				memberIsLetChild: callRoute.memberIsLetChild,
 				handsFillLevelStruct: callRoute.handsFillLevelStruct,
 				reentersEnclosingFill: callRoute.reentersEnclosingFill,
 			)

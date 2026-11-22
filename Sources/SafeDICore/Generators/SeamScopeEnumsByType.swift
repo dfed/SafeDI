@@ -661,8 +661,6 @@ extension DependencyTreeGenerator {
 							memberValuesType: enumCase.memberValuesTypeName.flatMap { memberValuesTypeName in
 								enumTypeByDescribed[caseOfProperty.described].map { .nested(name: memberValuesTypeName, parentType: $0, generics: []) }
 							},
-							memberIsLetChild: enumTypeByDescribed[caseOfProperty.described].flatMap(ReservedName.seamCarrier(ofEnum:)) != nil
-								&& enumCase.isLetChildOfCarrier(inSendableEnum: caseOfProperty.described.isSendable, isInLoop: holdsEnumOfItsOwnComponent(enumCase, of: key(of: caseOfProperty.described))),
 						))
 					} else {
 						let site = SeamSignature.Hole.Site(seamType: seamType, path: reached.sitePath)
