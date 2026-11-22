@@ -50,8 +50,7 @@ extension ScopeGenerator {
 
 	/// The first rule the parameters and construction of the mocked type itself meet that the walk does not lower yet.
 	private static func unsupportedRuleOfMockedType(_ instantiable: Instantiable) -> MockLowering.Rule? {
-		guard instantiable.mockInitializer == nil, instantiable.customMockName == nil else { return .handWrittenMock }
-		guard let initializer = instantiable.initializer else { return .handWrittenMock }
+		guard instantiable.mockInitializer == nil, instantiable.customMockName == nil, let initializer = instantiable.initializer else { return .handWrittenMock }
 		guard !initializer.arguments.contains(where: \.hasDefaultValue) else { return .defaultValuedParameter }
 		for dependency in instantiable.dependencies {
 			switch dependency.source {

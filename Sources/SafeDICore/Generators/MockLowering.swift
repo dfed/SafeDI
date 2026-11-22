@@ -107,8 +107,7 @@ extension ScopeGenerator {
 	/// This mock root's code, lowered from its finished generator tree, or the first rule it meets that the lowering does
 	/// not lower yet.
 	func lowerMockRoot(context: MockContext) async -> MockLowering.Result {
-		guard case let .root(instantiable, _) = scopeData else { return .unsupported(.publicMock) }
-		guard instantiable.generateMock != .public else { return .unsupported(.publicMock) }
+		guard case let .root(instantiable, _) = scopeData, instantiable.generateMock != .public else { return .unsupported(.publicMock) }
 		guard propertiesToGenerate.isEmpty,
 		      instantiable.dependencies.isEmpty,
 		      (instantiable.mockInitializer ?? instantiable.initializer)?.arguments.contains(where: \.hasDefaultValue) == false
