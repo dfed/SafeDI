@@ -15615,10 +15615,15 @@ enum GraphFuzzerOracle {
 			firstOutcome: firstOutcome,
 			// The second run creates the mock roots in reverse order, so that a construction memo shared between them
 			// carries other roots' generators to each, and shares generators between places by a schedule of its seed
-			// (`ConstructionSharingSchedule.sharingOracleSchedule(forGraphSeed:)`); it must still give the first run's outcome.
+			// (`ConstructionSharingSchedule.sharingOracleSchedule(forGraphSeed:)`), and interns in another order, reversed or
+			// permuted by its seed (`ConstructionInternerOrder.secondRun(forGraphSeed:)`), which gives every ID another value;
+			// it must still give the first run's outcome. A hand mutation that appends a root's interned type ID to its
+			// generated code fails seed 0 (reversed) and seed 1 (permuted) of the base corpus with "two runs of the tool differ".
 			secondOutcome: ConstructionMemoOracle.$buildsMockRootsInReverseOrder.withValue(true) {
 				try await ConstructionSharingSchedule.$current.withValue(.sharingOracleSchedule(forGraphSeed: fixture.seed)) {
-					try await toolOutcome(of: fixture)
+					try await ConstructionInternerOrder.secondRun(forGraphSeed: fixture.seed).applying {
+						try await toolOutcome(of: fixture)
+					}
 				}
 			},
 			cleanSubtreeSkipOffOutcome: cleanSubtreeSkipOffOutcome,

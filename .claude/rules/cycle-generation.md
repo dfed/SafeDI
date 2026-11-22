@@ -10,8 +10,6 @@ paths:
   - "Tests/**/*OnlyIfAvailable*.swift"
 ---
 
-<!-- Moved from CLAUDE.md §Cycle mechanisms and §Common Pitfalls at 337e5e22. Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 # Cycle mechanisms: generation
 
 This file holds the mechanisms generation uses; the validation half of the table is in `cycle-validation.md`.
