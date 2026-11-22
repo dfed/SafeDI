@@ -81,15 +81,16 @@ extension MockLowering {
 	/// bound under `bindingNames`' entry, wrapping the member's function, as the emitter declares it.
 	static func loopMembers(among generators: [ScopeGenerator], loops: [LoopMembership?], bindingNames: [String?], namesInScope: Set<String>) -> [Property: LoopMember] {
 		var reservedNames = namesInScope
-		var memberGenerators = [ScopeGenerator]()
-		for (generator, membership) in zip(generators, loops) where membership != nil {
-			memberGenerators.append(generator)
+		var memberGenerators = [(generator: ScopeGenerator, bindingName: String?)]()
+		for (index, (generator, membership)) in zip(generators, loops).enumerated() where membership != nil {
+			memberGenerators.append((generator, index < bindingNames.count ? bindingNames[index] : nil))
 		}
-		for generator in generators {
+		for (index, generator) in generators.enumerated() {
 			guard case let .property(_, property, _, _, isPropertyCycle, _) = generator.scopeData, !isPropertyCycle else { continue }
-			reservedNames.insert(ScopeGenerator.functionName(toBuildPropertyNamed: property.label))
+			// A node named apart is built by the function its name gives.
+			reservedNames.insert(MockLowering.builderFunctionName(boundAs: (index < bindingNames.count ? bindingNames[index] : nil) ?? property.label))
 		}
-		for member in memberGenerators {
+		for (member, _) in memberGenerators {
 			for child in member.orderedChildrenComputedAfresh(propertiesGeneratedLater: []) {
 				guard case let .property(_, property, _, _, isPropertyCycle, _) = child.generator.scopeData, !isPropertyCycle else { continue }
 				let functionName = ScopeGenerator.functionName(toBuildPropertyNamed: property.label)
@@ -99,13 +100,15 @@ extension MockLowering {
 		}
 		var names = GeneratedNameAllocator(reserving: reservedNames)
 		var members = [Property: LoopMember]()
-		for generator in memberGenerators {
+		for (generator, bindingName) in memberGenerators {
 			guard case let .property(instantiable, property, _, _, _, _) = generator.scopeData else { continue }
-			let builderFunctionName = ScopeGenerator.functionName(toBuildPropertyNamed: property.label)
+			// A member named apart from a sibling of its label is bound again, and built, under its name.
+			let bindingName = bindingName ?? property.label
+			let builderFunctionName = MockLowering.builderFunctionName(boundAs: bindingName)
 			let receivedFunctionName = generator.cycleParameters.isEmpty ? nil : names.claim(ReservedName.receivedBuilderFunctionName(of: builderFunctionName))
 			members[property] = LoopMember(
 				typeDescription: property.typeDescription,
-				bindingName: property.label,
+				bindingName: bindingName,
 				rename: nil,
 				functionName: receivedFunctionName ?? builderFunctionName,
 				builderFunctionName: builderFunctionName,

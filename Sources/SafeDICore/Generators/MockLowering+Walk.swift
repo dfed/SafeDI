@@ -360,7 +360,7 @@ extension MockLowering {
 				if membership == nil {
 					endLoopUnit(appendingTo: &lines)
 					lowering = await node(of: generator, bindingName: bindingName, inScope: scope, path: path, indent: indent, lines: &lines)
-				} else if case .property = generator.scopeData, generator.publicMockCall == nil, bindingName == generator.property?.label {
+				} else if case .property = generator.scopeData, generator.publicMockCall == nil {
 					lowering = await node(of: generator, bindingName: bindingName, inScope: scope, path: path, indent: indent, lines: &memberLines)
 				} else if case .alias = generator.scopeData {
 					// D1 lane hook (lane B): a rename the level declares of a member is bound with the loop's wrappers, after
@@ -368,8 +368,7 @@ extension MockLowering {
 					lowering = await node(of: generator, bindingName: bindingName, inScope: scope, path: path, indent: indent, lines: &memberLines)
 					lastLoopMemberLineCounts = MockLowering.LoopMemberLineCounts(prelude: 0, binding: memberLines.count)
 				} else {
-					// A member named apart is rebound by the loop's other members under its name, which the walk does not
-					// lower yet.
+					// D1 lane hook (lane B): a call of another module's public mock on a loop.
 					lowering = .unsupported(.cycle)
 				}
 				loopMembership = nil
