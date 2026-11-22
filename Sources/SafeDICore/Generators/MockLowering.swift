@@ -159,6 +159,9 @@ public enum MockLowering {
 		// lowered in `MockLowering+PublicConfigurations.swift`.
 		/// Where a public mock builds the node, the construction it builds the node's type with: `nil` in an internal mock.
 		var publicConstruction: PublicConstructionRecord?
+		// D1 lane hook (lane D): the fields for the node's construction's default-valued parameters.
+		/// The configuration's fields for the node's construction's default-valued parameters, after its children's.
+		var defaultFields = [DefaultField]()
 
 		/// A field that configures a child of the node: its configuration, or an optional builder closure.
 		struct ChildField: Sendable, Equatable {
@@ -273,5 +276,57 @@ extension ScopeGenerator {
 		} else {
 			code
 		}
+	}
+}
+
+// D1 lane hook (lane D): stubs until the family lowers default-valued parameters (`MockLowering+Defaults.swift`) and
+// records configurations as the emitter collects them (`MockLowering+Configurations.swift`). Each keeps today's output.
+extension MockLowering {
+	/// A field of a configuration for a default-valued parameter of the construction it configures.
+	struct DefaultField: Sendable, Equatable {}
+
+	/// The member of a configuration that configures a node bound as `bindingName` that closes a cycle on a node of
+	/// `concreteType`.
+	static func cycleClosingOverridesField(boundAs _: String, concreteType _: TypeDescription) -> OverridesField? {
+		nil
+	}
+
+	/// The configured types around a node's children, restored when the walk leaves them.
+	struct ConfiguredNodeEntry {
+		/// Whether the node records its configuration.
+		let recordsConfiguration: Bool
+	}
+}
+
+extension MockLowering.Walk {
+	/// The fields of the configuration of a node of `instantiable` for its construction's default-valued parameters.
+	func configurationDefaultFields(of instantiable: Instantiable, startsExtraction _: Bool) -> MockLowering.Lowering<[MockLowering.DefaultField]> {
+		guard instantiable.initializer?.arguments.contains(where: \.hasDefaultValue) != true else { return .unsupported(.defaultValuedParameter) }
+		return .lowered([])
+	}
+
+	/// The arguments of `initializer`'s construction of `instantiable`: `dependencyArguments`, with each default-valued
+	/// parameter read from the node's configuration at `nodePath`.
+	func constructionArguments(
+		of _: Initializer,
+		given _: Instantiable,
+		dependencyArguments: [(label: String, value: String)],
+		nodePath _: String,
+		overrideReachable _: Bool,
+	) -> [(label: String, value: String)] {
+		dependencyArguments
+	}
+
+	/// Enters the children of a node of `concreteType`.
+	mutating func enteringConfiguredNode(of _: TypeDescription) -> MockLowering.ConfiguredNodeEntry {
+		MockLowering.ConfiguredNodeEntry(recordsConfiguration: true)
+	}
+
+	/// Leaves the children `entry` entered.
+	mutating func leavingConfiguredNode(_: MockLowering.ConfiguredNodeEntry) {}
+
+	/// Whether a leaf of `concreteType` records its configuration.
+	func recordsConfiguration(ofLeafOf _: TypeDescription) -> Bool {
+		true
 	}
 }

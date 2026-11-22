@@ -20,6 +20,7 @@
 
 import Foundation
 import SafeDICore
+import Testing
 
 /// Stage D1's shadow in the tests: the executors install `MockLoweringShadow.observer`, which tallies how the lowering
 /// of each mock root compares with the emitter's code. The tally fails nothing until the switch pull request; it is
@@ -53,6 +54,12 @@ public enum MockLoweringShadowChecks {
 		public init() {}
 
 		public func record(_ comparison: MockLoweringShadow.Comparison) {
+			if case let .unsupported(rule) = comparison.outcome,
+			   let rules = ProcessInfo.processInfo.environment["SAFEDI_MOCK_LOWERING_LIST_RULES"],
+			   rules.split(separator: ",").contains(Substring(rule.rawValue))
+			{
+				print("mock-lowering unsupported (\(rule.rawValue)): \(comparison.mockedType) in \(Test.current?.name ?? "?")")
+			}
 			lock.withLock {
 				switch comparison.subject {
 				case .mockCode:
@@ -112,11 +119,6 @@ public enum MockLoweringShadowChecks {
 					}
 				case let .unsupported(rule):
 					unsupportedByRule[rule.rawValue, default: 0] += 1
-					// Names each root of the rules `SAFEDI_MOCK_LOWERING_LIST_RULES` lists (comma-separated raw values), to find the
-					// shapes a rule still holds.
-					if let rules = ProcessInfo.processInfo.environment["SAFEDI_MOCK_LOWERING_LIST_RULES"], rules.split(separator: ",").contains(Substring(rule.rawValue)) {
-						print("mock-lowering unsupported (\(rule.rawValue)): \(comparison.mockedType)")
-					}
 				}
 			}
 
