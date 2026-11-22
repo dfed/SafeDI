@@ -86,14 +86,58 @@ extension MockLowering {
 extension ScopeGenerator {
 	/// The parameters of this mock root's `mock()` other than its overrides, or the first rule they meet that the lowering
 	/// does not lower yet.
-	func lowerRootSignature(of instantiable: Instantiable, context _: MockContext) -> MockLowering.Lowering<MockLowering.RootSignature> {
-		// D1 lane hook (lane D): the forwarded, default-valued and flat received parameters, which lane D's family lowers.
-		guard !instantiable.dependencies.contains(where: { $0.source == .forwarded }) else { return .unsupported(.flatParameter) }
-		guard Self.defaultValuedMockParameterArguments(of: instantiable).isEmpty else { return .unsupported(.defaultValuedParameter) }
+	func lowerRootSignature(of instantiable: Instantiable, context: MockContext) -> MockLowering.Lowering<MockLowering.RootSignature> {
+		var forwardedParameters = [MockLowering.RootSignature.Parameter]()
+		for dependency in instantiable.dependencies.sorted(by: { $0.property < $1.property }) where dependency.source == .forwarded {
+			// A forwarded wrapper declares the forms of its instance beside it, which the tree's receives read.
+			guard dependency.property.propertyType.isConstant else { return .unsupported(.wrapper) }
+			// The default the initializer gives the parameter of its label wins over the hand-written mock its type has.
+			let constructionDefault = instantiable.initializer?.arguments.first { $0.innerLabel == dependency.property.label }?.defaultValueExpression
+			forwardedParameters.append(MockLowering.RootSignature.Parameter(
+				property: dependency.property,
+				defaultExpression: constructionDefault ?? context.flatParameterMockDefaults[dependency.property.typeDescription]?.expression,
+			))
+		}
+		var rootDefaultParameters = [MockLowering.RootSignature.Parameter]()
+		for (argument, defaultExpression) in Self.defaultValuedMockParameterArguments(of: instantiable) {
+			// `mock()` takes an `@autoclosure` as one and passes its call, so the value is evaluated where the type is built.
+			guard argument.typeDescription.strippingEscaping.autoclosureValueType == nil else { return .unsupported(.defaultValuedParameter) }
+			rootDefaultParameters.append(MockLowering.RootSignature.Parameter(
+				property: Property(label: argument.label, typeDescription: argument.typeDescription),
+				defaultExpression: defaultExpression,
+				typeSource: argument.typeDescription.asFunctionParameter.asSource,
+			))
+		}
+		// The forms of what the tree receives only if available are overrides of `mock()`, not parameters.
+		guard onlyIfAvailableUnwrappedReceivedProperties.isEmpty else { return .unsupported(.onlyIfAvailable) }
+		// Each in the mocked type's own spelling where it receives the dependency, else its receivers' most explicit one.
+		let receivedProperties = MockedTypeSpellings(of: instantiable, treeReceivedProperties: receivedProperties).spellings(of: receivedProperties)
+		// The mock wraps the instance it is passed for a `LazilyInstantiated` it cannot build.
+		guard !receivedProperties.contains(where: { $0.typeDescription.lazilyInstantiatedInstanceType != nil }) else { return .unsupported(.wrapper) }
+		let forwardedProperties = instantiable.forwardedReceivableProperties
+		let receivedNonOptionalProperties = Set(receivedProperties.filter { !$0.typeDescription.isOptional })
+		var flatReceivedParameters = [MockLowering.RootSignature.Parameter]()
+		for property in receivedProperties.sorted(by: { $0.precedesInMockOrder($1) }) {
+			// A forwarded `x: X` fulfills an `x: X?` too, and so does a received `x: X`, which the parameter of its own binds.
+			guard !forwardedProperties.contains(property),
+			      !property.typeDescription.isOptional
+			      || !receivedNonOptionalProperties.contains(property.asUnwrappedProperty) && !forwardedProperties.contains(property.asUnwrappedProperty)
+			else { continue }
+			// A node the mock promotes for an optional receive binds its non-optional value, which provides this one.
+			guard property.typeDescription.isOptional || !propertiesToDeclare.contains(property.asOptionalProperty) else { return .unsupported(.flatParameter) }
+			guard !Self.provides(property, declaredProperties: propertiesToDeclare, forwardedProperties: []) else { continue }
+			flatReceivedParameters.append(MockLowering.RootSignature.Parameter(
+				property: property,
+				defaultExpression: context.flatParameterMockDefaults[property.typeDescription]?.expression,
+			))
+		}
+		// Two parameters of one label are named apart.
+		let parameters = forwardedParameters + rootDefaultParameters + flatReceivedParameters
+		guard Set(parameters.map(\.property.label)).count == parameters.count else { return .unsupported(.siblingLabelCollision) }
 		return .lowered(MockLowering.RootSignature(
-			forwardedParameters: [],
-			rootDefaultParameters: [],
-			flatReceivedParameters: [],
+			forwardedParameters: forwardedParameters,
+			rootDefaultParameters: rootDefaultParameters,
+			flatReceivedParameters: flatReceivedParameters,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 		))
 	}
