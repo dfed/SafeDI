@@ -5158,6 +5158,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The by-value property with which this scope’s siblings and their subtrees receive the instance of the
 	/// lazily instantiated property this scope declares. `nil` when it declares none.
 	private let declaredLazilyInstantiatedInstanceProperty: Property?
+	/// `declaredLazilyInstantiatedInstanceProperty`, read by the mock lowering.
+	nonisolated var mockLoweringDeclaredLazilyInstantiatedInstanceProperty: Property? {
+		declaredLazilyInstantiatedInstanceProperty
+	}
 	/// For an `onlyIfAvailable` alias, whether the declared property it is bound from may be `nil`: an optional
 	/// property it reads in place of its fulfilling property's non-optional form, a parameter made optional, or a
 	/// seam's optional parameter. `false` for every other scope.
