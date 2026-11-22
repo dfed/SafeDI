@@ -55,6 +55,10 @@ extension ScopeGenerator {
 		guard instantiable.dependencies.allSatisfy({ nodeProperties.contains($0.property) }) else {
 			return .unsupported(.flatParameter)
 		}
+		// A configuration `Sendable`-typed makes the overrides' storage `Sendable`, which lane B's family lowers.
+		guard !nodes.contains(where: { $0.builtNode.map { $0.hasConfiguration && context.sendableConfigurationTypeNames.contains($0.instantiable.concreteInstantiable.asSource) } ?? false }) else {
+			return .unsupported(.wrapper)
+		}
 		return .lowered(Self.mockWithTree(of: instantiable, nodes: nodes, bindingLines: bindingLines, context: context), configurations: walk.configurationRecords)
 	}
 
@@ -148,9 +152,11 @@ extension ScopeGenerator {
 }
 
 extension MockLowering {
-	/// The state of one root's walk: the types built around the node it is at, and every label the tree binds so far.
+	/// The state of one root's walk: the types and labels built around the node it is at, and the labels its level binds
+	/// so far. A label bound again on another branch is bound in another builder function, apart from this one.
 	struct Walk {
 		var ancestorTypes: Set<TypeDescription>
+		var ancestorLabels = Set<String>()
 		var labels = Set<String>()
 		// D1 lane hook (lane D): the configurations of the nodes the walk finished, children before their node.
 		var configurationRecords = [ConfigurationRecord]()
@@ -192,7 +198,7 @@ extension MockLowering {
 				// D1 lane hook: aliases only if available, of a wrapper's instance, and bound apart from their label.
 				guard !onlyIfAvailable else { return .unsupported(.onlyIfAvailable) }
 				guard scope.contains(fulfillingProperty) else { return .unsupported(.alias) }
-				guard labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
+				guard !ancestorLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
 				let alias = AliasBinding(
 					property: property,
 					fulfillingProperty: fulfillingProperty,
@@ -245,7 +251,7 @@ extension MockLowering {
 			guard generator.unavailableOptionalProperties.isEmpty else { return .unsupported(.onlyIfAvailable) }
 			guard instantiable.mockInitializer == nil, let initializer = instantiable.initializer else { return .unsupported(.handWrittenMock) }
 			guard !initializer.arguments.contains(where: \.hasDefaultValue) else { return .unsupported(.defaultValuedParameter) }
-			guard labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
+			guard !ancestorLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
 
 			let childGenerators = generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator)
 			let node = ConstantNode(
@@ -268,6 +274,9 @@ extension MockLowering {
 			}
 			lines.append(node.builderFunctionDeclarationLine(indent: indent))
 			ancestorTypes.insert(instantiable.concreteInstantiable)
+			ancestorLabels.insert(property.label)
+			let siblingLabels = labels
+			labels = []
 			let lowering = await children(
 				of: childGenerators,
 				inScope: scope.union(forwarded),
@@ -275,6 +284,8 @@ extension MockLowering {
 				indent: "\(indent)\(ScopeGenerator.standardIndent)",
 				lines: &lines,
 			)
+			labels = siblingLabels
+			ancestorLabels.remove(property.label)
 			ancestorTypes.remove(instantiable.concreteInstantiable)
 			let children: [TreeNode]
 			switch lowering {
