@@ -218,16 +218,17 @@ struct FrozenScopeMap {
 			}
 			firstKeyByScope[identifier] = entry
 		}
-		let keyedScopes = firstKeyByScope.values.sorted { lhs, rhs in
-			let lhsConcreteType = lhs.scope.instantiable.concreteInstantiable
-			let rhsConcreteType = rhs.scope.instantiable.concreteInstantiable
-			return if lhsConcreteType == rhsConcreteType {
-				TypeDescription.precedesInScopeOrder(lhs.key, rhs.key)
+		let keyedScopes = firstKeyByScope.values.map { entry in
+			let concreteType = entry.scope.instantiable.concreteInstantiable
+			return (concreteType: concreteType, concreteTypeOrder: TypeDescription.ScopeOrderKey(concreteType), keyOrder: TypeDescription.ScopeOrderKey(entry.key), scope: entry.scope)
+		}.sorted { lhs, rhs in
+			if lhs.concreteType == rhs.concreteType {
+				lhs.keyOrder.precedes(rhs.keyOrder)
 			} else {
-				TypeDescription.precedesInScopeOrder(lhsConcreteType, rhsConcreteType)
+				lhs.concreteTypeOrder.precedes(rhs.concreteTypeOrder)
 			}
 		}
-		for (_, scope) in keyedScopes {
+		for (_, _, _, scope) in keyedScopes {
 			_ = id(of: scope)
 		}
 		var idByKey = [TypeDescription: ScopeID]()
@@ -553,6 +554,24 @@ extension TypeDescription {
 	/// two unequal types of one spelling, which `<` leaves unordered, by their structure as `String(reflecting:)` spells it.
 	/// A total order on unequal types, so no arrival order breaks a tie.
 	static func precedesInScopeOrder(_ lhs: TypeDescription, _ rhs: TypeDescription) -> Bool {
-		lhs < rhs || (!(rhs < lhs) && String(reflecting: lhs) < String(reflecting: rhs))
+		ScopeOrderKey(lhs).precedes(ScopeOrderKey(rhs))
+	}
+
+	/// A type with the spellings `precedesInScopeOrder` compares, spelled once, so that a sort of many types spells each
+	/// once rather than at every comparison. Held only for the sort that makes it.
+	struct ScopeOrderKey {
+		init(_ type: TypeDescription) {
+			self.type = type
+			spellings = (withoutAny: type.withoutAny.asSource, asSource: type.asSource)
+		}
+
+		/// Whether this key's type comes before `other`'s in `precedesInScopeOrder`'s order: by `<`'s spellings, then, for
+		/// two unequal types of one spelling, by their structure as `String(reflecting:)` spells it.
+		func precedes(_ other: ScopeOrderKey) -> Bool {
+			spellings < other.spellings || (spellings == other.spellings && String(reflecting: type) < String(reflecting: other.type))
+		}
+
+		private let type: TypeDescription
+		private let spellings: (withoutAny: String, asSource: String)
 	}
 }
