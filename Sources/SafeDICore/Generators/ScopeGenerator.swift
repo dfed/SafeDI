@@ -2693,11 +2693,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		static func carried(_ carriedType: TypeDescription, through returnType: TypeDescription) -> TypeDescription {
 			switch returnType {
 			case let .nested(name, parentType, generics) where ReservedName.namesLevelType(name) && generics.count == 1:
-				return .nested(name: name, parentType: parentType, generics: [carried(carriedType, through: generics[0])])
+				.nested(name: name, parentType: parentType, generics: [carried(carriedType, through: generics[0])])
 			case let .simple(name, generics) where ReservedName.namesLevelType(name) && generics.count == 1:
-				return .simple(name: name, generics: [carried(carriedType, through: generics[0])])
+				.simple(name: name, generics: [carried(carriedType, through: generics[0])])
 			case .void, .simple, .nested, .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .variadic, .unknown:
-				return carriedType
+				carriedType
 			}
 		}
 
@@ -8087,7 +8087,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A deferred parameter's field the fill binds from the struct is bound as its memo (`bindingItsMemo`).
 		let memoBoundLabels = Set(fillFields.filter(\.bindsMemo).map(\.property.label))
 		// A seam's carrier hands the fill the case's values as arguments, each named as the payload's name joined with its label.
-		let takesValuesAsArguments = if case let .nested(_, enumType, _)? = valuesType { ReservedName.seamCarrier(ofEnum: enumType) != nil } else { false }
+		let takesValuesAsArguments = if case let .nested(_, enumType, _)? = valuesType {
+			ReservedName.seamCarrier(ofEnum: enumType) != nil
+		} else {
+			false
+		}
 		let bindings: [String] = valuesType == nil ? [] : (nestedByTypeValues ?? hole.fields).filter(isRead).map { field -> String in
 			let bindsMemo = memoBoundLabels.contains(field.property.label)
 			let read = takesValuesAsArguments ? SeamHoles.argumentRead(of: field, inPayloadNamed: scopeParameterName, bindingMemo: bindsMemo) : "\(scopeParameterName).\(field.memberName(bindingMemo: bindsMemo))"
