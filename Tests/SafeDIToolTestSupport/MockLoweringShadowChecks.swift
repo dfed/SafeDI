@@ -112,6 +112,11 @@ public enum MockLoweringShadowChecks {
 					}
 				case let .unsupported(rule):
 					unsupportedByRule[rule.rawValue, default: 0] += 1
+					// Names each root of the rules `SAFEDI_MOCK_LOWERING_LIST_RULES` lists (comma-separated raw values), to find the
+					// shapes a rule still holds.
+					if let rules = ProcessInfo.processInfo.environment["SAFEDI_MOCK_LOWERING_LIST_RULES"], rules.split(separator: ",").contains(Substring(rule.rawValue)) {
+						print("mock-lowering unsupported (\(rule.rawValue)): \(comparison.mockedType)")
+					}
 				}
 			}
 
