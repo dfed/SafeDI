@@ -186,8 +186,23 @@ extension MockLowering {
 			indent: String,
 			lines: inout [String],
 		) async -> Lowering<TreeNode> {
-			switch generator.scopeData {
-			case let .property(instantiable, property, forwardedProperties, erasedToConcreteExistential, isPropertyCycle, seamCall):
+			if case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference) = generator.scopeData {
+				// D1 lane hook: aliases only if available, of a wrapper's instance, and bound apart from their label.
+				guard !onlyIfAvailable else { return .unsupported(.onlyIfAvailable) }
+				guard scope.contains(fulfillingProperty) else { return .unsupported(.alias) }
+				guard labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
+				let alias = AliasBinding(
+					property: property,
+					fulfillingProperty: fulfillingProperty,
+					isErased: erasedToConcreteExistential,
+					declarationReference: declarationReference,
+				)
+				lines.append(alias.bindingLines(indent: indent))
+				return .lowered(.alias(alias))
+			} else {
+				// An internal mock's tree holds only properties and aliases: a root, a hole and a fill are a public mock's,
+				// whose root the walk does not reach.
+				guard case let .property(instantiable, property, forwardedProperties, erasedToConcreteExistential, isPropertyCycle, seamCall) = generator.scopeData else { return .unsupported(.publicMock) }
 				switch await builtNode(
 					of: generator,
 					building: (instantiable, property, forwardedProperties, erasedToConcreteExistential, isPropertyCycle, seamCall),
@@ -201,21 +216,6 @@ extension MockLowering {
 				case let .unsupported(rule):
 					return .unsupported(rule)
 				}
-			case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
-				// D1 lane hook: aliases only if available, of a wrapper's instance, and bound apart from their label.
-				guard !onlyIfAvailable else { return .unsupported(.onlyIfAvailable) }
-				guard scope.contains(fulfillingProperty) else { return .unsupported(.alias) }
-				guard labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
-				let alias = AliasBinding(
-					property: property,
-					fulfillingProperty: fulfillingProperty,
-					isErased: erasedToConcreteExistential,
-					declarationReference: declarationReference,
-				)
-				lines.append(alias.bindingLines(indent: indent))
-				return .lowered(.alias(alias))
-			case .root, .hole, .fill:
-				return .unsupported(.publicMock)
 			}
 		}
 
@@ -306,9 +306,8 @@ extension MockLowering {
 					guard scope.contains(dependency.property) else { return .flatParameter }
 				case .forwarded:
 					guard isInstantiator else { return .wrapper }
-				case .received(onlyIfAvailable: true):
-					return .onlyIfAvailable
-				case .aliased(_, _, onlyIfAvailable: true):
+				case .received(onlyIfAvailable: true), .aliased(_, _, onlyIfAvailable: true):
+					// An alias only if available is its own node, which the walk rejects before its type's dependencies.
 					return .onlyIfAvailable
 				case .aliased(_, _, onlyIfAvailable: false):
 					guard childProperties.contains(dependency.property) else { return .alias }
