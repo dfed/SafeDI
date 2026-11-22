@@ -77,8 +77,26 @@ public enum MockLowering {
 	public enum Rule: String, Sendable, CaseIterable {
 		/// A public mock (`generateMock: .public`): its tiers, builders and calls.
 		case publicMock = "public mock"
-		/// A mock root whose `mock()` takes a parameter or builds a tree.
-		case mockRootWithTree = "mock root with tree"
+		/// A hand-written mock, of the mocked type or of a type its tree builds.
+		case handWrittenMock = "hand-written mock"
+		/// A default-valued parameter of a construction.
+		case defaultValuedParameter = "default-valued parameter"
+		/// A parameter of `mock()` other than the overrides: forwarded, received or instantiated values the mock cannot build.
+		case flatParameter = "flat parameter"
+		/// A receive or override only if available.
+		case onlyIfAvailable = "only if available"
+		/// An alias, or a receive the walk does not trace to a sibling.
+		case alias
+		/// `fulfilledByType:`, `erasedToConcreteExistential:`, or a property typed other than the type it builds.
+		case erasure
+		/// An instantiator, `LazilyInstantiated` or other wrapper, or a type that forwards values.
+		case wrapper
+		/// A cycle-closing node.
+		case cycle
+		/// A node that builds children of its own.
+		case nodeWithChildren = "node with children"
+		/// Two nodes of one label.
+		case siblingLabelCollision = "sibling label collision"
 	}
 
 	public enum Result: Sendable, Equatable {
@@ -91,12 +109,12 @@ extension ScopeGenerator {
 	/// This mock root's code, lowered from its finished generator tree, or the first rule it meets that the lowering does
 	/// not lower yet.
 	func lowerMockRoot(context: MockContext) async -> MockLowering.Result {
-		guard case let .root(instantiable, _) = scopeData else { return .unsupported(.mockRootWithTree) }
+		guard case let .root(instantiable, _) = scopeData else { return .unsupported(.publicMock) }
 		guard instantiable.generateMock != .public else { return .unsupported(.publicMock) }
 		guard propertiesToGenerate.isEmpty,
 		      instantiable.dependencies.isEmpty,
 		      (instantiable.mockInitializer ?? instantiable.initializer)?.arguments.contains(where: \.hasDefaultValue) == false
-		else { return .unsupported(.mockRootWithTree) }
+		else { return lowerMockRootWithTree(of: instantiable, context: context) }
 		return .lowered(Self.mockWithoutTree(of: instantiable, context: context))
 	}
 

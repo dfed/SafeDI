@@ -61,7 +61,7 @@ struct SafeDIToolMockLoweringShadowTests: ~Copyable {
 
 		#expect(withShadow.mockFiles.count == 3)
 		#expect(withShadow.generatedFiles == withoutShadow.generatedFiles)
-		#expect(tally.reportLine == "mock-lowering: 1/3 roots identical (33.3%); 0 differ; unsupported: mock root with tree 2")
+		#expect(tally.reportLine == "mock-lowering: 3/3 roots identical (100.0%); 0 differ")
 	}
 
 	@Test
@@ -82,7 +82,7 @@ struct SafeDIToolMockLoweringShadowTests: ~Copyable {
 
 	@Test
 	func outcome_isUnsupported_whenLoweringMeetsUnportedRule() {
-		#expect(MockLoweringShadow.outcome(comparing: .unsupported(.mockRootWithTree), with: "a") == .unsupported(.mockRootWithTree))
+		#expect(MockLoweringShadow.outcome(comparing: .unsupported(.wrapper), with: "a") == .unsupported(.wrapper))
 	}
 
 	@Test
@@ -90,11 +90,11 @@ struct SafeDIToolMockLoweringShadowTests: ~Copyable {
 		let tally = MockLoweringShadowChecks.Tally()
 		tally.record(MockLoweringShadow.Comparison(mockedType: "A", outcome: .identical))
 		tally.record(MockLoweringShadow.Comparison(mockedType: "B", outcome: .differs(line: 4, emitted: "x", lowered: nil)))
-		tally.record(MockLoweringShadow.Comparison(mockedType: "C", outcome: .unsupported(.mockRootWithTree)))
+		tally.record(MockLoweringShadow.Comparison(mockedType: "C", outcome: .unsupported(.wrapper)))
 		tally.record(MockLoweringShadow.Comparison(mockedType: "D", outcome: .identical))
 
 		#expect(tally.reportLine == """
-		mock-lowering: 2/4 roots identical (50.0%); 1 differ; unsupported: mock root with tree 1
+		mock-lowering: 2/4 roots identical (50.0%); 1 differ; unsupported: wrapper 1
 		  B line 4:
 		    emitted: x
 		    lowered: (end)
