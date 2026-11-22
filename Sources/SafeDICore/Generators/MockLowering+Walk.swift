@@ -840,7 +840,7 @@ extension MockLowering {
 				)
 				// D1 lane hook (lane C): a public mock's node records the construction its type's construction function makes.
 				if buildsPublicMock {
-					record.publicConstruction = MockLowering.publicConstructionRecord(of: configuredNode, children: children)
+					record.publicConstruction = MockLowering.publicConstructionRecord(of: configuredNode, children: children, orderedBy: generator)
 				}
 				configurationRecords.append(record)
 			}
