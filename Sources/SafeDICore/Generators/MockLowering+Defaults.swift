@@ -29,7 +29,7 @@ extension MockLowering {
 	struct DefaultField: Sendable, Equatable {
 		let label: String
 		/// The type of the value the parameter takes.
-		let valueTypeSource: String
+		let valueTypeDescription: TypeDescription
 		let defaultExpression: String
 		let isAutoclosure: Bool
 		let isClosureType: Bool
@@ -37,7 +37,7 @@ extension MockLowering {
 
 		init(of parameter: ScopeGenerator.MockParameterNode.DefaultParameter, handWrittenMockDefaultParameters: [ScopeGenerator.MockParameterNode.DefaultParameter]) {
 			label = parameter.label
-			valueTypeSource = parameter.valueTypeDescription.asSource
+			valueTypeDescription = parameter.valueTypeDescription
 			defaultExpression = handWrittenMockDefaultParameters.first(where: {
 				$0.isDefault(forParameterLabeled: parameter.label, ofType: parameter.typeDescription)
 			})?.defaultExpression ?? parameter.defaultExpression
@@ -66,6 +66,28 @@ extension MockLowering {
 					field: Self.field(named: label, typeSource: valueTypeSource, parameterTypeSource: "\(isDeclaredEscaping ? "@escaping " : "")\(valueTypeSource)"),
 				)
 			}
+		}
+
+		/// The type of the value the parameter takes, spelled.
+		var valueTypeSource: String {
+			valueTypeDescription.asSource
+		}
+
+		/// The type of the value a public mock's configuration and construction function take for the field: an
+		/// `@autoclosure` parameter's as a closure that returns its value (`DefaultParameter.publicMockForm`).
+		var publicValueType: TypeDescription {
+			isAutoclosure ? .closure(arguments: [], isAsync: false, doesThrow: false, returnType: valueTypeDescription) : valueTypeDescription
+		}
+
+		/// The default a public mock resolves the field with: an `@autoclosure` parameter's wrapped in a closure.
+		var publicDefaultExpression: String {
+			isAutoclosure ? "{ \(defaultExpression) }" : defaultExpression
+		}
+
+		/// Whether the type's extension declares a provider of the field's default for a public mock: its value is optional
+		/// and its default is no `nil` literal, which a configuration member and a pruned node's argument read through it.
+		var hasPublicProvider: Bool {
+			publicValueType.isOptional && publicDefaultExpression != "nil"
 		}
 
 		private static func field(named name: String, typeSource: String, parameterTypeSource: String) -> ConfigurationStorage.Field {
@@ -110,6 +132,9 @@ extension MockLowering.Walk {
 	) -> [(label: String, value: String)] {
 		let construction = ScopeGenerator.MockConstruction(instantiable: instantiable, useMockInitializer: usesMockInitializer, builderTypesDeclaredEscaping: [])
 		guard !construction.defaultParameters.isEmpty else { return dependencyArguments }
+		guard !buildsPublicMock else {
+			return publicConstructionArguments(of: construction, given: instantiable, dependencyArguments: dependencyArguments, nodePath: nodePath, overrideReachable: overrideReachable)
+		}
 		let handWrittenDefaults = handWrittenMockDefaultParameters[instantiable.concreteInstantiable, default: []]
 		let surfacedArguments = overrideReachable
 			? construction.callSiteArguments
@@ -129,6 +154,37 @@ extension MockLowering.Walk {
 			// An `@autoclosure` parameter's field is a closure, called where the type is built.
 			let isAutoclosure = argument.typeDescription.strippingEscaping.autoclosureValueType != nil
 			return (label: argument.label.spelledAsArgumentLabel, value: isAutoclosure ? "\(configurationRead)()" : configurationRead)
+		}
+	}
+
+	/// The arguments a public mock passes the construction function of `construction`'s type, as
+	/// `ScopeGenerator.publicBuilderArguments` passes them: every call-site argument, a dependency's value from
+	/// `dependencyArguments`, in order, and a default read from the node's configuration at `nodePath` where its override is
+	/// reachable, else its provider's value for an optional default, or `nil`, which the function resolves. An
+	/// `@autoclosure` default is a closure there, which the function calls.
+	private func publicConstructionArguments(
+		of construction: ScopeGenerator.MockConstruction,
+		given instantiable: Instantiable,
+		dependencyArguments: [(label: String, value: String)],
+		nodePath: String,
+		overrideReachable: Bool,
+	) -> [(label: String, value: String)] {
+		var dependencyValues = dependencyArguments[...]
+		return construction.callSiteArguments.compactMap { argument in
+			if instantiable.dependencies.contains(where: argument.isFulfilled(by:)) {
+				return dependencyValues.popFirst()
+			}
+			let value = if overrideReachable {
+				readingOverride("\(nodePath).\(argument.label)", localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(argument.label)")
+			} else if let defaultParameter = construction.defaultParameters.first(where: { $0.label == argument.label }),
+			          // The construction's own default decides, as the emitter's does, whatever default the provider evaluates.
+			          MockLowering.DefaultField(of: defaultParameter, handWrittenMockDefaultParameters: []).hasPublicProvider
+			{
+				MockLowering.publicProviderRead(of: instantiable.concreteInstantiable, label: argument.label)
+			} else {
+				"nil"
+			}
+			return (label: argument.label.spelledAsArgumentLabel, value: value)
 		}
 	}
 }

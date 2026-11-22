@@ -84,7 +84,6 @@ extension MockLowering {
 		var recordsByType = [TypeDescription: [PublicConstructionRecord]]()
 		var typesInOrder = [TypeDescription]()
 		for record in records {
-			guard !record.hasDefaultParameters else { return .unsupported(.defaultValuedParameter) }
 			if recordsByType[record.concreteType] == nil {
 				typesInOrder.append(record.concreteType)
 			}
@@ -122,6 +121,11 @@ extension MockLowering {
 		var members = record.childMembers.map { member in
 			publicMember(member, context: context, admittedModules: admittedModules, requiresSendable: false)
 		}
+		// Each default-valued parameter: optional, with `nil` keeping the declaration's default, unless the parameter is
+		// optional itself, which the member holds as it is, defaulting to what the declaration's default evaluates to.
+		for defaultField in record.defaultFields {
+			members.append(publicDefaultMember(of: defaultField, concreteType: concreteType, context: context, admittedModules: admittedModules))
+		}
 		let builderType = record.builderType
 		members.append(PublicStructMember(
 			name: ReservedName.configurationBuilderPropertyName,
@@ -140,11 +144,62 @@ extension MockLowering {
 		lines.append("}")
 		lines.append("")
 		lines.append("extension \(concreteType.asSource) {")
+		// One provider per label, value type and default, across the type's constructions: two of one label differ in the
+		// type they return, which each call's argument selects.
+		var providers = [DefaultField]()
+		for defaultField in ([record] + constructionRecords).flatMap(\.defaultFields)
+			where defaultField.hasPublicProvider && !providers.contains(where: {
+				$0.label == defaultField.label && $0.publicValueType == defaultField.publicValueType && $0.publicDefaultExpression == defaultField.publicDefaultExpression
+			})
+		{
+			providers.append(defaultField)
+		}
+		for provider in providers {
+			lines.append("\(ScopeGenerator.standardIndent)nonisolated static func \(PublicMockContext.providerName(label: provider.label))() -> \(provider.publicValueType.asSource) { \(provider.publicDefaultExpression) }")
+		}
 		for constructionRecord in constructionRecords {
 			lines.append(contentsOf: constructionRecord.constructionFunctionLines)
 		}
 		lines.append("}")
+		// A public member's default names its provider through a module-level function, which a public declaration's default
+		// argument can name without naming the type, which may be narrower than `public`.
+		for defaultField in record.defaultFields where defaultField.hasPublicProvider && context.access(ofTypes: [defaultField.publicValueType], admittedModules: admittedModules).level == .public {
+			lines.append("@usableFromInline nonisolated func \(context.forwarderName(of: concreteType, label: defaultField.label))() -> \(defaultField.publicValueType.asSource) { \(publicProviderRead(of: concreteType, label: defaultField.label)) }")
+		}
 		return lines.joined(separator: "\n")
+	}
+
+	/// The member of a public configuration of `concreteType` that holds `defaultField`, as visible as its value's type.
+	private static func publicDefaultMember(
+		of defaultField: DefaultField,
+		concreteType: TypeDescription,
+		context: PublicMockContext,
+		admittedModules: Set<String?>,
+	) -> PublicStructMember {
+		let valueType = defaultField.publicValueType
+		let access = context.access(ofTypes: [valueType], admittedModules: admittedModules).level
+		guard valueType.isOptional else {
+			return ScopeGenerator.publicDefaultMember(
+				name: defaultField.label,
+				valueType: .optional(valueType),
+				access: access,
+				defaultExpression: "nil",
+				omittedValue: "nil",
+				requiresSendable: false,
+				documentation: "`nil` keeps the default of `\(concreteType.asSource)`’s `\(defaultField.label.spelledWithoutBackticks)`.",
+			)
+		}
+		let provider = publicProviderRead(of: concreteType, label: defaultField.label)
+		let forwarder = "\(context.forwarderName(of: concreteType, label: defaultField.label))()"
+		return ScopeGenerator.publicDefaultMember(
+			name: defaultField.label,
+			valueType: valueType,
+			access: access,
+			defaultExpression: defaultField.hasPublicProvider ? (access == .public ? forwarder : provider) : "nil",
+			omittedValue: defaultField.hasPublicProvider ? provider : "nil",
+			requiresSendable: false,
+			documentation: "The default of `\(concreteType.asSource)`’s `\(defaultField.label.spelledWithoutBackticks)` unless set.",
+		)
 	}
 
 	/// The member of a public struct that configures a child as `member` describes it, `@Sendable` where the struct is read
@@ -199,23 +254,26 @@ extension MockLowering.PublicConstructionRecord {
 	/// The construction a public mock's `node`, whose children `children` are in inline order, builds its type with: its
 	/// initializer, or an extension's `instantiate(…)`.
 	init(of node: MockLowering.ConstantNode, children: [MockLowering.TreeNode]) {
-		let initializer = node.instantiable.initializer
-		let arguments = initializer?.arguments ?? []
+		// The arguments the construction is passed, which leave out a parameter left to its default
+		// (`ScopeGenerator.MockConstruction.callSiteArguments`).
+		let construction = ScopeGenerator.MockConstruction(instantiable: node.instantiable, useMockInitializer: false, builderTypesDeclaredEscaping: [])
 		self.init(
-			concreteType: node.instantiable.concreteInstantiable,
+			concreteType: construction.concreteType,
 			usesMockInitializer: false,
-			isExtensionBased: node.instantiable.declarationType.isExtension,
+			isExtensionBased: construction.isExtensionBased,
 			customMockName: nil,
-			constructionIsolation: initializer?.spelledIsolation,
-			constructionReturnType: node.instantiable.concreteInstantiable,
-			arguments: arguments.map { Argument(label: $0.label, innerLabel: $0.innerLabel, typeDescription: $0.typeDescription) },
-			builderParameterTypes: arguments.map { argument in
-				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription)
-					.asFunctionParameter(amongTypesDeclaredEscaping: [])
-			},
+			constructionIsolation: construction.constructionIsolation,
+			constructionReturnType: construction.concreteType,
+			arguments: construction.callSiteArguments.map { Argument(label: $0.label, innerLabel: $0.innerLabel, typeDescription: $0.typeDescription) },
+			builderParameterTypes: construction.builderParameterTypes,
 			childMembers: children.compactMap(ChildMember.init(of:)),
-			hasDefaultParameters: arguments.contains(where: \.hasDefaultValue),
+			defaultFields: node.defaultFields,
 		)
+	}
+
+	/// Whether the construction takes a default-valued parameter.
+	var hasDefaultParameters: Bool {
+		!defaultFields.isEmpty
 	}
 
 	/// The name of the construction function: `__safeDI_mock` for the hand-written mock, else `__safeDI_init`.
@@ -233,11 +291,30 @@ extension MockLowering.PublicConstructionRecord {
 	var constructionFunctionLines: [String] {
 		let indent = ScopeGenerator.standardIndent
 		let builderName = ReservedName.configurationBuilderPropertyName
-		var parameters = arguments.map { "\($0.innerLabel.spelledAsArgumentLabel): \($0.typeDescription.asFunctionParameter.asSource)" }
+		var parameters = [String]()
+		var resolutions = [String]()
+		var values = [String]()
+		for argument in arguments {
+			let name = argument.innerLabel
+			// A default the function takes optionally and resolves where it is not passed, an `@autoclosure` one as a
+			// closure it calls here, once per construction, as in production.
+			if let defaultField = defaultFields.first(where: { $0.label == argument.label }) {
+				let valueType = defaultField.publicValueType
+				if valueType.isOptional {
+					parameters.append("\(name.spelledAsArgumentLabel): \(valueType.asSource)")
+				} else {
+					parameters.append("\(name.spelledAsArgumentLabel): \(TypeDescription.optional(valueType).asSource)")
+					resolutions.append("\(indent)\(indent)let \(name) = \(name) ?? (\(defaultField.publicDefaultExpression))")
+				}
+				values.append(defaultField.isAutoclosure ? "\(name)()" : name)
+			} else {
+				parameters.append("\(name.spelledAsArgumentLabel): \(argument.typeDescription.asFunctionParameter.asSource)")
+				values.append(name)
+			}
+		}
 		parameters.append("\(builderName): \(builderType)")
-		let values = arguments.map(\.innerLabel)
-		let constructionArguments = arguments.map { argument in
-			argument.label == "_" ? argument.innerLabel : "\(argument.label.spelledAsArgumentLabel): \(argument.innerLabel)"
+		let constructionArguments = zip(arguments, values).map { argument, value in
+			argument.label == "_" ? value : "\(argument.label.spelledAsArgumentLabel): \(value)"
 		}.joined(separator: ", ")
 		let construction = if usesMockInitializer {
 			"\(concreteType.asSource).\(customMockName ?? InstantiableVisitor.mockMethodName)(\(constructionArguments))"
@@ -247,11 +324,11 @@ extension MockLowering.PublicConstructionRecord {
 			"\(concreteType.asSource)(\(constructionArguments))"
 		}
 		let isolationPrefix = constructionIsolation.map { "\($0) " } ?? ""
-		return [
-			"\(indent)\(isolationPrefix)static func \(functionName)(\(parameters.joined(separator: ", "))) -> \(constructionReturnType.asSource) {",
-			"\(indent)\(indent)if let \(builderName) { \(builderName)(\(values.joined(separator: ", "))) } else { \(construction) }",
-			"\(indent)}",
-		]
+		var lines = ["\(indent)\(isolationPrefix)static func \(functionName)(\(parameters.joined(separator: ", "))) -> \(constructionReturnType.asSource) {"]
+		lines.append(contentsOf: resolutions)
+		lines.append("\(indent)\(indent)\(resolutions.isEmpty ? "" : "return ")if let \(builderName) { \(builderName)(\(values.joined(separator: ", "))) } else { \(construction) }")
+		lines.append("\(indent)}")
+		return lines
 	}
 }
 
