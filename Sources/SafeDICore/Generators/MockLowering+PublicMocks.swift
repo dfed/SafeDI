@@ -116,6 +116,12 @@ extension ScopeGenerator {
 			calls.append(.init(generator: generator, propertiesGeneratedLater: child.propertiesGeneratedLater))
 		}
 		guard !calls.isEmpty else { return .lowered(.none) }
+		// Whether a type the tree builds inline may be another module's public mock, whose places read the builders: a module
+		// SafeDI knows no name of counts as another.
+		let ownModuleName: String? = if case let .root(instantiable, _) = scopeData { instantiable.moduleName } else { nil }
+		func isPublicMockOfAnotherModule(_ instantiable: Instantiable) -> Bool {
+			instantiable.generateMock == .public && (ownModuleName == nil || instantiable.moduleName != ownModuleName)
+		}
 		// The labels the tree binds and its types' dependencies have beneath the root's level, which name a builder apart.
 		var namesBoundInTheTree = Set<String>()
 		var generatorsToVisit = orderedChildren.map(\.generator)
@@ -124,6 +130,9 @@ extension ScopeGenerator {
 			case let .property(instantiable, property, _, _, _, _):
 				namesBoundInTheTree.insert(property.label)
 				guard generator.publicMockCall == nil else { continue }
+				// A place of a public mock the tree builds inline reads the builder `mock()` takes for its hole type
+				// (`ScopeGenerator.holeBuildersByInlinePlace`), which is not lowered yet.
+				guard !isPublicMockOfAnotherModule(instantiable) else { return .unsupported(.fill) }
 				namesBoundInTheTree.formUnion(instantiable.dependencies.map(\.property.label))
 			case let .alias(property, _, _, _, _):
 				namesBoundInTheTree.insert(property.label)
@@ -131,6 +140,14 @@ extension ScopeGenerator {
 				break
 			}
 			generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator))
+		}
+		// So does such a place inside a fill (`ScopeGenerator.holeBuildersByInlinePlaceInFills`).
+		var fillGeneratorsToVisit = calls.flatMap { call in call.generator.propertiesToGenerate.filter { $0.fillHole != nil } }
+		while let generator = fillGeneratorsToVisit.popLast() {
+			if case let .property(instantiable, _, _, _, _, _) = generator.scopeData, generator.publicMockCall == nil, isPublicMockOfAnotherModule(instantiable) {
+				return .unsupported(.fill)
+			}
+			fillGeneratorsToVisit.append(contentsOf: generator.propertiesToGenerate)
 		}
 		let families = Self.filledFamilies(of: filledCalls)
 		let stems = Self.stemsOfOptionalBuilders(
@@ -196,9 +213,9 @@ extension MockLowering.Walk {
 		      case let .property(instantiable, property, _, erasedToConcreteExistential, isPropertyCycle, _) = generator.scopeData
 		else { return .unsupported(.publicMockCall) }
 		// A call nested in a type's builder function is configured by that type's configuration, which a `@Sendable` builder
-		// function reads as a closure; a call that takes no overrides is configured by an override closure.
+		// function reads as a closure.
 		guard path == ReservedName.mockOverridesParameterName,
-		      publicMockCall.takesOverrides,
+		      !generator.buildsInSendableFunction,
 		      !isPropertyCycle,
 		      !erasedToConcreteExistential,
 		      property.propertyType.isConstant,
@@ -208,7 +225,26 @@ extension MockLowering.Walk {
 		// The leaf takes the called tier's parameters as its mock's.
 		let constructionInitializer = instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType) ? instantiable.mockInitializer : instantiable.initializer
 		guard let initializer = constructionInitializer else { return .unsupported(.publicMockCall) }
-		let node = MockLowering.PublicMockCallNode(property: property, calledType: instantiable.concreteInstantiable, call: publicMockCall)
+		// A call of a mock that takes no overrides is configured by an override closure, handed what the called `mock()`
+		// takes, where the call can hand each builder as a function a person writes (`ScopeGenerator.publicMockOverrideBuilders`).
+		let overrideBuilders = publicMockCall.takesOverrides ? nil : generator.publicMockOverrideBuilders
+		let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
+		// The call leaves a default-valued argument that is no dependency to its default, which the override's closure type
+		// leaves out too.
+		guard !initializer.arguments.contains(where: { $0.isLeftToItsDefault && !dependencyLabels.contains($0.innerLabel) }) else { return .unsupported(.publicMockCall) }
+		let node = MockLowering.PublicMockCallNode(
+			property: property,
+			calledType: instantiable.concreteInstantiable,
+			call: publicMockCall,
+			overrideClosureType: overrideBuilders.map { _ in
+				let parameterTypes = initializer.arguments.map { argument in
+					(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription)
+						.asFunctionParameter(amongTypesDeclaredEscaping: publicMockCall.typesDeclaredEscaping)
+						.asSource
+				}
+				return "(\(parameterTypes.joined(separator: ", "))) -> \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource)"
+			},
+		)
 		let nodePath = "\(path).\(property.label)"
 		// A call that fills builders is made in a builder function of its own, which declares the fills and names the guard
 		// first; it passes each builder the struct of the builder `mock()` takes optional for the builder's places, or of
@@ -225,10 +261,22 @@ extension MockLowering.Walk {
 		let structValuesByLabel = filledCall == nil ? [:] : generator.publicMockBuilderStructValuesByLabel
 		let lazilyInstantiatedInstances = generator.mockLoweringLazilyInstantiatedInstanceProperties
 		var arguments = [String]()
+		// What the override closure is handed for each argument: a builder as `publicMockOverrideBuilders` says, which reads
+		// the values the call passes, and any other argument as the call passes it.
+		var overrideArguments = [String]()
+		var argumentByLabel = [String: String]()
+		func labeled(_ value: String, as argument: Initializer.Argument) -> String {
+			argument.label == "_" ? value : "\(argument.label.spelledAsArgumentLabel): \(value)"
+		}
 		for argument in initializer.arguments {
 			if let builderStruct = structValuesByLabel[argument.innerLabel] {
 				let fillsStruct = builderStruct.replacingOccurrences(of: "\n\(ScopeGenerator.standardIndent)", with: "\n\(innerIndent)")
-				arguments.append("\(argument.label.spelledAsArgumentLabel): \(holeBuilders[argument.innerLabel]?.structValue(fillsStruct: fillsStruct) ?? fillsStruct)")
+				arguments.append(labeled(holeBuilders[argument.innerLabel]?.structValue(fillsStruct: fillsStruct) ?? fillsStruct, as: argument))
+				if let overrideBuilders {
+					// A builder an internal mock passes up whole is not lowered yet.
+					guard let overrideBuilder = overrideBuilders[argument.innerLabel], case .fill = overrideBuilder else { return .unsupported(.publicMockCall) }
+					overrideArguments.append(argument.innerLabel)
+				}
 			} else {
 				// A value the call passes is the root level's binding of its label, which an optional parameter takes as it is.
 				guard let dependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }),
@@ -237,11 +285,26 @@ extension MockLowering.Walk {
 				      !generator.unavailableOptionalProperties.contains(dependency.property),
 				      scope.contains(dependency.property) || dependency.property.typeDescription.isOptional && scope.contains(dependency.property.asUnwrappedProperty)
 				else { return .unsupported(.publicMockCall) }
-				arguments.append("\(argument.label.spelledAsArgumentLabel): \(dependency.property.label)")
+				arguments.append(labeled(dependency.property.label, as: argument))
+				overrideArguments.append(dependency.property.label)
+				argumentByLabel[argument.innerLabel] = dependency.property.label
 			}
 		}
-		arguments.append("\(ReservedName.mockOverridesParameterName): \(nodePath)")
-		let call = "\(instantiable.concreteInstantiable.asSource).\(publicMockCall.functionName)(\(arguments.joined(separator: ", ")))"
+		if publicMockCall.takesOverrides {
+			arguments.append("\(ReservedName.mockOverridesParameterName): \(nodePath)")
+		}
+		let defaultCall = "\(instantiable.concreteInstantiable.asSource).\(publicMockCall.functionName)(\(arguments.joined(separator: ", ")))"
+		let call: String
+		if let overrideBuilders {
+			// A builder's slot holds its label until here, so that each builder reads every value the call passes.
+			let handed = zip(initializer.arguments, overrideArguments).map { argument, value in
+				overrideBuilders[argument.innerLabel]?.expression(argumentByLabel: argumentByLabel, holeBuilder: holeBuilders[argument.innerLabel]) ?? value
+			}
+			let overrideName = ReservedName.configurationBuilderPropertyName
+			call = "if let \(overrideName) = \(nodePath) { \(overrideName)(\(handed.joined(separator: ", "))) } else { \(defaultCall) }"
+		} else {
+			call = defaultCall
+		}
 		guard let filledCall else {
 			lines.append("\(indent)\(publicMockCall.guardLine(for: instantiable.concreteInstantiable))")
 			lines.append("\(indent)let \(property.label) = \(call)")
@@ -274,15 +337,25 @@ extension MockLowering {
 		/// The type whose public mock the node calls.
 		let calledType: TypeDescription
 		let call: PublicMockCall
+		/// For a call of a mock that takes no overrides, the type of the closure that builds the called type, where the call
+		/// offers one (`ScopeGenerator.MockParameterNode.offersOverrideClosure`).
+		let overrideClosureType: String?
 
-		/// The member of the calling mock's overrides that configures the call: the called mock's own `SafeDIOverrides`.
-		var overridesField: OverridesField {
-			OverridesField(
-				name: property.label,
-				typeSource: "\(calledType.asSource).\(ReservedName.mockOverridesTypeName)",
-				defaultValue: ".init()",
-				sendability: .never,
-			)
+		/// The member of the calling mock's overrides that configures the call: the called mock's own `SafeDIOverrides`, or,
+		/// for a mock that takes none, the closure that builds the called type, where the call offers one.
+		var overridesField: OverridesField? {
+			if call.takesOverrides {
+				OverridesField(
+					name: property.label,
+					typeSource: "\(calledType.asSource).\(ReservedName.mockOverridesTypeName)",
+					defaultValue: ".init()",
+					sendability: .never,
+				)
+			} else if let overrideClosureType {
+				OverridesField(name: property.label, typeSource: "(\(overrideClosureType))?", defaultValue: "nil", sendability: .never)
+			} else {
+				nil
+			}
 		}
 	}
 }
