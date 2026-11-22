@@ -44,7 +44,7 @@ extension ScopeGenerator {
 		}
 		let bodyIndent = "\(Self.standardIndent)\(Self.standardIndent)"
 		// No node binds a parameter’s label again, at any depth: the emitter names the parameter apart.
-		var walk = MockLowering.Walk(cycleEdges: context.cycleEdges, ancestorLabels: signature.labels)
+		var walk = MockLowering.Walk(cycleEdges: context.cycleEdges, ancestorLabels: signature.labels, uncoveredProperties: signature.uncoveredProperties)
 		var bindingLines = [String]()
 		let nodes: [MockLowering.TreeNode]
 		switch await walk.children(
@@ -115,6 +115,7 @@ extension ScopeGenerator {
 			lines.append("")
 			parameterLines.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): \(ReservedName.mockOverridesTypeName) = .init()")
 		}
+		lines.append(contentsOf: signature.sharedValueDocumentationLines(indent: indent))
 		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
 		lines.append(parameterLines.joined(separator: ",\n"))
 		lines.append("\(indent)) -> \(instantiable.concreteInstantiable.asSource) {")
@@ -185,6 +186,10 @@ extension MockLowering {
 		var overridePathReachable = true
 		var ancestorLabels = Set<String>()
 		var labels = Set<String>()
+		// D1 lane hook (lane D): the `@Instantiated` dependencies the mock cannot build, each a parameter of `mock()`.
+		/// The properties of the `@Instantiated` dependencies the mock cannot build, which `mock()` takes, so the types that
+		/// instantiate them are passed the parameter.
+		var uncoveredProperties = Set<Property>()
 		// D1 lane hook (lane D): the configurations of the nodes the walk finished, children before their node.
 		var configurationRecords = [ConfigurationRecord]()
 		// D1 lane hook (lane B): the extractor of the `@Sendable` builder function the walk is inside, and the names of each
@@ -358,7 +363,7 @@ extension MockLowering {
 				requiresSendable: isInsideSendableFunction || generator.buildsInSendableFunction,
 			)
 			guard node.hasChildren || isWrapped else {
-				guard let rule = Self.unsupportedRule(ofDependenciesOf: instantiable, isWrapped: isWrapped, inScope: scope, childProperties: []) else {
+				guard let rule = Self.unsupportedRule(ofDependenciesOf: instantiable, isWrapped: isWrapped, inScope: scope, childProperties: [], uncoveredProperties: uncoveredProperties) else {
 					lines.append(node.constantBindingLine(overrideRead: overrideRead, indent: indent))
 					return .lowered(node)
 				}
@@ -398,7 +403,7 @@ extension MockLowering {
 			case let .unsupported(rule):
 				return .unsupported(rule)
 			}
-			if let rule = Self.unsupportedRule(ofDependenciesOf: instantiable, isWrapped: isWrapped, inScope: scope, childProperties: Set(children.map(\.property))) {
+			if let rule = Self.unsupportedRule(ofDependenciesOf: instantiable, isWrapped: isWrapped, inScope: scope, childProperties: Set(children.map(\.property)), uncoveredProperties: uncoveredProperties) {
 				return .unsupported(rule)
 			}
 			let configuredNode = node.configured(byChildren: children)
@@ -422,12 +427,14 @@ extension MockLowering {
 			isWrapped: Bool,
 			inScope scope: Set<Property>,
 			childProperties: Set<Property>,
+			uncoveredProperties: Set<Property>,
 		) -> Rule? {
 			for dependency in instantiable.dependencies {
 				switch dependency.source {
 				case .instantiated:
 					// D1 lane hook (lane B): a wrapper child is a node of its own, erased or fulfilled by another type alike.
-					guard childProperties.contains(dependency.property) else { return .flatParameter }
+					// D1 lane hook (lane D): an `@Instantiated` dependency the mock cannot build is a parameter of `mock()`.
+					guard childProperties.contains(dependency.property) || uncoveredProperties.contains(dependency.property) else { return .flatParameter }
 				case .received(onlyIfAvailable: false):
 					// D1 lane hook (lane B): a receive by value of a lazy wrapper's instance.
 					guard scope.contains(dependency.property) else { return .flatParameter }

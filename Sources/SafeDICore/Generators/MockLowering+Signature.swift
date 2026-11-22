@@ -52,6 +52,18 @@ extension MockLowering {
 			Set(parameters.map(\.property.label))
 		}
 
+		// D1 lane hook (lane D): the `@Instantiated` dependencies of the tree's types that the mock cannot build, which
+		// `mock()` takes after the received ones, and the documentation of those several types create.
+		/// The properties of the `@Instantiated` dependencies the mock cannot build, which a type of the tree is passed.
+		var uncoveredProperties: Set<Property> {
+			[]
+		}
+
+		/// The lines that document, above `mock()`, each parameter several types create, at `indent`.
+		func sharedValueDocumentationLines(indent _: String) -> [String] {
+			[]
+		}
+
 		/// Every parameter, in the order `mock()` declares them.
 		var parameters: [Parameter] {
 			forwardedParameters + rootDefaultParameters + flatReceivedParameters
