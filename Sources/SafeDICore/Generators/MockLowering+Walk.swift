@@ -138,6 +138,15 @@ extension ScopeGenerator {
 			lines.append(contentsOf: overridesStruct(of: overridesFields, sendableConfigurationTypeNames: context.sendableConfigurationTypeNames, indent: indent))
 			lines.append("")
 			parameterLines.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): \(ReservedName.mockOverridesTypeName) = .init()")
+		} else if nodes.contains(where: \.isPropertyNode) {
+			// D1 lane hook (lane C): a tree whose nodes have no override, such as a call of a mock that takes no overrides and
+			// offers no override closure, still declares its `SafeDIOverrides`, empty.
+			lines.append("\(indent)/// Overrides for the mock dependency tree.")
+			lines.append("\(indent)struct \(ReservedName.mockOverridesTypeName) {")
+			lines.append("\(indent)\(standardIndent)init() {}")
+			lines.append("\(indent)}")
+			lines.append("")
+			parameterLines.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): \(ReservedName.mockOverridesTypeName) = .init()")
 		}
 		lines.append(contentsOf: signature.sharedValueDocumentationLines(indent: indent))
 		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
