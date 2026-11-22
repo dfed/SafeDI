@@ -597,15 +597,12 @@ extension MockLowering {
 			node.cycleParameters = generator.cycleParameters.map(\.property)
 			node.cycleParameterArguments = cycleParameterArguments
 			let lazilyInstantiatedInstanceProperties = generator.mockLoweringLazilyInstantiatedInstanceProperties
-			guard node.hasChildren || isWrapped || !receiverBindings.isEmpty else {
+			// D1 lane hook (lane D): a node whose configuration holds its default-valued parameters is built in a builder
+			// function, as `MockParameterNode.requiresFunctionWrapper` says.
+			guard node.hasChildren || isWrapped || !receiverBindings.isEmpty || !defaultFields.isEmpty else {
 				guard let rule = Self.unsupportedRule(ofDependenciesOf: instantiable, isWrapped: isWrapped, inScope: scope, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, unavailableProperties: unavailableProperties, childProperties: [], uncoveredProperties: uncoveredProperties) else {
-					// D1 lane hook (lane D): a leaf whose configuration holds its default-valued parameters.
-					let leaf = node.configured(byChildren: [])
-					if leaf.hasConfiguration, recordsConfiguration(ofLeafOf: instantiable.concreteInstantiable) {
-						configurationRecords.append(ConfigurationRecord(of: leaf, children: []))
-					}
-					lines.append(leaf.constantBindingLine(overrideRead: overrideRead, indent: indent))
-					return .lowered(leaf)
+					lines.append(node.constantBindingLine(overrideRead: overrideRead, indent: indent))
+					return .lowered(node)
 				}
 				return .unsupported(rule)
 			}
@@ -823,7 +820,8 @@ extension MockLowering {
 		/// How the node is built without an override.
 		private var construction: String {
 			let typeName = instantiable.concreteInstantiable.asSource
-			let argumentList = arguments.map { "\($0.label): \($0.value)" }.joined(separator: ", ")
+			// An argument the initializer takes unlabeled is passed by position, as `defaultBuilderCall` passes it.
+			let argumentList = arguments.map { $0.label == "_" ? $0.value : "\($0.label): \($0.value)" }.joined(separator: ", ")
 			let unerasedConstruction = if instantiable.declarationType.isExtension {
 				"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
 			} else {
@@ -883,7 +881,8 @@ extension MockLowering {
 		func builderFunctionEndLines(overrideRead overridePath: String?, indent: String) -> [String] {
 			let builder = ReservedName.configurationBuilderPropertyName
 			let bodyIndent = "\(indent)\(ScopeGenerator.standardIndent)"
-			let returnPrefix = hasChildren || !receiverBindings.isEmpty ? "return " : ""
+			// A constant's builder function always returns its construction (`BuilderBody`).
+			let returnPrefix = hasChildren || !receiverBindings.isEmpty || !isWrapped ? "return " : ""
 			// A configuration's builder returns the concrete type, which an erased node wraps as its construction does.
 			let builderCall = isErased && hasConfiguration ? "\(erasedTypeSource)(\(builder)(\(builderArguments)))" : "\(builder)(\(builderArguments))"
 			var lines = ["\(bodyIndent)\(returnPrefix)\(constructionReading(override: overridePath, builderCall: builderCall))"]
