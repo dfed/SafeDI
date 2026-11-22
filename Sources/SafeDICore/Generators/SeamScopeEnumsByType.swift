@@ -507,7 +507,14 @@ extension DependencyTreeGenerator {
 		// other seam's, so this hole type's enums decide which of its cases are in a loop of levels.
 		let componentByKey = Self.componentByKey(of: result.enums)
 		func holdsEnumOfItsOwnComponent(_ enumCase: SeamSignature.ScopeEnum.Case, of enumKey: SeamSignature.ScopeEnum.Key) -> Bool {
-			guard case let .nested(heldKey, _, _) = enumCase.kind, let component = componentByKey[enumKey] else { return false }
+			let heldKey: SeamSignature.ScopeEnum.Key
+			switch enumCase.kind {
+			case let .nested(key, _, _), let .inner(key, _, _):
+				heldKey = key
+			case .place, .fill:
+				return false
+			}
+			guard let component = componentByKey[enumKey] else { return false }
 			return componentByKey[heldKey] == component
 		}
 		/// The step of `caseOfProperty`'s case, whose payload the seam's tree binds before building the last property of

@@ -2737,6 +2737,15 @@ struct SeamHoles: Sendable {
 				}
 			}
 		}
+		// The seam's own enums, signatures settled and their cases marked `indirect`, which decide whether a call's own member
+		// is a carrier's `let` child.
+		var scopeEnumByType = [TypeDescription: SeamSignature.ScopeEnum]()
+		for scopeEnum in scopeEnums where scopeEnum.key.seamType == seamType {
+			let type = SeamSignature.ScopeEnum.nestedType(named: scopeEnum.typeName, in: scopeEnum.rootTypeName)
+			if scopeEnumByType[type] == nil {
+				scopeEnumByType[type] = scopeEnum
+			}
+		}
 		for callRoute in callRoutes {
 			guard let builderName = internalNameByEnum[callRoute.rootKey] else { continue }
 			bindValues(of: callRoute.route, rootBuilderName: builderName)
@@ -2757,7 +2766,10 @@ struct SeamHoles: Sendable {
 					let parentName = callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName } ?? builderName
 					if case let .nested(_, enumType, _) = memberValuesType, ReservedName.seamCarrier(ofEnum: enumType) != nil {
 						// A carrier's member for a call's own case takes no values: a `let` child is read, any other member called.
-						return callRoute.memberIsLetChild ? "\(parentName).\(callRoute.caseName)" : "\(parentName).\(callRoute.caseName)()"
+						let isLetChild = scopeEnumByType[enumType].flatMap { scopeEnum in
+							scopeEnum.cases.first { $0.name == callRoute.caseName }?.isLetChildOfCarrier(inSendableEnum: scopeEnum.key.isSendable)
+						} ?? false
+						return isLetChild ? "\(parentName).\(callRoute.caseName)" : "\(parentName).\(callRoute.caseName)()"
 					} else {
 						return "\(parentName).\(callRoute.caseName)(\(memberValuesType.asSource)())"
 					}
