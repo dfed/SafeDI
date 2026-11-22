@@ -936,7 +936,7 @@ private struct TypeKeyLayout {
 						declarations.append(typeDeclaration(for: closerValue(of: label, closing: closer, onPlace: member)))
 					}
 				}
-				outcomes[owner][label] = if declarations.allSatisfy({ $0 == .none }) {
+				let outcome: ReadOutcome = if declarations.allSatisfy({ $0 == .none }) {
 					.none
 				} else if let first = declarations.first,
 				          declarations.allSatisfy({ $0 == first }),
@@ -946,6 +946,7 @@ private struct TypeKeyLayout {
 				} else {
 					.passed
 				}
+				outcomes[owner][label] = outcome
 			}
 		}
 		self.outcomes = outcomes
