@@ -1943,6 +1943,7 @@ struct CalledBuilders: Sendable {
 		self.scopeEnums = scopeEnums
 		let enumsByKey = Dictionary(scopeEnums.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
 		self.enumsByKey = enumsByKey
+		carrierValuesBySeam = SeamCarrierValues.bySeam(of: scopeEnums)
 		var builderKeyByReachedPlace = [ReachedPlace: SeamSignature.ScopeEnum.Key]()
 		for builder in builders {
 			for site in SeamSignature.ScopeEnum.sitesReached(from: builder.enumKey, in: enumsByKey) {
@@ -1960,6 +1961,21 @@ struct CalledBuilders: Sendable {
 	let scopeEnums: [SeamSignature.ScopeEnum]
 	/// Each enum by its key.
 	let enumsByKey: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]
+	/// How each seam's carriers among the enums hand a level's values (`SeamCarrierValues`), by seam; a seam none of whose
+	/// levels is cut into runs has no entry.
+	let carrierValuesBySeam: [TypeDescription: SeamCarrierValues]
+
+	/// How a fill of `hole`'s place takes its case's values, where the case is a seam's carrier's.
+	func carrierUse(ofPlace hole: SeamSignature.Hole) -> SeamCarrierValues.Use? {
+		guard let enumPlace = hole.enumPlace, !enumPlace.values.isEmpty, let values = carrierValuesBySeam[hole.scopeSeamType], let level = SeamCarrierValues.level(ofEnum: enumPlace.enumType(qualifiedBy: nil)) else { return nil }
+		return values.use(ofLevel: level, count: enumPlace.values.count)
+	}
+
+	/// How a member of `scopeEnum`, a carrier's, takes `count` values, or `nil` where it takes them positionally.
+	func carrierUse(ofEnum scopeEnum: SeamSignature.ScopeEnum, count: Int) -> SeamCarrierValues.Use? {
+		guard count > 0, let values = carrierValuesBySeam[scopeEnum.key.seamType], let level = SeamCarrierValues.level(ofEnum: scopeEnum.type) else { return nil }
+		return values.use(ofLevel: level, count: count)
+	}
 
 	/// The enum key of the first builder of `hole`'s hole type, in builder order, whose enum reaches `hole`'s site, or `nil`
 	/// where none does: found once for the call, never once for each fill that asks.
