@@ -57,6 +57,7 @@ extension ScopeGenerator {
 		let nodes: [MockLowering.TreeNode]
 		switch await walk.children(
 			of: orderedChildren.map(\.generator),
+			loops: mockLoweringLoopMemberships,
 			inScope: signature.properties,
 			path: ReservedName.mockOverridesParameterName,
 			indent: bodyIndent,
@@ -78,10 +79,6 @@ extension ScopeGenerator {
 		guard instantiable.dependencies.allSatisfy({ providedProperties.contains($0.property) }) else {
 			return .unsupported(.flatParameter)
 		}
-		// A configuration `Sendable`-typed makes the overrides' storage `Sendable`, which lane B's family lowers.
-		guard !nodes.contains(where: { $0.builtNode.map { $0.hasConfiguration && context.sendableConfigurationTypeNames.contains($0.instantiable.concreteInstantiable.asSource) } ?? false }) else {
-			return .unsupported(.wrapper)
-		}
 		// D1 lane hook (lane C): every call that fills builders is a node the walk reached.
 		guard walk.filledCallBuilders.calls.isEmpty else {
 			return .unsupported(.fill)
@@ -95,14 +92,12 @@ extension ScopeGenerator {
 		guard instantiable.mockInitializer == nil, instantiable.customMockName == nil, instantiable.initializer != nil else { return .handWrittenMock }
 		for dependency in instantiable.dependencies {
 			switch dependency.source {
-			case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential):
-				// D1 lane hook (lane B): the wrapper kinds a node of the tree builds.
-				guard fulfillingTypeDescription == nil && !erasedToConcreteExistential || dependency.property.propertyType.isConstant else { return .erasure }
-				guard dependency.property.propertyType.isConstant || dependency.property.propertyType == .instantiator else { return .wrapper }
+			case .instantiated:
+				// D1 lane hook (lane B): every wrapper kind is a node of the tree, erased or fulfilled by another type alike.
+				break
 			case let .received(onlyIfAvailable):
+				// D1 lane hook (lane B): a received wrapper is a node the mock promotes, which the walk checks it binds.
 				guard !onlyIfAvailable else { return .onlyIfAvailable }
-				// D1 lane hook (lane B): a received wrapper the mock promotes.
-				guard dependency.property.propertyType.isConstant else { return .wrapper }
 			case .aliased(_, _, onlyIfAvailable: true):
 				return .onlyIfAvailable
 			case .aliased(_, _, onlyIfAvailable: false):
@@ -239,11 +234,18 @@ extension MockLowering {
 		var levelNames = [GeneratedNameAllocator]()
 		/// Whether the walk is inside a `@Sendable` builder function, whose nodes' override closures are `@Sendable`.
 		var isInsideSendableFunction = false
+		// D1 lane hook (lane B): the loop of builders the node being built is a member of, the members of its level's loops,
+		// the loop being emitted at the level, and how the last member's lines split (`MockLowering+Loops.swift`).
+		var loopMembership: LoopMembership?
+		var loopMembers = [Property: LoopMember]()
+		var loopUnit: LoopUnit?
+		var lastLoopMemberLineCounts: LoopMemberLineCounts?
 
 		/// The nodes `generators` build, in generation order, where the nodes `scope` holds are bound before them, their
 		/// overrides at `path`, with their statements appended to `lines` at `indent`; or the first rule they meet.
 		mutating func children(
 			of generators: [ScopeGenerator],
+			loops: [LoopMembership?] = [],
 			inScope scope: Set<Property>,
 			path: String,
 			indent: String,
@@ -266,16 +268,47 @@ extension MockLowering {
 				renames[property.label, default: [:]][property.typeDescription] = bindingName
 			}
 			// D1 lane hook (lane B): the level's names, which a `@Sendable` builder function's locals are kept apart from.
-			for (generator, bindingName) in zip(generators, bindingNames) {
+			enterLevel(of: generators, boundAs: bindingNames)
+			defer { leaveLevel() }
+			// D1 lane hook (lane B): the loops of builders among the level's children, each emitted as one unit.
+			let enclosingLoopMembers = loopMembers
+			let enclosingLoopUnit = loopUnit
+			loopMembers = MockLowering.loopMembers(among: generators, loops: loops)
+			loopUnit = nil
+			defer {
+				loopMembers = enclosingLoopMembers
+				loopUnit = enclosingLoopUnit
+			}
+			for (index, (generator, bindingName)) in zip(generators, bindingNames).enumerated() {
+				let membership = index < loops.count ? loops[index] : nil
+				loopMembership = membership
+				var memberLines = [String]()
 				// D1 lane hook: kinds of node (instantiators, wrappers, aliases, holes, calls).
-				switch await node(of: generator, bindingName: bindingName, inScope: scope, path: path, indent: indent, lines: &lines) {
+				let lowering: Lowering<TreeNode>
+				if membership == nil {
+					endLoopUnit(appendingTo: &lines)
+					lowering = await node(of: generator, bindingName: bindingName, inScope: scope, path: path, indent: indent, lines: &lines)
+				} else if case .property = generator.scopeData, generator.publicMockCall == nil, bindingName == generator.property?.label {
+					// A member named apart is rebound by the loop's other members under its name, which the walk does not
+					// lower yet.
+					lowering = await node(of: generator, bindingName: bindingName, inScope: scope, path: path, indent: indent, lines: &memberLines)
+				} else {
+					// A rename a loop's level declares of a member is bound with the loop's wrappers.
+					lowering = .unsupported(.cycle)
+				}
+				loopMembership = nil
+				switch lowering {
 				case let .lowered(node):
 					nodes.append(node)
 					scope.insert(node.property)
 				case let .unsupported(rule):
 					return .unsupported(rule)
 				}
+				if let membership {
+					append(memberLines, ofMemberOf: membership, to: &lines)
+				}
 			}
+			endLoopUnit(appendingTo: &lines)
 			return .lowered(nodes)
 		}
 
@@ -293,6 +326,9 @@ extension MockLowering {
 				collidingLabels.insert(property.label)
 			}
 			guard !collidingLabels.isEmpty else { return .lowered(propertyNodes.map { $0?.label }) }
+			// D1 lane hook (lane B): inside a `@Sendable` builder function, the extractor reserved the functions this level
+			// declares under their labels before the level was named.
+			guard sendableOverrideExtractor == nil else { return .unsupported(.siblingLabelCollision) }
 			let collidingProperties = propertyNodes.compactMap { property in property.flatMap { collidingLabels.contains($0.label) ? $0 : nil } }
 			// Two nodes of one label and type are one entry of the emitter's map, which names both alike.
 			guard Set(collidingProperties).count == collidingProperties.count else { return .unsupported(.siblingLabelCollision) }
@@ -432,22 +468,36 @@ extension MockLowering {
 			let overrideReachable = overridePathReachable && !isPruned(instantiable.concreteInstantiable, beneath: parentConcreteType)
 			let isErased = erasedToConcreteExistential
 			let isFulfilledByAnotherType = property.typeDescription.asInstantiatedType != instantiable.concreteInstantiable
-			// D1 lane hook (lane B): the wrapper kinds and `@Sendable` builder functions a node builds its type in.
-			guard !(isErased || isFulfilledByAnotherType) || property.propertyType.isConstant else { return .unsupported(.erasure) }
+			// D1 lane hook (lane B): every wrapper kind builds its type in a builder function, as an `Instantiator` does,
+			// erased or fulfilled by another type alike (`MockLowering+Wrappers.swift`).
 			let isWrapped = !property.propertyType.isConstant
-			guard property.propertyType.isConstant && forwardedProperties.isEmpty || property.propertyType == .instantiator,
-			      !generator.buildsInSendableFunction
-			else { return .unsupported(.wrapper) }
+			guard isWrapped || forwardedProperties.isEmpty else { return .unsupported(.wrapper) }
 			let forwarded = instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted { $0.label < $1.label }
-			guard generator.unavailableOptionalProperties.isEmpty else { return .unsupported(.onlyIfAvailable) }
+			// D1 lane hook (lane B): a receive only if available the node is built where nothing provides is passed `nil`.
+			let unavailableProperties = generator.unavailableOptionalProperties
 			guard instantiable.mockInitializer == nil, let initializer = instantiable.initializer else { return .unsupported(.handWrittenMock) }
 			guard !initializer.arguments.contains(where: \.hasDefaultValue) else { return .unsupported(.defaultValuedParameter) }
 			guard !rootLabels.contains(property.label), labels.insert(bindingName).inserted else { return .unsupported(.siblingLabelCollision) }
 			dependencyLabelsInTree.formUnion(instantiable.dependencies.map(\.property.label))
 
 			let childGenerators = generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator)
-			// D1 lane hook (lane B): the expression that reads the node's override, which inside a `@Sendable` builder
-			// function reads a local.
+			// D1 lane hook (lane B): a member of a loop of builders first rebinds the members its tree receives
+			// (`MockLowering+Loops.swift`).
+			let isLoopMember = loopMembership != nil
+			var rebindingLines = [String]()
+			if let loopMembership {
+				guard isWrapped,
+				      loopMembership.declaresBinding,
+				      generator.cycleParameters.isEmpty,
+				      let memberRebindingLines = MockLowering.rebindingLines(of: generator.reboundProperties, among: loopMembers, indent: "\(indent)\(ScopeGenerator.standardIndent)")
+				else { return .unsupported(.cycle) }
+				rebindingLines = memberRebindingLines
+			}
+			let scope = scope.union(generator.reboundProperties)
+			// D1 lane hook (lane B): a `Sendable` wrapper's, or a cycle's, builder function is `@Sendable`, and every override
+			// read inside it is read into a local before the outermost such function.
+			let builder = ReservedName.configurationBuilderPropertyName
+			let hasConfiguration = childGenerators.contains { $0.mockLoweringBuiltProperty != nil }
 			let nodePath = "\(path).\(bindingName)"
 			// The node's builder function binds again under its label each receive named apart, from the names its own
 			// declarations, its children and forwarded properties, do not hide (`ScopeGenerator.removingRenames`).
@@ -457,47 +507,64 @@ extension MockLowering {
 			)
 			var receiverBindings = [(property: Property, name: String)]()
 			for dependency in instantiable.dependencies {
-				guard case .received = dependency.source,
-				      let names = functionRenames[dependency.property.label],
-				      let name = names[dependency.property.typeDescription] ?? names[dependency.property.asUnwrappedProperty.typeDescription]
-				else { continue }
-				// D1 lane hook (lane B): a receive of a lazy wrapper's instance reads the renamed wrapper's.
-				guard !generator.lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty) else { return .unsupported(.wrapper) }
-				receiverBindings.append((dependency.property, name))
+				guard case .received = dependency.source, let names = functionRenames[dependency.property.label] else { continue }
+				if generator.mockLoweringLazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty) {
+					// A receive of a lazy wrapper's instance binds the wrapper named apart again, whose instance its
+					// construction reads.
+					let instanceType = dependency.property.typeDescription.unwrapped
+					guard let wrapper = [Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType]
+						.lazy
+						.map({ TypeDescription.simple(name: $0, generics: [instanceType]) })
+						.compactMap({ wrapper in names[wrapper].map { (property: Property(label: dependency.property.label, typeDescription: wrapper), name: $0) } })
+						.first
+					else { continue }
+					receiverBindings.append(wrapper)
+				} else if let name = names[dependency.property.typeDescription] ?? names[dependency.property.asUnwrappedProperty.typeDescription] {
+					receiverBindings.append((dependency.property, name))
+				}
 			}
 			// A receive beneath a receiver that reads its label by name is handed the name instead
 			// (`ScopeGenerator.receivedBindingNamesPassedByName`), which the walk does not lower yet.
 			guard receiverBindings.isEmpty || childGenerators.isEmpty else { return .unsupported(.siblingLabelCollision) }
-			let overrideRead: String? = isCycleNode || !overrideReachable ? nil : nodePath
+			let overrideRead: String? = isCycleNode || !overrideReachable ? nil : readingOverride(
+				hasConfiguration ? "\(nodePath).\(builder)" : nodePath,
+				localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(builder)",
+			)
 			let node = ConstantNode(
 				property: property,
 				bindingName: bindingName,
 				instantiable: instantiable,
-				hasChildren: !childGenerators.isEmpty,
+				hasChildren: !childGenerators.isEmpty || !rebindingLines.isEmpty,
 				receiverBindings: receiverBindings,
 				isWrapped: isWrapped,
 				isErased: isErased,
 				isFulfilledByAnotherType: isFulfilledByAnotherType,
 				forwardedProperties: forwarded,
 				typesDeclaredEscaping: generator.typesDeclaredEscaping,
-				arguments: initializer.arguments.compactMap { argument in
-					// D1 lane hook (lane B): the value a lazy wrapper's instance is read by.
-					instantiable.dependencies.contains(where: argument.isFulfilled(by:)) ? (label: argument.label.spelledAsArgumentLabel, value: argument.innerLabel) : nil
-				},
+				arguments: MockLowering.argumentValues(
+					of: initializer,
+					given: instantiable.dependencies,
+					lazilyInstantiatedInstanceProperties: generator.mockLoweringLazilyInstantiatedInstanceProperties,
+					unavailableProperties: unavailableProperties,
+				),
 				buildsInSendableFunction: generator.buildsInSendableFunction,
 				requiresSendable: isInsideSendableFunction || generator.buildsInSendableFunction,
 			)
+			let lazilyInstantiatedInstanceProperties = generator.mockLoweringLazilyInstantiatedInstanceProperties
 			guard node.hasChildren || isWrapped || !receiverBindings.isEmpty else {
-				guard let rule = Self.unsupportedRule(ofDependenciesOf: instantiable, isWrapped: isWrapped, inScope: scope, childProperties: [], uncoveredProperties: uncoveredProperties) else {
+				guard let rule = Self.unsupportedRule(ofDependenciesOf: instantiable, isWrapped: isWrapped, inScope: scope, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, unavailableProperties: unavailableProperties, childProperties: [], uncoveredProperties: uncoveredProperties) else {
 					lines.append(node.constantBindingLine(overrideRead: overrideRead, indent: indent))
 					return .lowered(node)
 				}
 				return .unsupported(rule)
 			}
-			// D1 lane hook (lane B): the extraction a `@Sendable` builder function starts.
+			let startsExtraction = sendableOverrideExtractor == nil && generator.buildsInSendableFunction
+			let enclosingExtractor = startsExtraction ? startExtraction(inFunctionNamed: node.functionName) : sendableOverrideExtractor
 			let wasInsideSendableFunction = isInsideSendableFunction
 			isInsideSendableFunction = node.requiresSendable
+			let declarationIndex = lines.count
 			lines.append(node.builderFunctionDeclarationLine(indent: indent))
+			lines.append(contentsOf: rebindingLines)
 			lines.append(contentsOf: node.receiverBindingLines(indent: indent))
 			let insertedAncestor = ancestorTypes.insert(cycleNodeKey).inserted
 			ancestorDeclarationsByLabel[property.label, default: []].append((ScopeGenerator.BuiltDeclaration(property: property, concreteType: instantiable.concreteInstantiable), functionName: node.functionName, bodyLevel: bodyLabels.count))
@@ -512,6 +579,7 @@ extension MockLowering {
 			overridePathReachable = overrideReachable
 			let lowering = await children(
 				of: childGenerators,
+				loops: generator.mockLoweringLoopMemberships,
 				inScope: scope.union(forwarded),
 				path: nodePath,
 				indent: "\(indent)\(ScopeGenerator.standardIndent)",
@@ -534,12 +602,15 @@ extension MockLowering {
 			case let .unsupported(rule):
 				return .unsupported(rule)
 			}
-			if let rule = Self.unsupportedRule(ofDependenciesOf: instantiable, isWrapped: isWrapped, inScope: scope, childProperties: Set(children.map(\.property)), uncoveredProperties: uncoveredProperties) {
+			if let rule = Self.unsupportedRule(ofDependenciesOf: instantiable, isWrapped: isWrapped, inScope: scope, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, unavailableProperties: unavailableProperties, childProperties: Set(children.map(\.property)), uncoveredProperties: uncoveredProperties) {
 				return .unsupported(rule)
 			}
+			// The construction is inside the function, so a function that starts the extraction reads its own override
+			// into a local too, after its children's.
+			let functionOverrideRead = startsExtraction ? overrideRead.map { readingOverride($0, localNameSuffix: builder) } : overrideRead
+			let preludeLines = startsExtraction ? endExtraction(restoring: enclosingExtractor, indent: indent) : []
+			lines.insert(contentsOf: preludeLines, at: declarationIndex)
 			let configuredNode = node.configured(byChildren: children)
-			// D1 lane hook (lane B): the override read of a function that ends an extraction, and the locals it read.
-			let functionOverrideRead = configuredNode.hasConfiguration ? overrideRead.map { "\($0).\(ReservedName.configurationBuilderPropertyName)" } : overrideRead
 			if configuredNode.hasConfiguration {
 				let parentConcreteType = instantiable.concreteInstantiable.asSource
 				configurationRecords.append(ConfigurationRecord(
@@ -547,7 +618,12 @@ extension MockLowering {
 					children: children.filter { child in child.builtNode.map { !isPruned($0.instantiable.concreteInstantiable, beneath: parentConcreteType) } ?? true },
 				))
 			}
-			lines.append(contentsOf: configuredNode.builderFunctionEndLines(overrideRead: functionOverrideRead, indent: indent))
+			let endLines = configuredNode.builderFunctionEndLines(overrideRead: functionOverrideRead, indent: indent)
+			lines.append(contentsOf: endLines)
+			if isLoopMember {
+				// The lines after the construction and the function's closing brace bind the member.
+				lastLoopMemberLineCounts = LoopMemberLineCounts(prelude: preludeLines.count, binding: endLines.count - 2)
+			}
 			return .lowered(configuredNode)
 		}
 
@@ -557,6 +633,8 @@ extension MockLowering {
 			ofDependenciesOf instantiable: Instantiable,
 			isWrapped: Bool,
 			inScope scope: Set<Property>,
+			lazilyInstantiatedInstanceProperties: Set<Property>,
+			unavailableProperties: Set<Property>,
 			childProperties: Set<Property>,
 			uncoveredProperties: Set<Property>,
 		) -> Rule? {
@@ -567,11 +645,23 @@ extension MockLowering {
 					// D1 lane hook (lane D): an `@Instantiated` dependency the mock cannot build is a parameter of `mock()`.
 					guard childProperties.contains(dependency.property) || uncoveredProperties.contains(dependency.property) else { return .flatParameter }
 				case .received(onlyIfAvailable: false):
-					// D1 lane hook (lane B): a receive by value of a lazy wrapper's instance.
-					guard scope.contains(dependency.property) else { return .flatParameter }
+					// D1 lane hook (lane B): a receive by value of a lazy wrapper's instance reads the wrapper in scope.
+					guard scope.contains(dependency.property)
+						|| lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty)
+						&& MockLowering.scope(scope, holdsWrapperOfInstance: dependency.property.asUnwrappedProperty)
+					else { return .flatParameter }
 				case .forwarded:
 					guard isWrapped else { return .wrapper }
-				case .received(onlyIfAvailable: true), .aliased(_, _, onlyIfAvailable: true):
+				case .received(onlyIfAvailable: true):
+					// D1 lane hook (lane B): a receive only if available is passed `nil` or what the scope provides; one the
+					// mock's root provides is an override (`MockLowering+OnlyIfAvailable.swift`).
+					guard MockLowering.scope(
+						scope,
+						provides: dependency.property,
+						unavailableProperties: unavailableProperties,
+						lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+					) else { return .onlyIfAvailable }
+				case .aliased(_, _, onlyIfAvailable: true):
 					// An alias only if available is its own node, which the walk rejects before its type's dependencies.
 					return .onlyIfAvailable
 				case .aliased(_, _, onlyIfAvailable: false):
@@ -838,27 +928,14 @@ extension MockLowering {
 	/// The statements that bind `property` from the builder function `functionName`, which takes `forwardedProperties`: a
 	/// constant called, or an instantiator handed the function.
 	static func bindingLines(of property: Property, boundAs bindingName: String, callingFunctionNamed functionName: String, forwardedProperties: [Property], indent: String) -> [String] {
-		let bodyIndent = "\(indent)\(ScopeGenerator.standardIndent)"
-		// A mock binds a node it promotes for an optional receive to a value that is not optional, so a wrapper is spelled
-		// unwrapped where it is made.
-		let wrapperTypeSource = property.typeDescription.unwrapped.asSource
-		// D1 lane hook (lane B): the binding of each wrapper kind.
+		// D1 lane hook (lane B): the binding of each wrapper kind (`MockLowering+Wrappers.swift`).
 		if property.propertyType.isConstant {
 			// D1 lane hook (lane C): a promoted child is bound as the value it builds, as `constantBindingLine` binds it.
-			return ["\(indent)let \(bindingName): \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource) = \(functionName)()"]
-		} else if forwardedProperties.isEmpty {
-			return ["\(indent)let \(bindingName) = \(wrapperTypeSource)(\(functionName))"]
+			["\(indent)let \(bindingName): \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource) = \(functionName)()"]
 		} else {
-			let arguments = if forwardedProperties.count == 1 {
-				["\(forwardedProperties[0].label): $0"]
-			} else {
-				forwardedProperties.map { "\($0.label): $0.\($0.label)" }
-			}
-			return [
-				"\(indent)let \(bindingName) = \(wrapperTypeSource) {",
-				"\(bodyIndent)\(functionName)(\(arguments.joined(separator: ", ")))",
-				"\(indent)}",
-			]
+			// A mock binds a node it promotes for an optional receive to a value that is not optional, so a wrapper is
+			// spelled unwrapped where it is made.
+			wrapperBindingLines(of: property.typeDescription, named: bindingName, handing: functionName, forwardedProperties: forwardedProperties, indent: indent)
 		}
 	}
 
