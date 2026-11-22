@@ -359,7 +359,7 @@ extension MockLowering {
 				if membership == nil {
 					endLoopUnit(appendingTo: &lines)
 					lowering = await node(of: generator, bindingName: bindingName, inScope: scope, path: path, indent: indent, lines: &lines)
-				} else if case .property = generator.scopeData, generator.publicMockCall == nil, bindingName == generator.property?.label {
+				} else if case .property = generator.scopeData, generator.publicMockCall == nil {
 					lowering = await node(of: generator, bindingName: bindingName, inScope: scope, path: path, indent: indent, lines: &memberLines)
 				} else if case .alias = generator.scopeData {
 					// D1 lane hook (lane B): a rename the level declares of a member is bound with the loop's wrappers, after
@@ -367,8 +367,7 @@ extension MockLowering {
 					lowering = await node(of: generator, bindingName: bindingName, inScope: scope, path: path, indent: indent, lines: &memberLines)
 					lastLoopMemberLineCounts = MockLowering.LoopMemberLineCounts(prelude: 0, binding: memberLines.count)
 				} else {
-					// A member named apart is rebound by the loop's other members under its name, which the walk does not
-					// lower yet.
+					// D1 lane hook (lane B): a call of another module's public mock on a loop.
 					lowering = .unsupported(.cycle)
 				}
 				loopMembership = nil
@@ -529,12 +528,13 @@ extension MockLowering {
 			lines: inout [String],
 		) -> Lowering<TreeNode> {
 			// The node is the nearest declaration of the label around the closer, and no body between the two declares
-			// another node of it, so the closer reads the node's function by the name it is built with.
+			// another node of it, so the closer reads the node's function by the name it is built with: its label's, or the
+			// name the node's level names it apart by (`BuilderFunctionNames.enclosingFunctionNames`). A lazy wrapper closes
+			// on a constant declaration of its instance, and a constant on a lazy wrapper's, by the same function.
 			guard seamCall == nil,
-			      generator.closedOnDeclaration == ScopeGenerator.BuiltDeclaration(property: property, concreteType: instantiable.concreteInstantiable),
+			      generator.closedOnDeclaration?.concreteType == instantiable.concreteInstantiable,
 			      let closedOn = ancestorDeclarationsByLabel[property.label]?.last,
 			      closedOn.declaration == generator.closedOnDeclaration,
-			      closedOn.functionName == MockLowering.builderFunctionName(boundAs: property.label),
 			      !bodyLabels[closedOn.bodyLevel..<(bodyLabels.count - 1)].contains(where: { $0.contains(property.label) })
 			else { return .unsupported(.cycle) }
 			let forwardedProperties = instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted { $0.label < $1.label }

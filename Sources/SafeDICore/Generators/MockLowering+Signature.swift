@@ -251,6 +251,9 @@ extension ScopeGenerator {
 		// A type that generates its dependency tree takes a builder for each hole type of its places in place of their
 		// parameters (`seamMockBuilders`), which lane C's family lowers.
 		guard !instantiable.generatesDependencyTree || uncoveredParameters.isEmpty else { return .unsupported(.holeSite) }
+		// A value a type built in a `@Sendable` builder function instantiates is a `@Sendable` autoclosure, which `mock()`
+		// reads into a local and each type that instantiates it calls; the lowering builds neither yet.
+		guard !uncoveredParameters.contains(where: \.isSendableAutoclosure) else { return .unsupported(.wrapper) }
 		let namedUncoveredParameters = zip(uncoveredParameters, uncoveredNames).map { parameter, name in
 			MockRootParameters.UncoveredParameter(
 				property: parameter.property,
@@ -311,6 +314,8 @@ extension ScopeGenerator {
 			let declarationPath: [Position]
 			/// The labels the builder functions around the node declare, which hide a parameter of the same label there.
 			let namesDeclaredByEnclosingBuilderFunctions: Set<String>
+			/// Whether the node is built inside a `@Sendable` builder function: its own, or one around it.
+			let isInsideSendableFunction: Bool
 		}
 		struct Position: Comparable {
 			let declarationIndex: Int
@@ -321,7 +326,7 @@ extension ScopeGenerator {
 			}
 		}
 		/// The generators of the children that build a type, each at its position among them.
-		func propertyChildren(of generator: ScopeGenerator, declaredBy dependencies: [Dependency], at path: [Position], enclosedBy names: Set<String>) -> [Visit] {
+		func propertyChildren(of generator: ScopeGenerator, declaredBy dependencies: [Dependency], at path: [Position], enclosedBy names: Set<String>, insideSendableFunction: Bool) -> [Visit] {
 			var declarationIndexByLabel = [String: Int]()
 			for (index, dependency) in dependencies.enumerated() where declarationIndexByLabel[dependency.property.label] == nil {
 				declarationIndexByLabel[dependency.property.label] = index
@@ -329,7 +334,12 @@ extension ScopeGenerator {
 			return generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator).enumerated().compactMap { generationIndex, child in
 				guard case let .property(_, property, _, _, _, _) = child.scopeData else { return nil }
 				let position = Position(declarationIndex: declarationIndexByLabel[property.label] ?? Int.max, generationIndex: generationIndex)
-				return Visit(generator: child, declarationPath: path + [position], namesDeclaredByEnclosingBuilderFunctions: names)
+				return Visit(
+					generator: child,
+					declarationPath: path + [position],
+					namesDeclaredByEnclosingBuilderFunctions: names,
+					isInsideSendableFunction: insideSendableFunction || child.buildsInSendableFunction,
+				)
 			}
 		}
 
@@ -345,8 +355,9 @@ extension ScopeGenerator {
 		var dependencyByProperty = [Property: Dependency]()
 		var creatingTypesByProperty = [Property: [(path: [Position], type: TypeDescription)]]()
 		var hiddenProperties = Set<Property>()
+		var propertiesInstantiatedInSendableFunction = Set<Property>()
 		var namesDeclaredInBuilderFunctions = Set<String>()
-		func add(_ dependency: Dependency, createdBy type: TypeDescription, at path: [Position], isHiddenWhereReferenced: Bool) {
+		func add(_ dependency: Dependency, createdBy type: TypeDescription, at path: [Position], isHiddenWhereReferenced: Bool, isInstantiatedInSendableFunction: Bool) {
 			if dependencyByProperty[dependency.property] == nil {
 				properties.append(dependency.property)
 				dependencyByProperty[dependency.property] = dependency
@@ -354,6 +365,9 @@ extension ScopeGenerator {
 			creatingTypesByProperty[dependency.property, default: []].append((path: path, type: type))
 			if isHiddenWhereReferenced {
 				hiddenProperties.insert(dependency.property)
+			}
+			if isInstantiatedInSendableFunction {
+				propertiesInstantiatedInSendableFunction.insert(dependency.property)
 			}
 		}
 
@@ -365,7 +379,7 @@ extension ScopeGenerator {
 				return property
 			}
 		}
-		let rootChildren = propertyChildren(of: self, declaredBy: instantiable.dependencies, at: [], enclosedBy: [])
+		let rootChildren = propertyChildren(of: self, declaredBy: instantiable.dependencies, at: [], enclosedBy: [], insideSendableFunction: false)
 		var builtProperties = Set<Property>(holeSiteProperties(of: self))
 		for child in rootChildren {
 			guard let property = child.generator.property else { continue }
@@ -376,7 +390,7 @@ extension ScopeGenerator {
 		}
 		// The mocked type is built in the body of `mock()`, outside every builder function.
 		for dependency in instantiable.dependencies where isInstantiated(dependency) && !builtProperties.contains(dependency.property) {
-			add(dependency, createdBy: instantiable.concreteInstantiable, at: [], isHiddenWhereReferenced: false)
+			add(dependency, createdBy: instantiable.concreteInstantiable, at: [], isHiddenWhereReferenced: false, isInstantiatedInSendableFunction: false)
 		}
 		var visits = Array(rootChildren.reversed())
 		while let visit = visits.popLast() {
@@ -386,7 +400,7 @@ extension ScopeGenerator {
 			}
 			// A node that closes a cycle builds nothing beneath it, and its dependencies surface as no parameter.
 			guard !isPropertyCycle else { continue }
-			let children = propertyChildren(of: visit.generator, declaredBy: nodeInstantiable.dependencies, at: visit.declarationPath, enclosedBy: [])
+			let children = propertyChildren(of: visit.generator, declaredBy: nodeInstantiable.dependencies, at: visit.declarationPath, enclosedBy: [], insideSendableFunction: visit.isInsideSendableFunction)
 			let childLabels = Set(children.compactMap(\.generator.property?.label)).union(holeSiteProperties(of: visit.generator).map(\.label))
 			var uncoveredLabels = Set<String>()
 			for dependency in nodeInstantiable.dependencies where isInstantiated(dependency) && !childLabels.contains(dependency.property.label) {
@@ -397,6 +411,7 @@ extension ScopeGenerator {
 					createdBy: nodeInstantiable.concreteInstantiable,
 					at: visit.declarationPath,
 					isHiddenWhereReferenced: visit.namesDeclaredByEnclosingBuilderFunctions.contains(dependency.property.label),
+					isInstantiatedInSendableFunction: visit.isInsideSendableFunction,
 				)
 			}
 			var namesDeclared = visit.namesDeclaredByEnclosingBuilderFunctions
@@ -404,14 +419,17 @@ extension ScopeGenerator {
 				namesDeclared.insert(dependency.property.label)
 			}
 			visits.append(contentsOf: children.reversed().map {
-				Visit(generator: $0.generator, declarationPath: $0.declarationPath, namesDeclaredByEnclosingBuilderFunctions: namesDeclared)
+				Visit(
+					generator: $0.generator,
+					declarationPath: $0.declarationPath,
+					namesDeclaredByEnclosingBuilderFunctions: namesDeclared,
+					isInsideSendableFunction: $0.isInsideSendableFunction,
+				)
 			})
 		}
 		var parameters = [MockRootParameters.UncoveredParameter]()
 		for property in properties {
 			guard let dependency = dependencyByProperty[property] else { continue }
-			// A value a type built in a `@Sendable` builder function instantiates is a `@Sendable` autoclosure, which no
-			// node the walk lowers is (lane B's family).
 			let typeSource = property.propertyType.isConstant
 				? property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asFunctionParameter.asSource
 				: property.typeDescription.asFunctionParameter.asSource
@@ -426,7 +444,7 @@ extension ScopeGenerator {
 					? property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource
 					: typeSource,
 				instantiatedType: dependency.asInstantiatedType,
-				isSendableAutoclosure: false,
+				isSendableAutoclosure: propertiesInstantiatedInSendableFunction.contains(property),
 				creatingTypes: creatingTypes,
 			))
 		}
