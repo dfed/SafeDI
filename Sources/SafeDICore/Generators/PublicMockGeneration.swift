@@ -711,6 +711,9 @@ struct PublicMockParameter: Sendable {
 	/// mock's tree and its fills declare, and the builders of the calls whose places it builds.
 	var internalName: String?
 	var filledCallBuilders = [ScopeGenerator.MockRootParameters.SeamMockBuilder.FilledCallBuilder]()
+	/// For an optional builder, the hole type and family whose places it builds, which a place of a public mock the tree
+	/// builds inline reads it for (`ScopeGenerator.holeBuildersByInlinePlace(in:buildersByFamily:foreignPublicMocks:)`).
+	var optionalBuilderFamily: ScopeGenerator.MockRootParameters.SeamMockBuilder.Family?
 	/// The lines that document the parameter above each tier that takes it
 	/// (`MockRootParameters.UncoveredParameter.sharedValueDocumentation`).
 	var sharedValueDocumentation = [String]()
@@ -1178,6 +1181,7 @@ extension ScopeGenerator {
 			}
 			parameter.internalName = internalNames.claim(functionName(toBuildPropertyNamed: label))
 			parameter.filledCallBuilders = filled.callBuilders
+			parameter.optionalBuilderFamily = filled.family
 			parameters.append(parameter)
 		}
 		return parameters
@@ -1776,6 +1780,12 @@ struct PublicMockCall: Sendable {
 	/// Whether the calling module's mocks can call the mock: the two modules generate their mocks under one condition,
 	/// spelled the same, or the declaring module's mocks are unconditional.
 	var mockConditionsAgree: Bool {
+		Self.mockConditionsAgree(declaringModuleMockCondition: declaringModuleMockCondition, callerModuleMockCondition: callerModuleMockCondition)
+	}
+
+	/// Whether a module whose mocks generate under `callerModuleMockCondition` can call a mock its declaring module
+	/// generates under `declaringModuleMockCondition` (`mockConditionsAgree`).
+	static func mockConditionsAgree(declaringModuleMockCondition: MockCondition, callerModuleMockCondition: MockCondition) -> Bool {
 		declaringModuleMockCondition.conditionalCompilation == nil || declaringModuleMockCondition == callerModuleMockCondition
 	}
 
