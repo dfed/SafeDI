@@ -52,16 +52,32 @@ protocol BinaryCodable {
 /// added to a stored type fails the tests until it is written, read, and listed here.
 protocol BinarySchemaMember: BinaryCodable {
 	static var binaryLayout: BinaryLayout<Self> { get }
+	/// Whether the struct writes its optional and Boolean fields as one integer of flags before its fields
+	/// (``BinaryFieldFlags``): whether each optional field holds a value, and each Boolean field's value. Every struct
+	/// with two or more such fields that a file holds many of does.
+	static var writesFieldFlags: Bool { get }
 }
 
 extension BinarySchemaMember {
+	static var writesFieldFlags: Bool {
+		false
+	}
+
 	/// The member's layout in a line of ``BinaryFile/schemaDescription``.
 	static var binaryLayoutDescription: String {
-		binaryLayout.description
+		if writesFieldFlags {
+			"field flags, " + binaryLayout.description
+		} else {
+			binaryLayout.description
+		}
 	}
 }
 
 /// The tag a case of a cached enum is written as. Its cases are the enum's cases in the schema.
+/// A line and column in a source file, which a module info file writes as absent where a declaration another module
+/// records is read without positions (``BinaryWriter/writingPositionsAsAbsent(_:)``).
+protocol BinaryPosition: BinaryCodable {}
+
 protocol BinaryTag: RawRepresentable, CaseIterable where RawValue == UInt8 {}
 
 /// How a ``BinarySchemaMember`` is written.
@@ -185,8 +201,57 @@ struct BinaryWriter {
 		value.write(to: &self)
 	}
 
+	/// Whether every optional ``BinaryPosition`` is written as absent, as inside ``writingPositionsAsAbsent(_:)``.
+	private(set) var writesPositionsAsAbsent = false
+
+	/// Runs `write` with every optional ``BinaryPosition`` it writes written as absent. Every position a value holds is
+	/// optional, so `write` writes what it would write of a copy of the values with every position `nil`, without making
+	/// that copy.
+	mutating func writingPositionsAsAbsent(_ write: (inout BinaryWriter) -> Void) {
+		let wasWritingPositionsAsAbsent = writesPositionsAsAbsent
+		writesPositionsAsAbsent = true
+		write(&self)
+		writesPositionsAsAbsent = wasWritingPositionsAsAbsent
+	}
+
 	mutating func writeTag(_ tag: some BinaryTag) {
 		bytes.append(tag.rawValue)
+	}
+
+	/// Where a struct's fields begin: a struct that writes its optional and Boolean fields as flags
+	/// (``BinaryFieldFlags``) writes its fields after this and then ``finishFields(_:startingAt:)``, which writes the
+	/// flags before them. One byte is held for the flags, which is all that most structs' flags take.
+	mutating func startFields() -> Int {
+		let start = bytes.count
+		bytes.append(0)
+		return start
+	}
+
+	/// Writes `flags` before the fields written since ``startFields()`` returned `start`.
+	mutating func finishFields(_ flags: BinaryFieldFlags, startingAt start: Int) {
+		if flags.bits < 0x80 {
+			bytes[start] = UInt8(flags.bits)
+		} else {
+			var flagBytes = [UInt8]()
+			var remaining = flags.bits
+			while remaining >= 0x80 {
+				flagBytes.append(UInt8(truncatingIfNeeded: remaining) | 0x80)
+				remaining >>= 7
+			}
+			flagBytes.append(UInt8(remaining))
+			bytes.replaceSubrange(start..<start + 1, with: flagBytes)
+		}
+	}
+
+	/// Writes an optional field of a struct that writes its fields' flags: its presence as a flag, and then its value
+	/// only when it holds one.
+	mutating func writeOptional(_ value: (some BinaryCodable)?, flaggedIn flags: inout BinaryFieldFlags) {
+		if let value {
+			flags.append(true)
+			write(value)
+		} else {
+			flags.append(false)
+		}
 	}
 
 	mutating func writeUnsigned(_ value: UInt64) {
@@ -233,17 +298,19 @@ struct BinaryWriter {
 		}
 	}
 
-	/// Whether a type description is written through ``writeSharedByBytes(_:)``, as it is inside
-	/// ``writeSharingTypeDescriptions(_:)``.
-	private(set) var sharesTypeDescriptions = false
+	/// Whether a value a seam signature repeats is written through ``writeSharedByBytes(_:)``, as it is inside
+	/// ``writeSharingSignatureValues(_:)``.
+	private(set) var sharesSignatureValues = false
 
-	/// Runs `write` with every type description it writes, at the outermost level of each, written once
-	/// (``writeSharedByBytes(_:)``). A seam signature names the same few types at many places.
-	mutating func writeSharingTypeDescriptions(_ write: (inout BinaryWriter) -> Void) {
-		let wasSharing = sharesTypeDescriptions
-		sharesTypeDescriptions = true
+	/// Runs `write` with every value a seam signature repeats, at the outermost level of each, written once
+	/// (``writeSharedByBytes(_:)``): a type description, a hole's field, and the reason a declaration is not carried
+	/// to a hole's place. A seam signature names the same few types at many places, and repeats each field of a scope at
+	/// every hole and route step that binds it: E24-fill's `Feature` wrote 4 MB of fields, 2 KB of them distinct.
+	mutating func writeSharingSignatureValues(_ write: (inout BinaryWriter) -> Void) {
+		let wasSharing = sharesSignatureValues
+		sharesSignatureValues = true
 		write(&self)
-		sharesTypeDescriptions = wasSharing
+		sharesSignatureValues = wasSharing
 	}
 
 	/// Writes the value `write` writes as ``writeShared(_:)`` does, but keyed by the bytes it writes, which are equal
@@ -254,10 +321,10 @@ struct BinaryWriter {
 		let referenceStart = bytes.count
 		writeUnsigned(0)
 		let valueStart = bytes.count
-		let wasSharing = sharesTypeDescriptions
-		sharesTypeDescriptions = false
+		let wasSharing = sharesSignatureValues
+		sharesSignatureValues = false
 		write(&self)
-		sharesTypeDescriptions = wasSharing
+		sharesSignatureValues = wasSharing
 		// Copied: a slice would keep the writer's buffer shared, so that every later append copied the whole buffer.
 		let key = Array(bytes[valueStart...])
 		if let index = sharedValueIndicesByBytes[key] {
@@ -403,8 +470,11 @@ struct BinaryReader {
 
 	/// Far deeper than any type written in practice. Reading bytes that nest without a limit could exhaust the
 	/// stack, so a ``BinaryWriter`` notes a value nested more deeply than this, and ``BinaryFile`` refuses to
-	/// write a file that holds one rather than write a file no SafeDITool reads.
-	static let maximumNestingDepth = 128
+	/// write a file that holds one rather than write a file no SafeDITool reads. Reading recurses once for each
+	/// level, which a debug build of Swift 6.2 or 6.4.2 compiles to about 4.4 KB of stack on Linux (0.6 KB in a
+	/// release build), so 32 levels take about 140 KB: under half of the 512 KB stack of a Swift concurrency thread
+	/// on Apple platforms, whereas 128 levels overflowed it.
+	static let maximumNestingDepth = 32
 
 	/// Throws unless every byte has been read.
 	func finish() throws(BinaryDecodingError) {
@@ -415,6 +485,21 @@ struct BinaryReader {
 
 	mutating func read<Value: BinaryCodable>() throws(BinaryDecodingError) -> Value {
 		try Value(readingFrom: &self)
+	}
+
+	/// Reads the flags a struct writes before its fields (``BinaryWriter/finishFields(_:startingAt:)``).
+	mutating func readFieldFlags() throws(BinaryDecodingError) -> BinaryFieldFlagsReader {
+		let flagsOffset = offset
+		return try BinaryFieldFlagsReader(remaining: readUnsigned(), offset: flagsOffset)
+	}
+
+	/// Reads an optional field that ``BinaryWriter/writeOptional(_:flaggedIn:)`` wrote.
+	mutating func readOptional<Wrapped: BinaryCodable>(flaggedIn flags: inout BinaryFieldFlagsReader) throws(BinaryDecodingError) -> Wrapped? {
+		if flags.next() {
+			try read() as Wrapped
+		} else {
+			nil
+		}
 	}
 
 	mutating func readTag<Tag: BinaryTag>() throws(BinaryDecodingError) -> Tag {
@@ -482,15 +567,15 @@ struct BinaryReader {
 		}
 	}
 
-	/// Whether a type description is read through ``readSharedByBytes(_:)``, as it is inside
-	/// ``readSharingTypeDescriptions(_:)``.
-	private(set) var sharesTypeDescriptions = false
+	/// Whether a value a seam signature repeats is read through ``readSharedByBytes(_:)``, as it is inside
+	/// ``readSharingSignatureValues(_:)``.
+	private(set) var sharesSignatureValues = false
 
-	/// Reads what ``BinaryWriter/writeSharingTypeDescriptions(_:)`` wrote.
-	mutating func readSharingTypeDescriptions<Value>(_ read: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryDecodingError) -> Value {
-		let wasSharing = sharesTypeDescriptions
-		sharesTypeDescriptions = true
-		defer { sharesTypeDescriptions = wasSharing }
+	/// Reads what ``BinaryWriter/writeSharingSignatureValues(_:)`` wrote.
+	mutating func readSharingSignatureValues<Value>(_ read: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryDecodingError) -> Value {
+		let wasSharing = sharesSignatureValues
+		sharesSignatureValues = true
+		defer { sharesSignatureValues = wasSharing }
 		return try read(&self)
 	}
 
@@ -499,9 +584,9 @@ struct BinaryReader {
 		let referenceOffset = offset
 		let reference = try readUnsigned()
 		if reference == 0 {
-			let wasSharing = sharesTypeDescriptions
-			sharesTypeDescriptions = false
-			defer { sharesTypeDescriptions = wasSharing }
+			let wasSharing = sharesSignatureValues
+			sharesSignatureValues = false
+			defer { sharesSignatureValues = wasSharing }
 			let value = try read(&self)
 			sharedValues.append(value)
 			return value
@@ -545,6 +630,46 @@ struct BinaryReader {
 	}
 }
 
+/// The optional and Boolean fields of a struct, one bit each in the order the struct writes them: whether an optional
+/// field holds a value, and a Boolean field's value. A struct writes them as one integer before its fields, in place of a
+/// byte for each such field.
+struct BinaryFieldFlags {
+	private(set) var bits: UInt64 = 0
+
+	mutating func append(_ flag: Bool) {
+		if flag {
+			bits |= 1 << count
+		}
+		count += 1
+	}
+
+	private var count: UInt64 = 0
+}
+
+/// The flags ``BinaryReader/readFieldFlags()`` read, taken in the order they were written.
+struct BinaryFieldFlagsReader {
+	fileprivate init(remaining: UInt64, offset: Int) {
+		self.remaining = remaining
+		self.offset = offset
+	}
+
+	mutating func next() -> Bool {
+		let flag = remaining & 1 == 1
+		remaining >>= 1
+		return flag
+	}
+
+	/// Throws when the flags hold a flag the struct does not have.
+	func finish() throws(BinaryDecodingError) {
+		guard remaining == 0 else {
+			throw .unreadFieldFlags(offset: offset)
+		}
+	}
+
+	private var remaining: UInt64
+	private let offset: Int
+}
+
 /// Why bytes could not be read as the values a ``BinaryReader`` expected.
 enum BinaryDecodingError: Error, Equatable {
 	case truncated(offset: Int)
@@ -555,6 +680,7 @@ enum BinaryDecodingError: Error, Equatable {
 	case invalidTag(UInt8, tagType: String, offset: Int)
 	case nestedTooDeeply(offset: Int)
 	case trailingBytes(offset: Int)
+	case unreadFieldFlags(offset: Int)
 }
 
 // MARK: - Standard library conformances
@@ -621,7 +747,7 @@ extension Optional: BinaryCodable where Wrapped: BinaryCodable {
 	}
 
 	func write(to writer: inout BinaryWriter) {
-		if let self {
+		if let self, !(writer.writesPositionsAsAbsent && Wrapped.self is any BinaryPosition.Type) {
 			writer.write(true)
 			writer.write(self)
 		} else {
@@ -648,20 +774,21 @@ extension Array: BinaryCodable where Element: BinaryCodable {
 	}
 }
 
-/// A value whose type descriptions are each written once (``BinaryWriter/writeSharingTypeDescriptions(_:)``).
-struct BinarySharingTypeDescriptions<Value: BinaryCodable>: BinaryCodable {
+/// A value whose repeated type descriptions, hole fields and reasons are each written once
+/// (``BinaryWriter/writeSharingSignatureValues(_:)``).
+struct BinarySharingSignatureValues<Value: BinaryCodable>: BinaryCodable {
 	init(_ value: Value) {
 		self.value = value
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
-		value = try reader.readSharingTypeDescriptions { reader throws(BinaryDecodingError) in try reader.read() }
+		value = try reader.readSharingSignatureValues { reader throws(BinaryDecodingError) in try reader.read() }
 	}
 
 	let value: Value
 
 	func write(to writer: inout BinaryWriter) {
-		writer.writeSharingTypeDescriptions { $0.write(value) }
+		writer.writeSharingSignatureValues { $0.write(value) }
 	}
 }
 

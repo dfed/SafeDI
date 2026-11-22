@@ -167,7 +167,7 @@ struct SafeDIToolCallingMockBuiltWhenNilPromotionTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let widget: Widget? = safeDIOverrides.widget
-		        _ = Cache.__safeDI_Cache_mock_C2F35604B39B78BB.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        _ = Cache.__safeDI_Cache_mock_0F5E9A724501C0C2.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let cache = Cache.__safeDI_mock(widget: widget, safeDIOverrides: safeDIOverrides.cache)
 		        return Screen(cache: cache)
 		    }

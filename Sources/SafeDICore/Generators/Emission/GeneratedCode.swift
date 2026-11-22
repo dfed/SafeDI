@@ -18,38 +18,140 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import Foundation
+
 /// The code a production body plans, as a tree whose levels share their children's code instead of copying it: text, pieces
 /// written one after another, a child's code each level indents, and the places of the body's walk.
 ///
 /// Each level of a tree used to indent its whole subtree's text again, so a place's text was copied once per level above
 /// it, and every scope's cache held its subtree's text. A level now holds its children's plans, and the root's plan is
-/// spelled once (`spelled()`), each line written with the indentation of every level around it. The bytes are the ones
+/// spelled once (`spelled()`), each line written with the indentation of every level around it. A small subtree started
+/// early is spelled while the rest of the tree is generated (`Node.spelled`), and the root's spelling copies its text. The bytes are the ones
 /// re-indenting at every level wrote (`GeneratedCodeText.indentingNonEmptyLines`), which `GeneratedCodeTests` checks.
 ///
-/// A plan can be as deep as the module has types, so everything that reads one walks it with a stack of its own.
-indirect enum GeneratedCode: Sendable {
+/// A plan can be as deep as the module has types, so everything that reads one walks it with a stack of its own, and
+/// a level releases its children after its own release returns rather than within it (`Children`): a plan's last owner
+/// can be a temporary, and releasing a plan nested once per level from within each level's release overflowed the
+/// stack of a concurrency thread on a chain 1,500 types deep.
+struct GeneratedCode: Sendable {
+	/// What a level of the plan is, read from its storage.
+	enum Node {
+		/// Text, written as it is.
+		case text(String)
+		/// Pieces written one after another.
+		case sequence([GeneratedCode])
+		/// Pieces written one after another with a line feed between each two, as `joined(separator: "\n")` writes
+		/// strings.
+		case lines([GeneratedCode])
+		/// `code`, each of whose lines that is not empty is written after `indentation`, with the empty ones left out and
+		/// no line feed after the last, as `GeneratedCodeText.indentingNonEmptyLines(of:by:)` writes text. Empty
+		/// `indentation` writes `code` as it is: a scope generated with no leading whitespace keeps its empty lines.
+		case indented(GeneratedCode, by: String)
+		/// Code spelled while the rest of the tree was being generated, written as its text, with no plan kept.
+		case spelled(String)
+		/// A place of the body's walk (`PlacePlan`), whose code is written as it is.
+		case place(PlacePlan)
+	}
+
 	/// Text, written as it is.
-	case text(String)
+	static func text(_ text: String) -> GeneratedCode {
+		GeneratedCode(storage: .text(text))
+	}
+
 	/// Pieces written one after another.
-	case sequence([GeneratedCode])
-	/// Pieces written one after another with a line feed between each two, as `joined(separator: "\n")` writes strings.
-	case lines([GeneratedCode])
-	/// `code`, each of whose lines that is not empty is written after `indentation`, with the empty ones left out and no line
-	/// feed after the last, as `GeneratedCodeText.indentingNonEmptyLines(of:by:)` writes text. Empty `indentation` writes
-	/// `code` as it is: a scope generated with no leading whitespace keeps its empty lines.
-	case indented(GeneratedCode, by: String)
+	static func sequence(_ pieces: [GeneratedCode]) -> GeneratedCode {
+		GeneratedCode(storage: .children(Children(.sequence, pieces)))
+	}
+
+	/// Pieces written one after another with a line feed between each two.
+	static func lines(_ pieces: [GeneratedCode]) -> GeneratedCode {
+		GeneratedCode(storage: .children(Children(.lines, pieces)))
+	}
+
+	/// `code` with each of its lines that is not empty written after `indentation` (`Node.indented`).
+	static func indented(_ code: GeneratedCode, by indentation: String) -> GeneratedCode {
+		GeneratedCode(storage: .children(Children(.indented(indentation), [code])))
+	}
+
+	/// `code`'s text, which a writer writes as it is (`Node.spelled`). The plan is dropped once it is spelled.
+	static func spelled(_ code: GeneratedCode) -> GeneratedCode {
+		GeneratedCode(storage: .children(Children(.spelled(code.spelled()), [])))
+	}
+
 	/// A place of the body's walk (`PlacePlan`), whose code is written as it is.
-	case place(PlacePlan)
+	static func place(_ plan: PlacePlan) -> GeneratedCode {
+		GeneratedCode(storage: .children(Children(.place(record: plan.record), [plan.code])))
+	}
 
 	/// The empty code.
 	static let empty = GeneratedCode.sequence([])
 
+	/// What this level of the plan is.
+	var node: Node {
+		switch storage {
+		case let .text(text):
+			.text(text)
+		case let .children(children):
+			switch children.kind {
+			case .sequence:
+				.sequence(children.codes)
+			case .lines:
+				.lines(children.codes)
+			case let .indented(indentation):
+				.indented(children.codes[0], by: indentation)
+			case let .spelled(text):
+				.spelled(text)
+			case let .place(record):
+				.place(PlacePlan(code: children.codes[0], record: record))
+			}
+		}
+	}
+
 	/// The text of the code.
 	func spelled() -> String {
+		// Text no level indents is written as it is, so it is its own spelling: a mock's text, tens of megabytes on a deep
+		// chain, is not copied into the writer's bytes, which grow by doubling, and then into a string again.
+		switch node {
+		case let .text(text), let .spelled(text):
+			return text
+		case .sequence, .lines, .indented, .place:
+			break
+		}
 		var writer = GeneratedCodeWriter()
 		writer.write(self)
 		return writer.text
 	}
+
+	private enum Storage: Sendable {
+		case text(String)
+		case children(Children)
+	}
+
+	/// The codes a level holds, which its slot hands to `DeferredRelease` when the level is released, so that releasing a
+	/// deep plan nests no release per level.
+	private final class Children: Sendable {
+		enum Kind: Sendable {
+			case sequence
+			case lines
+			case indented(String)
+			case spelled(String)
+			case place(record: PlaceRecord?)
+		}
+
+		init(_ kind: Kind, _ codes: [GeneratedCode]) {
+			self.kind = kind
+			slot = DeferredReleaseSlot(codes)
+		}
+
+		let kind: Kind
+		var codes: [GeneratedCode] {
+			slot.value
+		}
+
+		private let slot: DeferredReleaseSlot<[GeneratedCode]>
+	}
+
+	private let storage: Storage
 }
 
 /// What a body's plan holds for one place: its code, and what the type key reads of it. A scope's cached code is reached
@@ -80,7 +182,8 @@ private struct GeneratedCodeWriter {
 
 	/// A level that indents its code's lines.
 	private struct Level {
-		let indentation: [UInt8]
+		/// Where the level's indentation ends in `indentations`.
+		let indentationEnd: Int
 		/// Whether the level's current line has begun: a line begins with its first byte, and ends with a line feed.
 		var lineHasBegun = false
 		/// Whether the level has written a line, so that the next one it begins is written after a line feed.
@@ -98,8 +201,8 @@ private struct GeneratedCodeWriter {
 
 	private var bytes = [UInt8]()
 	private var levels = [Level]()
-	/// The pieces a line's beginning still has to write, last first.
-	private var pending = [Piece]()
+	/// The indentation of every level, outermost first, so that the indentations a line begins with are one run of it.
+	private var indentations = [UInt8]()
 
 	var text: String {
 		String(decoding: bytes, as: UTF8.self)
@@ -110,8 +213,8 @@ private struct GeneratedCodeWriter {
 		while let next = work.popLast() {
 			switch next {
 			case let .code(code):
-				switch code {
-				case let .text(text):
+				switch code.node {
+				case let .text(text), let .spelled(text):
 					write(text)
 				case let .sequence(pieces):
 					for piece in pieces.reversed() {
@@ -128,7 +231,8 @@ private struct GeneratedCodeWriter {
 					if indentation.isEmpty {
 						work.append(.code(code))
 					} else {
-						levels.append(Level(indentation: Array(indentation.utf8)))
+						indentations.append(contentsOf: indentation.utf8)
+						levels.append(Level(indentationEnd: indentations.count))
 						work.append(.endOfLevel)
 						work.append(.code(code))
 					}
@@ -136,9 +240,10 @@ private struct GeneratedCodeWriter {
 					work.append(.code(plan.code))
 				}
 			case .lineFeed:
-				write(.lineFeed(level: levels.count - 1))
+				writeLineFeed(ofLevelAt: levels.count - 1)
 			case .endOfLevel:
 				levels.removeLast()
+				indentations.removeLast(indentations.count - (levels.last?.indentationEnd ?? 0))
 			}
 		}
 	}
@@ -149,84 +254,63 @@ private struct GeneratedCodeWriter {
 			let level = levels.count - 1
 			var start = 0
 			while start <= textBytes.count {
-				var end = start
-				while end < textBytes.count, textBytes[end] != Self.lineFeed {
-					end += 1
+				var end = textBytes.count
+				if start < textBytes.count, let baseAddress = textBytes.baseAddress,
+				   let lineFeed = memchr(baseAddress + start, Int32(Self.lineFeed), textBytes.count - start)
+				{
+					end = baseAddress.distance(to: lineFeed.assumingMemoryBound(to: UInt8.self))
 				}
 				if end > start {
-					write(.bytes(UnsafeBufferPointer(rebasing: textBytes[start..<end]), level: level))
+					write(UnsafeBufferPointer(rebasing: textBytes[start..<end]), ofLevelAt: level)
 				}
 				if end < textBytes.count {
-					write(.lineFeed(level: level))
+					writeLineFeed(ofLevelAt: level)
 				}
 				start = end + 1
 			}
 		}
 	}
 
-	/// A run of bytes to write as part of the text of the level at `level`, or of the plan's text where `level` is negative.
-	private enum Piece {
-		/// Bytes that hold no line feed.
-		case bytes(UnsafeBufferPointer<UInt8>, level: Int)
-		/// The indentation of the level at `levelIndex`.
-		case indentation(ofLevelAt: Int, level: Int)
-		case lineFeed(level: Int)
-	}
-
-	/// Writes `piece`.
+	/// Writes `run`, bytes of the text of the level at `level` that hold no line feed and are not empty, or of the plan's
+	/// text where `level` is negative.
 	///
 	/// A level splits its text into lines at each line feed that does not follow a carriage return, since `"\r\n"` is one
 	/// `Character`, which `GeneratedCodeText.indentingNonEmptyLines(of:by:)` does not split at, and writes each line that is
 	/// not empty after its indentation, with a line feed before every line but its first, into the text of the level around
 	/// it. While a level's line has begun, so has the line of every level around it, which holds it, so the last byte of
-	/// each such level's text is the last byte written.
-	private mutating func write(_ piece: Piece) {
-		// A line that begins writes its line feed and indentation into the level around it, which can begin a line there
-		// too, so the levels are walked outward, each run written at the level it belongs to. The stack is the writer's, so
-		// a line's beginning allocates nothing.
-		pending.removeAll(keepingCapacity: true)
-		pending.append(piece)
-		while let piece = pending.popLast() {
-			switch piece {
-			case let .bytes(run, level):
-				if level < 0 {
-					bytes.append(contentsOf: run)
-				} else {
-					write(.bytes(run, level: level - 1), beginningLineAt: level)
-				}
-			case let .indentation(levelIndex, level):
-				if level < 0 {
-					bytes.append(contentsOf: levels[levelIndex].indentation)
-				} else {
-					write(.indentation(ofLevelAt: levelIndex, level: level - 1), beginningLineAt: level)
-				}
-			case let .lineFeed(level):
-				if level < 0 {
-					bytes.append(Self.lineFeed)
-				} else if levels[level].lineHasBegun, bytes.last == Self.carriageReturn {
-					// A line feed after a carriage return continues the line.
-					pending.append(.lineFeed(level: level - 1))
-				} else {
-					// A line ends. An empty one is left out.
-					levels[level].lineHasBegun = false
-				}
+	/// each such level's text is the last byte written, and a run of a level whose line has begun is written as it is.
+	private mutating func write(_ run: UnsafeBufferPointer<UInt8>, ofLevelAt level: Int) {
+		// The run begins the line of its level and of each level around it whose line has not begun, innermost first. A
+		// level that has written a line writes a line feed into the level around it first, which can end that level's line
+		// too. Every line feed comes before the indentations, which are written outermost first.
+		var outermostBeginning = level + 1
+		while outermostBeginning > 0, !levels[outermostBeginning - 1].lineHasBegun {
+			outermostBeginning -= 1
+			levels[outermostBeginning].lineHasBegun = true
+			if levels[outermostBeginning].hasWrittenALine {
+				writeLineFeed(ofLevelAt: outermostBeginning - 1)
 			}
+			levels[outermostBeginning].hasWrittenALine = true
 		}
+		if outermostBeginning <= level {
+			let start = outermostBeginning == 0 ? 0 : levels[outermostBeginning - 1].indentationEnd
+			bytes.append(contentsOf: indentations[start..<levels[level].indentationEnd])
+		}
+		bytes.append(contentsOf: run)
 	}
 
-	/// Writes `run`, a run of bytes of the level at `level` that holds no line feed and is not empty, as the run of the
-	/// level around it that it is, after the line feed and indentation that begin the level's line where it has not begun.
-	private mutating func write(_ run: Piece, beginningLineAt level: Int) {
-		let outer = level - 1
-		// Pushed last first, so they are written in order.
-		pending.append(run)
-		if !levels[level].lineHasBegun {
-			levels[level].lineHasBegun = true
-			pending.append(.indentation(ofLevelAt: level, level: outer))
-			if levels[level].hasWrittenALine {
-				pending.append(.lineFeed(level: outer))
-			}
-			levels[level].hasWrittenALine = true
+	/// Writes a line feed of the text of the level at `level`, or of the plan's text where `level` is negative.
+	private mutating func writeLineFeed(ofLevelAt level: Int) {
+		var level = level
+		// A line feed after a carriage return continues the line, as a line feed of the level around it.
+		while level >= 0, levels[level].lineHasBegun, bytes.last == Self.carriageReturn {
+			level -= 1
+		}
+		if level < 0 {
+			bytes.append(Self.lineFeed)
+		} else {
+			// A line ends. An empty one is left out.
+			levels[level].lineHasBegun = false
 		}
 	}
 }

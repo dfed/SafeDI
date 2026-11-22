@@ -115,7 +115,6 @@ extension DependencyTreeGenerator {
 		builderLabels: (plain: String, sendable: String),
 		generator: ScopeGenerator,
 		reached: [ReachedPlace],
-		holesBySite: [SeamSignature.Hole.Site: SeamSignature.Hole],
 		parameters: [SeamSignature.Parameter],
 		bindsReceivesAgain: Bool,
 		reenteredFillsByKey: [String: ScopeGenerator],
@@ -134,8 +133,6 @@ extension DependencyTreeGenerator {
 		// The graph of the hole type's places, which every hole type of the tree reads from one walk
 		// (`LevelsOfEveryHoleType.placeHolding(of:inTreeRootedAt:reenteredFillsByKey:)`).
 		let placeHolding = levels.placeHolding(of: holeType, inTreeRootedAt: generator, reenteredFillsByKey: reenteredFillsByKey)
-		// The type the builder of the hole type returns, which the struct of a fill's own level is over.
-		let builtTypeOfHoleType = holesBySite.values.builtType(of: holeType)
 
 		// What each type with an enum binds, in its order, and the cases each family's enum has.
 		struct DraftCase {
@@ -510,7 +507,14 @@ extension DependencyTreeGenerator {
 		// other seam's, so this hole type's enums decide which of its cases are in a loop of levels.
 		let componentByKey = Self.componentByKey(of: result.enums)
 		func holdsEnumOfItsOwnComponent(_ enumCase: SeamSignature.ScopeEnum.Case, of enumKey: SeamSignature.ScopeEnum.Key) -> Bool {
-			guard case let .nested(heldKey, _, _) = enumCase.kind, let component = componentByKey[enumKey] else { return false }
+			let heldKey: SeamSignature.ScopeEnum.Key
+			switch enumCase.kind {
+			case let .nested(key, _, _), let .inner(key, _, _):
+				heldKey = key
+			case .place, .fill:
+				return false
+			}
+			guard let component = componentByKey[enumKey] else { return false }
 			return componentByKey[heldKey] == component
 		}
 		/// The step of `caseOfProperty`'s case, whose payload the seam's tree binds before building the last property of
@@ -523,7 +527,7 @@ extension DependencyTreeGenerator {
 			if case let .fill(innerKey, _?, _, fillLevelEnumType, _) = enumCase.kind, let bindingPrefix {
 				// A fill is handed the struct of its own level, which the called seam's or public mock's struct the case's member
 				// returns builds at the place.
-				let carriedType = ReservedName.levelType(ofEnum: fillLevelEnumType, built: builtTypeOfHoleType)
+				let carriedType = ReservedName.levelType(ofEnum: fillLevelEnumType, built: builderBuiltType)
 				innerScope = .init(callPath: bindingPrefix, innerKey: innerKey, enumType: carriedType, builderLabel: reachedEnum(innerKey)?.builderLabel ?? "", name: "")
 			}
 			let leadsIntoFill = caseOfProperty.filledBuilder != nil
@@ -654,8 +658,6 @@ extension DependencyTreeGenerator {
 							memberValuesType: enumCase.memberValuesTypeName.flatMap { memberValuesTypeName in
 								enumTypeByDescribed[caseOfProperty.described].map { .nested(name: memberValuesTypeName, parentType: $0, generics: []) }
 							},
-							memberIsLetChild: enumTypeByDescribed[caseOfProperty.described].flatMap(ReservedName.seamCarrier(ofEnum:)) != nil
-								&& enumCase.isLetChildOfCarrier(inSendableEnum: caseOfProperty.described.isSendable, isInLoop: holdsEnumOfItsOwnComponent(enumCase, of: key(of: caseOfProperty.described))),
 						))
 					} else {
 						let site = SeamSignature.Hole.Site(seamType: seamType, path: reached.sitePath)

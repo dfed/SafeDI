@@ -473,6 +473,7 @@ struct SafeDIToolPublicMockCycleRedeclarationTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        apiBuilder: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_home() -> Home {
@@ -489,7 +490,7 @@ struct SafeDIToolPublicMockCycleRedeclarationTests: ~Copyable {
 		                })
 		            }
 		            _ = Home.__safeDI_Home_mock_E59AA37ED2CB4611.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Home.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Home(), safeDIOverrides: safeDIOverrides.home)
+		            return Home.__safeDI_mock(apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Home(), safeDIOverrides: safeDIOverrides.home)
 		        }
 		        let home: Home = __safeDI_home()
 		        return Root(home: home)

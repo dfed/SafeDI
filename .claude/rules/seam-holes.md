@@ -8,8 +8,6 @@ paths:
   - "Tests/**/*UnreadType*.swift"
 ---
 
-<!-- Moved from CLAUDE.md §Mock generation specifics and §Common Pitfalls at 337e5e22. Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 # Seams: holes, builders, fills
 
 - The configuration that governs a module's own generation (imports, directories, additional mocks, its mock condition) comes only from that module. A dependency module's configuration is read only for its `mockConditionalCompilation`, to check a call of its seam or public mock (`GenerateCommand.seamResolution`, `publicMockUnderOtherMockCondition`; see `seams.md`).

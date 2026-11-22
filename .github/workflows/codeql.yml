@@ -13,8 +13,10 @@ on:
   schedule:
     - cron: '35 2 * * 0'
 
+# Keyed on the pull request, not its branch's name: pull requests from two forks often share a branch name
+# (`main`, `patch-1`), and would cancel each other's runs.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:

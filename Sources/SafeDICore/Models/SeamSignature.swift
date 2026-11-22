@@ -1109,9 +1109,8 @@ public struct SeamSignature: Sendable {
 	/// the inner enum, the cases that lead from the root enum to the call's case, and the values the call's owner binds
 	/// before it, which the closure the call passes builds.
 	public struct CallRoute: Codable, Sendable {
-		public init(sitePath: [Property], innerKey: ScopeEnum.Key, rootKey: ScopeEnum.Key, route: [Hole.RouteStep], caseName: String, memberValuesType: TypeDescription? = nil, memberIsLetChild: Bool = false, handsFillLevelStruct: Bool = false, reentersEnclosingFill: Bool = false) {
+		public init(sitePath: [Property], innerKey: ScopeEnum.Key, rootKey: ScopeEnum.Key, route: [Hole.RouteStep], caseName: String, memberValuesType: TypeDescription? = nil, handsFillLevelStruct: Bool = false, reentersEnclosingFill: Bool = false) {
 			self.sitePath = sitePath
-			self.memberIsLetChild = memberIsLetChild
 			self.innerKey = innerKey
 			self.rootKey = rootKey
 			self.route = route
@@ -1133,9 +1132,6 @@ public struct SeamSignature: Sendable {
 		/// seam's extension spells it: the call passes the inner seam the struct that member returns. `nil` where the enum
 		/// declares none.
 		public let memberValuesType: TypeDescription?
-		/// Whether the call's own case is a carrier's `let` child (`ScopeEnum.Case.isLetChildOfCarrier`), which the call reads
-		/// rather than calls.
-		public let memberIsLetChild: Bool
 		/// Whether the call is the fulfiller of a fill whose case `route` ends on: it is handed the struct of the fill's own level,
 		/// which the fill is handed, and has no case of its own (`caseName` is empty).
 		public let handsFillLevelStruct: Bool
@@ -1945,6 +1941,11 @@ struct CalledBuilders: Sendable {
 		self.holes = holes
 		self.builders = builders
 		self.scopeEnums = scopeEnums
+		var holeBySite = [SeamSignature.Hole.Site: SeamSignature.Hole]()
+		for hole in holes where holeBySite[hole.site] == nil {
+			holeBySite[hole.site] = hole
+		}
+		self.holeBySite = holeBySite
 		let enumsByKey = Dictionary(scopeEnums.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
 		self.enumsByKey = enumsByKey
 		carrierValuesBySeam = SeamCarrierValues.bySeam(of: scopeEnums)
@@ -2010,14 +2011,9 @@ struct CalledBuilders: Sendable {
 		Self.sites(sitesReached(by: builder, in: enumsByKey), onRoutesOf: builder.enumKey, holeBySite: holeBySite)
 	}
 
-	/// Each hole by its site, the first of `holes` at a site.
-	var holeBySite: [SeamSignature.Hole.Site: SeamSignature.Hole] {
-		var holeBySite = [SeamSignature.Hole.Site: SeamSignature.Hole]()
-		for hole in holes where holeBySite[hole.site] == nil {
-			holeBySite[hole.site] = hole
-		}
-		return holeBySite
-	}
+	/// Each hole by its site, the first of `holes` at a site: found once for the call, never once for each builder whose
+	/// routes are asked for, which grew a call's construction with the square of its hole types.
+	let holeBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]
 
 	/// The sites of `sites` that a route from the root enum of `rootKey` reaches (see `sitesReachedOnItsRoutes(by:in:)`).
 	static func sites(_ sites: Set<SeamSignature.Hole.Site>, onRoutesOf rootKey: SeamSignature.ScopeEnum.Key, holeBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]) -> Set<SeamSignature.Hole.Site> {

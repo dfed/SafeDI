@@ -59,6 +59,20 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_writesDependencyTree_whenFifteenHundredFeaturesEachInstantiateTheNextThroughAnInstantiator() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.featureChain(depth: 1_500, rootAttribute: "@Instantiable(isRoot: true)", featuresAreConstant: false),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			// The time the compiler takes for nested builder functions grows exponentially with their depth, so the chain of twenty below is compiled instead.
+			skipCompileVerification: true,
+		)
+
+		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == Self.instantiatorChainDependencyTree(depth: 1_500))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesDependencyTreeThatCompiles_whenTwentyFeaturesEachInstantiateTheNextThroughAnInstantiator() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: Self.featureChain(depth: 20, rootAttribute: "@Instantiable(isRoot: true)", featuresAreConstant: false),
@@ -223,6 +237,37 @@ struct SafeDIToolDeepTreeTests: ~Copyable {
 
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == Self.instantiatorChainMock(depth: 20))
 		#expect(output.mockConfigurationFile == Self.instantiatorChainMockConfiguration(depth: 20))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_keepsReadLogsGrowingWithTheChain_whenTypeWhoseMockIsGeneratedStartsAChainOfFeaturesEachInstantiatingTheNext() async throws {
+		// Every place of the chain reads whether a cycle closes on its own property, which is answered above the chain, so a
+		// place keeps a read for each place beneath it. Copying those reads into each place's log held reads that grew
+		// with the square of the depth: 4× for each doubling.
+		var elementCounts = [Int]()
+		for depth in [100, 200, 400] {
+			let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
+			try await ConstructionLogStorage.$observer.withValue({ continuation.yield($0) }) {
+				_ = try await executeSafeDIToolTest(
+					swiftFileContent: Self.featureChain(depth: depth, rootAttribute: "@Instantiable(generateMock: true)", featuresAreConstant: false),
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+					// The chain of twenty above is compiled: the compiler's time grows exponentially with the depth of nested builder functions.
+					skipCompileVerification: true,
+				)
+			}
+			continuation.finish()
+			var elementCount = 0
+			for await elements in stream {
+				elementCount += elements
+			}
+			elementCounts.append(elementCount)
+		}
+		for (smaller, larger) in zip(elementCounts, elementCounts.dropFirst()) {
+			#expect(smaller > 0)
+			#expect(Double(larger) <= Double(smaller) * 2.2, "The logs keep \(smaller) elements, then \(larger) for a chain twice as deep")
+		}
 	}
 
 	// MARK: Private

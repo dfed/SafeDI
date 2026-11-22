@@ -26,7 +26,9 @@ from the checkout's top level, wherever it is started, on `HEAD`, and does these
    this head in place of a new one. The script then waits for the run: through the command `SAFEDI_PRE_REVIEW_WAIT`
    names, given the run's id, where a machine has one waiter for every run, else by asking GitHub once a minute.
    `--no-wait` prints the block with the run in progress, and `--report` later prints it again with the run's
-   result. The run's id is recorded before the wait.
+   result. The run's id is recorded before the wait. Every `gh` call asks the repository `origin` names, or the
+   one `GH_REPO` names when it is set: in a fork the run is the fork's own, on Actions that start with no build
+   cache, and a run GitHub does not know there fails the step in place of being waited for.
 
 Both local checks run in a worktree of their own, checked out at `HEAD`, so they check this head's files whatever
 is edited, stashed or committed in the checkout while they run. There is one such worktree per checkout, under the
@@ -37,7 +39,7 @@ coverage report of step 3 is made there too.
 
 `--coverage` adds `Scripts/changed-line-coverage.sh BASE` as a step, in that worktree: every changed line under
 `Sources/` and `Plugins/` runs in a test. Without it the block says nothing of unit-test coverage, which
-"Check Line Coverage on Linux" gates on CI.
+"Check Agent Skill Scripts on Linux" gates on CI.
 
 It then lists these for the hand-back to answer, which fail nothing:
 
@@ -806,6 +808,34 @@ def prepare_worktree(path, head):
         output_of("git", "worktree", "add", "--force", "--detach", str(path), head)
 
 
+def repository_of(remote_url):
+    """`OWNER/REPO` for a github.com remote's URL, in any of the forms git accepts, else None."""
+    match = re.fullmatch(r"(?:https://(?:[^@/]+@)?github\.com/|(?:ssh://)?git@github\.com[:/])([^/]+)/([^/]+?)(?:\.git)?/?", remote_url.strip())
+    return f"{match.group(1)}/{match.group(2)}" if match else None
+
+
+def ask_the_repository_of_origin(environment=os.environ):
+    """Points every `gh` call at the repository `origin` names, unless GH_REPO already names one.
+
+    In a fork, `gh` may default to the repository it was forked from, where this branch does not exist and the
+    contributor cannot dispatch a workflow. The branch this script checks is pushed to `origin`, so its Verify run
+    is dispatched and read there: on the fork's own Actions, which start with no build cache.
+    """
+    if not environment.get("GH_REPO"):
+        repository = repository_of(output_of("git", "remote", "get-url", "origin", check=False))
+        if repository is not None:
+            environment["GH_REPO"] = repository
+
+
+def unread_pins_step(run, error):
+    """What the block says of a pins run GitHub gave no answer about. A run GitHub does not know will never be
+    known, so it fails; any other missing answer (GitHub answers the odd request with a 502) counts as in progress."""
+    reason = str(error).splitlines()[-1][:120]
+    if "HTTP 404" in str(error) or "could not find any workflow run" in str(error).lower():
+        return f"failed: run {run} is not a run of the repository gh asks ({reason}). Set GH_REPO=OWNER/REPO to the repository that ran it", False
+    return f"in progress, run {run} (GitHub did not answer: {reason})", False
+
+
 def view_run(run):
     return json.loads(output_of_gh("run", "view", str(run), "--json", "headSha,workflowName,status,conclusion,url,createdAt,updatedAt,jobs"))
 
@@ -1099,7 +1129,8 @@ def refresh_pins(record, wait):
     """Reads the pins run's state into the record, waiting for the run to end when `wait`.
 
     The wait is the command `SAFEDI_PRE_REVIEW_WAIT` names, given the run's id, on a machine that has one waiter for
-    every GitHub run; without it this asks GitHub once a minute. An answer GitHub fails to give counts as in progress.
+    every GitHub run; without it this asks GitHub once a minute. An answer GitHub fails to give counts as in progress,
+    except "not found", which ends the wait: no later answer would differ.
     """
     run = record.get("pins run")
     if run is None:
@@ -1109,7 +1140,7 @@ def refresh_pins(record, wait):
         try:
             text, passed = pins_step(view_run(run), record["head"])
         except RuntimeError as error:
-            text, passed = f"in progress, run {run} (GitHub did not answer: {str(error).splitlines()[-1][:120]})", False
+            text, passed = unread_pins_step(run, error)
         record["steps"]["pins"] = (text, passed)
         if not text.startswith("in progress"):
             break
@@ -1148,6 +1179,7 @@ def run(arguments):
     hand_back_path = os.path.abspath(arguments.hand_back) if arguments.hand_back else None
     top = output_of("git", "rev-parse", "--show-toplevel")
     os.chdir(top)
+    ask_the_repository_of_origin()
     head, status = output_of("git", "rev-parse", "HEAD"), output_of("git", "status", "--porcelain")
     if arguments.report:
         path = record_path(head)
@@ -1360,6 +1392,11 @@ def self_test():
     expect("a passed pins run", pins_step(passed, head), ("passed, 54 min 10 s, https://example.com/runs/1", True))
     expect("a run of another head", pins_step(passed, "b" * 40), ("failed: run https://example.com/runs/1 is of aaaaaaaaa, not this head", False))
     expect("a run of another workflow", pins_step({**passed, "workflowName": "CI"}, head), ("failed: run https://example.com/runs/1 is not a Verify run", False))
+    expect("a run GitHub does not know ends the wait", unread_pins_step(7, RuntimeError("gh run view 7: HTTP 404: Not Found (https://api.github.com/repos/o/r/actions/runs/7)"))[0].startswith("failed: run 7 is not a run of the repository gh asks"), True)
+    expect("an answer GitHub failed to give is waited for", unread_pins_step(7, RuntimeError("HTTP 502")), ("in progress, run 7 (GitHub did not answer: HTTP 502)", False))
+    for remote_url in ("https://github.com/o/r.git", "https://github.com/o/r", "https://token@github.com/o/r.git", "git@github.com:o/r.git", "ssh://git@github.com/o/r", "https://github.com/o/r/"):
+        expect(f"the repository of {remote_url}", repository_of(remote_url), "o/r")
+    expect("a remote that is not on github.com names no repository", (repository_of("https://example.com/o/r.git"), repository_of("/local/path"), repository_of("")), (None, None, None))
     expect("a run in progress", pins_step({**passed, "status": "in_progress", "conclusion": ""}, head), ("in progress, https://example.com/runs/1", False))
     expect("a Verify run without pins", pins_step({**passed, "jobs": [{"name": "Verify on Linux", "conclusion": "success"}, {"name": "Fuzz", "conclusion": "skipped"}]}, head), ("failed: run https://example.com/runs/1 fuzzed nothing (it was not dispatched with pins=true)", False))
     expect("a failed pins run", pins_step({**passed, "conclusion": "failure"}, head), ("failed (failure), 54 min 10 s, https://example.com/runs/1", False))
