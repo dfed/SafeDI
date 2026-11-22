@@ -55,7 +55,8 @@ extension ScopeGenerator {
 		case let .unsupported(rule):
 			return .unsupported(rule)
 		}
-		var bindingLines = [String]()
+		// D1 lane hook (lane C): `mock()` first binds each builder a call passes up apart from its label.
+		var bindingLines = walk.filledCallBuilders.leadingBindingLines(indent: bodyIndent)
 		let nodes: [MockLowering.TreeNode]
 		switch await walk.children(
 			of: orderedChildren.map(\.generator),

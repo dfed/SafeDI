@@ -104,11 +104,18 @@ extension MockLowering {
 		let parameters: [(label: String, declaration: String)]
 		/// The builders each call hands its called builders, which its fills are generated with.
 		let fillPlaceBindings: ScopeGenerator.FillPlaceBindings
+		/// The name `mock()` binds each builder a call passes up under, by the property the call's leaf receives it as.
+		var passedUpBuilderNames: [Property: String] = [:]
 
 		/// No call fills a builder.
 		static let none = FilledCallBuilders(calls: [], parameters: [], fillPlaceBindings: ScopeGenerator.FillPlaceBindings(bindingsByGenerator: [:]))
 
-		/// The declarations of the builders, one per line at `indent`, each followed by a comma.
+		/// The lines that bind each builder a call passes up apart from its label, before anything else `mock()` binds.
+		func leadingBindingLines(indent: String) -> [String] {
+			passedUpBuilderNames.sorted { $0.key < $1.key }.map { "\(indent)let \($0.value) = \($0.key.label)" }
+		}
+
+		/// The declarations of the builders, one per line at `indent`.
 		func parameterLines(indent: String) -> [String] {
 			parameters.map { "\(indent)\($0.declaration)" }
 		}
