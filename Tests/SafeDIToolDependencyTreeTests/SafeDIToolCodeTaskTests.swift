@@ -52,14 +52,17 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 		// each scope, 121 each.
 		let fixture = Self.ternaryTree(depth: 4, beneath: ["FirstRoot", "SecondRoot"], rootDeclarations: [], instantiatesLayer: 3)
 		let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
-		_ = try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: fixture,
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-				// The trees' code is what every other test of their shapes compares; this one counts how it is generated.
-				skipCompileVerification: true,
-			)
+		// Under the path key, whose roots start their code early as seams do; a root the type key lays out starts none.
+		_ = try await ProductionBodyKey.$current.withValue(.path) {
+			try await HeldCodeTasks.$observer.withValue({ continuation.yield($0) }) {
+				try await executeSafeDIToolTest(
+					swiftFileContent: fixture,
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+					// The trees' code is what every other test of their shapes compares; this one counts how it is generated.
+					skipCompileVerification: true,
+				)
+			}
 		}
 		continuation.finish()
 		var heldTaskCounts = [Int]()
@@ -175,6 +178,36 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_startsNoTask_whenTypeKeyLaysOutTheRoot() async throws {
+		// The root's tree has 1,093 scopes, so under the path key the root and its large subtrees start their code early
+		// (10 starts, `generate_startsTasksForFewScopes_whenTreeHasManySmallSubtrees`). The type key lays the root's body out
+		// from the plan of every place at the context the root asks for, so the root starts none.
+		let starts = try await countCodeTaskStarts(of: Self.ternaryTree(depth: Self.depth, beneath: ["Root"], rootDeclarations: []), layingOutBodiesBy: .type)
+		#expect(starts == 0)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_laysOutRootByPathKey_whenRootStartsItsCodeEarlyUnderThePathKey() async throws {
+		// The root's tree has 121 scopes, so under the path key the root starts its own code early, on a detached task. That
+		// task lays the body out by the key of the task that started it: one builder function for each of the 120 places
+		// beneath the root (3 + 9 + 27 + 81). Laid out by the type key, as a detached task that inherited no key did, it
+		// holds 12, one for each type.
+		let output = try await ProductionBodyKey.$current.withValue(.path) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.ternaryTree(depth: 4, beneath: ["Root"], rootDeclarations: [], instantiatesLayer: 3),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				// The tree's code is what every other test of its shapes compares; this one counts its builder functions.
+				skipCompileVerification: true,
+			)
+		}
+		let rootCode = try #require(output.dependencyTreeFiles["Root+SafeDI.swift"])
+		#expect(rootCode.components(separatedBy: "func __safeDI_").count - 1 == 120)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -209,18 +242,22 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 		return files
 	}
 
-	/// How many scopes started generating their code on a task of their own while `fixture` generated.
+	/// How many scopes started generating their code on a task of their own while `fixture` generated, its roots' bodies laid
+	/// out by `productionBodyKey`. A root the type key lays out starts none, so the counts of the starts themselves are
+	/// taken under the path key, whose roots keep them as seams do.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private mutating func countCodeTaskStarts(of fixture: [String]) async throws -> Int {
+	private mutating func countCodeTaskStarts(of fixture: [String], layingOutBodiesBy productionBodyKey: ProductionBodyKey = .path) async throws -> Int {
 		let (stream, continuation) = AsyncStream.makeStream(of: Void.self)
-		_ = try await CodeTaskStart.$observer.withValue({ continuation.yield(()) }) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: fixture,
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-				// The tree's code is what every other test of its shapes compares; this one counts how it is generated.
-				skipCompileVerification: true,
-			)
+		_ = try await ProductionBodyKey.$current.withValue(productionBodyKey) {
+			try await CodeTaskStart.$observer.withValue({ continuation.yield(()) }) {
+				try await executeSafeDIToolTest(
+					swiftFileContent: fixture,
+					buildSwiftOutputDirectory: true,
+					filesToDelete: &filesToDelete,
+					// The tree's code is what every other test of its shapes compares; this one counts how it is generated.
+					skipCompileVerification: true,
+				)
+			}
 		}
 		continuation.finish()
 		var starts = 0

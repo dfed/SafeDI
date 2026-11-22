@@ -228,197 +228,197 @@ struct SafeDIToolLazyCycleReadLabelTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_screen00() -> Screen00 {
 			            let service00 = Service()
-			            func __safeDI_screen01() -> Screen01 {
-			                let service01 = Service()
-			                let screen00 = Instantiator<Screen00>(__safeDI_screen00)
-			                func __safeDI_screen02() -> Screen02 {
-			                    let service02 = Service()
-			                    let screen00 = Instantiator<Screen00>(__safeDI_screen00)
-			                    let screen01 = Instantiator<Screen01>(__safeDI_screen01)
-			                    func __safeDI_screen03() -> Screen03 {
-			                        let service03 = Service()
-			                        let screen00 = Instantiator<Screen00>(__safeDI_screen00)
-			                        let screen01 = Instantiator<Screen01>(__safeDI_screen01)
-			                        let screen02 = Instantiator<Screen02>(__safeDI_screen02)
-			                        func __safeDI_screen04() -> Screen04 {
-			                            let service04 = Service()
-			                            let screen00 = Instantiator<Screen00>(__safeDI_screen00)
-			                            let screen01 = Instantiator<Screen01>(__safeDI_screen01)
-			                            let screen02 = Instantiator<Screen02>(__safeDI_screen02)
-			                            let screen03 = Instantiator<Screen03>(__safeDI_screen03)
-			                            func __safeDI_screen05() -> Screen05 {
-			                                let service05 = Service()
-			                                let screen01 = Instantiator<Screen01>(__safeDI_screen01)
-			                                let screen02 = Instantiator<Screen02>(__safeDI_screen02)
-			                                let screen03 = Instantiator<Screen03>(__safeDI_screen03)
-			                                let screen04 = Instantiator<Screen04>(__safeDI_screen04)
-			                                func __safeDI_screen06() -> Screen06 {
-			                                    let service06 = Service()
-			                                    let screen02 = Instantiator<Screen02>(__safeDI_screen02)
-			                                    let screen03 = Instantiator<Screen03>(__safeDI_screen03)
-			                                    let screen04 = Instantiator<Screen04>(__safeDI_screen04)
-			                                    let screen05 = Instantiator<Screen05>(__safeDI_screen05)
-			                                    func __safeDI_screen07() -> Screen07 {
-			                                        let service07 = Service()
-			                                        let screen03 = Instantiator<Screen03>(__safeDI_screen03)
-			                                        let screen04 = Instantiator<Screen04>(__safeDI_screen04)
-			                                        let screen05 = Instantiator<Screen05>(__safeDI_screen05)
-			                                        let screen06 = Instantiator<Screen06>(__safeDI_screen06)
-			                                        func __safeDI_screen08() -> Screen08 {
-			                                            let service08 = Service()
-			                                            let screen04 = Instantiator<Screen04>(__safeDI_screen04)
-			                                            let screen05 = Instantiator<Screen05>(__safeDI_screen05)
-			                                            let screen06 = Instantiator<Screen06>(__safeDI_screen06)
-			                                            let screen07 = Instantiator<Screen07>(__safeDI_screen07)
-			                                            func __safeDI_screen09() -> Screen09 {
-			                                                let service09 = Service()
-			                                                let screen05 = Instantiator<Screen05>(__safeDI_screen05)
-			                                                let screen06 = Instantiator<Screen06>(__safeDI_screen06)
-			                                                let screen07 = Instantiator<Screen07>(__safeDI_screen07)
-			                                                let screen08 = Instantiator<Screen08>(__safeDI_screen08)
-			                                                func __safeDI_screen10() -> Screen10 {
-			                                                    let service10 = Service()
-			                                                    let screen06 = Instantiator<Screen06>(__safeDI_screen06)
-			                                                    let screen07 = Instantiator<Screen07>(__safeDI_screen07)
-			                                                    let screen08 = Instantiator<Screen08>(__safeDI_screen08)
-			                                                    let screen09 = Instantiator<Screen09>(__safeDI_screen09)
-			                                                    func __safeDI_screen11() -> Screen11 {
-			                                                        let service11 = Service()
-			                                                        let screen07 = Instantiator<Screen07>(__safeDI_screen07)
-			                                                        let screen08 = Instantiator<Screen08>(__safeDI_screen08)
-			                                                        let screen09 = Instantiator<Screen09>(__safeDI_screen09)
-			                                                        let screen10 = Instantiator<Screen10>(__safeDI_screen10)
-			                                                        func __safeDI_screen12() -> Screen12 {
-			                                                            let service12 = Service()
-			                                                            let screen08 = Instantiator<Screen08>(__safeDI_screen08)
-			                                                            let screen09 = Instantiator<Screen09>(__safeDI_screen09)
-			                                                            let screen10 = Instantiator<Screen10>(__safeDI_screen10)
-			                                                            let screen11 = Instantiator<Screen11>(__safeDI_screen11)
-			                                                            func __safeDI_screen13() -> Screen13 {
-			                                                                let service13 = Service()
-			                                                                let screen09 = Instantiator<Screen09>(__safeDI_screen09)
-			                                                                let screen10 = Instantiator<Screen10>(__safeDI_screen10)
-			                                                                let screen11 = Instantiator<Screen11>(__safeDI_screen11)
-			                                                                let screen12 = Instantiator<Screen12>(__safeDI_screen12)
-			                                                                func __safeDI_screen14() -> Screen14 {
-			                                                                    let service14 = Service()
-			                                                                    let screen10 = Instantiator<Screen10>(__safeDI_screen10)
-			                                                                    let screen11 = Instantiator<Screen11>(__safeDI_screen11)
-			                                                                    let screen12 = Instantiator<Screen12>(__safeDI_screen12)
-			                                                                    let screen13 = Instantiator<Screen13>(__safeDI_screen13)
-			                                                                    func __safeDI_screen15() -> Screen15 {
-			                                                                        let service15 = Service()
-			                                                                        let screen11 = Instantiator<Screen11>(__safeDI_screen11)
-			                                                                        let screen12 = Instantiator<Screen12>(__safeDI_screen12)
-			                                                                        let screen13 = Instantiator<Screen13>(__safeDI_screen13)
-			                                                                        let screen14 = Instantiator<Screen14>(__safeDI_screen14)
-			                                                                        func __safeDI_screen16() -> Screen16 {
-			                                                                            let service16 = Service()
-			                                                                            let screen12 = Instantiator<Screen12>(__safeDI_screen12)
-			                                                                            let screen13 = Instantiator<Screen13>(__safeDI_screen13)
-			                                                                            let screen14 = Instantiator<Screen14>(__safeDI_screen14)
-			                                                                            let screen15 = Instantiator<Screen15>(__safeDI_screen15)
-			                                                                            func __safeDI_screen17() -> Screen17 {
-			                                                                                let service17 = Service()
-			                                                                                let screen13 = Instantiator<Screen13>(__safeDI_screen13)
-			                                                                                let screen14 = Instantiator<Screen14>(__safeDI_screen14)
-			                                                                                let screen15 = Instantiator<Screen15>(__safeDI_screen15)
-			                                                                                let screen16 = Instantiator<Screen16>(__safeDI_screen16)
-			                                                                                func __safeDI_screen18() -> Screen18 {
-			                                                                                    let service18 = Service()
-			                                                                                    let screen14 = Instantiator<Screen14>(__safeDI_screen14)
-			                                                                                    let screen15 = Instantiator<Screen15>(__safeDI_screen15)
-			                                                                                    let screen16 = Instantiator<Screen16>(__safeDI_screen16)
-			                                                                                    let screen17 = Instantiator<Screen17>(__safeDI_screen17)
-			                                                                                    func __safeDI_screen19() -> Screen19 {
-			                                                                                        let service19 = Service()
-			                                                                                        let screen15 = Instantiator<Screen15>(__safeDI_screen15)
-			                                                                                        let screen16 = Instantiator<Screen16>(__safeDI_screen16)
-			                                                                                        let screen17 = Instantiator<Screen17>(__safeDI_screen17)
-			                                                                                        let screen18 = Instantiator<Screen18>(__safeDI_screen18)
-			                                                                                        func __safeDI_hub() -> Hub {
-			                                                                                            let service00 = Service()
-			                                                                                            let service01 = Service()
-			                                                                                            let service02 = Service()
-			                                                                                            let service03 = Service()
-			                                                                                            let service04 = Service()
-			                                                                                            let service05 = Service()
-			                                                                                            let service06 = Service()
-			                                                                                            let service07 = Service()
-			                                                                                            let service08 = Service()
-			                                                                                            let service09 = Service()
-			                                                                                            let service10 = Service()
-			                                                                                            let service11 = Service()
-			                                                                                            let service12 = Service()
-			                                                                                            let service13 = Service()
-			                                                                                            let service14 = Service()
-			                                                                                            let service15 = Service()
-			                                                                                            let service16 = Service()
-			                                                                                            let service17 = Service()
-			                                                                                            let service18 = Service()
-			                                                                                            let service19 = Service()
-			                                                                                            let screen19 = Instantiator<Screen19>(__safeDI_screen19)
-			                                                                                            return Hub(service00: service00, service01: service01, service02: service02, service03: service03, service04: service04, service05: service05, service06: service06, service07: service07, service08: service08, service09: service09, service10: service10, service11: service11, service12: service12, service13: service13, service14: service14, service15: service15, service16: service16, service17: service17, service18: service18, service19: service19, screen19: screen19)
-			                                                                                        }
-			                                                                                        let hub = Instantiator<Hub>(__safeDI_hub)
-			                                                                                        return Screen19(service19: service19, screen15: screen15, screen16: screen16, screen17: screen17, screen18: screen18, hub: hub)
-			                                                                                    }
-			                                                                                    let screen19 = Instantiator<Screen19>(__safeDI_screen19)
-			                                                                                    return Screen18(service18: service18, screen14: screen14, screen15: screen15, screen16: screen16, screen17: screen17, screen19: screen19)
-			                                                                                }
-			                                                                                let screen18 = Instantiator<Screen18>(__safeDI_screen18)
-			                                                                                return Screen17(service17: service17, screen13: screen13, screen14: screen14, screen15: screen15, screen16: screen16, screen18: screen18)
-			                                                                            }
-			                                                                            let screen17 = Instantiator<Screen17>(__safeDI_screen17)
-			                                                                            return Screen16(service16: service16, screen12: screen12, screen13: screen13, screen14: screen14, screen15: screen15, screen17: screen17)
-			                                                                        }
-			                                                                        let screen16 = Instantiator<Screen16>(__safeDI_screen16)
-			                                                                        return Screen15(service15: service15, screen11: screen11, screen12: screen12, screen13: screen13, screen14: screen14, screen16: screen16)
-			                                                                    }
-			                                                                    let screen15 = Instantiator<Screen15>(__safeDI_screen15)
-			                                                                    return Screen14(service14: service14, screen10: screen10, screen11: screen11, screen12: screen12, screen13: screen13, screen15: screen15)
-			                                                                }
-			                                                                let screen14 = Instantiator<Screen14>(__safeDI_screen14)
-			                                                                return Screen13(service13: service13, screen09: screen09, screen10: screen10, screen11: screen11, screen12: screen12, screen14: screen14)
-			                                                            }
-			                                                            let screen13 = Instantiator<Screen13>(__safeDI_screen13)
-			                                                            return Screen12(service12: service12, screen08: screen08, screen09: screen09, screen10: screen10, screen11: screen11, screen13: screen13)
-			                                                        }
-			                                                        let screen12 = Instantiator<Screen12>(__safeDI_screen12)
-			                                                        return Screen11(service11: service11, screen07: screen07, screen08: screen08, screen09: screen09, screen10: screen10, screen12: screen12)
-			                                                    }
-			                                                    let screen11 = Instantiator<Screen11>(__safeDI_screen11)
-			                                                    return Screen10(service10: service10, screen06: screen06, screen07: screen07, screen08: screen08, screen09: screen09, screen11: screen11)
-			                                                }
-			                                                let screen10 = Instantiator<Screen10>(__safeDI_screen10)
-			                                                return Screen09(service09: service09, screen05: screen05, screen06: screen06, screen07: screen07, screen08: screen08, screen10: screen10)
-			                                            }
-			                                            let screen09 = Instantiator<Screen09>(__safeDI_screen09)
-			                                            return Screen08(service08: service08, screen04: screen04, screen05: screen05, screen06: screen06, screen07: screen07, screen09: screen09)
-			                                        }
-			                                        let screen08 = Instantiator<Screen08>(__safeDI_screen08)
-			                                        return Screen07(service07: service07, screen03: screen03, screen04: screen04, screen05: screen05, screen06: screen06, screen08: screen08)
-			                                    }
-			                                    let screen07 = Instantiator<Screen07>(__safeDI_screen07)
-			                                    return Screen06(service06: service06, screen02: screen02, screen03: screen03, screen04: screen04, screen05: screen05, screen07: screen07)
-			                                }
-			                                let screen06 = Instantiator<Screen06>(__safeDI_screen06)
-			                                return Screen05(service05: service05, screen01: screen01, screen02: screen02, screen03: screen03, screen04: screen04, screen06: screen06)
-			                            }
-			                            let screen05 = Instantiator<Screen05>(__safeDI_screen05)
-			                            return Screen04(service04: service04, screen00: screen00, screen01: screen01, screen02: screen02, screen03: screen03, screen05: screen05)
-			                        }
-			                        let screen04 = Instantiator<Screen04>(__safeDI_screen04)
-			                        return Screen03(service03: service03, screen00: screen00, screen01: screen01, screen02: screen02, screen04: screen04)
-			                    }
-			                    let screen03 = Instantiator<Screen03>(__safeDI_screen03)
-			                    return Screen02(service02: service02, screen00: screen00, screen01: screen01, screen03: screen03)
-			                }
-			                let screen02 = Instantiator<Screen02>(__safeDI_screen02)
-			                return Screen01(service01: service01, screen00: screen00, screen02: screen02)
-			            }
 			            let screen01 = Instantiator<Screen01>(__safeDI_screen01)
 			            return Screen00(service00: service00, screen01: screen01)
+			        }
+			        func __safeDI_screen01() -> Screen01 {
+			            let service01 = Service()
+			            let screen00 = Instantiator<Screen00>(__safeDI_screen00)
+			            let screen02 = Instantiator<Screen02>(__safeDI_screen02)
+			            return Screen01(service01: service01, screen00: screen00, screen02: screen02)
+			        }
+			        func __safeDI_screen02() -> Screen02 {
+			            let service02 = Service()
+			            let screen00 = Instantiator<Screen00>(__safeDI_screen00)
+			            let screen01 = Instantiator<Screen01>(__safeDI_screen01)
+			            let screen03 = Instantiator<Screen03>(__safeDI_screen03)
+			            return Screen02(service02: service02, screen00: screen00, screen01: screen01, screen03: screen03)
+			        }
+			        func __safeDI_screen03() -> Screen03 {
+			            let service03 = Service()
+			            let screen00 = Instantiator<Screen00>(__safeDI_screen00)
+			            let screen01 = Instantiator<Screen01>(__safeDI_screen01)
+			            let screen02 = Instantiator<Screen02>(__safeDI_screen02)
+			            let screen04 = Instantiator<Screen04>(__safeDI_screen04)
+			            return Screen03(service03: service03, screen00: screen00, screen01: screen01, screen02: screen02, screen04: screen04)
+			        }
+			        func __safeDI_screen04() -> Screen04 {
+			            let service04 = Service()
+			            let screen00 = Instantiator<Screen00>(__safeDI_screen00)
+			            let screen01 = Instantiator<Screen01>(__safeDI_screen01)
+			            let screen02 = Instantiator<Screen02>(__safeDI_screen02)
+			            let screen03 = Instantiator<Screen03>(__safeDI_screen03)
+			            let screen05 = Instantiator<Screen05>(__safeDI_screen05)
+			            return Screen04(service04: service04, screen00: screen00, screen01: screen01, screen02: screen02, screen03: screen03, screen05: screen05)
+			        }
+			        func __safeDI_screen05() -> Screen05 {
+			            let service05 = Service()
+			            let screen01 = Instantiator<Screen01>(__safeDI_screen01)
+			            let screen02 = Instantiator<Screen02>(__safeDI_screen02)
+			            let screen03 = Instantiator<Screen03>(__safeDI_screen03)
+			            let screen04 = Instantiator<Screen04>(__safeDI_screen04)
+			            let screen06 = Instantiator<Screen06>(__safeDI_screen06)
+			            return Screen05(service05: service05, screen01: screen01, screen02: screen02, screen03: screen03, screen04: screen04, screen06: screen06)
+			        }
+			        func __safeDI_screen06() -> Screen06 {
+			            let service06 = Service()
+			            let screen02 = Instantiator<Screen02>(__safeDI_screen02)
+			            let screen03 = Instantiator<Screen03>(__safeDI_screen03)
+			            let screen04 = Instantiator<Screen04>(__safeDI_screen04)
+			            let screen05 = Instantiator<Screen05>(__safeDI_screen05)
+			            let screen07 = Instantiator<Screen07>(__safeDI_screen07)
+			            return Screen06(service06: service06, screen02: screen02, screen03: screen03, screen04: screen04, screen05: screen05, screen07: screen07)
+			        }
+			        func __safeDI_screen07() -> Screen07 {
+			            let service07 = Service()
+			            let screen03 = Instantiator<Screen03>(__safeDI_screen03)
+			            let screen04 = Instantiator<Screen04>(__safeDI_screen04)
+			            let screen05 = Instantiator<Screen05>(__safeDI_screen05)
+			            let screen06 = Instantiator<Screen06>(__safeDI_screen06)
+			            let screen08 = Instantiator<Screen08>(__safeDI_screen08)
+			            return Screen07(service07: service07, screen03: screen03, screen04: screen04, screen05: screen05, screen06: screen06, screen08: screen08)
+			        }
+			        func __safeDI_screen08() -> Screen08 {
+			            let service08 = Service()
+			            let screen04 = Instantiator<Screen04>(__safeDI_screen04)
+			            let screen05 = Instantiator<Screen05>(__safeDI_screen05)
+			            let screen06 = Instantiator<Screen06>(__safeDI_screen06)
+			            let screen07 = Instantiator<Screen07>(__safeDI_screen07)
+			            let screen09 = Instantiator<Screen09>(__safeDI_screen09)
+			            return Screen08(service08: service08, screen04: screen04, screen05: screen05, screen06: screen06, screen07: screen07, screen09: screen09)
+			        }
+			        func __safeDI_screen09() -> Screen09 {
+			            let service09 = Service()
+			            let screen05 = Instantiator<Screen05>(__safeDI_screen05)
+			            let screen06 = Instantiator<Screen06>(__safeDI_screen06)
+			            let screen07 = Instantiator<Screen07>(__safeDI_screen07)
+			            let screen08 = Instantiator<Screen08>(__safeDI_screen08)
+			            let screen10 = Instantiator<Screen10>(__safeDI_screen10)
+			            return Screen09(service09: service09, screen05: screen05, screen06: screen06, screen07: screen07, screen08: screen08, screen10: screen10)
+			        }
+			        func __safeDI_screen10() -> Screen10 {
+			            let service10 = Service()
+			            let screen06 = Instantiator<Screen06>(__safeDI_screen06)
+			            let screen07 = Instantiator<Screen07>(__safeDI_screen07)
+			            let screen08 = Instantiator<Screen08>(__safeDI_screen08)
+			            let screen09 = Instantiator<Screen09>(__safeDI_screen09)
+			            let screen11 = Instantiator<Screen11>(__safeDI_screen11)
+			            return Screen10(service10: service10, screen06: screen06, screen07: screen07, screen08: screen08, screen09: screen09, screen11: screen11)
+			        }
+			        func __safeDI_screen11() -> Screen11 {
+			            let service11 = Service()
+			            let screen07 = Instantiator<Screen07>(__safeDI_screen07)
+			            let screen08 = Instantiator<Screen08>(__safeDI_screen08)
+			            let screen09 = Instantiator<Screen09>(__safeDI_screen09)
+			            let screen10 = Instantiator<Screen10>(__safeDI_screen10)
+			            let screen12 = Instantiator<Screen12>(__safeDI_screen12)
+			            return Screen11(service11: service11, screen07: screen07, screen08: screen08, screen09: screen09, screen10: screen10, screen12: screen12)
+			        }
+			        func __safeDI_screen12() -> Screen12 {
+			            let service12 = Service()
+			            let screen08 = Instantiator<Screen08>(__safeDI_screen08)
+			            let screen09 = Instantiator<Screen09>(__safeDI_screen09)
+			            let screen10 = Instantiator<Screen10>(__safeDI_screen10)
+			            let screen11 = Instantiator<Screen11>(__safeDI_screen11)
+			            let screen13 = Instantiator<Screen13>(__safeDI_screen13)
+			            return Screen12(service12: service12, screen08: screen08, screen09: screen09, screen10: screen10, screen11: screen11, screen13: screen13)
+			        }
+			        func __safeDI_screen13() -> Screen13 {
+			            let service13 = Service()
+			            let screen09 = Instantiator<Screen09>(__safeDI_screen09)
+			            let screen10 = Instantiator<Screen10>(__safeDI_screen10)
+			            let screen11 = Instantiator<Screen11>(__safeDI_screen11)
+			            let screen12 = Instantiator<Screen12>(__safeDI_screen12)
+			            let screen14 = Instantiator<Screen14>(__safeDI_screen14)
+			            return Screen13(service13: service13, screen09: screen09, screen10: screen10, screen11: screen11, screen12: screen12, screen14: screen14)
+			        }
+			        func __safeDI_screen14() -> Screen14 {
+			            let service14 = Service()
+			            let screen10 = Instantiator<Screen10>(__safeDI_screen10)
+			            let screen11 = Instantiator<Screen11>(__safeDI_screen11)
+			            let screen12 = Instantiator<Screen12>(__safeDI_screen12)
+			            let screen13 = Instantiator<Screen13>(__safeDI_screen13)
+			            let screen15 = Instantiator<Screen15>(__safeDI_screen15)
+			            return Screen14(service14: service14, screen10: screen10, screen11: screen11, screen12: screen12, screen13: screen13, screen15: screen15)
+			        }
+			        func __safeDI_screen15() -> Screen15 {
+			            let service15 = Service()
+			            let screen11 = Instantiator<Screen11>(__safeDI_screen11)
+			            let screen12 = Instantiator<Screen12>(__safeDI_screen12)
+			            let screen13 = Instantiator<Screen13>(__safeDI_screen13)
+			            let screen14 = Instantiator<Screen14>(__safeDI_screen14)
+			            let screen16 = Instantiator<Screen16>(__safeDI_screen16)
+			            return Screen15(service15: service15, screen11: screen11, screen12: screen12, screen13: screen13, screen14: screen14, screen16: screen16)
+			        }
+			        func __safeDI_screen16() -> Screen16 {
+			            let service16 = Service()
+			            let screen12 = Instantiator<Screen12>(__safeDI_screen12)
+			            let screen13 = Instantiator<Screen13>(__safeDI_screen13)
+			            let screen14 = Instantiator<Screen14>(__safeDI_screen14)
+			            let screen15 = Instantiator<Screen15>(__safeDI_screen15)
+			            let screen17 = Instantiator<Screen17>(__safeDI_screen17)
+			            return Screen16(service16: service16, screen12: screen12, screen13: screen13, screen14: screen14, screen15: screen15, screen17: screen17)
+			        }
+			        func __safeDI_screen17() -> Screen17 {
+			            let service17 = Service()
+			            let screen13 = Instantiator<Screen13>(__safeDI_screen13)
+			            let screen14 = Instantiator<Screen14>(__safeDI_screen14)
+			            let screen15 = Instantiator<Screen15>(__safeDI_screen15)
+			            let screen16 = Instantiator<Screen16>(__safeDI_screen16)
+			            let screen18 = Instantiator<Screen18>(__safeDI_screen18)
+			            return Screen17(service17: service17, screen13: screen13, screen14: screen14, screen15: screen15, screen16: screen16, screen18: screen18)
+			        }
+			        func __safeDI_screen18() -> Screen18 {
+			            let service18 = Service()
+			            let screen14 = Instantiator<Screen14>(__safeDI_screen14)
+			            let screen15 = Instantiator<Screen15>(__safeDI_screen15)
+			            let screen16 = Instantiator<Screen16>(__safeDI_screen16)
+			            let screen17 = Instantiator<Screen17>(__safeDI_screen17)
+			            let screen19 = Instantiator<Screen19>(__safeDI_screen19)
+			            return Screen18(service18: service18, screen14: screen14, screen15: screen15, screen16: screen16, screen17: screen17, screen19: screen19)
+			        }
+			        func __safeDI_screen19() -> Screen19 {
+			            let service19 = Service()
+			            let screen15 = Instantiator<Screen15>(__safeDI_screen15)
+			            let screen16 = Instantiator<Screen16>(__safeDI_screen16)
+			            let screen17 = Instantiator<Screen17>(__safeDI_screen17)
+			            let screen18 = Instantiator<Screen18>(__safeDI_screen18)
+			            let hub = Instantiator<Hub>(__safeDI_hub)
+			            return Screen19(service19: service19, screen15: screen15, screen16: screen16, screen17: screen17, screen18: screen18, hub: hub)
+			        }
+			        func __safeDI_hub() -> Hub {
+			            let service00 = Service()
+			            let service01 = Service()
+			            let service02 = Service()
+			            let service03 = Service()
+			            let service04 = Service()
+			            let service05 = Service()
+			            let service06 = Service()
+			            let service07 = Service()
+			            let service08 = Service()
+			            let service09 = Service()
+			            let service10 = Service()
+			            let service11 = Service()
+			            let service12 = Service()
+			            let service13 = Service()
+			            let service14 = Service()
+			            let service15 = Service()
+			            let service16 = Service()
+			            let service17 = Service()
+			            let service18 = Service()
+			            let service19 = Service()
+			            let screen19 = Instantiator<Screen19>(__safeDI_screen19)
+			            return Hub(service00: service00, service01: service01, service02: service02, service03: service03, service04: service04, service05: service05, service06: service06, service07: service07, service08: service08, service09: service09, service10: service10, service11: service11, service12: service12, service13: service13, service14: service14, service15: service15, service16: service16, service17: service17, service18: service18, service19: service19, screen19: screen19)
 			        }
 			        let screen00 = Instantiator<Screen00>(__safeDI_screen00)
 			        self.init(screen00: screen00)
@@ -504,458 +504,458 @@ struct SafeDIToolLazyCycleReadLabelTests: ~Copyable {
 			        let context = Context()
 			        func __safeDI_screen00(context: Context) -> Screen00 {
 			            let service00 = Service()
-			            func __safeDI_screen01(context: Context) -> Screen01 {
-			                let service01 = Service()
-			                let screen00 = Instantiator<Screen00> {
-			                    __safeDI_screen00(context: context)
-			                }
-			                func __safeDI_screen02(context: Context) -> Screen02 {
-			                    let service02 = Service()
-			                    let screen00 = Instantiator<Screen00> {
-			                        __safeDI_screen00(context: context)
-			                    }
-			                    let screen01 = Instantiator<Screen01> {
-			                        __safeDI_screen01(context: context)
-			                    }
-			                    func __safeDI_screen03(context: Context) -> Screen03 {
-			                        let service03 = Service()
-			                        let screen00 = Instantiator<Screen00> {
-			                            __safeDI_screen00(context: context)
-			                        }
-			                        let screen01 = Instantiator<Screen01> {
-			                            __safeDI_screen01(context: context)
-			                        }
-			                        let screen02 = Instantiator<Screen02> {
-			                            __safeDI_screen02(context: context)
-			                        }
-			                        func __safeDI_screen04(context: Context) -> Screen04 {
-			                            let service04 = Service()
-			                            let screen00 = Instantiator<Screen00> {
-			                                __safeDI_screen00(context: context)
-			                            }
-			                            let screen01 = Instantiator<Screen01> {
-			                                __safeDI_screen01(context: context)
-			                            }
-			                            let screen02 = Instantiator<Screen02> {
-			                                __safeDI_screen02(context: context)
-			                            }
-			                            let screen03 = Instantiator<Screen03> {
-			                                __safeDI_screen03(context: context)
-			                            }
-			                            func __safeDI_screen05(context: Context) -> Screen05 {
-			                                let service05 = Service()
-			                                let screen01 = Instantiator<Screen01> {
-			                                    __safeDI_screen01(context: context)
-			                                }
-			                                let screen02 = Instantiator<Screen02> {
-			                                    __safeDI_screen02(context: context)
-			                                }
-			                                let screen03 = Instantiator<Screen03> {
-			                                    __safeDI_screen03(context: context)
-			                                }
-			                                let screen04 = Instantiator<Screen04> {
-			                                    __safeDI_screen04(context: context)
-			                                }
-			                                func __safeDI_screen06(context: Context) -> Screen06 {
-			                                    let service06 = Service()
-			                                    let screen02 = Instantiator<Screen02> {
-			                                        __safeDI_screen02(context: context)
-			                                    }
-			                                    let screen03 = Instantiator<Screen03> {
-			                                        __safeDI_screen03(context: context)
-			                                    }
-			                                    let screen04 = Instantiator<Screen04> {
-			                                        __safeDI_screen04(context: context)
-			                                    }
-			                                    let screen05 = Instantiator<Screen05> {
-			                                        __safeDI_screen05(context: context)
-			                                    }
-			                                    func __safeDI_screen07(context: Context) -> Screen07 {
-			                                        let service07 = Service()
-			                                        let screen03 = Instantiator<Screen03> {
-			                                            __safeDI_screen03(context: context)
-			                                        }
-			                                        let screen04 = Instantiator<Screen04> {
-			                                            __safeDI_screen04(context: context)
-			                                        }
-			                                        let screen05 = Instantiator<Screen05> {
-			                                            __safeDI_screen05(context: context)
-			                                        }
-			                                        let screen06 = Instantiator<Screen06> {
-			                                            __safeDI_screen06(context: context)
-			                                        }
-			                                        func __safeDI_screen08(context: Context) -> Screen08 {
-			                                            let service08 = Service()
-			                                            let screen04 = Instantiator<Screen04> {
-			                                                __safeDI_screen04(context: context)
-			                                            }
-			                                            let screen05 = Instantiator<Screen05> {
-			                                                __safeDI_screen05(context: context)
-			                                            }
-			                                            let screen06 = Instantiator<Screen06> {
-			                                                __safeDI_screen06(context: context)
-			                                            }
-			                                            let screen07 = Instantiator<Screen07> {
-			                                                __safeDI_screen07(context: context)
-			                                            }
-			                                            func __safeDI_screen09(context: Context) -> Screen09 {
-			                                                let service09 = Service()
-			                                                let screen05 = Instantiator<Screen05> {
-			                                                    __safeDI_screen05(context: context)
-			                                                }
-			                                                let screen06 = Instantiator<Screen06> {
-			                                                    __safeDI_screen06(context: context)
-			                                                }
-			                                                let screen07 = Instantiator<Screen07> {
-			                                                    __safeDI_screen07(context: context)
-			                                                }
-			                                                let screen08 = Instantiator<Screen08> {
-			                                                    __safeDI_screen08(context: context)
-			                                                }
-			                                                func __safeDI_screen10(context: Context) -> Screen10 {
-			                                                    let service10 = Service()
-			                                                    let screen06 = Instantiator<Screen06> {
-			                                                        __safeDI_screen06(context: context)
-			                                                    }
-			                                                    let screen07 = Instantiator<Screen07> {
-			                                                        __safeDI_screen07(context: context)
-			                                                    }
-			                                                    let screen08 = Instantiator<Screen08> {
-			                                                        __safeDI_screen08(context: context)
-			                                                    }
-			                                                    let screen09 = Instantiator<Screen09> {
-			                                                        __safeDI_screen09(context: context)
-			                                                    }
-			                                                    func __safeDI_screen11(context: Context) -> Screen11 {
-			                                                        let service11 = Service()
-			                                                        let screen07 = Instantiator<Screen07> {
-			                                                            __safeDI_screen07(context: context)
-			                                                        }
-			                                                        let screen08 = Instantiator<Screen08> {
-			                                                            __safeDI_screen08(context: context)
-			                                                        }
-			                                                        let screen09 = Instantiator<Screen09> {
-			                                                            __safeDI_screen09(context: context)
-			                                                        }
-			                                                        let screen10 = Instantiator<Screen10> {
-			                                                            __safeDI_screen10(context: context)
-			                                                        }
-			                                                        func __safeDI_screen12(context: Context) -> Screen12 {
-			                                                            let service12 = Service()
-			                                                            let screen08 = Instantiator<Screen08> {
-			                                                                __safeDI_screen08(context: context)
-			                                                            }
-			                                                            let screen09 = Instantiator<Screen09> {
-			                                                                __safeDI_screen09(context: context)
-			                                                            }
-			                                                            let screen10 = Instantiator<Screen10> {
-			                                                                __safeDI_screen10(context: context)
-			                                                            }
-			                                                            let screen11 = Instantiator<Screen11> {
-			                                                                __safeDI_screen11(context: context)
-			                                                            }
-			                                                            func __safeDI_screen13(context: Context) -> Screen13 {
-			                                                                let service13 = Service()
-			                                                                let screen09 = Instantiator<Screen09> {
-			                                                                    __safeDI_screen09(context: context)
-			                                                                }
-			                                                                let screen10 = Instantiator<Screen10> {
-			                                                                    __safeDI_screen10(context: context)
-			                                                                }
-			                                                                let screen11 = Instantiator<Screen11> {
-			                                                                    __safeDI_screen11(context: context)
-			                                                                }
-			                                                                let screen12 = Instantiator<Screen12> {
-			                                                                    __safeDI_screen12(context: context)
-			                                                                }
-			                                                                func __safeDI_screen14(context: Context) -> Screen14 {
-			                                                                    let service14 = Service()
-			                                                                    let screen10 = Instantiator<Screen10> {
-			                                                                        __safeDI_screen10(context: context)
-			                                                                    }
-			                                                                    let screen11 = Instantiator<Screen11> {
-			                                                                        __safeDI_screen11(context: context)
-			                                                                    }
-			                                                                    let screen12 = Instantiator<Screen12> {
-			                                                                        __safeDI_screen12(context: context)
-			                                                                    }
-			                                                                    let screen13 = Instantiator<Screen13> {
-			                                                                        __safeDI_screen13(context: context)
-			                                                                    }
-			                                                                    func __safeDI_screen15(context: Context) -> Screen15 {
-			                                                                        let service15 = Service()
-			                                                                        let screen11 = Instantiator<Screen11> {
-			                                                                            __safeDI_screen11(context: context)
-			                                                                        }
-			                                                                        let screen12 = Instantiator<Screen12> {
-			                                                                            __safeDI_screen12(context: context)
-			                                                                        }
-			                                                                        let screen13 = Instantiator<Screen13> {
-			                                                                            __safeDI_screen13(context: context)
-			                                                                        }
-			                                                                        let screen14 = Instantiator<Screen14> {
-			                                                                            __safeDI_screen14(context: context)
-			                                                                        }
-			                                                                        func __safeDI_screen16(context: Context) -> Screen16 {
-			                                                                            let service16 = Service()
-			                                                                            let screen12 = Instantiator<Screen12> {
-			                                                                                __safeDI_screen12(context: context)
-			                                                                            }
-			                                                                            let screen13 = Instantiator<Screen13> {
-			                                                                                __safeDI_screen13(context: context)
-			                                                                            }
-			                                                                            let screen14 = Instantiator<Screen14> {
-			                                                                                __safeDI_screen14(context: context)
-			                                                                            }
-			                                                                            let screen15 = Instantiator<Screen15> {
-			                                                                                __safeDI_screen15(context: context)
-			                                                                            }
-			                                                                            func __safeDI_screen17(context: Context) -> Screen17 {
-			                                                                                let service17 = Service()
-			                                                                                let screen13 = Instantiator<Screen13> {
-			                                                                                    __safeDI_screen13(context: context)
-			                                                                                }
-			                                                                                let screen14 = Instantiator<Screen14> {
-			                                                                                    __safeDI_screen14(context: context)
-			                                                                                }
-			                                                                                let screen15 = Instantiator<Screen15> {
-			                                                                                    __safeDI_screen15(context: context)
-			                                                                                }
-			                                                                                let screen16 = Instantiator<Screen16> {
-			                                                                                    __safeDI_screen16(context: context)
-			                                                                                }
-			                                                                                func __safeDI_screen18(context: Context) -> Screen18 {
-			                                                                                    let service18 = Service()
-			                                                                                    let screen14 = Instantiator<Screen14> {
-			                                                                                        __safeDI_screen14(context: context)
-			                                                                                    }
-			                                                                                    let screen15 = Instantiator<Screen15> {
-			                                                                                        __safeDI_screen15(context: context)
-			                                                                                    }
-			                                                                                    let screen16 = Instantiator<Screen16> {
-			                                                                                        __safeDI_screen16(context: context)
-			                                                                                    }
-			                                                                                    let screen17 = Instantiator<Screen17> {
-			                                                                                        __safeDI_screen17(context: context)
-			                                                                                    }
-			                                                                                    func __safeDI_screen19(context: Context) -> Screen19 {
-			                                                                                        let service19 = Service()
-			                                                                                        let screen15 = Instantiator<Screen15> {
-			                                                                                            __safeDI_screen15(context: context)
-			                                                                                        }
-			                                                                                        let screen16 = Instantiator<Screen16> {
-			                                                                                            __safeDI_screen16(context: context)
-			                                                                                        }
-			                                                                                        let screen17 = Instantiator<Screen17> {
-			                                                                                            __safeDI_screen17(context: context)
-			                                                                                        }
-			                                                                                        let screen18 = Instantiator<Screen18> {
-			                                                                                            __safeDI_screen18(context: context)
-			                                                                                        }
-			                                                                                        func __safeDI_screen20(context: Context) -> Screen20 {
-			                                                                                            let service20 = Service()
-			                                                                                            let screen16 = Instantiator<Screen16> {
-			                                                                                                __safeDI_screen16(context: context)
-			                                                                                            }
-			                                                                                            let screen17 = Instantiator<Screen17> {
-			                                                                                                __safeDI_screen17(context: context)
-			                                                                                            }
-			                                                                                            let screen18 = Instantiator<Screen18> {
-			                                                                                                __safeDI_screen18(context: context)
-			                                                                                            }
-			                                                                                            let screen19 = Instantiator<Screen19> {
-			                                                                                                __safeDI_screen19(context: context)
-			                                                                                            }
-			                                                                                            func __safeDI_screen21(context: Context) -> Screen21 {
-			                                                                                                let service21 = Service()
-			                                                                                                let screen17 = Instantiator<Screen17> {
-			                                                                                                    __safeDI_screen17(context: context)
-			                                                                                                }
-			                                                                                                let screen18 = Instantiator<Screen18> {
-			                                                                                                    __safeDI_screen18(context: context)
-			                                                                                                }
-			                                                                                                let screen19 = Instantiator<Screen19> {
-			                                                                                                    __safeDI_screen19(context: context)
-			                                                                                                }
-			                                                                                                let screen20 = Instantiator<Screen20> {
-			                                                                                                    __safeDI_screen20(context: context)
-			                                                                                                }
-			                                                                                                func __safeDI_screen22(context: Context) -> Screen22 {
-			                                                                                                    let service22 = Service()
-			                                                                                                    let screen18 = Instantiator<Screen18> {
-			                                                                                                        __safeDI_screen18(context: context)
-			                                                                                                    }
-			                                                                                                    let screen19 = Instantiator<Screen19> {
-			                                                                                                        __safeDI_screen19(context: context)
-			                                                                                                    }
-			                                                                                                    let screen20 = Instantiator<Screen20> {
-			                                                                                                        __safeDI_screen20(context: context)
-			                                                                                                    }
-			                                                                                                    let screen21 = Instantiator<Screen21> {
-			                                                                                                        __safeDI_screen21(context: context)
-			                                                                                                    }
-			                                                                                                    func __safeDI_screen23(context: Context) -> Screen23 {
-			                                                                                                        let service23 = Service()
-			                                                                                                        let screen19 = Instantiator<Screen19> {
-			                                                                                                            __safeDI_screen19(context: context)
-			                                                                                                        }
-			                                                                                                        let screen20 = Instantiator<Screen20> {
-			                                                                                                            __safeDI_screen20(context: context)
-			                                                                                                        }
-			                                                                                                        let screen21 = Instantiator<Screen21> {
-			                                                                                                            __safeDI_screen21(context: context)
-			                                                                                                        }
-			                                                                                                        let screen22 = Instantiator<Screen22> {
-			                                                                                                            __safeDI_screen22(context: context)
-			                                                                                                        }
-			                                                                                                        func __safeDI_hub() -> Hub {
-			                                                                                                            let service00 = Service()
-			                                                                                                            let service01 = Service()
-			                                                                                                            let service02 = Service()
-			                                                                                                            let service03 = Service()
-			                                                                                                            let service04 = Service()
-			                                                                                                            let service05 = Service()
-			                                                                                                            let service06 = Service()
-			                                                                                                            let service07 = Service()
-			                                                                                                            let service08 = Service()
-			                                                                                                            let service09 = Service()
-			                                                                                                            let service10 = Service()
-			                                                                                                            let service11 = Service()
-			                                                                                                            let service12 = Service()
-			                                                                                                            let service13 = Service()
-			                                                                                                            let service14 = Service()
-			                                                                                                            let service15 = Service()
-			                                                                                                            let service16 = Service()
-			                                                                                                            let service17 = Service()
-			                                                                                                            let service18 = Service()
-			                                                                                                            let service19 = Service()
-			                                                                                                            let service20 = Service()
-			                                                                                                            let service21 = Service()
-			                                                                                                            let service22 = Service()
-			                                                                                                            let service23 = Service()
-			                                                                                                            let context = Context()
-			                                                                                                            let screen23 = Instantiator<Screen23> {
-			                                                                                                                __safeDI_screen23(context: context)
-			                                                                                                            }
-			                                                                                                            return Hub(service00: service00, service01: service01, service02: service02, service03: service03, service04: service04, service05: service05, service06: service06, service07: service07, service08: service08, service09: service09, service10: service10, service11: service11, service12: service12, service13: service13, service14: service14, service15: service15, service16: service16, service17: service17, service18: service18, service19: service19, service20: service20, service21: service21, service22: service22, service23: service23, context: context, screen23: screen23)
-			                                                                                                        }
-			                                                                                                        let hub = Instantiator<Hub>(__safeDI_hub)
-			                                                                                                        return Screen23(service23: service23, context: context, screen19: screen19, screen20: screen20, screen21: screen21, screen22: screen22, hub: hub)
-			                                                                                                    }
-			                                                                                                    let screen23 = Instantiator<Screen23> {
-			                                                                                                        __safeDI_screen23(context: context)
-			                                                                                                    }
-			                                                                                                    return Screen22(service22: service22, context: context, screen18: screen18, screen19: screen19, screen20: screen20, screen21: screen21, screen23: screen23)
-			                                                                                                }
-			                                                                                                let screen22 = Instantiator<Screen22> {
-			                                                                                                    __safeDI_screen22(context: context)
-			                                                                                                }
-			                                                                                                return Screen21(service21: service21, context: context, screen17: screen17, screen18: screen18, screen19: screen19, screen20: screen20, screen22: screen22)
-			                                                                                            }
-			                                                                                            let screen21 = Instantiator<Screen21> {
-			                                                                                                __safeDI_screen21(context: context)
-			                                                                                            }
-			                                                                                            return Screen20(service20: service20, context: context, screen16: screen16, screen17: screen17, screen18: screen18, screen19: screen19, screen21: screen21)
-			                                                                                        }
-			                                                                                        let screen20 = Instantiator<Screen20> {
-			                                                                                            __safeDI_screen20(context: context)
-			                                                                                        }
-			                                                                                        return Screen19(service19: service19, context: context, screen15: screen15, screen16: screen16, screen17: screen17, screen18: screen18, screen20: screen20)
-			                                                                                    }
-			                                                                                    let screen19 = Instantiator<Screen19> {
-			                                                                                        __safeDI_screen19(context: context)
-			                                                                                    }
-			                                                                                    return Screen18(service18: service18, context: context, screen14: screen14, screen15: screen15, screen16: screen16, screen17: screen17, screen19: screen19)
-			                                                                                }
-			                                                                                let screen18 = Instantiator<Screen18> {
-			                                                                                    __safeDI_screen18(context: context)
-			                                                                                }
-			                                                                                return Screen17(service17: service17, context: context, screen13: screen13, screen14: screen14, screen15: screen15, screen16: screen16, screen18: screen18)
-			                                                                            }
-			                                                                            let screen17 = Instantiator<Screen17> {
-			                                                                                __safeDI_screen17(context: context)
-			                                                                            }
-			                                                                            return Screen16(service16: service16, context: context, screen12: screen12, screen13: screen13, screen14: screen14, screen15: screen15, screen17: screen17)
-			                                                                        }
-			                                                                        let screen16 = Instantiator<Screen16> {
-			                                                                            __safeDI_screen16(context: context)
-			                                                                        }
-			                                                                        return Screen15(service15: service15, context: context, screen11: screen11, screen12: screen12, screen13: screen13, screen14: screen14, screen16: screen16)
-			                                                                    }
-			                                                                    let screen15 = Instantiator<Screen15> {
-			                                                                        __safeDI_screen15(context: context)
-			                                                                    }
-			                                                                    return Screen14(service14: service14, context: context, screen10: screen10, screen11: screen11, screen12: screen12, screen13: screen13, screen15: screen15)
-			                                                                }
-			                                                                let screen14 = Instantiator<Screen14> {
-			                                                                    __safeDI_screen14(context: context)
-			                                                                }
-			                                                                return Screen13(service13: service13, context: context, screen09: screen09, screen10: screen10, screen11: screen11, screen12: screen12, screen14: screen14)
-			                                                            }
-			                                                            let screen13 = Instantiator<Screen13> {
-			                                                                __safeDI_screen13(context: context)
-			                                                            }
-			                                                            return Screen12(service12: service12, context: context, screen08: screen08, screen09: screen09, screen10: screen10, screen11: screen11, screen13: screen13)
-			                                                        }
-			                                                        let screen12 = Instantiator<Screen12> {
-			                                                            __safeDI_screen12(context: context)
-			                                                        }
-			                                                        return Screen11(service11: service11, context: context, screen07: screen07, screen08: screen08, screen09: screen09, screen10: screen10, screen12: screen12)
-			                                                    }
-			                                                    let screen11 = Instantiator<Screen11> {
-			                                                        __safeDI_screen11(context: context)
-			                                                    }
-			                                                    return Screen10(service10: service10, context: context, screen06: screen06, screen07: screen07, screen08: screen08, screen09: screen09, screen11: screen11)
-			                                                }
-			                                                let screen10 = Instantiator<Screen10> {
-			                                                    __safeDI_screen10(context: context)
-			                                                }
-			                                                return Screen09(service09: service09, context: context, screen05: screen05, screen06: screen06, screen07: screen07, screen08: screen08, screen10: screen10)
-			                                            }
-			                                            let screen09 = Instantiator<Screen09> {
-			                                                __safeDI_screen09(context: context)
-			                                            }
-			                                            return Screen08(service08: service08, context: context, screen04: screen04, screen05: screen05, screen06: screen06, screen07: screen07, screen09: screen09)
-			                                        }
-			                                        let screen08 = Instantiator<Screen08> {
-			                                            __safeDI_screen08(context: context)
-			                                        }
-			                                        return Screen07(service07: service07, context: context, screen03: screen03, screen04: screen04, screen05: screen05, screen06: screen06, screen08: screen08)
-			                                    }
-			                                    let screen07 = Instantiator<Screen07> {
-			                                        __safeDI_screen07(context: context)
-			                                    }
-			                                    return Screen06(service06: service06, context: context, screen02: screen02, screen03: screen03, screen04: screen04, screen05: screen05, screen07: screen07)
-			                                }
-			                                let screen06 = Instantiator<Screen06> {
-			                                    __safeDI_screen06(context: context)
-			                                }
-			                                return Screen05(service05: service05, context: context, screen01: screen01, screen02: screen02, screen03: screen03, screen04: screen04, screen06: screen06)
-			                            }
-			                            let screen05 = Instantiator<Screen05> {
-			                                __safeDI_screen05(context: context)
-			                            }
-			                            return Screen04(service04: service04, context: context, screen00: screen00, screen01: screen01, screen02: screen02, screen03: screen03, screen05: screen05)
-			                        }
-			                        let screen04 = Instantiator<Screen04> {
-			                            __safeDI_screen04(context: context)
-			                        }
-			                        return Screen03(service03: service03, context: context, screen00: screen00, screen01: screen01, screen02: screen02, screen04: screen04)
-			                    }
-			                    let screen03 = Instantiator<Screen03> {
-			                        __safeDI_screen03(context: context)
-			                    }
-			                    return Screen02(service02: service02, context: context, screen00: screen00, screen01: screen01, screen03: screen03)
-			                }
-			                let screen02 = Instantiator<Screen02> {
-			                    __safeDI_screen02(context: context)
-			                }
-			                return Screen01(service01: service01, context: context, screen00: screen00, screen02: screen02)
-			            }
 			            let screen01 = Instantiator<Screen01> {
 			                __safeDI_screen01(context: context)
 			            }
 			            return Screen00(service00: service00, context: context, screen01: screen01)
+			        }
+			        func __safeDI_screen01(context: Context) -> Screen01 {
+			            let service01 = Service()
+			            let screen00 = Instantiator<Screen00> {
+			                __safeDI_screen00(context: context)
+			            }
+			            let screen02 = Instantiator<Screen02> {
+			                __safeDI_screen02(context: context)
+			            }
+			            return Screen01(service01: service01, context: context, screen00: screen00, screen02: screen02)
+			        }
+			        func __safeDI_screen02(context: Context) -> Screen02 {
+			            let service02 = Service()
+			            let screen00 = Instantiator<Screen00> {
+			                __safeDI_screen00(context: context)
+			            }
+			            let screen01 = Instantiator<Screen01> {
+			                __safeDI_screen01(context: context)
+			            }
+			            let screen03 = Instantiator<Screen03> {
+			                __safeDI_screen03(context: context)
+			            }
+			            return Screen02(service02: service02, context: context, screen00: screen00, screen01: screen01, screen03: screen03)
+			        }
+			        func __safeDI_screen03(context: Context) -> Screen03 {
+			            let service03 = Service()
+			            let screen00 = Instantiator<Screen00> {
+			                __safeDI_screen00(context: context)
+			            }
+			            let screen01 = Instantiator<Screen01> {
+			                __safeDI_screen01(context: context)
+			            }
+			            let screen02 = Instantiator<Screen02> {
+			                __safeDI_screen02(context: context)
+			            }
+			            let screen04 = Instantiator<Screen04> {
+			                __safeDI_screen04(context: context)
+			            }
+			            return Screen03(service03: service03, context: context, screen00: screen00, screen01: screen01, screen02: screen02, screen04: screen04)
+			        }
+			        func __safeDI_screen04(context: Context) -> Screen04 {
+			            let service04 = Service()
+			            let screen00 = Instantiator<Screen00> {
+			                __safeDI_screen00(context: context)
+			            }
+			            let screen01 = Instantiator<Screen01> {
+			                __safeDI_screen01(context: context)
+			            }
+			            let screen02 = Instantiator<Screen02> {
+			                __safeDI_screen02(context: context)
+			            }
+			            let screen03 = Instantiator<Screen03> {
+			                __safeDI_screen03(context: context)
+			            }
+			            let screen05 = Instantiator<Screen05> {
+			                __safeDI_screen05(context: context)
+			            }
+			            return Screen04(service04: service04, context: context, screen00: screen00, screen01: screen01, screen02: screen02, screen03: screen03, screen05: screen05)
+			        }
+			        func __safeDI_screen05(context: Context) -> Screen05 {
+			            let service05 = Service()
+			            let screen01 = Instantiator<Screen01> {
+			                __safeDI_screen01(context: context)
+			            }
+			            let screen02 = Instantiator<Screen02> {
+			                __safeDI_screen02(context: context)
+			            }
+			            let screen03 = Instantiator<Screen03> {
+			                __safeDI_screen03(context: context)
+			            }
+			            let screen04 = Instantiator<Screen04> {
+			                __safeDI_screen04(context: context)
+			            }
+			            let screen06 = Instantiator<Screen06> {
+			                __safeDI_screen06(context: context)
+			            }
+			            return Screen05(service05: service05, context: context, screen01: screen01, screen02: screen02, screen03: screen03, screen04: screen04, screen06: screen06)
+			        }
+			        func __safeDI_screen06(context: Context) -> Screen06 {
+			            let service06 = Service()
+			            let screen02 = Instantiator<Screen02> {
+			                __safeDI_screen02(context: context)
+			            }
+			            let screen03 = Instantiator<Screen03> {
+			                __safeDI_screen03(context: context)
+			            }
+			            let screen04 = Instantiator<Screen04> {
+			                __safeDI_screen04(context: context)
+			            }
+			            let screen05 = Instantiator<Screen05> {
+			                __safeDI_screen05(context: context)
+			            }
+			            let screen07 = Instantiator<Screen07> {
+			                __safeDI_screen07(context: context)
+			            }
+			            return Screen06(service06: service06, context: context, screen02: screen02, screen03: screen03, screen04: screen04, screen05: screen05, screen07: screen07)
+			        }
+			        func __safeDI_screen07(context: Context) -> Screen07 {
+			            let service07 = Service()
+			            let screen03 = Instantiator<Screen03> {
+			                __safeDI_screen03(context: context)
+			            }
+			            let screen04 = Instantiator<Screen04> {
+			                __safeDI_screen04(context: context)
+			            }
+			            let screen05 = Instantiator<Screen05> {
+			                __safeDI_screen05(context: context)
+			            }
+			            let screen06 = Instantiator<Screen06> {
+			                __safeDI_screen06(context: context)
+			            }
+			            let screen08 = Instantiator<Screen08> {
+			                __safeDI_screen08(context: context)
+			            }
+			            return Screen07(service07: service07, context: context, screen03: screen03, screen04: screen04, screen05: screen05, screen06: screen06, screen08: screen08)
+			        }
+			        func __safeDI_screen08(context: Context) -> Screen08 {
+			            let service08 = Service()
+			            let screen04 = Instantiator<Screen04> {
+			                __safeDI_screen04(context: context)
+			            }
+			            let screen05 = Instantiator<Screen05> {
+			                __safeDI_screen05(context: context)
+			            }
+			            let screen06 = Instantiator<Screen06> {
+			                __safeDI_screen06(context: context)
+			            }
+			            let screen07 = Instantiator<Screen07> {
+			                __safeDI_screen07(context: context)
+			            }
+			            let screen09 = Instantiator<Screen09> {
+			                __safeDI_screen09(context: context)
+			            }
+			            return Screen08(service08: service08, context: context, screen04: screen04, screen05: screen05, screen06: screen06, screen07: screen07, screen09: screen09)
+			        }
+			        func __safeDI_screen09(context: Context) -> Screen09 {
+			            let service09 = Service()
+			            let screen05 = Instantiator<Screen05> {
+			                __safeDI_screen05(context: context)
+			            }
+			            let screen06 = Instantiator<Screen06> {
+			                __safeDI_screen06(context: context)
+			            }
+			            let screen07 = Instantiator<Screen07> {
+			                __safeDI_screen07(context: context)
+			            }
+			            let screen08 = Instantiator<Screen08> {
+			                __safeDI_screen08(context: context)
+			            }
+			            let screen10 = Instantiator<Screen10> {
+			                __safeDI_screen10(context: context)
+			            }
+			            return Screen09(service09: service09, context: context, screen05: screen05, screen06: screen06, screen07: screen07, screen08: screen08, screen10: screen10)
+			        }
+			        func __safeDI_screen10(context: Context) -> Screen10 {
+			            let service10 = Service()
+			            let screen06 = Instantiator<Screen06> {
+			                __safeDI_screen06(context: context)
+			            }
+			            let screen07 = Instantiator<Screen07> {
+			                __safeDI_screen07(context: context)
+			            }
+			            let screen08 = Instantiator<Screen08> {
+			                __safeDI_screen08(context: context)
+			            }
+			            let screen09 = Instantiator<Screen09> {
+			                __safeDI_screen09(context: context)
+			            }
+			            let screen11 = Instantiator<Screen11> {
+			                __safeDI_screen11(context: context)
+			            }
+			            return Screen10(service10: service10, context: context, screen06: screen06, screen07: screen07, screen08: screen08, screen09: screen09, screen11: screen11)
+			        }
+			        func __safeDI_screen11(context: Context) -> Screen11 {
+			            let service11 = Service()
+			            let screen07 = Instantiator<Screen07> {
+			                __safeDI_screen07(context: context)
+			            }
+			            let screen08 = Instantiator<Screen08> {
+			                __safeDI_screen08(context: context)
+			            }
+			            let screen09 = Instantiator<Screen09> {
+			                __safeDI_screen09(context: context)
+			            }
+			            let screen10 = Instantiator<Screen10> {
+			                __safeDI_screen10(context: context)
+			            }
+			            let screen12 = Instantiator<Screen12> {
+			                __safeDI_screen12(context: context)
+			            }
+			            return Screen11(service11: service11, context: context, screen07: screen07, screen08: screen08, screen09: screen09, screen10: screen10, screen12: screen12)
+			        }
+			        func __safeDI_screen12(context: Context) -> Screen12 {
+			            let service12 = Service()
+			            let screen08 = Instantiator<Screen08> {
+			                __safeDI_screen08(context: context)
+			            }
+			            let screen09 = Instantiator<Screen09> {
+			                __safeDI_screen09(context: context)
+			            }
+			            let screen10 = Instantiator<Screen10> {
+			                __safeDI_screen10(context: context)
+			            }
+			            let screen11 = Instantiator<Screen11> {
+			                __safeDI_screen11(context: context)
+			            }
+			            let screen13 = Instantiator<Screen13> {
+			                __safeDI_screen13(context: context)
+			            }
+			            return Screen12(service12: service12, context: context, screen08: screen08, screen09: screen09, screen10: screen10, screen11: screen11, screen13: screen13)
+			        }
+			        func __safeDI_screen13(context: Context) -> Screen13 {
+			            let service13 = Service()
+			            let screen09 = Instantiator<Screen09> {
+			                __safeDI_screen09(context: context)
+			            }
+			            let screen10 = Instantiator<Screen10> {
+			                __safeDI_screen10(context: context)
+			            }
+			            let screen11 = Instantiator<Screen11> {
+			                __safeDI_screen11(context: context)
+			            }
+			            let screen12 = Instantiator<Screen12> {
+			                __safeDI_screen12(context: context)
+			            }
+			            let screen14 = Instantiator<Screen14> {
+			                __safeDI_screen14(context: context)
+			            }
+			            return Screen13(service13: service13, context: context, screen09: screen09, screen10: screen10, screen11: screen11, screen12: screen12, screen14: screen14)
+			        }
+			        func __safeDI_screen14(context: Context) -> Screen14 {
+			            let service14 = Service()
+			            let screen10 = Instantiator<Screen10> {
+			                __safeDI_screen10(context: context)
+			            }
+			            let screen11 = Instantiator<Screen11> {
+			                __safeDI_screen11(context: context)
+			            }
+			            let screen12 = Instantiator<Screen12> {
+			                __safeDI_screen12(context: context)
+			            }
+			            let screen13 = Instantiator<Screen13> {
+			                __safeDI_screen13(context: context)
+			            }
+			            let screen15 = Instantiator<Screen15> {
+			                __safeDI_screen15(context: context)
+			            }
+			            return Screen14(service14: service14, context: context, screen10: screen10, screen11: screen11, screen12: screen12, screen13: screen13, screen15: screen15)
+			        }
+			        func __safeDI_screen15(context: Context) -> Screen15 {
+			            let service15 = Service()
+			            let screen11 = Instantiator<Screen11> {
+			                __safeDI_screen11(context: context)
+			            }
+			            let screen12 = Instantiator<Screen12> {
+			                __safeDI_screen12(context: context)
+			            }
+			            let screen13 = Instantiator<Screen13> {
+			                __safeDI_screen13(context: context)
+			            }
+			            let screen14 = Instantiator<Screen14> {
+			                __safeDI_screen14(context: context)
+			            }
+			            let screen16 = Instantiator<Screen16> {
+			                __safeDI_screen16(context: context)
+			            }
+			            return Screen15(service15: service15, context: context, screen11: screen11, screen12: screen12, screen13: screen13, screen14: screen14, screen16: screen16)
+			        }
+			        func __safeDI_screen16(context: Context) -> Screen16 {
+			            let service16 = Service()
+			            let screen12 = Instantiator<Screen12> {
+			                __safeDI_screen12(context: context)
+			            }
+			            let screen13 = Instantiator<Screen13> {
+			                __safeDI_screen13(context: context)
+			            }
+			            let screen14 = Instantiator<Screen14> {
+			                __safeDI_screen14(context: context)
+			            }
+			            let screen15 = Instantiator<Screen15> {
+			                __safeDI_screen15(context: context)
+			            }
+			            let screen17 = Instantiator<Screen17> {
+			                __safeDI_screen17(context: context)
+			            }
+			            return Screen16(service16: service16, context: context, screen12: screen12, screen13: screen13, screen14: screen14, screen15: screen15, screen17: screen17)
+			        }
+			        func __safeDI_screen17(context: Context) -> Screen17 {
+			            let service17 = Service()
+			            let screen13 = Instantiator<Screen13> {
+			                __safeDI_screen13(context: context)
+			            }
+			            let screen14 = Instantiator<Screen14> {
+			                __safeDI_screen14(context: context)
+			            }
+			            let screen15 = Instantiator<Screen15> {
+			                __safeDI_screen15(context: context)
+			            }
+			            let screen16 = Instantiator<Screen16> {
+			                __safeDI_screen16(context: context)
+			            }
+			            let screen18 = Instantiator<Screen18> {
+			                __safeDI_screen18(context: context)
+			            }
+			            return Screen17(service17: service17, context: context, screen13: screen13, screen14: screen14, screen15: screen15, screen16: screen16, screen18: screen18)
+			        }
+			        func __safeDI_screen18(context: Context) -> Screen18 {
+			            let service18 = Service()
+			            let screen14 = Instantiator<Screen14> {
+			                __safeDI_screen14(context: context)
+			            }
+			            let screen15 = Instantiator<Screen15> {
+			                __safeDI_screen15(context: context)
+			            }
+			            let screen16 = Instantiator<Screen16> {
+			                __safeDI_screen16(context: context)
+			            }
+			            let screen17 = Instantiator<Screen17> {
+			                __safeDI_screen17(context: context)
+			            }
+			            let screen19 = Instantiator<Screen19> {
+			                __safeDI_screen19(context: context)
+			            }
+			            return Screen18(service18: service18, context: context, screen14: screen14, screen15: screen15, screen16: screen16, screen17: screen17, screen19: screen19)
+			        }
+			        func __safeDI_screen19(context: Context) -> Screen19 {
+			            let service19 = Service()
+			            let screen15 = Instantiator<Screen15> {
+			                __safeDI_screen15(context: context)
+			            }
+			            let screen16 = Instantiator<Screen16> {
+			                __safeDI_screen16(context: context)
+			            }
+			            let screen17 = Instantiator<Screen17> {
+			                __safeDI_screen17(context: context)
+			            }
+			            let screen18 = Instantiator<Screen18> {
+			                __safeDI_screen18(context: context)
+			            }
+			            let screen20 = Instantiator<Screen20> {
+			                __safeDI_screen20(context: context)
+			            }
+			            return Screen19(service19: service19, context: context, screen15: screen15, screen16: screen16, screen17: screen17, screen18: screen18, screen20: screen20)
+			        }
+			        func __safeDI_screen20(context: Context) -> Screen20 {
+			            let service20 = Service()
+			            let screen16 = Instantiator<Screen16> {
+			                __safeDI_screen16(context: context)
+			            }
+			            let screen17 = Instantiator<Screen17> {
+			                __safeDI_screen17(context: context)
+			            }
+			            let screen18 = Instantiator<Screen18> {
+			                __safeDI_screen18(context: context)
+			            }
+			            let screen19 = Instantiator<Screen19> {
+			                __safeDI_screen19(context: context)
+			            }
+			            let screen21 = Instantiator<Screen21> {
+			                __safeDI_screen21(context: context)
+			            }
+			            return Screen20(service20: service20, context: context, screen16: screen16, screen17: screen17, screen18: screen18, screen19: screen19, screen21: screen21)
+			        }
+			        func __safeDI_screen21(context: Context) -> Screen21 {
+			            let service21 = Service()
+			            let screen17 = Instantiator<Screen17> {
+			                __safeDI_screen17(context: context)
+			            }
+			            let screen18 = Instantiator<Screen18> {
+			                __safeDI_screen18(context: context)
+			            }
+			            let screen19 = Instantiator<Screen19> {
+			                __safeDI_screen19(context: context)
+			            }
+			            let screen20 = Instantiator<Screen20> {
+			                __safeDI_screen20(context: context)
+			            }
+			            let screen22 = Instantiator<Screen22> {
+			                __safeDI_screen22(context: context)
+			            }
+			            return Screen21(service21: service21, context: context, screen17: screen17, screen18: screen18, screen19: screen19, screen20: screen20, screen22: screen22)
+			        }
+			        func __safeDI_screen22(context: Context) -> Screen22 {
+			            let service22 = Service()
+			            let screen18 = Instantiator<Screen18> {
+			                __safeDI_screen18(context: context)
+			            }
+			            let screen19 = Instantiator<Screen19> {
+			                __safeDI_screen19(context: context)
+			            }
+			            let screen20 = Instantiator<Screen20> {
+			                __safeDI_screen20(context: context)
+			            }
+			            let screen21 = Instantiator<Screen21> {
+			                __safeDI_screen21(context: context)
+			            }
+			            let screen23 = Instantiator<Screen23> {
+			                __safeDI_screen23(context: context)
+			            }
+			            return Screen22(service22: service22, context: context, screen18: screen18, screen19: screen19, screen20: screen20, screen21: screen21, screen23: screen23)
+			        }
+			        func __safeDI_screen23(context: Context) -> Screen23 {
+			            let service23 = Service()
+			            let screen19 = Instantiator<Screen19> {
+			                __safeDI_screen19(context: context)
+			            }
+			            let screen20 = Instantiator<Screen20> {
+			                __safeDI_screen20(context: context)
+			            }
+			            let screen21 = Instantiator<Screen21> {
+			                __safeDI_screen21(context: context)
+			            }
+			            let screen22 = Instantiator<Screen22> {
+			                __safeDI_screen22(context: context)
+			            }
+			            let hub = Instantiator<Hub>(__safeDI_hub)
+			            return Screen23(service23: service23, context: context, screen19: screen19, screen20: screen20, screen21: screen21, screen22: screen22, hub: hub)
+			        }
+			        func __safeDI_hub() -> Hub {
+			            let service00 = Service()
+			            let service01 = Service()
+			            let service02 = Service()
+			            let service03 = Service()
+			            let service04 = Service()
+			            let service05 = Service()
+			            let service06 = Service()
+			            let service07 = Service()
+			            let service08 = Service()
+			            let service09 = Service()
+			            let service10 = Service()
+			            let service11 = Service()
+			            let service12 = Service()
+			            let service13 = Service()
+			            let service14 = Service()
+			            let service15 = Service()
+			            let service16 = Service()
+			            let service17 = Service()
+			            let service18 = Service()
+			            let service19 = Service()
+			            let service20 = Service()
+			            let service21 = Service()
+			            let service22 = Service()
+			            let service23 = Service()
+			            let context = Context()
+			            let screen23 = Instantiator<Screen23> {
+			                __safeDI_screen23(context: context)
+			            }
+			            return Hub(service00: service00, service01: service01, service02: service02, service03: service03, service04: service04, service05: service05, service06: service06, service07: service07, service08: service08, service09: service09, service10: service10, service11: service11, service12: service12, service13: service13, service14: service14, service15: service15, service16: service16, service17: service17, service18: service18, service19: service19, service20: service20, service21: service21, service22: service22, service23: service23, context: context, screen23: screen23)
 			        }
 			        let screen00 = Instantiator<Screen00> {
 			            __safeDI_screen00(context: context)

@@ -350,18 +350,18 @@ struct SafeDIToolRenameSpellingTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_child(x: X) -> Child {
+			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 8)
+			            let a: X? = x
+			            #sourceLocation()
+			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
+			            let b: X? = x
+			            #sourceLocation()
+			            return Child(a: a, b: b)
+			        }
 			        func __safeDI_available() -> Available {
 			            let x = X()
-			            func __safeDI_child() -> Child {
-			                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 8)
-			                let a: X? = x
-			                #sourceLocation()
-			                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
-			                let b: X? = x
-			                #sourceLocation()
-			                return Child(a: a, b: b)
-			            }
-			            let child: Child = __safeDI_child()
+			            let child: Child = __safeDI_child(x: x)
 			            return Available(x: x, child: child)
 			        }
 			        let available: Available = __safeDI_available()
