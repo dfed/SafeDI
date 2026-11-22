@@ -32,6 +32,7 @@ extension MockLowering {
 		of roots: [LoweredRoot],
 		mockConditionalCompilation: String?,
 		sendableConfigurationTypeNames: Set<String>,
+		publicMockContext: PublicMockContext?,
 	) -> Lowering<(mergedCodes: [String], configurationCode: String?)> {
 		var loweredRoots = [(code: String, records: [ConfigurationRecord])]()
 		var firstUnsupportedRoot: (mockedType: TypeDescription, rule: Rule)?
@@ -59,7 +60,8 @@ extension MockLowering {
 		var sharedExtensions = [(typeName: String, structCode: String)]()
 		let recordsInRootOrder = zip(roots, loweredRoots).sorted { $0.0.mockedType < $1.0.mockedType }.map(\.1.records)
 		for records in recordsInRootOrder {
-			for record in records where seenTypeNames.insert(record.concreteType.asSource).inserted {
+			// A public mock's records describe its module-level configurations, which are lowered after these.
+			for record in records where record.publicConstruction == nil && seenTypeNames.insert(record.concreteType.asSource).inserted {
 				let typeName = record.concreteType.asSource
 				let structCode = record.configurationStruct
 				if rootedTypeNames.contains(typeName) {
@@ -74,22 +76,35 @@ extension MockLowering {
 			guard let structCode = rootedStructs[root.mockedType.asSource] else { return code }
 			let configurationCode = Self.configurationCode(
 				extensions: [(typeName: root.mockedType.asSource, structCode: structCode)],
+				publicDeclarations: [],
 				mockConditionalCompilation: mockConditionalCompilation,
 			)
 			return code + "\n\n" + configurationCode.trimmingCharacters(in: .whitespacesAndNewlines)
 		}
-		let configurationCode = sharedExtensions.isEmpty
+		let publicRecords = recordsInRootOrder.flatMap { records in records.compactMap(\.publicConstruction) }
+		var publicDeclarations = [String]()
+		if let publicMockContext {
+			switch Self.publicConfigurationDeclarations(of: publicRecords, context: publicMockContext) {
+			case let .lowered(declarations):
+				publicDeclarations = declarations
+			case let .unsupported(rule):
+				return .unsupported(rule)
+			}
+		}
+		let configurationCode = sharedExtensions.isEmpty && publicDeclarations.isEmpty
 			? nil
-			: Self.configurationCode(extensions: sharedExtensions, mockConditionalCompilation: mockConditionalCompilation)
+			: Self.configurationCode(extensions: sharedExtensions, publicDeclarations: publicDeclarations, mockConditionalCompilation: mockConditionalCompilation)
 		return .lowered((mergedCodes: mergedCodes, configurationCode: configurationCode))
 	}
 
-	/// The code that declares each of `extensions`' structs in an extension of its type, under the mock condition.
+	/// The code that declares each of `extensions`' structs in an extension of its type, then `publicDeclarations`, under the
+	/// mock condition.
 	private static func configurationCode(
 		extensions: [(typeName: String, structCode: String)],
+		publicDeclarations: [String],
 		mockConditionalCompilation: String?,
 	) -> String {
-		let body = extensions.map { "extension \($0.typeName) {\n\($0.structCode)\n}" }.joined(separator: "\n\n")
+		let body = (extensions.map { "extension \($0.typeName) {\n\($0.structCode)\n}" } + publicDeclarations).joined(separator: "\n\n")
 		return if let mockConditionalCompilation {
 			"#if \(mockConditionalCompilation)\n\(body)\n#endif\n"
 		} else {
@@ -158,10 +173,15 @@ extension MockLoweringShadow {
 		emittedConfigurationCode: String?,
 		mockConditionalCompilation: String?,
 		sendableConfigurationTypeNames: Set<String>,
-		publicMockContext _: PublicMockContext?,
+		publicMockContext: PublicMockContext?,
 	) -> [Comparison] {
 		var comparisons = [Comparison]()
-		switch MockLowering.configurationCode(of: roots, mockConditionalCompilation: mockConditionalCompilation, sendableConfigurationTypeNames: sendableConfigurationTypeNames) {
+		switch MockLowering.configurationCode(
+			of: roots,
+			mockConditionalCompilation: mockConditionalCompilation,
+			sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+			publicMockContext: publicMockContext,
+		) {
 		case let .lowered((mergedCodes, configurationCode)):
 			for (root, mergedCode) in zip(roots, mergedCodes) {
 				comparisons.append(Comparison(
