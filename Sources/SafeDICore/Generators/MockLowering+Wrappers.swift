@@ -82,21 +82,23 @@ extension MockLowering {
 	/// The value a node hands its construction for each argument of `initializer` a dependency in `dependencies`
 	/// fulfills, in the initializer's order: the dependency's label, or the instance of the lazy wrapper in scope where a
 	/// received dependency is read by value through it (`lazilyInstantiatedInstanceProperties`), or `nil` for a receive
-	/// only if available that nothing provides where the node is built (`unavailableProperties`).
+	/// only if available that nothing provides where the node is built (`unavailableProperties`), each read under the name
+	/// the node is passed it by (`bindingNamesPassedByName`).
 	static func argumentValues(
 		of initializer: Initializer,
 		given dependencies: [Dependency],
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		unavailableProperties: Set<Property>,
+		bindingNamesPassedByName: [String: String] = [:],
 	) -> [(label: String, value: String)] {
 		initializer.arguments.compactMap { argument in
 			guard let dependency = dependencies.first(where: argument.isFulfilled(by:)) else { return nil }
 			let value = if dependency.source == .received(onlyIfAvailable: true), unavailableProperties.contains(dependency.property) {
 				"nil"
 			} else if dependency.source.isReceived, lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty) {
-				"\(argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+				"\(bindingNamesPassedByName[argument.innerLabel] ?? argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 			} else {
-				argument.innerLabel
+				bindingNamesPassedByName[argument.innerLabel] ?? argument.innerLabel
 			}
 			return (label: argument.label.spelledAsArgumentLabel, value: value)
 		}
