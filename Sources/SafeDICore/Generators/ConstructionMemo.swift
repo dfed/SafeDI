@@ -455,7 +455,11 @@ struct ConstructionLog {
 			let isAnsweredAlike = forEachRead(where: { $0.isCycleRead == asksCycleReads }) { recorded in
 				let (answer, depth) = context.answer(recorded.read.read)
 				guard answer.isAlike(recorded.answer) else { return false }
-				answers.append(RecordedRead(read: AnsweredRead(read: recorded.read.read, depth: depth), answer: answer))
+				// An alike answer at the same depth keeps the recorded read, which a fresh read would equal for every later
+				// lookup: `isAlike` is the synthesized `==`, diagnostic payload included, and alike spellings, both transitive,
+				// and a log's answers are read only by `isAlike`. The `==` here is identity for reuse, not a comparison for
+				// meaning: the payload it includes only makes fewer answers alike, so fewer places reuse a generator.
+				answers.append(depth == recorded.read.depth ? recorded : RecordedRead(read: AnsweredRead(read: recorded.read.read, depth: depth), answer: answer))
 				return true
 			}
 			guard isAnsweredAlike else { return nil }
@@ -568,8 +572,14 @@ struct ConstructionLog {
 		let depth: Int
 	}
 
-	/// A read with its answer.
-	private struct RecordedRead {
+	/// A read with its answer, held by reference: a log's reads are copied into every log that takes them, and a
+	/// reference copies as one retain where the read and its answer copied every field.
+	private final class RecordedRead: Sendable {
+		init(read: AnsweredRead, answer: Answer) {
+			self.read = read
+			self.answer = answer
+		}
+
 		let read: AnsweredRead
 		let answer: Answer
 	}
