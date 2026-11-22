@@ -198,7 +198,7 @@ public enum ReservedName: Hashable, Sendable {
 	/// spelled qualified by it: `__safeDI_<Stem>Carrier` for a root enum `SafeDIScope_<Stem>`, `…SendableCarrier` for
 	/// `SafeDISendableScope_<Stem>`, followed by `_<enum>` for an enum nested in the root. `nil` where `enumType` is no
 	/// seam's scope enum.
-	static func seamCarrier(ofEnum enumType: TypeDescription) -> (name: String, seamType: TypeDescription?, isSendable: Bool)? {
+	static func seamCarrier(ofEnum enumType: TypeDescription) -> (name: String, seamType: TypeDescription?, isSendable: Bool, describedTypeName: String?)? {
 		let rootName: String
 		var nestedName: String?
 		var seamType: TypeDescription?
@@ -229,8 +229,8 @@ public enum ReservedName: Hashable, Sendable {
 		} else {
 			return nil
 		}
-		let suffix = nestedName.map { "_\($0.hasSuffix("_Scope") ? String($0.dropLast("_Scope".count)) : $0)" } ?? ""
-		return ("\(builderFunctionNamePrefix)\(stem)\(isSendable ? "Sendable" : "")Carrier\(suffix)", seamType, isSendable)
+		let describedTypeName = nestedName.map { $0.hasSuffix("_Scope") ? String($0.dropLast("_Scope".count)) : $0 }
+		return ("\(builderFunctionNamePrefix)\(stem)\(isSendable ? "Sendable" : "")Carrier\(describedTypeName.map { "_\($0)" } ?? "")", seamType, isSendable, describedTypeName)
 	}
 
 	/// The name of a builder struct's generic parameter: the type its builder returns, prefixed so that no type a struct's
