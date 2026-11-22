@@ -5168,6 +5168,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	nonisolated var mockLoweringDeclaredLazilyInstantiatedInstanceProperty: Property? {
 		declaredLazilyInstantiatedInstanceProperty
 	}
+
 	/// For an `onlyIfAvailable` alias, whether the declared property it is bound from may be `nil`: an optional
 	/// property it reads in place of its fulfilling property's non-optional form, a parameter made optional, or a
 	/// seam's optional parameter. `false` for every other scope.
