@@ -1,6 +1,9 @@
 ---
 paths:
-  - "Sources/SafeDICore/Generators/**/*"
+  - "Sources/SafeDICore/Generators/{CLAUDE.md,ConfigurationStorage.swift,Construction*.swift,ContextStack.swift,DependencyTreeGenerator.swift,PublicMock*.swift,Scope*.swift,ValidationWalkObservation.swift}"
+  - "Sources/SafeDICore/Generators/DependencyTreeGenerator+{Constructions,CycleValidation,DeclarationValidation,Errors,FulfillmentValidation,MockOrchestration,MockRootPromotion,ScopeMapping,SeamDriver}.swift"
+  - "Sources/SafeDICore/Generators/Seam{BuilderFamilies,BuilderParameters,DeclarationGraph,ScopeEnumsByType}.swift"
+  - "Sources/SafeDICore/Generators/Emission/{ArgumentSource,BindingDeclaration,BuilderBody,BuilderFunctionGraph,ConstructionTarget,Expression,FillInlining,GeneratedCode,LoopMemberNames}.swift"
   - "Sources/SafeDICore/Models/{Scope,Property,Dependency,CycleParameter}.swift"
   - "Sources/SafeDICore/Utilities/DeferredRelease.swift"
   - "Tests/**/*Cycle*.swift"
