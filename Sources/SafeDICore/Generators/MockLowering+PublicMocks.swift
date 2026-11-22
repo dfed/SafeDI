@@ -214,15 +214,14 @@ extension MockLowering.Walk {
 		lines: inout [String],
 	) async -> MockLowering.Lowering<MockLowering.TreeNode> {
 		guard let publicMockCall = generator.publicMockCall,
-		      case let .property(instantiable, property, _, erasedToConcreteExistential, isPropertyCycle, _) = generator.scopeData
+		      case let .property(instantiable, property, forwardedProperties, erasedToConcreteExistential, isPropertyCycle, _) = generator.scopeData
 		else { return .unsupported(.publicMockCall) }
 		// A call nested in a type's builder function is configured by that type's configuration, which a `@Sendable` builder
 		// function reads as a closure.
-		guard path == ReservedName.mockOverridesParameterName,
-		      !generator.buildsInSendableFunction,
+		guard !generator.buildsInSendableFunction,
 		      !isPropertyCycle,
 		      !erasedToConcreteExistential,
-		      property.propertyType.isConstant,
+		      property.propertyType.isConstant || property.propertyType == .instantiator && forwardedProperties.isEmpty,
 		      property.typeDescription.asInstantiatedType == instantiable.concreteInstantiable
 		else { return .unsupported(.publicMockCall) }
 		guard !ancestorLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
@@ -309,9 +308,20 @@ extension MockLowering.Walk {
 		} else {
 			call = defaultCall
 		}
+		let typeName = property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource
+		let functionName = ScopeGenerator.functionName(toBuildPropertyNamed: property.label)
+		// A call held in an instantiator is made in the builder function the instantiator holds.
+		let isInstantiator = !property.propertyType.isConstant
 		guard let filledCall else {
 			lines.append("\(indent)\(publicMockCall.guardLine(for: instantiable.concreteInstantiable))")
-			lines.append("\(indent)let \(property.label) = \(call)")
+			if isInstantiator {
+				lines.append("\(indent)func \(functionName)() -> \(typeName) {")
+				lines.append("\(indent)\(ScopeGenerator.standardIndent)\(call)")
+				lines.append("\(indent)}")
+				lines.append("\(indent)let \(property.label) = \(property.typeDescription.asSource)(\(functionName))")
+			} else {
+				lines.append("\(indent)let \(property.label) = \(call)")
+			}
 			return .lowered(.publicMockCall(node))
 		}
 		let fillCode: String
@@ -320,8 +330,6 @@ extension MockLowering.Walk {
 		} catch {
 			return .unsupported(.fill)
 		}
-		let typeName = property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource
-		let functionName = ScopeGenerator.functionName(toBuildPropertyNamed: property.label)
 		lines.append("\(indent)func \(functionName)() -> \(typeName) {")
 		for line in fillCode.split(separator: "\n", omittingEmptySubsequences: false) where !fillCode.isEmpty {
 			lines.append(line.isEmpty ? "" : "\(innerIndent)\(line)")
@@ -329,7 +337,7 @@ extension MockLowering.Walk {
 		lines.append("\(innerIndent)\(publicMockCall.guardLine(for: instantiable.concreteInstantiable))")
 		lines.append("\(innerIndent)return \(call)")
 		lines.append("\(indent)}")
-		lines.append("\(indent)let \(property.label): \(typeName) = \(functionName)()")
+		lines.append(isInstantiator ? "\(indent)let \(property.label) = \(property.typeDescription.asSource)(\(functionName))" : "\(indent)let \(property.label): \(typeName) = \(functionName)()")
 		return .lowered(.publicMockCall(node))
 	}
 }
