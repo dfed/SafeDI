@@ -93,6 +93,14 @@ extension DependencyTreeGenerator {
 		static let seam = ScopeTypeNames(plain: ReservedName.seamScopeTypeNamePrefix, sendable: ReservedName.sendableSeamScopeTypeNamePrefix, areQualified: false)
 		/// A public mock's: `SafeDIMockScope_` and `SafeDISendableMockScope_`, apart from the seam's a mocked seam declares beside
 		/// them.
+		/// A seam's whose levels are carriers (`ReservedName.seamCarrier(ofEnum:)`): `SafeDICarrierScope_` and
+		/// `SafeDISendableCarrierScope_`, names no generated code spells.
+		static let seamCarriers = ScopeTypeNames(plain: ReservedName.seamCarrierScopeTypeNamePrefix, sendable: ReservedName.sendableSeamCarrierScopeTypeNamePrefix, areQualified: false)
+		/// Whether these are a seam's names, never a public mock's.
+		var isSeams: Bool {
+			plain == ReservedName.seamScopeTypeNamePrefix
+		}
+
 		static let publicMock = ScopeTypeNames(plain: ReservedName.publicMockScopeTypeNamePrefix, sendable: ReservedName.sendablePublicMockScopeTypeNamePrefix, areQualified: true)
 	}
 
@@ -165,6 +173,9 @@ extension DependencyTreeGenerator {
 		}
 		// The places and calls of a seam's or a public mock's tree, by hole type, whose enums are nested by type
 		// (`scopeEnumsByType`), a place inside a fill included.
+		// Whether the tree calls another seam or public mock that takes builders, whose levels a case of this seam's would
+		// hold: such a seam keeps its builder structs until carriers for places inside fills and passed-up places exist.
+		var callsBuildersOfOtherSeams = false
 		var reachedByHoleType = [SeamSignature.HoleType: [ReachedPlace]]()
 		var reenteringCalls = [ReachedPlace]()
 		// The fills a call inside a fill of the same call can re-enter, found once for the tree.
@@ -179,6 +190,7 @@ extension DependencyTreeGenerator {
 				reachedByHoleType[hole.holeType, default: []].append(ReachedPlace(sitePath: sitePath, steps: steps, call: nil))
 			case let .call(sitePath, call, steps, isInSendableFunction):
 				guard let calledBuilders = call.calledBuilders else { continue }
+				callsBuildersOfOtherSeams = true
 				for scopeEnum in calledBuilders.scopeEnums where calledSeamsEnums[scopeEnum.key] == nil {
 					calledSeamsEnums[scopeEnum.key] = scopeEnum
 				}
@@ -255,7 +267,8 @@ extension DependencyTreeGenerator {
 		)
 		for holeType in orderedHoleTypes {
 			let stem = stemByHoleType[holeType, default: ""]
-			let rootTypeNames = (plain: "\(scopeTypeNames.plain)\(stem)".spelledAsIdentifier, sendable: "\(scopeTypeNames.sendable)\(stem)".spelledAsIdentifier)
+			let typeNames = scopeTypeNames.isSeams && !callsBuildersOfOtherSeams && reenteringCalls.isEmpty ? ScopeTypeNames.seamCarriers : scopeTypeNames
+			let rootTypeNames = (plain: "\(typeNames.plain)\(stem)".spelledAsIdentifier, sendable: "\(typeNames.sendable)\(stem)".spelledAsIdentifier)
 			let builtType = flatHoles.builtType(of: holeType)
 			// The enums, nested by type.
 			var byType = ScopeEnumsByType()
@@ -345,7 +358,7 @@ extension DependencyTreeGenerator {
 					.compactMap { site in sortKeyBySite[site].map { (site: site, sortKey: $0) } }
 					.sorted { $0.sortKey < $1.sortKey }
 					.compactMap { holesBySite[$0.site] }
-				let parameterType = TypeDescription.nested(name: ReservedName.builderStructTypeName, parentType: enumType, generics: [builtType])
+				let parameterType = ReservedName.levelType(ofEnum: enumType, built: builtType)
 				builders.append(SeamSignature.Builder(
 					enumKey: key,
 					label: builderLabel,

@@ -348,10 +348,10 @@ struct PublicMockLevelFunctions: Sendable {
 					members.append(["\(caseName.spelledAsArgumentLabel): { \(carriedArguments.isEmpty ? "_" : valuesName) in \(call.name)(\(allArguments.joined(separator: ", "))) }"])
 				}
 			}
-			let builderType = TypeDescription.nested(name: ReservedName.builderStructTypeName, parentType: dispatcher.enumType, generics: [dispatcher.returnType])
+			let builderType = ReservedName.levelType(ofEnum: dispatcher.enumType, built: dispatcher.returnType)
 			var parameterList = [String]()
 			for carried in function.carriedInnerScopes {
-				let carriedType = TypeDescription.nested(name: ReservedName.builderStructTypeName, parentType: dispatcher.enumType, generics: [ScopeGenerator.FillDispatcher.carried(carried.type, through: dispatcher.returnType)])
+				let carriedType = ReservedName.levelType(ofEnum: dispatcher.enumType, built: ScopeGenerator.FillDispatcher.carried(carried.type, through: dispatcher.returnType))
 				parameterList.append("\(carried.upName.spelledAsArgumentLabel): \(carriedType.asSource)")
 			}
 			parameterList += function.parameters.map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
