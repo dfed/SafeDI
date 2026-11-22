@@ -80,11 +80,11 @@ struct SafeDIToolTypeKeyViewTests: ~Copyable {
 		// The graph issue #646 reported, at twelve screens: each opens three others through an `Instantiator`, and each
 		// declares, receives, receives if available, or ignores a `Context`. A screen's places are apart wherever the
 		// `Context` they read, or the function their builders' closers call reads, is another declaration, so the 12 screens
-		// are 257 views, of 12 classes in the type key's layout.
+		// are 232 views, of 12 classes in the type key's layout.
 		let roles: [ContextRole] = [.receivesIfAvailable, .none, .declares, .none, .receivesIfAvailable, .receivesIfAvailable, .declares, .declares, .none, .receives, .receivesIfAvailable, .declares]
 		let targets = [[2, 3, 10], [2, 8, 10], [4, 7, 11], [0, 7, 8], [0, 8, 10], [1, 3, 10], [0, 10, 11], [3, 6, 11], [3, 7, 9], [3, 5, 8], [3, 7, 11], [0, 6, 8]]
 		let counts = try await viewCounts(of: Self.screensOpeningEachOther(roles: roles, targets: targets))
-		#expect(counts == [257])
+		#expect(counts == [232])
 	}
 
 	@Test
@@ -92,7 +92,7 @@ struct SafeDIToolTypeKeyViewTests: ~Copyable {
 	mutating func generate_laysOutViewsThatGrowWithTheScreens_whenScreensOpenEachOtherAtTwoSizes() async throws {
 		// The reported graph's form at eight and twelve screens, each screen `i` opening screens `i + 1`, `i + 3` and `i + 7`
 		// (modulo the count) and taking the `i`th of the four roles in turn. Here the views grow with the declarations of
-		// `Context` each screen can be reached beneath, which grow with the screens' cycles: 135 at eight screens and 1,946 at
+		// `Context` each screen can be reached beneath, which grow with the screens' cycles: 133 at eight screens and 1,918 at
 		// twelve.
 		var counts = [[Int]]()
 		for screenCount in [8, 12] {
@@ -100,7 +100,7 @@ struct SafeDIToolTypeKeyViewTests: ~Copyable {
 			let targets = (0..<screenCount).map { screen in [1, 3, 7].map { (screen + $0) % screenCount }.sorted() }
 			try await counts.append(viewCounts(of: Self.screensOpeningEachOther(roles: roles, targets: targets)))
 		}
-		#expect(counts == [[135], [1_946]])
+		#expect(counts == [[133], [1_918]])
 	}
 
 	// MARK: Private
