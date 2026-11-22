@@ -52,12 +52,24 @@ protocol BinaryCodable {
 /// added to a stored type fails the tests until it is written, read, and listed here.
 protocol BinarySchemaMember: BinaryCodable {
 	static var binaryLayout: BinaryLayout<Self> { get }
+	/// Whether the struct writes its optional and Boolean fields as one integer of flags before its fields
+	/// (``BinaryFieldFlags``): whether each optional field holds a value, and each Boolean field's value. Every struct
+	/// with two or more such fields that a file holds many of does.
+	static var writesFieldFlags: Bool { get }
 }
 
 extension BinarySchemaMember {
+	static var writesFieldFlags: Bool {
+		false
+	}
+
 	/// The member's layout in a line of ``BinaryFile/schemaDescription``.
 	static var binaryLayoutDescription: String {
-		binaryLayout.description
+		if writesFieldFlags {
+			"field flags, " + binaryLayout.description
+		} else {
+			binaryLayout.description
+		}
 	}
 }
 
@@ -204,6 +216,42 @@ struct BinaryWriter {
 
 	mutating func writeTag(_ tag: some BinaryTag) {
 		bytes.append(tag.rawValue)
+	}
+
+	/// Where a struct's fields begin: a struct that writes its optional and Boolean fields as flags
+	/// (``BinaryFieldFlags``) writes its fields after this and then ``finishFields(_:startingAt:)``, which writes the
+	/// flags before them. One byte is held for the flags, which is all that most structs' flags take.
+	mutating func startFields() -> Int {
+		let start = bytes.count
+		bytes.append(0)
+		return start
+	}
+
+	/// Writes `flags` before the fields written since ``startFields()`` returned `start`.
+	mutating func finishFields(_ flags: BinaryFieldFlags, startingAt start: Int) {
+		if flags.bits < 0x80 {
+			bytes[start] = UInt8(flags.bits)
+		} else {
+			var flagBytes = [UInt8]()
+			var remaining = flags.bits
+			while remaining >= 0x80 {
+				flagBytes.append(UInt8(truncatingIfNeeded: remaining) | 0x80)
+				remaining >>= 7
+			}
+			flagBytes.append(UInt8(remaining))
+			bytes.replaceSubrange(start..<start + 1, with: flagBytes)
+		}
+	}
+
+	/// Writes an optional field of a struct that writes its fields' flags: its presence as a flag, and then its value
+	/// only when it holds one.
+	mutating func writeOptional(_ value: (some BinaryCodable)?, flaggedIn flags: inout BinaryFieldFlags) {
+		if let value {
+			flags.append(true)
+			write(value)
+		} else {
+			flags.append(false)
+		}
 	}
 
 	mutating func writeUnsigned(_ value: UInt64) {
@@ -422,8 +470,11 @@ struct BinaryReader {
 
 	/// Far deeper than any type written in practice. Reading bytes that nest without a limit could exhaust the
 	/// stack, so a ``BinaryWriter`` notes a value nested more deeply than this, and ``BinaryFile`` refuses to
-	/// write a file that holds one rather than write a file no SafeDITool reads.
-	static let maximumNestingDepth = 128
+	/// write a file that holds one rather than write a file no SafeDITool reads. Reading recurses once for each
+	/// level, which a debug build of Swift 6.2 or 6.4.2 compiles to about 4.4 KB of stack on Linux (0.6 KB in a
+	/// release build), so 32 levels take about 140 KB: under half of the 512 KB stack of a Swift concurrency thread
+	/// on Apple platforms, whereas 128 levels overflowed it.
+	static let maximumNestingDepth = 32
 
 	/// Throws unless every byte has been read.
 	func finish() throws(BinaryDecodingError) {
@@ -434,6 +485,21 @@ struct BinaryReader {
 
 	mutating func read<Value: BinaryCodable>() throws(BinaryDecodingError) -> Value {
 		try Value(readingFrom: &self)
+	}
+
+	/// Reads the flags a struct writes before its fields (``BinaryWriter/finishFields(_:startingAt:)``).
+	mutating func readFieldFlags() throws(BinaryDecodingError) -> BinaryFieldFlagsReader {
+		let flagsOffset = offset
+		return try BinaryFieldFlagsReader(remaining: readUnsigned(), offset: flagsOffset)
+	}
+
+	/// Reads an optional field that ``BinaryWriter/writeOptional(_:flaggedIn:)`` wrote.
+	mutating func readOptional<Wrapped: BinaryCodable>(flaggedIn flags: inout BinaryFieldFlagsReader) throws(BinaryDecodingError) -> Wrapped? {
+		if flags.next() {
+			try read() as Wrapped
+		} else {
+			nil
+		}
 	}
 
 	mutating func readTag<Tag: BinaryTag>() throws(BinaryDecodingError) -> Tag {
@@ -564,6 +630,46 @@ struct BinaryReader {
 	}
 }
 
+/// The optional and Boolean fields of a struct, one bit each in the order the struct writes them: whether an optional
+/// field holds a value, and a Boolean field's value. A struct writes them as one integer before its fields, in place of a
+/// byte for each such field.
+struct BinaryFieldFlags {
+	private(set) var bits: UInt64 = 0
+
+	mutating func append(_ flag: Bool) {
+		if flag {
+			bits |= 1 << count
+		}
+		count += 1
+	}
+
+	private var count: UInt64 = 0
+}
+
+/// The flags ``BinaryReader/readFieldFlags()`` read, taken in the order they were written.
+struct BinaryFieldFlagsReader {
+	fileprivate init(remaining: UInt64, offset: Int) {
+		self.remaining = remaining
+		self.offset = offset
+	}
+
+	mutating func next() -> Bool {
+		let flag = remaining & 1 == 1
+		remaining >>= 1
+		return flag
+	}
+
+	/// Throws when the flags hold a flag the struct does not have.
+	func finish() throws(BinaryDecodingError) {
+		guard remaining == 0 else {
+			throw .unreadFieldFlags(offset: offset)
+		}
+	}
+
+	private var remaining: UInt64
+	private let offset: Int
+}
+
 /// Why bytes could not be read as the values a ``BinaryReader`` expected.
 enum BinaryDecodingError: Error, Equatable {
 	case truncated(offset: Int)
@@ -574,6 +680,7 @@ enum BinaryDecodingError: Error, Equatable {
 	case invalidTag(UInt8, tagType: String, offset: Int)
 	case nestedTooDeeply(offset: Int)
 	case trailingBytes(offset: Int)
+	case unreadFieldFlags(offset: Int)
 }
 
 // MARK: - Standard library conformances
