@@ -4,8 +4,6 @@ paths:
   - "Tests/**/*GraphFuzzerCallingMockTests.swift"
 ---
 
-<!-- Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 # Graph fuzzer: the calling-mock draw
 
 The draw whose graphs `fuzzer-calling-mocks.md`'s check runs.

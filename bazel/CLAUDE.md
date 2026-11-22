@@ -4,4 +4,4 @@
 
 `SafeDIInfo.transitive_module_infos` is a depset never flattened at analysis (the CSV is written from an `Args` object); a run opens from it what its trees need (`ModulesBeneathSelection`) and what its dependencies' views refer to (`ModuleReferenceResolver`), and lists the rest as `unused_inputs_list`.
 
-`module_name` on the `SafeDIToolLibrary` and `SafeDICore` rules is the name their importers use. Module names never reach a `.safedi` file: its schema fingerprint is a checked-in constant. Rules: `.claude/rules/serialization.md` and `.claude/rules/file-paths.md`.
+`module_name` on the `SafeDIToolLibrary` and `SafeDICore` rules is the name their importers use. Module names never reach a `.safedi` file: its schema fingerprint is a checked-in constant.

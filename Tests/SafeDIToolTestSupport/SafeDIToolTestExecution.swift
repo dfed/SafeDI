@@ -338,7 +338,13 @@ func executeSafeDIToolTest(
 			// the same data on every path with the construction memo and without it (`ConstructionMemoChecks`).
 			generateOutput = try await SeamPlaceLevels.$observer.withValue(SeamPlaceLevels.checkingPathStructs(handingOn: SeamPlaceLevels.observer)) {
 				try await ConstructionMemoOracle.$observer.withValue(ConstructionMemoChecks.recordingDifferences(handingOn: ConstructionMemoOracle.observer)) {
-					try await tool.generate()
+					// Interned in the order `SAFEDI_INTERNER_ORDER` names, if any: the output must not change (`ConstructionInternerOrder`).
+					// Every value a freeze interns must be one the interner is designed to meet there (`ConstructionInternerClosure`).
+					try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
+						try await ConstructionInternerOrder.applying(.fromEnvironment) {
+							try await tool.generate()
+						}
+					}
 				}
 			}
 		} catch {

@@ -6,8 +6,6 @@ paths:
   - "Tests/**/*Mock*.swift"
 ---
 
-<!-- Moved from CLAUDE.md §Common Pitfalls at 337e5e22. Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 # Mock root promotion and parameter naming
 
 - Extension-based `@Instantiable` types use `static func instantiate(...)` instead of `init(...)`. Their `@Instantiated` dependencies are constructed by the parent scope. Each `instantiate` parameter without a default value is a `@Received` dependency (`InstantiableVisitor`), named by its inner name, which the macro rejects when it is `_` (Swift lets two parameters share only that name, and generation keys a type's dependencies by name); a default-valued one is not a dependency, exactly as a default-valued non-dependency `init` parameter: the production call leaves it out, a generated mock offers it as an override, and the macro gives `instantiate` the checks an initializer's default-valued parameters get (`InstantiableVisitor.instantiateFunctions`).
