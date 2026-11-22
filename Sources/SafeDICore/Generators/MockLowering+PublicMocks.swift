@@ -104,6 +104,31 @@ extension ScopeGenerator {
 		})
 	}
 
+	/// The modules that declare a receiver of each label in this mock root's tree, as `publicMockPlan` admits them: a type of
+	/// the tree whose declaration receives a dependency of that label, or aliases one. Walked with a stack, since a tree can
+	/// be as deep as the module has types.
+	private func publicMockReceiverModules(context: PublicMockContext) -> [String: Set<String?>] {
+		var modulesByLabel = [String: Set<String?>]()
+		var generatorsToVisit = orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator)
+		while let generator = generatorsToVisit.popLast() {
+			if case let .property(instantiable, _, _, _, _, _) = generator.scopeData {
+				let moduleName = context.moduleNameByType[instantiable.concreteInstantiable]
+				for dependency in instantiable.dependencies {
+					switch dependency.source {
+					case .received:
+						modulesByLabel[dependency.property.label, default: []].insert(moduleName)
+					case let .aliased(fulfillingProperty, _, _):
+						modulesByLabel[fulfillingProperty.label, default: []].insert(moduleName)
+					case .instantiated, .forwarded:
+						break
+					}
+				}
+			}
+			generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator))
+		}
+		return modulesByLabel
+	}
+
 	/// Whether the tree of `orderedChildren` calls another module's public mock. Walked with a stack, since a tree can be as
 	/// deep as the module has types.
 	private func treeCallsPublicMock(of orderedChildren: [OrderedChild]) -> Bool {
@@ -136,8 +161,34 @@ extension ScopeGenerator {
 		configurations: [MockLowering.ConfigurationRecord],
 		context: MockContext,
 	) -> MockLowering.Result {
-		// The parameters of a public mock other than its overrides are not lowered yet.
-		guard let publicMockContext = context.publicMockContext, signature.parameters.isEmpty else { return .unsupported(.publicMockRoot) }
+		// The uncovered parameters of a public mock are not lowered yet.
+		guard let publicMockContext = context.publicMockContext, signature.uncoveredParameters.isEmpty else { return .unsupported(.publicMockRoot) }
+		// Each forwarded parameter defaults to the default the initializer gives the parameter of its label, else to the
+		// hand-written mock its type has, as the signature's does.
+		let forwardedDependencies = instantiable.dependencies.filter { $0.source == .forwarded }.sorted { $0.property < $1.property }
+		var forwardedDefaults = [String: ForwardedParameterDefault]()
+		for dependency in forwardedDependencies {
+			let label = dependency.property.label
+			if let constructionDefault = instantiable.initializer?.arguments.first(where: { $0.innerLabel == label })?.defaultValueExpression {
+				forwardedDefaults[label] = .constructionDefault(constructionDefault)
+			} else if let mockDefault = context.flatParameterMockDefaults[dependency.property.typeDescription] {
+				forwardedDefaults[label] = .handWrittenMock(mockDefault)
+			}
+		}
+		let rootDefaultParameters = signature.rootDefaultParameters.compactMap { parameter in
+			parameter.defaultExpression.map { defaultExpression in
+				MockRootParameters.RootDefaultParameter(
+					label: parameter.name,
+					typeSource: parameter.typeSource ?? parameter.property.typeDescription.asSource,
+					defaultExpression: defaultExpression,
+					typeDescription: parameter.property.typeDescription.strippingEscaping,
+				)
+			}
+		}
+		var flatReceivedParameterMockDefaults = [Property: FlatParameterMockDefault]()
+		for parameter in signature.flatReceivedParameters {
+			flatReceivedParameterMockDefaults[parameter.property] = context.flatParameterMockDefaults[parameter.property.typeDescription]
+		}
 		// Each dependency the mock promotes to its root is an optional parameter, named as the node's binding, which the walk
 		// binds the node from. A promoted wrapper, and a name the parameters take apart from the binding's, are not lowered
 		// yet.
@@ -156,11 +207,11 @@ extension ScopeGenerator {
 		let hasOverrides = nodes.contains(where: \.isPropertyNode)
 		let plan = Self.publicMockPlan(
 			of: instantiable,
-			forwardedDependencies: [],
-			forwardedDefaults: [:],
-			rootDefaultParameters: [],
-			flatReceivedParameters: [],
-			flatReceivedParameterMockDefaults: [:],
+			forwardedDependencies: forwardedDependencies,
+			forwardedDefaults: forwardedDefaults,
+			rootDefaultParameters: rootDefaultParameters,
+			flatReceivedParameters: signature.flatReceivedParameters.map { (property: $0.property, name: $0.name) },
+			flatReceivedParameterMockDefaults: flatReceivedParameterMockDefaults,
 			flatUncoveredParameters: [],
 			promotedNodes: promotedNodes,
 			onlyIfAvailableOverrides: [],
@@ -169,10 +220,19 @@ extension ScopeGenerator {
 			builders: mockBuilders,
 			hasOverrides: hasOverrides,
 			typesDeclaredEscaping: signature.typesDeclaredEscaping,
+			receiverModulesByLabel: publicMockReceiverModules(context: publicMockContext),
 			context: publicMockContext,
 		)
 		guard promotedNodes.allSatisfy({ plan.promotedParameterNames[$0.property] == $0.name }) else { return .unsupported(.publicMockRoot) }
 		var lines = ["extension \(typeName) {"]
+		if !plan.providerDeclarations.isEmpty {
+			// The providers of the type's own optional-typed defaults, which the parameters default to.
+			if let marker = publicMockContext.unreadTypeComment?.markerLine(namedBy: plan.parameters.filter { $0.defaultKind == .provider }.map(\.type), indent: indent) {
+				lines.append(marker)
+			}
+			lines.append(contentsOf: plan.providerDeclarations)
+			lines.append("")
+		}
 		if !plan.builders.isEmpty {
 			// The scope types the builders `mock()` takes are handed, as a seam declares them.
 			for declaration in Self.ownScopeTypeDeclarations(
