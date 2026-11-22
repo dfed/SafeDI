@@ -15617,7 +15617,8 @@ enum GraphFuzzerOracle {
 			// carries other roots' generators to each, and shares generators between places by a schedule of its seed
 			// (`ConstructionSharingSchedule.sharingOracleSchedule(forGraphSeed:)`), and interns in another order, reversed or
 			// permuted by its seed (`ConstructionInternerOrder.secondRun(forGraphSeed:)`), which gives every ID another value;
-			// it must still give the first run's outcome.
+			// it must still give the first run's outcome. A hand mutation that appends a root's interned type ID to its
+			// generated code fails seed 0 (reversed) and seed 1 (permuted) of the base corpus with "two runs of the tool differ".
 			secondOutcome: ConstructionMemoOracle.$buildsMockRootsInReverseOrder.withValue(true) {
 				try await ConstructionSharingSchedule.$current.withValue(.sharingOracleSchedule(forGraphSeed: fixture.seed)) {
 					try await ConstructionInternerOrder.secondRun(forGraphSeed: fixture.seed).applying {
