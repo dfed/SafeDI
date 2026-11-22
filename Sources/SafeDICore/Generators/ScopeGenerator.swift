@@ -10086,8 +10086,29 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lines.append("}")
 		}
 
-		let code = lines.joined(separator: "\n")
-		return wrapInConditionalCompilation(code, mockConditionalCompilation: context.mockConditionalCompilation)
+		return Self.mockCode(releasingLines: &lines, mockConditionalCompilation: context.mockConditionalCompilation)
+	}
+
+	/// `lines` joined by line breaks and wrapped as `wrapInConditionalCompilation(_:mockConditionalCompilation:)` wraps
+	/// code, the same text, written once into a string of its exact size, each line released once it is copied.
+	///
+	/// A mock's text can be tens of megabytes, as a deep chain's indentation grows with its depth, and joining the lines
+	/// grew a copy by doubling beside them, which the wrap copied again: three copies of the text at once.
+	private static func mockCode(releasingLines lines: inout [String], mockConditionalCompilation: String?) -> String {
+		let prefix = mockConditionalCompilation.map { "#if \($0)\n" } ?? ""
+		let suffix = mockConditionalCompilation == nil ? "" : "\n#endif"
+		var code = ""
+		code.reserveCapacity(prefix.utf8.count + lines.reduce(0) { $0 + $1.utf8.count } + max(lines.count - 1, 0) + suffix.utf8.count)
+		code += prefix
+		for index in lines.indices {
+			if index > lines.startIndex {
+				code += "\n"
+			}
+			code += lines[index]
+			lines[index] = ""
+		}
+		code += suffix
+		return code
 	}
 
 	/// Generates the labeled argument list for the return statement in the mock body.
