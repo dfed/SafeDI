@@ -256,7 +256,7 @@ extension MockLowering.Walk {
 		      property.propertyType.isConstant || property.propertyType == .instantiator && forwardedProperties.isEmpty,
 		      property.typeDescription.asInstantiatedType == instantiable.concreteInstantiable
 		else { return .unsupported(.publicMockCall) }
-		guard !ancestorLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
+		guard !rootLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
 		// The leaf takes the called tier's parameters as its mock's.
 		let constructionInitializer = instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType) ? instantiable.mockInitializer : instantiable.initializer
 		guard let initializer = constructionInitializer else { return .unsupported(.publicMockCall) }
