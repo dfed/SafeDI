@@ -1221,6 +1221,7 @@ extension MockLowering.ConfigurationRecord {
 				)
 			},
 			concreteBuilderClosureType: node.concreteBuilderClosureType,
+			defaultFields: node.defaultFields,
 		)
 	}
 }
