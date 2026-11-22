@@ -93,8 +93,6 @@ public enum MockLowering {
 		case wrapper
 		/// A cycle-closing node.
 		case cycle
-		/// A node that builds children of its own.
-		case nodeWithChildren = "node with children"
 		/// Two nodes of one label.
 		case siblingLabelCollision = "sibling label collision"
 	}

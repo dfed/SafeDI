@@ -8527,7 +8527,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// optional override where no enclosing scope provides it, and from a non-optional
 	/// value where one does. The wrapper is then mapped over the fulfilling value promoted
 	/// to an optional, which compiles either way and binds `nil` when the fulfilling value is `nil`.
-	private static func aliasDeclaration(
+	static func aliasDeclaration(
 		of property: Property,
 		fulfilledBy fulfillingExpression: String,
 		ofType fulfillingTypeDescription: TypeDescription,
@@ -8572,7 +8572,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///
 	/// SafeDI does not validate that an aliased dependency’s declared type can be fulfilled by
 	/// the fulfilling dependency’s type; the Swift compiler checks the generated assignment.
-	private static func referencingDeclaration(
+	static func referencingDeclaration(
 		of code: String,
 		by declarationReference: AliasDeclarationReferences.Reference?,
 	) -> String {
