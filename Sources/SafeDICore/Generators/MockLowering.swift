@@ -31,11 +31,24 @@ public enum MockLoweringShadow {
 		/// The mocked type, as the generated code spells it.
 		public let mockedType: String
 		public let outcome: Outcome
+		/// What the comparison compares: the root's mock code unless set.
+		public let subject: Subject
 
-		public init(mockedType: String, outcome: Outcome) {
+		public init(mockedType: String, outcome: Outcome, subject: Subject = .mockCode) {
 			self.mockedType = mockedType
 			self.outcome = outcome
+			self.subject = subject
 		}
+	}
+
+	/// What one comparison compares.
+	public enum Subject: Sendable, Equatable {
+		/// A mock root's code as the emitter generates it, before the configuration structs are merged into it.
+		case mockCode
+		/// A mock root's code with the configuration struct of its own type merged into it, as the tool returns it.
+		case mergedCode
+		/// The module's shared configuration code (`MockGenerationResult.mockConfigurationCode`), absent included.
+		case moduleConfigurations
 	}
 
 	public enum Outcome: Sendable, Equatable {
@@ -48,12 +61,27 @@ public enum MockLoweringShadow {
 		case unsupported(MockLowering.Rule)
 	}
 
+	/// How the configurations lowered from `roots`' records compare with those the emitter generated: one comparison of
+	/// each root's merged code, then one of the module's shared configuration code, `emittedConfigurationCode`.
+	// D1 lane hook (lane D): lowered from the roots' records in `MockLowering+Configurations.swift`.
+	public static func configurationComparisons(
+		of roots: [MockLowering.LoweredRoot],
+		emittedConfigurationCode _: String?,
+		mockConditionalCompilation _: String?,
+	) -> [Comparison] {
+		var comparisons = roots.map { root in
+			Comparison(mockedType: root.mockedType.asSource, outcome: .unsupported(.configurationStructs), subject: .mergedCode)
+		}
+		comparisons.append(Comparison(mockedType: "", outcome: .unsupported(.configurationStructs), subject: .moduleConfigurations))
+		return comparisons
+	}
+
 	/// How `lowered` compares with `emitted`, byte for byte, line by line.
 	public static func outcome(comparing lowered: MockLowering.Result, with emitted: String) -> Outcome {
 		switch lowered {
 		case let .unsupported(rule):
 			return .unsupported(rule)
-		case let .lowered(loweredCode):
+		case let .lowered(loweredCode, _):
 			guard !loweredCode.utf8.elementsEqual(emitted.utf8) else { return .identical }
 			let emittedLines = emitted.split(separator: "\n", omittingEmptySubsequences: false)
 			let loweredLines = loweredCode.split(separator: "\n", omittingEmptySubsequences: false)
@@ -95,11 +123,44 @@ public enum MockLowering {
 		case cycle
 		/// Two nodes of one label.
 		case siblingLabelCollision = "sibling label collision"
+		/// The configuration structs a module's mocks share or merge into their roots.
+		case configurationStructs = "configuration structs"
 	}
 
 	public enum Result: Sendable, Equatable {
-		case lowered(String)
+		/// The root's code, with the configurations its tree's nodes are configured by, in the order its walk finished
+		/// them (`ConfigurationRecord`).
+		// D1 lane hook (lane D): the records the configuration structs are lowered from.
+		case lowered(String, configurations: [ConfigurationRecord] = [])
 		case unsupported(Rule)
+	}
+
+	/// A configuration a node of a mock's tree is configured by: what the `SafeDIMockConfiguration` of its concrete type,
+	/// generated from that node, holds. Recorded per node and construction in the order the walk finishes the nodes,
+	/// children first, never keyed by a generator, since one generator can build a type at two places.
+	public struct ConfigurationRecord: Sendable, Equatable {
+		/// The concrete type the configuration is nested in.
+		let concreteType: TypeDescription
+		/// Whether the node is built with its type's hand-written mock.
+		let usesMockInitializer: Bool
+		/// The configuration's fields for the node's children, in the order its initializer takes them.
+		let childFields: [ChildField]
+		/// The type of the closure that overrides how the node is built, returning its concrete type.
+		let concreteBuilderClosureType: String
+
+		/// A field that configures a child of the node: its configuration, or an optional builder closure.
+		struct ChildField: Sendable, Equatable {
+			let name: String
+			let typeSource: String
+			let defaultValue: String
+		}
+	}
+
+	/// A mock root's lowering beside the code the emitter generated for it with its configuration merged in.
+	public struct LoweredRoot: Sendable {
+		let mockedType: TypeDescription
+		let lowered: Result
+		let emittedMergedCode: String
 	}
 }
 

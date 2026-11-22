@@ -54,16 +54,11 @@ public enum MockLoweringShadowChecks {
 
 		public func record(_ comparison: MockLoweringShadow.Comparison) {
 			lock.withLock {
-				switch comparison.outcome {
-				case .identical:
-					state.identical += 1
-				case .differs:
-					state.differing += 1
-					if state.firstDifferences.count < Self.differencesKept {
-						state.firstDifferences.append(comparison)
-					}
-				case let .unsupported(rule):
-					state.unsupportedByRule[rule.rawValue, default: 0] += 1
+				switch comparison.subject {
+				case .mockCode:
+					state.record(comparison)
+				case .mergedCode, .moduleConfigurations:
+					configurationState.record(comparison)
 				}
 			}
 		}
@@ -72,21 +67,15 @@ public enum MockLoweringShadowChecks {
 		/// by rule in rule order: `mock-lowering: 12/40 roots identical (30.0%); 3 differ; unsupported: not yet ported 25`.
 		public var reportLine: String {
 			lock.withLock {
-				let unsupported = state.unsupportedByRule.values.reduce(0, +)
-				let total = state.identical + state.differing + unsupported
-				let share = total == 0 ? 0 : Double(state.identical) * 100 / Double(total)
-				var line = "mock-lowering: \(state.identical)/\(total) roots identical (\(String(format: "%.1f", share))%); \(state.differing) differ"
-				let unsupportedRules = MockLowering.Rule.allCases.compactMap { rule in
-					state.unsupportedByRule[rule.rawValue].map { "\(rule.rawValue) \($0)" }
-				}
-				if !unsupportedRules.isEmpty {
-					line += "; unsupported: " + unsupportedRules.joined(separator: ", ")
-				}
-				for difference in state.firstDifferences {
-					guard case let .differs(lineNumber, emitted, lowered) = difference.outcome else { continue }
-					line += "\n  \(difference.mockedType) line \(lineNumber):\n    emitted: \(emitted ?? "(end)")\n    lowered: \(lowered ?? "(end)")"
-				}
-				return line
+				state.reportLine(prefix: "mock-lowering", noun: "roots")
+			}
+		}
+
+		/// The same for the configuration structs: each root's merged code and each module's shared configuration code,
+		/// `mock-lowering structs: 12/40 identical (30.0%); …`.
+		public var configurationReportLine: String {
+			lock.withLock {
+				configurationState.reportLine(prefix: "mock-lowering structs", noun: nil)
 			}
 		}
 
@@ -99,7 +88,7 @@ public enum MockLoweringShadowChecks {
 		private static let registeredReportAtExit: Bool = {
 			guard ProcessInfo.processInfo.environment["SAFEDI_MOCK_LOWERING_REPORT"] != nil else { return false }
 			atexit {
-				FileHandle.standardError.write(Data((Tally.process.reportLine + "\n").utf8))
+				FileHandle.standardError.write(Data((Tally.process.reportLine + "\n" + Tally.process.configurationReportLine + "\n").utf8))
 			}
 			return true
 		}()
@@ -111,9 +100,42 @@ public enum MockLoweringShadowChecks {
 			var differing = 0
 			var unsupportedByRule = [String: Int]()
 			var firstDifferences = [MockLoweringShadow.Comparison]()
+
+			mutating func record(_ comparison: MockLoweringShadow.Comparison) {
+				switch comparison.outcome {
+				case .identical:
+					identical += 1
+				case .differs:
+					differing += 1
+					if firstDifferences.count < Tally.differencesKept {
+						firstDifferences.append(comparison)
+					}
+				case let .unsupported(rule):
+					unsupportedByRule[rule.rawValue, default: 0] += 1
+				}
+			}
+
+			func reportLine(prefix: String, noun: String?) -> String {
+				let unsupported = unsupportedByRule.values.reduce(0, +)
+				let total = identical + differing + unsupported
+				let share = total == 0 ? 0 : Double(identical) * 100 / Double(total)
+				var line = "\(prefix): \(identical)/\(total) \(noun.map { "\($0) " } ?? "")identical (\(String(format: "%.1f", share))%); \(differing) differ"
+				let unsupportedRules = MockLowering.Rule.allCases.compactMap { rule in
+					unsupportedByRule[rule.rawValue].map { "\(rule.rawValue) \($0)" }
+				}
+				if !unsupportedRules.isEmpty {
+					line += "; unsupported: " + unsupportedRules.joined(separator: ", ")
+				}
+				for difference in firstDifferences {
+					guard case let .differs(lineNumber, emitted, lowered) = difference.outcome else { continue }
+					line += "\n  \(difference.mockedType) line \(lineNumber):\n    emitted: \(emitted ?? "(end)")\n    lowered: \(lowered ?? "(end)")"
+				}
+				return line
+			}
 		}
 
 		private let lock = NSLock()
 		nonisolated(unsafe) private var state = State()
+		nonisolated(unsafe) private var configurationState = State()
 	}
 }

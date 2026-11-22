@@ -55,7 +55,7 @@ extension ScopeGenerator {
 		guard instantiable.dependencies.allSatisfy({ nodeProperties.contains($0.property) }) else {
 			return .unsupported(.flatParameter)
 		}
-		return .lowered(Self.mockWithTree(of: instantiable, nodes: nodes, bindingLines: bindingLines, context: context))
+		return .lowered(Self.mockWithTree(of: instantiable, nodes: nodes, bindingLines: bindingLines, context: context), configurations: walk.configurationRecords)
 	}
 
 	/// The first rule the parameters and construction of the mocked type itself meet that the walk does not lower yet.
@@ -152,6 +152,8 @@ extension MockLowering {
 	struct Walk {
 		var ancestorTypes: Set<TypeDescription>
 		var labels = Set<String>()
+		// D1 lane hook (lane D): the configurations of the nodes the walk finished, children before their node.
+		var configurationRecords = [ConfigurationRecord]()
 
 		/// The nodes `generators` build, in generation order, where the nodes `scope` holds are bound before them, their
 		/// overrides at `path`, with their statements appended to `lines` at `indent`; or the first rule they meet.
@@ -285,6 +287,9 @@ extension MockLowering {
 				return .unsupported(rule)
 			}
 			let configuredNode = node.configured(byChildren: children)
+			if configuredNode.hasConfiguration {
+				configurationRecords.append(ConfigurationRecord(of: configuredNode, children: children))
+			}
 			lines.append(contentsOf: configuredNode.builderFunctionEndLines(path: nodePath, indent: indent))
 			return .lowered(configuredNode)
 		}
@@ -350,12 +355,22 @@ extension MockLowering {
 
 		/// The type of the closure that overrides how the node is built, handed the values its initializer takes.
 		var builderClosureType: String {
-			let parameterTypes = (instantiable.initializer?.arguments ?? []).map { argument in
+			"(\(builderParameterTypes)) -> \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource)"
+		}
+
+		/// The type of the closure the node's configuration holds to override how it is built, which returns the concrete
+		/// type, since every node of the type shares the configuration.
+		var concreteBuilderClosureType: String {
+			"(\(builderParameterTypes)) -> \(instantiable.concreteInstantiable.asSource)"
+		}
+
+		/// The types of the values the node's override is handed, joined.
+		private var builderParameterTypes: String {
+			(instantiable.initializer?.arguments ?? []).map { argument in
 				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription)
 					.asFunctionParameter(amongTypesDeclaredEscaping: [])
 					.asSource
-			}
-			return "(\(parameterTypes.joined(separator: ", "))) -> \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource)"
+			}.joined(separator: ", ")
 		}
 
 		/// The configuration that configures the node's children and the node.
@@ -478,5 +493,24 @@ extension MockLowering {
 	enum Lowering<Lowered> {
 		case lowered(Lowered)
 		case unsupported(Rule)
+	}
+}
+
+extension MockLowering.ConfigurationRecord {
+	/// The configuration `node`, which `children` build beneath, is configured by.
+	// D1 lane hook (lane D): each child's field as the core's `SafeDIOverrides` spells it.
+	init(of node: MockLowering.ConstantNode, children: [MockLowering.TreeNode]) {
+		self.init(
+			concreteType: node.instantiable.concreteInstantiable,
+			usesMockInitializer: false,
+			childFields: children.compactMap(\.builtNode).map { child in
+				ChildField(
+					name: child.property.label,
+					typeSource: child.hasConfiguration ? child.configurationTypeName : "(\(child.builderClosureType))?",
+					defaultValue: child.hasConfiguration ? ".init()" : "nil",
+				)
+			},
+			concreteBuilderClosureType: node.concreteBuilderClosureType,
+		)
 	}
 }

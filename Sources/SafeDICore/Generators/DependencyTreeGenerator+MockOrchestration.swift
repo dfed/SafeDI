@@ -231,12 +231,14 @@ extension DependencyTreeGenerator {
 			async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
 			let code = try await mockRoot.generateCode(codeGeneration: .mock(mockContext))
 			// Stage D1's shadow, which only the tests set: the lowering of the same root, compared with the emitter's code.
+			var lowered: MockLowering.Result?
 			if let shadowObserver = MockLoweringShadow.observer {
-				let lowered = await mockRoot.lowerMockRoot(context: mockContext)
+				let loweredRoot = await mockRoot.lowerMockRoot(context: mockContext)
 				shadowObserver(MockLoweringShadow.Comparison(
 					mockedType: instantiable.concreteInstantiable.asSource,
-					outcome: MockLoweringShadow.outcome(comparing: lowered, with: code),
+					outcome: MockLoweringShadow.outcome(comparing: loweredRoot, with: code),
 				))
+				lowered = loweredRoot
 			}
 			let generatedRoot = await GeneratedMockRoot(
 				root: GeneratedRoot(
@@ -250,7 +252,7 @@ extension DependencyTreeGenerator {
 				publicConstructionNodes: summary.publicConstructionNodes,
 			)
 			await mockRoot.releaseRootMockParameterTree()
-			return (generatedRoot: generatedRoot, configurationNodesByConstruction: summary.configurationNodesByConstruction)
+			return (generatedRoot: generatedRoot, configurationNodesByConstruction: summary.configurationNodesByConstruction, lowered: lowered)
 		}
 		let generatedRoots = generatedRootsAndSummaries.map(\.generatedRoot)
 
@@ -396,6 +398,24 @@ extension DependencyTreeGenerator {
 				publicConfigurationDeclarations: publicConfigurationDeclarations,
 				mockConditionalCompilation: mockConditionalCompilation,
 			)
+		}
+
+		// Stage D1's shadow of the configuration structs, which only the tests set: each root's merged code and the module's
+		// shared configuration code, lowered from the records of every root's lowering.
+		// D1 lane hook (lane D): compared in `MockLowering+Configurations.swift`.
+		if let shadowObserver = MockLoweringShadow.observer {
+			let loweredRoots = zip(generatedRootsAndSummaries, mergedGeneratedRoots).compactMap { generatedRootAndSummary, mergedRoot in
+				generatedRootAndSummary.lowered.map { lowered in
+					MockLowering.LoweredRoot(mockedType: mergedRoot.typeDescription, lowered: lowered, emittedMergedCode: mergedRoot.code)
+				}
+			}
+			for comparison in MockLoweringShadow.configurationComparisons(
+				of: loweredRoots,
+				emittedConfigurationCode: mockConfigurationCode,
+				mockConditionalCompilation: mockConditionalCompilation,
+			) {
+				shadowObserver(comparison)
+			}
 		}
 
 		// Freeing the mock roots' trees keeps a core busy for a while on a large module, and nothing generated waits for it.
