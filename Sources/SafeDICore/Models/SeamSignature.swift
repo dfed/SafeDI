@@ -1109,8 +1109,9 @@ public struct SeamSignature: Sendable {
 	/// the inner enum, the cases that lead from the root enum to the call's case, and the values the call's owner binds
 	/// before it, which the closure the call passes builds.
 	public struct CallRoute: Codable, Sendable {
-		public init(sitePath: [Property], innerKey: ScopeEnum.Key, rootKey: ScopeEnum.Key, route: [Hole.RouteStep], caseName: String, memberValuesType: TypeDescription? = nil, handsFillLevelStruct: Bool = false, reentersEnclosingFill: Bool = false) {
+		public init(sitePath: [Property], innerKey: ScopeEnum.Key, rootKey: ScopeEnum.Key, route: [Hole.RouteStep], caseName: String, memberValuesType: TypeDescription? = nil, memberIsLetChild: Bool = false, handsFillLevelStruct: Bool = false, reentersEnclosingFill: Bool = false) {
 			self.sitePath = sitePath
+			self.memberIsLetChild = memberIsLetChild
 			self.innerKey = innerKey
 			self.rootKey = rootKey
 			self.route = route
@@ -1132,6 +1133,9 @@ public struct SeamSignature: Sendable {
 		/// seam's extension spells it: the call passes the inner seam the struct that member returns. `nil` where the enum
 		/// declares none.
 		public let memberValuesType: TypeDescription?
+		/// Whether the call's own case is a carrier's `let` child (`ScopeEnum.Case.isLetChildOfCarrier`), which the call reads
+		/// rather than calls.
+		public let memberIsLetChild: Bool
 		/// Whether the call is the fulfiller of a fill whose case `route` ends on: it is handed the struct of the fill's own level,
 		/// which the fill is handed, and has no case of its own (`caseName` is empty).
 		public let handsFillLevelStruct: Bool

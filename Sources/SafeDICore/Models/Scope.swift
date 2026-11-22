@@ -2728,10 +2728,9 @@ struct SeamHoles: Sendable {
 			} else {
 				callRoute.memberValuesType.map { memberValuesType in
 					let parentName = callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName } ?? builderName
-					// A carrier holds the inner seam's carrier as a `let` child, formed where the carrier is formed.
-					// A `Sendable` carrier holds a plain one only through a member, as the carrier declares it.
-					if case let .nested(_, enumType, _) = memberValuesType, let carrier = ReservedName.seamCarrier(ofEnum: enumType), !carrier.isSendable || callRoute.innerKey.isSendable {
-						return "\(parentName).\(callRoute.caseName)"
+					if case let .nested(_, enumType, _) = memberValuesType, ReservedName.seamCarrier(ofEnum: enumType) != nil {
+						// A carrier's member for a call's own case takes no values: a `let` child is read, any other member called.
+						return callRoute.memberIsLetChild ? "\(parentName).\(callRoute.caseName)" : "\(parentName).\(callRoute.caseName)()"
 					} else {
 						return "\(parentName).\(callRoute.caseName)(\(memberValuesType.asSource)())"
 					}

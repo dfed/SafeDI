@@ -126,7 +126,6 @@ extension DependencyTreeGenerator {
 	) -> ScopeEnumsByType {
 		let seamType = seam.concreteInstantiable
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
-		let declaresCarriers = rootTypeNames.plain.hasPrefix(ReservedName.seamCarrierScopeTypeNamePrefix)
 		// The inner enum of the hole type, of the family `isSendable` says, a call hands up, by the call's generator.
 		func innerKey(handedUpBy call: ScopeGenerator, isSendable: Bool) -> SeamSignature.ScopeEnum.Key? {
 			let keys = levels.innerKeysHandedUp(by: call).keysByHoleType[holeType]
@@ -457,9 +456,7 @@ extension DependencyTreeGenerator {
 			for (index, draftCase) in draftCases(of: current.type, isSendable: current.isSendable).enumerated() {
 				let memberValuesTypeName = valuesTypeNames[index]
 				let values: SeamSignature.ScopeEnum.Values? = if let fields = draftCase.fields {
-					// A carrier's member takes only the values its access admits: a field of a type narrower than the seam's, which a
-					// payload struct declared at the field's own access, no other module could read.
-					SeamSignature.ScopeEnum.Values(typeName: memberValuesTypeName, fields: declaresCarriers ? fields.filter { $0.access >= seamTypeAccess } : fields, labelsBoundLater: draftCase.labelsBoundLater)
+					SeamSignature.ScopeEnum.Values(typeName: memberValuesTypeName, fields: fields, labelsBoundLater: draftCase.labelsBoundLater)
 				} else {
 					nil
 				}
@@ -657,6 +654,8 @@ extension DependencyTreeGenerator {
 							memberValuesType: enumCase.memberValuesTypeName.flatMap { memberValuesTypeName in
 								enumTypeByDescribed[caseOfProperty.described].map { .nested(name: memberValuesTypeName, parentType: $0, generics: []) }
 							},
+							memberIsLetChild: enumTypeByDescribed[caseOfProperty.described].flatMap(ReservedName.seamCarrier(ofEnum:)) != nil
+								&& enumCase.isLetChildOfCarrier(inSendableEnum: caseOfProperty.described.isSendable, isInLoop: holdsEnumOfItsOwnComponent(enumCase, of: key(of: caseOfProperty.described))),
 						))
 					} else {
 						let site = SeamSignature.Hole.Site(seamType: seamType, path: reached.sitePath)

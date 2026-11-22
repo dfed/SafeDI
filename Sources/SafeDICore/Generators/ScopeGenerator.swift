@@ -5457,8 +5457,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// The payloads `valuesBindingLines` binds, each as an argument of the initializer of the class a boxed loop's box is
 	/// (`boxedLoops`), labeled with its binding's name.
+	/// A run struct of a carrier level's values (`SeamCarrierValues`) is bound before the box, which a member's argument reads
+	/// it from, and boxed under its name, so a function that unboxes it captures only the box.
 	nonisolated private var valuesBindingArguments: [String] {
-		valuesBindings.map { "\($0.bindingName): \($0.expression(readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties))" }
+		valuesBindings.map { binding in
+			binding.formsRunAfter == nil
+				? "\(binding.bindingName): \(binding.expression(readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties))"
+				: "\(binding.bindingName): \(binding.bindingName)"
+		}
+	}
+
+	/// The lines that bind the run structs `valuesBindingArguments` boxes by name, before the box.
+	nonisolated private var runStructBindingLinesBeforeBox: String {
+		valuesBindings.filter { $0.formsRunAfter != nil }.map { "\($0.line(readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties))\n" }.joined()
 	}
 
 	/// The lines at the top of a boxed loop member's builder function that unbox its own payloads under their names, so
@@ -6269,6 +6280,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var valuesBindingLinesByLoop = [Int: String]()
 		var valuesBindingMemberIndexByLoop = [Int: Int]()
 		var boxedArgumentsByLoop = [Int: [String]]()
+		var runStructLinesByLoop = [Int: String]()
 		var loopLevelsNameByLoop = [Int: String]()
 		if !receivedBuilderLoops.loopByChildIndex.isEmpty {
 			// A child is told apart from its siblings by its index, never by its generator, which a sibling can hold too.
@@ -6277,6 +6289,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				guard let loop = loopByChildIndex[child.index] else { continue }
 				if boxedLoops[loop] != nil {
 					boxedArgumentsByLoop[loop, default: []] += child.generator.valuesBindingArguments
+					runStructLinesByLoop[loop, default: ""] += child.generator.runStructBindingLinesBeforeBox
 				} else {
 					valuesBindingLinesByLoop[loop, default: ""] += child.generator.valuesBindingLines
 				}
@@ -6313,7 +6326,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				)
 				if let loopLevelsName = claimedNames.loopLevelsName, let box {
 					loopLevelsNameByLoop[loop] = loopLevelsName
-					valuesBindingLinesByLoop[loop] = Self.loopLevelsBinding(named: loopLevelsName, ofType: box.typeName, arguments: box.arguments)
+					valuesBindingLinesByLoop[loop] = runStructLinesByLoop[loop, default: ""] + Self.loopLevelsBinding(named: loopLevelsName, ofType: box.typeName, arguments: box.arguments)
 				}
 				if let receivedFunctionName = claimedNames.receivedFunctionName {
 					functionName = receivedFunctionName
