@@ -365,8 +365,7 @@ extension MockLowering {
 				guard !onlyIfAvailable else { return .unsupported(.onlyIfAvailable) }
 				guard scope.contains(fulfillingProperty) else { return .unsupported(.alias) }
 				// An alias of a label named apart reads the name it is handed.
-				guard renames[fulfillingProperty.label] == nil else { return .unsupported(.siblingLabelCollision) }
-				guard !rootLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
+				guard renames[fulfillingProperty.label] == nil, !rootLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
 				let alias = AliasBinding(
 					property: property,
 					fulfillingProperty: fulfillingProperty,
