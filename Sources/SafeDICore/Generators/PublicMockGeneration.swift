@@ -1766,6 +1766,12 @@ struct PublicMockCall: Sendable {
 	/// Whether the calling module's mocks can call the mock: the two modules generate their mocks under one condition,
 	/// spelled the same, or the declaring module's mocks are unconditional.
 	var mockConditionsAgree: Bool {
+		Self.mockConditionsAgree(declaringModuleMockCondition: declaringModuleMockCondition, callerModuleMockCondition: callerModuleMockCondition)
+	}
+
+	/// Whether a module whose mocks generate under `callerModuleMockCondition` can call a mock its declaring module
+	/// generates under `declaringModuleMockCondition` (`mockConditionsAgree`).
+	static func mockConditionsAgree(declaringModuleMockCondition: MockCondition, callerModuleMockCondition: MockCondition) -> Bool {
 		declaringModuleMockCondition.conditionalCompilation == nil || declaringModuleMockCondition == callerModuleMockCondition
 	}
 

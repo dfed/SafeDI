@@ -658,6 +658,62 @@ struct SafeDIToolCallingMockHoleBuilderShapeTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsPublicMockInlineAndFillsItsPlace_whenDeclaringModuleGeneratesMocksUnderAnotherCondition() async throws {
+		// `Feat` generates its mocks under `TESTING` and `App` under `DEBUG`, so no call of `G`'s public mock compiles in
+		// `App`: the `.public` mock builds `G` inline, fills its place of `any Api` itself, and takes no builder of it.
+		let feat = """
+		import SafeDI
+
+		public protocol Api {}
+
+		@Instantiable
+		public final class Unused: Instantiable {
+		    init() {}
+		}
+
+		@Instantiable(generateMock: .public)
+		public final class G: Instantiable {
+		    public init(api: any Api) {
+		        self.api = api
+		    }
+
+		    @Instantiated public let api: any Api
+		}
+		"""
+		let app = """
+		import Feat
+		import SafeDI
+
+		@Instantiable(fulfillingAdditionalTypes: [Api.self])
+		public final class Live: Api, Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable(generateMock: .public)
+		public final class Root: Instantiable {
+		    public init(g: G) {
+		        self.g = g
+		    }
+
+		    @Instantiated public let g: G
+		}
+		"""
+		let modules = [
+			ModuleFixture(name: "Feat", packageName: "Feat", swiftFileContentByFilePath: [
+				"FeatTypes.swift": feat,
+				"SafeDIConfiguration.swift": "#SafeDIConfiguration(mockConditionalCompilation: \"TESTING\")",
+			], mockConditionalCompilation: "TESTING"),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppTypes.swift": app], dependencies: ["Feat"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, compileVerification: .returningOutcomeOnly, filesToDelete: &filesToDelete)
+
+		#expect(Self.mockParameterLines(of: output) == [
+			"safeDIOverrides: SafeDIOverrides = .init()",
+		])
+	}
+
 	/// The modules of the join: `F` holds `any Api` twice, beneath levels whose `log` differs, and `Live` reads `log` lazily,
 	/// so a pass-up gate passes `F`'s places up whole and `Root`'s mock takes `apiBuilder` required, and `H`'s one place is
 	/// filled. Where `buildsGInline`, `Root` also instantiates `G`, whose public initializer lets the mock build it inline.

@@ -143,8 +143,10 @@ extension DependencyTreeGenerator {
 			// it – declared outside a `@Sendable` function that builds the place, say – where the tree built inline hands it
 			// every value, so such a type stays built inline, and the `.public` mock fills the place itself, as it fills every
 			// place it builds inline.
+			// Nor where the declaring module generates the mock under a condition this module's mocks do not compile under,
+			// which no call of the mock compiles in (`PublicMockCall.mockConditionsAgree`): the type stays built inline there too.
 			let isCalledToHonorPublicMocksBuilders: Bool
-			if typesReachedByOwnPublicMocks.contains(type) {
+			if typesReachedByOwnPublicMocks.contains(type), PublicMockCall.mockConditionsAgree(declaringModuleMockCondition: foreignPublicMock.declaringModuleMockCondition, callerModuleMockCondition: seams.currentModuleMockCondition) {
 				// Resolved only for a type a `.public` mock reaches.
 				let instantiables = try foreignPublicMock.visibleDeclarations().instantiables
 				let receivedFromTheCaller = Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache).received

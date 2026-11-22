@@ -8763,7 +8763,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: publicMockParametersSortedByLabelReason,
 			signatures: [.renamedGraphDiffers(.mockParameterAndFieldOrder)],
-			seeds: [103, 106, 167, 251, 351, 433, 514, 528, 562, 771, 836, 947],
+			seeds: [103, 106, 167, 251, 351, 514, 528, 562, 771, 836, 947],
 		),
 		// The base corpus's shape, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy
 		// cycle through it, in the gating draw of the shape #702 fixed, a `.public` type that builds itself again through
@@ -8774,7 +8774,7 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: lazyCycleConfigurationFieldReason,
 			signatures: [.renamedGraphDiffers(.mockConfigurationFieldPresence)],
 			seeds: [
-				3, 33, 99, 104, 112, 194, 213, 265, 289, 301, 302, 542, 561, 566, 572, 574, 583, 598, 612, 616, 618, 649,
+				3, 99, 104, 112, 194, 213, 265, 289, 301, 302, 542, 561, 566, 572, 574, 583, 598, 612, 616, 618, 649,
 				653, 677, 697, 825, 832, 833, 884, 907, 909, 944, 946,
 			],
 		),
@@ -8849,9 +8849,14 @@ struct SafeDIToolGraphFuzzerTests {
 			seeds: [137],
 		),
 		GraphFuzzerKnownIssue(
-			reason: "\(publicMockFormsNamedApartOrderReason); and a public mock's parameters are sorted by label (`Property.precedesInMockOrder`), so reversing the labels reorders a `.public` consumer's `mock()`; and \(lazyCycleConfigurationFieldReason); and a `__safeDI_mock` call's arguments are a label-sorted list the comparator doesn't yet move, so where `T7` calls `T6`'s public mock to honor its builders the same reorderings read as a change of the mock's code (Intended: an oracle limit; a later pull request teaches the comparator and deletes this)",
+			reason: "\(publicMockFormsNamedApartOrderReason); and a public mock's parameters are sorted by label (`Property.precedesInMockOrder`), so reversing the labels reorders a `.public` consumer's `mock()`; and \(lazyCycleConfigurationFieldReason); and \(calledPublicMockArgumentOrderReason)",
 			signatures: [.renamedGraphDiffers(.dependencyTreeCode), .renamedGraphDiffers(.mockConfigurationFieldPresence), .renamedGraphDiffers(.mockCode)],
 			seeds: [708],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "\(publicMockParametersSortedByLabelReason); and \(calledPublicMockArgumentOrderReason)",
+			signatures: [.renamedGraphDiffers(.mockCode)],
+			seeds: [433],
 		),
 		// The lazy cycle around `T6`'s hole that the stale-value draw adds (`HoleHost` and `HoleLoop`), whose back-edge's override the move across wrapper names moves, in `T6`'s mock in its dependency tree file.
 		GraphFuzzerKnownIssue(
@@ -8908,6 +8913,8 @@ struct SafeDIToolGraphFuzzerTests {
 	)
 
 	private static let publicMockParametersSortedByLabelReason = "A public mock's parameters are sorted by label (decision 27), so reversing the labels reorders a `.public` consumer's `mock()` and the parameters it surfaces from its leaves (Intended: CLAUDE.md's \"What may follow names\" allows a label sort of equivalent parameters, so the rename oracle's reordering here is expected, not a defect)"
+
+	private static let calledPublicMockArgumentOrderReason = "a `__safeDI_mock` call's arguments are a label-sorted list the comparator doesn't yet move, so where a consumer calls another module's public mock to honor its builders, the same reorderings read as a change of the mock's code, and the guard enum names that hash the called mock's signature change with it (Intended: an oracle limit; a later pull request teaches the comparator and deletes this)"
 
 	private static let publicMockBuilderOrderReason = "A mock's parameters are sorted by label, and a builder's label begins with its hole type's name, so moving type names across wrapper names moves a consumer's builder among its other parameters (Intended: CLAUDE.md's \"What may follow names\" allows a label sort of equivalent parameters, so the rename oracle's reordering here is expected, not a defect)"
 
