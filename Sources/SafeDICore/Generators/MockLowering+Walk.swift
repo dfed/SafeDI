@@ -200,9 +200,10 @@ extension MockLowering {
 				lines.append(alias.bindingLines(indent: indent))
 				return .lowered(.alias(alias))
 			} else {
-				// An internal mock's tree holds only properties and aliases: a root, a hole and a fill are a public mock's,
-				// whose root the walk does not reach.
-				guard case let .property(instantiable, property, forwardedProperties, erasedToConcreteExistential, isPropertyCycle, seamCall) = generator.scopeData else { return .unsupported(.publicMock) }
+				// D1 lane hook (lane C): a hole site and a fill, the kinds of node a public mock's tree holds besides properties
+				// and aliases, and a call of another module's public mock (`MockLowering+PublicMocks.swift`).
+				guard case let .property(instantiable, property, forwardedProperties, erasedToConcreteExistential, isPropertyCycle, seamCall) = generator.scopeData else { return await placeOrFillNode(of: generator, inScope: scope, path: path, indent: indent, lines: &lines) }
+				guard generator.publicMockCall == nil else { return await publicMockCallNode(of: generator, inScope: scope, path: path, indent: indent, lines: &lines) }
 				switch await builtNode(
 					of: generator,
 					building: (instantiable, property, forwardedProperties, erasedToConcreteExistential, isPropertyCycle, seamCall),
@@ -230,7 +231,8 @@ extension MockLowering {
 			lines: inout [String],
 		) async -> Lowering<ConstantNode> {
 			let (instantiable, property, forwardedProperties, erasedToConcreteExistential, isPropertyCycle, seamCall) = built
-			guard seamCall == nil, generator.publicMockCall == nil else { return .unsupported(.publicMock) }
+			// A mock builds every seam inline, so no scope of its tree calls one.
+			guard seamCall == nil else { return .unsupported(.publicMock) }
 			guard !isPropertyCycle, !ancestorTypes.contains(instantiable.concreteInstantiable) else { return .unsupported(.cycle) }
 			let isErased = erasedToConcreteExistential
 			let isFulfilledByAnotherType = property.typeDescription.asInstantiatedType != instantiable.concreteInstantiable
