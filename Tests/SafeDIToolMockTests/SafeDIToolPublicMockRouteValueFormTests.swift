@@ -351,6 +351,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> OfficeScreen {
 		        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Token() }
@@ -372,7 +373,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, token: token) })
 		            }
 		            _ = Office.__safeDI_Office_mock_533562D85E48F99D.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(token: token), safeDIOverrides: safeDIOverrides.office)
+		            return Office.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Office(token: token), safeDIOverrides: safeDIOverrides.office)
 		        }
 		        let office: Office = __safeDI_office()
 		        return OfficeScreen(office: office)
@@ -732,6 +733,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> OfficeScreen {
 		        let passUp = if let safeDIBuilder = safeDIOverrides.passUp { safeDIBuilder() } else { Token() }
@@ -753,7 +755,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, passUp: passUp) })
 		            }
 		            _ = Office.__safeDI_Office_mock_0BCE696681EAA0EC.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(passUp: passUp), safeDIOverrides: safeDIOverrides.office)
+		            return Office.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Office(passUp: passUp), safeDIOverrides: safeDIOverrides.office)
 		        }
 		        let office: Office = __safeDI_office()
 		        return OfficeScreen(office: office)
@@ -884,6 +886,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> OfficeScreen {
 		        let up = if let safeDIBuilder = safeDIOverrides.up { safeDIBuilder() } else { Token() }
@@ -905,7 +908,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		                .init(service: { scope in __safeDI_serviceBuilder_Office_Model_Scope_service(scope, up: up) })
 		            }
 		            _ = Office.__safeDI_Office_mock_30B1C276807B6ACB.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Office.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Office(up: up), safeDIOverrides: safeDIOverrides.office)
+		            return Office.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Office(up: up), safeDIOverrides: safeDIOverrides.office)
 		        }
 		        let office: Office = __safeDI_office()
 		        return OfficeScreen(office: office)
@@ -1236,6 +1239,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        apiBuilder: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_log() -> Log {
@@ -1253,7 +1257,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		                })
 		            }
 		            _ = F.__safeDI_F_mock_96D996AD6269EFC2.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return F.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_F(), log: log.instance, safeDIOverrides: safeDIOverrides.f)
+		            return F.__safeDI_mock(apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_F(), log: log.instance, safeDIOverrides: safeDIOverrides.f)
 		        }
 		        let f: F = __safeDI_f()
 		        return Root(log: log, f: f)
@@ -1579,6 +1583,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        apiBuilder: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let log = if let safeDIBuilder = safeDIOverrides.log { safeDIBuilder() } else { Log() }
@@ -1593,7 +1598,7 @@ struct SafeDIToolPublicMockRouteValueFormTests: ~Copyable {
 		                })
 		            }
 		            _ = F.__safeDI_F_mock_96D996AD6269EFC2.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return F.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_F(), log: log, safeDIOverrides: safeDIOverrides.f)
+		            return F.__safeDI_mock(apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_F(), log: log, safeDIOverrides: safeDIOverrides.f)
 		        }
 		        let f: F = __safeDI_f()
 		        return Root(log: log, f: f)

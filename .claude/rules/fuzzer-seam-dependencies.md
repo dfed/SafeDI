@@ -11,8 +11,6 @@ paths:
   - "Tests/**/*GraphFuzzerPublicMock*.swift"
 ---
 
-<!-- Split from fuzzer-corpora.md, which reached 32,000 characters. Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 # Graph fuzzer: modules beneath the seam's module
 
 Continues `fuzzer-corpora.md`.

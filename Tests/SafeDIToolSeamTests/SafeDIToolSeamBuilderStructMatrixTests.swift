@@ -1929,6 +1929,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        serviceBuilder: (() -> any Service)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        func __safeDI_inner() -> Inner {
@@ -1945,7 +1946,7 @@ struct SafeDIToolSeamBuilderStructMatrixTests: ~Copyable {
 		                })
 		            }
 		            _ = Inner.__safeDI_Inner_mock_DA6A3DB1524E7958.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Inner.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Inner(), safeDIOverrides: safeDIOverrides.inner)
+		            return Inner.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Inner(), safeDIOverrides: safeDIOverrides.inner)
 		        }
 		        let inner: Inner = __safeDI_inner()
 		        return Screen(inner: inner)

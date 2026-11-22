@@ -5,8 +5,6 @@ paths:
   - "Contributing.md"
 ---
 
-<!-- Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 # Documentation
 
 The Manual is how people learn what SafeDI can do and how to design with it. Each topic has one home section (`CLAUDE.md`, "Documentation"); these rules keep it readable.
@@ -20,3 +18,7 @@ The Manual is how people learn what SafeDI can do and how to design with it. Eac
 - **What one integration cannot do** is said once, in its limits section (as "Limits of the Xcode project plugin"), and the error leads with the remedy that works there.
 - **Apostrophes are ’** (U+2019) in the Manual, the README and release notes; code, Swift syntax and quoted code keep `'`.
 - **A new call form gets a written call.** When the Manual documents a new way to call a generated declaration (a parameter, a label, a builder or scope shape), add that call to `Scripts/release-checks/written-calls/` in the same change, citing the section; never change a call there that the last stable release's Manual documents (`.claude/rules/releases-and-packaging.md`, "Written calls keep compiling").
+
+## Tests that read the Manual by position
+
+Two tests take the Swift code blocks of "Generating a dependency tree per module" up to the section's first line that begins with `#`, its first subheading: one expects exactly seven, takes the first as its fixture, and compares the second with the code generated for that fixture and the third with the call a root in another module generates for it; the other compares the fifth and sixth with the code its own builder fixture generates. A third takes the two Swift code blocks of "Adopting SafeDI in a large codebase" and the first of "Calling a public mock from another module", each section up to its next heading, as the files of modules `Feed`, `App` and a module of another package, and compiles them.

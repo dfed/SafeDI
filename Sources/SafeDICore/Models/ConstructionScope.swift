@@ -36,6 +36,16 @@ struct ConstructionScope: Sendable {
 		record.instantiable
 	}
 
+	/// The ID of `instantiable`'s concrete type in `interner`.
+	var concreteTypeID: TypeID {
+		record.concreteTypeID
+	}
+
+	/// The IDs this scope's record holds, and what each projects.
+	var interner: ConstructionInterner {
+		table.interner
+	}
+
 	var builtInlineSeamComment: String? {
 		record.builtInlineSeamComment
 	}
@@ -91,7 +101,7 @@ struct ConstructionScope: Sendable {
 
 	/// `Scope.PropertyToGenerate`, with the scope built read from the table.
 	enum PropertyToGenerate: Sendable {
-		case instantiated(Property, ConstructionScope, erasedToConcreteExistential: Bool)
+		case instantiated(Property, ConstructionScope, erasedToConcreteExistential: Bool, id: PropertyID)
 		case hole(Property, erasedToConcreteExistential: Bool)
 		case aliased(
 			Property,
@@ -105,8 +115,8 @@ struct ConstructionScope: Sendable {
 	var propertiesToGenerate: [PropertyToGenerate] {
 		record.propertiesToGenerate.map { propertyToGenerate in
 			switch propertyToGenerate {
-			case let .instantiated(property, id, erasedToConcreteExistential):
-				.instantiated(property, ConstructionScope(table: table, record: table[id]), erasedToConcreteExistential: erasedToConcreteExistential)
+			case let .instantiated(property, id, erasedToConcreteExistential, propertyID):
+				.instantiated(property, ConstructionScope(table: table, record: table[id]), erasedToConcreteExistential: erasedToConcreteExistential, id: propertyID)
 			case let .hole(property, erasedToConcreteExistential):
 				.hole(property, erasedToConcreteExistential: erasedToConcreteExistential)
 			case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
@@ -117,15 +127,15 @@ struct ConstructionScope: Sendable {
 
 	/// `Scope.HoleArgument`, with the fulfilling scope read from the table.
 	enum HoleArgument: Sendable {
-		case fill(SeamSignature.Hole, ConstructionScope)
+		case fill(SeamSignature.Hole, ConstructionScope, ScopeRecord.FillContext)
 		case passUp(SeamSignature.Hole)
 	}
 
 	var holeArguments: [HoleArgument] {
 		record.holeArguments.map { argument in
 			switch argument {
-			case let .fill(hole, id):
-				.fill(hole, ConstructionScope(table: table, record: table[id]))
+			case let .fill(hole, id, fillContext):
+				.fill(hole, ConstructionScope(table: table, record: table[id]), fillContext)
 			case let .passUp(hole):
 				.passUp(hole)
 			}
@@ -180,12 +190,12 @@ struct ScopesBuiltAtOnePlace: Sendable {
 					lastReferrers.append(referrer)
 				}
 			}
-			for case let .instantiated(_, id, _) in records[referrer].propertiesToGenerate {
+			for case let .instantiated(_, id, _, _) in records[referrer].propertiesToGenerate {
 				reference(id)
 			}
 			// A fill place has no key and stores nothing, so counting its reference only keys, with nothing to hit, a scope the
 			// tree otherwise builds at one place. The count is kept so that one place means one reference of any kind.
-			for case let .fill(_, id) in records[referrer].holeArguments {
+			for case let .fill(_, id, _) in records[referrer].holeArguments {
 				reference(id)
 			}
 			referrer += 1

@@ -250,6 +250,7 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 			    }
 
 			    static func mock(
+			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_panel() -> Panel {
@@ -265,7 +266,7 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 			                .init(service: { _ in __safeDI_serviceBuilder_Panel_service() })
 			            }
 			            _ = Panel.__safeDI_Panel_mock_4C19E5205B40458C.self // If this line does not compile, compile the code SafeDI generates for module Up into Up: under Bazel, add Up’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder({ __safeDI_serviceBuilder_Panel_service() }) } else { Panel.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Panel()) }
+			            return if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder({ if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Panel_service() } }) } else { Panel.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Panel()) }
 			        }
 			        let panel: Panel = __safeDI_panel()
 			        return Screen(panel: panel)
@@ -313,13 +314,15 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 			    }
 
 			    public static func mock(
+			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
-			        Screen.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+			        Screen.__safeDI_mock(serviceBuilder: serviceBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
+			        serviceBuilder __safeDI_serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_panel() -> Panel {
@@ -335,7 +338,7 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 			                .init(service: { _ in __safeDI_serviceBuilder_Panel_service() })
 			            }
 			            _ = Panel.__safeDI_Panel_mock_4C19E5205B40458C.self // If this line does not compile, compile the code SafeDI generates for module Up into Up: under Bazel, add Up’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            return if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder({ __safeDI_serviceBuilder_Panel_service() }) } else { Panel.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Panel()) }
+			            return if let safeDIBuilder = safeDIOverrides.panel { safeDIBuilder({ if let __safeDI_serviceBuilder { __safeDI_serviceBuilder() } else { __safeDI_serviceBuilder_Panel_service() } }) } else { Panel.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Panel()) }
 			        }
 			        let panel: Panel = __safeDI_panel()
 			        return Screen(panel: panel)
@@ -343,7 +346,7 @@ struct SafeDIToolCallingMockAccessErrorTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_mock_51799E6AA5E7B634 {}
+			    public enum __safeDI_Screen_mock_E1553F902C7FFA09 {}
 			}
 			#endif
 			"""

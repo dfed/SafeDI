@@ -2,12 +2,10 @@
 paths:
   - "Tests/**/GraphFuzzer*.swift"
   - "Tests/**/*GraphFuzzer*Tests.swift"
-  - ".github/workflows/{ci,graph-fuzzer}.yml"
+  - ".github/workflows/graph-fuzzer.yml"
   - ".github/scripts/*graph-fuzzer*"
   - "Scripts/fuzz-corpus.sh"
 ---
-
-<!-- Split from fuzzer-seam-oracles.md, which reached 32,000 characters. Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
 
 # Graph fuzzer: the gating checks
 

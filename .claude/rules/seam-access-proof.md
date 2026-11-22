@@ -8,8 +8,6 @@ paths:
   - "Tests/**/*UnreadType*.swift"
 ---
 
-<!-- Moved from CLAUDE.md §Common Pitfalls ("Seams: two scope maps, one signature, a guard", sentences 20–34) at 337e5e22. Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 # Seams: tiers and access proofs
 
 Continues `seams.md`.

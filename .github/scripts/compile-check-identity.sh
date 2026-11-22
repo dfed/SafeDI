@@ -116,6 +116,35 @@ hashed_sources() {
 # Assigned first, so that a failure stops the script instead of hashing less.
 sources=$(hashed_sources)
 
+# Prints the package manifest as this hash covers it. A release commit rewrites
+# two of its lines and nothing else the hash covers: the address and checksum
+# of the prebuilt SafeDITool, which the `prebuilt` trait downloads. A build
+# with the `sourceBuild` trait compiles the tool from source and never reads
+# them, so for such a build they are left out, and the first runs after a
+# release keep every passed check: with them hashed, the release of 2.3.1
+# compiled all 4,287 checks again on each platform, 41.5 minutes of tests on
+# Linux and 68.7 on macOS against about 15 and 24 (run 44919892765). Any other
+# build hashes the manifest whole. It fails, rather than hash a manifest it no
+# longer reads as written, unless it leaves out exactly those two lines.
+hashed_manifest() {
+	case " $* " in
+	*" --traits sourceBuild "*) ;;
+	*)
+		cat Package.swift
+		return
+		;;
+	esac
+	local prebuilt_tool='^[[:space:]]*(url: "https://github\.com/dfed/SafeDI/releases/download/[^"]*/SafeDITool\.artifactbundle\.zip"|checksum: "[0-9a-f]{64}"),$'
+	if [ "$(grep -cE "$prebuilt_tool" Package.swift)" -ne 2 ]; then
+		echo "compile-check-identity.sh: expected exactly two lines for the prebuilt SafeDITool's address and checksum in Package.swift." >&2
+		return 1
+	fi
+	grep -vE "$prebuilt_tool" Package.swift
+}
+
+# Assigned first, for the same reason.
+manifest=$(hashed_manifest "$@")
+
 if [ "${1:-}" = --list-sources ]; then
 	echo "$sources"
 	exit 0
@@ -124,8 +153,8 @@ fi
 {
 	echo "Test arguments: $*"
 	echo "$sources" | tr '\n' '\0' | sha256_of_files
+	echo "Package.swift: $(echo "$manifest" | sha256 | cut -d ' ' -f 1)"
 	printf '%s\0' \
-		Package.swift \
 		Package.resolved \
 		Tests/SafeDIToolTestSupport/SafeDICompileVerifier.swift \
 		Tests/SafeDIToolTestSupport/PassedCompileCheckCache.swift \

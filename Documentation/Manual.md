@@ -1365,7 +1365,8 @@ Also:
 
   SafeDI decides this once for your module, for each public mock and type of place: every mock in the module that calls that public mock takes the builder, a `.public` mock included, even where the same module fills places of that type that other public mocks hold.
 - An internal mock takes one builder for each hole type its calls pass up, as a required parameter of its own for the test to supply, labeled as a seam labels a builder: `serviceBuilder`, with a trailing `_`, as in `serviceBuilder_`, when another parameter has its name. The places it passes up to one builder must forward the same values, or SafeDI reports an error. A public mock takes a builder of its own for the place, which its callers supply, as a seam passes an inner seam’s places up.
-- A place the calling mock fills never reaches the builder its caller passes. Generated code that calls that mock fills such a place too where it can, and otherwise passes it up with the rest, so an internal mock can take a builder that is never called.
+- The calling mock takes an optional builder for each hole type whose places its calls fill, such as `apiBuilder: (() -> any Api)? = nil`, under the label it would take a required builder of that type under. Passed, it replaces every fill of that type in every call the mock makes, and an override of a called type is handed it in place of the fill; left `nil`, the fills build the places. A place built inside a `@Sendable` function, as a `SendableInstantiator` builds one, takes the `@Sendable` builder of its type, such as `apiSendableBuilder`, so pass both to replace every place of the type. Where the mock also passes up a place of the type, it takes the one required builder, which then builds the places its calls fill too. An override or a builder replaces everything beneath what it builds. Where your module builds another module’s public type inline instead of calling its mock, as it does when it can call the type’s initializer and build its whole tree, the builder also replaces each place of that tree that the type’s own module cannot fill, including one held in an instantiator or `LazilyInstantiated` and one inside a fill, unless your overrides replace that place. A public mock takes these builders as well; generated code that calls it never passes them, so its own fills build those places.
+- A place a public mock fills itself never reaches a builder that generated code calling it passes. Generated code that calls that mock fills such a place too where it can, and otherwise passes it up with the rest, so an internal mock can take a builder that is never called.
 - A mock tree that reaches a type whose declaring module SafeDI does not know builds it inline where it can, and otherwise fails as [Limits of the Xcode project plugin](#limits-of-the-xcode-project-plugin) describes.
 
 ## Installation
@@ -1382,7 +1383,7 @@ To add the SafeDI framework as a dependency to a package utilizing [Swift Packag
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.0"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.2"),
 ]
 ```
 
@@ -1489,7 +1490,7 @@ Unlike the Xcode project plugin, the Swift package plugin finds the source files
 
 #### Bazel
 
-Add `bazel_dep(name = "safedi", version = "2.3.0")` to your `MODULE.bazel`, then declare each first-party Swift module ([Generating your dependency tree](#generating-your-dependency-tree)) with `safedi_swift_library` in place of `swift_library`:
+Add `bazel_dep(name = "safedi", version = "2.3.2")` to your `MODULE.bazel`, then declare each first-party Swift module ([Generating your dependency tree](#generating-your-dependency-tree)) with `safedi_swift_library` in place of `swift_library`:
 
 ```python
 load("@safedi//bazel:safedi.bzl", "safedi_swift_library")
@@ -1508,9 +1509,14 @@ safedi_swift_library(
 
 The macro accepts every `swift_library` attribute and declares two targets: the `swift_library` named `App`, and `App_safedi`, which runs `SafeDITool` over the same `srcs` with the same `defines` and `copts`. Both targets take the macro’s `visibility`. For each module you depend on directly, list its `<name>_safedi` target in `safedi_deps` and the module itself in `deps`; [Which modules to list](#which-modules-to-list) says why that is enough. List every Swift source of the module in `srcs`: Bazel cannot see the files an `additionalDirectoriesToInclude` entry names. For `package` access, give the modules of one package the same `package_name`: a module with a different `package_name` is in another package, and a module without one has no package. You can see this integration in practice in the [ExampleBazelIntegration](../Examples/ExampleBazelIntegration) module.
 
+A module with many mocks can spread them over several files, so that an edit recompiles only the files whose mocks it changed, and a build that compiles a module’s files in parallel compiles the mocks in parallel too. Set `split_mocks = True`: `App_safedi.swift` then holds the dependency trees, and `App_safedi_Mocks1.swift` through `App_safedi_Mocks32.swift` hold the mocks. Each mock goes whole into the file its type’s name picks, so an edit that changes one mock rewrites only that mock’s file. Turn it on for a module with a few hundred mocks or more: the 32 files add a fraction of a second to a clean build of a module with few.
+
+The edit-loop gain needs a compile that recompiles only the files whose bytes changed, as Swift’s incremental compile does when SafeDI leaves a file it did not change untouched. Where a build recompiles every file anyway, more files cost a little more instead, so time your own edit loop before keeping the setting.
+
 **Only if the macro does not fit** a module, declare the `safedi_compile` rule and the module’s `swift_library` separately, and add `[":<rule name>"]` to the library’s `srcs`. Load the rule with `load("@safedi//bazel:safedi.bzl", "safedi_compile")`. It takes:
 
 - `srcs`, `defines`, `copts`, and `package_name`: the library’s.
+- `split_mocks`: as on `safedi_swift_library`; the mock files are named after the rule, `<rule name>_Mocks1.swift` through `<rule name>_Mocks32.swift`.
 - `deps`: the targets `safedi_swift_library` calls `safedi_deps`.
 - `visibility`: as on the library, since the modules that list the rule must see it.
 - `module_name` (required): the library’s `module_name` attribute, or the name `derive_swift_module_name` from `@rules_swift//swift:module_name.bzl` gives the library’s label.
@@ -1547,7 +1553,7 @@ Depend on SafeDI in `Tuist/Package.swift`, so that `tuist install` fetches the S
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.0"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.3.2"),
 ]
 ```
 
@@ -1601,7 +1607,7 @@ An Xcode script phase that runs `SafeDITool` can keep `ENABLE_USER_SCRIPT_SANDBO
 
 | Option | Writes |
 | --- | --- |
-| `--combined-output <file>` | Everything in one file whose path is known in advance, for a build system that declares rule outputs up front. It cannot be combined with the other two. |
+| `--combined-output <file>` | Everything in one file whose path is known in advance, for a build system that declares rule outputs up front. It cannot be combined with the other two. With `--split-combined-output-mocks`, the file holds only the dependency trees, and the mocks are spread over 32 more files beside it, named as the file is with `_Mocks1` through `_Mocks32` before `.swift`, as the Bazel rule’s [`split_mocks`](#bazel) does. |
 | `--output-directory <existing directory>` | One file per source file, as the `SafeDIGenerator` plugin writes them, named as [Finding the generated code](#finding-the-generated-code) describes. `generate` runs `scan` itself and writes its manifest and cache there. When the input CSV lists files of other modules too, pass the module’s own files to `--mock-scoped-files`. |
 | `--swift-manifest <manifest>` | The outputs listed by a manifest you had `scan` write. A manifest you write by hand is deprecated, and `generate` warns. |
 
@@ -1695,7 +1701,7 @@ SafeDI writes its output into the build directory rather than your source tree. 
 | --- | --- |
 | Xcode project with the `SafeDIGenerator` plugin | `<DerivedData>/Build/Intermediates.noindex/BuildToolPluginIntermediates/<Project>.output/<Target>/SafeDIGenerator/SafeDIOutput/` |
 | Swift package built with `swift build` | `.build/plugins/outputs/<package>/<target>/destination/SafeDIGenerator/SafeDIOutput/` |
-| Bazel (`safedi_swift_library` or `safedi_compile`) | `bazel-bin/<package>/<name>_safedi.swift` for a `safedi_swift_library` named `<name>`, or `bazel-bin/<package>/<rule name>.swift` for a hand-written `safedi_compile`; one combined file per module |
+| Bazel (`safedi_swift_library` or `safedi_compile`) | `bazel-bin/<package>/<name>_safedi.swift` for a `safedi_swift_library` named `<name>`, or `bazel-bin/<package>/<rule name>.swift` for a hand-written `safedi_compile`; one combined file per module, and beside it `<name>_safedi_Mocks1.swift` and on through `<name>_safedi_Mocks32.swift` for a module that sets `split_mocks` |
 | Tuist (`SafeDITuist` plugin) | `$(DERIVED_FILE_DIR)/SafeDIGenerated.swift` for each target, under the target’s intermediates in DerivedData |
 | Custom build system | Wherever your `generate` invocation points `--combined-output` or `--output-directory` |
 
@@ -2072,7 +2078,7 @@ This plugin will:
 ### Manual migration
 
 1. Update your `swift-tools-version` to 6.2 or later
-2. Update your SafeDI dependency to `from: "2.3.0"`
+2. Update your SafeDI dependency to `from: "2.3.2"`
 3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, add a `#SafeDIConfiguration` in your root module with the equivalent values and delete the CSV files
 4. If you don’t have CSV configuration files and do not need other SafeDI configuration options, no `#SafeDIConfiguration()` declaration is required
 

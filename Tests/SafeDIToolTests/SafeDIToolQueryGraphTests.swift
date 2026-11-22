@@ -588,6 +588,93 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_namesDeclarationsEnclosingFunctionsCallsPass_whenLazyCycleCallPassesParameterOfEnclosingFunction() async throws {
+		// `B`'s builder function takes `theme`, which `Mid` declares before closing the cycle on it, and is declared in the body
+		// of `A`'s, which takes `theme` too, since `X` declares it before closing the cycle on `A`: `A`'s function passes its
+		// parameter on to `B`'s, so `B` is handed what `Shell` and `X`'s cycle-closing scope pass `A`'s, and what `Mid` passes.
+		let report = try await graph(of: [
+			"A.swift": """
+			@Instantiable
+			public final class A: Instantiable {
+			    public init(bBuilder: Instantiator<B>, xBuilder: Instantiator<X>) {
+			        self.bBuilder = bBuilder
+			        self.xBuilder = xBuilder
+			    }
+
+			    @Instantiated let bBuilder: Instantiator<B>
+			    @Instantiated let xBuilder: Instantiator<X>
+			}
+			""",
+			"B.swift": """
+			@Instantiable
+			public final class B: Instantiable {
+			    public init(theme: Theme, midBuilder: Instantiator<Mid>) {
+			        self.theme = theme
+			        self.midBuilder = midBuilder
+			    }
+
+			    @Received let theme: Theme
+			    @Instantiated let midBuilder: Instantiator<Mid>
+			}
+			""",
+			"Mid.swift": """
+			@Instantiable
+			public final class Mid: Instantiable {
+			    public init(theme: Theme, bBuilder: Instantiator<B>) {
+			        self.theme = theme
+			        self.bBuilder = bBuilder
+			    }
+
+			    @Forwarded let theme: Theme
+			    @Instantiated let bBuilder: Instantiator<B>
+			}
+			""",
+			"Root.swift": """
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(shellBuilder: Instantiator<Shell>) {
+			        self.shellBuilder = shellBuilder
+			    }
+
+			    @Instantiated let shellBuilder: Instantiator<Shell>
+			}
+			""",
+			"Shell.swift": """
+			@Instantiable
+			public final class Shell: Instantiable {
+			    public init(theme: Theme, aBuilder: Instantiator<A>) {
+			        self.theme = theme
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Forwarded let theme: Theme
+			    @Instantiated let aBuilder: Instantiator<A>
+			}
+			""",
+			"Theme.swift": """
+			public struct Theme {}
+			""",
+			"X.swift": """
+			@Instantiable
+			public final class X: Instantiable {
+			    public init(theme: Theme, aBuilder: Instantiator<A>) {
+			        self.theme = theme
+			        self.aBuilder = aBuilder
+			    }
+
+			    @Forwarded let theme: Theme
+			    @Instantiated let aBuilder: Instantiator<A>
+			}
+			""",
+		])
+
+		#expect(Self.supplies(in: report) == [
+			"App.B.theme": "App.Mid.theme, App.Shell.theme, App.X.theme",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func graph_marksReceivesNil_whenLazyCyclePassesNilFromOneCall() async throws {
 		// The app declares no session, so its call of the screen's builder function passes `nil`; the step's passes its own.
 		let report = try await graph(of: [
@@ -879,6 +966,47 @@ struct SafeDIToolQueryGraphTests: ~Copyable {
 		#expect(fromModuleInfo.types.map(\.id) == ["App.Cache", "App.Clock", "App.DefaultService", "App.Log", "App.Root"])
 		#expect(fromModuleInfo.types.map(\.id) == fromDirectory.types.map(\.id))
 		#expect(fromModuleInfo.fulfillment == fromDirectory.fulfillment)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func graph_exportsEveryModule_whenManyModulesAreReadFromDirectoriesOrModuleInfo() async throws {
+		// Forty modules, read in parallel both ways. Release builds of SafeDITool 2.3.1 by Swift 6.3 with `-Osize`, by
+		// Swift 6.4.1 and 6.4.2 on Linux, and by Xcode 26.4 miscompiled the task groups that read them, and exported no
+		// module or crashed. This build's compiler may not show that miscompile; the release binary's check in CI does.
+		let directory = try temporaryDirectory()
+		let moduleCount = 40
+		var moduleDirectories = [URL]()
+		var moduleInfoFiles = [URL]()
+		for index in 0..<moduleCount {
+			let moduleName = "Module\(index)"
+			let moduleDirectory = directory.appendingPathComponent(moduleName)
+			let fixtures = try createSwiftFixtureFiles(
+				atFilePaths: ["Type\(index).swift": """
+				@Instantiable
+				public final class Type\(index): Instantiable {
+				    public init() {}
+				}
+				"""],
+				in: moduleDirectory,
+				alongside: [],
+			)
+			let filePaths = Set(fixtures.map { NormalizedFilePath($0.path).path })
+			let parsed = try await parseModule(filePaths: filePaths, configurationFilePaths: filePaths, activeCompilationConditions: [])
+			let moduleInfoFile = directory.appendingPathComponent("\(moduleName).safedi")
+			try ModuleInfoFile(module: parsed.module.moduleInfo, moduleName: moduleName, seamSignatures: [], view: .empty)
+				.moduleInfoData
+				.write(to: moduleInfoFile)
+			moduleDirectories.append(moduleDirectory)
+			moduleInfoFiles.append(moduleInfoFile)
+		}
+		let expectedIDs = (0..<moduleCount).map { "Module\($0).Type\($0)" }.sorted()
+
+		let fromDirectories = try await QueryGraph.parse(["--include"] + moduleDirectories.map(\.path)).graph()
+		let fromModuleInfo = try await QueryGraph.parse(["--module-info"] + moduleInfoFiles.map(\.path)).graph()
+
+		#expect(fromDirectories.types.map(\.id).sorted() == expectedIDs)
+		#expect(fromModuleInfo.types.map(\.id).sorted() == expectedIDs)
 	}
 
 	@Test
