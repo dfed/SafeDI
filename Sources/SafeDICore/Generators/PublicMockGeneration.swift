@@ -911,10 +911,12 @@ extension ScopeGenerator {
 		builders shapedBuilders: DependencyTreeGenerator.ShapedBuilders?,
 		hasOverrides: Bool,
 		typesDeclaredEscaping: Set<TypeDescription>,
+		// D1 lane hook (lane C): the mock lowering, which reads no parameter tree, hands the receivers' modules it finds.
+		receiverModulesByLabel givenReceiverModulesByLabel: [String: Set<String?>]? = nil,
 		context: PublicMockContext,
 	) -> PublicMockPlan {
 		let typeName = instantiable.concreteInstantiable.asSource
-		let receiverModulesByLabel = receiverModules(in: parameterTree, context: context)
+		let receiverModulesByLabel = givenReceiverModulesByLabel ?? receiverModules(in: parameterTree, context: context)
 		// The cause of each access computed, by type and receive label, which a parameter of that access records.
 		var accessCauses = [String: TypeAccessProof.Cause]()
 		func access(of type: TypeDescription, receivedAs label: String?) -> AccessLevel {
