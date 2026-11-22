@@ -636,8 +636,22 @@ extension MockLowering {
 			let ownLoopMembership = loopMembership
 			if ownLoopMembership != nil {
 				guard isWrapped,
-				      let memberRebindingLines = MockLowering.rebindingLines(of: generator.reboundProperties, among: loopMembers, ownProperty: property, indent: "\(indent)\(ScopeGenerator.standardIndent)")
+				      var memberRebindingLines = MockLowering.rebindingLines(of: generator.reboundProperties, among: loopMembers, ownProperty: property, indent: "\(indent)\(ScopeGenerator.standardIndent)")
 				else { return .unsupported(.cycle) }
+				// D1 lane hook (lane C): a member a public mock promotes at its root is rebound as the caller's own where it passed
+				// one.
+				if parentConcreteType == nil, generator.reboundProperties.contains(where: promotedProperties.contains) {
+					memberRebindingLines = []
+					for reboundProperty in generator.reboundProperties {
+						guard let member = loopMembers[reboundProperty] else { return .unsupported(.cycle) }
+						if promotedProperties.contains(reboundProperty), member.rename == nil, reboundProperty != property || member.receivedFunctionName == nil {
+							memberRebindingLines.append(MockLowering.promotedWrapperBindingLine(of: member.typeDescription, named: member.bindingName, passing: member.bindingName, handing: member.functionName, forwardedProperties: member.forwardedProperties, indent: "\(indent)\(ScopeGenerator.standardIndent)"))
+						} else {
+							guard let lines = MockLowering.rebindingLines(of: [reboundProperty], among: loopMembers, ownProperty: property, indent: "\(indent)\(ScopeGenerator.standardIndent)") else { return .unsupported(.cycle) }
+							memberRebindingLines.append(contentsOf: lines)
+						}
+					}
+				}
 				rebindingLines = memberRebindingLines
 			}
 			// D1 lane hook (lane B): what the node's binding passes its builder function's cycle parameters, read where the node
@@ -848,7 +862,8 @@ extension MockLowering {
 				let bindingLines = loopMembership.declaresBinding
 					? member.receivedFunctionName == nil
 					? Array(endLines.dropFirst(2))
-					: MockLowering.wrapperBindingLines(of: property.typeDescription, named: bindingName, handing: member.functionName, forwardedProperties: member.forwardedProperties, indent: indent)
+					: configuredNode.promotedParameterName.map { [MockLowering.promotedWrapperBindingLine(of: property.typeDescription, named: bindingName, passing: $0, handing: member.functionName, forwardedProperties: member.forwardedProperties, indent: indent)] }
+					?? MockLowering.wrapperBindingLines(of: property.typeDescription, named: bindingName, handing: member.functionName, forwardedProperties: member.forwardedProperties, indent: indent)
 					: []
 				endLines = Array(endLines.prefix(2))
 				endLines.append(contentsOf: MockLowering.receivedFunctionLines(
@@ -1089,8 +1104,11 @@ extension MockLowering {
 		/// The statements that bind the node from its builder function, after the value the public mock's caller passed for it
 		/// where it promotes the node.
 		func promotedBindingLines(indent: String) -> [String] {
-			guard let promotedParameterName, property.propertyType.isConstant else {
+			guard let promotedParameterName else {
 				return MockLowering.bindingLines(of: property, boundAs: bindingName, callingFunctionNamed: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent)
+			}
+			guard property.propertyType.isConstant else {
+				return [MockLowering.promotedWrapperBindingLine(of: property.typeDescription, named: bindingName, passing: promotedParameterName, handing: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent)]
 			}
 			return ["\(indent)let \(bindingName): \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource) = \(ScopeGenerator.passing(promotedParameterName, orBuilding: "\(functionName)(\(cycleParameterArguments.joined(separator: ", ")))"))"]
 		}
@@ -1235,6 +1253,34 @@ extension MockLowering {
 			// spelled unwrapped where it is made.
 			wrapperBindingLines(of: property.typeDescription, named: bindingName, handing: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent)
 		}
+	}
+
+	/// The statement that binds a wrapper a public mock promotes, `typeDescription`, as `bindingName`: the caller's own,
+	/// passed as `promotedParameterName`, where it passed one, and otherwise made around the builder function `functionName`,
+	/// which takes `forwardedProperties`, as `wrapperBindingLines` makes it.
+	static func promotedWrapperBindingLine(
+		of typeDescription: TypeDescription,
+		named bindingName: String,
+		passing promotedParameterName: String,
+		handing functionName: String,
+		forwardedProperties: [Property],
+		cycleParameterArguments: [String] = [],
+		indent: String,
+	) -> String {
+		let unwrappedType = typeDescription.unwrapped
+		let binding = unwrappedType.isConstructedByAnnotation ? "\(bindingName): \(unwrappedType.asSource)" : bindingName
+		let wrapperType = unwrappedType.spelledForConstruction
+		let arguments = forwardedProperties.map {
+			forwardedProperties.count > 1
+				? "\($0.label.spelledAsArgumentLabel): $0.\($0.label)"
+				: "\($0.label.spelledAsArgumentLabel): $0"
+		} + cycleParameterArguments
+		let construction = if arguments.isEmpty {
+			"\(wrapperType)(\(functionName))"
+		} else {
+			"\(wrapperType) {\n\(indent)\(ScopeGenerator.standardIndent)\(functionName)(\(arguments.joined(separator: ", ")))\n\(indent)}"
+		}
+		return "\(indent)let \(binding) = \(ScopeGenerator.passing(promotedParameterName, orBuilding: construction))"
 	}
 
 	/// The name of the builder function of a node bound as `bindingName`.
