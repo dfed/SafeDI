@@ -852,7 +852,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func scanCache_readsBack_whenTypeNestsAsDeeplyAsSafeDIReads() async throws {
-		// `Int` and 127 optionals nest 128 type descriptions deep.
+		// `Int` and 31 optionals nest 32 type descriptions deep.
 		let deeplyNestedType = "Int" + String(repeating: "?", count: BinaryReader.maximumNestingDepth - 1)
 		let project = try await scannedProject(files: [
 			"Deep.swift": Self.deepSource(forwarding: deeplyNestedType),
@@ -867,6 +867,66 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		}
 		#expect(optionalCount == BinaryReader.maximumNestingDepth - 1)
 		#expect(cachedType == .simple(name: "Int"))
+	}
+
+	@Test(arguments: NestingShape.allCases)
+	func read_fitsInHalfOfConcurrencyThreadStack_whenTypeNestsAsDeeplyAsSafeDIReads(shape: NestingShape) async {
+		// Swift's concurrency threads have 512 KB of stack on Apple platforms. A debug build of Swift 6.2 or 6.4.2 takes
+		// about 4.4 KB of stack for each level it reads, so reading a type nested as deeply as SafeDI reads must fit in
+		// half of that, which leaves the other half for the frames beneath the read and for platforms whose frames are larger.
+		let innermostType = TypeDescription.simple(name: "Int")
+		let deeplyNestedType = (1..<BinaryReader.maximumNestingDepth).reduce(innermostType) { wrappedType, _ in
+			switch shape {
+			case .optional, .shared:
+				.optional(wrappedType)
+			case .generic:
+				.simple(name: "Array", generics: [wrappedType])
+			case .tuple:
+				.tuple([.init(label: "value", wrappedType), .init(innermostType)])
+			case .closure:
+				.closure(arguments: [innermostType], isAsync: true, doesThrow: true, returnType: wrappedType)
+			case .dictionary:
+				.dictionary(key: innermostType, value: wrappedType)
+			}
+		}
+		let bytes = if shape == .shared {
+			Self.encoded(BinarySharingSignatureValues([deeplyNestedType, deeplyNestedType]))
+		} else {
+			Self.encoded(deeplyNestedType)
+		}
+
+		let readType = await withCheckedContinuation { (continuation: CheckedContinuation<TypeDescription?, Never>) in
+			let thread = Thread {
+				// Read as the type itself: `try?` would infer an optional, and read a presence flag first.
+				let readType: TypeDescription
+				do {
+					if shape == .shared {
+						let sharedTypes: BinarySharingSignatureValues<[TypeDescription]> = try read(bytes)
+						readType = sharedTypes.value[0]
+					} else {
+						readType = try read(bytes)
+					}
+				} catch {
+					continuation.resume(returning: nil)
+					return
+				}
+				continuation.resume(returning: readType)
+			}
+			thread.stackSize = 256 * 1_024
+			thread.start()
+		}
+
+		#expect(readType == deeplyNestedType)
+	}
+
+	enum NestingShape: CaseIterable, Sendable {
+		case optional
+		case generic
+		case tuple
+		case closure
+		case dictionary
+		/// An optional inside a seam signature, whose outermost type descriptions a `.safedi` writes once.
+		case shared
 	}
 
 	@Test
@@ -885,7 +945,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenTypeNestsMoreDeeplyThanDependentModulesRead() async {
 		let deeplyNestedType = "Int" + String(repeating: "?", count: BinaryReader.maximumNestingDepth)
-		await assertThrowsError("SafeDI cannot write `Deep` to a module info file: a type its declaration names nests more than 128 types deep, which is more than SafeDI reads back. To fix this, declare a typealias for part of that type, so that no type in the declaration nests more than 128 types deep.") {
+		await assertThrowsError("SafeDI cannot write `Deep` to a module info file: a type its declaration names nests more than 32 types deep, which is more than SafeDI reads back. To fix this, declare a typealias for part of that type, so that no type in the declaration nests more than 32 types deep.") {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [Self.deepSource(forwarding: deeplyNestedType)],
 				filesToDelete: &filesToDelete,
@@ -897,8 +957,8 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func moduleInfoData_throwsErrorNamingOutermostTypeOfPlainTypeDeclaration_whenItsTypeNestsMoreDeeplyThanDependentModulesRead() {
-		// A type declaration nests one type description for each type that encloses it. A debug build's parser reads no
-		// declaration nested this deeply, so the declaration is made here rather than parsed.
+		// A type declaration nests one type description for each type that encloses it. The declaration is made here
+		// rather than parsed, which keeps the test independent of how deeply the parser reads.
 		let typeNames = (0...BinaryReader.maximumNestingDepth).map { "Level\($0)" }
 		let deeplyNestedType = typeNames.dropFirst().reduce(TypeDescription.simple(name: typeNames[0])) { enclosingType, typeName in
 			.nested(name: typeName, parentType: enclosingType)
@@ -918,7 +978,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			try ModuleInfoFile(module: moduleInfo, moduleName: "Deep", seamSignatures: [], view: .empty).moduleInfoData
 		} throws: { error in
 			// Named by its outermost type: spelling the nested type recurses as deeply as it nests.
-			"\(error)" == "SafeDI cannot write `Level0` to a module info file: a type its declaration names nests more than 128 types deep, which is more than SafeDI reads back. To fix this, declare a typealias for part of that type, so that no type in the declaration nests more than 128 types deep."
+			"\(error)" == "SafeDI cannot write `Level0` to a module info file: a type its declaration names nests more than 32 types deep, which is more than SafeDI reads back. To fix this, declare a typealias for part of that type, so that no type in the declaration nests more than 32 types deep."
 		}
 	}
 
