@@ -12842,7 +12842,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// declarations say.
 	/// - Parameter lazilyInstantiatedPropertyByInstance: The `LazilyInstantiated` a property is the instance of, when
 	///   the override is named after it rather than after its own type.
-	private static func onlyIfAvailableOverrides(
+	// D1 lane hook (lane D): the lowering names the overrides and parameters of `mock()` apart as the emitter does.
+	static func onlyIfAvailableOverrides(
 		for receivedProperties: [Property],
 		namedAfter lazilyInstantiatedPropertyByInstance: [Property: Property],
 		namesInMockScope: Set<String>,
@@ -12873,7 +12874,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// preferred name a declaration hides where the entry is referenced. Those entries are named apart by
 	/// `identifierSafeNames`: by the preferred name followed by the entry's type in `typeDescriptions`, never
 	/// taking a name in `namesInScope`, in `reservedNames`, or that another entry prefers or is named by.
-	private static func namesApart(
+	// D1 lane hook (lane D): the lowering names the parameters of `mock()` apart as the emitter does.
+	static func namesApart(
 		preferredNames: [String],
 		typeDescriptions: [TypeDescription],
 		namesInScope: Set<String>,
