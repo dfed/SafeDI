@@ -477,7 +477,9 @@ extension MockLowering {
 		/// The statement that binds a constant node with no children, whose override `overrideRead` reads.
 		func constantBindingLine(overrideRead nodePath: String, indent: String) -> String {
 			let builder = ReservedName.configurationBuilderPropertyName
-			let annotation = isFulfilledByAnotherType && !isErased ? ": \(property.typeDescription.asSource)" : ""
+			// D1 lane hook (lane C): a child the mock promotes for an optional receive, such as a value a called public mock
+			// builds when passed `nil`, is bound as the value it builds.
+			let annotation = isFulfilledByAnotherType && !isErased ? ": \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource)" : ""
 			return "\(indent)let \(property.label)\(annotation) = if let \(builder) = \(nodePath) { \(builder)(\(builderArguments)) } else { \(construction) }"
 		}
 
@@ -512,7 +514,8 @@ extension MockLowering {
 				lines.append("\(bodyIndent)\(functionName)(\(arguments.joined(separator: ", ")))")
 				lines.append("\(indent)}")
 			} else {
-				lines.append("\(indent)let \(property.label): \(property.typeDescription.asSource) = \(functionName)()")
+				// D1 lane hook (lane C): a promoted child is bound as the value it builds, as `constantBindingLine` binds it.
+				lines.append("\(indent)let \(property.label): \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource) = \(functionName)()")
 			}
 			return lines
 		}
