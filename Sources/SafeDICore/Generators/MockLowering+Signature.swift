@@ -370,8 +370,16 @@ extension ScopeGenerator {
 			}
 		}
 
+		/// The properties the sites of holes among a generator's children bind, which no parameter covers
+		/// (`ScopeGenerator.uncoveredInstantiatedDependencies(ofMockedType:treePropertyNodes:holeSiteProperties:)`).
+		func holeSiteProperties(of generator: ScopeGenerator) -> [Property] {
+			generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).compactMap { child in
+				guard case let .hole(property, _, .some) = child.generator.scopeData else { return nil }
+				return property
+			}
+		}
 		let rootChildren = propertyChildren(of: self, declaredBy: instantiable.dependencies, at: [], enclosedBy: [], insideSendableFunction: false)
-		var builtProperties = Set<Property>()
+		var builtProperties = Set<Property>(holeSiteProperties(of: self))
 		for child in rootChildren {
 			guard let property = child.generator.property else { continue }
 			builtProperties.insert(property)
@@ -392,7 +400,7 @@ extension ScopeGenerator {
 			// A node that closes a cycle builds nothing beneath it, and its dependencies surface as no parameter.
 			guard !isPropertyCycle else { continue }
 			let children = propertyChildren(of: visit.generator, declaredBy: nodeInstantiable.dependencies, at: visit.declarationPath, enclosedBy: [], insideSendableFunction: visit.isInsideSendableFunction)
-			let childLabels = Set(children.compactMap(\.generator.property?.label))
+			let childLabels = Set(children.compactMap(\.generator.property?.label)).union(holeSiteProperties(of: visit.generator).map(\.label))
 			var uncoveredLabels = Set<String>()
 			for dependency in nodeInstantiable.dependencies where isInstantiated(dependency) && !childLabels.contains(dependency.property.label) {
 				uncoveredLabels.insert(dependency.property.label)
