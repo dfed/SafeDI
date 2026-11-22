@@ -208,6 +208,7 @@ extension DependencyTreeGenerator {
 		let mockDeclarationLocations = mockDeclarationLocationsOfTypesWithHandWrittenMocks()
 		let concreteTypesWithHandWrittenMocks = Set(mockDeclarationLocations.keys)
 
+		let foreignPublicMocks = seams.foreignPublicMocks
 		// Generate each root's mock code.
 		let generatedRootsAndSummaries = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
 			let (instantiable, mockRoot) = instantiableAndMockRoot
@@ -226,6 +227,7 @@ extension DependencyTreeGenerator {
 					handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 					sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 					publicMockContext: publicMockContext,
+					foreignPublicMocks: foreignPublicMocks,
 				)),
 			)
 			async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
