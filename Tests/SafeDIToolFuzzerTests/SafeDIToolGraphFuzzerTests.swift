@@ -107,6 +107,43 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func constantCycleCloser_isReadOnlyFromCallsThatReachTheirOwnFunction_whenTheTypeKeyDeclaresEveryFunctionInTheRootsBody() {
+		// The type key declares every builder function in the root's body, so a function's call of another is further out
+		// whether or not it closes a cycle. Only a call whose function reaches back to one the call is inside closes one.
+		let closed = { (bCall: String) in
+			GraphFuzzerFeature.closesCycleWithConstantOrLazilyInstantiatedDependency("""
+			extension Root {
+			    public convenience init() {
+			        let a: A = __safeDI_a()
+			        self.init(a: a)
+			        func __safeDI_a() -> A {
+			            let b: B = __safeDI_b()
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return A(b: b, cBuilder: cBuilder)
+			        }
+			        func __safeDI_b() -> B {
+			            let leaf: Leaf = __safeDI_leaf()
+			            return B(leaf: leaf)
+			        }
+			        func __safeDI_leaf() -> Leaf {
+			            Leaf()
+			        }
+			        func __safeDI_cBuilder() -> C {
+			\(bCall.split(separator: "\n").map { "            \($0)" }.joined(separator: "\n"))
+			            return C()
+			        }
+			    }
+			}
+			""")
+		}
+		#expect(!closed(""))
+		#expect(!closed("let b: B = __safeDI_b()"))
+		#expect(closed("let a: A = __safeDI_a()"))
+		#expect(closed("let a = LazilyInstantiated<A> {\n    __safeDI_a()\n}"))
+		#expect(!closed("let leaf = LazilyInstantiated<Leaf>(__safeDI_leaf)"))
+	}
+
+	@Test
 	func receivedBuilderLoopFeatures_readBuilderLeftNilBesideOwnBuilder_whenTypeReceivesItsOwnBuilderOnlyIfAvailable() {
 		// `T4`'s builder function wraps its own function again, and passes `nil` for `t2Builder`, which a sibling builder
 		// function is named for. Only where `T4` receives `t4Builder` only if available is that the feature: a required
@@ -1838,8 +1875,9 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test
 	func nilArgumentFailure_countsInlinesNilAtTheConstructionsOfItsBuilderFunction_whenInlinePassesACycleParameterNil() {
 		// Inline hands the builder function a lazy cycle closes on a literal `nil` for `mark`, which the construction in its
-		// body passes on by name: that `nil` counts at the construction, so a seam that writes it there once matches inline,
-		// and one that writes it at a second construction, or loses `token`, does not.
+		// body passes on by name: that `nil` counts at the construction. The function is called twice, so it is shared and
+		// stands for places its text does not count: a seam that writes `mark`'s `nil` at one construction or two matches
+		// inline, and one that loses `token`, which inline never passes `nil`, does not.
 		let fixture = GraphFuzzerFixture(seed: 7, swiftFileContent: [
 			"@Instantiable(generateDependencyTree: true)\npublic final class S7_Screen: Instantiable {\n\tpublic init(reader: S7_Reader) {\n\t\tself.reader = reader\n\t}\n\n\t@Instantiated let reader: S7_Reader\n}\n",
 		])
@@ -1853,8 +1891,112 @@ struct SafeDIToolGraphFuzzerTests {
 			return GraphFuzzerToolRuns(fixture: fixture, firstOutcome: seam, secondOutcome: seam, inlineOutcome: inline)
 		}
 		#expect(runs(seamFile: "let first = S7_Reader(token: token, mark: nil)\nlet second = S7_Reader(token: token, mark: mark)").nilArgumentFailure == nil)
-		#expect(runs(seamFile: "let first = S7_Reader(token: token, mark: nil)\nlet second = S7_Reader(token: token, mark: nil)").nilArgumentFailure?.details.prefix { $0 != "\n" } == "`S7_Reader(mark:)` is passed `nil` 2 times with the seam and 1 without it.")
+		#expect(runs(seamFile: "let first = S7_Reader(token: token, mark: nil)\nlet second = S7_Reader(token: token, mark: nil)").nilArgumentFailure == nil)
 		#expect(runs(seamFile: "let first = S7_Reader(token: nil, mark: nil)").nilArgumentFailure?.details.prefix { $0 != "\n" } == "`S7_Reader(token:)` is passed `nil` 1 times with the seam and 0 without it.")
+	}
+
+	@Test
+	func nilArgumentFailure_comparesOnlyWhetherNilIsPassed_whenInlinePassesItInASharedBuilderFunction() {
+		// The type key builds a type that two places build alike in one function, which each place calls, where the seam
+		// writes the type's code at each place: the text of the shared function does not count its places, so a seam that
+		// passes `token` `nil` any number of times matches inline, which passes it `nil` in the shared function, and one
+		// that passes `nil` to an argument inline never passes `nil` does not.
+		let fixture = GraphFuzzerFixture(seed: 7, swiftFileContent: [
+			"@Instantiable(generateDependencyTree: true)\npublic final class S7_Screen: Instantiable {\n\tpublic init(reader: S7_Reader) {\n\t\tself.reader = reader\n\t}\n\n\t@Instantiated let reader: S7_Reader\n}\n",
+		])
+		let inlineFiles = [
+			"S7_Root+SafeDI.swift": "func __safeDI_S7_Reader() -> S7_Reader {\n    let mark = S7_Mark(token: nil, user: user)\n    return S7_Reader(mark: mark)\n}\nlet first = __safeDI_S7_Reader()\nlet second = __safeDI_S7_Reader()",
+		]
+		#expect(GraphFuzzerOracle.nilArgumentKeysInSharedBuilderFunctions(in: inlineFiles, typeNamePrefix: "S7_", excluding: []) == ["S7_Mark(token:)"])
+		let inline = GraphFuzzerToolOutcome.accepted(generatedFiles: inlineFiles, warnings: [])
+		func runs(seamFile: String) -> GraphFuzzerToolRuns {
+			let seam = GraphFuzzerToolOutcome.accepted(generatedFiles: ["S7_Root+SafeDI.swift": seamFile], warnings: [])
+			return GraphFuzzerToolRuns(fixture: fixture, firstOutcome: seam, secondOutcome: seam, inlineOutcome: inline)
+		}
+		#expect(runs(seamFile: "let first = S7_Mark(token: nil, user: user)\nlet second = S7_Mark(token: nil, user: user)\nlet third = S7_Mark(token: nil, user: user)").nilArgumentFailure == nil)
+		#expect(runs(seamFile: "let first = S7_Mark(token: nil, user: user)\nlet second = S7_Mark(token: nil, user: nil)").nilArgumentFailure?.details.prefix { $0 != "\n" } == "`S7_Mark(user:)` is passed `nil` 1 times with the seam and 0 without it.")
+	}
+
+	@Test
+	func nilArgumentKeysInSharedBuilderFunctions_holdsOnlyFunctionsThatStandForMoreThanOnePlace_whenFunctionsAreReferencedOnceOrMore() {
+		// A function referenced once from the root's body stands for one place, and so does one it alone references; one
+		// referenced twice, one that references itself again, and one only such a function references, stand for more.
+		let file = """
+		func __safeDI_once() -> S7_A {
+		    let b = __safeDI_onceInner()
+		    return S7_A(b: b, x: nil)
+		}
+		func __safeDI_onceInner() -> S7_B {
+		    S7_B(y: nil)
+		}
+		func __safeDI_twice() -> S7_C {
+		    let d = __safeDI_twiceInner()
+		    return S7_C(d: d, z: nil)
+		}
+		func __safeDI_twiceInner() -> S7_D {
+		    S7_D(w: nil)
+		}
+		func __safeDI_loop() -> S7_E {
+		    let next = Instantiator<S7_E>(__safeDI_loop)
+		    return S7_E(next: next, v: nil)
+		}
+		let a = __safeDI_once()
+		let c = __safeDI_twice()
+		let other = __safeDI_twice()
+		let e = Instantiator<S7_E>(__safeDI_loop)
+		let f = S7_F(u: nil)
+		"""
+		#expect(GraphFuzzerOracle.nilArgumentKeysInSharedBuilderFunctions(in: ["S7_Root+SafeDI.swift": file], typeNamePrefix: "S7_", excluding: []) == ["S7_C(z:)", "S7_D(w:)", "S7_E(v:)"])
+	}
+
+	@Test
+	func nilArgumentKeysInSharedBuilderFunctions_holdsAConstructionTwoFunctionsAway_whenASharedFunctionHandsOnTheNilItIsGiven() {
+		// The type key's shared function for a subtree takes a received label, one of whose callers passes `nil`; the function
+		// hands it on to the function of a child, which constructs with it, so the `nil` reaches a construction two calls away.
+		let file = """
+		let first = __safeDI_sub(mark: nil, label: label)
+		let mark = S7_Mark()
+		let second = __safeDI_sub(mark: mark, label: label)
+		func __safeDI_sub(mark: S7_Mark?, label: S7_Label) -> S7_Sub {
+		    let child = __safeDI_child(label: label, mark: mark)
+		    return S7_Sub(mark: mark, child: child)
+		}
+		func __safeDI_child(label: S7_Label, mark: S7_Mark?) -> S7_Child {
+		    let gadget = S7_Gadget(label: label, mark: mark)
+		    return S7_Child(gadget: gadget)
+		}
+		"""
+		#expect(GraphFuzzerOracle.nilArgumentKeysInSharedBuilderFunctions(in: ["S7_Root+SafeDI.swift": file], typeNamePrefix: "S7_", excluding: []) == ["S7_Sub(mark:)", "S7_Gadget(mark:)"])
+	}
+
+	@Test
+	func nilArgumentKeysInSharedBuilderFunctions_holdsAConstructionReadingTheWrappersInstance_whenASharedFunctionTakesALazyCyclesWrapper() {
+		// The type key's function for a type a lazy cycle closes on takes the cycle's optional wrapper, which the root passes
+		// `nil` and the cycle's closer passes the wrapper; its constructions read the wrapper's instance.
+		let file = """
+		@Sendable func __safeDI_a(tag: SendableLazilyInstantiated<S7_Tag>?) -> S7_A {
+		    let reader = S7_Reader(tag: tag?.instance)
+		    return S7_A(reader: reader)
+		}
+		@Sendable func __safeDI_c(tag: SendableLazilyInstantiated<S7_Tag>) -> S7_C {
+		    let a: S7_A = __safeDI_a(tag: tag)
+		    return S7_C(a: a)
+		}
+		let a: S7_A = __safeDI_a(tag: nil)
+		"""
+		#expect(GraphFuzzerOracle.nilArgumentKeysInSharedBuilderFunctions(in: ["S7_Root+SafeDI.swift": file], typeNamePrefix: "S7_", excluding: []) == ["S7_Reader(tag:)"])
+	}
+
+	@Test
+	func nilArgumentCountsThroughBuilderFunctions_countsAConstructionReadingTheWrappersInstance_whenACallPassesTheWrapperNil() {
+		let file = """
+		@Sendable func __safeDI_a(tag: SendableLazilyInstantiated<S7_Tag>?) -> S7_A {
+		    let reader = S7_Reader(tag: tag?.instance)
+		    return S7_A(reader: reader)
+		}
+		let a: S7_A = __safeDI_a(tag: nil)
+		"""
+		#expect(GraphFuzzerOracle.nilArgumentCountsThroughBuilderFunctions(in: ["S7_Root+SafeDI.swift": file], typeNamePrefix: "S7_", excluding: []) == ["S7_Reader(tag:)": 1])
 	}
 
 	/// A seam's generated file whose plain enum holds `cases`, each `case <name>(<name>_Values)`, and whose initializer
@@ -3238,6 +3380,19 @@ struct SafeDIToolGraphFuzzerTests {
 		extension S731_Root0 {
 		    public convenience init() {
 		        let t1 = S731_T1()
+		        @Sendable func __safeDI_link0(t1Alias: S731_T1?) -> S731_Link0 {
+		            #sourceLocation(file: "S731_Link0.swift", line: 8)
+		            let t1AliasAlias: S731_T1? = t1Alias
+		            #sourceLocation()
+		            let link1: S731_Link1 = __safeDI_link1(t1AliasAlias: t1AliasAlias)
+		            return S731_Link0(t1AliasAlias: t1AliasAlias, link1: link1)
+		        }
+		        @Sendable func __safeDI_link1(t1AliasAlias: S731_T1?) -> S731_Link1 {
+		            #sourceLocation(file: "S731_Link1.swift", line: 7)
+		            let t1AliasAliasAlias: S731_T1? = t1AliasAlias
+		            #sourceLocation()
+		            return S731_Link1(t1AliasAliasAlias: t1AliasAliasAlias)
+		        }
 		        @Sendable func __safeDI_lazyT0() -> S731_T0 {
 		            #sourceLocation(file: "S731_T0.swift", line: 9)
 		            let anyT1Alias: S731_AnyT1? = S731_AnyT1(t1)
@@ -3245,20 +3400,7 @@ struct SafeDIToolGraphFuzzerTests {
 		            #sourceLocation(file: "S731_T0.swift", line: 10)
 		            let t1Alias: S731_T1? = t1
 		            #sourceLocation()
-		            func __safeDI_link0() -> S731_Link0 {
-		                #sourceLocation(file: "S731_Link0.swift", line: 8)
-		                let t1AliasAlias: S731_T1? = t1Alias
-		                #sourceLocation()
-		                func __safeDI_link1() -> S731_Link1 {
-		                    #sourceLocation(file: "S731_Link1.swift", line: 7)
-		                    let t1AliasAliasAlias: S731_T1? = t1AliasAlias
-		                    #sourceLocation()
-		                    return S731_Link1(t1AliasAliasAlias: t1AliasAliasAlias)
-		                }
-		                let link1: S731_Link1 = __safeDI_link1()
-		                return S731_Link0(t1AliasAlias: t1AliasAlias, link1: link1)
-		            }
-		            let link0: S731_Link0 = __safeDI_link0()
+		            let link0: S731_Link0 = __safeDI_link0(t1Alias: t1Alias)
 		            return S731_T0(anyT1Alias: anyT1Alias, t1Alias: t1Alias, link0: link0)
 		        }
 		        let lazyT0 = SendableLazilyInstantiated<S731_T0>(__safeDI_lazyT0)
@@ -6746,12 +6888,14 @@ struct SafeDIToolGraphFuzzerTests {
 	/// now rejected. Seed 327 draws screens that open one another, beneath which a screen receives only if available what a
 	/// mock binds at its root (`addingReceiveThroughCycleWalkedEarlier`); without the walk's fix its mock passes the screen
 	/// built again `nil`, leaving its binding of the override unread, which draws a warning.
+	/// Seed 4002's type-key root shares a builder function that takes an optional lazily instantiated value and reads its
+	/// instance as `lazyT3?.instance`, which the query suppliers oracle reads through the optional chaining.
 	/// It is small because compiling generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on
 	/// every pull request. Compiling the batch is one `swiftc` invocation when nothing fails, and comparing its values
 	/// one compile and one link.
-	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 327, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516, 5_889, 6_388]
+	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 327, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_002, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x56175982232F2A91
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x3B932EAFF8DF5E1F
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -6761,7 +6905,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x3F77AD4281B24308
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x92B26BD3FE048921
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -6829,7 +6973,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.multipleRoots: 1_765,
 		.generateMock: 2_455,
 		.lazyCycle: 1_374,
-		.constantCycleCloser: 151,
+		.constantCycleCloser: 157,
 		.builderReceivedInsideItsTree: 179,
 		.sendableBuilderReceivedInsideItsTree: 68,
 		.builderReceivedInsideItsTreeBesideBuilderLeftNil: 40,

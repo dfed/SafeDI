@@ -6657,11 +6657,11 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
 		extension Root {
 		    public init() {
+		        func __safeDI_profile() -> Profile {
+		            let userService: any UserService = DefaultUserService()
+		            return Profile(userService: userService)
+		        }
 		        func __safeDI_service() -> Service {
-		            func __safeDI_profile() -> Profile {
-		                let userService: any UserService = DefaultUserService()
-		                return Profile(userService: userService)
-		            }
 		            let profile: Profile = __safeDI_profile()
 		            return Service(profile: profile) // Built inline: SafeDI does not know which module declares `Service`, so this tree cannot call the initializer SafeDI generates for it.
 		        }

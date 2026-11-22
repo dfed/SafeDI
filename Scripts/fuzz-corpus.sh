@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/bash
 # Scripts/fuzz-corpus.sh [--features NAME,NAME] [--seed N] [--iterations M|corpus] [--seeds N,N…] [--release]
 # Runs SafeDIToolGraphFuzzerTests/longRun as CI does and prints the shard (or seeds) and corpus pin lines and the cost line from its report.
 # --features takes `GraphFuzzerGeneratorFeature` raw values (`generateDependencyTree`, `generateMockPublic`, …).
@@ -11,7 +11,7 @@
 set -euo pipefail
 features="" seed=0 iterations=100 seeds="" configuration=debug
 while (( $# )); do case "$1" in
-	--features) features=$2; shift 2 ;; --seed) seed=$2; shift 2 ;; --iterations) iterations=$2; shift 2 ;; --seeds) seeds=$2; [[ -n $seeds ]] || { echo "--seeds takes a list of seeds" >&2; exit 2 }; shift 2 ;;
+	--features) features=$2; shift 2 ;; --seed) seed=$2; shift 2 ;; --iterations) iterations=$2; shift 2 ;; --seeds) seeds=$2; [[ -n $seeds ]] || { echo "--seeds takes a list of seeds" >&2; exit 2; }; shift 2 ;;
 	--release) configuration=release; shift ;; *) echo "unknown option $1" >&2; exit 2 ;; esac; done
 cd "$(git rev-parse --show-toplevel)"
 # The report goes under the user's caches directory, never the system temporary directory: on macOS `mktemp -t`
@@ -21,12 +21,12 @@ mkdir -p "$caches/SafeDIFuzzReports"
 report=$(mktemp "$caches/SafeDIFuzzReports/safedi-fuzz-report.XXXXXX")
 exit_status=0
 if [[ -n $seeds ]]; then
-	selection=(-u SAFEDI_GRAPH_FUZZER_STARTING_SEED -u SAFEDI_GRAPH_FUZZER_ITERATIONS SAFEDI_GRAPH_FUZZER_SEEDS=$seeds)
+	selection=(-u SAFEDI_GRAPH_FUZZER_STARTING_SEED -u SAFEDI_GRAPH_FUZZER_ITERATIONS "SAFEDI_GRAPH_FUZZER_SEEDS=$seeds")
 else
-	selection=(-u SAFEDI_GRAPH_FUZZER_SEEDS SAFEDI_GRAPH_FUZZER_STARTING_SEED=$seed SAFEDI_GRAPH_FUZZER_ITERATIONS=$iterations)
+	selection=(-u SAFEDI_GRAPH_FUZZER_SEEDS "SAFEDI_GRAPH_FUZZER_STARTING_SEED=$seed" "SAFEDI_GRAPH_FUZZER_ITERATIONS=$iterations")
 fi
 # A shard left in the environment would also select seeds; -u keeps the run to what the options name.
-env -u SAFEDI_GRAPH_FUZZER_SHARD $selection SAFEDI_GRAPH_FUZZER_FEATURES=$features SAFEDI_GRAPH_FUZZER_REPORT=$report \
-	swift test -c $configuration --traits sourceBuild --filter 'SafeDIToolGraphFuzzerTests/longRun' || exit_status=$?
+env -u SAFEDI_GRAPH_FUZZER_SHARD "${selection[@]}" "SAFEDI_GRAPH_FUZZER_FEATURES=$features" "SAFEDI_GRAPH_FUZZER_REPORT=$report" \
+	swift test -c "$configuration" --traits sourceBuild --filter 'SafeDIToolGraphFuzzerTests/longRun' || exit_status=$?
 echo "--- pins (report: $report)"; grep -E '^(shard|seeds|corpus|cpu) |^problem .*(fixture|partition) hash ' "$report" || true
 exit $exit_status

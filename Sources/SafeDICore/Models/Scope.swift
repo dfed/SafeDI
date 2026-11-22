@@ -414,6 +414,12 @@ extension ScopeRecord {
 		declaredTypeNames: DeclaredTypeNames,
 		constructionMemo: inout ConstructionMemo,
 	) throws -> ScopeGenerator {
+		// A root of the dependency tree that the type key lays out (`TypeKeyBody`) starts no code early, decided here, before
+		// its tree starts any. Its body is laid out from the plan of every place, at the context each place is reached in,
+		// which the root asks for once its tree exists; an early start generates each large subtree's code at the context of
+		// a root, which on graphs with lazy cycles that layout never reads, and on every graph runs beside it. Seams, mocks
+		// and trees built only to read their sets keep their starts.
+		let startsCodeGeneration = startsCodeGeneration && !(seamRoot == nil && mockBuilders == nil && !forMockGeneration)
 		let scopeGenerator = try createdTree(
 			in: table,
 			nearestDeclarations: nearestDeclarations,

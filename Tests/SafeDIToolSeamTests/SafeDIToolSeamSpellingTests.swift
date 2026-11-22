@@ -88,12 +88,12 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public init() {
+			        func __safeDI_list(onSelect: @escaping () -> Void) -> List {
+			            let row = Row(onSelect: onSelect)
+			            return List(row: row)
+			        }
 			        func __safeDI_screenBuilder(onSelect: @escaping () -> Void) -> Screen {
-			            func __safeDI_list() -> List {
-			                let row = Row(onSelect: onSelect)
-			                return List(row: row)
-			            }
-			            let list: List = __safeDI_list()
+			            let list: List = __safeDI_list(onSelect: onSelect)
 			            return Screen(onSelect: onSelect, list: list)
 			        }
 			        let screenBuilder = Instantiator<Screen> {
@@ -160,18 +160,18 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public init() {
+			        func __safeDI_list(onTap: @escaping () -> Void) -> List {
+			            let row: Row = __safeDI_row(onTap: onTap)
+			            return List(row: row)
+			        }
+			        func __safeDI_row(onTap: @escaping () -> Void) -> Row {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Row.swift"])", line: 7)
+			            let action: (() -> Void)? = onTap
+			            #sourceLocation()
+			            return Row(action: action)
+			        }
 			        func __safeDI_screenBuilder(onTap: @escaping () -> Void) -> Screen {
-			            func __safeDI_list() -> List {
-			                func __safeDI_row() -> Row {
-			                    #sourceLocation(file: "\(inlineOutput.fixtures["Row.swift"])", line: 7)
-			                    let action: (() -> Void)? = onTap
-			                    #sourceLocation()
-			                    return Row(action: action)
-			                }
-			                let row: Row = __safeDI_row()
-			                return List(row: row)
-			            }
-			            let list: List = __safeDI_list()
+			            let list: List = __safeDI_list(onTap: onTap)
 			            return Screen(onTap: onTap, list: list)
 			        }
 			        let screenBuilder = Instantiator<Screen> {
@@ -229,12 +229,12 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public init() {
+			        func __safeDI_list(onFailure: @escaping (any Error) -> Void) -> List {
+			            let row = Row(onFailure: onFailure)
+			            return List(row: row)
+			        }
 			        func __safeDI_screenBuilder(onFailure: @escaping (any Error) -> Void) -> Screen {
-			            func __safeDI_list() -> List {
-			                let row = Row(onFailure: onFailure)
-			                return List(row: row)
-			            }
-			            let list: List = __safeDI_list()
+			            let list: List = __safeDI_list(onFailure: onFailure)
 			            return Screen(onFailure: onFailure, list: list)
 			        }
 			        let screenBuilder = Instantiator<Screen> {
@@ -353,12 +353,12 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public init() {
+			        func __safeDI_list(onSelect: (@Sendable () -> Void)?) -> List {
+			            let row = Row(onSelect: onSelect)
+			            return List(row: row)
+			        }
 			        func __safeDI_screenBuilder(onSelect: (@Sendable () -> Void)?) -> Screen {
-			            func __safeDI_list() -> List {
-			                let row = Row(onSelect: onSelect)
-			                return List(row: row)
-			            }
-			            let list: List = __safeDI_list()
+			            let list: List = __safeDI_list(onSelect: onSelect)
 			            return Screen(onSelect: onSelect, list: list)
 			        }
 			        let screenBuilder = Instantiator<Screen> {
@@ -1089,12 +1089,12 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 
 					extension Root {
 					    public init() {
+					        func __safeDI_list(value: Settings) -> List {
+					            let row = Row(value: value)
+					            return List(row: row)
+					        }
 					        func __safeDI_screenBuilder(value: Settings) -> Screen {
-					            func __safeDI_list() -> List {
-					                let row = Row(value: value)
-					                return List(row: row)
-					            }
-					            let list: List = __safeDI_list()
+					            let list: List = __safeDI_list(value: value)
 					            return Screen(value: value, list: list)
 					        }
 					        let screenBuilder = Instantiator<Screen> {
@@ -1116,12 +1116,12 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 
 					extension Root {
 					    public init() {
+					        func __safeDI_list(value: @escaping (Settings) -> Void) -> List {
+					            let row = Row(value: value)
+					            return List(row: row)
+					        }
 					        func __safeDI_screenBuilder(value: @escaping (Settings) -> Void) -> Screen {
-					            func __safeDI_list() -> List {
-					                let row = Row(value: value)
-					                return List(row: row)
-					            }
-					            let list: List = __safeDI_list()
+					            let list: List = __safeDI_list(value: value)
 					            return Screen(value: value, list: list)
 					        }
 					        let screenBuilder = Instantiator<Screen> {
@@ -1143,12 +1143,12 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 
 					extension Root {
 					    public init() {
+					        func __safeDI_list(value: any Logging) -> List {
+					            let row = Row(value: value)
+					            return List(row: row)
+					        }
 					        func __safeDI_screenBuilder(value: any Logging) -> Screen {
-					            func __safeDI_list() -> List {
-					                let row = Row(value: value)
-					                return List(row: row)
-					            }
-					            let list: List = __safeDI_list()
+					            let list: List = __safeDI_list(value: value)
 					            return Screen(value: value, list: list)
 					        }
 					        let screenBuilder = Instantiator<Screen> {
@@ -1170,12 +1170,12 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 
 					extension Root {
 					    public init() {
+					        func __safeDI_list(value: Catalog.Entry) -> List {
+					            let row = Row(value: value)
+					            return List(row: row)
+					        }
 					        func __safeDI_screenBuilder(value: Catalog.Entry) -> Screen {
-					            func __safeDI_list() -> List {
-					                let row = Row(value: value)
-					                return List(row: row)
-					            }
-					            let list: List = __safeDI_list()
+					            let list: List = __safeDI_list(value: value)
 					            return Screen(value: value, list: list)
 					        }
 					        let screenBuilder = Instantiator<Screen> {
@@ -1199,12 +1199,12 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 
 					extension Root {
 					    public init() {
+					        func __safeDI_list(value: Settings) -> List {
+					            let row = Row(value: value)
+					            return List(row: row)
+					        }
 					        func __safeDI_screenBuilder(value: Settings) -> Screen {
-					            func __safeDI_list() -> List {
-					                let row = Row(value: value)
-					                return List(row: row)
-					            }
-					            let list: List = __safeDI_list()
+					            let list: List = __safeDI_list(value: value)
 					            return Screen(value: value, list: list)
 					        }
 					        let screenBuilder = Instantiator<Screen> {
@@ -1226,12 +1226,12 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 
 					extension Root {
 					    public init() {
+					        func __safeDI_list(value: @escaping (Settings) -> Void) -> List {
+					            let row = Row(value: value)
+					            return List(row: row)
+					        }
 					        func __safeDI_screenBuilder(value: @escaping (Settings) -> Void) -> Screen {
-					            func __safeDI_list() -> List {
-					                let row = Row(value: value)
-					                return List(row: row)
-					            }
-					            let list: List = __safeDI_list()
+					            let list: List = __safeDI_list(value: value)
 					            return Screen(value: value, list: list)
 					        }
 					        let screenBuilder = Instantiator<Screen> {
@@ -1253,12 +1253,12 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 
 					extension Root {
 					    public init() {
+					        func __safeDI_list(value: any Logging) -> List {
+					            let row = Row(value: value)
+					            return List(row: row)
+					        }
 					        func __safeDI_screenBuilder(value: any Logging) -> Screen {
-					            func __safeDI_list() -> List {
-					                let row = Row(value: value)
-					                return List(row: row)
-					            }
-					            let list: List = __safeDI_list()
+					            let list: List = __safeDI_list(value: value)
 					            return Screen(value: value, list: list)
 					        }
 					        let screenBuilder = Instantiator<Screen> {
@@ -1280,12 +1280,12 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 
 					extension Root {
 					    public init() {
+					        func __safeDI_list(value: Catalog.Entry) -> List {
+					            let row = Row(value: value)
+					            return List(row: row)
+					        }
 					        func __safeDI_screenBuilder(value: Catalog.Entry) -> Screen {
-					            func __safeDI_list() -> List {
-					                let row = Row(value: value)
-					                return List(row: row)
-					            }
-					            let list: List = __safeDI_list()
+					            let list: List = __safeDI_list(value: value)
 					            return Screen(value: value, list: list)
 					        }
 					        let screenBuilder = Instantiator<Screen> {

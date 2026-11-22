@@ -97,15 +97,15 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_child(x: X?) -> Child {
+			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
+			            let ax: X? = x
+			            #sourceLocation()
+			            let grand = Grand(ax: ax)
+			            return Child(ax: ax, grand: grand)
+			        }
 			        func __safeDI_holderBuilder(x: X?) -> Holder {
-			            func __safeDI_child() -> Child {
-			                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			                let ax: X? = x
-			                #sourceLocation()
-			                let grand = Grand(ax: ax)
-			                return Child(ax: ax, grand: grand)
-			            }
-			            let child: Child = __safeDI_child()
+			            let child: Child = __safeDI_child(x: x)
 			            return Holder(x: x, child: child)
 			        }
 			        let holderBuilder = Instantiator<Holder> {
@@ -172,15 +172,15 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_child(x: X?) -> Child {
+			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
+			            let ax: X? = x
+			            #sourceLocation()
+			            let grand = Grand(ax: ax)
+			            return Child(ax: ax, grand: grand)
+			        }
 			        func __safeDI_holderBuilder(x: X?) -> Holder {
-			            func __safeDI_child() -> Child {
-			                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			                let ax: X? = x
-			                #sourceLocation()
-			                let grand = Grand(ax: ax)
-			                return Child(ax: ax, grand: grand)
-			            }
-			            let child: Child = __safeDI_child()
+			            let child: Child = __safeDI_child(x: x)
 			            return Holder(x: x, child: child)
 			        }
 			        let holderBuilder = Instantiator<Holder> {
@@ -253,22 +253,22 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_mid() -> Mid {
+			            let x: X = __safeDI_x()
+			            return Mid(x: x)
+			        }
+			        func __safeDI_x() -> X {
+			            let grand = Grand(x: nil)
+			            let b: B = __safeDI_b()
+			            return X(grand: grand, b: b)
+			        }
+			        func __safeDI_b() -> B {
+			            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 2)
+			            let ax: X? = nil
+			            #sourceLocation()
+			            return B(ax: ax)
+			        }
 			        func __safeDI_holderBuilder(x: X?) -> Holder {
-			            func __safeDI_mid() -> Mid {
-			                func __safeDI_x() -> X {
-			                    let grand = Grand(x: nil)
-			                    func __safeDI_b() -> B {
-			                        #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 2)
-			                        let ax: X? = nil
-			                        #sourceLocation()
-			                        return B(ax: ax)
-			                    }
-			                    let b: B = __safeDI_b()
-			                    return X(grand: grand, b: b)
-			                }
-			                let x: X = __safeDI_x()
-			                return Mid(x: x)
-			            }
 			            let mid: Mid = __safeDI_mid()
 			            return Holder(x: x, mid: mid)
 			        }
@@ -391,21 +391,21 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_optionalSpelling(token: Secret?) -> OptionalSpelling {
+			            #sourceLocation(file: "\(output.fixtures["OptionalSpelling.swift"])", line: 2)
+			            let auth: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
+			            #sourceLocation()
+			            return OptionalSpelling(auth: auth)
+			        }
+			        func __safeDI_plainSpelling(token: Secret?) -> PlainSpelling {
+			            #sourceLocation(file: "\(output.fixtures["PlainSpelling.swift"])", line: 2)
+			            let auth: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
+			            #sourceLocation()
+			            return PlainSpelling(auth: auth)
+			        }
 			        func __safeDI_holderBuilder(token: Secret?) -> Holder {
-			            func __safeDI_optionalSpelling() -> OptionalSpelling {
-			                #sourceLocation(file: "\(output.fixtures["OptionalSpelling.swift"])", line: 2)
-			                let auth: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
-			                #sourceLocation()
-			                return OptionalSpelling(auth: auth)
-			            }
-			            let optionalSpelling: OptionalSpelling = __safeDI_optionalSpelling()
-			            func __safeDI_plainSpelling() -> PlainSpelling {
-			                #sourceLocation(file: "\(output.fixtures["PlainSpelling.swift"])", line: 2)
-			                let auth: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
-			                #sourceLocation()
-			                return PlainSpelling(auth: auth)
-			            }
-			            let plainSpelling: PlainSpelling = __safeDI_plainSpelling()
+			            let optionalSpelling: OptionalSpelling = __safeDI_optionalSpelling(token: token)
+			            let plainSpelling: PlainSpelling = __safeDI_plainSpelling(token: token)
 			            return Holder(token: token, optionalSpelling: optionalSpelling, plainSpelling: plainSpelling)
 			        }
 			        let holderBuilder = Instantiator<Holder> {
@@ -467,14 +467,14 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_sub() -> Sub {
+			            #sourceLocation(file: "\(output.fixtures["Sub.swift"])", line: 2)
+			            let token: (any Auth)? = nil
+			            #sourceLocation()
+			            let reader = Reader(token: token)
+			            return Sub(token: token, reader: reader)
+			        }
 			        func __safeDI_holderBuilder(token: (any Auth)?) -> Holder {
-			            func __safeDI_sub() -> Sub {
-			                #sourceLocation(file: "\(output.fixtures["Sub.swift"])", line: 2)
-			                let token: (any Auth)? = nil
-			                #sourceLocation()
-			                let reader = Reader(token: token)
-			                return Sub(token: token, reader: reader)
-			            }
 			            let sub: Sub = __safeDI_sub()
 			            return Holder(token: token, sub: sub)
 			        }
@@ -534,13 +534,13 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_xBuilder() -> X {
-			            func __safeDI_child() -> Child {
-			                let xBuilder = Instantiator<X>(__safeDI_xBuilder)
-			                let mid = Mid(xBuilder: xBuilder)
-			                return Child(xBuilder: xBuilder, mid: mid)
-			            }
 			            let child: Child = __safeDI_child()
 			            return X(child: child)
+			        }
+			        func __safeDI_child() -> Child {
+			            let xBuilder = Instantiator<X>(__safeDI_xBuilder)
+			            let mid = Mid(xBuilder: xBuilder)
+			            return Child(xBuilder: xBuilder, mid: mid)
 			        }
 			        let xBuilder = Instantiator<X>(__safeDI_xBuilder)
 			        self.init(xBuilder: xBuilder)
@@ -680,26 +680,28 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 
 			extension Top {
 			    public convenience init() {
-			        func __safeDI_rootBuilder(service: Service) -> Root {
-			            func __safeDI_child() -> Child {
-			                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			                let sa: Service? = service
-			                #sourceLocation()
-			                func __safeDI_holder() -> Holder {
-			                    func __safeDI_service() -> Service {
-			                        func __safeDI_leafBuilder() -> Leaf {
-			                            Leaf(sa: sa)
-			                        }
-			                        let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
-			                        return Service(leafBuilder: leafBuilder)
-			                    }
-			                    let service: Service = __safeDI_service()
-			                    return Holder(service: service)
-			                }
-			                let holder: Holder = __safeDI_holder()
-			                return Child(sa: sa, holder: holder)
+			        func __safeDI_child(service: Service) -> Child {
+			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
+			            let sa: Service? = service
+			            #sourceLocation()
+			            let holder: Holder = __safeDI_holder(sa: sa)
+			            return Child(sa: sa, holder: holder)
+			        }
+			        func __safeDI_holder(sa: Service?) -> Holder {
+			            let service: Service = __safeDI_service(sa: sa)
+			            return Holder(service: service)
+			        }
+			        func __safeDI_service(sa: Service?) -> Service {
+			            let leafBuilder = Instantiator<Leaf> {
+			                __safeDI_leafBuilder(sa: sa)
 			            }
-			            let child: Child = __safeDI_child()
+			            return Service(leafBuilder: leafBuilder)
+			        }
+			        func __safeDI_leafBuilder(sa: Service?) -> Leaf {
+			            Leaf(sa: sa)
+			        }
+			        func __safeDI_rootBuilder(service: Service) -> Root {
+			            let child: Child = __safeDI_child(service: service)
 			            return Root(service: service, child: child)
 			        }
 			        let rootBuilder = Instantiator<Root> {
@@ -972,13 +974,13 @@ struct SafeDIToolOnlyIfAvailableRenameTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_child() -> Child {
+			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
+			            let ax: X? = nil
+			            #sourceLocation()
+			            return Child(ax: ax)
+			        }
 			        func __safeDI_holderBuilder(x: LazilyInstantiated<X>?) -> Holder {
-			            func __safeDI_child() -> Child {
-			                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 2)
-			                let ax: X? = nil
-			                #sourceLocation()
-			                return Child(ax: ax)
-			            }
 			            let child: Child = __safeDI_child()
 			            return Holder(x: x, child: child)
 			        }

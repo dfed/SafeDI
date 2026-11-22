@@ -523,44 +523,24 @@ struct SafeDIToolSeamReenteredFillLosesValueTests: ~Copyable {
 
 				extension Root {
 				    public init() {
-				        func __safeDI_checkout() -> Checkout {
-				            func __safeDI_payments(cart: Cart?) -> LivePayments {
-				                func __safeDI_retryBuilder() -> Checkout {
-				                    let payments: any Payments = __safeDI_payments(cart: cart)
-				                    func __safeDI_cartScreenBuilder(cart: Cart) -> CartScreen {
-				                        let payments: any Payments = __safeDI_payments(cart: cart)
-				                        return CartScreen(cart: cart, payments: payments)
-				                    }
-				                    let cartScreenBuilder = Instantiator<CartScreen> {
-				                        __safeDI_cartScreenBuilder(cart: $0)
-				                    }
-				                    return Checkout(payments: payments, cartScreenBuilder: cartScreenBuilder)
-				                }
-				                let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
-				                return LivePayments(cart: cart, retryBuilder: retryBuilder)
-				            }
-				            let payments: any Payments = __safeDI_payments(cart: nil)
-				            func __safeDI_cartScreenBuilder(cart: Cart) -> CartScreen {
-				                func __safeDI_payments() -> LivePayments {
-				                    func __safeDI_retryBuilder() -> Checkout {
-				                        let payments: any Payments = __safeDI_payments()
-				                        let cartScreenBuilder = Instantiator<CartScreen> {
-				                            __safeDI_cartScreenBuilder(cart: $0)
-				                        }
-				                        return Checkout(payments: payments, cartScreenBuilder: cartScreenBuilder)
-				                    }
-				                    let retryBuilder = Instantiator<Checkout>(__safeDI_retryBuilder)
-				                    return LivePayments(cart: cart, retryBuilder: retryBuilder)
-				                }
-				                let payments: any Payments = __safeDI_payments()
-				                return CartScreen(cart: cart, payments: payments)
-				            }
+				        func __safeDI_checkout(cart: Cart?) -> Checkout {
+				            let payments: any Payments = __safeDI_payments(cart: cart)
 				            let cartScreenBuilder = Instantiator<CartScreen> {
 				                __safeDI_cartScreenBuilder(cart: $0)
 				            }
 				            return Checkout(payments: payments, cartScreenBuilder: cartScreenBuilder)
 				        }
-				        let checkout: Checkout = __safeDI_checkout()
+				        func __safeDI_payments(cart: Cart?) -> LivePayments {
+				            let retryBuilder = Instantiator<Checkout> {
+				                __safeDI_checkout(cart: cart)
+				            }
+				            return LivePayments(cart: cart, retryBuilder: retryBuilder)
+				        }
+				        func __safeDI_cartScreenBuilder(cart: Cart) -> CartScreen {
+				            let payments: any Payments = __safeDI_payments(cart: cart)
+				            return CartScreen(cart: cart, payments: payments)
+				        }
+				        let checkout: Checkout = __safeDI_checkout(cart: nil)
 				        self.init(checkout: checkout)
 				    }
 				}

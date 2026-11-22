@@ -155,16 +155,16 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_childBuilder() -> Child {
-		            func __safeDI_childBuilder_Leaf() -> Leaf {
-		                Leaf()
-		            }
-		            let childBuilder = LazilyInstantiated<Leaf>(__safeDI_childBuilder_Leaf)
-		            func __safeDI_middleBuilder() -> Middle {
-		                let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
-		                return Middle(childBuilder: childBuilder)
-		            }
+		            let childBuilder = LazilyInstantiated<Leaf>(__safeDI_childBuilder_)
 		            let middleBuilder = Instantiator<Middle>(__safeDI_middleBuilder)
 		            return Child(childBuilder: childBuilder, middleBuilder: middleBuilder)
+		        }
+		        func __safeDI_middleBuilder() -> Middle {
+		            let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
+		            return Middle(childBuilder: childBuilder)
+		        }
+		        func __safeDI_childBuilder_() -> Leaf {
+		            Leaf()
 		        }
 		        let childBuilder = Instantiator<Child>(__safeDI_childBuilder)
 		        self.init(childBuilder: childBuilder)
@@ -213,13 +213,13 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        func __safeDI_b() -> B {
+		            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 4)
+		            let renamedA: LazilyInstantiated<A>? = nil
+		            #sourceLocation()
+		            return B(renamedA: renamedA)
+		        }
 		        func __safeDI_a() -> A {
-		            func __safeDI_b() -> B {
-		                #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 4)
-		                let renamedA: LazilyInstantiated<A>? = nil
-		                #sourceLocation()
-		                return B(renamedA: renamedA)
-		            }
 		            let b: B = __safeDI_b()
 		            return A(b: b)
 		        }
@@ -611,10 +611,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        @Sendable func __safeDI_uploaderBuilder() -> Uploader {
+		            Uploader(analytics: nil)
+		        }
 		        func __safeDI_analytics() -> Analytics {
-		            @Sendable func __safeDI_uploaderBuilder() -> Uploader {
-		                Uploader(analytics: nil)
-		            }
 		            let uploaderBuilder = SendableInstantiator<Uploader>(__safeDI_uploaderBuilder)
 		            return Analytics(uploaderBuilder: uploaderBuilder)
 		        }
@@ -1012,12 +1012,12 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_aBuilder() -> A {
-		            func __safeDI_b() -> B {
-		                let aBuilder = Instantiator<A>(__safeDI_aBuilder)
-		                return B(aBuilder: aBuilder)
-		            }
 		            let b = LazilyInstantiated<B>(__safeDI_b)
 		            return A(b: b)
+		        }
+		        func __safeDI_b() -> B {
+		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		            return B(aBuilder: aBuilder)
 		        }
 		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		        self.init(aBuilder: aBuilder)
@@ -2647,12 +2647,12 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_b() -> B {
-			            func __safeDI_aBuilder() -> A {
-			                let b = LazilyInstantiated<B>(__safeDI_b)
-			                return A(b: b)
-			            }
 			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 			            return B(aBuilder: aBuilder)
+			        }
+			        func __safeDI_aBuilder() -> A {
+			            let b = LazilyInstantiated<B>(__safeDI_b)
+			            return A(b: b)
 			        }
 			        let b = LazilyInstantiated<B>(__safeDI_b)
 			        self.init(b: b)

@@ -526,27 +526,25 @@ struct SafeDIToolCodeGenerationSendableCaptureRemedyTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
+			        @Sendable func __safeDI_childBuilder() -> Child {
+			            Child()
+			        }
+			        @Sendable func __safeDI_settingsBuilder(childBuilder: SendableInstantiator<Child>) -> Settings {
+			            Settings(childBuilder: childBuilder)
+			        }
 			        func __safeDI_screenA() -> ScreenA {
-			            @Sendable func __safeDI_childBuilder() -> Child {
-			                Child()
-			            }
 			            let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
-			            @Sendable func __safeDI_settingsBuilder() -> Settings {
-			                Settings(childBuilder: childBuilder)
+			            let settingsBuilder = SendableInstantiator<Settings> {
+			                __safeDI_settingsBuilder(childBuilder: childBuilder)
 			            }
-			            let settingsBuilder = SendableInstantiator<Settings>(__safeDI_settingsBuilder)
 			            return ScreenA(childBuilder: childBuilder, settingsBuilder: settingsBuilder)
 			        }
 			        let screenA: ScreenA = __safeDI_screenA()
 			        func __safeDI_screenB() -> ScreenB {
-			            @Sendable func __safeDI_childBuilder() -> Child {
-			                Child()
-			            }
 			            let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
-			            @Sendable func __safeDI_settingsBuilder() -> Settings {
-			                Settings(childBuilder: childBuilder)
+			            let settingsBuilder = SendableInstantiator<Settings> {
+			                __safeDI_settingsBuilder(childBuilder: childBuilder)
 			            }
-			            let settingsBuilder = SendableInstantiator<Settings>(__safeDI_settingsBuilder)
 			            return ScreenB(childBuilder: childBuilder, settingsBuilder: settingsBuilder)
 			        }
 			        let screenB: ScreenB = __safeDI_screenB()

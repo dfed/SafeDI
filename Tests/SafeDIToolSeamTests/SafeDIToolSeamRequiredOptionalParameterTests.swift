@@ -194,23 +194,23 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 				"Root+SafeDI.swift": generatedFileHeader + """
 				extension Root {
 				    public convenience init() {
+				        func __safeDI_screen(token: Secret?) -> Screen {
+				            let left: Left = __safeDI_left(token: token)
+				            return Screen(token: token, left: left)
+				        }
+				        func __safeDI_left(token: Secret?) -> Left {
+				            let detail: Detail = __safeDI_detail(token: token)
+				            return Left(detail: detail)
+				        }
+				        func __safeDI_detail(token: Secret?) -> Detail {
+				            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+				            let authToken: Secret? = token
+				            #sourceLocation()
+				            let reader = Reader(authToken: authToken)
+				            return Detail(authToken: authToken, reader: reader)
+				        }
 				        func __safeDI_hostBuilder(token: Secret?) -> Host {
-				            func __safeDI_screen() -> Screen {
-				                func __safeDI_left() -> Left {
-				                    func __safeDI_detail() -> Detail {
-				                        #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-				                        let authToken: Secret? = token
-				                        #sourceLocation()
-				                        let reader = Reader(authToken: authToken)
-				                        return Detail(authToken: authToken, reader: reader)
-				                    }
-				                    let detail: Detail = __safeDI_detail()
-				                    return Left(detail: detail)
-				                }
-				                let left: Left = __safeDI_left()
-				                return Screen(token: token, left: left)
-				            }
-				            let screen: Screen = __safeDI_screen()
+				            let screen: Screen = __safeDI_screen(token: token)
 				            return Host(token: token, screen: screen)
 				        }
 				        let hostBuilder = Instantiator<Host> {
@@ -225,23 +225,23 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 				"Root+SafeDI.swift": generatedFileHeader + """
 				extension Root {
 				    public convenience init() {
+				        func __safeDI_screen(token: Secret?) -> Screen {
+				            let left: Left = __safeDI_left(token: token)
+				            return Screen(token: token, left: left)
+				        }
+				        func __safeDI_left(token: Secret?) -> Left {
+				            let detail: Detail = __safeDI_detail(token: token)
+				            return Left(detail: detail)
+				        }
+				        func __safeDI_detail(token: Secret?) -> Detail {
+				            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+				            let authToken: Secret? = token
+				            #sourceLocation()
+				            let reader = Reader(authToken: authToken)
+				            return Detail(authToken: authToken, reader: reader)
+				        }
 				        func __safeDI_hostBuilder(token: Secret?) -> Host {
-				            func __safeDI_screen() -> Screen {
-				                func __safeDI_left() -> Left {
-				                    func __safeDI_detail() -> Detail {
-				                        #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-				                        let authToken: Secret? = token
-				                        #sourceLocation()
-				                        let reader = Reader(authToken: authToken)
-				                        return Detail(authToken: authToken, reader: reader)
-				                    }
-				                    let detail: Detail = __safeDI_detail()
-				                    return Left(detail: detail)
-				                }
-				                let left: Left = __safeDI_left()
-				                return Screen(token: token, left: left)
-				            }
-				            let screen: Screen = __safeDI_screen()
+				            let screen: Screen = __safeDI_screen(token: token)
 				            return Host(token: token, screen: screen)
 				        }
 				        let hostBuilder = Instantiator<Host> {
@@ -256,22 +256,22 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 				"Root+SafeDI.swift": generatedFileHeader + """
 				extension Root {
 				    public convenience init() {
+				        func __safeDI_screen(token: Secret?) -> Screen {
+				            let left: Left = __safeDI_left(token: token)
+				            return Screen(token: token, left: left)
+				        }
+				        func __safeDI_left(token: Secret?) -> Left {
+				            let detail: Detail = __safeDI_detail(token: token)
+				            return Left(detail: detail)
+				        }
+				        func __safeDI_detail(token: Secret?) -> Detail {
+				            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+				            let authToken: Secret? = token
+				            #sourceLocation()
+				            return Detail(authToken: authToken)
+				        }
 				        func __safeDI_hostBuilder(token: Secret?) -> Host {
-				            func __safeDI_screen() -> Screen {
-				                func __safeDI_left() -> Left {
-				                    func __safeDI_detail() -> Detail {
-				                        #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
-				                        let authToken: Secret? = token
-				                        #sourceLocation()
-				                        return Detail(authToken: authToken)
-				                    }
-				                    let detail: Detail = __safeDI_detail()
-				                    return Left(detail: detail)
-				                }
-				                let left: Left = __safeDI_left()
-				                return Screen(token: token, left: left)
-				            }
-				            let screen: Screen = __safeDI_screen()
+				            let screen: Screen = __safeDI_screen(token: token)
 				            return Host(token: token, screen: screen)
 				        }
 				        let hostBuilder = Instantiator<Host> {
@@ -342,23 +342,23 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_screen(token: LazilyInstantiated<Secret>?) -> Screen {
+			            let left: Left = __safeDI_left(token: token)
+			            return Screen(left: left)
+			        }
+			        func __safeDI_left(token: LazilyInstantiated<Secret>?) -> Left {
+			            let detail: Detail = __safeDI_detail(token: token)
+			            return Left(token: token, detail: detail)
+			        }
+			        func __safeDI_detail(token: LazilyInstantiated<Secret>?) -> Detail {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			            let authToken: LazilyInstantiated<Secret>? = token
+			            #sourceLocation()
+			            let reader = Reader(authToken: authToken)
+			            return Detail(authToken: authToken, reader: reader)
+			        }
 			        func __safeDI_hostBuilder(token: LazilyInstantiated<Secret>?) -> Host {
-			            func __safeDI_screen() -> Screen {
-			                func __safeDI_left() -> Left {
-			                    func __safeDI_detail() -> Detail {
-			                        #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			                        let authToken: LazilyInstantiated<Secret>? = token
-			                        #sourceLocation()
-			                        let reader = Reader(authToken: authToken)
-			                        return Detail(authToken: authToken, reader: reader)
-			                    }
-			                    let detail: Detail = __safeDI_detail()
-			                    return Left(token: token, detail: detail)
-			                }
-			                let left: Left = __safeDI_left()
-			                return Screen(left: left)
-			            }
-			            let screen: Screen = __safeDI_screen()
+			            let screen: Screen = __safeDI_screen(token: token)
 			            return Host(token: token, screen: screen)
 			        }
 			        let hostBuilder = Instantiator<Host> {
@@ -656,23 +656,23 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 				"Root+SafeDI.swift": generatedFileHeader + """
 				extension Root {
 				    public convenience init() {
+				        func __safeDI_screen(token: (any Auth)?) -> Screen {
+				            let left: Left = __safeDI_left(token: token)
+				            return Screen(token: token, left: left)
+				        }
+				        func __safeDI_left(token: (any Auth)?) -> Left {
+				            let detail: Detail = __safeDI_detail(token: token)
+				            return Left(detail: detail)
+				        }
+				        func __safeDI_detail(token: (any Auth)?) -> Detail {
+				            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+				            let authToken: (any Auth)? = token
+				            #sourceLocation()
+				            let reader = Reader(authToken: authToken)
+				            return Detail(authToken: authToken, reader: reader)
+				        }
 				        func __safeDI_hostBuilder(token: (any Auth)?) -> Host {
-				            func __safeDI_screen() -> Screen {
-				                func __safeDI_left() -> Left {
-				                    func __safeDI_detail() -> Detail {
-				                        #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-				                        let authToken: (any Auth)? = token
-				                        #sourceLocation()
-				                        let reader = Reader(authToken: authToken)
-				                        return Detail(authToken: authToken, reader: reader)
-				                    }
-				                    let detail: Detail = __safeDI_detail()
-				                    return Left(detail: detail)
-				                }
-				                let left: Left = __safeDI_left()
-				                return Screen(token: token, left: left)
-				            }
-				            let screen: Screen = __safeDI_screen()
+				            let screen: Screen = __safeDI_screen(token: token)
 				            return Host(token: token, screen: screen)
 				        }
 				        let hostBuilder = Instantiator<Host> {
@@ -687,23 +687,23 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 				"Root+SafeDI.swift": generatedFileHeader + """
 				extension Root {
 				    public convenience init() {
+				        func __safeDI_screen(token: (() -> Void)?) -> Screen {
+				            let left: Left = __safeDI_left(token: token)
+				            return Screen(token: token, left: left)
+				        }
+				        func __safeDI_left(token: (() -> Void)?) -> Left {
+				            let detail: Detail = __safeDI_detail(token: token)
+				            return Left(detail: detail)
+				        }
+				        func __safeDI_detail(token: (() -> Void)?) -> Detail {
+				            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+				            let authToken: (() -> Void)? = token
+				            #sourceLocation()
+				            let reader = Reader(authToken: authToken)
+				            return Detail(authToken: authToken, reader: reader)
+				        }
 				        func __safeDI_hostBuilder(token: (() -> Void)?) -> Host {
-				            func __safeDI_screen() -> Screen {
-				                func __safeDI_left() -> Left {
-				                    func __safeDI_detail() -> Detail {
-				                        #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-				                        let authToken: (() -> Void)? = token
-				                        #sourceLocation()
-				                        let reader = Reader(authToken: authToken)
-				                        return Detail(authToken: authToken, reader: reader)
-				                    }
-				                    let detail: Detail = __safeDI_detail()
-				                    return Left(detail: detail)
-				                }
-				                let left: Left = __safeDI_left()
-				                return Screen(token: token, left: left)
-				            }
-				            let screen: Screen = __safeDI_screen()
+				            let screen: Screen = __safeDI_screen(token: token)
 				            return Host(token: token, screen: screen)
 				        }
 				        let hostBuilder = Instantiator<Host> {
@@ -718,23 +718,23 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 				"Root+SafeDI.swift": generatedFileHeader + """
 				extension Root {
 				    public convenience init() {
+				        func __safeDI_screen(token: Feature.Secret?) -> Screen {
+				            let left: Left = __safeDI_left(token: token)
+				            return Screen(token: token, left: left)
+				        }
+				        func __safeDI_left(token: Feature.Secret?) -> Left {
+				            let detail: Detail = __safeDI_detail(token: token)
+				            return Left(detail: detail)
+				        }
+				        func __safeDI_detail(token: Feature.Secret?) -> Detail {
+				            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+				            let authToken: Feature.Secret? = token
+				            #sourceLocation()
+				            let reader = Reader(authToken: authToken)
+				            return Detail(authToken: authToken, reader: reader)
+				        }
 				        func __safeDI_hostBuilder(token: Feature.Secret?) -> Host {
-				            func __safeDI_screen() -> Screen {
-				                func __safeDI_left() -> Left {
-				                    func __safeDI_detail() -> Detail {
-				                        #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-				                        let authToken: Feature.Secret? = token
-				                        #sourceLocation()
-				                        let reader = Reader(authToken: authToken)
-				                        return Detail(authToken: authToken, reader: reader)
-				                    }
-				                    let detail: Detail = __safeDI_detail()
-				                    return Left(detail: detail)
-				                }
-				                let left: Left = __safeDI_left()
-				                return Screen(token: token, left: left)
-				            }
-				            let screen: Screen = __safeDI_screen()
+				            let screen: Screen = __safeDI_screen(token: token)
 				            return Host(token: token, screen: screen)
 				        }
 				        let hostBuilder = Instantiator<Host> {
@@ -749,23 +749,23 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 				"Root+SafeDI.swift": generatedFileHeader + """
 				extension Root {
 				    public convenience init() {
+				        func __safeDI_screen(token: SecretID?) -> Screen {
+				            let left: Left = __safeDI_left(token: token)
+				            return Screen(token: token, left: left)
+				        }
+				        func __safeDI_left(token: SecretID?) -> Left {
+				            let detail: Detail = __safeDI_detail(token: token)
+				            return Left(detail: detail)
+				        }
+				        func __safeDI_detail(token: SecretID?) -> Detail {
+				            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+				            let authToken: SecretID? = token
+				            #sourceLocation()
+				            let reader = Reader(authToken: authToken)
+				            return Detail(authToken: authToken, reader: reader)
+				        }
 				        func __safeDI_hostBuilder(token: SecretID?) -> Host {
-				            func __safeDI_screen() -> Screen {
-				                func __safeDI_left() -> Left {
-				                    func __safeDI_detail() -> Detail {
-				                        #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-				                        let authToken: SecretID? = token
-				                        #sourceLocation()
-				                        let reader = Reader(authToken: authToken)
-				                        return Detail(authToken: authToken, reader: reader)
-				                    }
-				                    let detail: Detail = __safeDI_detail()
-				                    return Left(detail: detail)
-				                }
-				                let left: Left = __safeDI_left()
-				                return Screen(token: token, left: left)
-				            }
-				            let screen: Screen = __safeDI_screen()
+				            let screen: Screen = __safeDI_screen(token: token)
 				            return Host(token: token, screen: screen)
 				        }
 				        let hostBuilder = Instantiator<Host> {
@@ -780,23 +780,23 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 				"Root+SafeDI.swift": generatedFileHeader + """
 				extension Root {
 				    public convenience init() {
+				        func __safeDI_screen(token: Box<Secret>?) -> Screen {
+				            let left: Left = __safeDI_left(token: token)
+				            return Screen(token: token, left: left)
+				        }
+				        func __safeDI_left(token: Box<Secret>?) -> Left {
+				            let detail: Detail = __safeDI_detail(token: token)
+				            return Left(detail: detail)
+				        }
+				        func __safeDI_detail(token: Box<Secret>?) -> Detail {
+				            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+				            let authToken: Box<Secret>? = token
+				            #sourceLocation()
+				            let reader = Reader(authToken: authToken)
+				            return Detail(authToken: authToken, reader: reader)
+				        }
 				        func __safeDI_hostBuilder(token: Box<Secret>?) -> Host {
-				            func __safeDI_screen() -> Screen {
-				                func __safeDI_left() -> Left {
-				                    func __safeDI_detail() -> Detail {
-				                        #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-				                        let authToken: Box<Secret>? = token
-				                        #sourceLocation()
-				                        let reader = Reader(authToken: authToken)
-				                        return Detail(authToken: authToken, reader: reader)
-				                    }
-				                    let detail: Detail = __safeDI_detail()
-				                    return Left(detail: detail)
-				                }
-				                let left: Left = __safeDI_left()
-				                return Screen(token: token, left: left)
-				            }
-				            let screen: Screen = __safeDI_screen()
+				            let screen: Screen = __safeDI_screen(token: token)
 				            return Host(token: token, screen: screen)
 				        }
 				        let hostBuilder = Instantiator<Host> {
@@ -811,23 +811,23 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 				"Root+SafeDI.swift": generatedFileHeader + """
 				extension Root {
 				    public convenience init() {
+				        func __safeDI_screen(token: (a: Int, b: String)?) -> Screen {
+				            let left: Left = __safeDI_left(token: token)
+				            return Screen(token: token, left: left)
+				        }
+				        func __safeDI_left(token: (a: Int, b: String)?) -> Left {
+				            let detail: Detail = __safeDI_detail(token: token)
+				            return Left(detail: detail)
+				        }
+				        func __safeDI_detail(token: (a: Int, b: String)?) -> Detail {
+				            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+				            let authToken: (a: Int, b: String)? = token
+				            #sourceLocation()
+				            let reader = Reader(authToken: authToken)
+				            return Detail(authToken: authToken, reader: reader)
+				        }
 				        func __safeDI_hostBuilder(token: (a: Int, b: String)?) -> Host {
-				            func __safeDI_screen() -> Screen {
-				                func __safeDI_left() -> Left {
-				                    func __safeDI_detail() -> Detail {
-				                        #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-				                        let authToken: (a: Int, b: String)? = token
-				                        #sourceLocation()
-				                        let reader = Reader(authToken: authToken)
-				                        return Detail(authToken: authToken, reader: reader)
-				                    }
-				                    let detail: Detail = __safeDI_detail()
-				                    return Left(detail: detail)
-				                }
-				                let left: Left = __safeDI_left()
-				                return Screen(token: token, left: left)
-				            }
-				            let screen: Screen = __safeDI_screen()
+				            let screen: Screen = __safeDI_screen(token: token)
 				            return Host(token: token, screen: screen)
 				        }
 				        let hostBuilder = Instantiator<Host> {
@@ -918,27 +918,27 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_screen(token: Secret?) -> Screen {
+			            let inner: Inner = __safeDI_inner(token: token)
+			            return Screen(token: token, inner: inner)
+			        }
+			        func __safeDI_inner(token: Secret?) -> Inner {
+			            let left: Left = __safeDI_left(token: token)
+			            return Inner(left: left)
+			        }
+			        func __safeDI_left(token: Secret?) -> Left {
+			            let detail: Detail = __safeDI_detail(token: token)
+			            return Left(token: token, detail: detail)
+			        }
+			        func __safeDI_detail(token: Secret?) -> Detail {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			            let authToken: Secret? = token
+			            #sourceLocation()
+			            let reader = Reader(authToken: authToken)
+			            return Detail(authToken: authToken, reader: reader)
+			        }
 			        func __safeDI_hostBuilder(token: Secret?) -> Host {
-			            func __safeDI_screen() -> Screen {
-			                func __safeDI_inner() -> Inner {
-			                    func __safeDI_left() -> Left {
-			                        func __safeDI_detail() -> Detail {
-			                            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			                            let authToken: Secret? = token
-			                            #sourceLocation()
-			                            let reader = Reader(authToken: authToken)
-			                            return Detail(authToken: authToken, reader: reader)
-			                        }
-			                        let detail: Detail = __safeDI_detail()
-			                        return Left(token: token, detail: detail)
-			                    }
-			                    let left: Left = __safeDI_left()
-			                    return Inner(left: left)
-			                }
-			                let inner: Inner = __safeDI_inner()
-			                return Screen(token: token, inner: inner)
-			            }
-			            let screen: Screen = __safeDI_screen()
+			            let screen: Screen = __safeDI_screen(token: token)
 			            return Host(token: token, screen: screen)
 			        }
 			        let hostBuilder = Instantiator<Host> {
@@ -1006,19 +1006,19 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_left(token: Secret?) -> Left {
+			            let detail: Detail = __safeDI_detail(token: token)
+			            return Left(detail: detail)
+			        }
+			        func __safeDI_detail(token: Secret?) -> Detail {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			            let authToken: Secret? = token
+			            #sourceLocation()
+			            let reader = Reader(authToken: authToken)
+			            return Detail(authToken: authToken, reader: reader)
+			        }
 			        func __safeDI_screenBuilder(token: Secret?) -> Screen {
-			            func __safeDI_left() -> Left {
-			                func __safeDI_detail() -> Detail {
-			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			                    let authToken: Secret? = token
-			                    #sourceLocation()
-			                    let reader = Reader(authToken: authToken)
-			                    return Detail(authToken: authToken, reader: reader)
-			                }
-			                let detail: Detail = __safeDI_detail()
-			                return Left(detail: detail)
-			            }
-			            let left: Left = __safeDI_left()
+			            let left: Left = __safeDI_left(token: token)
 			            return Screen(token: token, left: left)
 			        }
 			        let screenBuilder = Instantiator<Screen> {
@@ -1094,27 +1094,27 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_screen(token: Secret?) -> Screen {
+			            let right = Right(token: token)
+			            let left: Left = __safeDI_left()
+			            return Screen(right: right, left: left)
+			        }
+			        func __safeDI_left() -> Left {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Left.swift"])", line: 8)
+			            let token: Secret? = nil
+			            #sourceLocation()
+			            let detail: Detail = __safeDI_detail(token: token)
+			            return Left(token: token, detail: detail)
+			        }
+			        func __safeDI_detail(token: Secret?) -> Detail {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			            let authToken: Secret? = token
+			            #sourceLocation()
+			            let reader = Reader(authToken: authToken)
+			            return Detail(authToken: authToken, reader: reader)
+			        }
 			        func __safeDI_hostBuilder(token: Secret?) -> Host {
-			            func __safeDI_screen() -> Screen {
-			                let right = Right(token: token)
-			                func __safeDI_left() -> Left {
-			                    #sourceLocation(file: "\(inlineOutput.fixtures["Left.swift"])", line: 8)
-			                    let token: Secret? = nil
-			                    #sourceLocation()
-			                    func __safeDI_detail() -> Detail {
-			                        #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			                        let authToken: Secret? = token
-			                        #sourceLocation()
-			                        let reader = Reader(authToken: authToken)
-			                        return Detail(authToken: authToken, reader: reader)
-			                    }
-			                    let detail: Detail = __safeDI_detail()
-			                    return Left(token: token, detail: detail)
-			                }
-			                let left: Left = __safeDI_left()
-			                return Screen(right: right, left: left)
-			            }
-			            let screen: Screen = __safeDI_screen()
+			            let screen: Screen = __safeDI_screen(token: token)
 			            return Host(token: token, screen: screen)
 			        }
 			        let hostBuilder = Instantiator<Host> {
@@ -1184,17 +1184,17 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        let token = Secret()
+			        func __safeDI_left() -> Left {
+			            let sub: Sub = __safeDI_sub()
+			            return Left(sub: sub)
+			        }
+			        func __safeDI_sub() -> Sub {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Sub.swift"])", line: 7)
+			            let authToken: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
+			            #sourceLocation()
+			            return Sub(authToken: authToken)
+			        }
 			        func __safeDI_screen() -> Screen {
-			            func __safeDI_left() -> Left {
-			                func __safeDI_sub() -> Sub {
-			                    #sourceLocation(file: "\(inlineOutput.fixtures["Sub.swift"])", line: 7)
-			                    let authToken: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
-			                    #sourceLocation()
-			                    return Sub(authToken: authToken)
-			                }
-			                let sub: Sub = __safeDI_sub()
-			                return Left(sub: sub)
-			            }
 			            let left: Left = __safeDI_left()
 			            return Screen(left: left)
 			        }
@@ -1258,17 +1258,17 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        let token = Secret()
+			        func __safeDI_left() -> Left {
+			            let sub: Sub = __safeDI_sub()
+			            return Left(sub: sub)
+			        }
+			        func __safeDI_sub() -> Sub {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Sub.swift"])", line: 7)
+			            let authToken: AnyAuth? = AnyAuth(token)
+			            #sourceLocation()
+			            return Sub(authToken: authToken)
+			        }
 			        func __safeDI_screen() -> Screen {
-			            func __safeDI_left() -> Left {
-			                func __safeDI_sub() -> Sub {
-			                    #sourceLocation(file: "\(inlineOutput.fixtures["Sub.swift"])", line: 7)
-			                    let authToken: AnyAuth? = AnyAuth(token)
-			                    #sourceLocation()
-			                    return Sub(authToken: authToken)
-			                }
-			                let sub: Sub = __safeDI_sub()
-			                return Left(sub: sub)
-			            }
 			            let left: Left = __safeDI_left()
 			            return Screen(left: left)
 			        }
@@ -1336,22 +1336,22 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
+			        func __safeDI_screen(token: Secret?) -> Screen {
+			            let left: Left = __safeDI_left(token: token)
+			            return Screen(token: token, left: left)
+			        }
+			        func __safeDI_left(token: Secret?) -> Left {
+			            let sub: Sub = __safeDI_sub(token: token)
+			            return Left(sub: sub)
+			        }
+			        func __safeDI_sub(token: Secret?) -> Sub {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Sub.swift"])", line: 7)
+			            let authToken: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
+			            #sourceLocation()
+			            return Sub(authToken: authToken)
+			        }
 			        func __safeDI_hostBuilder(token: Secret?) -> Host {
-			            func __safeDI_screen() -> Screen {
-			                func __safeDI_left() -> Left {
-			                    func __safeDI_sub() -> Sub {
-			                        #sourceLocation(file: "\(inlineOutput.fixtures["Sub.swift"])", line: 7)
-			                        let authToken: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
-			                        #sourceLocation()
-			                        return Sub(authToken: authToken)
-			                    }
-			                    let sub: Sub = __safeDI_sub()
-			                    return Left(sub: sub)
-			                }
-			                let left: Left = __safeDI_left()
-			                return Screen(token: token, left: left)
-			            }
-			            let screen: Screen = __safeDI_screen()
+			            let screen: Screen = __safeDI_screen(token: token)
 			            return Host(token: token, screen: screen)
 			        }
 			        let hostBuilder = Instantiator<Host> {
