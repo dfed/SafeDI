@@ -35,11 +35,19 @@ extension ScopeGenerator {
 			return .unsupported(.onlyIfAvailable)
 		}
 		let bodyIndent = "\(Self.standardIndent)\(Self.standardIndent)"
+		let orderedChildren = orderedChildrenComputedAfresh(propertiesGeneratedLater: [])
 		var walk = MockLowering.Walk(ancestorTypes: [instantiable.concreteInstantiable])
+		// D1 lane hook (lane C): the builders `mock()` takes optional for the places its calls fill.
+		switch filledCallBuilders(of: orderedChildren) {
+		case let .lowered(filledCallBuilders):
+			walk.filledCallBuilders = filledCallBuilders
+		case let .unsupported(rule):
+			return .unsupported(rule)
+		}
 		var bindingLines = [String]()
 		let nodes: [MockLowering.TreeNode]
 		switch await walk.children(
-			of: orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator),
+			of: orderedChildren.map(\.generator),
 			inScope: [],
 			path: ReservedName.mockOverridesParameterName,
 			indent: bodyIndent,
@@ -59,7 +67,11 @@ extension ScopeGenerator {
 		guard !nodes.contains(where: { $0.builtNode.map { $0.hasConfiguration && context.sendableConfigurationTypeNames.contains($0.instantiable.concreteInstantiable.asSource) } ?? false }) else {
 			return .unsupported(.wrapper)
 		}
-		return .lowered(Self.mockWithTree(of: instantiable, nodes: nodes, bindingLines: bindingLines, context: context), configurations: walk.configurationRecords)
+		// D1 lane hook (lane C): every call that fills builders is a node the walk reached.
+		guard walk.filledCallBuilders.calls.isEmpty else {
+			return .unsupported(.fill)
+		}
+		return .lowered(Self.mockWithTree(of: instantiable, nodes: nodes, bindingLines: bindingLines, builderParameterLines: walk.filledCallBuilders.parameterLines(indent: bodyIndent), context: context), configurations: walk.configurationRecords)
 	}
 
 	/// The first rule the parameters and construction of the mocked type itself meet that the walk does not lower yet.
@@ -89,7 +101,7 @@ extension ScopeGenerator {
 
 	/// The mock of `instantiable` whose tree's top-level nodes are `nodes`, in generation order, bound by `bindingLines`:
 	/// its `SafeDIOverrides`, and `mock()`, which binds each node and returns the type built from them.
-	private static func mockWithTree(of instantiable: Instantiable, nodes: [MockLowering.TreeNode], bindingLines: [String], context: MockContext) -> String {
+	private static func mockWithTree(of instantiable: Instantiable, nodes: [MockLowering.TreeNode], bindingLines: [String], builderParameterLines: [String], context: MockContext) -> String {
 		let indent = standardIndent
 		let bodyIndent = "\(indent)\(indent)"
 		let typeName = instantiable.concreteInstantiable.asSource
@@ -98,6 +110,8 @@ extension ScopeGenerator {
 		lines.append(contentsOf: overridesStruct(of: nodes.compactMap(\.overridesField), sendableConfigurationTypeNames: context.sendableConfigurationTypeNames, indent: indent))
 		lines.append("")
 		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
+		// D1 lane hook (lane C): the builders `mock()` takes, before its overrides.
+		lines.append(contentsOf: builderParameterLines)
 		lines.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): \(ReservedName.mockOverridesTypeName) = .init()")
 		lines.append("\(indent)) -> \(instantiable.concreteInstantiable.asSource) {")
 		lines.append(contentsOf: bindingLines)
@@ -161,6 +175,8 @@ extension MockLowering {
 		var labels = Set<String>()
 		// D1 lane hook (lane D): the configurations of the nodes the walk finished, children before their node.
 		var configurationRecords = [ConfigurationRecord]()
+		// D1 lane hook (lane C): the builders `mock()` takes optional for the places its calls fill, and the calls not reached yet.
+		var filledCallBuilders = FilledCallBuilders.none
 		// D1 lane hook (lane B): the extractor of the `@Sendable` builder function the walk is inside, and the names of each
 		// level it is in, from which such a function's locals are claimed (`MockLowering+Wrappers.swift`).
 		var sendableOverrideExtractor: ScopeGenerator.SendableOverrideExtractor?
