@@ -27,7 +27,7 @@ extension ScopeGenerator {
 
 	/// The builders `mock()` takes optional for the places its calls of other modules' public mocks fill, from the root's
 	/// children, `orderedChildren`, in generation order, or the first rule the calls meet.
-	func filledCallBuilders(of _: [OrderedChild]) -> MockLowering.Lowering<MockLowering.FilledCallBuilders> {
+	func filledCallBuilders(of _: [OrderedChild], context _: MockContext) -> MockLowering.Lowering<MockLowering.FilledCallBuilders> {
 		.lowered(.none)
 	}
 }
