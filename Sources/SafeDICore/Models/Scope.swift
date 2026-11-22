@@ -628,9 +628,7 @@ extension ScopeRecord {
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
 			scope: root,
 			property: property,
-			propertyStack: [],
-			concreteTypeStack: [],
-			depthStack: [],
+			stack: ConstructionStack(),
 			depth: 0,
 			nearestDeclarations: nearestDeclarations,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -747,17 +745,14 @@ extension ScopeRecord {
 /// the generators of the scopes it creates exist.
 private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// - Parameters:
-	///   - concreteTypeStack: The concrete types of the scopes `propertyStack`'s properties are built for, beside it.
-	///   - depthStack: The depth in the tree of the scope that put each entry of `propertyStack` on it, beside it.
+	///   - stack: The properties being built above this scope, innermost first (see `ConstructionStack`).
 	///   - depth: This scope's depth in the tree: 0 for the root, and one more than the scope that creates it otherwise.
-	///   - fillPathStackCount: How many of the outermost entries of `propertyStack` are the path of the seam whose hole the
+	///   - fillPathStackCount: How many of the outermost entries of `stack` are the path of the seam whose hole the
 	///     enclosing fill fills (`SeamSignature.Hole.fillPropertyStack`): none outside a fill, and a nested fill's are its own.
 	init(
 		scope: ConstructionScope,
 		property: Property?,
-		propertyStack: [Property],
-		concreteTypeStack: [TypeDescription],
-		depthStack: [Int],
+		stack: ConstructionStack,
 		depth: Int,
 		fillPathStackCount: Int = 0,
 		nearestDeclarations inheritedNearestDeclarations: NearestDeclarations,
@@ -791,17 +786,13 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		// `ConstructionMemo`).
 		var log = ConstructionLog(recording: recordsReads)
 		let context = ConstructionContext(
-			propertyStack: propertyStack,
-			concreteTypeStack: concreteTypeStack,
-			depthStack: depthStack,
+			stack: stack,
 			nearestDeclarations: inheritedNearestDeclarations,
 			cycleParameterContexts: cycleParameterContexts,
 		)
-		var childPropertyStack = propertyStack
-		var childConcreteTypeStack = concreteTypeStack
-		var childDepthStack = depthStack
-		// The index on `propertyStack` of the declaration this scope repeats when it closes a cycle.
-		var closedOnDeclarationIndex: Int?
+		var childStack = stack
+		// The declaration this scope repeats when it closes a cycle, with its index on `stack`.
+		var closedOn: (declaration: ScopeGenerator.BuiltDeclaration, index: Int)?
 		// The declarations this scope's own dependencies are read from: those enclosing it, with every form of its own
 		// property being built.
 		var nearestDeclarations = inheritedNearestDeclarations.changed(atDepth: depth)
@@ -810,16 +801,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// validation sees it (a lazily instantiated property as the constant it stands for), built for the same
 			// concrete type. A lazily instantiated declaration's instance is on the stack just inside the declaration.
 			let concreteType = scope.instantiable.concreteInstantiable
-			let closedOn = context.declarationClosedOn(by: property, concreteType: concreteType)
-			log.record(.declarationClosedOn(property, concreteType), answer: .declarationClosedOn(closedOn?.declaration), depth: closedOn?.depth ?? -1)
-			closedOnDeclarationIndex = closedOn?.index
-			childPropertyStack.insert(property, at: 0)
-			childConcreteTypeStack.insert(concreteType, at: 0)
-			childDepthStack.insert(depth, at: 0)
+			let foundClosedOn = context.declarationClosedOn(by: property, concreteType: concreteType)
+			log.record(.declarationClosedOn(property, concreteType), answer: .declarationClosedOn(foundClosedOn?.declaration), depth: foundClosedOn?.depth ?? -1)
+			closedOn = foundClosedOn.map { ($0.declaration, $0.index) }
+			childStack = childStack.pushing(property, concreteType: concreteType, depth: depth)
 			if let instanceProperty = property.asLazilyInstantiatedInstanceProperty {
-				childPropertyStack.insert(instanceProperty, at: 0)
-				childConcreteTypeStack.insert(concreteType, at: 0)
-				childDepthStack.insert(depth, at: 0)
+				childStack = childStack.pushing(instanceProperty, concreteType: concreteType, depth: depth)
 			}
 			// Building the property adds its forms to the nearest declaration of its label, which it reads.
 			let (buildingDeclaration, buildingDepth) = nearestDeclarations.resolving(property.label)
@@ -832,17 +819,18 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			}
 		}
 		// The declaration repeated is built for this scope's concrete type, as its entry records.
-		let closedOnDeclaration = closedOnDeclarationIndex.map {
-			ScopeGenerator.BuiltDeclaration(property: propertyStack[$0], concreteType: scope.instantiable.concreteInstantiable)
-		}
+		let closedOnDeclaration = closedOn?.declaration
 		let isPropertyCycle = closedOnDeclaration != nil
 		self.fillPathStackCount = fillPathStackCount
-		let fillPathStart = propertyStack.count - fillPathStackCount
+		let fillPathStart = stack.count - fillPathStackCount
 		// How many declarations of the fill's path lie beneath the one this scope closes on, when it closes on one: generation's
 		// own finding, which the check of a fill reads instead of working the membership out again. A lazily instantiated
 		// declaration's instance is its own entry of the stack, and no declaration.
-		closedOnFillPathDeclarationsBeneath = closedOnDeclarationIndex.flatMap { index in
-			index >= fillPathStart ? (fillPathStart..<index).count(where: { !(propertyStack.indices.contains($0 + 1) && propertyStack[$0 + 1].asLazilyInstantiatedInstanceProperty == propertyStack[$0]) }) : nil
+		closedOnFillPathDeclarationsBeneath = closedOn.flatMap { closedOn in
+			let index = closedOn.index
+			guard index >= fillPathStart else { return nil }
+			let propertyStack = stack.prefix(index + 1).map(\.property)
+			return (fillPathStart..<index).count(where: { propertyStack[$0 + 1].asLazilyInstantiatedInstanceProperty != propertyStack[$0] })
 		}
 		// The parameters of this scope's builder function that the pass before found, when a lazy cycle closes on it,
 		// or those of the function a cycle-closing scope refers to. Nearly every scope has neither.
@@ -945,9 +933,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		self.property = property
 		// A scope that closes a cycle creates no children.
 		propertiesToGenerate = isPropertyCycle ? [] : scope.propertiesToGenerate
-		self.childPropertyStack = childPropertyStack
-		self.childConcreteTypeStack = childConcreteTypeStack
-		self.childDepthStack = childDepthStack
+		self.childStack = childStack
 		self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
 		self.childLazilyInstantiatedInstanceProperties = childLazilyInstantiatedInstanceProperties
 		self.previousPassGenerator = previousPassGenerator
@@ -1621,10 +1607,8 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		return ScopeGeneratorUnderConstruction(
 			scope: scope,
 			property: hole.property,
-			propertyStack: hole.fillPropertyStack,
-			concreteTypeStack: hole.fillConcreteTypeStack,
 			// The fill's stack is the path of the seam whose tree holds the site, put on it above this tree.
-			depthStack: hole.fillPropertyStack.map { _ in -1 },
+			stack: ConstructionStack(fillPathProperties: hole.fillPropertyStack, concreteTypes: hole.fillConcreteTypeStack),
 			depth: depth + 1,
 			fillPathStackCount: hole.fillPropertyStack.count,
 			nearestDeclarations: fillNearestDeclarations,
@@ -1667,8 +1651,8 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			holeProperty: property,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			site: seamHoles.site(at: sitePath + [property]),
-			ownerPropertyStack: childPropertyStack,
-			ownerConcreteTypeStack: childConcreteTypeStack,
+			ownerPropertyStack: childStack.properties,
+			ownerConcreteTypeStack: childStack.concreteTypes,
 			ownerLazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 			// A seam that declares builder structs spells the `@Sendable` functions of its sites, too, `nonisolated`.
 			sendableFunctionsAreNonisolated: seamHoles.declaresBuilderStructs,
@@ -1686,9 +1670,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		ScopeGeneratorUnderConstruction(
 			scope: scope,
 			property: property,
-			propertyStack: childPropertyStack,
-			concreteTypeStack: childConcreteTypeStack,
-			depthStack: childDepthStack,
+			stack: childStack,
 			depth: depth + 1,
 			fillPathStackCount: fillPathStackCount,
 			nearestDeclarations: nearestDeclarations(ofChildBuilding: property),
@@ -1763,9 +1745,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// The context the scope this scope instantiates as `property` inherits (see `ConstructionContext`).
 	func childContext(ofChildBuilding property: Property) -> ConstructionContext {
 		ConstructionContext(
-			propertyStack: childPropertyStack,
-			concreteTypeStack: childConcreteTypeStack,
-			depthStack: childDepthStack,
+			stack: childStack,
 			nearestDeclarations: nearestDeclarations(ofChildBuilding: property),
 			cycleParameterContexts: childCycleParameterContexts,
 		)
@@ -2416,13 +2396,9 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	private let propertiesToGenerate: [ConstructionScope.PropertyToGenerate]
 	/// The index in `propertiesToGenerate` of the next property to create a generator for.
 	private var nextPropertyIndex = 0
-	private let childPropertyStack: [Property]
-	/// The concrete types of the scopes `childPropertyStack`'s properties are built for, beside it (see
-	/// `init(scope:property:propertyStack:concreteTypeStack:…)`).
-	private let childConcreteTypeStack: [TypeDescription]
-	/// The depth of the scope that put each entry of `childPropertyStack` on it, beside it.
-	private let childDepthStack: [Int]
-	/// See `init(scope:property:propertyStack:concreteTypeStack:fillPathStackCount:…)`.
+	/// The properties being built above this scope's children: this scope's stack with its own property, and its instance where it is lazily instantiated, pushed on it.
+	private let childStack: ConstructionStack
+	/// See `init(scope:property:stack:depth:fillPathStackCount:…)`.
 	private let fillPathStackCount: Int
 	/// See `ScopeGenerator.closedOnFillPathDeclarationsBeneath`.
 	private let closedOnFillPathDeclarationsBeneath: Int?
