@@ -7,8 +7,6 @@ paths:
   - "Scripts/fuzz-corpus.sh"
 ---
 
-<!-- Split from fuzzer-overview.md, which reached 32,000 characters. Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 # Graph fuzzer: known issues
 
 Continues `fuzzer-overview.md`.

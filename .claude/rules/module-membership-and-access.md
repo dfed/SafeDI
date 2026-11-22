@@ -12,8 +12,6 @@ paths:
   - "Tests/**/*RootOfOtherModule*.swift"
 ---
 
-<!-- Moved from CLAUDE.md §Architecture, §Validation boundaries and §Common Pitfalls at 337e5e22. Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 # Module membership and access between modules
 
 ## Module membership

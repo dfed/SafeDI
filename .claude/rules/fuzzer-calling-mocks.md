@@ -4,8 +4,6 @@ paths:
   - "Tests/**/*GraphFuzzerCallingMockTests.swift"
 ---
 
-<!-- Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 # Graph fuzzer: calling mocks mirror production
 
 A *calling mock* is a generated `mock()` (`generateMock: true` or `.public`) whose tree calls another module's public mock. Contract rule 7's calling-mock clause (`seam-and-mock-contract.md`) says it does what its production twin does: it fills a place where the twin fills it, reports the twin's error where the twin reports one, and passes a place up only where the twin takes a builder for it, which is where its module sees no implementation of the place's type. An implementation that receives what nothing in the mock's tree builds is no reason to pass a place up, for internal and `.public` mocks alike: production takes that value as a parameter and fills the place, so the mock must too. One outcome differs by rule 7's list: where the called type's tree builds that type again, or a call inside a fill re-enters a level of the call, the twin reports that its caller cannot hand the place the value nearest it, and the mock, which builds the called type inline, hands it that value and is accepted, unless the called mock binds that value on its way to the builder it holds, where the mock reports the twin's error. That outcome is agreed only when the mock's values equal those of the same types built inline (`SafeDIToolCallingMockMirrorsProductionTests`' value cells, and the check below); no pass-up reason, flag or list entry stands for it.

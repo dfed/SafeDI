@@ -7,8 +7,6 @@ paths:
   - "Tests/SafeDIToolTestSupport/GraphFuzzerPublicMocks.swift"
 ---
 
-<!-- Continues public-mocks.md. Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 # Public mocks and a seam's own mock: builders that take nothing
 
 Continues `public-mocks.md`; a seam's builder struct is `seam-builder-structs.md`'s.
