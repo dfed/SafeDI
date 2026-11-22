@@ -11,19 +11,26 @@
 # A failing test does not stop the report: the lines are reported from what the tests that ran executed, and the
 # script then exits with `swift test`'s status. A test process that crashed wrote no counts, so its lines read as
 # unexecuted.
+# SwiftPM's native build system, as CI uses: it links every test target into one SafeDIPackageTests.xctest, where
+# Swift Build, the default from Swift 6.4, builds one bundle per test target and this script would find none.
 # Bash, not zsh, so that it runs unchanged in a Linux container, which has no zsh.
 set -euo pipefail
 root=$(git rev-parse --show-toplevel); cd "$root"
 main=origin/main; git rev-parse --verify --quiet upstream/main >/dev/null && main=upstream/main
 base=$(git merge-base "${1:-$main}" HEAD)
 test_status=0
-swift test -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild || test_status=$?
-bin=$(swift build -c release --traits sourceBuild --show-bin-path)
-# On Linux the .xctest is the executable; on macOS it is a bundle that holds it.
+swift test --build-system native -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild || test_status=$?
+bin=$(swift build --build-system native -c release --traits sourceBuild --show-bin-path)
+# On Linux the .xctest is the executable; on macOS it is a bundle that holds it. Name the path: the bundle's debug
+# symbols hold a file of the same name, which llvm-cov cannot load.
 if [[ -f "$bin/SafeDIPackageTests.xctest" ]]; then
 	executable="$bin/SafeDIPackageTests.xctest"
 else
-	executable=$(find "$bin/SafeDIPackageTests.xctest" -type f -name SafeDIPackageTests | head -1)
+	executable="$bin/SafeDIPackageTests.xctest/Contents/MacOS/SafeDIPackageTests"
+fi
+if [[ ! -f "$executable" ]]; then
+	echo "no test executable at $executable: the build made no SafeDIPackageTests.xctest" >&2
+	if (( test_status != 0 )); then exit $test_status; else exit 2; fi
 fi
 llvm_cov=(llvm-cov); llvm_profdata=(llvm-profdata)
 if command -v xcrun >/dev/null 2>&1; then llvm_cov=(xcrun llvm-cov); llvm_profdata=(xcrun llvm-profdata); fi
