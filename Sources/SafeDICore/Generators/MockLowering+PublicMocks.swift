@@ -187,7 +187,7 @@ extension MockLowering.Walk {
 	/// which the calling mock's overrides hold under the node's label.
 	mutating func publicMockCallNode(
 		of generator: ScopeGenerator,
-		inScope _: Set<Property>,
+		inScope scope: Set<Property>,
 		path: String,
 		indent: String,
 		lines: inout [String],
@@ -196,42 +196,57 @@ extension MockLowering.Walk {
 		      case let .property(instantiable, property, _, erasedToConcreteExistential, isPropertyCycle, _) = generator.scopeData
 		else { return .unsupported(.publicMockCall) }
 		// A call nested in a type's builder function is configured by that type's configuration, which a `@Sendable` builder
-		// function reads as a closure; a call that passes values, builders or no overrides hands the mock more than its
-		// overrides.
+		// function reads as a closure; a call that takes no overrides is configured by an override closure.
 		guard path == ReservedName.mockOverridesParameterName,
 		      publicMockCall.takesOverrides,
-		      publicMockCall.passedParameters.allSatisfy({ $0.builder != nil }) || !generator.fillsABuilder && publicMockCall.passedParameters.isEmpty,
-		      generator.fillsABuilder || publicMockCall.builders.isEmpty,
 		      !isPropertyCycle,
 		      !erasedToConcreteExistential,
 		      property.propertyType.isConstant,
 		      property.typeDescription.asInstantiatedType == instantiable.concreteInstantiable
 		else { return .unsupported(.publicMockCall) }
 		guard !ancestorLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
-		let node = MockLowering.PublicMockCallNode(property: property, calledType: instantiable.concreteInstantiable, call: publicMockCall)
-		let nodePath = "\(path).\(property.label)"
-		guard generator.fillsABuilder else {
-			lines.append(contentsOf: node.bindingLines(path: nodePath, indent: indent))
-			return .lowered(.publicMockCall(node))
-		}
-		// A call that fills builders is made in a builder function of its own, which declares the fills and names the guard
-		// first; it passes each builder the struct of the builder `mock()` takes optional for the builder's places, or of
-		// its fills where that builder is `nil`.
-		guard !filledCallBuilders.calls.isEmpty, filledCallBuilders.calls[0].generator === generator else { return .unsupported(.fill) }
-		let filledCall = filledCallBuilders.calls.removeFirst()
 		// The leaf takes the called tier's parameters as its mock's.
 		let constructionInitializer = instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType) ? instantiable.mockInitializer : instantiable.initializer
 		guard let initializer = constructionInitializer else { return .unsupported(.publicMockCall) }
-		let innerIndent = "\(indent)\(ScopeGenerator.standardIndent)"
+		let node = MockLowering.PublicMockCallNode(property: property, calledType: instantiable.concreteInstantiable, call: publicMockCall)
+		let nodePath = "\(path).\(property.label)"
+		// A call that fills builders is made in a builder function of its own, which declares the fills and names the guard
+		// first; it passes each builder the struct of the builder `mock()` takes optional for the builder's places, or of
+		// its fills where that builder is `nil`. Any other call names the guard where it is made.
+		let filledCall: MockLowering.FilledCallBuilders.Call?
+		if generator.fillsABuilder {
+			guard !filledCallBuilders.calls.isEmpty, filledCallBuilders.calls[0].generator === generator else { return .unsupported(.fill) }
+			filledCall = filledCallBuilders.calls.removeFirst()
+		} else {
+			filledCall = nil
+		}
+		let innerIndent = filledCall == nil ? indent : "\(indent)\(ScopeGenerator.standardIndent)"
 		let holeBuilders = filledCallBuilders.fillPlaceBindings.holeBuildersByCall[ObjectIdentifier(generator)] ?? [:]
-		let structValuesByLabel = generator.publicMockBuilderStructValuesByLabel
+		let structValuesByLabel = filledCall == nil ? [:] : generator.publicMockBuilderStructValuesByLabel
+		let lazilyInstantiatedInstances = generator.mockLoweringLazilyInstantiatedInstanceProperties
 		var arguments = [String]()
 		for argument in initializer.arguments {
-			guard let builderStruct = structValuesByLabel[argument.innerLabel] else { return .unsupported(.publicMockCall) }
-			let fillsStruct = builderStruct.replacingOccurrences(of: "\n\(ScopeGenerator.standardIndent)", with: "\n\(innerIndent)")
-			arguments.append("\(argument.label.spelledAsArgumentLabel): \(holeBuilders[argument.innerLabel]?.structValue(fillsStruct: fillsStruct) ?? fillsStruct)")
+			if let builderStruct = structValuesByLabel[argument.innerLabel] {
+				let fillsStruct = builderStruct.replacingOccurrences(of: "\n\(ScopeGenerator.standardIndent)", with: "\n\(innerIndent)")
+				arguments.append("\(argument.label.spelledAsArgumentLabel): \(holeBuilders[argument.innerLabel]?.structValue(fillsStruct: fillsStruct) ?? fillsStruct)")
+			} else {
+				// A value the call passes is the root level's binding of its label, which an optional parameter takes as it is.
+				guard let dependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }),
+				      dependency.source != .forwarded,
+				      !lazilyInstantiatedInstances.contains(dependency.property),
+				      !generator.unavailableOptionalProperties.contains(dependency.property),
+				      scope.contains(dependency.property) || dependency.property.typeDescription.isOptional && scope.contains(dependency.property.asUnwrappedProperty)
+				else { return .unsupported(.publicMockCall) }
+				arguments.append("\(argument.label.spelledAsArgumentLabel): \(dependency.property.label)")
+			}
 		}
 		arguments.append("\(ReservedName.mockOverridesParameterName): \(nodePath)")
+		let call = "\(instantiable.concreteInstantiable.asSource).\(publicMockCall.functionName)(\(arguments.joined(separator: ", ")))"
+		guard let filledCall else {
+			lines.append("\(indent)\(publicMockCall.guardLine(for: instantiable.concreteInstantiable))")
+			lines.append("\(indent)let \(property.label) = \(call)")
+			return .lowered(.publicMockCall(node))
+		}
 		let fillCode: String
 		do {
 			fillCode = try await generator.mockLoweringFillCode(propertiesGeneratedLater: filledCall.propertiesGeneratedLater, fillPlaceBindings: filledCallBuilders.fillPlaceBindings).joined(separator: "\n")
@@ -245,11 +260,12 @@ extension MockLowering.Walk {
 			lines.append(line.isEmpty ? "" : "\(innerIndent)\(line)")
 		}
 		lines.append("\(innerIndent)\(publicMockCall.guardLine(for: instantiable.concreteInstantiable))")
-		lines.append("\(innerIndent)return \(instantiable.concreteInstantiable.asSource).\(publicMockCall.functionName)(\(arguments.joined(separator: ", ")))")
+		lines.append("\(innerIndent)return \(call)")
 		lines.append("\(indent)}")
 		lines.append("\(indent)let \(property.label): \(typeName) = \(functionName)()")
 		return .lowered(.publicMockCall(node))
 	}
+
 }
 
 extension MockLowering {
@@ -268,14 +284,6 @@ extension MockLowering {
 				defaultValue: ".init()",
 				sendability: .never,
 			)
-		}
-
-		/// The statements that name the called mock's guard and bind the node, whose overrides are at `nodePath`.
-		func bindingLines(path nodePath: String, indent: String) -> [String] {
-			[
-				"\(indent)\(call.guardLine(for: calledType))",
-				"\(indent)let \(property.label) = \(calledType.asSource).\(call.functionName)(\(ReservedName.mockOverridesParameterName): \(nodePath))",
-			]
 		}
 	}
 }
