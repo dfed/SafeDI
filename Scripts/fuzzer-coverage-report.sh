@@ -1,20 +1,30 @@
 #!/bin/zsh
-# Scripts/fuzzer-coverage-report.sh RUN [BASE]   (default BASE: the merge base with origin/main)
+# Scripts/fuzzer-coverage-report.sh RUN [BASE]   (default BASE: the merge base with upstream/main, or origin/main
+# where no `upstream` remote exists)
 # Prints the generator lines changed since BASE that no fuzzer corpus graph executed, from the coverage a run uploaded
 # (the `fuzzer-coverage` artifact of ci.yml's "Report Changed Lines No Fuzzer Graph Executed on Linux" or of
 # graph-fuzzer.yml's coverage mode), without running anything. RUN is the run's ID or URL. Check out the commit the
 # coverage was built from first (the artifact's head.txt, which the run's report names): line numbers are that
 # commit's. The download goes under the user's caches directory, never $TMPDIR, and is removed afterwards.
+# A URL names the repository the run is in, so a run of another repository than `gh`'s default (a fork's own run, or
+# upstream's from a fork) is read from where it ran; for a bare ID, set GH_REPO=OWNER/REPO when it is not the default.
 set -euo pipefail
 run=${1:?usage: Scripts/fuzzer-coverage-report.sh RUN [BASE]}
+repository=()
+if [[ $run == *github.com/*/*/actions/runs/* ]]; then
+	repository=${run#*github.com/}; repository=(--repo "${repository%%/actions/runs/*}")
+fi
 run=${run##*/runs/}; run=${run%%/*}
 root=$(git rev-parse --show-toplevel); cd "$root"
-base=${2:-$(git merge-base origin/main HEAD)}
+# A fork's `origin/main` can be behind the repository it was forked from, which would count that repository's newer
+# commits as this change's.
+main=origin/main; git rev-parse --verify --quiet upstream/main >/dev/null && main=upstream/main
+base=${2:-$(git merge-base $main HEAD)}
 if [[ $(uname) == Darwin ]]; then caches=$HOME/Library/Caches; else caches=${XDG_CACHE_HOME:-$HOME/.cache}; fi
 mkdir -p "$caches/SafeDIFuzzerCoverage"
 directory=$(mktemp -d "$caches/SafeDIFuzzerCoverage/run-$run.XXXXXX")
 trap 'rm -rf "$directory"' EXIT
-gh run download "$run" --name fuzzer-coverage --dir "$directory"
+gh run download "$run" "${repository[@]}" --name fuzzer-coverage --dir "$directory"
 head=$(<"$directory/head.txt")
 # The lines head changes since its merge base with BASE, as the run's report lists them.
 base=$(git merge-base "$(git rev-parse "$base^{commit}")" "$head")

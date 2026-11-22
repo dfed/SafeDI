@@ -1,7 +1,8 @@
-#!/bin/zsh
-# Scripts/changed-line-coverage.sh [BASE]   (default origin/main)
+#!/bin/bash
+# Scripts/changed-line-coverage.sh [BASE]   (default upstream/main, or origin/main where no `upstream` remote exists)
 # Runs the full suite with coverage as CI does and prints every added or changed line under Sources/ and Plugins/
-# that no test executed, then every Swift file there that the change adds, renames or edits and the report does not
+# that no test executed (the lines changed since the merge base with BASE, so a BASE that has moved on adds none of
+# its own), then every Swift file there that the change adds, renames or edits and the report does not
 # record (a file of declarations only), which "Check Line Coverage on Linux" fails on unless
 # Scripts/unmeasured-files.txt lists it. The plugin compiles SafeDICore and SafeDIToolLibrary files through symlinks;
 # a line counts as executed when either copy executed it. Exit 1 when any line is unexecuted or any such file is
@@ -10,9 +11,11 @@
 # A failing test does not stop the report: the lines are reported from what the tests that ran executed, and the
 # script then exits with `swift test`'s status. A test process that crashed wrote no counts, so its lines read as
 # unexecuted.
+# Bash, not zsh, so that it runs unchanged in a Linux container, which has no zsh.
 set -euo pipefail
-base=${1:-origin/main}
 root=$(git rev-parse --show-toplevel); cd "$root"
+main=origin/main; git rev-parse --verify --quiet upstream/main >/dev/null && main=upstream/main
+base=$(git merge-base "${1:-$main}" HEAD)
 test_status=0
 swift test -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild || test_status=$?
 bin=$(swift build -c release --traits sourceBuild --show-bin-path)
@@ -29,8 +32,8 @@ if (( test_status != 0 )); then
 	# SwiftPM empties the directory before a run and merges the raw profiles only when every test passes, so merge
 	# what this run wrote.
 	echo "swift test exited $test_status; reporting coverage from the tests that ran" >&2
-	raw_profiles=("$bin"/codecov/*.profraw(N))
-	if (( ${#raw_profiles} == 0 )); then
+	shopt -s nullglob; raw_profiles=("$bin"/codecov/*.profraw); shopt -u nullglob
+	if (( ${#raw_profiles[@]} == 0 )); then
 		echo "no raw profile in $bin/codecov: the tests did not run, so there is nothing to report" >&2
 		exit $test_status
 	fi
