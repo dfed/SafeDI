@@ -45,3 +45,30 @@ extension MockLowering.Walk {
 		.unsupported(.publicMock)
 	}
 }
+
+extension MockLowering {
+	/// A node of a mock's tree that calls another module's public mock, which builds the node's whole tree.
+	struct PublicMockCallNode {
+		let property: Property
+		/// The type whose public mock the node calls.
+		let calledType: TypeDescription
+		let call: PublicMockCall
+
+		/// The member of the calling mock's overrides that configures the call: the called mock's own `SafeDIOverrides`.
+		var overridesField: OverridesField {
+			OverridesField(
+				name: property.label,
+				typeSource: "\(calledType.asSource).\(ReservedName.mockOverridesTypeName)",
+				defaultValue: ".init()",
+			)
+		}
+
+		/// The statements that name the called mock's guard and bind the node, whose overrides are at `nodePath`.
+		func bindingLines(path nodePath: String, indent: String) -> [String] {
+			[
+				"\(indent)\(call.guardLine(for: calledType))",
+				"\(indent)let \(property.label) = \(calledType.asSource).\(call.functionName)(\(ReservedName.mockOverridesParameterName): \(nodePath))",
+			]
+		}
+	}
+}

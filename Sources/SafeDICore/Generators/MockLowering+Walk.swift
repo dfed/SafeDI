@@ -93,7 +93,7 @@ extension ScopeGenerator {
 		let typeName = instantiable.concreteInstantiable.asSource
 		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
 		var lines = ["extension \(typeName) {"]
-		lines.append(contentsOf: overridesStruct(of: nodes.compactMap(\.builtNode), indent: indent))
+		lines.append(contentsOf: overridesStruct(of: nodes.compactMap(\.overridesField), indent: indent))
 		lines.append("")
 		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
 		lines.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): \(ReservedName.mockOverridesTypeName) = .init()")
@@ -116,28 +116,27 @@ extension ScopeGenerator {
 		}
 	}
 
-	/// The mock's `SafeDIOverrides`: an optional builder closure for each node, in generation order.
-	private static func overridesStruct(of nodes: [MockLowering.ConstantNode], indent: String) -> [String] {
+	/// The mock's `SafeDIOverrides`: the member that configures each node, in generation order.
+	private static func overridesStruct(of fields: [MockLowering.OverridesField], indent: String) -> [String] {
 		let innerIndent = "\(indent)\(standardIndent)"
 		let memberIndent = "\(innerIndent)\(standardIndent)"
 		var lines = [
 			"\(indent)/// Overrides for the mock dependency tree.",
 			"\(indent)struct \(ReservedName.mockOverridesTypeName) {",
 		]
-		let storage = ConfigurationStorage(fields: nodes.map { node in
-			let typeSource = node.hasConfiguration ? node.configurationTypeName : "(\(node.builderClosureType))?"
-			return ConfigurationStorage.Field(
-				name: node.property.label,
-				typeSource: typeSource,
-				parameterTypeSource: typeSource,
+		let storage = ConfigurationStorage(fields: fields.map { field in
+			ConfigurationStorage.Field(
+				name: field.name,
+				typeSource: field.typeSource,
+				parameterTypeSource: field.typeSource,
 				accessPrefix: "",
 				documentation: nil,
 				isProvenSendable: false,
 			)
 		})
 		lines.append("\(innerIndent)init(")
-		lines.append(zip(storage.fields, nodes).map { field, node in
-			"\(memberIndent)\(field.name.spelledAsAssigningParameter(labeled: field.name)): \(field.typeSource) = \(node.hasConfiguration ? ".init()" : "nil")"
+		lines.append(zip(storage.fields, fields).map { storageField, field in
+			"\(memberIndent)\(storageField.name.spelledAsAssigningParameter(labeled: storageField.name)): \(storageField.typeSource) = \(field.defaultValue)"
 		}.joined(separator: ",\n"))
 		lines.append("\(innerIndent)) {")
 		lines.append(contentsOf: storage.initialization(to: storage.fields.map(\.name.spelledAsAssigningParameterName), indent: memberIndent))
@@ -360,8 +359,15 @@ extension MockLowering {
 		/// The node, configured in a configuration of its own where `children` hold a node that builds its type.
 		func configured(byChildren children: [TreeNode]) -> ConstantNode {
 			var node = self
-			node.hasConfiguration = children.contains { $0.builtNode != nil }
+			node.hasConfiguration = children.contains { $0.overridesField != nil }
 			return node
+		}
+
+		/// The member of the enclosing overrides that configures the node: its configuration, or an optional builder closure.
+		var overridesField: OverridesField {
+			hasConfiguration
+				? OverridesField(name: property.label, typeSource: configurationTypeName, defaultValue: ".init()")
+				: OverridesField(name: property.label, typeSource: "(\(builderClosureType))?", defaultValue: "nil")
 		}
 
 		/// The type of the closure that overrides how the node is built, handed the values its initializer takes.
@@ -455,24 +461,44 @@ extension MockLowering {
 		}
 	}
 
-	/// A node of a mock's tree: one that builds its type, or an alias of a value bound before it.
+	/// A node of a mock's tree: one that builds its type, an alias of a value bound before it, or a call of another module's
+	/// public mock.
 	enum TreeNode {
 		case built(ConstantNode)
 		case alias(AliasBinding)
+		// D1 lane hook (lane C): a call of another module's public mock (`MockLowering+PublicMocks.swift`).
+		case publicMockCall(PublicMockCallNode)
 
 		var property: Property {
 			switch self {
 			case let .built(node): node.property
 			case let .alias(alias): alias.property
+			case let .publicMockCall(call): call.property
 			}
 		}
 
 		var builtNode: ConstantNode? {
 			switch self {
 			case let .built(node): node
-			case .alias: nil
+			case .alias, .publicMockCall: nil
 			}
 		}
+
+		/// The member of the enclosing overrides that configures the node, if any.
+		var overridesField: OverridesField? {
+			switch self {
+			case let .built(node): node.overridesField
+			case .alias: nil
+			case let .publicMockCall(call): call.overridesField
+			}
+		}
+	}
+
+	/// A member of a mock's overrides, or of a configuration, that configures one node: its name, type and default.
+	struct OverridesField {
+		let name: String
+		let typeSource: String
+		let defaultValue: String
 	}
 
 	/// An alias a type of the tree declares, bound from a value bound before it under its own label.
