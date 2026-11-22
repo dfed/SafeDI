@@ -107,15 +107,31 @@ extension MockLowering {
 			)
 		}
 
-		/// The parameters' declarations in `mock()`, at `indent`.
-		func parameterLines(indent: String) -> [String] {
-			parameters.map { parameter in
-				let typeSource = parameter.typeSource ?? parameter.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource
-				return if let defaultExpression = parameter.defaultExpression {
-					"\(indent)\(parameter.name): \(typeSource) = \(defaultExpression)"
-				} else {
-					"\(indent)\(parameter.name): \(typeSource)"
+		/// The parameters' declarations in `mock()`, at `indent`, with `builders` (label-sorted, each the full
+		/// `label: Type = default` text) listed among the flat received parameters as the emitter lists a seam's own mock's
+		/// builders: each before the first flat received parameter whose property's label sorts after the builder's, the rest
+		/// after the last, before the uncovered parameters.
+		func parameterLines(indent: String, builders: [(label: String, declaration: String)] = []) -> [String] {
+			var lines = (forwardedParameters + rootDefaultParameters).map { line(of: $0, indent: indent) }
+			var buildersToList = builders[...]
+			for parameter in flatReceivedParameters {
+				while let builder = buildersToList.first, builder.label < parameter.property.label {
+					lines.append("\(indent)\(builder.declaration)")
+					buildersToList = buildersToList.dropFirst()
 				}
+				lines.append(line(of: parameter, indent: indent))
+			}
+			lines.append(contentsOf: buildersToList.map { "\(indent)\($0.declaration)" })
+			lines.append(contentsOf: uncoveredParameters.map { line(of: $0, indent: indent) })
+			return lines
+		}
+
+		private func line(of parameter: Parameter, indent: String) -> String {
+			let typeSource = parameter.typeSource ?? parameter.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource
+			return if let defaultExpression = parameter.defaultExpression {
+				"\(indent)\(parameter.name): \(typeSource) = \(defaultExpression)"
+			} else {
+				"\(indent)\(parameter.name): \(typeSource)"
 			}
 		}
 	}
