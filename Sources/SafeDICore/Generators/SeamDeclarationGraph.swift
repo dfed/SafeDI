@@ -45,7 +45,7 @@
 ///
 /// A call of an inner seam that passes a place up holds no place in the start order this graph gives (`init(treeRootedAt:)`
 /// reads only sites and fills): it is no carrier, so it starts among its type's other children. The enums' graph
-/// (`placeHolding(inTreeRootedAt:edges:)`) counts it as a place, so the call has a case, which holds the inner seam's enum
+/// (`PlacesOfEveryHoleType`) counts it as a place, so the call has a case, which holds the inner seam's enum
 /// and no value of the calling type: a fill that would read what the passing-up seam binds before the call is reported
 /// (`boundByPassingUpSeam`).
 struct SeamDeclarationGraph {
@@ -93,9 +93,8 @@ struct SeamDeclarationGraph {
 		/// The properties of each type that have a `<label>_Sendable` case in its `@Sendable` enum: a call of an inner seam that
 		/// hands up its `@Sendable` enum, or a property whose type has a `@Sendable` enum, which the case holds.
 		let sendableBeneathCasePropertiesByType: [TypeDescription: Set<Property>]
-		/// The first build the walk expanded of each type that has a declaration in the graph: every build of a type that
-		/// closes no cycle has the same children in the same order, since the order is the type's (`startsAsCarrier(_:)`).
-		let firstBuildByType: [TypeDescription: ScopeGenerator]
+		/// The hole type whose places the graph holds.
+		let holeType: SeamSignature.HoleType
 		/// The type each declaration of a type builds for a property, by the type and the property, for the properties that
 		/// are no place.
 		let builtTypeByTypeAndProperty: [TypeAndProperty: TypeDescription]
@@ -109,6 +108,15 @@ struct SeamDeclarationGraph {
 		let sendableBeneathFillCasesByType: [TypeDescription: Set<FillCase>]
 		/// The type each call's fill of a builder builds, by the type that makes the call and the case.
 		let fulfillerTypeByTypeAndFillCase: [TypeAndFillCase: TypeDescription]
+		/// The builds the walk expanded of each type that has a declaration in the graph, up to the first that every hole type's
+		/// graph reads (`PlacesOfEveryHoleType`).
+		let firstBuildsByType: [TypeDescription: [FirstBuild]]
+
+		/// The first build the walk expanded of `type` that the hole type's graph reads: every build of a type that closes no
+		/// cycle has the same children in the same order, since the order is the type's (`startsAsCarrier(_:)`).
+		func firstBuild(of type: TypeDescription) -> ScopeGenerator? {
+			firstBuildsByType[type]?.first { !$0.placeHoleTypes.contains(holeType) }?.generator
+		}
 	}
 
 	/// One of an inner seam's builders that a call's fill is passed for, by the key of the inner seam's root enum the builder
@@ -167,10 +175,8 @@ struct SeamDeclarationGraph {
 		let property: Property
 	}
 
-	/// What a child of a scope is to the graph of one hole type's places: each edge it gives its parent's declaration.
-	enum ChildEdge: Hashable {
-		/// A declaration whose children the graph reads, built in a `@Sendable` function of its own when `inSendableFunction`.
-		case declaration(inSendableFunction: Bool)
+	/// A place a child of a scope is to the graph of one hole type's places, an edge it gives its parent's declaration.
+	enum PlaceKind: Hashable {
 		/// A place built in plain code, or a call there of an inner seam that hands up its plain enum.
 		case plainPlace
 		/// A place held in a `Sendable` wrapper, or a call made in a `@Sendable` function of its own of an inner seam that hands
@@ -180,17 +186,33 @@ struct SeamDeclarationGraph {
 		case sendableBeneathPlace
 	}
 
-	/// An edge of the graph of one hole type's places: one a child gives its parent's declaration, or a call's fill.
+	/// What a child of a scope is to the graph of every hole type's places (`PlacesOfEveryHoleType`).
+	enum ChildPlaces {
+		/// A site of a hole: a place of `holeType`, and no declaration.
+		case site(holeType: SeamSignature.HoleType, kind: PlaceKind)
+		/// A declaration whose children the graph reads, built in a `@Sendable` function of its own when `inSendableFunction`.
+		/// A call of an inner seam that hands up an inner enum of a hole type is, in that hole type's graph, a place instead
+		/// (`places`): its own declaration is a node with no edge out, since its children are its fills, which have no
+		/// property, so the edge into it changes no other node's dominators and reaches no place. A site of a hole whose
+		/// owner and property hold no hole type is a declaration that holds no place, and builds no type, so it adds no edge.
+		case declaration(inSendableFunction: Bool, places: [(holeType: SeamSignature.HoleType, kind: PlaceKind)])
+
+		/// The places the child holds: the site's own, or those the declaration's call hands up.
+		var places: [(holeType: SeamSignature.HoleType, kind: PlaceKind)] {
+			switch self {
+			case let .site(holeType, kind):
+				[(holeType, kind)]
+			case let .declaration(_, places):
+				places
+			}
+		}
+	}
+
+	/// An edge between declarations of the graph of every hole type's places: one a child gives its parent's declaration, or
+	/// a call's fill. A place is no such edge: the places of each hole type are kept apart (`HeldPlace`).
 	enum PlaceEdge: Hashable {
 		/// A declaration whose children the graph reads, built in a `@Sendable` function of its own when `inSendableFunction`.
 		case declaration(inSendableFunction: Bool)
-		/// A place built in plain code, or a call there of an inner seam that hands up its plain enum.
-		case plainPlace
-		/// A place held in a `Sendable` wrapper, or a call made in a `@Sendable` function of its own of an inner seam that hands
-		/// up its plain enum.
-		case sendablePlace
-		/// A call of an inner seam that hands up its `@Sendable` enum.
-		case sendableBeneathPlace
 		/// A call's fill of one of the inner seam's builders (`fillEdges`).
 		case fill(FillEdge)
 
@@ -204,237 +226,280 @@ struct SeamDeclarationGraph {
 		}
 	}
 
-	/// Reads the graph of one hole type's places in the tree `root` roots, in which `edges` says what each child of a scope
-	/// gives its parent's declaration: none, for a child the graph leaves out with its subtree, a declaration, or places.
-	/// Every build of a declaration is read, since whether a child's builder function is `@Sendable` can differ between them
-	/// where a lazy cycle makes it so, and the edges of all of them are joined. An edge whose target dominates its source
-	/// closes a cycle on every build and is removed. `fillEdges` says, for a child that is a call, which of its fills the
-	/// graph enters: each an edge from the call's declaration to the declaration of the type the fill builds, read as any.
-	static func placeHolding(
-		inTreeRootedAt root: ScopeGenerator,
-		edges: (_ parent: ScopeGenerator, _ child: ScopeGenerator) -> [ChildEdge],
-		fillEdges: (_ parent: ScopeGenerator, _ child: ScopeGenerator) -> [(edge: FillEdge, fulfiller: ScopeGenerator)],
-	) -> PlaceHolding {
-		struct KindedEdge: Hashable {
-			let property: Property
-			let target: Int
-			let kind: PlaceEdge
-		}
-		// The nodes that stand for the places of each kind.
-		let plainPlaceNode = 1
-		let sendablePlaceNode = 2
-		let sendableBeneathPlaceNode = 3
-		var nodeIndexByDeclaration = [Declaration: Int]()
-		var types: [TypeDescription?] = [root.builtInstantiable?.concreteInstantiable, nil, nil, nil]
-		var successors: [[KindedEdge]] = [[], [], [], []]
-		var seenEdges: [Set<KindedEdge>] = [[], [], [], []]
-		var firstBuildByType = [TypeDescription: ScopeGenerator]()
-		var builtTypeByTypeAndProperty = [TypeAndProperty: TypeDescription]()
-		var fulfillerTypeByTypeAndFillCase = [TypeAndFillCase: TypeDescription]()
-		var generatorsToVisit = [(generator: root, node: Self.entry)]
-		/// The node of `declaration`, created when it is new.
-		func nodeIndex(of declaration: Declaration) -> Int {
-			if let existingNode = nodeIndexByDeclaration[declaration] {
-				return existingNode
+	/// The graph of every hole type's places in one tree, read with one walk of the tree, from which each hole type's
+	/// `PlaceHolding` is found apart. A hole type's graph is the declarations and fills every hole type's graph shares, which
+	/// the walk reads once, and the places of that hole type alone: every build of a declaration is read, since whether a
+	/// child's builder function is `@Sendable` can differ between them where a lazy cycle makes it so, and the edges of all
+	/// of them are joined. An edge whose target dominates its source closes a cycle on every build and is removed, the same
+	/// edges for every hole type, since a place's node has no edge out and dominates no other node. So a hole type's
+	/// `PlaceHolding` costs the part of the graph that reaches its places, not the tree: read once per hole type, the tree's
+	/// walk grew with the hole types times the tree.
+	struct PlacesOfEveryHoleType {
+		/// Reads the graph of the tree `root` roots, in which `childPlaces` says what each child of a scope is, and
+		/// `fillEdges` says, for a child that is a call, which of its fills the graph enters: each an edge from the call's
+		/// declaration to the declaration of the type the fill builds, read as any.
+		init(
+			treeRootedAt root: ScopeGenerator,
+			childPlaces: (_ parent: ScopeGenerator, _ child: ScopeGenerator) -> ChildPlaces,
+			fillEdges: (_ parent: ScopeGenerator, _ child: ScopeGenerator) -> [(edge: FillEdge, fulfiller: ScopeGenerator)],
+		) {
+			struct KindedEdge: Hashable {
+				let property: Property
+				let target: Int
+				let kind: PlaceEdge
 			}
-			let newNode = types.count
-			nodeIndexByDeclaration[declaration] = newNode
-			types.append(declaration.concreteType)
-			successors.append([])
-			seenEdges.append([])
-			return newNode
-		}
-		while let (generator, node) = generatorsToVisit.popLast() {
-			if let type = types[node], firstBuildByType[type] == nil {
-				firstBuildByType[type] = generator
+			struct HoleTypePlace: Hashable {
+				let holeType: SeamSignature.HoleType
+				let place: HeldPlace
 			}
-			for child in generator.children {
-				guard let property = child.property else { continue }
-				// A fill builds its type with the stack of the seam whose hole it fills, so it never closes on this tree's path.
-				for (fillEdge, fulfiller) in fillEdges(generator, child) {
-					guard let fulfillerProperty = fulfiller.property, let fulfillerType = fulfiller.builtInstantiable?.concreteInstantiable else { continue }
-					let edge = KindedEdge(property: property, target: nodeIndex(of: Declaration(property: fulfillerProperty.asValidatedForDependencyCycles, concreteType: fulfillerType)), kind: .fill(fillEdge))
-					let target = edge.target
-					if let type = types[node] {
-						// The `@Sendable` family's case that holds what a `@Sendable` function beneath the fill builds carries no inner
-						// scope, whatever the fill's.
-						for filledBuilder in [fillEdge.filledBuilder, fillEdge.filledBuilder.withoutInnerScope] {
-							let typeAndFillCase = TypeAndFillCase(type: type, fillCase: FillCase(property: property, filledBuilder: filledBuilder))
-							if fulfillerTypeByTypeAndFillCase[typeAndFillCase] == nil {
-								fulfillerTypeByTypeAndFillCase[typeAndFillCase] = fulfillerType
+			var nodeIndexByDeclaration = [Declaration: Int]()
+			var types: [TypeDescription?] = [root.builtInstantiable?.concreteInstantiable, nil, nil, nil]
+			var successors: [[KindedEdge]] = [[], [], [], []]
+			var seenEdges: [Set<KindedEdge>] = [[], [], [], []]
+			var seenPlaces = Set<HoleTypePlace>()
+			var placesByHoleType = [SeamSignature.HoleType: [HeldPlace]]()
+			var firstBuildsByType = [TypeDescription: [FirstBuild]]()
+			var builtTypeByTypeAndProperty = [TypeAndProperty: TypeDescription]()
+			var fulfillerTypeByTypeAndFillCase = [TypeAndFillCase: TypeDescription]()
+			// Each build with the hole types whose graph does not read it: a call's own, in the graphs where it is a place.
+			var generatorsToVisit = [(generator: root, node: SeamDeclarationGraph.entry, placeHoleTypes: Set<SeamSignature.HoleType>())]
+			/// The node of `declaration`, created when it is new.
+			func nodeIndex(of declaration: Declaration) -> Int {
+				if let existingNode = nodeIndexByDeclaration[declaration] {
+					return existingNode
+				}
+				let newNode = types.count
+				nodeIndexByDeclaration[declaration] = newNode
+				types.append(declaration.concreteType)
+				successors.append([])
+				seenEdges.append([])
+				return newNode
+			}
+			func addPlace(of holeType: SeamSignature.HoleType, from source: Int, property: Property, kind: PlaceKind) {
+				let place = HoleTypePlace(holeType: holeType, place: HeldPlace(source: source, property: property, kind: kind))
+				if seenPlaces.insert(place).inserted {
+					placesByHoleType[holeType, default: []].append(place.place)
+				}
+			}
+			while let (generator, node, placeHoleTypes) = generatorsToVisit.popLast() {
+				if let type = types[node], firstBuildsByType[type]?.last?.placeHoleTypes.isEmpty != true {
+					firstBuildsByType[type, default: []].append(FirstBuild(generator: generator, placeHoleTypes: placeHoleTypes))
+				}
+				for child in generator.children {
+					guard let property = child.property else { continue }
+					// A fill builds its type with the stack of the seam whose hole it fills, so it never closes on this tree's path.
+					for (fillEdge, fulfiller) in fillEdges(generator, child) {
+						guard let fulfillerProperty = fulfiller.property, let fulfillerType = fulfiller.builtInstantiable?.concreteInstantiable else { continue }
+						let edge = KindedEdge(property: property, target: nodeIndex(of: Declaration(property: fulfillerProperty.asValidatedForDependencyCycles, concreteType: fulfillerType)), kind: .fill(fillEdge))
+						let target = edge.target
+						if let type = types[node] {
+							// The `@Sendable` family's case that holds what a `@Sendable` function beneath the fill builds carries no inner
+							// scope, whatever the fill's.
+							for filledBuilder in [fillEdge.filledBuilder, fillEdge.filledBuilder.withoutInnerScope] {
+								let typeAndFillCase = TypeAndFillCase(type: type, fillCase: FillCase(property: property, filledBuilder: filledBuilder))
+								if fulfillerTypeByTypeAndFillCase[typeAndFillCase] == nil {
+									fulfillerTypeByTypeAndFillCase[typeAndFillCase] = fulfillerType
+								}
 							}
 						}
-					}
-					if seenEdges[node].insert(edge).inserted {
-						successors[node].append(edge)
-					}
-					// The enclosing call's fill edge reads what a reused fill builds.
-					guard !fillEdge.reusesEnclosingFill else { continue }
-					generatorsToVisit.append((fulfiller, target))
-					// A fulfiller that is itself a call handing up an enum of the hole type holds a place, as a child call does: the
-					// fill's case then holds that call's enum.
-					for fulfillerEdge in edges(child, fulfiller) {
-						let placeNode: Int
-						let placeKind: PlaceEdge
-						switch fulfillerEdge {
-						case .plainPlace:
-							placeNode = plainPlaceNode
-							placeKind = .plainPlace
-						case .sendablePlace:
+						if seenEdges[node].insert(edge).inserted {
+							successors[node].append(edge)
+						}
+						// The enclosing call's fill edge reads what a reused fill builds.
+						guard !fillEdge.reusesEnclosingFill else { continue }
+						generatorsToVisit.append((fulfiller, target, []))
+						// A fulfiller that is itself a call handing up an enum of the hole type holds a place, as a child call does: the
+						// fill's case then holds that call's enum.
+						for (holeType, kind) in childPlaces(child, fulfiller).places {
 							// A call that hands up its plain enum from a `@Sendable` function is a plain place to the fill, whose edge says
 							// it is built in that function (`FillEdge.inSendableFunction`): the fill's case is then of the `@Sendable`
 							// family and holds the plain enum, as a child call's own case does. Counted here too, the function would put
 							// the case where only a `@Sendable` enum is held, and the call's enum would have no case.
-							placeNode = plainPlaceNode
-							placeKind = .plainPlace
-						case .sendableBeneathPlace:
-							placeNode = sendableBeneathPlaceNode
-							placeKind = .sendableBeneathPlace
-						case .declaration:
-							continue
-						}
-						let placeEdge = KindedEdge(property: fulfillerProperty, target: placeNode, kind: placeKind)
-						if seenEdges[target].insert(placeEdge).inserted {
-							successors[target].append(placeEdge)
+							addPlace(of: holeType, from: target, property: fulfillerProperty, kind: kind == .sendableBeneathPlace ? .sendableBeneathPlace : .plainPlace)
 						}
 					}
-				}
-				for childEdge in edges(generator, child) {
-					let target: Int
-					let kind: PlaceEdge
-					switch childEdge {
-					case .plainPlace:
-						target = plainPlaceNode
-						kind = .plainPlace
-					case .sendablePlace:
-						target = sendablePlaceNode
-						kind = .sendablePlace
-					case .sendableBeneathPlace:
-						target = sendableBeneathPlaceNode
-						kind = .sendableBeneathPlace
-					case let .declaration(inSendableFunction):
-						guard let builtType = child.builtInstantiable?.concreteInstantiable else { continue }
-						if let type = types[node] {
-							builtTypeByTypeAndProperty[TypeAndProperty(type: type, property: property)] = builtType
-						}
-						target = nodeIndex(of: Declaration(property: property.asValidatedForDependencyCycles, concreteType: builtType))
-						kind = .declaration(inSendableFunction: inSendableFunction)
-						if !child.closesPropertyCycle {
-							generatorsToVisit.append((child, target))
-						}
+					let placesOfChild = childPlaces(generator, child)
+					for (holeType, kind) in placesOfChild.places {
+						addPlace(of: holeType, from: node, property: property, kind: kind)
 					}
-					let edge = KindedEdge(property: property, target: target, kind: kind)
+					guard case let .declaration(inSendableFunction, places) = placesOfChild, let builtType = child.builtInstantiable?.concreteInstantiable else { continue }
+					if let type = types[node] {
+						builtTypeByTypeAndProperty[TypeAndProperty(type: type, property: property)] = builtType
+					}
+					let edge = KindedEdge(property: property, target: nodeIndex(of: Declaration(property: property.asValidatedForDependencyCycles, concreteType: builtType)), kind: .declaration(inSendableFunction: inSendableFunction))
 					if seenEdges[node].insert(edge).inserted {
 						successors[node].append(edge)
 					}
+					if !child.closesPropertyCycle {
+						generatorsToVisit.append((child, edge.target, Set(places.map(\.holeType))))
+					}
 				}
 			}
-		}
-		let immediateDominators = Self.immediateDominators(successors: successors.map { edges in
-			edges.filter { !$0.kind.reusesEnclosingFill }.map { Edge(property: $0.property, target: $0.target) }
-		})
-		// An edge whose target dominates its source closes a cycle on every build: it is removed. A reuse of an enclosing call's
-		// fill closes the tree by name, so it is left.
-		var leftEdges = Array(repeating: [KindedEdge](), count: successors.count)
-		var predecessorsByLeftEdges = Array(repeating: [(source: Int, kind: PlaceEdge)](), count: successors.count)
-		for (source, edges) in successors.enumerated() {
-			for edge in edges where edge.target <= sendableBeneathPlaceNode || edge.kind.reusesEnclosingFill || !Self.dominates(edge.target, source, immediateDominators: immediateDominators) {
-				leftEdges[source].append(edge)
-				predecessorsByLeftEdges[edge.target].append((source, edge.kind))
+			let immediateDominators = SeamDeclarationGraph.immediateDominators(successors: successors.map { edges in
+				edges.filter { !$0.kind.reusesEnclosingFill }.map { Edge(property: $0.property, target: $0.target) }
+			})
+			// An edge whose target dominates its source closes a cycle on every build: it is removed. A reuse of an enclosing
+			// call's fill closes the tree by name, so it is left.
+			var predecessorsByLeftEdges = Array(repeating: [PredecessorEdge](), count: successors.count)
+			for (source, edges) in successors.enumerated() {
+				for edge in edges where edge.kind.reusesEnclosingFill || !SeamDeclarationGraph.dominates(edge.target, source, immediateDominators: immediateDominators) {
+					predecessorsByLeftEdges[edge.target].append(PredecessorEdge(source: source, property: edge.property, kind: edge.kind))
+				}
 			}
+			self.types = types
+			self.predecessorsByLeftEdges = predecessorsByLeftEdges
+			self.placesByHoleType = placesByHoleType
+			self.firstBuildsByType = firstBuildsByType
+			self.builtTypeByTypeAndProperty = builtTypeByTypeAndProperty
+			self.fulfillerTypeByTypeAndFillCase = fulfillerTypeByTypeAndFillCase
 		}
-		// The nodes whose type has a plain enum: a left edge in plain code reaches a place built in plain code. An edge into
-		// such a node is a plain place's, the only edge into its node, or a declaration's or a fill's, each in plain code
-		// where it builds its target in no `@Sendable` function of its own; the nodes of the places held in `Sendable`
-		// wrappers have no edges out.
-		var reachesPlain = Array(repeating: false, count: successors.count)
-		reachesPlain[plainPlaceNode] = true
-		var nodesToVisit = [plainPlaceNode]
-		while let node = nodesToVisit.popLast() {
-			for (predecessor, kind) in predecessorsByLeftEdges[node] where !reachesPlain[predecessor] && !Self.buildsInSendableFunction(kind) {
-				reachesPlain[predecessor] = true
-				nodesToVisit.append(predecessor)
+
+		/// What the graph of `holeType`'s places says of the types of the tree.
+		func placeHolding(of holeType: SeamSignature.HoleType) -> PlaceHolding {
+			let places = placesByHoleType[holeType] ?? []
+			// The declarations that reach a place of the hole type, each once, in the order they are found.
+			var reachedNodes = [Int]()
+			// The nodes whose type has a plain enum: a left edge in plain code reaches a place built in plain code. An edge into
+			// such a node is a plain place's, or a declaration's or a fill's, each in plain code where it builds its target in no
+			// `@Sendable` function of its own; the places held in `Sendable` wrappers have no edges out.
+			var reachesPlain = Array(repeating: false, count: types.count)
+			var nodesToVisit = [Int]()
+			for place in places where place.kind == .plainPlace && !reachesPlain[place.source] {
+				reachesPlain[place.source] = true
+				reachedNodes.append(place.source)
+				nodesToVisit.append(place.source)
 			}
-		}
-		// The nodes whose type has a `@Sendable` enum: a left edge reaches a place built in a `@Sendable` function.
-		var reachesSendable = Array(repeating: false, count: successors.count)
-		reachesSendable[sendablePlaceNode] = true
-		reachesSendable[sendableBeneathPlaceNode] = true
-		nodesToVisit = [sendablePlaceNode, sendableBeneathPlaceNode]
-		for (source, edges) in leftEdges.enumerated() where edges.contains(where: { Self.buildsInSendableFunction($0.kind) && reachesPlain[$0.target] }) {
-			reachesSendable[source] = true
-			nodesToVisit.append(source)
-		}
-		while let node = nodesToVisit.popLast() {
-			for (predecessor, kind) in predecessorsByLeftEdges[node] where !reachesSendable[predecessor] && kind != .plainPlace {
-				reachesSendable[predecessor] = true
-				nodesToVisit.append(predecessor)
+			while let node = nodesToVisit.popLast() {
+				for predecessor in predecessorsByLeftEdges[node] where !reachesPlain[predecessor.source] && !SeamDeclarationGraph.buildsInSendableFunction(predecessor.kind) {
+					reachesPlain[predecessor.source] = true
+					reachedNodes.append(predecessor.source)
+					nodesToVisit.append(predecessor.source)
+				}
 			}
-		}
-		var plainCasePropertiesByType = [TypeDescription: Set<Property>]()
-		var sendableOwnCasePropertiesByType = [TypeDescription: Set<Property>]()
-		var sendableBeneathCasePropertiesByType = [TypeDescription: Set<Property>]()
-		var plainFillCasesByType = [TypeDescription: Set<FillCase>]()
-		var sendableOwnFillCasesByType = [TypeDescription: Set<FillCase>]()
-		var sendableBeneathFillCasesByType = [TypeDescription: Set<FillCase>]()
-		for (source, edges) in leftEdges.enumerated() {
-			guard let type = types[source] else { continue }
-			for edge in edges {
-				switch edge.kind {
-				case let .fill(fillEdge):
-					let fillCase = FillCase(property: edge.property, filledBuilder: fillEdge.filledBuilder)
-					if reachesPlain[edge.target] {
-						if fillEdge.inSendableFunction {
-							sendableOwnFillCasesByType[type, default: []].insert(fillCase)
-						} else {
-							plainFillCasesByType[type, default: []].insert(fillCase)
-						}
-					}
-					if reachesSendable[edge.target] {
-						sendableBeneathFillCasesByType[type, default: []].insert(FillCase(property: edge.property, filledBuilder: fillEdge.filledBuilder.withoutInnerScope))
-					}
+			// The nodes whose type has a `@Sendable` enum: a left edge reaches a place built in a `@Sendable` function.
+			var reachesSendable = Array(repeating: false, count: types.count)
+			func reachSendable(_ node: Int) {
+				guard !reachesSendable[node] else { return }
+				reachesSendable[node] = true
+				if !reachesPlain[node] {
+					reachedNodes.append(node)
+				}
+				nodesToVisit.append(node)
+			}
+			for place in places where place.kind != .plainPlace {
+				reachSendable(place.source)
+			}
+			for node in reachedNodes where reachesPlain[node] {
+				for predecessor in predecessorsByLeftEdges[node] where SeamDeclarationGraph.buildsInSendableFunction(predecessor.kind) {
+					reachSendable(predecessor.source)
+				}
+			}
+			while let node = nodesToVisit.popLast() {
+				for predecessor in predecessorsByLeftEdges[node] {
+					reachSendable(predecessor.source)
+				}
+			}
+			var plainCasePropertiesByType = [TypeDescription: Set<Property>]()
+			var sendableOwnCasePropertiesByType = [TypeDescription: Set<Property>]()
+			var sendableBeneathCasePropertiesByType = [TypeDescription: Set<Property>]()
+			var plainFillCasesByType = [TypeDescription: Set<FillCase>]()
+			var sendableOwnFillCasesByType = [TypeDescription: Set<FillCase>]()
+			var sendableBeneathFillCasesByType = [TypeDescription: Set<FillCase>]()
+			for place in places {
+				guard let type = types[place.source] else { continue }
+				switch place.kind {
 				case .plainPlace:
-					plainCasePropertiesByType[type, default: []].insert(edge.property)
+					plainCasePropertiesByType[type, default: []].insert(place.property)
 				case .sendablePlace:
-					sendableOwnCasePropertiesByType[type, default: []].insert(edge.property)
+					sendableOwnCasePropertiesByType[type, default: []].insert(place.property)
 				case .sendableBeneathPlace:
-					sendableBeneathCasePropertiesByType[type, default: []].insert(edge.property)
-				case let .declaration(inSendableFunction):
-					if reachesPlain[edge.target] {
-						if inSendableFunction {
-							sendableOwnCasePropertiesByType[type, default: []].insert(edge.property)
-						} else {
-							plainCasePropertiesByType[type, default: []].insert(edge.property)
+					sendableBeneathCasePropertiesByType[type, default: []].insert(place.property)
+				}
+			}
+			for target in reachedNodes {
+				for edge in predecessorsByLeftEdges[target] {
+					guard let type = types[edge.source] else { continue }
+					switch edge.kind {
+					case let .fill(fillEdge):
+						let fillCase = FillCase(property: edge.property, filledBuilder: fillEdge.filledBuilder)
+						if reachesPlain[target] {
+							if fillEdge.inSendableFunction {
+								sendableOwnFillCasesByType[type, default: []].insert(fillCase)
+							} else {
+								plainFillCasesByType[type, default: []].insert(fillCase)
+							}
 						}
-					}
-					if reachesSendable[edge.target] {
-						sendableBeneathCasePropertiesByType[type, default: []].insert(edge.property)
+						if reachesSendable[target] {
+							sendableBeneathFillCasesByType[type, default: []].insert(FillCase(property: edge.property, filledBuilder: fillEdge.filledBuilder.withoutInnerScope))
+						}
+					case let .declaration(inSendableFunction):
+						if reachesPlain[target] {
+							if inSendableFunction {
+								sendableOwnCasePropertiesByType[type, default: []].insert(edge.property)
+							} else {
+								plainCasePropertiesByType[type, default: []].insert(edge.property)
+							}
+						}
+						if reachesSendable[target] {
+							sendableBeneathCasePropertiesByType[type, default: []].insert(edge.property)
+						}
 					}
 				}
 			}
+			return PlaceHolding(
+				plainCasePropertiesByType: plainCasePropertiesByType,
+				sendableOwnCasePropertiesByType: sendableOwnCasePropertiesByType,
+				sendableBeneathCasePropertiesByType: sendableBeneathCasePropertiesByType,
+				holeType: holeType,
+				builtTypeByTypeAndProperty: builtTypeByTypeAndProperty,
+				plainFillCasesByType: plainFillCasesByType,
+				sendableOwnFillCasesByType: sendableOwnFillCasesByType,
+				sendableBeneathFillCasesByType: sendableBeneathFillCasesByType,
+				fulfillerTypeByTypeAndFillCase: fulfillerTypeByTypeAndFillCase,
+				firstBuildsByType: firstBuildsByType,
+			)
 		}
-		return PlaceHolding(
-			plainCasePropertiesByType: plainCasePropertiesByType,
-			sendableOwnCasePropertiesByType: sendableOwnCasePropertiesByType,
-			sendableBeneathCasePropertiesByType: sendableBeneathCasePropertiesByType,
-			firstBuildByType: firstBuildByType,
-			builtTypeByTypeAndProperty: builtTypeByTypeAndProperty,
-			plainFillCasesByType: plainFillCasesByType,
-			sendableOwnFillCasesByType: sendableOwnFillCasesByType,
-			sendableBeneathFillCasesByType: sendableBeneathFillCasesByType,
-			fulfillerTypeByTypeAndFillCase: fulfillerTypeByTypeAndFillCase,
-		)
+
+		/// The type each node's declaration builds, by node, `nil` for the nodes of the places.
+		private let types: [TypeDescription?]
+		/// The left edges into each node from a declaration, the places' aside.
+		private let predecessorsByLeftEdges: [[PredecessorEdge]]
+		/// The edges into the places of each hole type, each once.
+		private let placesByHoleType: [SeamSignature.HoleType: [HeldPlace]]
+		private let firstBuildsByType: [TypeDescription: [FirstBuild]]
+		private let builtTypeByTypeAndProperty: [TypeAndProperty: TypeDescription]
+		private let fulfillerTypeByTypeAndFillCase: [TypeAndFillCase: TypeDescription]
+	}
+
+	/// An edge as its target reads it: the declaration it comes from, the child's property, and what the child is.
+	struct PredecessorEdge: Hashable {
+		let source: Int
+		let property: Property
+		let kind: PlaceEdge
+	}
+
+	/// A place of one hole type as the graph reads it: the declaration that holds it, the child's property, and its kind.
+	struct HeldPlace: Hashable {
+		let source: Int
+		let property: Property
+		let kind: PlaceKind
+	}
+
+	/// A build of a type the walk expanded, with the hole types whose graphs do not read it: a call's own build, in the graphs
+	/// of the hole types it hands up an inner enum of, where it is a place. A type's builds are kept up to the first that
+	/// every graph reads.
+	struct FirstBuild {
+		let generator: ScopeGenerator
+		let placeHoleTypes: Set<SeamSignature.HoleType>
 	}
 
 	/// Whether an edge of `kind` builds its target in a `@Sendable` function of its own.
-	private static func buildsInSendableFunction(_ kind: PlaceEdge) -> Bool {
+	fileprivate static func buildsInSendableFunction(_ kind: PlaceEdge) -> Bool {
 		switch kind {
 		case let .declaration(inSendableFunction):
 			inSendableFunction
 		case let .fill(fillEdge):
 			fillEdge.inSendableFunction
-		case .plainPlace, .sendablePlace, .sendableBeneathPlace:
-			false
 		}
 	}
 

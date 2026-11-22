@@ -31,27 +31,80 @@ struct SafeDIToolReleaseAcceptanceTests {
 		enum Kind: String {
 			case knownBreak = "known-break"
 			case exemption = "exempted"
+			/// A graph whose probe spends even `DifferentialValueLimits.isolatedFuzzerGraph`'s traversals on both releases,
+			/// so the comparator describes none of its values beneath that node: class X, as the corpus's own known issue
+			/// lists the seed.
+			case beyondComparator = "beyond-comparator"
 		}
 
+		let corpus: GraphFuzzerReleaseAcceptanceCorpus
 		let seed: UInt64
 		let kind: Kind
 		let verdictClass: GraphFuzzerReleaseAcceptanceClass
 		let reason: String
 	}
 
-	/// The seeds of the base corpus whose break from each older release is expected, by the release's name. A seed of
+	/// The seeds whose break from each older release is expected, by the release's name, each of its corpus. A seed of
 	/// another class, or one that no longer breaks, fails the run as stale. Each is attributed, never listed to make a
 	/// run pass: a break is release-noted, or a defect of the older release this tree fixed, and lists the seed in the
-	/// change that makes it. Against 2.3.0 no seed breaks.
-	static let listedSeedsByRelease: [String: [ListedSeed]] = [:]
+	/// change that makes it.
+	static let listedSeedsByRelease: [String: [ListedSeed]] = [
+		"2.3.0": [
+			ListedSeed(corpus: .base, seed: 9, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 175, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 195, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 206, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 210, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 295, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 296, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 515, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 565, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 626, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 711, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 1_180, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 1_269, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 1_401, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 2_254, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 2_270, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 2_298, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 2_388, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 2_413, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 2_637, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 2_674, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 3_042, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 3_302, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 3_405, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 3_608, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 4_227, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 4_420, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 4_522, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 4_548, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 4_664, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 4_692, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .base, seed: 4_803, kind: .knownBreak, verdictClass: .valuesDiffer, reason: mockPassesNilAsProductionDoesReason),
+			ListedSeed(corpus: .seam, seed: 391, kind: .beyondComparator, verdictClass: .valuesNotCompared, reason: beyondComparatorReason),
+			ListedSeed(corpus: .seam, seed: 1_311, kind: .beyondComparator, verdictClass: .valuesNotCompared, reason: beyondComparatorReason),
+		],
+	]
+
+	/// #892: a mock passes `nil`, as production does, to a receive only if available of the other `LazilyInstantiated`
+	/// kind beside a required wrapper of the same instance, where 2.3.0's mock handed it a wrapper it made.
+	/// Seam seeds 391 and 1311, whose `Root0()` spends even a graph's own traversals through chains of hole draws that
+	/// re-enter `HoleSeam` (`HoleLoop`, `HoleDeep`, and `HoleInner2` or `HoleRelay` and `HolePing`) on both releases, as the
+	/// seam corpus's known issue of them says.
+	static let beyondComparatorReason = "the comparator cannot describe the graph's values within its isolated traversal budget"
+
+	static let mockPassesNilAsProductionDoesReason = "#892, a 2.3.0 mock defect fixed and release-noted"
 
 	@Test
 	func listedSeeds_listEachSeedOnceAsABreak_forEachRelease() {
 		for (release, listedSeeds) in Self.listedSeedsByRelease {
-			let seeds = listedSeeds.map(\.seed)
-			#expect(seeds == seeds.sorted(), "\(release)")
-			#expect(Set(seeds).count == seeds.count, "\(release)")
-			#expect(listedSeeds.allSatisfy { $0.verdictClass.isBreak && $0.seed < UInt64(SafeDIToolGraphFuzzerTests.corpusSeedCount) }, "\(release)")
+			for corpus in GraphFuzzerReleaseAcceptanceCorpus.allCases {
+				let seeds = listedSeeds.filter { $0.corpus == corpus }.map(\.seed)
+				#expect(seeds == seeds.sorted(), "\(release) \(corpus)")
+				#expect(Set(seeds).count == seeds.count, "\(release) \(corpus)")
+			}
+			#expect(listedSeeds.allSatisfy { ($0.kind == .beyondComparator ? $0.verdictClass == .valuesNotCompared : $0.verdictClass.isBreak) && $0.seed < UInt64(ReleaseAcceptanceLongRunConfiguration.seedCount(of: $0.corpus)) }, "\(release)")
 		}
 	}
 
@@ -157,6 +210,15 @@ struct SafeDIToolReleaseAcceptanceTests {
 	}
 
 	@Test
+	func classify_annotatesNothing_whenBothToolsReportOneWarningInTheirOwnForms() {
+		let message = "This #SafeDIConfiguration sets `mockConditionalCompilation` and is not in a file named `SafeDIConfiguration.swift`, so SafeDI had to scan this module’s files twice."
+		let older = GraphFuzzerReleaseRun(outcome: .compiled(generatedFiles: [:], toolWarnings: ["<fixture-directory>/shop/Sources/FuzzFeature/S1_Plain.swift:22:1: warning: \(message)"], compilation: GraphFuzzerReleaseCompilation(exitCode: 0, stderr: "")))
+		let current = GraphFuzzerReleaseRun(outcome: .compiled(generatedFiles: [:], toolWarnings: ["SourceDiagnostic(severity: SafeDICore.SourceDiagnostic.Severity.warning, location: nil, message: \"\(message)\", fixIts: [])"], compilation: GraphFuzzerReleaseCompilation(exitCode: 0, stderr: "")))
+		let classification = GraphFuzzerReleaseAcceptance.classify(older: older, current: current, probes: Self.noProbes)
+		#expect(classification == .comparesValues(GraphFuzzerReleaseVerdict(verdictClass: .valuesAgree), probes: []))
+	}
+
+	@Test
 	func classify_annotatesSharedGeneratedWarning_whenBothGeneratedCodesDrawTheWarning() {
 		let warning = "/scratch/Generated/S0_Root0+SafeDI.swift:12:7: warning: variable 't3' was never mutated"
 		let classification = GraphFuzzerReleaseAcceptance.classify(older: .compiledRun(stderr: warning), current: .compiledRun(stderr: warning.replacingOccurrences(of: ":12:", with: ":14:")), probes: Self.noProbes)
@@ -173,6 +235,33 @@ struct SafeDIToolReleaseAcceptanceTests {
 		#expect(verdicts.map(\.seed) == [0, 1, 2, 3])
 		#expect(verdicts.allSatisfy { !$0.verdict.verdictClass.isBreak && $0.verdict.verdictClass != .valuesNotCompared }, "\(verdicts)")
 		#expect(verdicts.count(where: { $0.verdict.verdictClass == .valuesAgree }) >= 3, "\(verdicts)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func verdicts_compareGraphOnItsOwnWithIsolatedBudget_whenItsProbeSpendsTheBatchsTraversals() async throws {
+		guard compileVerificationIsEnabled else { return }
+		// Seed 0's probes traverse more than one wrapper, so a batch budget of one traversal spends it, and only the
+		// comparison on its own under `DifferentialValueLimits.isolatedFuzzerGraph` gives the graph a verdict. Without that
+		// second comparison the verdict is class X.
+		let verdicts = try await GraphFuzzerReleaseAcceptance.verdicts(
+			forSeeds: [0],
+			older: .currentTree,
+			batchLimits: DifferentialValueLimits(probeTimeLimitInSeconds: 60, traversalsPerProbe: 1),
+		)
+		#expect(verdicts.map(\.seed) == [0])
+		#expect(verdicts.allSatisfy { $0.verdict.verdictClass == .valuesAgree }, "\(verdicts)")
+	}
+
+	@Test(arguments: [GraphFuzzerReleaseAcceptanceCorpus.seam, .publicMock])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func verdicts_reportNoBreak_whenCurrentTreeIsComparedWithItselfOverGraphsSplitAcrossModules(corpus: GraphFuzzerReleaseAcceptanceCorpus) async throws {
+		guard compileVerificationIsEnabled else { return }
+		let seeds = Self.splitSeeds[corpus] ?? []
+		#expect(seeds.allSatisfy { GraphFuzzerGenerator.fixture(forSeed: $0, features: corpus.features, storingEveryParameter: true).modules != nil })
+		let verdicts = try await GraphFuzzerReleaseAcceptance.verdicts(forSeeds: seeds, of: corpus, older: .currentTree)
+		#expect(verdicts.map(\.seed) == seeds)
+		#expect(verdicts.allSatisfy { $0.verdict.verdictClass == .valuesAgree }, "\(verdicts)")
 	}
 
 	@Test
@@ -255,14 +344,14 @@ struct SafeDIToolReleaseAcceptanceTests {
 			report.append("problem \(problem)")
 			Issue.record(Comment(rawValue: problem))
 		}
-		report.append("release-acceptance release=\(configuration.release.name) seeds=\(configuration.seeds.lowerBound)..<\(configuration.seeds.upperBound)")
+		report.append("release-acceptance release=\(configuration.release.name) corpus=\(configuration.corpus.rawValue) seeds=\(configuration.seeds.lowerBound)..<\(configuration.seeds.upperBound)")
 		guard compileVerificationIsEnabled else {
 			reportProblem("Release acceptance compiles generated code. Unset SAFEDI_SKIP_COMPILE_CHECK.")
 			return
 		}
 		let start = Date()
-		let verdicts = try await GraphFuzzerReleaseAcceptance.verdicts(forSeeds: Array(configuration.seeds), older: configuration.release)
-		let listedSeeds = Self.listedSeedsByRelease[configuration.release.name] ?? []
+		let verdicts = try await GraphFuzzerReleaseAcceptance.verdicts(forSeeds: Array(configuration.seeds), of: configuration.corpus, older: configuration.release)
+		let listedSeeds = (Self.listedSeedsByRelease[configuration.release.name] ?? []).filter { $0.corpus == configuration.corpus }
 		let listedSeedBySeed = Dictionary(grouping: listedSeeds, by: \.seed).compactMapValues(\.first)
 		var classCounts = [GraphFuzzerReleaseAcceptanceClass: Int]()
 		var rejectionCounts = [GraphFuzzerReleaseRejection: Int]()
@@ -308,7 +397,7 @@ struct SafeDIToolReleaseAcceptanceTests {
 				} else {
 					let failure = "failure \(seed) \(verdict.verdictClass.rawValue) \(verdict.details.split(separator: "\n").first ?? "")"
 					report.append(failure)
-					Issue.record(Comment(rawValue: "Seed \(seed) of release acceptance against \(configuration.release.name): class \(verdict.verdictClass.rawValue)\n\(verdict.details)"))
+					Issue.record(Comment(rawValue: "Seed \(seed) of the \(configuration.corpus.rawValue) corpus's release acceptance against \(configuration.release.name): class \(verdict.verdictClass.rawValue)\n\(verdict.details)"))
 				}
 			} else if let listedSeed {
 				report.append("stale \(seed) \(listedSeed.verdictClass.rawValue) \(listedSeed.reason)")
@@ -330,6 +419,13 @@ struct SafeDIToolReleaseAcceptanceTests {
 
 	// MARK: Helpers
 
+	/// Seeds of the seam and public mock corpora whose graphs are split across modules and accepted, so that a
+	/// self-comparison runs every module's tool, compile and probes.
+	private static let splitSeeds: [GraphFuzzerReleaseAcceptanceCorpus: [UInt64]] = [
+		.seam: [18, 24],
+		.publicMock: [0, 2],
+	]
+
 	private static func noProbes(_: [String: String]) -> [DifferentialValueProbe] {
 		[]
 	}
@@ -342,6 +438,7 @@ struct ReleaseAcceptanceLongRunConfiguration {
 	}
 
 	let release: GraphFuzzerRelease
+	let corpus: GraphFuzzerReleaseAcceptanceCorpus
 	let seeds: Range<UInt64>
 	let reportPath: String
 
@@ -353,8 +450,9 @@ struct ReleaseAcceptanceLongRunConfiguration {
 	/// The configuration a requested run reads, or the problem that keeps it from running: `SAFEDI_RELEASE_ACCEPTANCE_TOOL`
 	/// (the older release's built `SafeDITool`), `SAFEDI_RELEASE_ACCEPTANCE_MACROS_TOOL` (its `SafeDIMacros-tool`),
 	/// `SAFEDI_RELEASE_ACCEPTANCE_RUNTIME_SOURCES` (its `Sources/SafeDI`) and `SAFEDI_RELEASE_ACCEPTANCE_REPORT` must
-	/// each be set and exist (the report's directory, for the report); `SAFEDI_RELEASE_ACCEPTANCE_SHARD`, when set to
-	/// `<index>/<count>`, runs only that shard of the base corpus's seeds.
+	/// each be set and exist (the report's directory, for the report); `SAFEDI_RELEASE_ACCEPTANCE_CORPUS`, when set, names
+	/// the corpus (`base`, `seam` or `public-mock`; `base` when unset); `SAFEDI_RELEASE_ACCEPTANCE_SHARD`, when set to
+	/// `<index>/<count>`, runs only that shard of the corpus's seeds.
 	static var current: Result<ReleaseAcceptanceLongRunConfiguration, Problem> {
 		let environment = ProcessInfo.processInfo.environment
 		var problems = [String]()
@@ -381,7 +479,15 @@ struct ReleaseAcceptanceLongRunConfiguration {
 		if reportPath.isEmpty || !FileManager.default.fileExists(atPath: URL(fileURLWithPath: reportPath).deletingLastPathComponent().path) {
 			problems.append("SAFEDI_RELEASE_ACCEPTANCE_REPORT must name a file in a directory that exists.")
 		}
-		let corpusSeedCount = SafeDIToolGraphFuzzerTests.corpusSeedCount
+		var corpus = GraphFuzzerReleaseAcceptanceCorpus.base
+		if let corpusName = environment["SAFEDI_RELEASE_ACCEPTANCE_CORPUS"], !corpusName.isEmpty {
+			if let namedCorpus = GraphFuzzerReleaseAcceptanceCorpus(rawValue: corpusName) {
+				corpus = namedCorpus
+			} else {
+				problems.append("SAFEDI_RELEASE_ACCEPTANCE_CORPUS must be one of \(GraphFuzzerReleaseAcceptanceCorpus.allCases.map(\.rawValue).joined(separator: ", ")).")
+			}
+		}
+		let corpusSeedCount = seedCount(of: corpus)
 		var seeds = UInt64(0)..<UInt64(corpusSeedCount)
 		if let shardDescription = environment["SAFEDI_RELEASE_ACCEPTANCE_SHARD"] {
 			let parts = shardDescription.split(separator: "/", omittingEmptySubsequences: false).map { Int($0) }
@@ -400,9 +506,22 @@ struct ReleaseAcceptanceLongRunConfiguration {
 				tool: .executable(tool),
 				runtimeSource: DifferentialValueRuntimeSource(runtimeSourcesDirectory: runtimeSources, macrosToolPath: macrosTool),
 			),
+			corpus: corpus,
 			seeds: seeds,
 			reportPath: reportPath,
 		))
+	}
+
+	/// The number of seeds of `corpus`, as the graph fuzzer's long run judges it.
+	static func seedCount(of corpus: GraphFuzzerReleaseAcceptanceCorpus) -> Int {
+		switch corpus {
+		case .base:
+			SafeDIToolGraphFuzzerTests.corpusSeedCount
+		case .seam:
+			SafeDIToolGraphFuzzerTests.seamCorpusSeedCount
+		case .publicMock:
+			SafeDIToolGraphFuzzerTests.publicMockCorpusSeedCount
+		}
 	}
 }
 

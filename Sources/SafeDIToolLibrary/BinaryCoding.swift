@@ -74,6 +74,10 @@ extension BinarySchemaMember {
 }
 
 /// The tag a case of a cached enum is written as. Its cases are the enum's cases in the schema.
+/// A line and column in a source file, which a module info file writes as absent where a declaration another module
+/// records is read without positions (``BinaryWriter/writingPositionsAsAbsent(_:)``).
+protocol BinaryPosition: BinaryCodable {}
+
 protocol BinaryTag: RawRepresentable, CaseIterable where RawValue == UInt8 {}
 
 /// How a ``BinarySchemaMember`` is written.
@@ -197,6 +201,19 @@ struct BinaryWriter {
 		value.write(to: &self)
 	}
 
+	/// Whether every optional ``BinaryPosition`` is written as absent, as inside ``writingPositionsAsAbsent(_:)``.
+	private(set) var writesPositionsAsAbsent = false
+
+	/// Runs `write` with every optional ``BinaryPosition`` it writes written as absent. Every position a value holds is
+	/// optional, so `write` writes what it would write of a copy of the values with every position `nil`, without making
+	/// that copy.
+	mutating func writingPositionsAsAbsent(_ write: (inout BinaryWriter) -> Void) {
+		let wasWritingPositionsAsAbsent = writesPositionsAsAbsent
+		writesPositionsAsAbsent = true
+		write(&self)
+		writesPositionsAsAbsent = wasWritingPositionsAsAbsent
+	}
+
 	mutating func writeTag(_ tag: some BinaryTag) {
 		bytes.append(tag.rawValue)
 	}
@@ -281,17 +298,19 @@ struct BinaryWriter {
 		}
 	}
 
-	/// Whether a type description is written through ``writeSharedByBytes(_:)``, as it is inside
-	/// ``writeSharingTypeDescriptions(_:)``.
-	private(set) var sharesTypeDescriptions = false
+	/// Whether a value a seam signature repeats is written through ``writeSharedByBytes(_:)``, as it is inside
+	/// ``writeSharingSignatureValues(_:)``.
+	private(set) var sharesSignatureValues = false
 
-	/// Runs `write` with every type description it writes, at the outermost level of each, written once
-	/// (``writeSharedByBytes(_:)``). A seam signature names the same few types at many places.
-	mutating func writeSharingTypeDescriptions(_ write: (inout BinaryWriter) -> Void) {
-		let wasSharing = sharesTypeDescriptions
-		sharesTypeDescriptions = true
+	/// Runs `write` with every value a seam signature repeats, at the outermost level of each, written once
+	/// (``writeSharedByBytes(_:)``): a type description, a hole's field, and the reason a declaration is not carried
+	/// to a hole's place. A seam signature names the same few types at many places, and repeats each field of a scope at
+	/// every hole and route step that binds it: E24-fill's `Feature` wrote 4 MB of fields, 2 KB of them distinct.
+	mutating func writeSharingSignatureValues(_ write: (inout BinaryWriter) -> Void) {
+		let wasSharing = sharesSignatureValues
+		sharesSignatureValues = true
 		write(&self)
-		sharesTypeDescriptions = wasSharing
+		sharesSignatureValues = wasSharing
 	}
 
 	/// Writes the value `write` writes as ``writeShared(_:)`` does, but keyed by the bytes it writes, which are equal
@@ -302,10 +321,10 @@ struct BinaryWriter {
 		let referenceStart = bytes.count
 		writeUnsigned(0)
 		let valueStart = bytes.count
-		let wasSharing = sharesTypeDescriptions
-		sharesTypeDescriptions = false
+		let wasSharing = sharesSignatureValues
+		sharesSignatureValues = false
 		write(&self)
-		sharesTypeDescriptions = wasSharing
+		sharesSignatureValues = wasSharing
 		// Copied: a slice would keep the writer's buffer shared, so that every later append copied the whole buffer.
 		let key = Array(bytes[valueStart...])
 		if let index = sharedValueIndicesByBytes[key] {
@@ -545,15 +564,15 @@ struct BinaryReader {
 		}
 	}
 
-	/// Whether a type description is read through ``readSharedByBytes(_:)``, as it is inside
-	/// ``readSharingTypeDescriptions(_:)``.
-	private(set) var sharesTypeDescriptions = false
+	/// Whether a value a seam signature repeats is read through ``readSharedByBytes(_:)``, as it is inside
+	/// ``readSharingSignatureValues(_:)``.
+	private(set) var sharesSignatureValues = false
 
-	/// Reads what ``BinaryWriter/writeSharingTypeDescriptions(_:)`` wrote.
-	mutating func readSharingTypeDescriptions<Value>(_ read: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryDecodingError) -> Value {
-		let wasSharing = sharesTypeDescriptions
-		sharesTypeDescriptions = true
-		defer { sharesTypeDescriptions = wasSharing }
+	/// Reads what ``BinaryWriter/writeSharingSignatureValues(_:)`` wrote.
+	mutating func readSharingSignatureValues<Value>(_ read: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryDecodingError) -> Value {
+		let wasSharing = sharesSignatureValues
+		sharesSignatureValues = true
+		defer { sharesSignatureValues = wasSharing }
 		return try read(&self)
 	}
 
@@ -562,9 +581,9 @@ struct BinaryReader {
 		let referenceOffset = offset
 		let reference = try readUnsigned()
 		if reference == 0 {
-			let wasSharing = sharesTypeDescriptions
-			sharesTypeDescriptions = false
-			defer { sharesTypeDescriptions = wasSharing }
+			let wasSharing = sharesSignatureValues
+			sharesSignatureValues = false
+			defer { sharesSignatureValues = wasSharing }
 			let value = try read(&self)
 			sharedValues.append(value)
 			return value
@@ -725,7 +744,7 @@ extension Optional: BinaryCodable where Wrapped: BinaryCodable {
 	}
 
 	func write(to writer: inout BinaryWriter) {
-		if let self {
+		if let self, !(writer.writesPositionsAsAbsent && Wrapped.self is any BinaryPosition.Type) {
 			writer.write(true)
 			writer.write(self)
 		} else {
@@ -752,20 +771,21 @@ extension Array: BinaryCodable where Element: BinaryCodable {
 	}
 }
 
-/// A value whose type descriptions are each written once (``BinaryWriter/writeSharingTypeDescriptions(_:)``).
-struct BinarySharingTypeDescriptions<Value: BinaryCodable>: BinaryCodable {
+/// A value whose repeated type descriptions, hole fields and reasons are each written once
+/// (``BinaryWriter/writeSharingSignatureValues(_:)``).
+struct BinarySharingSignatureValues<Value: BinaryCodable>: BinaryCodable {
 	init(_ value: Value) {
 		self.value = value
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
-		value = try reader.readSharingTypeDescriptions { reader throws(BinaryDecodingError) in try reader.read() }
+		value = try reader.readSharingSignatureValues { reader throws(BinaryDecodingError) in try reader.read() }
 	}
 
 	let value: Value
 
 	func write(to writer: inout BinaryWriter) {
-		writer.writeSharingTypeDescriptions { $0.write(value) }
+		writer.writeSharingSignatureValues { $0.write(value) }
 	}
 }
 

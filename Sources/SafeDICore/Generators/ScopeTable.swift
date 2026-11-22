@@ -33,7 +33,8 @@ struct ScopeID: Hashable, Sendable {
 final class ScopeRecord: Sendable {
 	/// A property the scope builds, as `Scope.PropertyToGenerate` holds it, with the scope it builds named by its position.
 	enum PropertyToGenerate: Sendable {
-		case instantiated(Property, ScopeID, erasedToConcreteExistential: Bool)
+		/// A property the scope instantiates, with its ID in the table's interner.
+		case instantiated(Property, ScopeID, erasedToConcreteExistential: Bool, id: PropertyID)
 		case hole(Property, erasedToConcreteExistential: Bool)
 		case aliased(
 			Property,
@@ -45,11 +46,21 @@ final class ScopeRecord: Sendable {
 	}
 
 	/// How a call passes the builder for one place, as `Scope.HoleArgument` holds it, with the scope of a fill named by its
-	/// position.
+	/// position and the IDs its tree is built with.
 	enum HoleArgument: Sendable {
-		case fill(SeamSignature.Hole, ScopeID)
+		case fill(SeamSignature.Hole, ScopeID, FillContext)
 		case passUp(SeamSignature.Hole)
 	}
+
+	/// What a fill's tree is built with, interned when the call's record is made: the ID of the hole's property, which the
+	/// fill builds, and the stack of the seam path the fill is built beneath (`SeamSignature.Hole.fillPropertyStack`).
+	struct FillContext: Sendable {
+		let propertyID: PropertyID
+		let contextStack: ContextStack
+	}
+
+	/// The ID of `instantiable`'s concrete type in the table's interner.
+	let concreteTypeID: TypeID
 
 	/// See `Scope.instantiable`.
 	let instantiable: Instantiable
@@ -101,8 +112,9 @@ final class ScopeRecord: Sendable {
 		return nil
 	}
 
-	fileprivate init(freezing scope: Scope, propertiesToGenerate: [PropertyToGenerate], holeArguments: [HoleArgument]) {
+	fileprivate init(freezing scope: Scope, concreteTypeID: TypeID, propertiesToGenerate: [PropertyToGenerate], holeArguments: [HoleArgument]) {
 		instantiable = scope.instantiable
+		self.concreteTypeID = concreteTypeID
 		builtInlineSeamComment = scope.builtInlineSeamComment
 		seamCall = scope.seamCall
 		publicMockCall = scope.publicMockCall
@@ -123,6 +135,14 @@ final class ScopeRecord: Sendable {
 /// One scope map, frozen: a record per scope, found by its `ScopeID`, and the map's keys. Built once, serially, from a
 /// complete map (`FrozenScopeMap`), and read by every tree built from that map.
 struct ScopeTable: Sendable {
+	fileprivate init(interner: ConstructionInterner) {
+		self.interner = interner
+	}
+
+	/// The IDs the records hold, and what each projects: the snapshot published once the table was made, which holds every
+	/// ID its records hold.
+	fileprivate(set) var interner: ConstructionInterner
+
 	/// The record at `id`, which this table gave.
 	subscript(id: ScopeID) -> ScopeRecord {
 		let index = Int(id.index)
@@ -182,7 +202,10 @@ struct ScopeTable: Sendable {
 ///    own entries, so this adds none; the rule makes the order total either way.
 struct FrozenScopeMap {
 	/// Freezes the map whose entries are `entries`, in whatever order they arrive.
-	init(freezing entries: some Sequence<(key: TypeDescription, scope: Scope)>) {
+	/// - Parameter internerSpace: The generator's ID space, in which the records' values are interned.
+	init(freezing entries: some Sequence<(key: TypeDescription, scope: Scope)>, interningIn internerSpace: ConstructionInternerSpace) {
+		self.internerSpace = internerSpace
+		table = ScopeTable(interner: internerSpace.snapshot())
 		var entries = Array(entries)
 		if let entryOrder = ScopeTableObservation.entryOrder {
 			entries = entryOrder(entries.count).map { entries[$0] }
@@ -215,6 +238,7 @@ struct FrozenScopeMap {
 		// Every table made from this one shares what it holds now.
 		table.storage = ScopeTable.Storage(records: (0..<table.count).compactMap { table.overlaidRecords[$0] }, idByKey: idByKey)
 		table.overlaidRecords = [:]
+		table.interner = internerSpace.snapshot()
 		scopeStorage = ScopeStorage(scopes: addedScopes, idByScope: addedIDByScope)
 		addedScopes = []
 		addedIDByScope = [:]
@@ -224,7 +248,9 @@ struct FrozenScopeMap {
 	}
 
 	/// The frozen table.
-	private(set) var table = ScopeTable()
+	private(set) var table: ScopeTable
+	/// The generator's ID space, in which every freeze of this map and of the tables made from it interns its records' values.
+	private let internerSpace: ConstructionInternerSpace
 
 	/// The table of one signature pass, from this base, frozen once from a seam world in which every seam of the declaration
 	/// map is built and not called: each record of a type that is no seam depends on the declarations alone, so it is the
@@ -272,17 +298,18 @@ struct FrozenScopeMap {
 		for (id, scope) in callScopeByID.sorted(by: { $0.key.index < $1.key.index }) {
 			let holeArguments = (scope.seamCall?.holes ?? []).map { hole -> ScopeRecord.HoleArgument in
 				if let key = fulfillingKey(hole), let fillID = frozenScopeMap.table.id(forKey: key) {
-					.fill(hole, fillID)
+					.fill(hole, fillID, frozenScopeMap.fillContext(of: hole))
 				} else {
 					.passUp(hole)
 				}
 			}
-			frozenScopeMap.table.overlaidRecords[Int(id.index)] = frozenScopeMap.record(freezing: scope, holeArguments: holeArguments)
+			frozenScopeMap.table.overlaidRecords[Int(id.index)] = frozenScopeMap.recordCountingMisses(freezing: scope, holeArguments: holeArguments)
 		}
 		if let overlaidCallRecords = ScopeTableObservation.overlaidCallRecords {
 			overlaidCallRecords(callScopeByID.values.map(\.instantiable.concreteInstantiable.asSource).sorted())
 		}
 		frozenScopeMap.freezePendingScopes()
+		frozenScopeMap.table.interner = internerSpace.snapshot()
 		if let observer = ScopeTableObservation.observer {
 			observer(frozenScopeMap.table.projection)
 		}
@@ -325,8 +352,10 @@ struct FrozenScopeMap {
 	/// that the map did not hold.
 	func freezing(rootScope scope: Scope) -> (table: ScopeTable, record: ScopeRecord) {
 		var frozenScopeMap = self
-		let record = frozenScopeMap.record(freezing: scope)
+		// What a root's promotion respells is interned with its record, before any tree is built from the table.
+		let record = internerSpace.interning(countingMissesIn: .internedAtFreeze) { frozenScopeMap.record(freezing: scope) }
 		frozenScopeMap.freezePendingScopes()
+		frozenScopeMap.table.interner = internerSpace.snapshot()
 		return (frozenScopeMap.table, record)
 	}
 
@@ -366,7 +395,7 @@ struct FrozenScopeMap {
 	/// Makes the record of every scope given a position but no record yet, in `ScopeID` order; each can give more positions.
 	private mutating func freezePendingScopes() {
 		while table.count < scopeStorage.scopes.count + addedScopes.count {
-			table.overlaidRecords[table.count] = record(freezing: addedScopes[table.count - scopeStorage.scopes.count])
+			table.overlaidRecords[table.count] = recordCountingMisses(freezing: addedScopes[table.count - scopeStorage.scopes.count])
 			table.count += 1
 		}
 	}
@@ -378,7 +407,7 @@ struct FrozenScopeMap {
 		for propertyToGenerate in scope.propertiesToGenerate {
 			switch propertyToGenerate {
 			case let .instantiated(property, childScope, erasedToConcreteExistential):
-				propertiesToGenerate.append(.instantiated(property, id(of: childScope), erasedToConcreteExistential: erasedToConcreteExistential))
+				propertiesToGenerate.append(.instantiated(property, id(of: childScope), erasedToConcreteExistential: erasedToConcreteExistential, id: internerSpace.intern(property)))
 			case let .hole(property, erasedToConcreteExistential, _):
 				propertiesToGenerate.append(.hole(property, erasedToConcreteExistential: erasedToConcreteExistential))
 			case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
@@ -388,12 +417,34 @@ struct FrozenScopeMap {
 		let holeArguments = givenHoleArguments ?? scope.holeArguments.map { holeArgument -> ScopeRecord.HoleArgument in
 			switch holeArgument {
 			case let .fill(hole, fillScope):
-				.fill(hole, id(of: fillScope))
+				.fill(hole, id(of: fillScope), fillContext(of: hole))
 			case let .passUp(hole):
 				.passUp(hole)
 			}
 		}
-		return ScopeRecord(freezing: scope, propertiesToGenerate: propertiesToGenerate, holeArguments: holeArguments)
+		return ScopeRecord(freezing: scope, concreteTypeID: internerSpace.intern(scope.instantiable.concreteInstantiable), propertiesToGenerate: propertiesToGenerate, holeArguments: holeArguments)
+	}
+
+	/// The record of `scope`, as `record(freezing:holeArguments:)` makes it, counting what a leaf that calls a seam or
+	/// another module's public mock interns as interned at freeze: its instantiable is the call's signature.
+	private mutating func recordCountingMisses(freezing scope: Scope, holeArguments givenHoleArguments: [ScopeRecord.HoleArgument]? = nil) -> ScopeRecord {
+		if scope.seamCall != nil || scope.publicMockCall != nil {
+			internerSpace.interning(countingMissesIn: .internedAtFreeze) { record(freezing: scope, holeArguments: givenHoleArguments) }
+		} else {
+			record(freezing: scope, holeArguments: givenHoleArguments)
+		}
+	}
+
+	/// What the tree of a fill of `hole` is built with, interned now.
+	private func fillContext(of hole: SeamSignature.Hole) -> ScopeRecord.FillContext {
+		internerSpace.interning(countingMissesIn: .excluded) { fillContextInterned(of: hole) }
+	}
+
+	private func fillContextInterned(of hole: SeamSignature.Hole) -> ScopeRecord.FillContext {
+		ScopeRecord.FillContext(
+			propertyID: internerSpace.intern(hole.property),
+			contextStack: ContextStack(fillPropertyStack: hole.fillPropertyStack, concreteTypeStack: hole.fillConcreteTypeStack, interningIn: internerSpace),
+		)
 	}
 }
 
@@ -421,7 +472,7 @@ extension ScopeTable {
 			}
 			for propertyToGenerate in record.propertiesToGenerate {
 				switch propertyToGenerate {
-				case let .instantiated(property, childID, _):
+				case let .instantiated(property, childID, _, _):
 					text.append(" \(property.asSource) -> \(name(childID))")
 				case let .hole(property, _):
 					text.append(" \(property.asSource) -> hole")
@@ -431,7 +482,7 @@ extension ScopeTable {
 			}
 			for holeArgument in record.holeArguments {
 				switch holeArgument {
-				case let .fill(hole, fillID):
+				case let .fill(hole, fillID, _):
 					text.append(" fill \(hole.property.asSource) -> \(name(fillID))")
 				case let .passUp(hole):
 					text.append(" pass up \(hole.property.asSource)")
@@ -462,7 +513,7 @@ extension ScopeTable {
 			line.append(" keys [\(keys.map(\.asSource).joined(separator: ", "))]")
 			for propertyToGenerate in record.propertiesToGenerate {
 				switch propertyToGenerate {
-				case let .instantiated(property, id, _):
+				case let .instantiated(property, id, _, _):
 					line.append(" \(property.label) -> \(id.index)")
 				case let .hole(property, _):
 					line.append(" \(property.label) -> hole")
@@ -470,7 +521,7 @@ extension ScopeTable {
 					line.append(" \(property.label) = \(fulfillingProperty.label)")
 				}
 			}
-			for case let .fill(hole, id) in record.holeArguments {
+			for case let .fill(hole, id, _) in record.holeArguments {
 				line.append(" fill \(hole.property.label) -> \(id.index)")
 			}
 			lines.append(line)

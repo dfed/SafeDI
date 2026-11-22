@@ -81,8 +81,8 @@ enum BinaryFile {
 	static let unreadableFileExplanation = "A different version of SafeDI most likely wrote this file, or its write was interrupted. To fix this, clean your build (in Xcode: Product > Clean Build Folder) and build again, so that the module that wrote the file regenerates it."
 
 	/// The version of the layout of the header and of the primitives in ``BinaryCodable``. Changes to how a
-	/// stored type is laid out change ``schemaFingerprint`` instead. Version 2 writes the optional and Boolean fields of
-	/// most structs as one integer of flags (``BinaryFieldFlags``).
+	/// stored type is laid out change ``schemaFingerprint`` instead. Version 2 shares repeated values inside seam signatures,
+	/// and writes the optional and Boolean fields of most other structs as one integer of flags (``BinaryFieldFlags``).
 	static let formatVersion: UInt16 = 2
 
 	/// Every struct and enum a file holds.
@@ -176,7 +176,7 @@ enum BinaryFile {
 	/// because describing the schema reflects on every member's type, and reflection scans the runtime's
 	/// protocol conformance tables: computing it took most of a small module's `generate`. A test computes it
 	/// and fails, giving the new value, when a stored type's layout changes.
-	static let schemaFingerprint: UInt64 = 0xBD476E81BBF331EE
+	static let schemaFingerprint: UInt64 = 0x5C8D5FF998C29BA9
 
 	/// The format version and every schema member's layout, one member per line: the name and type of each
 	/// field a struct writes, and the name and payload types of each case an enum writes, in the order written.
@@ -190,8 +190,15 @@ enum BinaryFile {
 	/// - Throws: When `value` holds an instantiable whose declaration names a type that nests more deeply than a
 	///   ``BinaryReader`` reads.
 	static func data(_ kind: Kind, holding value: some BinaryCodable) throws(BinaryFileWriteError) -> Data {
+		try data(kind) { writer in writer.write(value) }
+	}
+
+	/// A file of `kind` that holds what `write` writes.
+	/// - Throws: When `write` writes an instantiable whose declaration names a type that nests more deeply than a
+	///   ``BinaryReader`` reads.
+	static func data(_ kind: Kind, writing write: (inout BinaryWriter) -> Void) throws(BinaryFileWriteError) -> Data {
 		var writer = BinaryWriter()
-		writer.write(value)
+		write(&writer)
 		if let valueNestedTooDeeply = writer.valueNestedTooDeeply {
 			throw BinaryFileWriteError(kind: kind, instantiableNestedTooDeeply: valueNestedTooDeeply)
 		} else {

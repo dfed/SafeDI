@@ -1,0 +1,36 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+/// What the walk that validates a module's trees did (`DependencyTreeGenerator.validatePropertiesAreFulfillable(onRootScopes:…)`),
+/// handed to `observer`, which the tests set, never the tool.
+public enum ValidationWalkObservation: Sendable {
+	/// The walk validated a scope of a tree, along one path.
+	case validatedScope
+	/// The walk skipped a scope's subtree, since a walk of it along a path that gives it an equal context completed and found
+	/// nothing (see `cycle-validation.md`, "Clean subtrees").
+	case skippedCleanSubtree
+
+	/// Called with what the walk did, when set: by the tests, never by the tool.
+	@TaskLocal public static var observer: (@Sendable (ValidationWalkObservation) -> Void)?
+
+	/// Whether the walk skips a subtree whose walk along an equal context completed and found nothing. `false` only where a
+	/// test, or the graph fuzzer's oracle, compares what the walk reports with and without the skip.
+	@TaskLocal public static var skipsCleanSubtrees = true
+}
