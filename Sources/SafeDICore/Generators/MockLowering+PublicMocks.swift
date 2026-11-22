@@ -21,7 +21,21 @@
 extension ScopeGenerator {
 	/// The public mock of `instantiable`, this root's mocked type, or the first rule it meets that the lowering does not lower
 	/// yet.
-	func lowerPublicMockRoot(of _: Instantiable, context _: MockContext) -> MockLowering.Result {
+	func lowerPublicMockRoot(of _: Instantiable, context _: MockContext) async -> MockLowering.Result {
+		.unsupported(.publicMockRoot)
+	}
+
+	/// The public mock of `instantiable`, whose tree's top-level nodes are `nodes`, or the first rule it meets that the
+	/// lowering does not lower yet.
+	func publicMockWithTree(
+		of _: Instantiable,
+		signature _: MockLowering.RootSignature,
+		nodes _: [MockLowering.TreeNode],
+		bindingLines _: [String],
+		rootRenames _: [String: [TypeDescription: String]],
+		configurations _: [MockLowering.ConfigurationRecord],
+		context _: MockContext,
+	) -> MockLowering.Result {
 		.unsupported(.publicMockRoot)
 	}
 
@@ -119,5 +133,21 @@ extension MockLowering {
 		func parameterLines(indent: String) -> [String] {
 			parameters.map { "\(indent)\($0.declaration)" }
 		}
+	}
+}
+
+extension MockLowering {
+	/// The construction a public mock's configured `node`, whose children are `children`, builds its type with, which its
+	/// configuration record carries.
+	static func publicConstructionRecord(of _: ConstantNode, children _: [TreeNode]) -> PublicConstructionRecord? {
+		nil
+	}
+}
+
+extension MockLowering.ConstantNode {
+	/// The lines that end a public mock's configured node's builder function, or the first rule they meet that the lowering
+	/// does not lower yet.
+	func publicBuilderFunctionEndLines(children _: [MockLowering.TreeNode], overrideRead overridePath: String?, indent: String) -> MockLowering.Lowering<[String]> {
+		.lowered(builderFunctionEndLines(overrideRead: overridePath, indent: indent))
 	}
 }

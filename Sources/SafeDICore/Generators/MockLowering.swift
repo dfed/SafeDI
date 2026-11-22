@@ -241,7 +241,7 @@ extension ScopeGenerator {
 	func lowerMockRoot(context: MockContext) async -> MockLowering.Result {
 		guard case let .root(instantiable, _) = scopeData else { return .unsupported(.publicMockRoot) }
 		// D1 lane hook (lane C): a public mock's root (`MockLowering+PublicMocks.swift`).
-		guard instantiable.generateMock != .public else { return lowerPublicMockRoot(of: instantiable, context: context) }
+		guard instantiable.generateMock != .public else { return await lowerPublicMockRoot(of: instantiable, context: context) }
 		guard propertiesToGenerate.isEmpty,
 		      instantiable.dependencies.isEmpty,
 		      (instantiable.mockInitializer ?? instantiable.initializer)?.arguments.contains(where: \.hasDefaultValue) == false
