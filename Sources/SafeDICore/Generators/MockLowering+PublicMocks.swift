@@ -151,3 +151,10 @@ extension MockLowering.ConstantNode {
 		.lowered(builderFunctionEndLines(overrideRead: overridePath, indent: indent))
 	}
 }
+
+extension ScopeGenerator {
+	/// Stub until lane C's family lands: the properties a public mock promotes (`MockLowering+PublicMocks.swift`).
+	func publicMockPromotedProperties(of _: Instantiable, among _: [OrderedChild]) -> Set<Property> {
+		[]
+	}
+}

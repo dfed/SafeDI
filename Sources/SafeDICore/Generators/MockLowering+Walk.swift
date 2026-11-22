@@ -51,6 +51,8 @@ extension ScopeGenerator {
 		walk.handWrittenMockDefaultParameters = context.handWrittenMockDefaultParameters
 		// D1 lane hook (lane C): a public mock builds each configured node with its type's construction function.
 		walk.buildsPublicMock = instantiable.generateMock == .public
+		// D1 lane hook (lane C): the nodes a public mock promotes, each bound from its caller's value when passed one.
+		walk.promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildren)
 		// D1 lane hook (lane C): the builders `mock()` takes optional for the places its calls fill.
 		switch filledCallBuilders(of: orderedChildren, context: context) {
 		case let .lowered(filledCallBuilders):
@@ -277,6 +279,9 @@ extension MockLowering {
 		// D1 lane hook (lane C): the bindings the node around the walk is passed by name, which a payload bound inside its
 		// builder function reads (`ScopeGenerator.MockParameterNode.ValuesBinding.line`).
 		var enclosingBindingNamesPassedByName = [String: String]()
+		// D1 lane hook (lane C): the properties of the nodes a public mock promotes at its root's level, each bound from the
+		// parameter its caller passes, named as the node's binding (`MockLowering+PublicMocks.swift` checks the name).
+		var promotedProperties = Set<Property>()
 		// D1 lane hook (lane B): the extractor of the `@Sendable` builder function the walk is inside, and the names of each
 		// level it is in, from which such a function's locals are claimed (`MockLowering+Wrappers.swift`).
 		var sendableOverrideExtractor: ScopeGenerator.SendableOverrideExtractor?
@@ -709,6 +714,10 @@ extension MockLowering {
 				defaultFields: defaultFields,
 			)
 			node.cycleParameters = generator.cycleParameters.map(\.property)
+			// D1 lane hook (lane C): a node a public mock promotes at its root's level reads its caller's value first.
+			if parentConcreteType == nil, promotedProperties.contains(property) {
+				node.promotedParameterName = bindingName
+			}
 			node.cycleParameterArguments = cycleParameterArguments
 			let lazilyInstantiatedInstanceProperties = generator.mockLoweringLazilyInstantiatedInstanceProperties
 			// D1 lane hook (lane D): a node whose configuration holds its default-valued parameters is built in a builder
@@ -926,6 +935,10 @@ extension MockLowering {
 		var cycleParameters = [Property]()
 		/// The arguments the node's binding passes `cycleParameters`.
 		var cycleParameterArguments = [String]()
+		// D1 lane hook (lane C): a public mock binds a node it promotes from its caller's value, when passed one.
+		/// The parameter of a public mock that holds the value its caller passed for the node, which the node's binding reads
+		/// first (`ScopeGenerator.passing(_:orBuilding:)`).
+		var promotedParameterName: String?
 
 		/// The node, configured in a configuration of its own where `children` hold a node that builds its type or its
 		/// construction takes a default-valued parameter.
@@ -1005,7 +1018,12 @@ extension MockLowering {
 			// D1 lane hook (lane C): a child the mock promotes for an optional receive, such as a value a called public mock
 			// builds when passed `nil`, is bound as the value it builds.
 			let annotation = isFulfilledByAnotherType && !isErased && nodePath != nil ? ": \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource)" : ""
-			return "\(indent)let \(bindingName)\(annotation) = \(constructionReading(override: nodePath, builderCall: "\(ReservedName.configurationBuilderPropertyName)(\(builderArguments))"))"
+			return "\(indent)let \(bindingName)\(annotation) = \(passingPromotedValue(orBuilding: constructionReading(override: nodePath, builderCall: "\(ReservedName.configurationBuilderPropertyName)(\(builderArguments))")))"
+		}
+
+		/// `construction`, read after the value the public mock's caller passed for the node where it promotes the node.
+		func passingPromotedValue(orBuilding construction: String) -> String {
+			promotedParameterName.map { ScopeGenerator.passing($0, orBuilding: construction) } ?? construction
 		}
 
 		/// The node's construction, preceded by a read of its override at `overridePath` that `builderCall` calls, or alone
@@ -1046,8 +1064,17 @@ extension MockLowering {
 			let builderCall = isErased && hasConfiguration ? "\(erasedTypeSource)(\(builder)(\(builderArguments)))" : "\(builder)(\(builderArguments))"
 			var lines = ["\(bodyIndent)\(returnPrefix)\(constructionReading(override: overridePath, builderCall: builderCall))"]
 			lines.append("\(indent)}")
-			lines.append(contentsOf: MockLowering.bindingLines(of: property, boundAs: bindingName, callingFunctionNamed: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent))
+			lines.append(contentsOf: promotedBindingLines(indent: indent))
 			return lines
+		}
+
+		/// The statements that bind the node from its builder function, after the value the public mock's caller passed for it
+		/// where it promotes the node.
+		func promotedBindingLines(indent: String) -> [String] {
+			guard let promotedParameterName, property.propertyType.isConstant else {
+				return MockLowering.bindingLines(of: property, boundAs: bindingName, callingFunctionNamed: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent)
+			}
+			return ["\(indent)let \(bindingName): \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource) = \(ScopeGenerator.passing(promotedParameterName, orBuilding: "\(functionName)(\(cycleParameterArguments.joined(separator: ", ")))"))"]
 		}
 	}
 
