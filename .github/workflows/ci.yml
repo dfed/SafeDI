@@ -9,8 +9,10 @@ on:
     - cron: '0 0 * * 1'
   pull_request:
 
+# Keyed on the pull request, not its branch's name: pull requests from two forks often share a branch name
+# (`main`, `patch-1`), and would cancel each other's runs.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -1524,7 +1526,9 @@ jobs:
         if: success()
         uses: codecov/codecov-action@v7
         with:
-          fail_ci_if_error: true
+          # Codecov may refuse the upload of a fork's own run, which has no token for it, after every test has
+          # passed, so only this repository's runs fail on a refused upload.
+          fail_ci_if_error: ${{ github.repository == 'dfed/SafeDI' }}
           verbose: true
           os: macos
           flags: macos
@@ -2053,7 +2057,9 @@ jobs:
         if: success()
         uses: codecov/codecov-action@v7
         with:
-          fail_ci_if_error: true
+          # Codecov may refuse the upload of a fork's own run, which has no token for it, after every test has
+          # passed, so only this repository's runs fail on a refused upload.
+          fail_ci_if_error: ${{ github.repository == 'dfed/SafeDI' }}
           verbose: true
           os: linux
           flags: linux
