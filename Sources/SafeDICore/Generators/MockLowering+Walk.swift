@@ -46,6 +46,7 @@ extension ScopeGenerator {
 		let orderedChildren = orderedChildrenComputedAfresh(propertiesGeneratedLater: [])
 		// No node binds a parameter’s label again, at any depth: the emitter names the parameter apart.
 		var walk = MockLowering.Walk(cycleEdges: context.cycleEdges, rootLabels: signature.labels, uncoveredProperties: signature.uncoveredProperties)
+		walk.rootFlatReceivedLabels = Set(signature.flatReceivedParameters.map(\.property.label))
 		// D1 lane hook (lane D): the defaults a type's hand-written mock declares, which its configuration's fields take.
 		walk.handWrittenMockDefaultParameters = context.handWrittenMockDefaultParameters
 		// D1 lane hook (lane C): the builders `mock()` takes optional for the places its calls fill.
@@ -74,7 +75,7 @@ extension ScopeGenerator {
 		// The mocked type is passed its own dependencies by label, and the builder functions beneath bind theirs, so the root's
 		// level names apart only labels neither reads.
 		// D1 lane hook (lane D): the mocked type's construction reads the names its own dependencies are bound apart under.
-		guard walk.rootNamesApart.isDisjoint(with: walk.dependencyLabelsInTree) else { return .unsupported(.siblingLabelCollision) }
+		guard walk.rootNamesApart.isDisjoint(with: walk.dependencyLabelsInTree), walk.rootAliasNamesApart.isDisjoint(with: walk.dependencyLabelsInTree) else { return .unsupported(.siblingLabelCollision) }
 		// The mocked type is passed each of its own dependencies the root's level names apart by that name
 		// (`generateReturnArgumentList`'s disambiguation map), which reads the exact property's name.
 		let lazilyInstantiatedInstances = Set(propertiesToGenerate.compactMap(\.mockLoweringDeclaredLazilyInstantiatedInstanceProperty))
@@ -240,6 +241,11 @@ extension MockLowering {
 		var rootRenames = [String: [TypeDescription: String]]()
 		/// The labels the mock root's level names its nodes apart under.
 		var rootLabelsNamedApart = Set<String>()
+		/// The labels of the dependencies the tree receives that the mock cannot build, which an alias of the mock root's
+		/// level is named apart from.
+		var rootFlatReceivedLabels = Set<String>()
+		/// The names the mock root's level gives the aliases it names apart, which no builder function beneath may declare.
+		var rootAliasNamesApart = Set<String>()
 		/// The labels of the dependencies of every node the walk built, which a builder function beneath the root binds.
 		var dependencyLabelsInTree = Set<String>()
 		var labels = Set<String>()
@@ -284,12 +290,15 @@ extension MockLowering {
 		) async -> Lowering<[TreeNode]> {
 			var nodes = [TreeNode]()
 			var scope = scope
-			let bindingNames: [String?]
+			var bindingNames: [String?]
 			switch levelBindingNames(of: generators) {
 			case let .lowered(lowered):
 				bindingNames = lowered
 			case let .unsupported(rule):
 				return .unsupported(rule)
+			}
+			if bodyLabels.isEmpty {
+				nameRootAliasesApart(among: generators, bindingNames: &bindingNames)
 			}
 			// Every node of the level and beneath it reads the level's names apart, until a declaration hides one.
 			let enclosingRenames = renames
@@ -384,6 +393,29 @@ extension MockLowering {
 			return .lowered(propertyNodes.map { property in property.map { nameByProperty[$0] ?? $0.label } })
 		}
 
+		/// Names apart each alias of the mock root's level, among `generators`, whose label a property node of the level, or a
+		/// flat received parameter of `mock()`, binds, as `ScopeGenerator.renamingAliases` does: `<label>_<simplified type>`,
+		/// `_` appended while the name is taken, set as the alias's entry of `bindingNames`.
+		private mutating func nameRootAliasesApart(among generators: [ScopeGenerator], bindingNames: inout [String?]) {
+			let propertyNodeNames = Set(zip(generators, bindingNames).compactMap { generator, bindingName in
+				generator.mockLoweringBuiltProperty == nil ? nil : bindingName
+			})
+			let aliases: [(index: Int, property: Property)] = generators.enumerated().compactMap { index, generator in
+				guard case let .alias(property, _, _, _, _) = generator.scopeData else { return nil }
+				return (index, property)
+			}
+			let redeclaredNames = propertyNodeNames.union(rootFlatReceivedLabels)
+			var takenNames = propertyNodeNames.union(rootLabels).union(aliases.map(\.property.label))
+			for alias in aliases where redeclaredNames.contains(alias.property.label) {
+				var name = "\(alias.property.label)_\(alias.property.typeDescription.simplified.asIdentifier)".spelledAsJoinedIdentifier
+				while !takenNames.insert(name).inserted {
+					name = "\(name)_".spelledAsJoinedIdentifier
+				}
+				bindingNames[alias.index] = name
+				rootAliasNamesApart.insert(name)
+			}
+		}
+
 		/// The node of `generator`, built after the nodes `scope` holds, whose statements are appended to `lines`, or the
 		/// first rule it meets.
 		private mutating func node(
@@ -398,11 +430,15 @@ extension MockLowering {
 				// D1 lane hook: aliases only if available, of a wrapper's instance, and bound apart from their label.
 				guard !onlyIfAvailable else { return .unsupported(.onlyIfAvailable) }
 				guard scope.contains(fulfillingProperty) else { return .unsupported(.alias) }
-				// An alias of a label named apart reads the name it is handed.
-				guard renames[fulfillingProperty.label] == nil, !rootLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
+				// An alias of a label named apart reads the name it is handed; one the mock root's level names apart is bound
+				// under its name.
+				let aliasBindingName = bindingName ?? property.label
+				guard aliasBindingName != property.label || !rootLabels.contains(property.label), labels.insert(aliasBindingName).inserted else { return .unsupported(.siblingLabelCollision) }
 				let alias = AliasBinding(
 					property: property,
+					bindingName: aliasBindingName,
 					fulfillingProperty: fulfillingProperty,
+					fulfillingName: renames[fulfillingProperty.label]?[fulfillingProperty.typeDescription] ?? fulfillingProperty.label,
 					isErased: erasedToConcreteExistential,
 					declarationReference: declarationReference,
 				)
@@ -1005,7 +1041,11 @@ extension MockLowering {
 	/// An alias a type of the tree declares, bound from a value bound before it under its own label.
 	struct AliasBinding {
 		let property: Property
+		/// The name the alias is bound under: its label, or a name apart at the mock root's level.
+		let bindingName: String
 		let fulfillingProperty: Property
+		/// The name the fulfilling property is read under: its label, or the name it is handed.
+		let fulfillingName: String
 		let isErased: Bool
 		let declarationReference: AliasDeclarationReferences.Reference?
 
@@ -1014,8 +1054,8 @@ extension MockLowering {
 			GeneratedCodeText.indentingNonEmptyLines(
 				of: ScopeGenerator.referencingDeclaration(
 					of: ScopeGenerator.aliasDeclaration(
-						of: property,
-						fulfilledBy: fulfillingProperty.label,
+						of: Property(label: bindingName, typeDescription: property.typeDescription),
+						fulfilledBy: fulfillingName,
 						ofType: fulfillingProperty.typeDescription,
 						erasedToConcreteExistential: isErased,
 						fulfillingValueMayBeOptional: false,
