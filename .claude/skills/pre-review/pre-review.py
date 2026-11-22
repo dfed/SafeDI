@@ -3,6 +3,7 @@
 
     pre-review.py [BASE] [--ref BRANCH] [--pins-run ID] [--no-wait] [--runner COMMAND]
                   [--matrix FILE --hand-back FILE]
+    pre-review.py --pre-push [BASE] [--runner COMMAND]
     pre-review.py --report
     pre-review.py --self-test
 
@@ -40,6 +41,17 @@ coverage report of step 3 is made there too.
 `--coverage` adds `Scripts/changed-line-coverage.sh BASE` as a step, in that worktree: every changed line under
 `Sources/` and `Plugins/` runs in a test. Without it the block says nothing of unit-test coverage, which
 "Check Agent Skill Scripts on Linux" gates on CI.
+
+`--pre-push` is the few minutes that come before every push that starts CI, so that a run of an hour is not spent
+on what this machine can show. It runs, at `HEAD` in the same worktree, lint, then side by side
+`Scripts/changed-line-coverage.sh BASE` (the suites the change touches first, generated code not compiled: a failing
+new test and an uncovered line both stop it) and the release build "Build Release SafeDITool on Linux" makes (the
+product, then each target under `Sources/` and `Plugins/`, in a build folder of its own), which fails on any
+compiler warning located under `Sources/` or `Plugins/`. Only what a build compiles again can warn, so the first
+build on a machine reads everything and a later one the modules the change reaches. It prints a short block that
+names the head and the toolchain that compiled it: a pass under one Swift says nothing of another, and CI builds
+with Swift 6.2, Xcode 26 and Swift 6.3. It asks GitHub nothing, pushes nothing, starts no run and records nothing,
+and it is not the pre-review block: a hand-back still carries that one.
 
 It then lists these for the hand-back to answer, which fail nothing:
 
@@ -675,6 +687,113 @@ def block(record):
 # MARK: Running
 
 
+def source_warnings(lines, top):
+    """The compiler warnings located in this checkout's own sources, each once, in the order first printed."""
+    prefixes = tuple(f"{top}/{directory}/" for directory in ("Sources", "Plugins"))
+    return list(dict.fromkeys(line for line in lines if ": warning: " in line and line.startswith(prefixes)))
+
+
+def source_targets(description):
+    """The targets `swift package describe` lists under Sources or Plugins, as CI's release build reads them."""
+    targets, name = set(), None
+    for line in description.splitlines():
+        words = line.split()
+        if words[:1] == ["Name:"] and len(words) > 1:
+            name = words[1]
+        elif words[:1] == ["Path:"] and len(words) > 1 and words[1].startswith(("Sources/", "Plugins/")) and name:
+            targets.add(name)
+    return sorted(targets)
+
+
+def pre_push_block(head, branch, base, commits, uncommitted, toolchain, steps):
+    """What `--pre-push` prints, and whether every step passed."""
+    lines = ["Pre-push block", f"head: {head} ({branch}), {commits} commit(s) measured from {base}", f"toolchain: {toolchain}: this says nothing of another Swift or platform"]
+    ready = True
+    if uncommitted:
+        lines.append("uncommitted changes in the checkout: they are not this head's, and no check saw them")
+        ready = False
+    for name in ("lint", "changed-line coverage", "release build"):
+        text, passed, details = steps.get(name, ("not run", False, []))
+        lines.append(f"{name}: {text}")
+        lines += [f"  {detail}" for detail in details]
+        ready = ready and passed
+    lines.append("result: " + ("PUSH" if ready else "DO NOT PUSH"))
+    return "\n".join(lines), ready
+
+
+def report_text(path):
+    return path.read_text() if path.exists() else None
+
+
+def coverage_details(status_code, lines, report):
+    """What a failed coverage step shows: the script's report when that is what failed (status 1 with a report
+    written), else the last lines printed, which are a failed test's or the build's."""
+    if status_code == 1 and report is not None:
+        listed = [line.strip()[:240] for line in report.splitlines() if line.strip()]
+        return listed[:20] + ([f"and {len(listed) - 21} more, then: {listed[-1]}"] if len(listed) > 21 else listed[20:])
+    return [line[:240] for line in lines[-8:]]
+
+
+def release_build(runner, worktree, linux):
+    """CI's release build of the tool and of each source target, in a build folder of its own so that the coverage
+    build beside it keeps its products. Gives the exit status, the seconds and every line printed."""
+    build = runner + ["swift", "build", "-c", "release", "--scratch-path", ".build/pre-push-release", "-Xswiftc", "-Osize"] + (["--static-swift-stdlib"] if linux else [])
+    status_code, seconds, lines = timed(build + ["--product", "SafeDITool"], worktree)
+    if status_code != 0:
+        return status_code, seconds, lines
+    described = subprocess.run(["swift", "package", "describe"], capture_output=True, text=True, cwd=worktree.path, pass_fds=(worktree.lock,))
+    targets = source_targets(described.stdout)
+    if not targets:
+        return 1, seconds, lines + ["swift package describe listed no target under Sources or Plugins"]
+    for target in targets:
+        status_code, more_seconds, more_lines = timed(build + ["--target", target], worktree)
+        seconds, lines = seconds + more_seconds, lines + more_lines
+        if status_code != 0:
+            return status_code, seconds, lines
+    return 0, seconds, lines
+
+
+def pre_push(arguments, top, head, status):
+    try:
+        base = output_of("git", "merge-base", arguments.base, "HEAD")
+    except RuntimeError as error:
+        print(f"pre-review: {error}", file=sys.stderr)
+        sys.exit(2)
+    if base == head:
+        print(f"pre-review: {arguments.base} already holds this head, so there is nothing to measure", file=sys.stderr)
+        sys.exit(2)
+    runner = shlex.split(arguments.runner) if arguments.runner else []
+    toolchain = " ".join(output_of("swift", "--version", check=False).split()) or "swift --version printed nothing"
+    steps = {}
+    with scratch_worktree(top, head) as worktree:
+        status_code, seconds, lines = timed(runner + ["./CLI/lint.sh", "--check"], worktree)
+        steps["lint"] = (f"passed, {duration(seconds)}" if status_code == 0 else f"failed, {duration(seconds)}", status_code == 0, [] if status_code == 0 else lines[-5:])
+
+        def coverage():
+            status_code, seconds, lines = timed(runner + ["Scripts/changed-line-coverage.sh", arguments.base], worktree)
+            steps["changed-line coverage"] = (f"{'passed' if status_code == 0 else 'failed'}, {duration(seconds)}", status_code == 0, [] if status_code == 0 else coverage_details(status_code, lines, report_text(pathlib.Path(worktree.path) / ".build/coverage/report.txt")))
+
+        def release():
+            status_code, seconds, lines = release_build(runner, worktree, sys.platform.startswith("linux"))
+            warnings = source_warnings(lines, os.path.realpath(worktree.path))
+            if status_code != 0:
+                steps["release build"] = (f"failed, {duration(seconds)}", False, [line for line in lines if ": error: " in line][:20] or lines[-5:])
+            elif warnings:
+                steps["release build"] = (f"failed, {duration(seconds)}: {len(warnings)} warning(s) in SafeDI's own sources", False, warnings[:20])
+            else:
+                steps["release build"] = (f"passed, {duration(seconds)}", True, [])
+
+        # Side by side: they build into different folders, and neither reads what the other writes.
+        threads = [threading.Thread(target=coverage), threading.Thread(target=release)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+    text, ready = pre_push_block(head, output_of("git", "rev-parse", "--abbrev-ref", "HEAD"), f"{arguments.base} at {base[:9]}", int(output_of("git", "rev-list", "--count", f"{base}..HEAD")), bool(status), toolchain, steps)
+    print(text)
+    sys.exit(0 if ready else 1)
+
+
 def output_of(*arguments, check=True):
     completed = subprocess.run(arguments, capture_output=True, text=True)
     if check and completed.returncode != 0:
@@ -1179,8 +1298,10 @@ def run(arguments):
     hand_back_path = os.path.abspath(arguments.hand_back) if arguments.hand_back else None
     top = output_of("git", "rev-parse", "--show-toplevel")
     os.chdir(top)
-    ask_the_repository_of_origin()
     head, status = output_of("git", "rev-parse", "HEAD"), output_of("git", "status", "--porcelain")
+    if arguments.pre_push:
+        pre_push(arguments, top, head, status)
+    ask_the_repository_of_origin()
     if arguments.report:
         path = record_path(head)
         if not path.exists():
@@ -1782,6 +1903,36 @@ def self_test():
     expect("a saved overlap reads back the same", block(json.loads(json.dumps({**record, "overlap": ("x", shared)}))), block({**record, "overlap": ("x", shared)}))
     expect("durations", [duration(9.4), duration(60), duration(3250)], ["9 s", "1 min 0 s", "54 min 10 s"])
 
+    build_log = [
+        "/work/SafeDI/Sources/SafeDICore/A.swift:3:5: warning: variable was never mutated",
+        "/work/SafeDI/.build/checkouts/swift-syntax/Sources/SwiftSyntax/B.swift:9:1: warning: deprecated",
+        "/work/SafeDI/Sources/SafeDICore/A.swift:3:5: warning: variable was never mutated",
+        "/work/SafeDI/Plugins/SafeDIGenerator/P.swift:1:1: warning: unused",
+        "/work/SafeDI/Tests/SafeDICoreTests/T.swift:1:1: warning: unused",
+        "/work/SafeDI/Sources/SafeDICore/A.swift:8:1: error: nope",
+    ]
+    expect("only warnings in the checkout's own sources count, each once", source_warnings(build_log, "/work/SafeDI"), [build_log[0], build_log[3]])
+    described = "\n".join(["Name: SafeDI", "Path: /work/SafeDI", "Targets:", "    Name: SafeDICore", "    C99name: SafeDICore", "    Path: Sources/SafeDICore", "    Name: SafeDIToolTests", "    Path: Tests/SafeDIToolTests", "    Name: SafeDIGenerator", "    Path: Plugins/SafeDIGenerator"])
+    expect("the targets under Sources and Plugins", source_targets(described), ["SafeDICore", "SafeDIGenerator"])
+    passed_steps = {"lint": ("passed, 50 s", True, []), "changed-line coverage": ("passed, 5 min 9 s", True, []), "release build": ("passed, 2 min 0 s", True, [])}
+    expect("a pre-push block that passed names its head and toolchain", pre_push_block("abc", "lane", "origin/main at 123", 2, False, "Swift 6.4", passed_steps), ("\n".join([
+        "Pre-push block",
+        "head: abc (lane), 2 commit(s) measured from origin/main at 123",
+        "toolchain: Swift 6.4: this says nothing of another Swift or platform",
+        "lint: passed, 50 s",
+        "changed-line coverage: passed, 5 min 9 s",
+        "release build: passed, 2 min 0 s",
+        "result: PUSH",
+    ]), True))
+    report_file = "\n".join([f"Sources/A.swift:{number}: x" for number in range(1, 31)] + ["30 changed line(s) no test executed", "0 changed file(s) the report does not record"]) + "\n"
+    details = coverage_details(1, ["noise"], report_file)
+    expect("a failed coverage report is given from its file, cut to twenty lines and its total", (len(details), details[0], details[-1]), (21, "Sources/A.swift:1: x", "and 11 more, then: 0 changed file(s) the report does not record"))
+    expect("a failed test run gives the last lines printed", coverage_details(2, [str(number) for number in range(20)], report_file), [str(number) for number in range(12, 20)])
+    expect("so does a failure that wrote no report", coverage_details(1, ["a", "b"], None), ["a", "b"])
+    failed_steps = {**passed_steps, "release build": ("failed, 2 min 0 s: 1 warning(s) in SafeDI's own sources", False, [build_log[0]])}
+    expect("a failed step gives its lines and says not to push", pre_push_block("abc", "lane", "b", 1, False, "t", failed_steps)[0].splitlines()[-3:], ["release build: failed, 2 min 0 s: 1 warning(s) in SafeDI's own sources", f"  {build_log[0]}", "result: DO NOT PUSH"])
+    expect("a step that did not run, and uncommitted changes, are not a pass", [pre_push_block("abc", "lane", "b", 1, False, "t", {"lint": ("passed", True, [])})[1], pre_push_block("abc", "lane", "b", 1, True, "t", passed_steps)[1]], [False, False])
+
     if failures:
         for failure in failures:
             print(f"self-test failed: {failure}", file=sys.stderr)
@@ -1800,6 +1951,7 @@ def main():
     parser.add_argument("--hand-back", metavar="FILE")
     parser.add_argument("--report", action="store_true")
     parser.add_argument("--coverage", action="store_true")
+    parser.add_argument("--pre-push", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     arguments = parser.parse_args()
     if arguments.self_test:
