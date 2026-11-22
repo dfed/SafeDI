@@ -2986,7 +2986,11 @@ struct SeamHoles: Sendable {
 		func expression(readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property>, bindingNamesPassedByName: [String: String] = [:], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:]) -> String {
 			if let formsRunAfter {
 				// A run's struct, made of the run before it and the run's own values.
-				var arguments = formsRunAfter.map { ["\(SeamCarrierValues.previousName): \($0)"] } ?? []
+				// The run before it is handed on with `consume`: the body forms each run once, after every member that reads the
+				// run before it, and no function captures a run's binding, so this is its last read. Without `consume`, Swift
+				// 6.2's -O copies the whole chain beneath at each hand-off (the seam initializer of the generate-time check's P2-40
+				// held 39 whole-chain `retain_value`s and 40 `release_value`s), which made a build of the tree five times slower.
+				var arguments = formsRunAfter.map { ["\(SeamCarrierValues.previousName): consume \($0)"] } ?? []
 				let values = SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)
 				if !values.isEmpty {
 					arguments.append(values)
