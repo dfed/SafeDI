@@ -2792,6 +2792,7 @@ struct SeamHoles: Sendable {
 		readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property> = [],
 		bindingNamesPassedByName: [String: String] = [:],
 		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:],
+		labeled: Bool = true,
 	) -> String {
 		fields.map { field in
 			let label = field.property.label
@@ -2801,8 +2802,21 @@ struct SeamHoles: Sendable {
 			} else {
 				name
 			}
-			return "\(label.spelledAsArgumentLabel): \(value)"
+			return labeled ? "\(label.spelledAsArgumentLabel): \(value)" : value
 		}.joined(separator: ", ")
+	}
+
+	/// The name under which a member of a seam's carrier, or a fill it calls, takes `field` of a level's values, which a
+	/// builder struct's member took as the payload named `payloadName`: the payload's name joined with the field's label.
+	static func argumentName(of field: SeamSignature.Hole.Field, inPayloadNamed payloadName: String) -> String {
+		"\(payloadName)_\(field.property.label)".spelledAsJoinedIdentifier
+	}
+
+	/// What reads `field` from the arguments `argumentName(of:inPayloadNamed:)` names, as `<payload>.<field>` read it from a
+	/// payload struct: a deferred parameter's field is handed as its memo, whose instance is the value.
+	static func argumentRead(of field: SeamSignature.Hole.Field, inPayloadNamed payloadName: String, bindingMemo: Bool) -> String {
+		let name = argumentName(of: field, inPayloadNamed: payloadName)
+		return field.isDeferredParameter && !bindingMemo ? "\(name).\(Dependency.lazilyInstantiatedInstancePropertyName)" : name
 	}
 
 	/// The struct the member of a case returns, which the seam's tree binds just before the builder function of a property
@@ -2837,6 +2851,10 @@ struct SeamHoles: Sendable {
 
 		/// The value `line(readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)` binds.
 		func expression(readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property>, bindingNamesPassedByName: [String: String] = [:], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:]) -> String {
+			if case let .nested(_, enumType, _) = type, ReservedName.seamCarrier(ofEnum: enumType) != nil {
+				// A seam's carrier takes the level's values as its member's arguments.
+				return "\(memberCall.parentName).\(memberCall.caseName)(\(SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames, labeled: false)))"
+			}
 			let payload = "\(type.asSource)(\(SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)))"
 			return "\(memberCall.parentName).\(memberCall.caseName)(\(payload))"
 		}

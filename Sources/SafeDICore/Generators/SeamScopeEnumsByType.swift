@@ -513,7 +513,7 @@ extension DependencyTreeGenerator {
 			if case let .fill(innerKey, _?, _, fillLevelEnumType, _) = enumCase.kind, let bindingPrefix {
 				// A fill is handed the struct of its own level, which the called seam's or public mock's struct the case's member
 				// returns builds at the place.
-				let carriedType = TypeDescription.nested(name: ReservedName.builderStructTypeName, parentType: fillLevelEnumType, generics: [builderBuiltType])
+				let carriedType = ReservedName.levelType(ofEnum: fillLevelEnumType, built: builderBuiltType)
 				innerScope = .init(callPath: bindingPrefix, innerKey: innerKey, enumType: carriedType, builderLabel: reachedEnum(innerKey)?.builderLabel ?? "", name: "")
 			}
 			let leadsIntoFill = caseOfProperty.filledBuilder != nil
@@ -532,7 +532,7 @@ extension DependencyTreeGenerator {
 					bindingName: "",
 					valuesType: .nested(name: memberValuesTypeName, parentType: enumType, generics: []),
 					fields: enumCase.values?.fields ?? [],
-					levelType: .nested(name: ReservedName.builderStructTypeName, parentType: heldEnumType, generics: [builderBuiltType]),
+					levelType: ReservedName.levelType(ofEnum: heldEnumType, built: builderBuiltType),
 					bindingPath: bindingPrefix,
 					isCalledInsideFunction: caseOfProperty.described.isSendable && buildsInSendableFunction,
 				)

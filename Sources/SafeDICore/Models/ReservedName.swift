@@ -103,6 +103,13 @@ public enum ReservedName: Hashable, Sendable {
 	/// The prefix of the name of a seam's `@Sendable` root enum, `SafeDISendableScope_<Stem>`.
 	static let sendableSeamScopeTypeNamePrefix = "SafeDISendableScope_"
 
+	/// The prefix of the name of a seam's plain root enum whose levels are carriers, `SafeDICarrierScope_<Stem>`, which no
+	/// generated code spells: the seam declares a carrier for each of its levels (`seamCarrier(ofEnum:)`).
+	static let seamCarrierScopeTypeNamePrefix = "SafeDICarrierScope_"
+
+	/// The prefix of the name of a seam's `@Sendable` root enum whose levels are carriers, `SafeDISendableCarrierScope_<Stem>`.
+	static let sendableSeamCarrierScopeTypeNamePrefix = "SafeDISendableCarrierScope_"
+
 	/// The prefix of the name of a public mock's plain root enum, `SafeDIMockScope_<Stem>`, which the mocked type's module
 	/// declares in an extension of the mocked type.
 	static let publicMockScopeTypeNamePrefix = "SafeDIMockScope_"
@@ -167,6 +174,64 @@ public enum ReservedName: Hashable, Sendable {
 	/// The name of the struct a seam's scope type declares for each of its levels, generic over what the builder returns:
 	/// one stored function per member, each called where the seam binds that level.
 	static let builderStructTypeName = "\(builderFunctionNamePrefix)Builder"
+
+	/// The type of a level of a seam's or a public mock's scope enum `enumType`, which hands its members to the generated
+	/// code that fills the level's places, over `builtType`: for a seam, the carrier of the level, a final class declared
+	/// in the seam's extension beside its initializers; for a public mock, the enum's builder struct.
+	static func levelType(ofEnum enumType: TypeDescription, built builtType: TypeDescription) -> TypeDescription {
+		guard let carrier = seamCarrier(ofEnum: enumType) else {
+			return .nested(name: builderStructTypeName, parentType: enumType, generics: [builtType])
+		}
+		if let seamType = carrier.seamType {
+			return .nested(name: carrier.name, parentType: seamType, generics: [builtType])
+		} else {
+			return .simple(name: carrier.name, generics: [builtType])
+		}
+	}
+
+	/// Whether `name` names the type of a level `levelType(ofEnum:built:)` spells: a builder struct, or a seam's carrier.
+	static func namesLevelType(_ name: String) -> Bool {
+		name == builderStructTypeName || (name.hasPrefix(builderFunctionNamePrefix) && (name.hasSuffix("Carrier") || name.contains("Carrier_")))
+	}
+
+	/// The name of the carrier of a seam's level whose scope enum is `enumType`, and the seam's type where `enumType` is
+	/// spelled qualified by it: `__safeDI_<Stem>Carrier` for a root enum `SafeDIScope_<Stem>`, `…SendableCarrier` for
+	/// `SafeDISendableScope_<Stem>`, followed by `_<enum>` for an enum nested in the root. `nil` where `enumType` is no
+	/// seam's scope enum.
+	static func seamCarrier(ofEnum enumType: TypeDescription) -> (name: String, seamType: TypeDescription?)? {
+		let rootName: String
+		var nestedName: String?
+		var seamType: TypeDescription?
+		switch enumType {
+		case let .simple(name, _):
+			rootName = name
+		case let .nested(name, .simple(parentName, _), _) where parentName.hasPrefix(seamCarrierScopeTypeNamePrefix) || parentName.hasPrefix(sendableSeamCarrierScopeTypeNamePrefix):
+			rootName = parentName
+			nestedName = name
+		case let .nested(name, .nested(parentName, grandparentType, _), _) where parentName.hasPrefix(seamCarrierScopeTypeNamePrefix) || parentName.hasPrefix(sendableSeamCarrierScopeTypeNamePrefix):
+			rootName = parentName
+			nestedName = name
+			seamType = grandparentType
+		case let .nested(name, parentType, _):
+			rootName = name
+			seamType = parentType
+		case .void, .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .variadic, .unknown:
+			return nil
+		}
+		let stem: String
+		let isSendable: Bool
+		if rootName.hasPrefix(sendableSeamCarrierScopeTypeNamePrefix) {
+			stem = String(rootName.dropFirst(sendableSeamCarrierScopeTypeNamePrefix.count))
+			isSendable = true
+		} else if rootName.hasPrefix(seamCarrierScopeTypeNamePrefix) {
+			stem = String(rootName.dropFirst(seamCarrierScopeTypeNamePrefix.count))
+			isSendable = false
+		} else {
+			return nil
+		}
+		let suffix = nestedName.map { "_\($0.hasSuffix("_Scope") ? String($0.dropLast("_Scope".count)) : $0)" } ?? ""
+		return ("\(builderFunctionNamePrefix)\(stem)\(isSendable ? "Sendable" : "")Carrier\(suffix)", seamType)
+	}
 
 	/// The name of a builder struct's generic parameter: the type its builder returns, prefixed so that no type a struct's
 	/// member spells can be hidden by it.
