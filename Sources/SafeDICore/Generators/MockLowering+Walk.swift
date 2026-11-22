@@ -1086,6 +1086,7 @@ extension MockLowering.ConfigurationRecord {
 				ChildField(name: field.name, typeSource: field.typeSource, defaultValue: field.defaultValue)
 			},
 			concreteBuilderClosureType: node.concreteBuilderClosureType,
+			defaultFields: node.defaultFields,
 		)
 	}
 }
