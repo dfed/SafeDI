@@ -737,7 +737,10 @@ def coverage_details(status_code, lines, report):
 def release_build(runner, worktree, linux):
     """CI's release build of the tool and of each source target, in a build folder of its own so that the coverage
     build beside it keeps its products. Gives the exit status, the seconds and every line printed."""
-    build = runner + ["swift", "build", "-c", "release", "--scratch-path", ".build/pre-push-release", "-Xswiftc", "-Osize"] + (["--static-swift-stdlib"] if linux else [])
+    # SwiftPM's native build system, as CI's Swift 6.3 uses by default: Swift Build, the default from Swift 6.4,
+    # refuses `--target SafeDIMacros` ("Found multiple targets named 'SafeDIMacros'"), since it plans a macro target
+    # once for the host and once for the destination.
+    build = runner + ["swift", "build", "--build-system", "native", "-c", "release", "--scratch-path", ".build/pre-push-release", "-Xswiftc", "-Osize"] + (["--static-swift-stdlib"] if linux else [])
     status_code, seconds, lines = timed(build + ["--product", "SafeDITool"], worktree)
     if status_code != 0:
         return status_code, seconds, lines
@@ -749,7 +752,7 @@ def release_build(runner, worktree, linux):
         status_code, more_seconds, more_lines = timed(build + ["--target", target], worktree)
         seconds, lines = seconds + more_seconds, lines + more_lines
         if status_code != 0:
-            return status_code, seconds, lines
+            return status_code, seconds, lines + [f"error: building the target {target} failed"]
     return 0, seconds, lines
 
 
@@ -777,7 +780,7 @@ def pre_push(arguments, top, head, status):
             status_code, seconds, lines = release_build(runner, worktree, sys.platform.startswith("linux"))
             warnings = source_warnings(lines, os.path.realpath(worktree.path))
             if status_code != 0:
-                steps["release build"] = (f"failed, {duration(seconds)}", False, [line for line in lines if ": error: " in line][:20] or lines[-5:])
+                steps["release build"] = (f"failed, {duration(seconds)}", False, [line[:240] for line in lines if "error: " in line][:20] or lines[-5:])
             elif warnings:
                 steps["release build"] = (f"failed, {duration(seconds)}: {len(warnings)} warning(s) in SafeDI's own sources", False, warnings[:20])
             else:
