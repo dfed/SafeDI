@@ -959,7 +959,7 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 				""",
 				"""
 				@Instantiable
-				public final class T0: Instantiable, Sendable {
+				public final class T0: Instantiable, @unchecked Sendable {
 				    public init(t1Builder: Instantiator<T2>, t2Builder: SendableInstantiator<T2>) {
 				        self.t1Builder = t1Builder
 				        self.t2Builder = t2Builder
@@ -1019,7 +1019,9 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 		                let t2Builder = SendableInstantiator<T2> {
 		                    __safeDI_t2Builder(t1: $0, t0: nil)
 		                }
-		                let anyT1Alias: AnyT1? = AnyT1(t1) // Declared at \(output.fixtures["T1.swift"]):12
+		                #sourceLocation(file: "\(output.fixtures["T1.swift"])", line: 12)
+		                let anyT1Alias: AnyT1? = AnyT1(t1)
+		                #sourceLocation()
 		                return T1(t0: t0, t2Builder: t2Builder, anyT1Alias: anyT1Alias, t1: t1)
 		            }
 		            let t1Builder = SendableInstantiator<T1> {
@@ -1042,7 +1044,9 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 		                    let t2Builder = SendableInstantiator<T2> {
 		                        __safeDI_t2Builder(t1: $0)
 		                    }
-		                    let anyT1Alias: AnyT1? = (t1 as T1?).map { AnyT1($0) } // Declared at \(output.fixtures["T1.swift"]):12
+		                    #sourceLocation(file: "\(output.fixtures["T1.swift"])", line: 12)
+		                    let anyT1Alias: AnyT1? = (t1 as T1?).map { AnyT1($0) }
+		                    #sourceLocation()
 		                    return T1(t0: t0, t2Builder: t2Builder, anyT1Alias: anyT1Alias, t1: t1)
 		                }
 		                let t1Builder = SendableInstantiator<T1> {
