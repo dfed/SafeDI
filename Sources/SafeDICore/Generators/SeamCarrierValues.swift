@@ -49,13 +49,19 @@ struct SeamCarrierValues: Sendable {
 	/// The form this build generates; `SAFEDI_CARRIER_TRANSPORT` (`E`, `E2`, or `H<K>`) picks another for measurement.
 	static let transport: Transport = {
 		let setting = ProcessInfo.processInfo.environment["SAFEDI_CARRIER_TRANSPORT"] ?? "E2"
-		if setting == "E" { return .singleStruct }
-		if setting.hasPrefix("H"), let maximum = Int(setting.dropFirst()) { return .hybrid(maximumPositionalValues: maximum) }
+		if setting == "E" {
+			return .singleStruct
+		}
+		if setting.hasPrefix("H"), let maximum = Int(setting.dropFirst()) {
+			return .hybrid(maximumPositionalValues: maximum)
+		}
 		return .runStructs
 	}()
 
 	static var chainsEveryRun: Bool {
-		if case .singleStruct = transport { return false }
+		if case .singleStruct = transport {
+			return false
+		}
 		return true
 	}
 
