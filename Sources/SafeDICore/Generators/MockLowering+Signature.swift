@@ -38,13 +38,19 @@ extension MockLowering {
 		let rootDefaultParameters: [Parameter]
 		/// The dependencies the tree receives that the mock cannot build, in the mock's order (`precedesInMockOrder`).
 		let flatReceivedParameters: [Parameter]
+		/// The `@Instantiated` dependencies of the mocked type and of the types of its tree that the mock cannot build, the
+		/// mocked type's first, then in the order the walk of the tree first meets them.
+		let uncoveredParameters: [Parameter]
+		/// The lines that document, above `mock()`, each uncovered parameter several types create
+		/// (`MockRootParameters.UncoveredParameter.sharedValueDocumentation`).
+		let sharedValueDocumentation: [String]
 		/// The names the constructions of the root's tree declare `@escaping`, which the parameters spell so.
 		let typesDeclaredEscaping: Set<TypeDescription>
 
-		/// The properties the forwarded and received parameters bind, which every node of the tree is built after. The
-		/// default-valued ones are the initializer's alone.
+		/// The properties the forwarded, received and uncovered parameters bind, which every node of the tree is built after.
+		/// The default-valued ones are the initializer's alone.
 		var properties: Set<Property> {
-			Set((forwardedParameters + flatReceivedParameters).map(\.property))
+			Set((forwardedParameters + flatReceivedParameters + uncoveredParameters).map(\.property))
 		}
 
 		/// The labels the parameters bind, which no node of the tree may bind again.
@@ -52,21 +58,19 @@ extension MockLowering {
 			Set(parameters.map(\.property.label))
 		}
 
-		// D1 lane hook (lane D): the `@Instantiated` dependencies of the tree's types that the mock cannot build, which
-		// `mock()` takes after the received ones, and the documentation of those several types create.
 		/// The properties of the `@Instantiated` dependencies the mock cannot build, which a type of the tree is passed.
 		var uncoveredProperties: Set<Property> {
-			[]
+			Set(uncoveredParameters.map(\.property))
 		}
 
 		/// The lines that document, above `mock()`, each parameter several types create, at `indent`.
-		func sharedValueDocumentationLines(indent _: String) -> [String] {
-			[]
+		func sharedValueDocumentationLines(indent: String) -> [String] {
+			sharedValueDocumentation.map { "\(indent)\($0)" }
 		}
 
 		/// Every parameter, in the order `mock()` declares them.
 		var parameters: [Parameter] {
-			forwardedParameters + rootDefaultParameters + flatReceivedParameters
+			forwardedParameters + rootDefaultParameters + flatReceivedParameters + uncoveredParameters
 		}
 
 		/// The parameters' declarations in `mock()`, at `indent`.
@@ -131,14 +135,144 @@ extension ScopeGenerator {
 				defaultExpression: context.flatParameterMockDefaults[property.typeDescription]?.expression,
 			))
 		}
+		let uncoveredParameters: [MockRootParameters.UncoveredParameter]
+		switch lowerUncoveredParameters(of: instantiable) {
+		case let .lowered(lowered):
+			uncoveredParameters = lowered
+		case let .unsupported(rule):
+			return .unsupported(rule)
+		}
+		// A type that generates its dependency tree takes a builder for each hole type of its places in place of their
+		// parameters (`seamMockBuilders`), which lane C's family lowers.
+		guard !instantiable.generatesDependencyTree || uncoveredParameters.isEmpty else { return .unsupported(.holeSite) }
 		// Two parameters of one label are named apart.
-		let parameters = forwardedParameters + rootDefaultParameters + flatReceivedParameters
+		let parameters = forwardedParameters + rootDefaultParameters + flatReceivedParameters + uncoveredParameters.map {
+			MockLowering.RootSignature.Parameter(property: $0.property, defaultExpression: nil, typeSource: $0.typeSource)
+		}
 		guard Set(parameters.map(\.property.label)).count == parameters.count else { return .unsupported(.siblingLabelCollision) }
 		return .lowered(MockLowering.RootSignature(
 			forwardedParameters: forwardedParameters,
 			rootDefaultParameters: rootDefaultParameters,
 			flatReceivedParameters: flatReceivedParameters,
+			uncoveredParameters: parameters.suffix(uncoveredParameters.count),
+			sharedValueDocumentation: uncoveredParameters.flatMap(\.sharedValueDocumentation),
 			typesDeclaredEscaping: typesDeclaredEscaping,
 		))
+	}
+
+	/// The `@Instantiated` dependencies of the mocked type, `instantiable`, and of the types of its tree that the mock cannot
+	/// build, which `mock()` takes, as `mockRootParameters(instantiable:mockDefaults:)` collects them: the mocked type's in
+	/// its declaration order, then each node's, in the order a walk of the tree in generation order first meets them; or the
+	/// first rule they meet that the lowering does not lower yet. A dependency is uncovered where no child of the type that
+	/// instantiates it builds its label (for the mocked type, its property or a `LazilyInstantiated` of it). The tree is
+	/// walked with a stack, since it can be as deep as the module has types.
+	private func lowerUncoveredParameters(of instantiable: Instantiable) -> MockLowering.Lowering<[MockRootParameters.UncoveredParameter]> {
+		/// A node of the tree that builds a type, and where it is among the nodes the type above it builds: its declaration
+		/// index there, or none for a node the mock promotes, then its index in generation order.
+		struct Visit {
+			let generator: ScopeGenerator
+			let declarationPath: [Position]
+			/// The labels the builder functions around the node declare, which hide a parameter of the same label there.
+			let namesDeclaredByEnclosingBuilderFunctions: Set<String>
+		}
+		struct Position: Comparable {
+			let declarationIndex: Int
+			let generationIndex: Int
+
+			static func < (lhs: Position, rhs: Position) -> Bool {
+				(lhs.declarationIndex, lhs.generationIndex) < (rhs.declarationIndex, rhs.generationIndex)
+			}
+		}
+		/// The generators of the children that build a type, each at its position among them.
+		func propertyChildren(of generator: ScopeGenerator, declaredBy dependencies: [Dependency], at path: [Position], enclosedBy names: Set<String>) -> [Visit] {
+			var declarationIndexByLabel = [String: Int]()
+			for (index, dependency) in dependencies.enumerated() where declarationIndexByLabel[dependency.property.label] == nil {
+				declarationIndexByLabel[dependency.property.label] = index
+			}
+			return generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator).enumerated().compactMap { generationIndex, child in
+				guard case let .property(_, property, _, _, _, _) = child.scopeData else { return nil }
+				let position = Position(declarationIndex: declarationIndexByLabel[property.label] ?? Int.max, generationIndex: generationIndex)
+				return Visit(generator: child, declarationPath: path + [position], namesDeclaredByEnclosingBuilderFunctions: names)
+			}
+		}
+
+		func isInstantiated(_ dependency: Dependency) -> Bool {
+			switch dependency.source {
+			case .instantiated:
+				true
+			case .received, .aliased, .forwarded:
+				false
+			}
+		}
+		var properties = [Property]()
+		var dependencyByProperty = [Property: Dependency]()
+		var creatingTypesByProperty = [Property: [(path: [Position], type: TypeDescription)]]()
+		func add(_ dependency: Dependency, createdBy type: TypeDescription, at path: [Position]) {
+			if dependencyByProperty[dependency.property] == nil {
+				properties.append(dependency.property)
+				dependencyByProperty[dependency.property] = dependency
+			}
+			creatingTypesByProperty[dependency.property, default: []].append((path: path, type: type))
+		}
+
+		let rootChildren = propertyChildren(of: self, declaredBy: instantiable.dependencies, at: [], enclosedBy: [])
+		var builtProperties = Set<Property>()
+		for child in rootChildren {
+			guard let property = child.generator.property else { continue }
+			builtProperties.insert(property)
+			if let instanceProperty = property.asLazilyInstantiatedInstanceProperty {
+				builtProperties.insert(instanceProperty)
+			}
+		}
+		// The mocked type is built in the body of `mock()`, outside every builder function.
+		for dependency in instantiable.dependencies where isInstantiated(dependency) && !builtProperties.contains(dependency.property) {
+			add(dependency, createdBy: instantiable.concreteInstantiable, at: [])
+		}
+		var visits = Array(rootChildren.reversed())
+		while let visit = visits.popLast() {
+			// The walk does not lower a node that closes a cycle, whose dependencies would not surface as parameters.
+			guard case let .property(nodeInstantiable, _, _, _, isPropertyCycle, _) = visit.generator.scopeData, !isPropertyCycle else { continue }
+			let children = propertyChildren(of: visit.generator, declaredBy: nodeInstantiable.dependencies, at: visit.declarationPath, enclosedBy: [])
+			let childLabels = Set(children.compactMap(\.generator.property?.label))
+			var uncoveredLabels = Set<String>()
+			for dependency in nodeInstantiable.dependencies where isInstantiated(dependency) && !childLabels.contains(dependency.property.label) {
+				// A builder function around the type declares the label, which would hide the parameter there: `mock()` names it
+				// apart.
+				guard !visit.namesDeclaredByEnclosingBuilderFunctions.contains(dependency.property.label) else { return .unsupported(.siblingLabelCollision) }
+				uncoveredLabels.insert(dependency.property.label)
+				add(dependency, createdBy: nodeInstantiable.concreteInstantiable, at: visit.declarationPath)
+			}
+			var namesDeclared = visit.namesDeclaredByEnclosingBuilderFunctions
+			for dependency in nodeInstantiable.dependencies where !uncoveredLabels.contains(dependency.property.label) {
+				namesDeclared.insert(dependency.property.label)
+			}
+			visits.append(contentsOf: children.reversed().map {
+				Visit(generator: $0.generator, declarationPath: $0.declarationPath, namesDeclaredByEnclosingBuilderFunctions: namesDeclared)
+			})
+		}
+		var parameters = [MockRootParameters.UncoveredParameter]()
+		for property in properties {
+			guard let dependency = dependencyByProperty[property] else { continue }
+			// A value a type built in a `@Sendable` builder function instantiates is a `@Sendable` autoclosure, which no
+			// node the walk lowers is (lane B's family).
+			let typeSource = property.propertyType.isConstant
+				? property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asFunctionParameter.asSource
+				: property.typeDescription.asFunctionParameter.asSource
+			var creatingTypes = [TypeDescription]()
+			for (_, type) in (creatingTypesByProperty[property] ?? []).sorted(by: { $0.path.lexicographicallyPrecedes($1.path) }) where !creatingTypes.contains(type) {
+				creatingTypes.append(type)
+			}
+			parameters.append(MockRootParameters.UncoveredParameter(
+				property: property,
+				label: property.label,
+				typeSource: typesDeclaredEscaping.contains(property.typeDescription)
+					? property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource
+					: typeSource,
+				instantiatedType: dependency.asInstantiatedType,
+				isSendableAutoclosure: false,
+				creatingTypes: creatingTypes,
+			))
+		}
+		return .lowered(parameters)
 	}
 }
