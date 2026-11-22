@@ -139,13 +139,16 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 			seamFixtureType(named: "Step", isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
 			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
 		]
-		let racing = try await executeSafeDIToolTest(
-			swiftFileContent: fixture,
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-			// The tree's code is what every other test of its shapes compares; this one compares it across orders.
-			skipCompileVerification: true,
-		)
+		// The path key's roots start their code early; the type key's start none (`ProductionBodyKey`).
+		let racing = try await ProductionBodyKey.$current.withValue(.path) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: fixture,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				// The tree's code is what every other test of its shapes compares; this one compares it across orders.
+				skipCompileVerification: true,
+			)
+		}
 		var orders: [@Sendable (Int) -> [Int]] = [{ Array(0..<$0) }, { Array((0..<$0).reversed()) }]
 		for seed in UInt64(1)...4 {
 			orders.append { count in
@@ -164,13 +167,15 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 		}
 		for order in orders {
 			let ordering = ForcedCodeTaskStartOrder(order: order)
-			let ordered = try await CodeTaskStart.$ordering.withValue(ordering) {
-				try await executeSafeDIToolTest(
-					swiftFileContent: fixture,
-					buildSwiftOutputDirectory: true,
-					filesToDelete: &filesToDelete,
-					skipCompileVerification: true,
-				)
+			let ordered = try await ProductionBodyKey.$current.withValue(.path) {
+				try await CodeTaskStart.$ordering.withValue(ordering) {
+					try await executeSafeDIToolTest(
+						swiftFileContent: fixture,
+						buildSwiftOutputDirectory: true,
+						filesToDelete: &filesToDelete,
+						skipCompileVerification: true,
+					)
+				}
 			}
 			// Every start took its turn in the order forced.
 			#expect(await ordering.turnsTaken() == order(20))

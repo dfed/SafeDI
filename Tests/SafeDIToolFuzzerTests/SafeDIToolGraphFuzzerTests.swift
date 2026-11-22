@@ -3238,6 +3238,19 @@ struct SafeDIToolGraphFuzzerTests {
 		extension S731_Root0 {
 		    public convenience init() {
 		        let t1 = S731_T1()
+		        @Sendable func __safeDI_link0(t1Alias: S731_T1?) -> S731_Link0 {
+		            #sourceLocation(file: "S731_Link0.swift", line: 8)
+		            let t1AliasAlias: S731_T1? = t1Alias
+		            #sourceLocation()
+		            let link1: S731_Link1 = __safeDI_link1(t1AliasAlias: t1AliasAlias)
+		            return S731_Link0(t1AliasAlias: t1AliasAlias, link1: link1)
+		        }
+		        @Sendable func __safeDI_link1(t1AliasAlias: S731_T1?) -> S731_Link1 {
+		            #sourceLocation(file: "S731_Link1.swift", line: 7)
+		            let t1AliasAliasAlias: S731_T1? = t1AliasAlias
+		            #sourceLocation()
+		            return S731_Link1(t1AliasAliasAlias: t1AliasAliasAlias)
+		        }
 		        @Sendable func __safeDI_lazyT0() -> S731_T0 {
 		            #sourceLocation(file: "S731_T0.swift", line: 9)
 		            let anyT1Alias: S731_AnyT1? = S731_AnyT1(t1)
@@ -3245,20 +3258,7 @@ struct SafeDIToolGraphFuzzerTests {
 		            #sourceLocation(file: "S731_T0.swift", line: 10)
 		            let t1Alias: S731_T1? = t1
 		            #sourceLocation()
-		            func __safeDI_link0() -> S731_Link0 {
-		                #sourceLocation(file: "S731_Link0.swift", line: 8)
-		                let t1AliasAlias: S731_T1? = t1Alias
-		                #sourceLocation()
-		                func __safeDI_link1() -> S731_Link1 {
-		                    #sourceLocation(file: "S731_Link1.swift", line: 7)
-		                    let t1AliasAliasAlias: S731_T1? = t1AliasAlias
-		                    #sourceLocation()
-		                    return S731_Link1(t1AliasAliasAlias: t1AliasAliasAlias)
-		                }
-		                let link1: S731_Link1 = __safeDI_link1()
-		                return S731_Link0(t1AliasAlias: t1AliasAlias, link1: link1)
-		            }
-		            let link0: S731_Link0 = __safeDI_link0()
+		            let link0: S731_Link0 = __safeDI_link0(t1Alias: t1Alias)
 		            return S731_T0(anyT1Alias: anyT1Alias, t1Alias: t1Alias, link0: link0)
 		        }
 		        let lazyT0 = SendableLazilyInstantiated<S731_T0>(__safeDI_lazyT0)
