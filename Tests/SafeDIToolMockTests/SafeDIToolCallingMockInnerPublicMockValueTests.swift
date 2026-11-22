@@ -857,6 +857,7 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        apiBuilder: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let db = if let safeDIBuilder = safeDIOverrides.db { safeDIBuilder() } else { Db() }
@@ -879,7 +880,7 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		                })
 		            }
 		            _ = F.__safeDI_F_mock_AEA8D6564306A707.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return F.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_F(), db: db, safeDIOverrides: safeDIOverrides.f)
+		            return F.__safeDI_mock(apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_F(), db: db, safeDIOverrides: safeDIOverrides.f)
 		        }
 		        let f: F = __safeDI_f()
 		        return Root(db: db, f: f)
@@ -966,14 +967,17 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		        }
 		    }
 
+		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 		    public static func mock(
+		        apiBuilder: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        Root.__safeDI_mock(safeDIOverrides: safeDIOverrides)
+		        Root.__safeDI_mock(apiBuilder: apiBuilder, safeDIOverrides: safeDIOverrides)
 		    }
 
 		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 		    public static func __safeDI_mock(
+		        apiBuilder __safeDI_apiBuilder: (() -> any Api)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        let db = if let safeDIBuilder = safeDIOverrides.db { safeDIBuilder() } else { Db() }
@@ -996,7 +1000,7 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		                })
 		            }
 		            _ = F.__safeDI_F_mock_AEA8D6564306A707.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return F.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_F(), db: db, safeDIOverrides: safeDIOverrides.f)
+		            return F.__safeDI_mock(apiBuilder: __safeDI_apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_F(), db: db, safeDIOverrides: safeDIOverrides.f)
 		        }
 		        let f: F = __safeDI_f()
 		        return Root(db: db, f: f)
@@ -1004,7 +1008,7 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		}
 
 		extension Root {
-		    public enum __safeDI_Root_mock_51799E6AA5E7B634 {}
+		    public enum __safeDI_Root_mock_BEDDA3C65C73F485 {}
 		}
 		#endif
 		""",

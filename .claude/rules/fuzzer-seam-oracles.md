@@ -2,12 +2,10 @@
 paths:
   - "Tests/**/GraphFuzzer*.swift"
   - "Tests/**/*GraphFuzzer*Tests.swift"
-  - ".github/workflows/{ci,graph-fuzzer}.yml"
+  - ".github/workflows/graph-fuzzer.yml"
   - ".github/scripts/*graph-fuzzer*"
   - "Scripts/fuzz-corpus.sh"
 ---
-
-<!-- Moved from CLAUDE.md §Graph fuzzer ("Generator features", sentences 35–63) at 337e5e22. Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
 
 # Graph fuzzer: the seam corpus's oracles
 
