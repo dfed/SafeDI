@@ -47,9 +47,13 @@ extension ScopeGenerator {
 		// No node binds a parameter’s label again, at any depth: the emitter names the parameter apart.
 		var walk = MockLowering.Walk(cycleEdges: context.cycleEdges, rootLabels: signature.labels, uncoveredProperties: signature.uncoveredProperties)
 		walk.rootFlatReceivedLabels = Set(signature.flatReceivedParameters.map(\.property.label))
+		// D1 lane hook (lane B): a receive of a flat received parameter or override named apart from its label is handed that
+		// name, which its builder function binds again under the label.
+		walk.renames = signature.renamesByLabelAndType
 		walk.rootParametersKeepingTheirLabels = (signature.forwardedParameters + signature.rootDefaultParameters).map(\.property)
 		// D1 lane hook (lane D): the defaults a type's hand-written mock declares, which its configuration's fields take.
 		walk.handWrittenMockDefaultParameters = context.handWrittenMockDefaultParameters
+		walk.sendableConfigurationTypeNames = context.sendableConfigurationTypeNames
 		// D1 lane hook (lane C): a public mock builds each configured node with its type's construction function.
 		walk.buildsPublicMock = instantiable.generateMock == .public
 		// D1 lane hook (lane C): the nodes a public mock promotes, each bound from its caller's value when passed one.
@@ -61,13 +65,24 @@ extension ScopeGenerator {
 		case let .unsupported(rule):
 			return .unsupported(rule)
 		}
+		// D1 lane hook (lane B): `mock()` first binds each override of what its tree receives only if available, which the
+		// receives beneath read.
+		var bindingLines = signature.onlyIfAvailableOverrides.map { override in
+			"\(bodyIndent)let \(override.name): \(override.typeDescription.asSource) = \(ReservedName.mockOverridesParameterName).\(override.name)"
+		}
 		// D1 lane hook (lane C): `mock()` first binds each builder a call passes up apart from its label.
-		var bindingLines = walk.filledCallBuilders.leadingBindingLines(indent: bodyIndent)
+		bindingLines.append(contentsOf: walk.filledCallBuilders.leadingBindingLines(indent: bodyIndent))
+		let rootReceiverBindingIndex = bindingLines.endIndex
+		// D1 lane hook (lane B): each override binds its receive's label, in the optional form a receive only if available
+		// reads.
+		let overrideProperties = Set(signature.onlyIfAvailableOverrides.flatMap { override in
+			[override.receivedProperty, Property(label: override.receivedProperty.label, typeDescription: override.typeDescription)]
+		})
 		let nodes: [MockLowering.TreeNode]
 		switch await walk.children(
 			of: orderedChildren,
 			loops: mockLoweringLoopMemberships,
-			inScope: signature.properties,
+			inScope: signature.properties.union(overrideProperties),
 			path: ReservedName.mockOverridesParameterName,
 			indent: bodyIndent,
 			lines: &bindingLines,
@@ -89,8 +104,28 @@ extension ScopeGenerator {
 		guard !instantiable.dependencies.contains(where: { dependency in
 			walk.rootLabelsNamedApart.contains(dependency.property.label) && lazilyInstantiatedInstances.contains(dependency.property.asUnwrappedProperty)
 		}) else { return .unsupported(.siblingLabelCollision) }
+		// D1 lane hook (lane B): the mocked type's own receive of a flat received parameter or override named apart is bound
+		// again under its label before the tree, unless the root's level binds that label (`generateMockRootCode`'s
+		// `rootDependenciesToRebind`), when the mocked type is passed the name.
+		// The signature names an override apart from a label the root's property nodes keep until the level names them
+		// apart, where the emitter names it by its label: until the signature reads the level's names, it is not lowered.
+		guard signature.onlyIfAvailableOverrides.allSatisfy({ override in
+			override.name == override.receivedProperty.label || walk.rootPropertyNodeBindingNames.contains(override.receivedProperty.label) || !walk.rootLabelsNamedApart.contains(override.receivedProperty.label)
+		}) else { return .unsupported(.siblingLabelCollision) }
+		let rootLevelBindingNames = walk.rootPropertyNodeBindingNames.union(signature.onlyIfAvailableOverrides.map(\.name))
+		var rootRenames = walk.rootRenames
+		var rootReceiverBindingLines = [String]()
+		for dependency in instantiable.dependencies where dependency.source.isReceived {
+			guard let names = signature.renamesByLabelAndType[dependency.property.label],
+			      let name = names[dependency.property.typeDescription] ?? names[dependency.property.asUnwrappedProperty.typeDescription],
+			      !rootLevelBindingNames.contains(dependency.property.label)
+			else { continue }
+			rootReceiverBindingLines.append("\(bodyIndent)let \(dependency.property.label): \(dependency.property.typeDescription.asSource) = \(name)")
+			rootRenames[dependency.property.label]?[dependency.property.typeDescription] = nil
+		}
+		bindingLines.insert(contentsOf: rootReceiverBindingLines, at: rootReceiverBindingIndex)
 		// Every dependency of the mocked type is a node of its tree or a parameter of `mock()`.
-		let providedProperties = Set(nodes.map(\.property)).union(signature.properties)
+		let providedProperties = Set(nodes.map(\.property)).union(signature.properties).union(overrideProperties)
 		guard instantiable.dependencies.allSatisfy({ providedProperties.contains($0.property) }) else {
 			return .unsupported(.flatParameter)
 		}
@@ -100,32 +135,20 @@ extension ScopeGenerator {
 		}
 		// D1 lane hook (lane C): a public mock's tiers, overrides and guard (`MockLowering+PublicMocks.swift`).
 		guard instantiable.generateMock != .public else {
+			// D1 lane hook (lane B): a public mock's parameters named apart are lane C's to lower.
+			guard signature.renamesByLabelAndType.isEmpty else { return .unsupported(.siblingLabelCollision) }
 			return publicMockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: walk.rootRenames, configurations: walk.configurationRecords, context: context)
 		}
-		return .lowered(Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, builders: walk.filledCallBuilders.parameters, rootRenames: walk.rootRenames, context: context), configurations: walk.configurationRecords)
+		return .lowered(Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, builders: walk.filledCallBuilders.parameters, rootRenames: rootRenames, context: context), configurations: walk.configurationRecords)
 	}
 
 	/// The first rule the parameters and construction of the mocked type itself meet that the walk does not lower yet.
 	private static func unsupportedRuleOfMockedType(_ instantiable: Instantiable) -> MockLowering.Rule? {
 		// The initializer's default-valued arguments are parameters of `mock()` (`lowerRootSignature(of:context:)`).
 		guard instantiable.mockInitializer == nil, instantiable.customMockName == nil, instantiable.initializer != nil else { return .handWrittenMock }
-		for dependency in instantiable.dependencies {
-			switch dependency.source {
-			case .instantiated:
-				// D1 lane hook (lane B): every wrapper kind is a node of the tree, erased or fulfilled by another type alike.
-				break
-			case let .received(onlyIfAvailable):
-				// D1 lane hook (lane B): a received wrapper is a node the mock promotes, which the walk checks it binds.
-				guard !onlyIfAvailable else { return .onlyIfAvailable }
-			case .aliased(_, _, onlyIfAvailable: true):
-				return .onlyIfAvailable
-			case .aliased(_, _, onlyIfAvailable: false):
-				break
-			case .forwarded:
-				// A parameter of `mock()` (`lowerRootSignature(of:context:)`).
-				break
-			}
-		}
+		// D1 lane hook (lane B): every dependency of the mocked type is a node of its tree (a wrapper of any kind, erased or
+		// fulfilled by another type alike, a received wrapper the mock promotes, an alias), a parameter of `mock()` or an
+		// override's binding, which the walk checks it binds.
 		return nil
 	}
 
@@ -138,13 +161,13 @@ extension ScopeGenerator {
 		let typeName = instantiable.concreteInstantiable.asSource
 		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
 		// A mock that takes nothing and binds nothing is one call of the type's construction.
-		guard !nodes.isEmpty || !signature.parameters.isEmpty else { return mockWithoutTree(of: instantiable, context: context) }
+		guard !nodes.isEmpty || !signature.parameters.isEmpty || !signature.onlyIfAvailableOverrides.isEmpty else { return mockWithoutTree(of: instantiable, context: context) }
 		var lines = ["extension \(typeName) {"]
 		let overridesFields = nodes.compactMap(\.overridesField)
 		// D1 lane hook (lane C): the builders `mock()` takes, listed among the flat received parameters by label.
 		var parameterLines = signature.parameterLines(indent: bodyIndent, builders: builders)
-		if !overridesFields.isEmpty {
-			lines.append(contentsOf: overridesStruct(of: overridesFields, sendableConfigurationTypeNames: context.sendableConfigurationTypeNames, indent: indent))
+		if !overridesFields.isEmpty || !signature.onlyIfAvailableOverrides.isEmpty {
+			lines.append(contentsOf: overridesStruct(of: overridesFields, onlyIfAvailableOverrides: signature.onlyIfAvailableOverrides, sendableConfigurationTypeNames: context.sendableConfigurationTypeNames, indent: indent))
 			lines.append("")
 			parameterLines.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): \(ReservedName.mockOverridesTypeName) = .init()")
 		} else if nodes.contains(where: \.isPropertyNode) {
@@ -182,7 +205,7 @@ extension ScopeGenerator {
 	}
 
 	/// The mock's `SafeDIOverrides`: the member that configures each node, in generation order.
-	private static func overridesStruct(of fields: [MockLowering.OverridesField], sendableConfigurationTypeNames: Set<String>, indent: String) -> [String] {
+	private static func overridesStruct(of fields: [MockLowering.OverridesField], onlyIfAvailableOverrides: [OnlyIfAvailableOverride], sendableConfigurationTypeNames: Set<String>, indent: String) -> [String] {
 		let innerIndent = "\(indent)\(standardIndent)"
 		let memberIndent = "\(innerIndent)\(standardIndent)"
 		var lines = [
@@ -200,16 +223,32 @@ extension ScopeGenerator {
 			)
 		})
 		lines.append("\(innerIndent)init(")
-		lines.append(zip(storage.fields, fields).map { storageField, field in
+		var initParameters = zip(storage.fields, fields).map { storageField, field in
 			"\(memberIndent)\(storageField.name.spelledAsAssigningParameter(labeled: storageField.name)): \(storageField.typeSource) = \(field.defaultValue)"
-		}.joined(separator: ",\n"))
+		}
+		// D1 lane hook (lane B): each override of what the mock receives only if available, after the storage's fields and
+		// stored beside the storage (`generateSafeDIOverridesStruct`).
+		for override in onlyIfAvailableOverrides {
+			initParameters.append("\(memberIndent)\(override.name.spelledAsAssigningParameter(labeled: override.name)): \(override.typeDescription.asSource) = nil")
+		}
+		lines.append(initParameters.joined(separator: ",\n"))
 		lines.append("\(innerIndent)) {")
-		lines.append(contentsOf: storage.initialization(to: storage.fields.map(\.name.spelledAsAssigningParameterName), indent: memberIndent))
+		if !storage.fields.isEmpty {
+			lines.append(contentsOf: storage.initialization(to: storage.fields.map(\.name.spelledAsAssigningParameterName), indent: memberIndent))
+		}
+		for override in onlyIfAvailableOverrides {
+			lines.append("\(memberIndent)self.\(override.name) = \(override.name.spelledAsAssigningParameterName)")
+		}
 		lines.append("\(innerIndent)}")
 		lines.append("")
 		lines.append(contentsOf: storage.readers(indent: innerIndent))
-		lines.append("")
-		lines.append(contentsOf: storage.declarations(indent: innerIndent))
+		for override in onlyIfAvailableOverrides {
+			lines.append("\(innerIndent)let \(override.name.spelledAsMemberDeclarationName): \(override.typeDescription.asSource)")
+		}
+		if !storage.fields.isEmpty {
+			lines.append("")
+			lines.append(contentsOf: storage.declarations(indent: innerIndent))
+		}
 		lines.append("\(indent)}")
 		return lines
 	}
@@ -247,6 +286,8 @@ extension MockLowering {
 		/// The names the mock root's level gives the nodes it names apart, by label and then type, under which the mocked type
 		/// is passed them.
 		var rootRenames = [String: [TypeDescription: String]]()
+		/// The names the property nodes of the mock root's level are bound under.
+		var rootPropertyNodeBindingNames = Set<String>()
 		/// The labels the mock root's level names its nodes apart under.
 		var rootLabelsNamedApart = Set<String>()
 		/// The labels of the dependencies the tree receives that the mock cannot build, which an alias of the mock root's
@@ -273,6 +314,8 @@ extension MockLowering {
 		/// The default-valued parameters of each type's hand-written mock, by concrete type, whose defaults the fields of the
 		/// type's configuration take (`MockLowering+Defaults.swift`).
 		var handWrittenMockDefaultParameters = [TypeDescription: [ScopeGenerator.MockParameterNode.DefaultParameter]]()
+		/// The concrete types whose configurations are `@Sendable`-typed, whose default fields are read as calls.
+		var sendableConfigurationTypeNames = Set<String>()
 		/// The concrete types of the configured nodes around the node the walk is at, and whether a node around it repeats one
 		/// around it: a node of a type around it, or beneath such a node, records no configuration
 		/// (`ScopeGenerator.collectUniqueConfigurationTypes`).
@@ -340,6 +383,12 @@ extension MockLowering {
 			}
 			if bodyLabels.isEmpty {
 				rootRenames = renames
+				// D1 lane hook (lane B): the names the root's property nodes are bound under, which a rebinding of the mocked
+				// type's own receive would redeclare.
+				for (generator, bindingName) in zip(generators, bindingNames) {
+					guard case .property = generator.scopeData, let bindingName else { continue }
+					rootPropertyNodeBindingNames.insert(bindingName)
+				}
 			}
 			// D1 lane hook (lane B): the level's names, which a `@Sendable` builder function's locals are kept apart from.
 			enterLevel(of: generators, boundAs: bindingNames)
@@ -562,7 +611,7 @@ extension MockLowering {
 			guard !property.propertyType.isConstant || forwardedProperties.isEmpty else { return .unsupported(.wrapper) }
 			guard labels.insert(bindingName).inserted else { return .unsupported(.siblingLabelCollision) }
 			// D1 lane hook (lane B): a closer passes the function's cycle parameters (`MockLowering+CycleParameters.swift`).
-			guard let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: scope) else { return .unsupported(.onlyIfAvailable) }
+			guard let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: scope, renames: renames) else { return .unsupported(.onlyIfAvailable) }
 			// D1 lane hook (lane B): a closer on a loop of builders declares the `_received` function its wrappers hand, with
 			// the loop's functions, and is bound with the loop's wrappers where its level binds it (`MockLowering+Loops.swift`).
 			if let loopMembership, let member = loopMembers[property] {
@@ -623,7 +672,15 @@ extension MockLowering {
 			// A member of a loop of builders is passed the wrappers its function makes again, as production passes them
 			// (`ownUnavailableProperties` in `ScopeGenerator`).
 			let unavailableProperties = generator.reboundProperties.isEmpty ? unavailableProperties : unavailableProperties.subtracting(generator.reboundProperties.flatMap(CycleParameter.forms(providedBy:)))
-			guard instantiable.mockInitializer == nil, let initializer = instantiable.initializer else { return .unsupported(.handWrittenMock) }
+			// D1 lane hook (lane D): a node whose type's hand-written mock returns a type its property can hold is built with the
+			// mock, as `MockConstruction(useMockInitializer:)` says, where the mock returns the concrete type, in an internal mock.
+			let usesMockInitializer = instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType)
+			// An argument of the mock neither a dependency fulfills nor a default fills is passed what a build that compiles
+			// no mock never compiles (`UnfulfilledMockParameter`).
+			guard let initializer = usesMockInitializer ? instantiable.mockInitializer : instantiable.initializer,
+			      !usesMockInitializer || instantiable.mockCallReturnType == instantiable.concreteInstantiable && !buildsPublicMock,
+			      initializer.arguments.allSatisfy({ argument in argument.hasDefaultValue || instantiable.dependencies.contains(where: argument.isFulfilled(by:)) })
+			else { return .unsupported(.handWrittenMock) }
 			guard !rootLabels.contains(property.label) || (bindingName != property.label && rootPropertiesNamedApartFromParameters.contains(property)), labels.insert(bindingName).inserted else { return .unsupported(.siblingLabelCollision) }
 			dependencyLabelsInTree.formUnion(instantiable.dependencies.map(\.property.label))
 
@@ -656,14 +713,14 @@ extension MockLowering {
 			}
 			// D1 lane hook (lane B): what the node's binding passes its builder function's cycle parameters, read where the node
 			// is built, and the parameters, the nearest declarations of their labels in the function.
-			guard let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: scope) else { return .unsupported(.onlyIfAvailable) }
+			guard let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: scope, renames: renames) else { return .unsupported(.onlyIfAvailable) }
 			let scope = scope.union(generator.reboundProperties).union(MockLowering.cycleParameterForms(of: generator))
 			// D1 lane hook (lane B): a `Sendable` wrapper's, or a cycle's, builder function is `@Sendable`, and every override
 			// read inside it is read into a local before the outermost such function.
 			let builder = ReservedName.configurationBuilderPropertyName
 			// D1 lane hook (lane D): a default-valued parameter is a field of the node's configuration (`MockLowering+Defaults.swift`).
 			let defaultFields: [DefaultField]
-			switch configurationDefaultFields(of: instantiable, startsExtraction: sendableOverrideExtractor == nil && generator.buildsInSendableFunction) {
+			switch configurationDefaultFields(of: instantiable, usesMockInitializer: usesMockInitializer, startsExtraction: sendableOverrideExtractor == nil && generator.buildsInSendableFunction) {
 			case let .lowered(lowered):
 				defaultFields = lowered
 			case let .unsupported(rule):
@@ -672,9 +729,15 @@ extension MockLowering {
 			let hasConfiguration = childGenerators.contains { $0.mockLoweringBuiltProperty != nil } || !defaultFields.isEmpty
 			let nodePath = "\(path).\(bindingName)"
 			// The node's builder function binds again under its label each receive named apart, from the names its own
-			// declarations, its children and forwarded properties, do not hide (`ScopeGenerator.removingRenames`).
+			// declarations, its children, forwarded properties and cycle parameters, do not hide (`ScopeGenerator.removingRenames`).
+			// D1 lane hook (lane B): nor do the dependencies its type instantiates that the mock cannot build, whose receives
+			// beneath read the parameter `mock()` takes under its label (`routingReceives`).
+			let uncoveredInstantiatedProperties = instantiable.dependencies.compactMap { dependency -> Property? in
+				guard case .instantiated = dependency.source, uncoveredProperties.contains(dependency.property) else { return nil }
+				return dependency.property
+			}
 			let functionRenames = MockLowering.removingRenames(
-				hiddenBy: childGenerators.compactMap(\.property) + (isWrapped ? forwarded : []),
+				hiddenBy: childGenerators.compactMap(\.property) + (isWrapped ? forwarded : []) + MockLowering.cycleParameterForms(of: generator).sorted() + uncoveredInstantiatedProperties,
 				from: renames,
 			)
 			var receiverBindings = [(property: Property, name: String)]()
@@ -725,12 +788,14 @@ extension MockLowering {
 				isWrapped: isWrapped,
 				isErased: isErased,
 				isFulfilledByAnotherType: isFulfilledByAnotherType,
+				usesMockInitializer: usesMockInitializer,
 				forwardedProperties: forwarded,
 				typesDeclaredEscaping: generator.typesDeclaredEscaping,
 				// D1 lane hook (lane D): each default-valued parameter read from the node's configuration, among its dependencies.
 				arguments: constructionArguments(
 					of: initializer,
 					given: instantiable,
+					usesMockInitializer: usesMockInitializer,
 					dependencyArguments: MockLowering.argumentValues(
 						of: initializer,
 						given: instantiable.dependencies,
@@ -943,6 +1008,9 @@ extension MockLowering {
 		let isErased: Bool
 		/// Whether the node builds a type other than its property's, which its binding then spells (`fulfilledByType:`).
 		let isFulfilledByAnotherType: Bool
+		// D1 lane hook (lane D): a node built with its type's hand-written mock.
+		/// Whether the node is built with its type's hand-written mock rather than its initializer.
+		let usesMockInitializer: Bool
 		/// The properties the type forwards, by label.
 		let forwardedProperties: [Property]
 		/// The names the constructions of the node's subtree declare `@escaping`, which its builder function's parameters
@@ -1002,9 +1070,14 @@ extension MockLowering {
 
 		/// The types of the values the node's override is handed, joined: one per argument its construction is passed, which
 		/// leaves out a parameter left to its default (`ScopeGenerator.MockParameterNode.callSiteArguments`).
+		/// What builds the node: its type's hand-written mock, or its initializer.
+		private var constructionInitializer: Initializer? {
+			usesMockInitializer ? instantiable.mockInitializer : instantiable.initializer
+		}
+
 		private var builderParameterTypes: String {
 			let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
-			return (instantiable.initializer?.arguments ?? []).filter { !$0.isLeftToItsDefault || dependencyLabels.contains($0.innerLabel) }.map { argument in
+			return (constructionInitializer?.arguments ?? []).filter { !$0.isLeftToItsDefault || dependencyLabels.contains($0.innerLabel) }.map { argument in
 				(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription)
 					.asFunctionParameter(amongTypesDeclaredEscaping: [])
 					.asSource
@@ -1026,7 +1099,9 @@ extension MockLowering {
 			let typeName = instantiable.concreteInstantiable.asSource
 			// An argument the initializer takes unlabeled is passed by position, as `defaultBuilderCall` passes it.
 			let argumentList = arguments.map { $0.label == "_" ? $0.value : "\($0.label): \($0.value)" }.joined(separator: ", ")
-			let unerasedConstruction = if instantiable.declarationType.isExtension {
+			let unerasedConstruction = if usesMockInitializer {
+				"\(typeName).\(instantiable.customMockName ?? InstantiableVisitor.mockMethodName)(\(argumentList))"
+			} else if instantiable.declarationType.isExtension {
 				"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
 			} else {
 				"\(typeName)(\(argumentList))"
@@ -1372,7 +1447,7 @@ extension MockLowering.ConfigurationRecord {
 	init(of node: MockLowering.ConstantNode, children: [MockLowering.TreeNode]) {
 		self.init(
 			concreteType: node.instantiable.concreteInstantiable,
-			usesMockInitializer: false,
+			usesMockInitializer: node.usesMockInitializer,
 			// A child's field is the one the overrides hold for a node at the root: its override, its configuration, or the
 			// overrides of the public mock it calls.
 			childFields: children.compactMap(\.overridesField).map { field in
