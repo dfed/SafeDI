@@ -2758,6 +2758,18 @@ jobs:
           path: reports
       - name: Combine Shard Reports
         run: python3 .github/scripts/combine-graph-fuzzer-reports.py "$RUNNER_TEMP/graph-fuzzer-corpus.md" reports/*/report.txt
+      # Prints what the shards' reports say the pins should be, for a session
+      # that cannot download this run's artifacts: the analysis's report, then
+      # its pins.json as lines that
+      # .claude/skills/apply-fuzzer-pins/apply-fuzzer-pins.py reads back from
+      # a saved copy of this job's log. It runs when the step above fails,
+      # which is when pins moved, and it never fails the job.
+      - name: Print the Pins the Reports Derive
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: .github/scripts/report-graph-fuzzer-pins.sh reports
 
   # Fails on any line under Sources/ or Plugins/ that no test executes on
   # Linux or macOS, over the whole tree, from the lcov reports the two test
@@ -2783,6 +2795,11 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
+      # .github/scripts/analyze-graph-fuzzer-pins.py derives the fuzzer's pins in
+      # "Check Graph Fuzzer Corpus on Linux"; this checks how it fills its
+      # inputs from a run and what it does without them.
+      - name: Check the Fuzzer Pins Analysis Against Its Fixtures
+        run: python3 -I .github/scripts/analyze-graph-fuzzer-pins.py --self-test "$RUNNER_TEMP/analyze-graph-fuzzer-pins-self-test"
       # The check is the only thing between an unexecuted line and main, so
       # its script proves on fixtures that it unions the platforms, resolves
       # symbolic links and refuses missing data before it reads the reports.
