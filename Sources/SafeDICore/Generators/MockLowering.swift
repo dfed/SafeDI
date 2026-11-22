@@ -64,10 +64,12 @@ public enum MockLoweringShadow {
 	/// How the configurations lowered from `roots`' records compare with those the emitter generated: one comparison of
 	/// each root's merged code, then one of the module's shared configuration code, `emittedConfigurationCode`.
 	// D1 lane hook (lane D): lowered from the roots' records in `MockLowering+Configurations.swift`.
-	public static func configurationComparisons(
+	static func configurationComparisons(
 		of roots: [MockLowering.LoweredRoot],
 		emittedConfigurationCode _: String?,
 		mockConditionalCompilation _: String?,
+		sendableConfigurationTypeNames _: Set<String>,
+		publicMockContext _: PublicMockContext?,
 	) -> [Comparison] {
 		var comparisons = roots.map { root in
 			Comparison(mockedType: root.mockedType.asSource, outcome: .unsupported(.configurationStructs), subject: .mergedCode)
@@ -153,12 +155,72 @@ public enum MockLowering {
 		let childFields: [ChildField]
 		/// The type of the closure that overrides how the node is built, returning its concrete type.
 		let concreteBuilderClosureType: String
+		// D1 lane hook (lane D): a public mock's node, whose type's module-level configuration and construction functions are
+		// lowered in `MockLowering+PublicConfigurations.swift`.
+		/// Where a public mock builds the node, the construction it builds the node's type with: `nil` in an internal mock.
+		var publicConstruction: PublicConstructionRecord?
 
 		/// A field that configures a child of the node: its configuration, or an optional builder closure.
 		struct ChildField: Sendable, Equatable {
 			let name: String
 			let typeSource: String
 			let defaultValue: String
+		}
+	}
+
+	/// A construction a public mock's tree builds a type with, through a function in the type's extension
+	/// (`__safeDI_init` or `__safeDI_mock`), from which the type's module-level configuration
+	/// (`__safeDI_<Module>_<Type>_MockConfiguration`), its extension's construction functions and the call of a construction
+	/// function are lowered (`MockLowering+PublicConfigurations.swift`). Recorded per node in the order the walk finishes the
+	/// nodes, as a `ConfigurationRecord` is.
+	struct PublicConstructionRecord: Sendable, Equatable {
+		/// The concrete type built.
+		let concreteType: TypeDescription
+		/// Whether the type is built with its hand-written mock (`__safeDI_mock`) rather than its initializer (`__safeDI_init`).
+		let usesMockInitializer: Bool
+		/// Whether the type is built with an extension's `instantiate(…)`.
+		let isExtensionBased: Bool
+		/// The name of the hand-written mock method, where it is not `mock`.
+		let customMockName: String?
+		/// The isolation the initializer or hand-written mock spells, which the construction function mirrors.
+		let constructionIsolation: String?
+		/// What the construction returns: the concrete type, or what a hand-written mock returns.
+		let constructionReturnType: TypeDescription
+		/// The construction's arguments, in the order it takes them.
+		let arguments: [Argument]
+		/// The types the builder that overrides the construction is handed, one per argument.
+		let builderParameterTypes: [TypeDescription]
+		/// The members that configure the node's children, in the order a public configuration declares them (inline
+		/// order, `MockParameterNode.inlineOrderPosition`).
+		let childMembers: [ChildMember]
+		/// Whether the construction takes a default-valued parameter, whose member and provider the lowering does not
+		/// lower yet.
+		let hasDefaultParameters: Bool
+
+		/// An argument of the construction: its label, the name its value is bound under, and its type as declared.
+		struct Argument: Sendable, Equatable {
+			let label: String
+			let innerLabel: String
+			let typeDescription: TypeDescription
+		}
+
+		/// A member of a public configuration, or of a public mock's `SafeDIOverrides`, that configures one child.
+		struct ChildMember: Sendable, Equatable {
+			/// The member's name, which is also its initializer parameter's label.
+			let name: String
+			/// The concrete type the child builds, whose module a closure member's access admits.
+			let concreteType: TypeDescription
+			let source: Source
+
+			/// What the member holds.
+			enum Source: Sendable, Equatable {
+				/// The `SafeDIOverrides` of the public mock another module generated, which the child calls.
+				case calledMockOverrides(typeSource: String, defaultValue: String)
+				/// The child's own module-level configuration where `isConfigured` and the module names one, or else an
+				/// optional closure of `builderClosureType`, `@Sendable` where `requiresSendable` or the configuration
+				/// holding it is, as visible as `accessTypes`.
+				case built(isConfigured: Bool, builderClosureType: String, requiresSendable: Bool, accessTypes: [TypeDescription])
+			}
 		}
 	}
 
@@ -186,7 +248,7 @@ extension ScopeGenerator {
 
 	/// The mock of a type whose `mock()` takes no parameter and builds nothing but the type: one call of its hand-written
 	/// mock, its `instantiate()` or its initializer.
-	private static func mockWithoutTree(of instantiable: Instantiable, context: MockContext) -> String {
+	static func mockWithoutTree(of instantiable: Instantiable, context: MockContext) -> String {
 		let typeName = instantiable.concreteInstantiable.asSource
 		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
 		let returnType = (instantiable.mockCallReturnType ?? instantiable.concreteInstantiable).asSource

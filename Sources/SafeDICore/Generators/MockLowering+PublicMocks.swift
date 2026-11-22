@@ -424,9 +424,9 @@ extension MockLowering {
 		/// No call fills a builder.
 		static let none = FilledCallBuilders(calls: [], parameters: [], fillPlaceBindings: ScopeGenerator.FillPlaceBindings(bindingsByGenerator: [:]))
 
-		/// The declarations of the builders, one per line at `indent`, each followed by a comma.
+		/// The declarations of the builders, one per line at `indent`.
 		func parameterLines(indent: String) -> [String] {
-			parameters.map { "\(indent)\($0.declaration)," }
+			parameters.map { "\(indent)\($0.declaration)" }
 		}
 	}
 }

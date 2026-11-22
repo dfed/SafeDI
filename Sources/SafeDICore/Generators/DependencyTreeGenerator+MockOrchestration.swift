@@ -413,6 +413,8 @@ extension DependencyTreeGenerator {
 				of: loweredRoots,
 				emittedConfigurationCode: mockConfigurationCode,
 				mockConditionalCompilation: mockConditionalCompilation,
+				sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+				publicMockContext: publicMockContext,
 			) {
 				shadowObserver(comparison)
 			}
