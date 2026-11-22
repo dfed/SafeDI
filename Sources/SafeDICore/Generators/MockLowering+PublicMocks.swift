@@ -89,9 +89,12 @@ extension ScopeGenerator {
 		while let generator = generatorsToVisit.popLast() {
 			guard generator.publicMockCall == nil else { return true }
 			// A construction function's defaults are not lowered yet.
-			if case let .property(instantiable, _, _, _, _, _) = generator.scopeData, instantiable.initializer?.arguments.contains(where: \.hasDefaultValue) == true {
-				return true
+			let constructionTakesDefault = if case let .property(instantiable, _, _, _, _, _) = generator.scopeData {
+				instantiable.initializer?.arguments.contains(where: \.hasDefaultValue) == true
+			} else {
+				false
 			}
+			guard !constructionTakesDefault else { return true }
 			generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator))
 		}
 		return false
