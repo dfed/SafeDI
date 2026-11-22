@@ -190,12 +190,11 @@ extension ScopeGenerator {
 			flatReceivedParameterMockDefaults[parameter.property] = context.flatParameterMockDefaults[parameter.property.typeDescription]
 		}
 		// Each dependency the mock promotes to its root is an optional parameter, named as the node's binding, which the walk
-		// binds the node from. A promoted wrapper, and a name the parameters take apart from the binding's, are not lowered
-		// yet.
+		// binds the node from. A name the parameters take apart from the binding's is not lowered yet.
 		let promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildrenComputedAfresh(propertiesGeneratedLater: []))
 		var promotedNodes = [(property: Property, name: String)]()
 		for node in nodes where promotedProperties.contains(node.property) {
-			guard let builtNode = node.builtNode, !builtNode.isWrapped else { return .unsupported(.publicMockRoot) }
+			guard let builtNode = node.builtNode else { return .unsupported(.publicMockRoot) }
 			promotedNodes.append((property: node.property, name: builtNode.bindingName))
 		}
 		let indent = Self.standardIndent
