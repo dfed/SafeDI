@@ -7,8 +7,6 @@ paths:
   - "Scripts/fuzz-corpus.sh"
 ---
 
-<!-- Split from fuzzer-seam-oracles.md, which reached 32,000 characters. Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 # Graph fuzzer: the gating checks
 
 Continues `fuzzer-seam-oracles.md`. These checks gate seam and public mock generator changes: the retention oracle, its first signal (the level function capture check), the compile of the call a person writes, and the draws of fixed defects' shapes; and mock generator changes: the configuration storage oracle.

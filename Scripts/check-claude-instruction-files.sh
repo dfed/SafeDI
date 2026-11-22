@@ -40,4 +40,7 @@ fi
 if ! python3 Scripts/check-instruction-symbols.py; then
 	status=1
 fi
+if ! python3 Scripts/check-instruction-load.py; then
+	status=1
+fi
 exit $status

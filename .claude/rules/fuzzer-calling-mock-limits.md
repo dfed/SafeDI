@@ -4,8 +4,6 @@ paths:
   - "Tests/**/*GraphFuzzerCallingMockTests.swift"
 ---
 
-<!-- Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 # Graph fuzzer: the calling-mock check's limits
 
 The known issues, cost, undrawn shapes and report-only run of the calling-mock check and draw that `fuzzer-calling-mocks.md` and `fuzzer-calling-mock-draw.md` describe, and the draw's blocks from `970..<1030` on, which that file has no room for.
