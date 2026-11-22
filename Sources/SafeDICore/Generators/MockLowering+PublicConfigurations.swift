@@ -261,7 +261,7 @@ extension MockLowering.PublicConstructionRecord.ChildMember {
 		switch child {
 		case let .built(node):
 			self.init(
-				name: node.property.label,
+				name: node.bindingName,
 				concreteType: node.instantiable.concreteInstantiable,
 				source: .built(
 					isConfigured: node.hasConfiguration,
@@ -273,7 +273,9 @@ extension MockLowering.PublicConstructionRecord.ChildMember {
 		case .alias, .cycleClosing:
 			return nil
 		case let .publicMockCall(call):
-			let field = call.overridesField
+			// A call whose override closure the calling mock cannot offer has no member.
+			let field: MockLowering.OverridesField? = call.overridesField
+			guard let field else { return nil }
 			self.init(
 				name: field.name,
 				concreteType: call.calledType,

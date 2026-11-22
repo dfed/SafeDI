@@ -113,9 +113,62 @@ extension MockLowering {
 	}
 }
 
+extension MockLowering {
+	/// The member of a configuration that configures a node bound as `bindingName` that closes a cycle on a node of
+	/// `concreteType`: that type's configuration, as the emitter nests the configuration of a node that repeats one around it
+	/// (`ScopeGenerator.configurationField`), unless an edge in `cycleEdges` prunes it.
+	static func cycleClosingOverridesField(boundAs bindingName: String, concreteType: TypeDescription) -> OverridesField? {
+		OverridesField(
+			name: bindingName,
+			typeSource: "\(concreteType.asSource).\(ScopeGenerator.MockParameterNode.configurationStructName)",
+			defaultValue: ".init()",
+			sendability: .whenConfigurationIsTypedSendable(concreteType.asSource),
+		)
+	}
+
+	/// The configured types around a node's children, which the walk restores when it leaves them.
+	struct ConfiguredNodeEntry {
+		/// Whether the node records its configuration: its type repeats no configured node around it, and it is beneath no
+		/// node that does.
+		let recordsConfiguration: Bool
+		/// The node's type, which the walk inserted among the configured types around it, unless one there has it.
+		fileprivate let insertedType: String?
+		fileprivate let wasBeneathRepeatedConfiguredAncestor: Bool
+	}
+}
+
+extension MockLowering.Walk {
+	/// Enters the children of a node of `concreteType`, as `ScopeGenerator.collectUniqueConfigurationTypes` walks them.
+	mutating func enteringConfiguredNode(of concreteType: TypeDescription) -> MockLowering.ConfiguredNodeEntry {
+		let typeName = concreteType.asSource
+		let repeatsAncestor = !configuredAncestorTypes.insert(typeName).inserted
+		let entry = MockLowering.ConfiguredNodeEntry(
+			recordsConfiguration: !repeatsAncestor && !isBeneathRepeatedConfiguredAncestor,
+			insertedType: repeatsAncestor ? nil : typeName,
+			wasBeneathRepeatedConfiguredAncestor: isBeneathRepeatedConfiguredAncestor,
+		)
+		isBeneathRepeatedConfiguredAncestor = isBeneathRepeatedConfiguredAncestor || repeatsAncestor
+		return entry
+	}
+
+	/// Leaves the children `entry` entered.
+	mutating func leavingConfiguredNode(_ entry: MockLowering.ConfiguredNodeEntry) {
+		if let insertedType = entry.insertedType {
+			configuredAncestorTypes.remove(insertedType)
+		}
+		isBeneathRepeatedConfiguredAncestor = entry.wasBeneathRepeatedConfiguredAncestor
+	}
+
+	/// Whether a leaf of `concreteType` records its configuration: its type repeats no configured node around it, and it is
+	/// beneath no node that does.
+	func recordsConfiguration(ofLeafOf concreteType: TypeDescription) -> Bool {
+		!isBeneathRepeatedConfiguredAncestor && !configuredAncestorTypes.contains(concreteType.asSource)
+	}
+}
+
 extension MockLowering.ConfigurationRecord {
-	/// The `SafeDIMockConfiguration` this record describes, nested in an extension of its type: a field per child, then
-	/// the builder that overrides how the type is built, each held in the configuration's storage.
+	/// The `SafeDIMockConfiguration` this record describes, nested in an extension of its type: a field per child, one per
+	/// default-valued parameter, then the builder that overrides how the type is built, each held in the configuration's storage.
 	var configurationStruct: String {
 		let indent = ScopeGenerator.standardIndent
 		let innerIndent = "\(indent)\(ScopeGenerator.standardIndent)"
@@ -136,6 +189,11 @@ extension MockLowering.ConfigurationRecord {
 				documentation: nil,
 				isProvenSendable: false,
 			))
+		}
+		for defaultField in defaultFields {
+			let (parameter, field) = defaultField.configurationParameter(indent: parameterIndent)
+			parameters.append(parameter)
+			fields.append(field)
 		}
 		let builderType = "(\(concreteBuilderClosureType))?"
 		parameters.append("\(parameterIndent)_ \(ReservedName.configurationBuilderPropertyName): \(builderType) = nil")
