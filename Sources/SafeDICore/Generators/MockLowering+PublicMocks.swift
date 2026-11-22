@@ -373,7 +373,8 @@ extension MockLowering.Walk {
 			{
 				// A builder the call passes up is the builder `mock()` takes, which the call's builder function binds under the
 				// label the leaf receives it as. An override closure handed it is not lowered yet.
-				guard overrideBuilders == nil, filledCall == nil, property.propertyType.isConstant else { return .unsupported(.publicMockCall) }
+				// `mock()` takes it as the flat received parameter of its property (`lowerRootSignature(of:context:)`).
+				guard scope.contains(dependency.property), overrideBuilders == nil, filledCall == nil, property.propertyType.isConstant else { return .unsupported(.publicMockCall) }
 				passedUpBuilderBindings.append("let \(dependency.property.label): \(dependency.property.typeDescription.strippingEscaping.asSource) = \(builderName)")
 				arguments.append(labeled(".init(__safeDI_noScope: \(dependency.property.label))", as: argument))
 			} else {
