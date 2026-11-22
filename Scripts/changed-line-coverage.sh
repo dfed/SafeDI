@@ -10,7 +10,7 @@
 #
 # It runs as few tests as answer the question. A line one test executes stays executed whatever else runs, so the
 # script first runs only the suites the change itself touches (each `Tests/**/<Suite>Tests.swift` the change adds or
-# edits, by the file's name, plus each --first REGEX, a `swift test --filter` pattern). When those execute every
+# edits, by the file's name; or, where --first REGEX is given, only the tests those `swift test --filter` patterns name). When those execute every
 # changed line, that is the answer and nothing else runs. Otherwise it runs every other test, adds the two runs'
 # counts, and reports from both. --full runs the whole suite at once, as before. A change that touches no test file
 # and names no --first runs the whole suite.
@@ -51,10 +51,12 @@ fi
 mkdir -p .build/coverage; rm -f .build/coverage/report.txt .build/coverage/*.profdata
 git diff --name-only --diff-filter=ACMR "$base" -- 'Sources/*.swift' 'Plugins/*.swift' >.build/coverage/changed-files.txt
 # The suites the change touches: a test file is named for the suite it holds.
-while IFS= read -r test_file; do
-	suite=$(basename "$test_file" .swift)
-	first+=("\\.${suite}/")
-done < <(git diff --name-only --diff-filter=ACMR "$base" -- 'Tests/*Tests.swift')
+if (( ${#first[@]} == 0 )); then
+	while IFS= read -r test_file; do
+		suite=$(basename "$test_file" .swift)
+		first+=("\\.${suite}/")
+	done < <(git diff --name-only --diff-filter=ACMR "$base" -- 'Tests/*Tests.swift')
+fi
 if (( ${#first[@]} == 0 )); then full=1; fi
 swift_test=(swift test --build-system native -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild)
 bin=$(swift build --build-system native -c release --traits sourceBuild --show-bin-path)
