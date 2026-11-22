@@ -54,14 +54,35 @@ struct SafeDIToolCycleParameterPlanTests: ~Copyable {
 		#expect(files.count == 1)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_generatesSameFilesWithSettledParametersAsWithout_whenRoundRebuildsEqualMapOfRedeclaredLabels() async throws {
+		// Four screens that each open the other three through builders; `Screen1` declares `context` again, which
+		// `Screen2` receives only if available. As a round changes the parameters of a function nested inside another, the
+		// places above search again and build maps of the labels redeclared on the functions anew, holding the same labels
+		// as the round before. The plan counts each as found anew, so the places above search once more, and the parameters
+		// still settle where the passes without the plan end.
+		let files = try await expectSameFilesWithPlanAsWithout(of: Self.screens(
+			opened: [[1, 2, 3], [0, 2, 3], [0, 1, 3], [0, 1, 2]],
+			context: [1: "@Instantiated let context: Context", 2: "@Received(onlyIfAvailable: true) let context: Context?"],
+		))
+		#expect(files.count == 1)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
 
 	/// The graph `make_screens.py` (the generate benchmark's) draws at eight screens with seed 6.
 	private static var screens: [String] {
-		let opened = [[1, 5, 7], [0, 3, 7], [1, 5, 6], [2, 6, 7], [0, 2, 7], [1, 3, 7], [1, 4, 5], [0, 4, 5]]
-		let context = [1: "@Instantiated let context: Context", 5: "@Instantiated let context: Context", 3: "@Received(onlyIfAvailable: true) let context: Context?", 6: "@Received(onlyIfAvailable: true) let context: Context?"]
+		screens(
+			opened: [[1, 5, 7], [0, 3, 7], [1, 5, 6], [2, 6, 7], [0, 2, 7], [1, 3, 7], [1, 4, 5], [0, 4, 5]],
+			context: [1: "@Instantiated let context: Context", 5: "@Instantiated let context: Context", 3: "@Received(onlyIfAvailable: true) let context: Context?", 6: "@Received(onlyIfAvailable: true) let context: Context?"],
+		)
+	}
+
+	/// Screens that each open the screens `opened` lists through builders, and declare `context` as `context` lists.
+	private static func screens(opened: [[Int]], context: [Int: String]) -> [String] {
 		var files = opened.enumerated().map { index, screens in
 			var declarations = ["@Forwarded let id: String", "@Received let service: Service"]
 			if let declaration = context[index] {
