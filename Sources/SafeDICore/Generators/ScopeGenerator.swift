@@ -6517,18 +6517,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Only each child's code is awaited here: what the body decides around it is decided by the synchronous functions
 		// below, as a property's scope is (`generatePropertyCode`).
 		var body = bodyChildren(propertiesGeneratedLater: propertiesGeneratedLater, enclosingFunctionNames: enclosingFunctionNames)
-		let requests = body.orderedChildren.indices.filter { body.orderedChildren[$0].generator.fillEmitsCode }.map { index in
-			ChildCodeRequest(
-				index: index,
-				generator: body.orderedChildren[index].generator,
-				unavailableProperties: body.orderedChildren[index].unavailableProperties,
-				propertiesGeneratedLater: body.orderedChildren[index].propertiesGeneratedLater,
-				builderFunctionNames: builderFunctionNamesOfChild(at: index, in: body),
-			)
-		}
-		let codes = try await Self.childCode(of: requests, codeGeneration: codeGeneration, leadingWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
-		for (request, code) in zip(requests, codes) {
-			append(code, ofChildAt: request.index, to: &body, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
+		if ConcurrentChildCode.plansChildrenAtOnce {
+			try await appendConcurrentChildCode(to: &body, codeGeneration: codeGeneration, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
+		} else {
+			// One child after another, each awaited in this frame: a function between the body and each child's code
+			// would add its frame to every task that plans a body (`.claude/rules/generator-design.md`).
+			for index in body.orderedChildren.indices where body.orderedChildren[index].generator.fillEmitsCode {
+				let code = try await body.orderedChildren[index].generator.generateCode(
+					codeGeneration: codeGeneration,
+					unavailableProperties: body.orderedChildren[index].unavailableProperties,
+					propertiesGeneratedLater: body.orderedChildren[index].propertiesGeneratedLater,
+					builderFunctionNames: builderFunctionNamesOfChild(at: index, in: body),
+					leadingWhitespace: leadingMemberWhitespace,
+					fillPlaceBindings: fillPlaceBindings,
+				)
+				append(code, ofChildAt: index, to: &body, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
+			}
 		}
 		return statements(of: consume body, leadingMemberWhitespace: leadingMemberWhitespace)
 	}
@@ -6549,14 +6553,47 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// those children, and in every other tree, which starts its large subtrees' code early, a body plans one child after
 	/// another. A child's error is thrown as the roots' task group throws one
 	/// (`DependencyTreeGenerator.plannedCode(of:rootsOfOtherModules:)`).
-	private static func childCode(
+	private func appendConcurrentChildCode(
+		to body: inout BodyChildren,
+		codeGeneration: CodeGeneration,
+		leadingMemberWhitespace: String,
+		fillPlaceBindings: FillPlaceBindings,
+	) async throws {
+		let requests = body.orderedChildren.indices.filter { body.orderedChildren[$0].generator.fillEmitsCode }.map { index in
+			ChildCodeRequest(
+				index: index,
+				generator: body.orderedChildren[index].generator,
+				unavailableProperties: body.orderedChildren[index].unavailableProperties,
+				propertiesGeneratedLater: body.orderedChildren[index].propertiesGeneratedLater,
+				builderFunctionNames: builderFunctionNamesOfChild(at: index, in: body),
+			)
+		}
+		let codes = try await Self.concurrentChildCode(of: requests, codeGeneration: codeGeneration, leadingWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
+		for (request, code) in zip(requests, codes) {
+			append(code, ofChildAt: request.index, to: &body, leadingMemberWhitespace: leadingMemberWhitespace, fillPlaceBindings: fillPlaceBindings)
+		}
+	}
+
+	/// The code of each of `requests`, each on a task of its own (`appendConcurrentChildCode`).
+	private static func concurrentChildCode(
 		of requests: [ChildCodeRequest],
 		codeGeneration: CodeGeneration,
 		leadingWhitespace: String,
 		fillPlaceBindings: FillPlaceBindings,
 	) async throws -> [GeneratedCode] {
-		guard ConcurrentChildCode.plansChildrenAtOnce, requests.count > 1 else {
-			return try await code(of: requests, codeGeneration: codeGeneration, leadingWhitespace: leadingWhitespace, fillPlaceBindings: fillPlaceBindings)
+		guard requests.count > 1 else {
+			var codes = [GeneratedCode]()
+			for request in requests {
+				try await codes.append(request.generator.generateCode(
+					codeGeneration: codeGeneration,
+					unavailableProperties: request.unavailableProperties,
+					propertiesGeneratedLater: request.propertiesGeneratedLater,
+					builderFunctionNames: request.builderFunctionNames,
+					leadingWhitespace: leadingWhitespace,
+					fillPlaceBindings: fillPlaceBindings,
+				))
+			}
+			return codes
 		}
 		ConcurrentChildCode.record(childCount: requests.count)
 		let maximumChildrenAtOnce = ConcurrentChildCode.maximumChildrenAtOnce
@@ -6592,27 +6629,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// Every position holds its child's code once the group is done.
 			return codesByPosition.compactMap(\.self)
 		}
-	}
-
-	/// The code of each of `requests`, generated one after another in their order.
-	private static func code(
-		of requests: [ChildCodeRequest],
-		codeGeneration: CodeGeneration,
-		leadingWhitespace: String,
-		fillPlaceBindings: FillPlaceBindings,
-	) async throws -> [GeneratedCode] {
-		var codes = [GeneratedCode]()
-		for request in requests {
-			try await codes.append(request.generator.generateCode(
-				codeGeneration: codeGeneration,
-				unavailableProperties: request.unavailableProperties,
-				propertiesGeneratedLater: request.propertiesGeneratedLater,
-				builderFunctionNames: request.builderFunctionNames,
-				leadingWhitespace: leadingWhitespace,
-				fillPlaceBindings: fillPlaceBindings,
-			))
-		}
-		return codes
 	}
 
 	/// What a body decides of its children before it awaits their code, and what it has written of them since: the
@@ -7404,18 +7420,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				unavailableProperties: unavailableProperties,
 				builderFunctionNames: builderFunctionNames,
 			) {
-				let closedOnFunctionName = closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames)
-				return .place(PlacePlan(code: .text(closingCode),
-				                        record: closingRecord(
-				                        	of: property,
-				                        	instantiable: instantiable,
-				                        	forwardedProperties: [],
-				                        	erasedToConcreteExistential: erasedToConcreteExistential,
-				                        	closedOnFunctionName: closedOnFunctionName,
-				                        	unavailableProperties: unavailableProperties,
-				                        	builderFunctionNames: builderFunctionNames,
-				                        	fillPlaceBindings: fillPlaceBindings,
-				                        )))
+				return closingPlace(
+					closingCode: closingCode,
+					of: property,
+					instantiable: instantiable,
+					erasedToConcreteExistential: erasedToConcreteExistential,
+					unavailableProperties: unavailableProperties,
+					builderFunctionNames: builderFunctionNames,
+					fillPlaceBindings: fillPlaceBindings,
+				)
 			}
 			let childCode = try await generateProperties(
 				codeGeneration: codeGeneration,
@@ -7424,7 +7437,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				leadingMemberWhitespace: Self.standardIndent,
 				fillPlaceBindings: fillPlaceBindings,
 			)
-			return try .place(propertyCode(
+			return try placeCode(
 				around: childCode,
 				instantiable: instantiable,
 				property: property,
@@ -7436,7 +7449,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				unavailableProperties: unavailableProperties,
 				builderFunctionNames: builderFunctionNames,
 				fillPlaceBindings: fillPlaceBindings,
-			))
+			)
 		case let .hole(property, _, site):
 			// A tree built only to compute the seam's signature has no site, and generates nothing.
 			guard let site else { return .empty }
@@ -7444,7 +7457,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// `generateSeamRootCode`, lives until the 2.3.1 seam rework (R2a) plans seam bodies, fills and level
 			// functions on the builder graph and deletes today's seam emission with it. The caller side, a fill below,
 			// stays until fills are planned.
-			return .place(PlacePlan(code: .text(Self.buildSiteCode(of: property, at: site, functionName: builderFunctionNames.functionName, readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties, isNonisolated: sendableFunctionsAreNonisolated))))
+			return Self.textPlace(Self.buildSiteCode(of: property, at: site, functionName: builderFunctionNames.functionName, readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties, isNonisolated: sendableFunctionsAreNonisolated))
 		case let .fill(hole, functionName):
 			// A fill is hosted as its text until fills are planned (`.claude/rules/emission-decisions.md`).
 			let fillCode = try await generateFillCode(
@@ -7457,9 +7470,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 				fillPlaceBindings: fillPlaceBindings,
 			)
-			return .place(PlacePlan(code: .text(fillCode)))
+			return Self.textPlace(fillCode)
 		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
-			let aliasCode = aliasCode(
+			return aliasPlace(
 				of: property,
 				fulfilledBy: fulfillingProperty,
 				erasedToConcreteExistential: erasedToConcreteExistential,
@@ -7467,17 +7480,102 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				declarationReference: declarationReference,
 				unavailableProperties: unavailableProperties,
 			)
-			let record: PlaceRecord? = if fulfillingExpression == nil {
-				.alias(AliasPlaceRecord(
-					property: property,
-					fulfillingProperty: Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: unavailableProperties) ? nil : fulfillingProperty,
-					text: aliasCode,
-				))
-			} else {
-				nil
-			}
-			return .place(PlacePlan(code: .text(aliasCode), record: record))
 		}
+	}
+
+	// The four functions below build a place's record, a struct of many fields, in a frame of their own: inlined into
+	// `generatePropertyCode`, whose async frame every task planning a scope holds, the record's temporaries grew that frame
+	// by about 5.6 KB, and the peak memory of a module of 1,200 seams by about 15 MB.
+
+	/// A place that records nothing, written as `text`.
+	@inline(never)
+	private static func textPlace(_ text: String) -> GeneratedCode {
+		.place(PlacePlan(code: .text(text)))
+	}
+
+	/// The place of a scope that closes a cycle, written as `closingCode`.
+	@inline(never)
+	private func closingPlace(
+		closingCode: String,
+		of property: Property,
+		instantiable: Instantiable,
+		erasedToConcreteExistential: Bool,
+		unavailableProperties: Set<Property>,
+		builderFunctionNames: BuilderFunctionNames,
+		fillPlaceBindings: FillPlaceBindings,
+	) -> GeneratedCode {
+		let closedOnFunctionName = closedOnFunctionName(builtFor: property, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames)
+		return .place(PlacePlan(code: .text(closingCode),
+		                        record: closingRecord(
+		                        	of: property,
+		                        	instantiable: instantiable,
+		                        	forwardedProperties: [],
+		                        	erasedToConcreteExistential: erasedToConcreteExistential,
+		                        	closedOnFunctionName: closedOnFunctionName,
+		                        	unavailableProperties: unavailableProperties,
+		                        	builderFunctionNames: builderFunctionNames,
+		                        	fillPlaceBindings: fillPlaceBindings,
+		                        )))
+	}
+
+	/// The place of a scope that builds its property around `childCode` (`propertyCode`).
+	@inline(never)
+	private func placeCode(
+		around childCode: [GeneratedCode],
+		instantiable: Instantiable,
+		property: Property,
+		forwardedProperties: Set<Property>,
+		erasedToConcreteExistential: Bool,
+		isPropertyCycle: Bool,
+		seamCall: SeamCall?,
+		argumentList: String,
+		unavailableProperties: Set<Property>,
+		builderFunctionNames: BuilderFunctionNames,
+		fillPlaceBindings: FillPlaceBindings,
+	) throws(Initializer.GenerationError) -> GeneratedCode {
+		try .place(propertyCode(
+			around: childCode,
+			instantiable: instantiable,
+			property: property,
+			forwardedProperties: forwardedProperties,
+			erasedToConcreteExistential: erasedToConcreteExistential,
+			isPropertyCycle: isPropertyCycle,
+			seamCall: seamCall,
+			argumentList: argumentList,
+			unavailableProperties: unavailableProperties,
+			builderFunctionNames: builderFunctionNames,
+			fillPlaceBindings: fillPlaceBindings,
+		))
+	}
+
+	/// The place of an alias's declaration.
+	@inline(never)
+	private func aliasPlace(
+		of property: Property,
+		fulfilledBy fulfillingProperty: Property,
+		erasedToConcreteExistential: Bool,
+		onlyIfAvailable: Bool,
+		declarationReference: AliasDeclarationReferences.Reference?,
+		unavailableProperties: Set<Property>,
+	) -> GeneratedCode {
+		let aliasCode = aliasCode(
+			of: property,
+			fulfilledBy: fulfillingProperty,
+			erasedToConcreteExistential: erasedToConcreteExistential,
+			onlyIfAvailable: onlyIfAvailable,
+			declarationReference: declarationReference,
+			unavailableProperties: unavailableProperties,
+		)
+		let record: PlaceRecord? = if fulfillingExpression == nil {
+			.alias(AliasPlaceRecord(
+				property: property,
+				fulfillingProperty: Self.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: unavailableProperties) ? nil : fulfillingProperty,
+				text: aliasCode,
+			))
+		} else {
+			nil
+		}
+		return .place(PlacePlan(code: .text(aliasCode), record: record))
 	}
 
 	/// The initializer generated for `instantiable`, a root of the dependency tree, or `nil` for a root without

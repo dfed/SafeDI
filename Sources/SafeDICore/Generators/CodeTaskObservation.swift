@@ -65,8 +65,8 @@ public enum HeldCodeTasks {
 }
 
 /// The children a production body plans at once, each on a task of its own
-/// (`ScopeGenerator.childCode(of:codeGeneration:leadingWhitespace:fillPlaceBindings:)`): a root the type key lays out starts no
-/// code early, so its tree is planned in parallel this way. Each body's count is handed to `observer`, which the tests set,
+/// (`ScopeGenerator.appendConcurrentChildCode(to:codeGeneration:leadingMemberWhitespace:fillPlaceBindings:)`): a root
+/// the type key lays out starts no code early, so its tree is planned in parallel this way. Each body's count is handed to `observer`, which the tests set,
 /// never the tool.
 public enum ConcurrentChildCode {
 	/// Whether the body being planned plans its children at once: set while a root of the dependency tree, whose tree
