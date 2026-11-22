@@ -145,7 +145,7 @@ If your session started outside the worktree you are editing, scoped rules and n
 | promotion to the mock root, parameter naming | `.claude/rules/mock-root-promotion.md` |
 | `LazilyInstantiated` anywhere | `.claude/rules/lazily-instantiated.md` |
 | `generateMock: .public`, generated attributes; a public mock's or a seam's own mock's builders that take nothing | `.claude/rules/public-mocks.md`, `public-mock-builders.md`, `calling-mock-hole-builders.md` |
-| `generateDependencyTree: true` (seams) | `.claude/rules/seams.md`, `seam-access-proof.md`, `seam-generation.md`, `seam-builder-structs.md`, `seam-holes.md`, `seam-hole-fills.md` |
+| `generateDependencyTree: true` (seams) | `.claude/rules/seams.md`, `seam-access-proof.md`, `seam-generation.md`, `seam-builder-structs.md`, `seam-holes.md`, `seam-hole-fills.md`, `seam-signature-passes.md` |
 | a seam's or public mock's design: the contract, retention, hand-written builders | `.claude/rules/seam-and-mock-contract.md` |
 | a generator's design: type spelling, cost, captures, parallel work, runtime safety | `.claude/rules/generator-design.md` |
 | the construction memo; a decision made while code is emitted | `.claude/rules/construction-memo.md`, `emission-decisions.md` |
