@@ -113,7 +113,7 @@ enum CycleParameterPlan {
 		let requiredAliasFulfillingProperties: Set<Property>
 		let onlyIfAvailableUnwrappedReceivedProperties: Set<Property>
 		let unpassableCycleLabelsInTree: [UnpassableCycleLabel]
-		let cycleClosingRedeclaredLabels: ScopeGenerator.CycleClosingRedeclaredLabels
+		let cycleClosingRedeclaredLabels: CycleClosingRedeclaredLabels
 
 		init(
 			foundCycleParameters: [CycleParameter],
@@ -122,7 +122,7 @@ enum CycleParameterPlan {
 			requiredAliasFulfillingProperties: Set<Property>,
 			onlyIfAvailableUnwrappedReceivedProperties: Set<Property>,
 			unpassableCycleLabelsInTree: [UnpassableCycleLabel],
-			cycleClosingRedeclaredLabels: ScopeGenerator.CycleClosingRedeclaredLabels,
+			cycleClosingRedeclaredLabels: CycleClosingRedeclaredLabels,
 		) {
 			self.foundCycleParameters = foundCycleParameters
 			self.receivedProperties = receivedProperties
@@ -133,7 +133,7 @@ enum CycleParameterPlan {
 			self.cycleClosingRedeclaredLabels = cycleClosingRedeclaredLabels
 		}
 
-		/// Whether the two hold the same results.
+		/// Whether the two hold the same results, counting maps of redeclared labels built of other layers as other results.
 		func findsWhat(_ other: SearchResult) -> Bool {
 			self === other || (
 				foundCycleParameters == other.foundCycleParameters
@@ -142,7 +142,7 @@ enum CycleParameterPlan {
 					&& requiredAliasFulfillingProperties == other.requiredAliasFulfillingProperties
 					&& onlyIfAvailableUnwrappedReceivedProperties == other.onlyIfAvailableUnwrappedReceivedProperties
 					&& unpassableCycleLabelsInTree == other.unpassableCycleLabelsInTree
-					&& cycleClosingRedeclaredLabels == other.cycleClosingRedeclaredLabels
+					&& cycleClosingRedeclaredLabels.holdsSameLayers(as: other.cycleClosingRedeclaredLabels)
 			)
 		}
 	}
@@ -229,7 +229,7 @@ enum CycleParameterPlan {
 				requiredAliasFulfillingProperties: [],
 				onlyIfAvailableUnwrappedReceivedProperties: [],
 				unpassableCycleLabelsInTree: [],
-				cycleClosingRedeclaredLabels: [:],
+				cycleClosingRedeclaredLabels: .init(),
 			)
 			self.init(generator: root, inputs: inputs, result: resultBeforeFirstSearch)
 			// Built with an explicit stack: a tree can be as deep as its module has types.
@@ -464,11 +464,9 @@ enum CycleParameterPlan {
 		)
 		// The children's maps, merged in their order, as `ScopeGeneratorUnderConstruction` merges them. A generator child's
 		// subtree closes no cycle, so its map is empty.
-		var childrenCycleClosingRedeclaredLabels = ScopeGenerator.CycleClosingRedeclaredLabels()
+		var childrenCycleClosingRedeclaredLabels = CycleClosingRedeclaredLabels()
 		for case let .place(childPlace) in place.children {
-			for (closedOnDeclaration, redeclarations) in childPlace.result.cycleClosingRedeclaredLabels {
-				childrenCycleClosingRedeclaredLabels[closedOnDeclaration, default: [:]].merge(redeclarations) { $0.preceding($1) }
-			}
+			childrenCycleClosingRedeclaredLabels.merge(childPlace.result.cycleClosingRedeclaredLabels)
 		}
 		let cycleParameterSearch = ScopeGenerator.cycleParameterSearch(
 			instantiable: inputs.instantiable,

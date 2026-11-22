@@ -1105,13 +1105,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// `CycleClosingRedeclaredLabels`).
 		var cycleClosingRedeclaredLabels = CycleClosingRedeclaredLabels()
 		if let closedOnDeclaration {
-			cycleClosingRedeclaredLabels[closedOnDeclaration] = [:]
+			cycleClosingRedeclaredLabels.open(closedOn: closedOnDeclaration)
 		} else if childrenTakePartInCycle {
 			cycleClosingRedeclaredLabels = childrenCycleClosingRedeclaredLabels
 		}
 		var foundCycleParameters = [CycleParameter]()
 		var unpassableCycleLabelsInTree = [UnpassableCycleLabel]()
-		if let property, let declaration, !isPropertyCycle, let redeclarations = cycleClosingRedeclaredLabels.removeValue(forKey: declaration) {
+		if let property, let declaration, !isPropertyCycle, let redeclarations = cycleClosingRedeclaredLabels.removeRedeclarations(closedOn: declaration) {
 			// The property's own label is no parameter: the function's body is passed `nil` for it wherever it is called,
 			// since every call is made inside the tree that builds a declaration of the label – the property itself where
 			// the function is declared, and the cycle-closing scope's own property where it closes the cycle. Nor is a label
@@ -1170,10 +1170,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for parameter in cycleParameters {
 				redeclarations[parameter.property.label] = redeclarations[parameter.property.label].map { $0.preceding(parameter.redeclaration) } ?? parameter.redeclaration
 			}
-			// Merged in place: the map is this scope's alone.
-			for closedOnDeclaration in Array(cycleClosingRedeclaredLabels.keys) {
-				cycleClosingRedeclaredLabels[closedOnDeclaration, default: [:]].merge(redeclarations) { $0.preceding($1) }
-			}
+			cycleClosingRedeclaredLabels.add(redeclarations)
 		}
 		return CycleParameterSearch(
 			cycleClosingRedeclaredLabels: cycleClosingRedeclaredLabels,
@@ -4610,14 +4607,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `cycleParameters`: for a scope that declares the function, those its parameters do not hide; for any other scope,
 	/// `lazilyInstantiatedInstanceProperties`.
 	private let callSiteLazilyInstantiatedInstanceProperties: Set<Property>
-	/// For each declaration a cycle-closing scope in a subtree closes on above the subtree's root, the labels the scopes
-	/// between it and the root's parent declare – their instantiated, aliased and forwarded properties and their own builder
-	/// functions' parameters (see `CycleParameter`) – each with the declaration of it that comes first in source order.
-	/// Empty for nearly every subtree. Only the parent's construction reads a scope's map, so no generator stores it:
-	/// `ScopeGeneratorUnderConstruction` merges each child's into its parent's as the child's generator is created, and
-	/// hands the result to the parent's initializer. A map kept on every generator held a copy at each level of a cycle's
-	/// path for the tree's whole life.
-	typealias CycleClosingRedeclaredLabels = [BuiltDeclaration: [String: CycleParameter.Redeclaration]]
 	/// The parameters this scope's builder function needs, which the next pass of `Scope.createScopeGenerator` creates
 	/// the tree with: the labels its tree receives from the scopes enclosing it that a scope between it and one of its
 	/// cycle-closing scopes declares (see `CycleParameter.parameters`). Empty for nearly every scope.

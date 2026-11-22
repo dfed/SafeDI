@@ -1417,12 +1417,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 
 	/// The generators created so far for `propertiesToGenerate`, in order, followed by those of `fillsOfThisCall`.
 	private(set) var childGenerators = [ScopeGenerator]()
-	/// The `ScopeGenerator.CycleClosingRedeclaredLabels` of `childGenerators`, merged in their order, which this scope's
+	/// The `CycleClosingRedeclaredLabels` of `childGenerators`, merged in their order, which this scope's
 	/// generator is created from; then, once `scopeGenerator(collectingGeneratorsToStartInto:)` has created it, its own,
 	/// which `add(childGenerator:createdBy:readsAnsweredAbove:isSettled:)` merges into its parent's, and a memo entry of
 	/// the generator keeps for a place that reuses it (`ConstructionMemo.Entry`). No generator keeps one. An alias or a hole
 	/// has none.
-	private(set) var cycleClosingRedeclaredLabels = ScopeGenerator.CycleClosingRedeclaredLabels()
+	private(set) var cycleClosingRedeclaredLabels = CycleClosingRedeclaredLabels()
 	/// How many scopes this scope's subtree has so far: itself, and every scope created beneath it. An alias or a hole,
 	/// which generates a line or two, is not counted.
 	private(set) var subtreeScopeCount = 1
@@ -1475,11 +1475,9 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		}
 	}
 
-	/// Merges a child's `ScopeGenerator.CycleClosingRedeclaredLabels` into `cycleClosingRedeclaredLabels`.
-	private mutating func merge(childCycleClosingRedeclaredLabels: ScopeGenerator.CycleClosingRedeclaredLabels) {
-		for (closedOnDeclaration, redeclarations) in childCycleClosingRedeclaredLabels {
-			cycleClosingRedeclaredLabels[closedOnDeclaration, default: [:]].merge(redeclarations) { $0.preceding($1) }
-		}
+	/// Merges a child's `CycleClosingRedeclaredLabels` into `cycleClosingRedeclaredLabels`.
+	private mutating func merge(childCycleClosingRedeclaredLabels: CycleClosingRedeclaredLabels) {
+		cycleClosingRedeclaredLabels.merge(childCycleClosingRedeclaredLabels)
 	}
 
 	/// Adds the generator another place built, which `reuse` found, to this scope's children, as the child it builds
