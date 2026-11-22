@@ -406,7 +406,7 @@ extension MockLowering {
 				else { return await placeOrFillNode(of: generator, inScope: scope, path: path, indent: indent, lines: &lines) }
 				guard generator.publicMockCall == nil else { return await publicMockCallNode(of: generator, inScope: scope, path: path, indent: indent, lines: &lines) }
 				guard !isPropertyCycle else {
-					return cycleClosingNode(of: generator, instantiable: instantiable, property: property, bindingName: bindingName, seamCall: seamCall, indent: indent, lines: &lines)
+					return cycleClosingNode(of: generator, instantiable: instantiable, property: property, bindingName: bindingName, seamCall: seamCall, inScope: scope, indent: indent, lines: &lines)
 				}
 				switch await builtNode(
 					of: generator,
@@ -441,6 +441,7 @@ extension MockLowering {
 			property: Property,
 			bindingName: String,
 			seamCall: SeamCall?,
+			inScope scope: Set<Property>,
 			indent: String,
 			lines: inout [String],
 		) -> Lowering<TreeNode> {
@@ -451,20 +452,21 @@ extension MockLowering {
 			      let closedOn = ancestorDeclarationsByLabel[property.label]?.last,
 			      closedOn.declaration == generator.closedOnDeclaration,
 			      closedOn.functionName == MockLowering.builderFunctionName(boundAs: property.label),
-			      !bodyLabels[closedOn.bodyLevel..<(bodyLabels.count - 1)].contains(where: { $0.contains(property.label) }),
-			      generator.cycleParameters.isEmpty
+			      !bodyLabels[closedOn.bodyLevel..<(bodyLabels.count - 1)].contains(where: { $0.contains(property.label) })
 			else { return .unsupported(.cycle) }
 			let forwardedProperties = instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted { $0.label < $1.label }
-			// D1 lane hook (lane B): a closer inside a `@Sendable` builder function, and of other wrapper kinds.
-			guard property.propertyType.isConstant && forwardedProperties.isEmpty || property.propertyType == .instantiator,
-			      !isInsideSendableFunction
-			else { return .unsupported(.wrapper) }
+			// D1 lane hook (lane B): a closer of any wrapper kind hands the function to its wrapper, inside a `@Sendable`
+			// builder function too, since it reads no override.
+			guard !property.propertyType.isConstant || forwardedProperties.isEmpty else { return .unsupported(.wrapper) }
 			guard labels.insert(bindingName).inserted else { return .unsupported(.siblingLabelCollision) }
+			// D1 lane hook (lane B): a closer passes the function's cycle parameters (`MockLowering+CycleParameters.swift`).
+			guard let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: scope) else { return .unsupported(.onlyIfAvailable) }
 			lines.append(contentsOf: MockLowering.bindingLines(
 				of: property,
 				boundAs: bindingName,
 				callingFunctionNamed: closedOn.functionName,
 				forwardedProperties: forwardedProperties,
+				cycleParameterArguments: cycleParameterArguments,
 				indent: indent,
 			))
 			return .lowered(.cycleClosing(property, bindingName: bindingName, concreteType: instantiable.concreteInstantiable))
@@ -515,7 +517,10 @@ extension MockLowering {
 				else { return .unsupported(.cycle) }
 				rebindingLines = memberRebindingLines
 			}
-			let scope = scope.union(generator.reboundProperties)
+			// D1 lane hook (lane B): what the node's binding passes its builder function's cycle parameters, read where the node
+			// is built, and the parameters, the nearest declarations of their labels in the function.
+			guard let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: scope) else { return .unsupported(.onlyIfAvailable) }
+			let scope = scope.union(generator.reboundProperties).union(MockLowering.cycleParameterForms(of: generator))
 			// D1 lane hook (lane B): a `Sendable` wrapper's, or a cycle's, builder function is `@Sendable`, and every override
 			// read inside it is read into a local before the outermost such function.
 			let builder = ReservedName.configurationBuilderPropertyName
@@ -561,7 +566,7 @@ extension MockLowering {
 				hasConfiguration ? "\(nodePath).\(builder)" : nodePath,
 				localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(builder)",
 			)
-			let node = ConstantNode(
+			var node = ConstantNode(
 				property: property,
 				bindingName: bindingName,
 				instantiable: instantiable,
@@ -589,6 +594,8 @@ extension MockLowering {
 				requiresSendable: isInsideSendableFunction || generator.buildsInSendableFunction,
 				defaultFields: defaultFields,
 			)
+			node.cycleParameters = generator.cycleParameters.map(\.property)
+			node.cycleParameterArguments = cycleParameterArguments
 			let lazilyInstantiatedInstanceProperties = generator.mockLoweringLazilyInstantiatedInstanceProperties
 			guard node.hasChildren || isWrapped || !receiverBindings.isEmpty else {
 				guard let rule = Self.unsupportedRule(ofDependenciesOf: instantiable, isWrapped: isWrapped, inScope: scope, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, unavailableProperties: unavailableProperties, childProperties: [], uncoveredProperties: uncoveredProperties) else {
@@ -757,6 +764,12 @@ extension MockLowering {
 		let defaultFields: [DefaultField]
 		/// Whether the node's children are configured in a configuration of its own, which holds its builder too.
 		var hasConfiguration = false
+		// D1 lane hook (lane B): the parameters a lazy cycle closing on the node's builder function needs, and what the
+		// node's binding passes them (`MockLowering+CycleParameters.swift`).
+		/// The parameters of the builder function a lazy cycle closing on it needs, after the forwarded properties.
+		var cycleParameters = [Property]()
+		/// The arguments the node's binding passes `cycleParameters`.
+		var cycleParameterArguments = [String]()
 
 		/// The node, configured in a configuration of its own where `children` hold a node that builds its type or its
 		/// construction takes a default-valued parameter.
@@ -851,7 +864,11 @@ extension MockLowering {
 			let builtType = property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource
 			let parameters = forwardedProperties.map { "\($0.label): \($0.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
 			let decorator = buildsInSendableFunction ? "@Sendable " : ""
-			return "\(indent)\(decorator)func \(functionName)(\(parameters.joined(separator: ", "))) -> \(builtType) {"
+			var parameterList = parameters.joined(separator: ", ")
+			if !cycleParameters.isEmpty {
+				parameterList += (parameterList.isEmpty ? "" : ", ") + cycleParameters.initializerFunctionParametersSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
+			}
+			return "\(indent)\(decorator)func \(functionName)(\(parameterList)) -> \(builtType) {"
 		}
 
 		/// The statements that begin the node's builder function, before its children's: each receive named apart bound
@@ -871,7 +888,7 @@ extension MockLowering {
 			let builderCall = isErased && hasConfiguration ? "\(erasedTypeSource)(\(builder)(\(builderArguments)))" : "\(builder)(\(builderArguments))"
 			var lines = ["\(bodyIndent)\(returnPrefix)\(constructionReading(override: overridePath, builderCall: builderCall))"]
 			lines.append("\(indent)}")
-			lines.append(contentsOf: MockLowering.bindingLines(of: property, boundAs: bindingName, callingFunctionNamed: functionName, forwardedProperties: forwardedProperties, indent: indent))
+			lines.append(contentsOf: MockLowering.bindingLines(of: property, boundAs: bindingName, callingFunctionNamed: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent))
 			return lines
 		}
 	}
@@ -994,15 +1011,15 @@ extension MockLowering {
 
 	/// The statements that bind `property` from the builder function `functionName`, which takes `forwardedProperties`: a
 	/// constant called, or an instantiator handed the function.
-	static func bindingLines(of property: Property, boundAs bindingName: String, callingFunctionNamed functionName: String, forwardedProperties: [Property], indent: String) -> [String] {
+	static func bindingLines(of property: Property, boundAs bindingName: String, callingFunctionNamed functionName: String, forwardedProperties: [Property], cycleParameterArguments: [String] = [], indent: String) -> [String] {
 		// D1 lane hook (lane B): the binding of each wrapper kind (`MockLowering+Wrappers.swift`).
 		if property.propertyType.isConstant {
 			// D1 lane hook (lane C): a promoted child is bound as the value it builds, as `constantBindingLine` binds it.
-			["\(indent)let \(bindingName): \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource) = \(functionName)()"]
+			["\(indent)let \(bindingName): \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource) = \(functionName)(\(cycleParameterArguments.joined(separator: ", ")))"]
 		} else {
 			// A mock binds a node it promotes for an optional receive to a value that is not optional, so a wrapper is
 			// spelled unwrapped where it is made.
-			wrapperBindingLines(of: property.typeDescription, named: bindingName, handing: functionName, forwardedProperties: forwardedProperties, indent: indent)
+			wrapperBindingLines(of: property.typeDescription, named: bindingName, handing: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent)
 		}
 	}
 

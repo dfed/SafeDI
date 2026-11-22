@@ -5153,6 +5153,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lazilyInstantiatedInstanceProperties
 	}
 
+	// D1 lane hook (lane B): the mock lowering reads which cycle arguments pass a lazy wrapper's instance.
+	/// `callSiteLazilyInstantiatedInstanceProperties`, read by the mock lowering.
+	nonisolated var mockLoweringCallSiteLazilyInstantiatedInstanceProperties: Set<Property> {
+		callSiteLazilyInstantiatedInstanceProperties
+	}
+
 	/// Whether the property an alias renames is in scope only as the instance of a `LazilyInstantiated` property.
 	private let fulfillingPropertyIsLazilyInstantiatedInstance: Bool
 	/// The by-value property with which this scope’s siblings and their subtrees receive the instance of the
