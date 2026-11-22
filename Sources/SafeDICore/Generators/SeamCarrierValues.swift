@@ -18,6 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import Foundation
+
 /// How a seam's carriers hand a level's values to their members: the one place that decides it, which the carrier's
 /// declaration, the seam's tree and the caller's carrier all read, each computing it from the same enums.
 ///
@@ -29,13 +31,33 @@
 /// takes one argument however many values its level binds, a run's fields are spelled once per level, and every value
 /// keeps the access its type proves: a struct field at its own access, never a positional argument of a wider member.
 ///
-/// The internal switch `chainsEveryRun` keeps the single-struct form beside it for measurement: one struct per level,
-/// of the shortest case's values, with every later value positional. Only one form ships; the other is deleted before
-/// review.
+/// The internal switch `transport` keeps the other forms beside it for measurement: one struct per level, of the shortest
+/// case's values, with every later value positional (E), and the run structs with a level of few public values taken
+/// positionally (the hybrid). Only one form ships; the others are deleted before review.
 struct SeamCarrierValues: Sendable {
-	/// Whether every distinct length of a level's cases ends a run of its own (a member takes exactly its struct), or only
-	/// the shortest does (a member takes that struct and the rest of its values positionally).
-	static let chainsEveryRun = true
+	/// How a level's values travel to its members.
+	enum Transport {
+		/// Only the shortest case's values end a run (a member takes that struct and the rest of its values positionally).
+		case singleStruct
+		/// Every distinct length of a level's cases ends a run of its own (a member takes exactly its struct).
+		case runStructs
+		/// As `runStructs`, but a level whose longest case takes at most `maximumPositionalValues` values, each as wide as
+		/// the public carrier, takes no struct: its members take their values positionally.
+		case hybrid(maximumPositionalValues: Int)
+	}
+
+	/// The form this build generates; `SAFEDI_CARRIER_TRANSPORT` (`E`, `E2`, or `H<K>`) picks another for measurement.
+	static let transport: Transport = {
+		let setting = ProcessInfo.processInfo.environment["SAFEDI_CARRIER_TRANSPORT"] ?? "E2"
+		if setting == "E" { return .singleStruct }
+		if setting.hasPrefix("H"), let maximum = Int(setting.dropFirst()) { return .hybrid(maximumPositionalValues: maximum) }
+		return .runStructs
+	}()
+
+	static var chainsEveryRun: Bool {
+		if case .singleStruct = transport { return false }
+		return true
+	}
 
 	/// Where each run of each level ends, by level, ascending.
 	private let endsByLevel: [String: [Int]]
@@ -68,6 +90,9 @@ struct SeamCarrierValues: Sendable {
 		var endsByLevel = [String: [Int]]()
 		for (level, lengths) in lengthsByLevel where !inconsistentLevels.contains(level) {
 			let sorted = lengths.sorted()
+			if case let .hybrid(maximumPositionalValues) = Self.transport, let longest = longestByLevel[level], longest.count <= maximumPositionalValues, !longest.contains(where: { $0.access < .public }) {
+				continue
+			}
 			if Self.chainsEveryRun {
 				endsByLevel[level] = sorted
 			} else {
