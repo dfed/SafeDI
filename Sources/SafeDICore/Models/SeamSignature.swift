@@ -1264,9 +1264,9 @@ public struct SeamSignature: Sendable {
 			/// where the parent is formed ends and captures nothing; a `Sendable` carrier holds only a `Sendable` child.
 			public func isLetChildOfCarrier(inSendableEnum: Bool, isInLoop: Bool = false) -> Bool {
 				switch kind {
-				case let .nested(enumKey, _, isIndirect):
+				case let .nested(enumKey, _, isIndirect), let .inner(enumKey, _, isIndirect):
 					!isIndirect && !isInLoop && (values?.fields.isEmpty ?? true) && (!inSendableEnum || enumKey.isSendable)
-				case .place, .inner, .fill:
+				case .place, .fill:
 					false
 				}
 			}
