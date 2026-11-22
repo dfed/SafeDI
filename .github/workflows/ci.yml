@@ -2180,6 +2180,62 @@ jobs:
     with:
       bundle: graph-fuzzer-test-bundle
 
+  # Compiles the hand-written calls of every generated declaration the
+  # Manual documents (Scripts/release-checks/written-calls.sh) against the
+  # code this change's SafeDITool generates, so that a change that breaks a
+  # documented call form fails on its own pull request rather than at the
+  # next release. It reuses the tool, macros and SafeDI module "Build Tests
+  # on Linux" bundles, so it builds nothing. It runs main's copy of the
+  # fixtures, so that a pull request cannot pass by editing a call: a change
+  # that documents a new call form adds it, and the check runs it once that
+  # change is on main. Main's copy holds every call the last stable release's
+  # copy holds, since no change edits one of those; the check before a stable
+  # tag still runs that release's own copy, as
+  # `.claude/rules/releases-and-packaging.md` says.
+  written-calls:
+    name: Check Written Calls on Linux
+    needs: [changes, linux-build]
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Download Test Bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: graph-fuzzer-test-bundle
+      - name: Unpack Test Bundle
+        run: tar -xzf graph-fuzzer-test-bundle.tar.gz
+      # The script is zsh's, which the container lacks. Retried for the
+      # reason "Install curl for Codecov" gives.
+      - name: Install zsh
+        uses: ./.github/actions/retry
+        with:
+          command: command -v zsh >/dev/null || { apt-get update && apt-get install -y --no-install-recommends zsh; }
+      # The checkout is the container's, so git needs telling that this user
+      # may read it.
+      - name: Fetch Main
+        uses: ./.github/actions/retry
+        with:
+          command: git config --global --add safe.directory "$GITHUB_WORKSPACE" && git fetch --no-tags --depth=1 origin main
+      - name: Check Out Main's Fixtures
+        run: git worktree add --detach "$RUNNER_TEMP/main" FETCH_HEAD
+      # The check took 8 seconds on a 4-core Linux machine with a release
+      # tool (2026-11-20); the limit leaves room for a slower runner and the
+      # bundle's coverage-instrumented tool.
+      - name: Compile Written Calls
+        timeout-minutes: 2
+        run: |
+          products="$GITHUB_WORKSPACE/.build/x86_64-unknown-linux-gnu/release"
+          "$RUNNER_TEMP/main/Scripts/release-checks/written-calls.sh" --keep-going \
+            --tool "$products/SafeDITool" --output "$RUNNER_TEMP/written-calls"
+
   linux-repeat-pass:
     name: Repeat Tests on Linux (pass ${{ matrix.pass }})
     needs: [changes, linux-build]
