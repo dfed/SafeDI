@@ -68,6 +68,7 @@ extension MockLowering {
 				name: property.label,
 				typeSource: "\(calledType.asSource).\(ReservedName.mockOverridesTypeName)",
 				defaultValue: ".init()",
+				sendability: .never,
 			)
 		}
 
