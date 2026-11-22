@@ -21,15 +21,22 @@
 extension ScopeGenerator {
 	/// The public mock of `instantiable`, this root's mocked type, or the first rule it meets that the lowering does not lower
 	/// yet. A mock that takes no parameter and builds nothing but the type is the `mock()` and `__safeDI_mock()` pair, whose
-	/// guard hashes its empty signature.
-	func lowerPublicMockRoot(of instantiable: Instantiable, context: MockContext) -> MockLowering.Result {
-		guard let publicMockContext = context.publicMockContext,
-		      propertiesToGenerate.isEmpty,
+	/// guard hashes its empty signature; a mock with a tree is lowered by the walk (`lowerMockRootWithTree(of:context:)`),
+	/// which hands its nodes to `publicMockWithTree`.
+	func lowerPublicMockRoot(of instantiable: Instantiable, context: MockContext) async -> MockLowering.Result {
+		guard let publicMockContext = context.publicMockContext else { return .unsupported(.publicMockRoot) }
+		guard propertiesToGenerate.isEmpty,
 		      instantiable.dependencies.isEmpty,
 		      instantiable.mockInitializer == nil,
 		      let initializer = instantiable.initializer,
 		      initializer.arguments.isEmpty
-		else { return .unsupported(.publicMockRoot) }
+		else {
+			// The calls of other modules' public mocks in a public mock's tree, and the builders it takes, are not lowered yet.
+			guard mockBuilders == nil, !treeCallsPublicMock(of: orderedChildrenComputedAfresh(propertiesGeneratedLater: [])) else {
+				return .unsupported(.publicMockRoot)
+			}
+			return await lowerMockRootWithTree(of: instantiable, context: context)
+		}
 		let plan = Self.publicMockPlan(
 			of: instantiable,
 			forwardedDependencies: [],
@@ -73,6 +80,140 @@ extension ScopeGenerator {
 		} else {
 			.lowered(code)
 		}
+	}
+
+	/// Whether the tree of `orderedChildren` calls another module's public mock. Walked with a stack, since a tree can be as
+	/// deep as the module has types.
+	private func treeCallsPublicMock(of orderedChildren: [OrderedChild]) -> Bool {
+		var generatorsToVisit = orderedChildren.map(\.generator)
+		while let generator = generatorsToVisit.popLast() {
+			guard generator.publicMockCall == nil else { return true }
+			// A construction function's defaults are not lowered yet.
+			if case let .property(instantiable, _, _, _, _, _) = generator.scopeData, instantiable.initializer?.arguments.contains(where: \.hasDefaultValue) == true { return true }
+			generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator))
+		}
+		return false
+	}
+
+	/// The public mock of `instantiable`, whose tree's top-level nodes are `nodes`, in generation order, bound by
+	/// `bindingLines`, as `generateMockRootCode` emits it for a public mock: its `public` `SafeDIOverrides` where a node is
+	/// built, the `mock()` and `__safeDI_mock` pair of each tier, which takes `signature`'s parameters, the overrides last,
+	/// the narrowest tier's binding each node and returning the type built from them, and the guard enum; or the first rule
+	/// it meets that the lowering does not lower yet.
+	func publicMockWithTree(
+		of instantiable: Instantiable,
+		signature: MockLowering.RootSignature,
+		nodes: [MockLowering.TreeNode],
+		bindingLines: [String],
+		rootRenames: [String: [TypeDescription: String]],
+		configurations: [MockLowering.ConfigurationRecord],
+		context: MockContext,
+	) -> MockLowering.Result {
+		// The parameters of a public mock other than its overrides are not lowered yet.
+		guard let publicMockContext = context.publicMockContext, signature.parameters.isEmpty else { return .unsupported(.publicMockRoot) }
+		// A dependency the mock promotes to its root, which a public mock takes as an optional parameter, is not lowered yet.
+		let ownProperties = Set(instantiable.dependencies.compactMap { dependency -> Property? in
+			switch dependency.source {
+			case .instantiated, .aliased: dependency.property
+			case .received, .forwarded: nil
+			}
+		})
+		guard nodes.allSatisfy({ ownProperties.contains($0.property) }) else { return .unsupported(.publicMockRoot) }
+		let indent = Self.standardIndent
+		let bodyIndent = "\(indent)\(indent)"
+		let typeName = instantiable.concreteInstantiable.asSource
+		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
+		// A public mock takes each property received only if available as a parameter, so only the tree's nodes make a
+		// `SafeDIOverrides`.
+		let hasOverrides = nodes.contains(where: \.isPropertyNode)
+		let plan = Self.publicMockPlan(
+			of: instantiable,
+			forwardedDependencies: [],
+			forwardedDefaults: [:],
+			rootDefaultParameters: [],
+			flatReceivedParameters: [],
+			flatReceivedParameterMockDefaults: [:],
+			flatUncoveredParameters: [],
+			promotedNodes: [],
+			onlyIfAvailableOverrides: [],
+			wrapperParameterByInstance: [:],
+			parameterTree: [],
+			builders: nil,
+			hasOverrides: hasOverrides,
+			typesDeclaredEscaping: signature.typesDeclaredEscaping,
+			context: publicMockContext,
+		)
+		var lines = ["extension \(typeName) {"]
+		if hasOverrides {
+			// The members are in inline order, which a tree that holds no place builds its root's level in.
+			lines.append(MockLowering.publicOverridesStruct(
+				members: nodes.compactMap(MockLowering.PublicConstructionRecord.ChildMember.init(of:)),
+				mockedTypeModuleName: instantiable.moduleName,
+				context: publicMockContext,
+				indent: indent,
+			))
+			lines.append("")
+		}
+		var body = plan.defaultResolutions
+		body.append(contentsOf: bindingLines)
+		let argumentList = instantiable.initializer.map { initializer in
+			MockLowering.rootArgumentList(of: initializer, given: instantiable.dependencies, renames: rootRenames)
+		} ?? ""
+		let construction = if instantiable.declarationType.isExtension {
+			"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
+		} else {
+			"\(typeName)(\(argumentList))"
+		}
+		body.append("\(bodyIndent)return \(construction)")
+		lines.append(contentsOf: Self.publicMockTiers(
+			of: plan,
+			typeName: typeName,
+			returnType: typeName,
+			attributesPrefix: mockAttributesPrefix,
+			narrowestBody: body,
+			unreadTypeComment: publicMockContext.unreadTypeComment,
+		))
+		lines.append("}")
+		lines.append("")
+		lines.append(Self.guardEnumDeclaration(extending: typeName, named: plan.guardTypeName))
+		let code = lines.joined(separator: "\n")
+		let lowered = if let mockConditionalCompilation = context.mockConditionalCompilation {
+			"#if \(mockConditionalCompilation)\n\(code)\n#endif"
+		} else {
+			code
+		}
+		return .lowered(lowered, configurations: configurations)
+	}
+}
+
+extension MockLowering {
+	/// The construction a public mock's configured `node`, whose children are `children`, builds its type with, which its
+	/// configuration record carries.
+	static func publicConstructionRecord(of node: ConstantNode, children: [TreeNode]) -> PublicConstructionRecord {
+		PublicConstructionRecord(of: node, children: children)
+	}
+}
+
+extension MockLowering.ConstantNode {
+	/// The lines that end a public mock's configured node's builder function, which returns a call of its type's
+	/// construction function handed the builder its override at `overridePath` reads, and bind the node; or the first rule
+	/// they meet that the lowering does not lower yet.
+	func publicBuilderFunctionEndLines(children: [MockLowering.TreeNode], overrideRead overridePath: String?, indent: String) -> MockLowering.Lowering<[String]> {
+		// A construction function's defaults, and an argument left to its default, are not lowered yet.
+		let record = MockLowering.publicConstructionRecord(of: self, children: children)
+		guard defaultFields.isEmpty, !record.hasDefaultParameters, record.arguments.count == arguments.count else { return .unsupported(.defaultValuedParameter) }
+		let bodyIndent = "\(indent)\(ScopeGenerator.standardIndent)"
+		let returnPrefix = hasChildren || !receiverBindings.isEmpty ? "return " : ""
+		let erasedTo: TypeDescription? = if isErased {
+			isWrapped ? property.typeDescription.asInstantiatedTypeSpelledAsDeclared : property.typeDescription
+		} else {
+			nil
+		}
+		let call = MockLowering.publicConstructionCall(of: record, arguments: arguments.map(\.value), builderRead: overridePath, erasedTo: erasedTo)
+		var lines = ["\(bodyIndent)\(returnPrefix)\(call)"]
+		lines.append("\(indent)}")
+		lines.append(contentsOf: MockLowering.bindingLines(of: property, boundAs: bindingName, callingFunctionNamed: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent))
+		return .lowered(lines)
 	}
 }
 
