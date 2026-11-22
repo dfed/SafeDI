@@ -139,7 +139,7 @@ extension MockLowering {
 extension MockLowering {
 	/// The construction a public mock's configured `node`, whose children are `children`, builds its type with, which its
 	/// configuration record carries.
-	static func publicConstructionRecord(of _: ConstantNode, children _: [TreeNode]) -> PublicConstructionRecord? {
+	static func publicConstructionRecord(of _: ConstantNode, children _: [TreeNode], orderedBy _: ScopeGenerator) -> PublicConstructionRecord? {
 		nil
 	}
 }
