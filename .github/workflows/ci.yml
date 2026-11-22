@@ -1430,12 +1430,15 @@ jobs:
         with:
           path: .build
           key: ${{ steps.build-cache.outputs.cache-primary-key }}
-      # A part's limit is the whole suite's until a run has measured the two
-      # parts with every check compiling; each should take about half of the
-      # 62.7 minutes the one job took then (run 44843308363).
+      # A part's limit is twice the longer part's test step in the one run
+      # that has measured the two with every check compiling, rounded up to
+      # 5 minutes: 32.1 minutes for seams-and-mocks and 30.8 for the-rest
+      # (run 45034492743), half each of the 62.7 the one job took then (run
+      # 44843308363). One run is thin: set it again from the step lists once
+      # eight two-part runs exist. The one job keeps the whole suite's limit.
       - name: Test Framework
         id: tests
-        timeout-minutes: 85
+        timeout-minutes: ${{ matrix.part == 'all' && 85 || 65 }}
         env:
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
           SELECTION: ${{ steps.part.outputs.selection }}
