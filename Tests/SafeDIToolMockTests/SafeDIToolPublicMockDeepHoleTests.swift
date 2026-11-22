@@ -140,7 +140,7 @@ struct SafeDIToolPublicMockDeepHoleTests: ~Copyable {
 	}
 
 	/// The code generated for `App`: the mock of `Screen`, which calls `Panel`'s public mock with a level function for each
-	/// of the `depth` features, the last of which fills the hole with `WidgetImpl`.
+	/// of the `depth` features, the last of which fills the hole with `WidgetImpl`, unless a test passes `widgetBuilder`.
 	private static func screenMock(depth: Int, guardHash: String) -> String {
 		var lines = [
 			"""
@@ -180,6 +180,7 @@ struct SafeDIToolPublicMockDeepHoleTests: ~Copyable {
 			    }
 
 			    static func mock(
+			        widgetBuilder: (() -> any Widget)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Screen {
 			        func __safeDI_panel() -> Panel {
@@ -203,7 +204,7 @@ struct SafeDIToolPublicMockDeepHoleTests: ~Copyable {
 		                })
 		            }
 		            _ = Panel.__safeDI_Panel_mock_\(guardHash).self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Panel.__safeDI_mock(widgetBuilder: __safeDI_widgetBuilder_Panel(), safeDIOverrides: safeDIOverrides.panel)
+		            return Panel.__safeDI_mock(widgetBuilder: widgetBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_widgetBuilder_Panel(), safeDIOverrides: safeDIOverrides.panel)
 		        }
 		        let panel: Panel = __safeDI_panel()
 		        return Screen(panel: panel)
