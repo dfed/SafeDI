@@ -173,9 +173,6 @@ extension DependencyTreeGenerator {
 		}
 		// The places and calls of a seam's or a public mock's tree, by hole type, whose enums are nested by type
 		// (`scopeEnumsByType`), a place inside a fill included.
-		// Whether the tree calls another seam or public mock that takes builders, whose levels a case of this seam's would
-		// hold: such a seam keeps its builder structs until carriers for places inside fills and passed-up places exist.
-		var callsBuildersOfOtherSeams = false
 		var reachedByHoleType = [SeamSignature.HoleType: [ReachedPlace]]()
 		var reenteringCalls = [ReachedPlace]()
 		// The fills a call inside a fill of the same call can re-enter, found once for the tree.
@@ -190,7 +187,6 @@ extension DependencyTreeGenerator {
 				reachedByHoleType[hole.holeType, default: []].append(ReachedPlace(sitePath: sitePath, steps: steps, call: nil))
 			case let .call(sitePath, call, steps, isInSendableFunction):
 				guard let calledBuilders = call.calledBuilders else { continue }
-				callsBuildersOfOtherSeams = true
 				for scopeEnum in calledBuilders.scopeEnums where calledSeamsEnums[scopeEnum.key] == nil {
 					calledSeamsEnums[scopeEnum.key] = scopeEnum
 				}
@@ -270,7 +266,9 @@ extension DependencyTreeGenerator {
 		let holdsFieldNarrowerThanSeam = flatHoles.contains { hole in hole.fields.contains { $0.access < seamTypeAccess } }
 		for holeType in orderedHoleTypes {
 			let stem = stemByHoleType[holeType, default: ""]
-			let typeNames = scopeTypeNames.isSeams && !callsBuildersOfOtherSeams && reenteringCalls.isEmpty && !holdsFieldNarrowerThanSeam ? ScopeTypeNames.seamCarriers : scopeTypeNames
+			// A hole type whose routes lead through a fill keeps its builder structs until carriers for places inside fills exist.
+			let leadsThroughFill = reachedByHoleType[holeType, default: []].contains { $0.steps.contains { $0.filledBuilder != nil } }
+			let typeNames = scopeTypeNames.isSeams && !leadsThroughFill && reenteringCalls.isEmpty && !holdsFieldNarrowerThanSeam ? ScopeTypeNames.seamCarriers : scopeTypeNames
 			let rootTypeNames = (plain: "\(typeNames.plain)\(stem)".spelledAsIdentifier, sendable: "\(typeNames.sendable)\(stem)".spelledAsIdentifier)
 			let builtType = flatHoles.builtType(of: holeType)
 			// The enums, nested by type.

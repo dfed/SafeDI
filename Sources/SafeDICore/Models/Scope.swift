@@ -2703,7 +2703,14 @@ struct SeamHoles: Sendable {
 				callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName }
 			} else {
 				callRoute.memberValuesType.map { memberValuesType in
-					"\(callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName } ?? builderName).\(callRoute.caseName)(\(memberValuesType.asSource)())"
+					let parentName = callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName } ?? builderName
+					// A carrier holds the inner seam's carrier as a `let` child, formed where the carrier is formed.
+					// A `Sendable` carrier holds a plain one only through a member, as the carrier declares it.
+					if case let .nested(_, enumType, _) = memberValuesType, let carrier = ReservedName.seamCarrier(ofEnum: enumType), !carrier.isSendable || callRoute.innerKey.isSendable {
+						return "\(parentName).\(callRoute.caseName)"
+					} else {
+						return "\(parentName).\(callRoute.caseName)(\(memberValuesType.asSource)())"
+					}
 				}
 			}
 			routeCasesByCall[RouteCall(sitePath: callRoute.sitePath, innerKey: callRoute.innerKey)] = RouteCase(memberCall: memberCall)
