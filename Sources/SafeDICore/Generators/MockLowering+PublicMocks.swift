@@ -88,7 +88,11 @@ extension ScopeGenerator {
 		var namesFillsDeclare = Set<String>()
 		// What the mock's root level declares, which a fill reading a value of the caller's scope reads.
 		var rootLevelProperties = Set<Property>()
-		let rootDependencies: Set<Property> = if case let .root(instantiable, _) = scopeData { Set(instantiable.dependencies.map(\.property)) } else { [] }
+		let rootDependencies: Set<Property> = if case let .root(instantiable, _) = scopeData {
+			Set(instantiable.dependencies.map(\.property))
+		} else {
+			[]
+		}
 		for child in orderedChildren {
 			if let property = child.generator.property {
 				rootLevelProperties.insert(property)
