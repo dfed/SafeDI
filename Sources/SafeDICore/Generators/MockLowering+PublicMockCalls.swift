@@ -295,7 +295,7 @@ extension MockLowering.Walk {
 		}
 		for argument in initializer.arguments {
 			if let dependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }),
-			          let builderName = filledCallBuilders.passedUpBuilderNames[dependency.property]
+			   let builderName = filledCallBuilders.passedUpBuilderNames[dependency.property]
 			{
 				// A builder the call passes up is the builder `mock()` takes, which the call's builder function binds under the
 				// label the leaf receives it as. An override closure handed it is not lowered yet.
