@@ -189,7 +189,7 @@ extension ScopeGenerator {
 extension MockLowering {
 	/// The construction a public mock's configured `node`, whose children are `children`, builds its type with, which its
 	/// configuration record carries.
-	static func publicConstructionRecord(of node: ConstantNode, children: [TreeNode]) -> PublicConstructionRecord {
+	static func publicConstructionRecord(of node: ConstantNode, children: [TreeNode]) -> PublicConstructionRecord? {
 		PublicConstructionRecord(of: node, children: children)
 	}
 }
@@ -200,7 +200,7 @@ extension MockLowering.ConstantNode {
 	/// they meet that the lowering does not lower yet.
 	func publicBuilderFunctionEndLines(children: [MockLowering.TreeNode], overrideRead overridePath: String?, indent: String) -> MockLowering.Lowering<[String]> {
 		// A construction function's defaults, and an argument left to its default, are not lowered yet.
-		let record = MockLowering.publicConstructionRecord(of: self, children: children)
+		let record = MockLowering.PublicConstructionRecord(of: self, children: children)
 		guard defaultFields.isEmpty, !record.hasDefaultParameters, record.arguments.count == arguments.count else { return .unsupported(.defaultValuedParameter) }
 		let bodyIndent = "\(indent)\(ScopeGenerator.standardIndent)"
 		let returnPrefix = hasChildren || !receiverBindings.isEmpty ? "return " : ""
