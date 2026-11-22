@@ -82,6 +82,28 @@ extension ScopeGenerator {
 		}
 	}
 
+	/// The properties of the root's children, `orderedChildren`, that the public mock of `instantiable` promotes for received
+	/// dependencies, which it takes as optional parameters (`publicMockPromotedNodes(of:in:)`): every child but the mocked
+	/// type's own instantiated properties and a `LazilyInstantiated` of one's instance.
+	func publicMockPromotedProperties(of instantiable: Instantiable, among orderedChildren: [OrderedChild]) -> Set<Property> {
+		guard instantiable.generateMock == .public else { return [] }
+		let ownProperties = Set(instantiable.dependencies.lazy.filter { dependency in
+			switch dependency.source {
+			case .instantiated:
+				true
+			case .received, .aliased, .forwarded:
+				false
+			}
+		}.map(\.property))
+		return Set(orderedChildren.compactMap { child -> Property? in
+			guard case let .property(_, property, _, _, _, _) = child.generator.scopeData, !ownProperties.contains(property) else { return nil }
+			let isWrapperOfOwnInstance = property.propertyType.isLazilyInstantiated && property.typeDescription.lazilyInstantiatedInstanceType.map {
+				ownProperties.contains(Property(label: property.label, typeDescription: $0))
+			} ?? false
+			return isWrapperOfOwnInstance ? nil : property
+		})
+	}
+
 	/// Whether the tree of `orderedChildren` calls another module's public mock. Walked with a stack, since a tree can be as
 	/// deep as the module has types.
 	private func treeCallsPublicMock(of orderedChildren: [OrderedChild]) -> Bool {
@@ -116,14 +138,15 @@ extension ScopeGenerator {
 	) -> MockLowering.Result {
 		// The parameters of a public mock other than its overrides are not lowered yet.
 		guard let publicMockContext = context.publicMockContext, signature.parameters.isEmpty else { return .unsupported(.publicMockRoot) }
-		// A dependency the mock promotes to its root, which a public mock takes as an optional parameter, is not lowered yet.
-		let ownProperties = Set(instantiable.dependencies.compactMap { dependency -> Property? in
-			switch dependency.source {
-			case .instantiated, .aliased: dependency.property
-			case .received, .forwarded: nil
-			}
-		})
-		guard nodes.allSatisfy({ ownProperties.contains($0.property) }) else { return .unsupported(.publicMockRoot) }
+		// Each dependency the mock promotes to its root is an optional parameter, named as the node's binding, which the walk
+		// binds the node from. A promoted wrapper, and a name the parameters take apart from the binding's, are not lowered
+		// yet.
+		let promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildrenComputedAfresh(propertiesGeneratedLater: []))
+		var promotedNodes = [(property: Property, name: String)]()
+		for node in nodes where promotedProperties.contains(node.property) {
+			guard let builtNode = node.builtNode, !builtNode.isWrapped else { return .unsupported(.publicMockRoot) }
+			promotedNodes.append((property: node.property, name: builtNode.bindingName))
+		}
 		let indent = Self.standardIndent
 		let bodyIndent = "\(indent)\(indent)"
 		let typeName = instantiable.concreteInstantiable.asSource
@@ -139,7 +162,7 @@ extension ScopeGenerator {
 			flatReceivedParameters: [],
 			flatReceivedParameterMockDefaults: [:],
 			flatUncoveredParameters: [],
-			promotedNodes: [],
+			promotedNodes: promotedNodes,
 			onlyIfAvailableOverrides: [],
 			wrapperParameterByInstance: [:],
 			parameterTree: [],
@@ -148,6 +171,7 @@ extension ScopeGenerator {
 			typesDeclaredEscaping: signature.typesDeclaredEscaping,
 			context: publicMockContext,
 		)
+		guard promotedNodes.allSatisfy({ plan.promotedParameterNames[$0.property] == $0.name }) else { return .unsupported(.publicMockRoot) }
 		var lines = ["extension \(typeName) {"]
 		if !plan.builders.isEmpty {
 			// The scope types the builders `mock()` takes are handed, as a seam declares them.
@@ -241,7 +265,7 @@ extension MockLowering.ConstantNode {
 		let call = MockLowering.publicConstructionCall(of: record, arguments: arguments.map(\.value), builderRead: overridePath, erasedTo: erasedTo)
 		var lines = ["\(bodyIndent)\(returnPrefix)\(call)"]
 		lines.append("\(indent)}")
-		lines.append(contentsOf: MockLowering.bindingLines(of: property, boundAs: bindingName, callingFunctionNamed: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent))
+		lines.append(contentsOf: promotedBindingLines(indent: indent))
 		return .lowered(lines)
 	}
 }
