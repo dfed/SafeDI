@@ -45,7 +45,7 @@ extension ScopeGenerator {
 		let bodyIndent = "\(Self.standardIndent)\(Self.standardIndent)"
 		let orderedChildren = orderedChildrenComputedAfresh(propertiesGeneratedLater: [])
 		// No node binds a parameter’s label again, at any depth: the emitter names the parameter apart.
-		var walk = MockLowering.Walk(cycleEdges: context.cycleEdges, ancestorLabels: signature.labels, uncoveredProperties: signature.uncoveredProperties)
+		var walk = MockLowering.Walk(cycleEdges: context.cycleEdges, rootLabels: signature.labels, uncoveredProperties: signature.uncoveredProperties)
 		// D1 lane hook (lane C): the builders `mock()` takes optional for the places its calls fill.
 		switch filledCallBuilders(of: orderedChildren, context: context) {
 		case let .lowered(filledCallBuilders):
@@ -198,7 +198,15 @@ extension MockLowering {
 		var parentConcreteType: String?
 		/// Whether the overrides of the node whose children the walk is at are reachable: no edge above it is in `cycleEdges`.
 		var overridePathReachable = true
-		var ancestorLabels = Set<String>()
+		/// The labels `mock()` binds before its tree, which no node may bind again.
+		let rootLabels: Set<String>
+		/// The declarations built around the node the walk is at, by label, innermost last: a node of a label one of them
+		/// has binds it again in its own builder function, which hides the farther one, as Swift's lookup does.
+		var ancestorDeclarationsByLabel = [String: [(declaration: ScopeGenerator.BuiltDeclaration, bodyLevel: Int)]]()
+		/// The labels of the children of each builder function's body the walk is inside, outermost first: a builder
+		/// function a body between a cycle closer and the node it repeats declares under that node's label would hide the
+		/// node's function from the closer.
+		var bodyLabels = [Set<String>]()
 		var labels = Set<String>()
 		// D1 lane hook (lane D): the `@Instantiated` dependencies the mock cannot build, each a parameter of `mock()`.
 		/// The properties of the `@Instantiated` dependencies the mock cannot build, which `mock()` takes, so the types that
@@ -253,7 +261,7 @@ extension MockLowering {
 				// D1 lane hook: aliases only if available, of a wrapper's instance, and bound apart from their label.
 				guard !onlyIfAvailable else { return .unsupported(.onlyIfAvailable) }
 				guard scope.contains(fulfillingProperty) else { return .unsupported(.alias) }
-				guard !ancestorLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
+				guard !rootLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
 				let alias = AliasBinding(
 					property: property,
 					fulfillingProperty: fulfillingProperty,
@@ -304,10 +312,13 @@ extension MockLowering {
 			indent: String,
 			lines: inout [String],
 		) -> Lowering<TreeNode> {
-			// The walk binds no other node of the label between the two, so the function has the name it is built with.
+			// The node is the nearest declaration of the label around the closer, and no body between the two declares
+			// another node of it, so the closer reads the node's function by the name it is built with.
 			guard seamCall == nil,
 			      generator.closedOnDeclaration == ScopeGenerator.BuiltDeclaration(property: property, concreteType: instantiable.concreteInstantiable),
-			      ancestorLabels.contains(property.label),
+			      let closedOn = ancestorDeclarationsByLabel[property.label]?.last,
+			      closedOn.declaration == generator.closedOnDeclaration,
+			      !bodyLabels[closedOn.bodyLevel..<(bodyLabels.count - 1)].contains(where: { $0.contains(property.label) }),
 			      generator.cycleParameters.isEmpty
 			else { return .unsupported(.cycle) }
 			let forwardedProperties = instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted { $0.label < $1.label }
@@ -355,7 +366,7 @@ extension MockLowering {
 			guard generator.unavailableOptionalProperties.isEmpty else { return .unsupported(.onlyIfAvailable) }
 			guard instantiable.mockInitializer == nil, let initializer = instantiable.initializer else { return .unsupported(.handWrittenMock) }
 			guard !initializer.arguments.contains(where: \.hasDefaultValue) else { return .unsupported(.defaultValuedParameter) }
-			guard !ancestorLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
+			guard !rootLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
 
 			let childGenerators = generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator)
 			// D1 lane hook (lane B): the expression that reads the node's override, which inside a `@Sendable` builder
@@ -390,7 +401,8 @@ extension MockLowering {
 			isInsideSendableFunction = node.requiresSendable
 			lines.append(node.builderFunctionDeclarationLine(indent: indent))
 			let insertedAncestor = ancestorTypes.insert(cycleNodeKey).inserted
-			ancestorLabels.insert(property.label)
+			ancestorDeclarationsByLabel[property.label, default: []].append((ScopeGenerator.BuiltDeclaration(property: property, concreteType: instantiable.concreteInstantiable), bodyLevel: bodyLabels.count))
+			bodyLabels.append(Set(childGenerators.compactMap(\.property?.label)))
 			let siblingLabels = labels
 			labels = []
 			let enclosingParentConcreteType = parentConcreteType
@@ -407,7 +419,8 @@ extension MockLowering {
 			parentConcreteType = enclosingParentConcreteType
 			overridePathReachable = enclosingOverridePathReachable
 			labels = siblingLabels
-			ancestorLabels.remove(property.label)
+			ancestorDeclarationsByLabel[property.label]?.removeLast()
+			bodyLabels.removeLast()
 			if insertedAncestor {
 				ancestorTypes.remove(cycleNodeKey)
 			}
