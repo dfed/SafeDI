@@ -1673,6 +1673,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        appFilter_FilterProtocolBuilder: (() -> any FilterProtocol)? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> App {
 		        func __safeDI_root() -> Root {
@@ -1684,7 +1685,7 @@ struct SafeDIToolMockFulfilledByTypeTests: ~Copyable {
 		                .init(filter: { _ in __safeDI_appFilter_FilterProtocolBuilder_Root_filter() })
 		            }
 		            _ = Root.__safeDI_Root_mock_B14A32056046B596.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return if let safeDIBuilder = safeDIOverrides.root { safeDIBuilder({ __safeDI_appFilter_FilterProtocolBuilder_Root_filter() }) } else { Root.__safeDI_mock(appFilter_FilterProtocolBuilder: __safeDI_appFilter_FilterProtocolBuilder_Root()) }
+		            return if let safeDIBuilder = safeDIOverrides.root { safeDIBuilder({ if let appFilter_FilterProtocolBuilder { appFilter_FilterProtocolBuilder() } else { __safeDI_appFilter_FilterProtocolBuilder_Root_filter() } }) } else { Root.__safeDI_mock(appFilter_FilterProtocolBuilder: appFilter_FilterProtocolBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_appFilter_FilterProtocolBuilder_Root()) }
 		        }
 		        let root: Root = __safeDI_root()
 		        return App(root: root)
