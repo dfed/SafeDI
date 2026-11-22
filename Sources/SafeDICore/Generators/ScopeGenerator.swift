@@ -458,7 +458,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// Each loop's bindings in index order, the order the body generates its members in (`orderedPropertiesToGenerate`).
 			var bindingsByLoop = [Int: [SeamHoles.ValuesBinding]]()
 			for (index, loop) in receivedBuilderLoops.loopByChildIndex.sorted(by: { $0.key < $1.key }) where !propertiesToGenerate[index].isAlias {
-				bindingsByLoop[loop, default: []] += propertiesToGenerate[index].valuesBindings
+				// A run struct is bound before the box and read only by the bindings the box holds, so the box holds none.
+				bindingsByLoop[loop, default: []] += propertiesToGenerate[index].valuesBindings.filter { $0.formsRunAfter == nil }
 			}
 			let loopsWithSendableFunction = Set(receivedBuilderLoops.loopByChildIndex.filter { propertiesToGenerate[$0.key].buildsInSendableFunction }.values)
 			for (loop, bindings) in bindingsByLoop where bindings.count > 1 && !loopsWithSendableFunction.contains(loop) {
@@ -5928,17 +5929,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// The payloads `valuesBindingLines` binds, each as an argument of the initializer of the class a boxed loop's box is
 	/// (`boxedLoops`), labeled with its binding's name.
-	/// A run struct of a carrier level's values (`SeamCarrierValues`) is bound before the box, which a member's argument reads
-	/// it from, and boxed under its name, so a function that unboxes it captures only the box.
+	/// A run struct of a carrier level's values (`SeamCarrierValues`) is bound before the box, where the members' arguments
+	/// read it, and is not boxed: no builder function of the loop reads it, so unboxing it would bind a value nothing reads.
 	nonisolated private var valuesBindingArguments: [String] {
-		valuesBindings.map { binding in
-			binding.formsRunAfter == nil
-				? "\(binding.bindingName): \(binding.expression(readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties))"
-				: "\(binding.bindingName): \(binding.bindingName)"
+		valuesBindings.filter { $0.formsRunAfter == nil }.map { binding in
+			"\(binding.bindingName): \(binding.expression(readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties))"
 		}
 	}
 
-	/// The lines that bind the run structs `valuesBindingArguments` boxes by name, before the box.
+	/// The lines that bind the run structs the box's arguments read, before the box.
 	nonisolated private var runStructBindingLinesBeforeBox: String {
 		valuesBindings.filter { $0.formsRunAfter != nil }.map { "\($0.line(readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties))\n" }.joined()
 	}
@@ -5946,7 +5945,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The lines at the top of a boxed loop member's builder function that unbox its own payloads under their names, so
 	/// everything beneath reads them as it reads a payload bound before the function.
 	nonisolated private func loopLevelsUnboxingLines(from loopLevelsName: String) -> [String] {
-		valuesBindings.map { "\(Self.standardIndent)let \($0.bindingName) = \(loopLevelsName).\($0.bindingName)" }
+		valuesBindings.filter { $0.formsRunAfter == nil }.map { "\(Self.standardIndent)let \($0.bindingName) = \(loopLevelsName).\($0.bindingName)" }
 	}
 
 	/// The binding of a boxed loop's box, `name`, an instance of `typeName` made of `arguments`, the payloads of the loop's
