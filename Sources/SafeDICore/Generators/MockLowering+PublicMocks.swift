@@ -18,6 +18,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+extension ScopeGenerator {
+	/// The public mock of `instantiable`, this root's mocked type, or the first rule it meets that the lowering does not lower
+	/// yet.
+	func lowerPublicMockRoot(of _: Instantiable, context _: MockContext) -> MockLowering.Result {
+		.unsupported(.publicMockRoot)
+	}
+}
+
 /// Stage D1's lowering of lane C's family: public mock roots, the sites of their holes, the payloads and members bound before
 /// a node, the fills of their calls, and the calls of other modules' public mocks.
 extension MockLowering.Walk {
@@ -30,7 +38,7 @@ extension MockLowering.Walk {
 		indent _: String,
 		lines _: inout [String],
 	) async -> MockLowering.Lowering<MockLowering.TreeNode> {
-		.unsupported(.publicMock)
+		.unsupported(.holeSite)
 	}
 
 	/// The node of `generator`, a call of another module's public mock, whose statements are appended to `lines`, or the
@@ -42,7 +50,7 @@ extension MockLowering.Walk {
 		indent _: String,
 		lines _: inout [String],
 	) async -> MockLowering.Lowering<MockLowering.TreeNode> {
-		.unsupported(.publicMock)
+		.unsupported(.publicMockCall)
 	}
 }
 

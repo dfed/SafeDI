@@ -239,7 +239,7 @@ extension MockLowering {
 		) async -> Lowering<ConstantNode> {
 			let (instantiable, property, forwardedProperties, erasedToConcreteExistential, isPropertyCycle, seamCall) = built
 			// A mock builds every seam inline, so no scope of its tree calls one.
-			guard seamCall == nil else { return .unsupported(.publicMock) }
+			guard seamCall == nil else { return .unsupported(.publicMockCall) }
 			guard !isPropertyCycle, !ancestorTypes.contains(instantiable.concreteInstantiable) else { return .unsupported(.cycle) }
 			let isErased = erasedToConcreteExistential
 			let isFulfilledByAnotherType = property.typeDescription.asInstantiatedType != instantiable.concreteInstantiable

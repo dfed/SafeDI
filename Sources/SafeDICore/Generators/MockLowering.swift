@@ -103,8 +103,14 @@ public enum MockLowering {
 	/// A rule of mock generation, as the lowering reports one it does not lower yet: the first such construct it meets in
 	/// a root decides the root's outcome, so a gap is counted, never guessed at.
 	public enum Rule: String, Sendable, CaseIterable {
-		/// A public mock (`generateMock: .public`): its tiers, builders and calls.
-		case publicMock = "public mock"
+		/// A public mock's root (`generateMock: .public`): its tiers, builders and guard.
+		case publicMockRoot = "public mock root"
+		/// A call of another module's public mock: its level functions, fills and override closure.
+		case publicMockCall = "public mock call"
+		/// A site of a public mock's hole, which its builder builds.
+		case holeSite = "hole site"
+		/// A fill of another module's public mock's place, or a root built again inside one.
+		case fill
 		/// A hand-written mock, of the mocked type or of a type its tree builds.
 		case handWrittenMock = "hand-written mock"
 		/// A default-valued parameter of a construction.
@@ -168,7 +174,9 @@ extension ScopeGenerator {
 	/// This mock root's code, lowered from its finished generator tree, or the first rule it meets that the lowering does
 	/// not lower yet.
 	func lowerMockRoot(context: MockContext) async -> MockLowering.Result {
-		guard case let .root(instantiable, _) = scopeData, instantiable.generateMock != .public else { return .unsupported(.publicMock) }
+		guard case let .root(instantiable, _) = scopeData else { return .unsupported(.publicMockRoot) }
+		// D1 lane hook (lane C): a public mock's root (`MockLowering+PublicMocks.swift`).
+		guard instantiable.generateMock != .public else { return lowerPublicMockRoot(of: instantiable, context: context) }
 		guard propertiesToGenerate.isEmpty,
 		      instantiable.dependencies.isEmpty,
 		      (instantiable.mockInitializer ?? instantiable.initializer)?.arguments.contains(where: \.hasDefaultValue) == false
