@@ -1424,14 +1424,16 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 
 			    public static func mock(
 			        gadgetBuilder: @escaping () -> any Gadget,
+			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Outer {
-			        Outer.__safeDI_mock(gadgetBuilder: .init(__safeDI_noScope: gadgetBuilder), safeDIOverrides: safeDIOverrides)
+			        Outer.__safeDI_mock(gadgetBuilder: .init(__safeDI_noScope: gadgetBuilder), serviceBuilder: serviceBuilder, safeDIOverrides: safeDIOverrides)
 			    }
 
 			    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
 			    public static func __safeDI_mock(
 			        gadgetBuilder __safeDI_gadgetBuilder: Outer.SafeDIMockScope_Gadget.__safeDI_Builder<any Gadget>,
+			        serviceBuilder __safeDI_serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Outer {
 			        let __safeDI_gadgetBuilder_inner_serviceBuilder = __safeDI_gadgetBuilder.inner_serviceBuilder(SafeDIMockScope_Gadget.inner_serviceBuilder_Values())
@@ -1461,7 +1463,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			                .init(service: { scope in __safeDI_serviceBuilder_Inner_service(scope, __safeDI_inner_serviceBuilder: up.service(scope)) })
 			            }
 			            _ = Inner.__safeDI_Inner_mock_E789692848368FB8.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
-			            return Inner.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Inner(up: __safeDI_gadgetBuilder_inner_serviceBuilder))
+			            return Inner.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Inner(up: __safeDI_gadgetBuilder_inner_serviceBuilder))
 			        }
 			        let inner: Inner = __safeDI_inner()
 			        return Outer(inner: inner)
@@ -1469,7 +1471,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			}
 
 			extension Outer {
-			    public enum __safeDI_Outer_mock_405AD2EC8E8F24B1 {}
+			    public enum __safeDI_Outer_mock_BBEADFB7A541D124 {}
 			}
 			#endif
 			""",
@@ -1558,6 +1560,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			    }
 
 			    static func mock(
+			        serviceBuilder: (() -> any Service)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        func __safeDI_outer() -> Outer {
@@ -1585,7 +1588,7 @@ struct SafeDIToolSeamLoopLevelsTests: ~Copyable {
 			                    .init(service: { _ in __safeDI_serviceBuilder_Inner_service() })
 			                }
 			                _ = Inner.__safeDI_Inner_mock_E789692848368FB8.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
-			                return if let safeDIBuilder = safeDIOverrides.outer.inner { safeDIBuilder({ __safeDI_serviceBuilder_Inner_service() }) } else { Inner.__safeDI_mock(serviceBuilder: __safeDI_serviceBuilder_Inner()) }
+			                return if let safeDIBuilder = safeDIOverrides.outer.inner { safeDIBuilder({ if let serviceBuilder { serviceBuilder() } else { __safeDI_serviceBuilder_Inner_service() } }) } else { Inner.__safeDI_mock(serviceBuilder: serviceBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_serviceBuilder_Inner()) }
 			            }
 			            let inner: Inner = __safeDI_inner()
 			            return if let safeDIBuilder = safeDIOverrides.outer.safeDIBuilder { safeDIBuilder(inner) } else { Outer(inner: inner) }
