@@ -108,6 +108,21 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_generatesSameTreeWithMemoAsWithout_whenPlacesReadAlikeDeclarationsAtDifferentDepths() async throws {
+		// `C` receives `x`, which `Root` declares above the place `Root` builds and `D` declares again above the place `D`
+		// builds, one level deeper: the two places read alike declarations answered at different depths, so the place that
+		// reuses the other's generator records the read again at its own depth.
+		try await expectSameFilesWithMemoAsWithout(of: [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let x: X", "@Instantiated let c: C", "@Instantiated let d: D"]),
+			seamFixtureType(named: "D", isFinalClass: true, declarations: ["@Instantiated let x: X", "@Instantiated let c: C"]),
+			seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Received let x: X", "@Instantiated let e: E"]),
+			seamFixtureType(named: "E", isFinalClass: true, declarations: ["@Received let x: X"]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsSameErrorWithMemoAsWithout_whenSiblingSubtreesSharingKeyThrow() async {
 		// `P` and `Q` each build `G`, whose `childBuilder` spells a first generic that is not `Child`'s forwarded
 		// properties, which construction throws; no partial build of `G` is kept.

@@ -239,7 +239,9 @@ public struct TypeAccessProof: Sendable {
 		// its module may name that entry.
 		var mentions = [TypeDescription: [Mention]]()
 		var seenMembers = Set<MemberKey>()
-		for (_, carrier) in instantiables.sorted(by: { $0.key < $1.key }) {
+		// Visited in key order, sorting the map's indices rather than copying every declaration into a sorted array.
+		for index in instantiables.indices.sorted(by: { instantiables[$0].key < instantiables[$1].key }) {
+			let carrier = instantiables[index].value
 			let dependencyLabels = Set(carrier.dependencies.map(\.property.label))
 			for member in Self.provingMembers(of: carrier) {
 				guard seenMembers.insert(MemberKey(carrier: carrier.concreteInstantiable, member: member.kind, location: member.location)).inserted else { continue }

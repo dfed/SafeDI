@@ -87,6 +87,9 @@ public actor DependencyTreeGenerator {
 		importAccess = importAccessSpellingOwnLevels([:])
 		self.readOwnFiles = readOwnFiles
 		self.typeDescriptionToFulfillingInstantiableMap = typeDescriptionToFulfillingInstantiableMap
+		// What the declarations spell is interned first, in the order of their keys, which no arrival order decides. The
+		// order assigns the IDs, which only an `==` reads, never output: the tests intern in other orders to show it.
+		internerSpace = ConstructionInternerSpace(declarationsOf: Self.declarationsInInterningOrder(of: typeDescriptionToFulfillingInstantiableMap))
 		self.aliasDeclarationReferences = aliasDeclarationReferences
 		self.compilesGeneratedMocks = compilesGeneratedMocks
 		self.emittingModule = emittingModule
@@ -201,13 +204,14 @@ public actor DependencyTreeGenerator {
 
 	/// The code a generated file holds, which decides what its header imports.
 	public enum GeneratedFileContent: Sendable {
-		/// Dependency-tree code.
-		case dependencyTree(code: String)
+		/// Dependency-tree code. Each case holds its code as a function, which the header calls only where the file's
+		/// imports spell levels, since a module's whole output can be tens of megabytes to join.
+		case dependencyTree(code: @Sendable () -> String)
 		/// Mock code, as each generated mock file and the shared mock configuration file hold, which only builds in
 		/// which `mockConditionalCompilation` is active compile, or every build when it is `nil`.
-		case mock(code: String, mockConditionalCompilation: String?)
+		case mock(code: @Sendable () -> String, mockConditionalCompilation: String?)
 		/// Both dependency-tree code and mock code, as one file that holds a module's whole output does.
-		case dependencyTreeAndMock(dependencyTreeCode: String, mockCode: String, mockConditionalCompilation: String?)
+		case dependencyTreeAndMock(dependencyTreeCode: @Sendable () -> String, mockCode: @Sendable () -> String, mockConditionalCompilation: String?)
 	}
 
 	/// A generated file whose header `fileHeaders(for:)` makes: its code, and the types the trees it holds build that the
@@ -235,7 +239,7 @@ public actor DependencyTreeGenerator {
 				await imports(importStatements, building: file.fulfillers, forUnconditionalCode: code, mockCode: nil, ownFilesRead: &ownFilesRead)
 			case let .mock(code, mockConditionalCompilation):
 				if let mockConditionalCompilation {
-					await imports(mockImportStatements, building: file.fulfillers, forUnconditionalCode: "", mockCode: (code, mockConditionalCompilation), ownFilesRead: &ownFilesRead)
+					await imports(mockImportStatements, building: file.fulfillers, forUnconditionalCode: { "" }, mockCode: (code, mockConditionalCompilation), ownFilesRead: &ownFilesRead)
 				} else {
 					await imports(mockImportStatements, building: file.fulfillers, forUnconditionalCode: code, mockCode: nil, ownFilesRead: &ownFilesRead)
 				}
@@ -243,7 +247,7 @@ public actor DependencyTreeGenerator {
 				if let mockConditionalCompilation {
 					await imports(importStatements + mockImportStatements, building: file.fulfillers, forUnconditionalCode: dependencyTreeCode, mockCode: (mockCode, mockConditionalCompilation), ownFilesRead: &ownFilesRead)
 				} else {
-					await imports(importStatements + mockImportStatements, building: file.fulfillers, forUnconditionalCode: dependencyTreeCode + "\n\n" + mockCode, mockCode: nil, ownFilesRead: &ownFilesRead)
+					await imports(importStatements + mockImportStatements, building: file.fulfillers, forUnconditionalCode: { dependencyTreeCode() + "\n\n" + mockCode() }, mockCode: nil, ownFilesRead: &ownFilesRead)
 				}
 			}
 			headers.append(Self.fileHeader(importing: imports))
@@ -314,45 +318,44 @@ public actor DependencyTreeGenerator {
 	public func generate(_ request: GenerationRequest) async throws -> GenerationResults {
 		let buildsDependencyTrees = request.generatesDependencyTrees || request.generatesDOTTree
 		let declaresPublicMock = typeDescriptionToFulfillingInstantiableMap.values.contains(where: { $0.generateMock == .public })
+		// The proof of every type's access over the module's declarations, which the public mock context and the
+		// signatures of the module's own seams share, built once, when the first of them reads it.
+		let ownAccessProof = ownAccessProof()
 		// The context the module's public mocks share, whose comment the initializers of its seams carry too, made once
 		// when either is generated.
 		let publicMockContext: PublicMockContext? = if (declaresPublicMock && request.mocks != nil) || (buildsDependencyTrees && !seams.isEmpty && !generatedSeamTypes.isEmpty) {
-			makePublicMockContext()
+			makePublicMockContext(proof: ownAccessProof.proof)
 		} else {
 			nil
 		}
-		let trees = try buildsDependencyTrees ? dependencyTrees(unreadTypeComment: publicMockContext?.unreadTypeComment) : nil
+		let trees = try buildsDependencyTrees ? dependencyTrees(unreadTypeComment: publicMockContext?.unreadTypeComment, ownAccessProof: ownAccessProof) : nil
 		// The checks run in this task, not the one that plans the code: their walks are as deep as the trees, and a task
 		// frees the memory its frames took when it ends, which on a deep module took as long as releasing the trees.
 		if request.generatesDependencyTrees, let trees {
 			try await validateBeforeGeneratingCode(of: trees.roots)
 		}
-		// What the module info stores of the seams these trees generate, which holds no scope.
+		// The roots' plans generate in a child task while the warnings and the DOT graph are made from the same trees.
+		// The mocks are made only once the trees are released, so a module's root trees and its mock trees are never held
+		// at once: making them beside the plans raised a mock-heavy module's peak memory by a fifth.
 		let storedSeamSignatures = if request.generatesDependencyTrees, let trees {
 			trees.storedSeamSignatures
 		} else {
 			[StoredSeamSignature]()
 		}
-		// The roots' plans generate in a child task while the warnings and the DOT graph are made from the same trees.
-		// The mocks are made only once the trees are released, so a module's root trees and its mock trees are never held
-		// at once: making them beside the plans raised a mock-heavy module's peak memory by a fifth.
-		let plannedRoots: Result<[PlannedRoot], any Error>
+		let plans: [PlannedRoot]
 		let warnings: [SourceDiagnostic]
-		let dotTree: Result<String?, any Error>
+		let drawnTree: String?
 		do {
-			// The trees as the work below reads them, released at the end of this block.
+			// The trees as the work below reads them, released at the end of this block, or as an error in the roots' and
+			// seams' code leaves it, which is reported before any mock is built.
 			let trees = trees
-			(plannedRoots, warnings, dotTree) = await withTaskGroup(
-				of: Result<[PlannedRoot], any Error>.self,
-				returning: (Result<[PlannedRoot], any Error>, [SourceDiagnostic], Result<String?, any Error>).self,
+			(plans, warnings, drawnTree) = try await withThrowingTaskGroup(
+				of: [PlannedRoot].self,
+				returning: ([PlannedRoot], [SourceDiagnostic], String?).self,
 			) { taskGroup in
 				if request.generatesDependencyTrees, let trees {
 					taskGroup.addTask { [roots = trees.roots, rootsOfOtherModules = trees.rootsOfOtherModules] in
-						do {
-							return try await .success(self.plannedCode(of: roots, rootsOfOtherModules: rootsOfOtherModules))
-						} catch {
-							return .failure(error)
-						}
+						try await self.plannedCode(of: roots, rootsOfOtherModules: rootsOfOtherModules)
 					}
 				}
 				let warnings = if let trees, request.generatesDependencyTrees {
@@ -360,27 +363,18 @@ public actor DependencyTreeGenerator {
 				} else {
 					[SourceDiagnostic]()
 				}
-				// Drawn from the trees the code is generated from, before any mock is built. Its error is kept until the
-				// plans' is reported.
-				let dotTree: Result<String?, any Error>
-				do {
-					dotTree = if let trees, request.generatesDOTTree {
-						try await .success(generateDOTTree(of: trees.roots))
-					} else {
-						.success(nil)
-					}
-				} catch {
-					dotTree = .failure(error)
+				// Drawn from the trees the code is generated from, before any mock is built. Drawing a tree throws nothing.
+				let drawnTree: String? = if let trees, request.generatesDOTTree {
+					await generateDOTTree(of: trees.roots)
+				} else {
+					nil
 				}
-				let plannedRoots = await taskGroup.next() ?? .success([])
-				return (plannedRoots, warnings, dotTree)
+				let plans = try await taskGroup.next() ?? []
+				return (plans, warnings, drawnTree)
 			}
 		}
 		// A read, not an assignment, so the optimizer cannot keep the trees past this point.
 		_ = consume trees
-		// An error in the roots' and seams' code is reported before any mock is built.
-		let plans = try plannedRoots.get()
-		let drawnTree = try dotTree.get()
 		// The roots' plans are spelled in a child task while the mocks are made.
 		async let roots = Self.spelled(plans)
 		var mocks: MockGenerationResult?
@@ -409,6 +403,9 @@ public actor DependencyTreeGenerator {
 	/// `rootsOfOtherModules`, the roots another module declares.
 	private func plannedCode(of roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable]) async throws -> [PlannedRoot] {
 		let rootScopeGenerators = roots
+		if let ordering = CodeTaskStart.ordering {
+			await ordering.runEveryStart()
+		}
 		let plannedRoots = try await withThrowingTaskGroup(
 			of: PlannedRoot?.self,
 			returning: [PlannedRoot].self,
@@ -481,16 +478,16 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// The DOT graph of the trees `rootScopeGenerators` root.
-	private func generateDOTTree(of rootScopeGenerators: [RootScopeInfo]) async throws -> String {
-		let dependencyTree = try await withThrowingTaskGroup(
+	private func generateDOTTree(of rootScopeGenerators: [RootScopeInfo]) async -> String {
+		let dependencyTree = await withTaskGroup(
 			of: String.self,
 			returning: String.self,
 		) { taskGroup in
 			for rootInfo in rootScopeGenerators {
-				taskGroup.addTask { try await rootInfo.scopeGenerator.generateDOT() }
+				taskGroup.addTask { await rootInfo.scopeGenerator.generateDOT() }
 			}
 			var generatedRoots = [String]()
-			for try await generatedRoot in taskGroup {
+			for await generatedRoot in taskGroup {
 				generatedRoots.append(generatedRoot)
 			}
 			return generatedRoots.removingEmpty().sorted().joined(separator: "\n\n")
@@ -512,6 +509,19 @@ public actor DependencyTreeGenerator {
 	private let importAccessSpellingOwnLevels: @Sendable ([String: Set<AccessLevel>]) -> GeneratedImportAccess
 	private let readOwnFiles: (@Sendable () async -> FulfillerImports.OwnFiles)?
 	let typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]
+	/// The generator's one ID space: every map it freezes interns its records' values here, so that every ID a tree or a
+	/// construction memo compares means one value however many maps and tables the generator makes. Only the generator's
+	/// serial code reaches it.
+	let internerSpace: ConstructionInternerSpace
+
+	/// The declarations of `instantiables` in the order a generator interns them: the order of their keys, which no arrival
+	/// order decides, or the order the tests set (`ConstructionInternerObservation.declarationOrder`).
+	static func declarationsInInterningOrder(of instantiables: [TypeDescription: Instantiable]) -> [Instantiable] {
+		let declarations = instantiables.sorted { TypeDescription.precedesInScopeOrder($0.key, $1.key) }.map(\.value)
+		guard let declarationOrder = ConstructionInternerObservation.declarationOrder else { return declarations }
+		return declarationOrder(declarations.count).map { declarations[$0] }
+	}
+
 	let aliasDeclarationReferences: AliasDeclarationReferences
 	/// See `init`.
 	let compilesGeneratedMocks: Bool
@@ -590,9 +600,15 @@ public actor DependencyTreeGenerator {
 
 	/// Validates the dependency tree and builds the trees this module generates, computing the signatures of the seams
 	/// this module calls or generates once, here, and handing them down.
-	/// - Parameter unreadTypeComment: The comment the `public` initializers of the seams this module generates carry
-	///   (`PublicMockContext.unreadTypeComment`).
-	private func dependencyTrees(unreadTypeComment: UnreadTypeComment?) throws -> DependencyTrees {
+	/// - Parameters:
+	///   - unreadTypeComment: The comment the `public` initializers of the seams this module generates carry
+	///     (`PublicMockContext.unreadTypeComment`).
+	///   - ownAccessProof: The proof of every type's access over the module's declarations, which the signatures of the
+	///     seams this module generates read (`ownAccessProof()`).
+	///   - startsCodeGeneration: Whether each generator of a root's tree starts generating its code as it is created,
+	///     which trees built only to be read skip. Read only where no module holds a seam: a module that holds one always
+	///     generates code.
+	func dependencyTrees(unreadTypeComment: UnreadTypeComment?, ownAccessProof: OwnAccessProof, startsCodeGeneration: Bool = true) throws -> DependencyTrees {
 		// The trees of the foreign seams with holes, built inline with the fills this module generates.
 		var inlineForeignSeamTrees = [ScopeGenerator]()
 		var validatedScopes = Set<Scope>()
@@ -638,7 +654,7 @@ public actor DependencyTreeGenerator {
 				throw error.markingCyclesClosedInSeamFills(DependencyTreeGeneratorError.SeamFillDeclarations.ofFills(ofHolesOf: foreignSeamHoles, in: typeDescriptionToScopeMap))
 			}
 			// Every tree built from the validated scopes reads them frozen, once.
-			let validatedWorld = ValidatedWorld(frozenScopeMap: FrozenScopeMap(freezing: typeDescriptionToScopeMap.lazy.map { (key: $0.key, scope: $0.value) }))
+			let validatedWorld = ValidatedWorld(frozenScopeMap: FrozenScopeMap(freezing: typeDescriptionToScopeMap.lazy.map { (key: $0.key, scope: $0.value) }, interningIn: internerSpace))
 			inlineForeignSeamTrees = try inlineTreesOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap, validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots)
 			validatedScopes = Set(typeDescriptionToScopeMap.values)
 			// A module whose declarations hold no seam generates from the validated scopes.
@@ -665,9 +681,9 @@ public actor DependencyTreeGenerator {
 						sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
 						scopeGenerator: record.createScopeGenerator(
 							in: table,
-							for: nil,
 							lazilyInstantiatedInstanceProperties: [],
 							erasedToConcreteExistential: false,
+							startsCodeGeneration: startsCodeGeneration,
 							declaredTypeNames: declaredTypeNames,
 							constructionMemo: &constructionMemo,
 						),
@@ -675,7 +691,7 @@ public actor DependencyTreeGenerator {
 				}
 				return roots
 			}
-			let seamWorldRoots = try seamWorldRootScopeGenerators(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, unreadTypeComment: unreadTypeComment)
+			let seamWorldRoots = try seamWorldRootScopeGenerators(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, unreadTypeComment: unreadTypeComment, ownAccessProof: ownAccessProof)
 			rootsOfOtherModules = seamWorldRoots.rootsOfOtherModules
 			storedSeamSignatures = seamWorldRoots.storedSeamSignatures
 			return seamWorldRoots.roots
@@ -805,8 +821,8 @@ public actor DependencyTreeGenerator {
 	private func imports(
 		_ importStatements: [ImportStatement],
 		building fulfillers: Set<FulfillerImports.Fulfiller>,
-		forUnconditionalCode unconditionalCode: String,
-		mockCode: (code: String, condition: String)?,
+		forUnconditionalCode unconditionalCode: () -> String,
+		mockCode: (code: () -> String, condition: String)?,
 		ownFilesRead ownFilesReadByEarlierFile: inout OwnFilesRead?,
 	) async -> String {
 		let fulfillersToImport = FulfillerImports.fulfillers(among: fulfillers, notMadeVisibleBy: importStatements, emittingModuleName: emittingModule?.identity.moduleName)
@@ -832,8 +848,8 @@ public actor DependencyTreeGenerator {
 		}
 		let namedTypes: GeneratedImportAccess.FileNamedTypes? = if importAccess.spellsAccessLevels || !moduleNamesSpellingOwnFilesLevels.isEmpty {
 			GeneratedImportAccess.FileNamedTypes(
-				unconditional: importAccess.namedTypes(inGeneratedCode: unconditionalCode),
-				underMockCondition: mockCode.map { mockCode in (mockCode.condition, importAccess.namedTypes(inGeneratedCode: mockCode.code)) },
+				unconditional: importAccess.namedTypes(inGeneratedCode: unconditionalCode()),
+				underMockCondition: mockCode.map { mockCode in (mockCode.condition, importAccess.namedTypes(inGeneratedCode: mockCode.code())) },
 			)
 		} else {
 			nil

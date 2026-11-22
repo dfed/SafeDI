@@ -403,7 +403,6 @@ extension ScopeRecord {
 	/// the pass after is the same.
 	func createScopeGenerator(
 		in table: ScopeTable,
-		for property: Property?,
 		nearestDeclarations: NearestDeclarations = NearestDeclarations(),
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		seamRoot: ScopeGenerator.SeamRoot? = nil,
@@ -420,10 +419,9 @@ extension ScopeRecord {
 		// which the root asks for once its tree exists; an early start generates each large subtree's code at the context of
 		// a root, which on graphs with lazy cycles that layout never reads, and on every graph runs beside it. Seams, mocks
 		// and trees built only to read their sets keep their starts.
-		let startsCodeGeneration = startsCodeGeneration && !(property == nil && seamRoot == nil && mockBuilders == nil && !forMockGeneration)
+		let startsCodeGeneration = startsCodeGeneration && !(seamRoot == nil && mockBuilders == nil && !forMockGeneration)
 		let scopeGenerator = try createdTree(
 			in: table,
-			for: property,
 			nearestDeclarations: nearestDeclarations,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			seamRoot: seamRoot,
@@ -443,7 +441,6 @@ extension ScopeRecord {
 			let treeBuiltWithMemo = try ConstructionMemoOracle.$keyedPlaceObserver.withValue(nil) {
 				try createdTree(
 					in: table,
-					for: property,
 					nearestDeclarations: nearestDeclarations,
 					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 					seamRoot: seamRoot,
@@ -457,11 +454,12 @@ extension ScopeRecord {
 				)
 			}
 			constructionMemo.oracleMemo = oracleMemo
-			let treeBuiltWithoutMemo = try ConstructionMemo.$isEnabled.withValue(false) {
+			// The reference tree is built with neither the memo nor the settled cycle parameter seed, so every
+			// graph compares the seeded build with the plain pass loop as well.
+			let treeBuiltWithoutMemo = try ConstructionMemo.$isEnabled.withValue(false) { try CycleParameterPlan.$isEnabled.withValue(false) {
 				var unusedMemo = ConstructionMemo()
 				return try createdTree(
 					in: table,
-					for: property,
 					nearestDeclarations: nearestDeclarations,
 					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 					seamRoot: seamRoot,
@@ -473,7 +471,7 @@ extension ScopeRecord {
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &unusedMemo,
 				)
-			}
+			} }
 			observer(treeBuiltWithMemo, treeBuiltWithoutMemo)
 		}
 		return scopeGenerator
@@ -482,7 +480,6 @@ extension ScopeRecord {
 	/// The tree `createScopeGenerator` creates, in as many passes as it takes.
 	private func createdTree(
 		in table: ScopeTable,
-		for property: Property?,
 		nearestDeclarations: NearestDeclarations,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		seamRoot: ScopeGenerator.SeamRoot?,
@@ -495,6 +492,9 @@ extension ScopeRecord {
 		constructionMemo: inout ConstructionMemo,
 	) throws -> ScopeGenerator {
 		var previousPassGenerator: ScopeGenerator?
+		// The cycle parameters settled on the first pass's tree, which the second pass is built with in place of the first
+		// pass's findings (see `CycleParameterPlan`), or `nil` where the tree is not planned.
+		var cycleParameterSeed: CycleParameterSeed?
 		var firstPassMemo = ConstructionMemo()
 		// The memo of the pass before, whose settled generators a pass reuses (see `ConstructionMemo.settledReuse`), and the
 		// place-holding properties that pass read.
@@ -534,7 +534,6 @@ extension ScopeRecord {
 				// discarded build of the same pass stored, which the schedule asks newest first.
 				var discardedGeneratorsToStart = generatorsToStart
 				_ = try createScopeGenerator(
-					for: property,
 					nearestDeclarations: nearestDeclarations,
 					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 					seamRoot: seamRoot,
@@ -545,6 +544,7 @@ extension ScopeRecord {
 					validatesForwardedProperties: validatesForwardedProperties,
 					declaredTypeNames: declaredTypeNames,
 					previousPassGenerator: nil,
+					cycleParameterSeed: nil,
 					generatorsToStart: &discardedGeneratorsToStart,
 					placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 					memo: &passMemo,
@@ -554,7 +554,6 @@ extension ScopeRecord {
 				)
 			}
 			scopeGenerator = try createScopeGenerator(
-				for: property,
 				nearestDeclarations: nearestDeclarations,
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 				seamRoot: seamRoot,
@@ -565,6 +564,7 @@ extension ScopeRecord {
 				validatesForwardedProperties: validatesForwardedProperties,
 				declaredTypeNames: declaredTypeNames,
 				previousPassGenerator: previousPassGenerator,
+				cycleParameterSeed: cycleParameterSeed,
 				generatorsToStart: &generatorsToStart,
 				placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 				memo: &passMemo,
@@ -574,6 +574,15 @@ extension ScopeRecord {
 			)
 			if previousPassGenerator == nil {
 				firstPassMemo = passMemo
+				cycleParameterSeed = Self.cycleParameterSeed(
+					ofFirstPassTree: scopeGenerator,
+					seamRoot: seamRoot,
+					mockBuilders: mockBuilders,
+					nearestDeclarations: nearestDeclarations,
+					forMockGeneration: forMockGeneration,
+				)
+			} else {
+				cycleParameterSeed = nil
 			}
 			previousPassMemo = passMemo
 			placeHoldingPropertiesOfPreviousPass = placeHoldingPropertiesByType
@@ -601,6 +610,30 @@ extension ScopeRecord {
 		return scopeGenerator
 	}
 
+	/// The cycle parameters `CycleParameterPlan` settles on `tree`, a first pass's, where only they would drive the passes
+	/// after it, or `nil`: a tree with a seam root, a mock root's builders, a receive a mock passes `nil`, a call or fill, or a
+	/// build site keeps the plain passes, as does a tree whose parameters the first pass found settled. So does a mock's
+	/// tree, where settling cost more than the passes it saved: on issue #646's graph of twelve mocks, its later passes
+	/// reuse most of the pass before's generators, while the pass a seed builds reuses few of the first pass's.
+	private static func cycleParameterSeed(
+		ofFirstPassTree tree: ScopeGenerator,
+		seamRoot: ScopeGenerator.SeamRoot?,
+		mockBuilders: DependencyTreeGenerator.ShapedBuilders?,
+		nearestDeclarations: NearestDeclarations,
+		forMockGeneration: Bool,
+	) -> CycleParameterSeed? {
+		guard CycleParameterPlan.isEnabled,
+		      !forMockGeneration,
+		      tree.cycleParametersChangedInTree,
+		      seamRoot == nil,
+		      mockBuilders == nil,
+		      !nearestDeclarations.mayPassNil,
+		      !tree.treeHoldsCallOrFill,
+		      !tree.containsBuildSite
+		else { return nil }
+		return CycleParameterPlan.settledSeed(ofTreeRootedAt: tree)
+	}
+
 	/// One pass of `createScopeGenerator`, which reads the parameters of the builder functions lazy cycles close on
 	/// from `previousPassGenerator`, the tree the pass before created, or finds none when there is no pass before.
 	/// - Parameter generatorsToStart: `nil` to start each generator's code as it is created, or where to collect the
@@ -613,7 +646,6 @@ extension ScopeRecord {
 	///   and its entry could serve only the pass after (`ConstructionMemo.settledReuse`), which builds the place again
 	///   instead, reusing what the pass before stored of the places beneath it.
 	private func createScopeGenerator(
-		for property: Property?,
 		nearestDeclarations: NearestDeclarations,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		seamRoot: ScopeGenerator.SeamRoot?,
@@ -624,6 +656,7 @@ extension ScopeRecord {
 		validatesForwardedProperties: Bool,
 		declaredTypeNames: DeclaredTypeNames,
 		previousPassGenerator: ScopeGenerator?,
+		cycleParameterSeed: CycleParameterSeed?,
 		generatorsToStart: inout [[ScopeGenerator]]?,
 		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?,
 		memo: inout ConstructionMemo,
@@ -633,10 +666,8 @@ extension ScopeRecord {
 	) throws -> ScopeGenerator {
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
 			scope: root,
-			property: property,
-			propertyStack: [],
-			concreteTypeStack: [],
-			depthStack: [],
+			property: nil,
+			contextStack: ContextStack(),
 			depth: 0,
 			nearestDeclarations: nearestDeclarations,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -652,6 +683,7 @@ extension ScopeRecord {
 			validatesForwardedProperties: validatesForwardedProperties,
 			declaredTypeNames: declaredTypeNames,
 			previousPassGenerator: previousPassGenerator,
+			cycleParameterSeed: cycleParameterSeed,
 			cycleParameterContexts: [:],
 			placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 			// A root's place is never stored.
@@ -671,7 +703,7 @@ extension ScopeRecord {
 			let index = scopeGeneratorsUnderConstruction.count - 1
 			if let propertyToGenerate = scopeGeneratorsUnderConstruction[index].nextPropertyToGenerate() {
 				switch propertyToGenerate {
-				case let .instantiated(property, scope, erasedToConcreteExistential):
+				case let .instantiated(property, scope, erasedToConcreteExistential, propertyID):
 					try scopeGeneratorsUnderConstruction[index].validateForwardedProperties(ofChildBuilding: scope, as: property)
 					let key = reusesGenerators && scopesBuiltAtOnePlace?.contains(scope) != true
 						? scopeGeneratorsUnderConstruction[index].memoKey(ofChildBuilding: scope, as: property, erasedToConcreteExistential: erasedToConcreteExistential)
@@ -697,6 +729,7 @@ extension ScopeRecord {
 						var child = scopeGeneratorsUnderConstruction[index].childUnderConstruction(
 							scope: scope,
 							property: property,
+							propertyID: propertyID,
 							erasedToConcreteExistential: erasedToConcreteExistential,
 							isKeyed: key != nil,
 						)
@@ -722,6 +755,7 @@ extension ScopeRecord {
 				try scopeGeneratorsUnderConstruction.append(scopeGeneratorsUnderConstruction[index].fillUnderConstruction(
 					fill: fill.fill,
 					scope: fill.scope,
+					context: fill.context,
 				))
 			} else {
 				var createdScope = scopeGeneratorsUnderConstruction.removeLast()
@@ -753,17 +787,15 @@ extension ScopeRecord {
 /// the generators of the scopes it creates exist.
 private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// - Parameters:
-	///   - concreteTypeStack: The concrete types of the scopes `propertyStack`'s properties are built for, beside it.
-	///   - depthStack: The depth in the tree of the scope that put each entry of `propertyStack` on it, beside it.
+	///   - property: The property the scope builds, with its ID in `scope`'s interner, or `nil` for a root.
+	///   - contextStack: The declarations being built above the scope.
 	///   - depth: This scope's depth in the tree: 0 for the root, and one more than the scope that creates it otherwise.
-	///   - fillPathStackCount: How many of the outermost entries of `propertyStack` are the path of the seam whose hole the
+	///   - fillPathStackCount: How many of the outermost entries of `contextStack` are the path of the seam whose hole the
 	///     enclosing fill fills (`SeamSignature.Hole.fillPropertyStack`): none outside a fill, and a nested fill's are its own.
 	init(
 		scope: ConstructionScope,
-		property: Property?,
-		propertyStack: [Property],
-		concreteTypeStack: [TypeDescription],
-		depthStack: [Int],
+		property builtProperty: (property: Property, id: PropertyID)?,
+		contextStack: ContextStack,
 		depth: Int,
 		fillPathStackCount: Int = 0,
 		nearestDeclarations inheritedNearestDeclarations: NearestDeclarations,
@@ -784,6 +816,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		buildsWithHandWrittenMocks: Bool = false,
 		declaredTypeNames: DeclaredTypeNames,
 		previousPassGenerator: ScopeGenerator?,
+		cycleParameterSeed: CycleParameterSeed? = nil,
 		cycleParameterContexts: [ScopeGenerator.BuiltDeclaration: CycleParameterContext],
 		reboundProperties: Set<Property> = [],
 		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]? = nil,
@@ -796,37 +829,21 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		// whether another place inherits a context that answers the reads of this scope's subtree alike (see
 		// `ConstructionMemo`).
 		var log = ConstructionLog(recording: recordsReads)
-		let context = ConstructionContext(
-			propertyStack: propertyStack,
-			concreteTypeStack: concreteTypeStack,
-			depthStack: depthStack,
-			nearestDeclarations: inheritedNearestDeclarations,
-			cycleParameterContexts: cycleParameterContexts,
-		)
-		var childPropertyStack = propertyStack
-		var childConcreteTypeStack = concreteTypeStack
-		var childDepthStack = depthStack
-		// The index on `propertyStack` of the declaration this scope repeats when it closes a cycle.
-		var closedOnDeclarationIndex: Int?
+		let property = builtProperty?.property
+		let interner = scope.interner
+		var childContextStack = contextStack
+		// The entry of `contextStack` this scope repeats when it closes a cycle, with its index.
+		var closedOn: (entry: ContextStack.Entry, index: Int)?
 		// The declarations this scope's own dependencies are read from: those enclosing it, with every form of its own
 		// property being built.
 		var nearestDeclarations = inheritedNearestDeclarations.changed(atDepth: depth)
-		if let property {
+		if let (property, propertyID) = builtProperty {
 			// A scope closes a cycle where validation finds one: it repeats a declaration of the same property, as cycle
 			// validation sees it (a lazily instantiated property as the constant it stands for), built for the same
 			// concrete type. A lazily instantiated declaration's instance is on the stack just inside the declaration.
-			let concreteType = scope.instantiable.concreteInstantiable
-			let closedOn = context.declarationClosedOn(by: property, concreteType: concreteType)
-			log.record(.declarationClosedOn(property, concreteType), answer: .declarationClosedOn(closedOn?.declaration), depth: closedOn?.depth ?? -1)
-			closedOnDeclarationIndex = closedOn?.index
-			childPropertyStack.insert(property, at: 0)
-			childConcreteTypeStack.insert(concreteType, at: 0)
-			childDepthStack.insert(depth, at: 0)
-			if let instanceProperty = property.asLazilyInstantiatedInstanceProperty {
-				childPropertyStack.insert(instanceProperty, at: 0)
-				childConcreteTypeStack.insert(concreteType, at: 0)
-				childDepthStack.insert(depth, at: 0)
-			}
+			closedOn = contextStack.entryClosedOn(byPropertyID: propertyID, concreteTypeID: scope.concreteTypeID, interner: interner)
+			log.record(.declarationClosedOn(propertyID, scope.concreteTypeID), answer: .declarationClosedOn(closedOn?.entry.propertyID), depth: closedOn?.entry.depth ?? -1)
+			childContextStack.push(property, id: propertyID, concreteType: scope.instantiable.concreteInstantiable, concreteTypeID: scope.concreteTypeID, depth: depth, interner: interner)
 			// Building the property adds its forms to the nearest declaration of its label, which it reads.
 			let (buildingDeclaration, buildingDepth) = nearestDeclarations.resolving(property.label)
 			log.record(.nearestDeclaration(property.label), answer: .nearestDeclaration(buildingDeclaration), depth: buildingDepth)
@@ -838,22 +855,21 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			}
 		}
 		// The declaration repeated is built for this scope's concrete type, as its entry records.
-		let closedOnDeclaration = closedOnDeclarationIndex.map {
-			ScopeGenerator.BuiltDeclaration(property: propertyStack[$0], concreteType: scope.instantiable.concreteInstantiable)
+		let closedOnDeclaration = closedOn.map {
+			ScopeGenerator.BuiltDeclaration(property: $0.entry.property, concreteType: scope.instantiable.concreteInstantiable)
 		}
 		let isPropertyCycle = closedOnDeclaration != nil
 		self.fillPathStackCount = fillPathStackCount
-		let fillPathStart = propertyStack.count - fillPathStackCount
 		// How many declarations of the fill's path lie beneath the one this scope closes on, when it closes on one: generation's
 		// own finding, which the check of a fill reads instead of working the membership out again. A lazily instantiated
 		// declaration's instance is its own entry of the stack, and no declaration.
-		closedOnFillPathDeclarationsBeneath = closedOnDeclarationIndex.flatMap { index in
-			index >= fillPathStart ? (fillPathStart..<index).count(where: { !(propertyStack.indices.contains($0 + 1) && propertyStack[$0 + 1].asLazilyInstantiatedInstanceProperty == propertyStack[$0]) }) : nil
+		closedOnFillPathDeclarationsBeneath = closedOn.flatMap { closedOn in
+			closedOn.index < fillPathStackCount ? contextStack.entries[(closedOn.index + 1)..<fillPathStackCount].count(where: { !$0.isInstanceOfEntryOutside }) : nil
 		}
 		// The parameters of this scope's builder function that the pass before found, when a lazy cycle closes on it,
 		// or those of the function a cycle-closing scope refers to. Nearly every scope has neither.
 		let ownCycleParameters = if !isPropertyCycle, property != nil {
-			previousPassGenerator?.foundCycleParameters ?? []
+			cycleParameterSeed?.foundCycleParameters ?? previousPassGenerator?.foundCycleParameters ?? []
 		} else {
 			[CycleParameter]()
 		}
@@ -951,12 +967,11 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		self.property = property
 		// A scope that closes a cycle creates no children.
 		propertiesToGenerate = isPropertyCycle ? [] : scope.propertiesToGenerate
-		self.childPropertyStack = childPropertyStack
-		self.childConcreteTypeStack = childConcreteTypeStack
-		self.childDepthStack = childDepthStack
+		self.childContextStack = childContextStack
 		self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
 		self.childLazilyInstantiatedInstanceProperties = childLazilyInstantiatedInstanceProperties
 		self.previousPassGenerator = previousPassGenerator
+		self.cycleParameterSeed = cycleParameterSeed
 		self.ownCycleParameters = ownCycleParameters
 		passedCycleParameters = closedOnContext?.parameters ?? ownCycleParameters
 		self.cycleParameterUnavailableProperties = cycleParameterUnavailableProperties
@@ -1034,7 +1049,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		// pass names both, fills first, then dispatchers, apart from what encloses the call: the
 		// fills and dispatchers enclosing it, and the names the seam whose tree holds it binds for its builders, which a call
 		// inside it passes by name and which a closer declaration would shadow.
-		var fillsOfThisCall = [(fill: Fill, scope: ConstructionScope)]()
+		var fillsOfThisCall = [(fill: Fill, scope: ConstructionScope, context: ScopeRecord.FillContext)]()
 		var dispatchersOfThisCall = [ScopeGenerator.FillDispatcher]()
 		var namesOfThisCall = GeneratedNameAllocator(reserving: [])
 		if !holeArguments.isEmpty {
@@ -1052,7 +1067,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// field any place of the case carries, each from the case or from the dispatchers that lead to it, in the form every
 			// route can hand it (`ScopeGenerator.caseFields(of:)`).
 			var placesByCaseKey = [String: [SeamSignature.Hole]]()
-			for case let .fill(hole, _) in holeArguments where hole.enumPlace != nil {
+			for case let .fill(hole, _, _) in holeArguments where hole.enumPlace != nil {
 				placesByCaseKey[ScopeGenerator.fillCaseKey(of: hole), default: []].append(hole)
 			}
 			// A place inside a fill of an inner seam's builder reads, through the scope value the inner seam handed that fill, a
@@ -1138,12 +1153,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 				}
 			}
 			var functionNameByCaseKey = [String: String]()
-			for case let .fill(hole, fulfillingScope) in holeArguments where enclosingFills[ScopeGenerator.fillKey(of: hole)] == nil {
+			for case let .fill(hole, fulfillingScope, fillContext) in holeArguments where enclosingFills[ScopeGenerator.fillKey(of: hole)] == nil {
 				let key = ScopeGenerator.fillKey(of: hole)
 				let caseKey = ScopeGenerator.fillCaseKey(of: hole)
 				if let functionName = functionNameByCaseKey[caseKey] {
 					fillNames[key] = functionName
-					fillsOfThisCall.append((Fill(hole: hole, key: key, functionName: functionName, fields: hole.fields, emitsCode: false, caseHoles: [hole]), fulfillingScope))
+					fillsOfThisCall.append((Fill(hole: hole, key: key, functionName: functionName, fields: hole.fields, emitsCode: false, caseHoles: [hole]), fulfillingScope, fillContext))
 					continue
 				}
 				let functionName = names.claim(ScopeGenerator.fillFunctionName(of: hole))
@@ -1174,7 +1189,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 						fill.optionalLazilyInstantiatedLabels.insert(field.property.label)
 					}
 				}
-				fillsOfThisCall.append((fill, fulfillingScope))
+				fillsOfThisCall.append((fill, fulfillingScope, fillContext))
 			}
 			if let calledBuilders = scope.calledBuilders {
 				dispatchersOfThisCall = ScopeGenerator.FillDispatcher.dispatchers(
@@ -1241,7 +1256,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		// fill, a call's fills grew with the square of the places of the seam it calls.
 		var enclosingFillsOfThisCall = enclosingFills
 		if !holeArguments.isEmpty {
-			for (fill, _) in fillsOfThisCall {
+			for (fill, _, _) in fillsOfThisCall {
 				enclosingFillsOfThisCall[fill.key] = fill.functionName
 			}
 			for dispatcher in dispatchersOfThisCall {
@@ -1316,7 +1331,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		let enumKeys = Set(calledBuilders.enumsByKey.keys)
 		var visited = Set<ObjectIdentifier>()
 		var scopesToVisit = holeArguments.compactMap { argument -> ConstructionScope? in
-			guard case let .fill(_, scope) = argument else { return nil }
+			guard case let .fill(_, scope, _) = argument else { return nil }
 			return scope
 		}
 		while let scope = scopesToVisit.popLast() {
@@ -1324,10 +1339,10 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			if let innerBuilders = scope.calledBuilders, innerBuilders.enumsByKey.keys.contains(where: enumKeys.contains) {
 				return true
 			}
-			for case let .fill(_, fillScope) in scope.holeArguments {
+			for case let .fill(_, fillScope, _) in scope.holeArguments {
 				scopesToVisit.append(fillScope)
 			}
-			for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
+			for case let .instantiated(_, childScope, _, _) in scope.propertiesToGenerate {
 				scopesToVisit.append(childScope)
 			}
 		}
@@ -1411,12 +1426,12 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 
 	/// The generators created so far for `propertiesToGenerate`, in order, followed by those of `fillsOfThisCall`.
 	private(set) var childGenerators = [ScopeGenerator]()
-	/// The `ScopeGenerator.CycleClosingRedeclaredLabels` of `childGenerators`, merged in their order, which this scope's
+	/// The `CycleClosingRedeclaredLabels` of `childGenerators`, merged in their order, which this scope's
 	/// generator is created from; then, once `scopeGenerator(collectingGeneratorsToStartInto:)` has created it, its own,
 	/// which `add(childGenerator:createdBy:readsAnsweredAbove:isSettled:)` merges into its parent's, and a memo entry of
 	/// the generator keeps for a place that reuses it (`ConstructionMemo.Entry`). No generator keeps one. An alias or a hole
 	/// has none.
-	private(set) var cycleClosingRedeclaredLabels = ScopeGenerator.CycleClosingRedeclaredLabels()
+	private(set) var cycleClosingRedeclaredLabels = CycleClosingRedeclaredLabels()
 	/// How many scopes this scope's subtree has so far: itself, and every scope created beneath it. An alias or a hole,
 	/// which generates a line or two, is not counted.
 	private(set) var subtreeScopeCount = 1
@@ -1469,11 +1484,9 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		}
 	}
 
-	/// Merges a child's `ScopeGenerator.CycleClosingRedeclaredLabels` into `cycleClosingRedeclaredLabels`.
-	private mutating func merge(childCycleClosingRedeclaredLabels: ScopeGenerator.CycleClosingRedeclaredLabels) {
-		for (closedOnDeclaration, redeclarations) in childCycleClosingRedeclaredLabels {
-			cycleClosingRedeclaredLabels[closedOnDeclaration, default: [:]].merge(redeclarations) { $0.preceding($1) }
-		}
+	/// Merges a child's `CycleClosingRedeclaredLabels` into `cycleClosingRedeclaredLabels`.
+	private mutating func merge(childCycleClosingRedeclaredLabels: CycleClosingRedeclaredLabels) {
+		cycleClosingRedeclaredLabels.merge(childCycleClosingRedeclaredLabels)
 	}
 
 	/// Adds the generator another place built, which `reuse` found, to this scope's children, as the child it builds
@@ -1500,7 +1513,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// children did, and it found the cycle parameters and loops of builders the pass before's generator for the place
 	/// found, spelled alike.
 	func isSettled(building generator: ScopeGenerator) -> Bool {
-		childrenAreSettled && ConstructionMemo.foundAlike(by: generator, asBy: previousPassGenerator)
+		childrenAreSettled && ConstructionMemo.foundAlike(by: generator, asBy: previousPassGenerator, builtWithCycleParameters: ownCycleParameters)
 	}
 
 	/// What this scope's subtree read of the context above this scope (see `ConstructionMemo`).
@@ -1539,7 +1552,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 
 	/// The next of `fillsOfThisCall` to create a generator for, once every one of `propertiesToGenerate` has its
 	/// generator, or `nil` once every fill has its generator.
-	mutating func nextFill() -> (fill: Fill, scope: ConstructionScope)? {
+	mutating func nextFill() -> (fill: Fill, scope: ConstructionScope, context: ScopeRecord.FillContext)? {
 		guard nextFillIndex < fillsOfThisCall.count else { return nil }
 		let fill = fillsOfThisCall[nextFillIndex]
 		nextFillIndex += 1
@@ -1549,7 +1562,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// The scope under construction for the property a fill of this scope's seam call builds: the scope of the type
 	/// that fulfills the hole in the caller's declarations, built with the stack the seam whose tree holds the site
 	/// reaches it with, and with the fields of the site's scope struct in scope beside what encloses the call.
-	func fillUnderConstruction(fill: Fill, scope: ConstructionScope) throws -> ScopeGeneratorUnderConstruction {
+	func fillUnderConstruction(fill: Fill, scope: ConstructionScope, context fillContext: ScopeRecord.FillContext) throws -> ScopeGeneratorUnderConstruction {
 		var fill = fill
 		let hole = fill.hole
 		try validateForwardedProperties(of: hole.property, declaredAt: hole.declarationLocation, on: hole.ownerType, seeingThroughModulesNamed: hole.declaringModuleNames, building: scope.instantiable)
@@ -1629,13 +1642,11 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		}
 		return ScopeGeneratorUnderConstruction(
 			scope: scope,
-			property: hole.property,
-			propertyStack: hole.fillPropertyStack,
-			concreteTypeStack: hole.fillConcreteTypeStack,
+			property: (hole.property, fillContext.propertyID),
 			// The fill's stack is the path of the seam whose tree holds the site, put on it above this tree.
-			depthStack: hole.fillPropertyStack.map { _ in -1 },
+			contextStack: fillContext.contextStack,
 			depth: depth + 1,
-			fillPathStackCount: hole.fillPropertyStack.count,
+			fillPathStackCount: fillContext.contextStack.count,
 			nearestDeclarations: fillNearestDeclarations,
 			lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties.filter { !fieldLabels.contains($0.label) && !mockRootBoundLabels.contains($0.label) }.union(fieldInstanceProperties),
 			seamRoot: nil,
@@ -1676,8 +1687,8 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			holeProperty: property,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			site: seamHoles.site(at: sitePath + [property]),
-			ownerPropertyStack: childPropertyStack,
-			ownerConcreteTypeStack: childConcreteTypeStack,
+			ownerPropertyStack: childContextStack.propertiesInnermostFirst,
+			ownerConcreteTypeStack: childContextStack.concreteTypesInnermostFirst,
 			ownerLazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 			// A seam that declares builder structs spells the `@Sendable` functions of its sites, too, `nonisolated`.
 			sendableFunctionsAreNonisolated: seamHoles.declaresBuilderStructs,
@@ -1690,15 +1701,14 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	func childUnderConstruction(
 		scope: ConstructionScope,
 		property: Property,
+		propertyID: PropertyID,
 		erasedToConcreteExistential: Bool,
 		isKeyed: Bool,
 	) -> ScopeGeneratorUnderConstruction {
 		ScopeGeneratorUnderConstruction(
 			scope: scope,
-			property: property,
-			propertyStack: childPropertyStack,
-			concreteTypeStack: childConcreteTypeStack,
-			depthStack: childDepthStack,
+			property: (property, propertyID),
+			contextStack: childContextStack,
 			depth: depth + 1,
 			fillPathStackCount: fillPathStackCount,
 			nearestDeclarations: nearestDeclarations(ofChildBuilding: property),
@@ -1717,6 +1727,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			buildsWithHandWrittenMocks: buildsWithHandWrittenMocks,
 			declaredTypeNames: declaredTypeNames,
 			previousPassGenerator: previousPassChildGenerator,
+			cycleParameterSeed: cycleParameterSeed?.child(at: childGenerators.count),
 			cycleParameterContexts: childCycleParameterContexts,
 			// The loops the pass before found among this scope's children.
 			reboundProperties: childReboundProperties,
@@ -1756,6 +1767,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			reboundProperties: childReboundProperties,
 			spellings: Property.spellingsForConstructionMemo(of: property, childLazilyInstantiatedInstanceProperties, childReboundProperties),
 			previousPassGenerator: previousPassChildGenerator.map(ObjectIdentifier.init),
+			cycleParameterSeed: cycleParameterSeed?.child(at: childGenerators.count).map(ObjectIdentifier.init),
 		)
 	}
 
@@ -1773,9 +1785,8 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// The context the scope this scope instantiates as `property` inherits (see `ConstructionContext`).
 	func childContext(ofChildBuilding property: Property) -> ConstructionContext {
 		ConstructionContext(
-			propertyStack: childPropertyStack,
-			concreteTypeStack: childConcreteTypeStack,
-			depthStack: childDepthStack,
+			contextStack: childContextStack,
+			interner: scope.interner,
 			nearestDeclarations: nearestDeclarations(ofChildBuilding: property),
 			cycleParameterContexts: childCycleParameterContexts,
 		)
@@ -2085,7 +2096,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// The sites of the places a call whose builders `holeArguments` are fills.
 	private static func filledSites(of holeArguments: [ConstructionScope.HoleArgument]) -> Set<SeamSignature.Hole.Site> {
 		Set(holeArguments.compactMap { holeArgument in
-			if case let .fill(hole, _) = holeArgument {
+			if case let .fill(hole, _, _) = holeArgument {
 				hole.site
 			} else {
 				nil
@@ -2250,7 +2261,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			mockBuilders: mockBuilders,
 			holeCallArguments: holeArguments.map { holeArgument in
 				switch holeArgument {
-				case let .fill(hole, _):
+				case let .fill(hole, _, _):
 					// Inside a fill of the same site, the call passes that fill under the label the called seam takes it by.
 					let fillKey = ScopeGenerator.fillKey(of: hole)
 					return ScopeGenerator.HoleCallArgument(
@@ -2341,7 +2352,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 				if generatorsToStart != nil {
 					generatorsToStart?.append(group)
 				} else {
-					Self.startCodeGeneration(of: group)
+					Self.startCodeGeneration(of: group, spellsPlans: group.first !== scopeGenerator)
 				}
 			}
 		}
@@ -2372,25 +2383,42 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		return groups
 	}
 
-	/// Kicks off the generation of the code of each of `scopeGenerators`, one after another on one task, which a later
-	/// request for the code reads from its cache.
-	static func startCodeGeneration(of scopeGenerators: [ScopeGenerator]) {
+	/// Kicks off the generation of the plan of each of `scopeGenerators`, one after another on one task, which a later
+	/// request for the code reads from its cache. Where `spellsPlans`, each plan is spelled too, while the rest of the tree
+	/// is still being generated, and the cache keeps it with its text (`ScopeGenerator.generateSpelledPlan()`): a large
+	/// subtree passes it for each group of small subtrees directly beneath it, whose text the root's spelling then copies,
+	/// and never for itself, since a large subtree can hold another, whose text it would copy again. A later pass of a
+	/// tree's construction starts its generators without spelling them: nearly every tree takes one pass.
+	static func startCodeGeneration(of scopeGenerators: [ScopeGenerator], spellsPlans: Bool = false) {
 		CodeTaskStart.record()
+		let generate: @Sendable () async throws -> Void = {
+			for scopeGenerator in scopeGenerators {
+				if spellsPlans {
+					try await scopeGenerator.generateSpelledPlan()
+				} else {
+					_ = try await scopeGenerator.generatePlan()
+				}
+			}
+		}
 		// A detached task inherits no task-local, so the work observer of the task that starts the code is handed on: the
 		// code a later request reads from the cache then counts its work whichever task asks for it first.
-		if let observer = GenerationWork.observer {
+		if let ordering = CodeTaskStart.ordering {
+			// A test forces the order in which the early starts finish, to show the code does not depend on it.
+			ordering.registerStart()
+			_ = Task.detached {
+				let turn = await ordering.waitForTurn()
+				try? await generate()
+				await ordering.finish(turn)
+			}
+		} else if let observer = GenerationWork.observer {
 			_ = Task.detached {
 				try await GenerationWork.$observer.withValue(observer) {
-					for scopeGenerator in scopeGenerators {
-						_ = try await scopeGenerator.generateCode()
-					}
+					try await generate()
 				}
 			}
 		} else {
 			_ = Task.detached {
-				for scopeGenerator in scopeGenerators {
-					_ = try await scopeGenerator.generateCode()
-				}
+				try await generate()
 			}
 		}
 	}
@@ -2410,13 +2438,9 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	private let propertiesToGenerate: [ConstructionScope.PropertyToGenerate]
 	/// The index in `propertiesToGenerate` of the next property to create a generator for.
 	private var nextPropertyIndex = 0
-	private let childPropertyStack: [Property]
-	/// The concrete types of the scopes `childPropertyStack`'s properties are built for, beside it (see
-	/// `init(scope:property:propertyStack:concreteTypeStack:…)`).
-	private let childConcreteTypeStack: [TypeDescription]
-	/// The depth of the scope that put each entry of `childPropertyStack` on it, beside it.
-	private let childDepthStack: [Int]
-	/// See `init(scope:property:propertyStack:concreteTypeStack:fillPathStackCount:…)`.
+	/// The declarations being built above this scope's children: those above it, then its own.
+	private let childContextStack: ContextStack
+	/// See `init(scope:property:contextStack:depth:fillPathStackCount:…)`.
 	private let fillPathStackCount: Int
 	/// See `ScopeGenerator.closedOnFillPathDeclarationsBeneath`.
 	private let closedOnFillPathDeclarationsBeneath: Int?
@@ -2442,6 +2466,9 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// The parameters of this scope's builder function that the pass before found: those a lazy cycle closing on it
 	/// needs. Empty for nearly every scope.
 	private let ownCycleParameters: [CycleParameter]
+	/// The settled cycle parameters of this place and the places beneath it, which this place reads in place of what
+	/// `previousPassGenerator` found (see `CycleParameterPlan`), or `nil`.
+	private let cycleParameterSeed: CycleParameterSeed?
 	/// The parameters this scope passes a builder function a lazy cycle closes on: its own, or, for a cycle-closing
 	/// scope, those of the function it refers to.
 	private let passedCycleParameters: [CycleParameter]
@@ -2480,7 +2507,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	private let holeArguments: [ConstructionScope.HoleArgument]
 	/// The fills of `holeArguments` this scope's generator holds – those no enclosing call already fills – each with the
 	/// scope of the type that fulfills its hole.
-	private let fillsOfThisCall: [(fill: Fill, scope: ConstructionScope)]
+	private let fillsOfThisCall: [(fill: Fill, scope: ConstructionScope, context: ScopeRecord.FillContext)]
 	/// The dispatchers this scope's seam call declares – those no enclosing call declares – in the order the call's arguments
 	/// first reach them.
 	private let dispatchersOfThisCall: [ScopeGenerator.FillDispatcher]
@@ -3275,13 +3302,7 @@ struct NearestDeclarations: Sendable {
 		init(declarations: [String: NearestDeclaration], depth: Int, enclosingLayer: Layer?) {
 			self.declarations = declarations
 			self.depth = depth
-			enclosingLayers = enclosingLayer.map { [$0] } ?? []
-		}
-
-		deinit {
-			var enclosingLayers = [Layer]()
-			swap(&enclosingLayers, &self.enclosingLayers)
-			DeferredRelease.release(consume enclosingLayers)
+			enclosingLayers = DeferredReleaseSlot(enclosingLayer.map { [$0] } ?? [])
 		}
 
 		let declarations: [String: NearestDeclaration]
@@ -3290,12 +3311,11 @@ struct NearestDeclarations: Sendable {
 
 		/// The layer this one is enclosed by, if any.
 		var enclosingLayer: Layer? {
-			enclosingLayers.first
+			enclosingLayers.value.first
 		}
 
-		/// `enclosingLayer`, held in an array `deinit` hands to `DeferredRelease`. Mutated only by `deinit`, which has the
-		/// only access.
-		nonisolated(unsafe) private var enclosingLayers: [Layer]
+		/// `enclosingLayer`, held in an array, which the slot releases after the release that freed this layer returns.
+		private let enclosingLayers: DeferredReleaseSlot<[Layer]>
 	}
 
 	/// The declarations shared with the scopes above, nearest first.

@@ -938,6 +938,134 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 		)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesSettledTree_whenClassesTakeASecondRefinementPass() async throws {
+		// Places alike in what they build and how differ in the classes their bodies' calls reach, so the type key's
+		// partition settles only on a second refinement pass (seed 2775 of the fuzzer's base corpus).
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(t0Builder: Instantiator<T0>, t2Builder: SendableInstantiator<T2>) {
+				        self.t0Builder = t0Builder
+				        self.t2Builder = t2Builder
+				    }
+
+				    @Instantiated let t0Builder: Instantiator<T0>
+				    @Instantiated let t2Builder: SendableInstantiator<T2>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class T0: Instantiable, @unchecked Sendable {
+				    public init(t1Builder: Instantiator<T2>, t2Builder: SendableInstantiator<T2>) {
+				        self.t1Builder = t1Builder
+				        self.t2Builder = t2Builder
+				    }
+
+				    @Instantiated let t1Builder: Instantiator<T2>
+				    @Received let t2Builder: SendableInstantiator<T2>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class T1: Instantiable, Sendable {
+				    public init(t0: T0?, t2Builder: SendableInstantiator<T2>, anyT1Alias: AnyT1?, t1: T1?) {
+				        self.t0 = t0
+				        self.t2Builder = t2Builder
+				        self.anyT1Alias = anyT1Alias
+				        self.t1 = t1
+				    }
+
+				    @Forwarded let t0: T0?
+				    @Instantiated let t2Builder: SendableInstantiator<T2>
+				    @Received(fulfilledByDependencyNamed: "t1", ofType: T1.self, erasedToConcreteExistential: true, onlyIfAvailable: true) let anyT1Alias: AnyT1?
+				    @Received(onlyIfAvailable: true) let t1: T1?
+				}
+
+				public final class AnyT1: Sendable {
+				    public init(_ value: T1) {
+				        self.value = value
+				    }
+
+				    public let value: T1
+				}
+				""",
+				"""
+				@Instantiable
+				public final class T2: Instantiable, Sendable {
+				    public init(t1: T1, t1Builder: SendableInstantiator<T1>, t0: T1?) {
+				        self.t1 = t1
+				        self.t1Builder = t1Builder
+				        self.t0 = t0
+				    }
+
+				    @Forwarded let t1: T1
+				    @Instantiated let t1Builder: SendableInstantiator<T1>
+				    @Received(onlyIfAvailable: true) let t0: T1?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": generatedFileHeader + """
+		extension Root {
+		    public convenience init() {
+		        @Sendable func __safeDI_t2Builder(t1: T1, t0: T1?) -> T2 {
+		            @Sendable func __safeDI_t1Builder(t0: T0?) -> T1 {
+		                let t2Builder = SendableInstantiator<T2> {
+		                    __safeDI_t2Builder(t1: $0, t0: nil)
+		                }
+		                #sourceLocation(file: "\(output.fixtures["T1.swift"])", line: 12)
+		                let anyT1Alias: AnyT1? = AnyT1(t1)
+		                #sourceLocation()
+		                return T1(t0: t0, t2Builder: t2Builder, anyT1Alias: anyT1Alias, t1: t1)
+		            }
+		            let t1Builder = SendableInstantiator<T1> {
+		                __safeDI_t1Builder(t0: $0)
+		            }
+		            return T2(t1: t1, t1Builder: t1Builder, t0: t0)
+		        }
+		        let t2Builder = SendableInstantiator<T2> {
+		            __safeDI_t2Builder(t1: $0, t0: nil)
+		        }
+		        func __safeDI_t0Builder() -> T0 {
+		            func __safeDI_t1Builder(t1: T1) -> T2 {
+		                @Sendable func __safeDI_t1Builder(t0: T0?, t1: T1?) -> T1 {
+		                    @Sendable func __safeDI_t2Builder(t1: T1) -> T2 {
+		                        let t1Builder = SendableInstantiator<T1> {
+		                            __safeDI_t1Builder(t0: $0, t1: t1)
+		                        }
+		                        return T2(t1: t1, t1Builder: t1Builder, t0: nil)
+		                    }
+		                    let t2Builder = SendableInstantiator<T2> {
+		                        __safeDI_t2Builder(t1: $0)
+		                    }
+		                    #sourceLocation(file: "\(output.fixtures["T1.swift"])", line: 12)
+		                    let anyT1Alias: AnyT1? = (t1 as T1?).map { AnyT1($0) }
+		                    #sourceLocation()
+		                    return T1(t0: t0, t2Builder: t2Builder, anyT1Alias: anyT1Alias, t1: t1)
+		                }
+		                let t1Builder = SendableInstantiator<T1> {
+		                    __safeDI_t1Builder(t0: $0, t1: t1)
+		                }
+		                return T2(t1: t1, t1Builder: t1Builder, t0: nil)
+		            }
+		            let t1Builder = Instantiator<T2> {
+		                __safeDI_t1Builder(t1: $0)
+		            }
+		            return T0(t1Builder: t1Builder, t2Builder: t2Builder)
+		        }
+		        let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
+		        self.init(t0Builder: t0Builder, t2Builder: t2Builder)
+		    }
+		}
+		"""])
+	}
+
 	// MARK: Tests of merge order (R1b §2a)
 
 	// Each cell below takes a cell whose places the construction memo keeps apart and the type key merges, and builds it at

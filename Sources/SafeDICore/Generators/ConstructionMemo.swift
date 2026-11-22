@@ -110,6 +110,9 @@ struct ConstructionMemo {
 		/// The generator the pass before created for the place, whose children and findings the place's build reads. Two
 		/// places of the pass before that shared a generator share it here too.
 		let previousPassGenerator: ObjectIdentifier?
+		/// The settled cycle parameters the place is built with (`CycleParameterSeed`), which it reads in place of what
+		/// `previousPassGenerator` found, or `nil`.
+		let cycleParameterSeed: ObjectIdentifier?
 
 		/// This key with `previousPassGenerator` replaced.
 		func withPreviousPassGenerator(_ previousPassGenerator: ObjectIdentifier?) -> Key {
@@ -126,6 +129,7 @@ struct ConstructionMemo {
 				reboundProperties: reboundProperties,
 				spellings: spellings,
 				previousPassGenerator: previousPassGenerator,
+				cycleParameterSeed: cycleParameterSeed,
 			)
 		}
 	}
@@ -143,9 +147,9 @@ struct ConstructionMemo {
 		/// loops of builders and fill struct labels. Building the place again from this generator then reads what the build
 		/// read from the pass before, so it builds this generator again (see `settledReuse`).
 		let isSettled: Bool
-		/// The generator's `ScopeGenerator.CycleClosingRedeclaredLabels`, which no generator keeps, for the parent of a place
+		/// The generator's `CycleClosingRedeclaredLabels`, which no generator keeps, for the parent of a place
 		/// that reuses it to merge.
-		let cycleClosingRedeclaredLabels: ScopeGenerator.CycleClosingRedeclaredLabels
+		let cycleClosingRedeclaredLabels: CycleClosingRedeclaredLabels
 	}
 
 	/// Every group of generators one pass started or collected to start, each group on one task, in order
@@ -204,7 +208,9 @@ struct ConstructionMemo {
 	/// building it from `G′` took, which built `G`: the key's other fields and the reads are what the memo compares within a
 	/// pass. This memo is the pass before's.
 	func settledReuse(of key: Key, in context: ConstructionContext) -> Reuse? {
-		guard let previousPassGenerator = key.previousPassGenerator,
+		// A seeded place reads its cycle parameters from the seed, not from `G`.
+		guard key.cycleParameterSeed == nil,
+		      let previousPassGenerator = key.previousPassGenerator,
 		      let (storedKey, entry) = entriesByGenerator[previousPassGenerator],
 		      entry.isSettled,
 		      storedKey == key.withPreviousPassGenerator(storedKey.previousPassGenerator),
@@ -215,11 +221,13 @@ struct ConstructionMemo {
 
 	/// Whether `generator` found the cycle parameters and loops of builders that `previousPassGenerator`, the generator the
 	/// pass before built for its place, found, compared as a memo compares answers: by `==` and by spelling.
-	static func foundAlike(by generator: ScopeGenerator, asBy previousPassGenerator: ScopeGenerator?) -> Bool {
+	/// - Parameter builtWithCycleParameters: The cycle parameters `generator`'s build read: `previousPassGenerator`'s, or a
+	///   seed's in their place.
+	static func foundAlike(by generator: ScopeGenerator, asBy previousPassGenerator: ScopeGenerator?, builtWithCycleParameters: [CycleParameter]) -> Bool {
 		let loops = generator.receivedBuilderLoops
 		let previousPassLoops = previousPassGenerator?.receivedBuilderLoops ?? ScopeGenerator.ReceivedBuilderLoops()
 		return ConstructionLog.Answer.cycleParameterContext(generator.foundCycleParameters)
-			.isAlike(.cycleParameterContext(previousPassGenerator?.foundCycleParameters ?? []))
+			.isAlike(.cycleParameterContext(builtWithCycleParameters))
 			&& loops == previousPassLoops
 			&& loops.reboundPropertiesByChildIndex.allSatisfy { index, properties in
 				previousPassLoops.reboundPropertiesByChildIndex[index].map(properties.isSpelledAlike) ?? false
@@ -270,28 +278,12 @@ struct ConstructionMemo {
 
 /// The context a place of a tree inherits from the scopes above it, which its subtree reads (see `ConstructionMemo`).
 struct ConstructionContext {
-	/// The properties being built above the place, innermost first.
-	let propertyStack: [Property]
-	/// The concrete types the properties of `propertyStack` are built for, beside it.
-	let concreteTypeStack: [TypeDescription]
-	/// The depth in the tree of the scope that put each entry of `propertyStack` on it, beside it.
-	let depthStack: [Int]
+	/// The declarations being built above the place.
+	let contextStack: ContextStack
+	/// What the IDs of `contextStack` and of the reads project.
+	let interner: ConstructionInterner
 	let nearestDeclarations: NearestDeclarations
 	let cycleParameterContexts: [ScopeGenerator.BuiltDeclaration: CycleParameterContext]
-
-	/// The declaration a scope that builds `property` for `concreteType` repeats, when it closes a cycle, with its index on
-	/// `propertyStack` and the depth of the scope that built it: the innermost entry of the same property as cycle
-	/// validation sees it (a lazily instantiated property as the constant it stands for), built for the same concrete type,
-	/// and, where that entry is a lazily instantiated declaration's instance, the declaration, which the same scope put on
-	/// the stack just outside it.
-	func declarationClosedOn(by property: Property, concreteType: TypeDescription) -> (declaration: ScopeGenerator.BuiltDeclaration, index: Int, depth: Int)? {
-		let validatedProperty = property.asValidatedForDependencyCycles
-		guard let entryIndex = propertyStack.indices.first(where: {
-			propertyStack[$0].asValidatedForDependencyCycles == validatedProperty && concreteTypeStack[$0] == concreteType
-		}) else { return nil }
-		let index = propertyStack.indices.contains(entryIndex + 1) && propertyStack[entryIndex + 1].asLazilyInstantiatedInstanceProperty == propertyStack[entryIndex] ? entryIndex + 1 : entryIndex
-		return (ScopeGenerator.BuiltDeclaration(property: propertyStack[index], concreteType: concreteType), index, depthStack[index])
-	}
 
 	/// The answer `context` gives `read`, with the depth of the scope whose declaration gives it.
 	func answer(_ read: ConstructionLog.Read) -> (answer: ConstructionLog.Answer, depth: Int) {
@@ -303,8 +295,8 @@ struct ConstructionContext {
 			let (binding, depth) = nearestDeclarations.resolvingBinding(of: property)
 			return (.binding(binding), depth)
 		case let .declarationClosedOn(property, concreteType):
-			let closedOn = declarationClosedOn(by: property, concreteType: concreteType)
-			return (.declarationClosedOn(closedOn?.declaration), closedOn?.depth ?? -1)
+			let closedOn = contextStack.entryClosedOn(byPropertyID: property, concreteTypeID: concreteType, interner: interner)
+			return (.declarationClosedOn(closedOn?.entry.propertyID), closedOn?.entry.depth ?? -1)
 		case let .cycleParameterContext(declaration):
 			let context = cycleParameterContexts[declaration]
 			return (.cycleParameterContext(context?.parameters), context?.depth ?? -1)
@@ -323,8 +315,8 @@ struct ConstructionLog {
 		case nearestDeclaration(String)
 		/// The binding a receive of a property only if available reads (`NearestDeclarations.binding(of:)`).
 		case binding(Property)
-		/// The declaration a scope building a property for a concrete type closes a cycle on, if any.
-		case declarationClosedOn(Property, TypeDescription)
+		/// The declaration a scope building a property for a concrete type closes a cycle on, if any, by their IDs.
+		case declarationClosedOn(PropertyID, TypeID)
 		/// The parameters of the builder function built for a declaration that a lazy cycle closes on, if any.
 		case cycleParameterContext(ScopeGenerator.BuiltDeclaration)
 		/// Whether a mock passes `nil` to a receive of a property only if available, by a dependency on a concrete type
@@ -349,7 +341,9 @@ struct ConstructionLog {
 	enum Answer: Equatable {
 		case nearestDeclaration(NearestDeclaration?)
 		case binding(Property?)
-		case declarationClosedOn(ScopeGenerator.BuiltDeclaration?)
+		/// The ID of the declaration's property: the declaration is built for the concrete type the read names, and an ID
+		/// is one spelling, so equal IDs are alike.
+		case declarationClosedOn(PropertyID?)
 		case cycleParameterContext([CycleParameter]?)
 		case passesNil(Bool)
 
@@ -371,11 +365,6 @@ struct ConstructionLog {
 				guard case let .binding(otherProperty) = other else { return false }
 				guard let property, let otherProperty else { return true }
 				return property.isSpelledAlike(otherProperty)
-			case let .declarationClosedOn(declaration):
-				guard case let .declarationClosedOn(otherDeclaration) = other else { return false }
-				guard let declaration, let otherDeclaration else { return true }
-				return declaration.property.isSpelledAlike(otherDeclaration.property)
-					&& declaration.concreteType.isSpelledAlike(otherDeclaration.concreteType)
 			case let .cycleParameterContext(parameters):
 				guard case let .cycleParameterContext(otherParameters) = other else { return false }
 				guard let parameters, let otherParameters else { return true }
@@ -390,8 +379,9 @@ struct ConstructionLog {
 						&& parameter.requiredAliasFulfillingForms.isSpelledAlike(otherParameter.requiredAliasFulfillingForms)
 						&& parameter.onlyIfAvailableUnwrappedForms.isSpelledAlike(otherParameter.onlyIfAvailableUnwrappedForms)
 				}
-			case .passesNil:
-				// `==` holds, so the other answer passes `nil` exactly when this one does.
+			case .declarationClosedOn, .passesNil:
+				// `==` holds, so the other answer names the same ID, which is one spelling, or passes `nil` exactly when this
+				// one does.
 				return true
 			}
 		}
@@ -403,30 +393,56 @@ struct ConstructionLog {
 		isRecording = recording
 	}
 
+	/// A log of `reads`, in order, each a distinct read.
+	private init(reads: [RecordedRead]) {
+		isRecording = true
+		ownReads = reads
+	}
+
 	/// Records that `read` was answered `answer` by the declaration of the scope at `depth`, -1 for one above the tree.
 	/// A read is kept once for each depth that answers it: a scope can read a label above itself and its child read it
 	/// again where the scope declares it, and only the first answer tells another place's context apart.
 	mutating func record(_ read: Read, answer: Answer, depth: Int) {
 		guard isRecording else { return }
 		let key = AnsweredRead(read: read, depth: depth)
-		if answersByRead[key] == nil {
-			answersByRead[key] = answer
+		if ownReadsRecorded.insert(key).inserted {
+			ownReads.append(RecordedRead(read: key, answer: answer))
 		}
 	}
 
-	/// The reads of this log answered above the scope at `depth`.
+	/// The reads of this log answered above the scope at `depth`. They are not copied: the result refers to this log's
+	/// reads, frozen in a segment, and leaves out those answered at `depth` or below whenever it is read. A place's
+	/// subtree holds a read for each scope beneath it, and every place above keeps the ones answered above it, so copying
+	/// them made the logs of a chain of n places hold n²/2 reads.
 	func reads(answeredAbove depth: Int) -> Self {
 		var reads = Self()
-		for (read, answer) in answersByRead where read.depth < depth {
-			reads.answersByRead[read] = answer
+		let allParts = allParts
+		guard !allParts.isEmpty else { return reads }
+		// A short log is copied, so that the many candidates a short log is asked to tell apart read one array, as a log did
+		// before segments; only a long one, whose copies grow with the square of a chain, is frozen in a segment.
+		if let readsAbove = Self.distinctReads(of: allParts, answeredAbove: depth, upTo: Self.copiedReadLimit) {
+			ConstructionLogStorage.record(readsAbove.count)
+			if !readsAbove.isEmpty {
+				reads.parts = [.reads(readsAbove)]
+			}
+			return reads
+		}
+		let segment = Segment(parts: allParts)
+		ConstructionLogStorage.record(segment.storedElementCount)
+		if segment.shallowestDepth < depth {
+			reads.parts = [.segment(segment, answeredAbove: depth)]
 		}
 		return reads
 	}
 
-	/// Adds `log`'s reads to this log's.
+	/// Adds `log`'s reads to this log's, after the reads it has: a read both hold keeps this log's answer.
 	mutating func formUnion(_ log: Self) {
 		guard isRecording else { return }
-		answersByRead.merge(log.answersByRead) { existing, _ in existing }
+		closeOwnReads()
+		parts.append(contentsOf: log.parts)
+		if !log.ownReads.isEmpty {
+			parts.append(.reads(log.ownReads))
+		}
 	}
 
 	/// These reads as `context` answers them, or `nil` when `context` answers one otherwise.
@@ -434,21 +450,120 @@ struct ConstructionLog {
 		// Most candidates differ in some read, so the answers are kept in an array until every read is answered alike.
 		// The reads that tell most candidates apart, which closes a cycle and on what, are asked first, so a candidate that
 		// differs is set aside after a read or two.
-		var answers = [(read: AnsweredRead, answer: Answer)]()
-		answers.reserveCapacity(answersByRead.count)
+		var answers = [RecordedRead]()
 		for asksCycleReads in [true, false] {
-			for (read, answered) in answersByRead where read.read.isCycleRead == asksCycleReads {
-				let (answer, depth) = context.answer(read.read)
-				guard answer.isAlike(answered) else { return nil }
-				answers.append((AnsweredRead(read: read.read, depth: depth), answer))
+			let isAnsweredAlike = forEachRead(where: { $0.isCycleRead == asksCycleReads }) { recorded in
+				let (answer, depth) = context.answer(recorded.read.read)
+				guard answer.isAlike(recorded.answer) else { return false }
+				// An alike answer at the same depth keeps the recorded read, which a fresh read would equal for every later
+				// lookup: `isAlike` is the synthesized `==`, diagnostic payload included, and alike spellings, both transitive,
+				// and a log's answers are read only by `isAlike`. The `==` here is identity for reuse, not a comparison for
+				// meaning: the payload it includes only makes fewer answers alike, so fewer places reuse a generator.
+				answers.append(depth == recorded.read.depth ? recorded : RecordedRead(read: AnsweredRead(read: recorded.read.read, depth: depth), answer: answer))
+				return true
+			}
+			guard isAnsweredAlike else { return nil }
+		}
+		// Two reads that differ only in the depth that answered them are one read here, with one answer.
+		var readsKept = Set<AnsweredRead>()
+		readsKept.reserveCapacity(answers.count)
+		return Self(reads: answers.filter { readsKept.insert($0.read).inserted })
+	}
+
+	/// Calls `body` with each read of this log whose kind `isIncluded` admits, in the order the reads were added, each read
+	/// (and depth) once, with the first answer it was added with, until `body` returns `false`.
+	/// - Returns: Whether `body` returned `true` for every read.
+	private func forEachRead(where isIncluded: (Read) -> Bool, _ body: (RecordedRead) -> Bool) -> Bool {
+		// Most candidates are set aside after a read or two, and most logs are one run of distinct reads: a log this one
+		// recorded or answered alike, or a short one a place kept as a copy. Their reads are read in place, with no stack
+		// and no set of the reads visited, which cost more than the reads.
+		if let reads = distinctReadsInOneRun {
+			for recorded in reads where isIncluded(recorded.read.read) {
+				guard body(recorded) else { return false }
+			}
+			return true
+		}
+		var readsVisited = Set<AnsweredRead>()
+		// A segment refers to the segments of the places beneath it, which can be as deep as the module has types, so the
+		// walk keeps a stack of its own rather than recursing.
+		var stack = [(parts: allParts, index: 0, answeredAbove: Int.max)]
+		while let frame = stack.last {
+			guard frame.index < frame.parts.count else {
+				stack.removeLast()
+				continue
+			}
+			stack[stack.count - 1].index += 1
+			switch frame.parts[frame.index] {
+			case let .reads(reads):
+				for recorded in reads where recorded.read.depth < frame.answeredAbove && isIncluded(recorded.read.read) {
+					guard readsVisited.insert(recorded.read).inserted else { continue }
+					guard body(recorded) else { return false }
+				}
+			case let .segment(segment, answeredAbove):
+				let answeredAbove = min(answeredAbove, frame.answeredAbove)
+				if segment.shallowestDepth < answeredAbove {
+					stack.append((segment.parts, 0, answeredAbove))
+				}
 			}
 		}
-		var reads = Self()
-		reads.answersByRead.reserveCapacity(answers.count)
-		for (read, answer) in answers where reads.answersByRead[read] == nil {
-			reads.answersByRead[read] = answer
+		return true
+	}
+
+	/// This log's reads when they are one run of distinct reads, every one of which a walk reads: the one part of reads a
+	/// place's copy (`reads(answeredAbove:)`) holds, or the reads it recorded.
+	private var distinctReadsInOneRun: [RecordedRead]? {
+		let allParts = allParts
+		guard allParts.count == 1, case let .reads(reads) = allParts[0] else {
+			return allParts.isEmpty ? [] : nil
 		}
 		return reads
+	}
+
+	/// The most reads a place's log keeps as a copy (`reads(answeredAbove:)`).
+	private static let copiedReadLimit = 32
+
+	/// The reads of `parts` answered above `depth`, in order, each read (and depth) once with the first answer it was added
+	/// with, or `nil` when there are more than `limit`.
+	private static func distinctReads(of parts: [Part], answeredAbove depth: Int, upTo limit: Int) -> [RecordedRead]? {
+		var reads = [RecordedRead]()
+		var readsVisited = Set<AnsweredRead>()
+		var stack = [(parts: parts, index: 0, answeredAbove: depth)]
+		while let frame = stack.last {
+			guard frame.index < frame.parts.count else {
+				stack.removeLast()
+				continue
+			}
+			stack[stack.count - 1].index += 1
+			switch frame.parts[frame.index] {
+			case let .reads(partReads):
+				for recorded in partReads where recorded.read.depth < frame.answeredAbove && readsVisited.insert(recorded.read).inserted {
+					guard reads.count < limit else { return nil }
+					reads.append(recorded)
+				}
+			case let .segment(segment, answeredAbove):
+				let answeredAbove = min(answeredAbove, frame.answeredAbove)
+				if segment.shallowestDepth < answeredAbove {
+					stack.append((segment.parts, 0, answeredAbove))
+				}
+			}
+		}
+		return reads
+	}
+
+	/// The reads this log was told, in order: its parts, then the reads recorded since its last part.
+	private var allParts: [Part] {
+		var allParts = parts
+		if !ownReads.isEmpty {
+			allParts.append(.reads(ownReads))
+		}
+		return allParts
+	}
+
+	/// Ends the run of reads recorded since the last part, so that what is added next follows them.
+	private mutating func closeOwnReads() {
+		guard !ownReads.isEmpty else { return }
+		parts.append(.reads(ownReads))
+		ownReads = []
 	}
 
 	/// A read, with the depth of the scope whose declaration answered it (-1 above the tree).
@@ -457,7 +572,81 @@ struct ConstructionLog {
 		let depth: Int
 	}
 
-	private var answersByRead = [AnsweredRead: Answer]()
+	/// A read with its answer, held by reference: a log's reads are copied into every log that takes them, and a
+	/// reference copies as one retain where the read and its answer copied every field.
+	private final class RecordedRead: Sendable {
+		init(read: AnsweredRead, answer: Answer) {
+			self.read = read
+			self.answer = answer
+		}
+
+		let read: AnsweredRead
+		let answer: Answer
+	}
+
+	/// A run of a log's reads, in the order they were added.
+	private enum Part {
+		/// Reads recorded or added one by one.
+		case reads([RecordedRead])
+		/// The reads of another log, answered above `answeredAbove`: what a place keeps of a child's log.
+		case segment(Segment, answeredAbove: Int)
+	}
+
+	/// The reads a log held when a place kept those answered above it (`reads(answeredAbove:)`), frozen, so that every
+	/// place above it, and the memo entry of the place, refers to them rather than copying them. It holds immutable values
+	/// only. It lives as long as the memo entry or the log of a place above that refers to it: for one pass, and for the
+	/// memo shared by the mock roots, as long as that memo.
+	private final class Segment: Sendable {
+		/// The parts of this segment, in order. A part refers to the segment of a place beneath, so segments form a chain
+		/// as deep as the tree, which the slot releases one level at a time (`DeferredReleaseSlot`).
+		var parts: [Part] {
+			partsSlot.value
+		}
+
+		private let partsSlot: DeferredReleaseSlot<[Part]>
+
+		/// The shallowest depth that answered a read of `parts`, `Int.max` for none, so a walk that leaves out every read
+		/// answered at or below a depth skips a segment that holds none above it.
+		let shallowestDepth: Int
+
+		init(parts: [Part]) {
+			partsSlot = DeferredReleaseSlot(parts)
+			var shallowestDepth = Int.max
+			for part in parts {
+				switch part {
+				case let .reads(reads):
+					for recorded in reads {
+						shallowestDepth = min(shallowestDepth, recorded.read.depth)
+					}
+				case let .segment(segment, answeredAbove):
+					if segment.shallowestDepth < answeredAbove {
+						shallowestDepth = min(shallowestDepth, segment.shallowestDepth)
+					}
+				}
+			}
+			self.shallowestDepth = shallowestDepth
+		}
+
+		/// The elements this segment adds to what the logs hold: each read it holds itself, and each segment it refers to.
+		var storedElementCount: Int {
+			parts.reduce(0) { count, part in
+				switch part {
+				case let .reads(reads):
+					count + reads.count
+				case .segment:
+					count + 1
+				}
+			}
+		}
+	}
+
+	/// The parts of this log before `ownReads`, in order.
+	private var parts = [Part]()
+	/// The reads recorded since the last part, in order.
+	private var ownReads = [RecordedRead]()
+	/// The reads `ownReads` holds, and those recorded before it, so that each is recorded once. A log a place keeps
+	/// (`reads(answeredAbove:)`) holds none.
+	private var ownReadsRecorded = Set<AnsweredRead>()
 	private let isRecording: Bool
 }
 
@@ -547,4 +736,20 @@ public enum ConstructionMemoOracle {
 	/// Called with the concrete type of each place `Scope.createScopeGenerator` keys and looks up in a construction memo,
 	/// when set: by the tests, never by the tool. The oracle's own builds are not reported.
 	@TaskLocal public static var keyedPlaceObserver: (@Sendable (_ concreteType: String) -> Void)?
+}
+
+/// What a place's log keeps of the reads its subtree made: the elements each place adds to what the logs and the memo
+/// hold when it keeps the reads answered above it (`ConstructionLog.reads(answeredAbove:)`). Copying those reads made a
+/// chain of places hold reads that grew with the square of its depth; the tests count the elements to check that they
+/// grow with the places. Handed to `observer`, which the tests set, never the tool.
+public enum ConstructionLogStorage {
+	/// Called with the elements each place's kept log adds, when set: by the tests, never by the tool.
+	@TaskLocal public static var observer: (@Sendable (Int) -> Void)?
+
+	/// Hands `observer`, when set, the elements a place's kept log adds.
+	static func record(_ elementCount: Int) {
+		if let observer {
+			observer(elementCount)
+		}
+	}
 }

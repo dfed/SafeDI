@@ -27,6 +27,9 @@ indirect enum Expression: Hashable, Sendable {
 	/// `expression` wrapped in the eraser of `erasedType`: the type an `erasedToConcreteExistential` property is
 	/// declared as, or the type an erased wrapper builds.
 	case erasure(Expression, as: TypeDescription)
+	/// What a place of a public mock built inline inside a fill is bound to: the value of the builder `mock()` takes for its
+	/// hole type and family, where it is passed or required, and `otherwise` where an optional one is `nil`.
+	case holeBuilderRead(ScopeGenerator.FillPlaceBindings.HoleBuilder, otherwise: Expression)
 
 	/// How generated code spells the expression.
 	var spelled: String {
@@ -37,6 +40,8 @@ indirect enum Expression: Hashable, Sendable {
 			"\(function)(\(arguments))"
 		case let .erasure(expression, erasedType):
 			"\(erasedType.asSource)(\(expression.spelled))"
+		case let .holeBuilderRead(holeBuilder, otherwise):
+			holeBuilder.inlinePlaceValue(construction: otherwise.spelled, overrideExpression: nil)
 		}
 	}
 

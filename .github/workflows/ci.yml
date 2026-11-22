@@ -9,8 +9,10 @@ on:
     - cron: '0 0 * * 1'
   pull_request:
 
+# Keyed on the pull request, not its branch's name: pull requests from two forks often share a branch name
+# (`main`, `patch-1`), and would cancel each other's runs.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -32,6 +34,14 @@ jobs:
     # empty one. When in doubt (a scheduled run, or a diff that can't
     # be computed) the answer is "everything changed", and the gates
     # below treat a missing answer the same way.
+    #
+    # Two paths are classified by who reads them, not by their extension.
+    # `Documentation/Manual.md` is a source change: three tests take their
+    # fixtures and expected output from its code blocks. A file under
+    # `.claude/` is not: no source, test or build reads one, and the
+    # scripts there have their fixture self-tests in "Check Agent Skill
+    # Scripts on Linux", which always runs. A path joins this list only
+    # when no job that would skip reads it.
     #
     # `integrations` is false when every changed file is Markdown or
     # under `Tests/` or `.claude/`. The two macOS jobs that build SafeDI
@@ -93,7 +103,8 @@ jobs:
                 *.docc/*) docc=true ;;
               esac
               case "$file" in
-                *.md) ;;
+                Documentation/Manual.md) source=true ;;
+                *.md | .claude/*) ;;
                 *) source=true ;;
               esac
               case "$file" in
@@ -1169,12 +1180,31 @@ jobs:
           retention-days: 3
           overwrite: true
 
-  spm:
-    name: Build and Test on Xcode 26
-    needs: changes
+  # The Xcode 26 tests, as one job when most compile checks passed in an
+  # earlier run and as two when few did, which "Choose How the Xcode 26 Tests
+  # Run" decides. A run's time is mostly compile checks when none is skipped:
+  # main's run 44839883136 skipped all 4,260 and tested for 26.5 minutes after
+  # a 16.7-minute build, and run 44843308363, the first of a change to the
+  # sources the macro plugin compiles, compiled all 4,287 and tested for 62.7
+  # after a 26.5-minute build, 91 minutes on the one runner while the Linux
+  # jobs of the same run took 78. Two runners each build, 17 to 27 minutes,
+  # so two jobs spend a second runner to no gain when the checks are skipped,
+  # and macOS runners are what pull requests queue on: only a run that would
+  # compile most checks takes the second.
+  #
+  # The two parts are every test of the two targets whose tests compile the
+  # most, and every other test: the second part skips what the first selects,
+  # so no test runs in neither. With every check compiling, Verify's Linux
+  # groups took 5.5 minutes for the seams and 5.0 for the mocks, 10.5 of the
+  # 19.6 that all seven took (run 43766692766, which verify.yml describes).
+  # No run has measured the parts on macOS yet.
+  spm-tests:
+    name: Build and Test on Xcode 26 (${{ matrix.part }})
+    needs: [changes, spm-plan]
     # Also runs on every push to main, Markdown-only or not, so the
     # Codecov report behind the README badge always comes from a real
-    # test run.
+    # test run. It runs when "Choose How the Xcode 26 Tests Run" failed too,
+    # as one job.
     if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     # Runs on macOS because it builds and tests SafeDI with Xcode's Swift,
     # the compiler adopters use, and compiles every test's generated code
@@ -1186,6 +1216,15 @@ jobs:
       contents: read
       # To read the passed compile checks other runs uploaded.
       actions: read
+    strategy:
+      # A part that fails says nothing about the other's tests.
+      fail-fast: false
+      matrix:
+        # `all`, or `seams-and-mocks` and `the-rest`.
+        part: ${{ fromJSON(needs.spm-plan.outputs.parts || '["all"]') }}
+    outputs:
+      # The same from every part: they build one commit with one compiler.
+      compile-check-identity: ${{ steps.compile-check-identity.outputs.identity }}
     env:
       # What the build step passes `swift build --build-tests` and the test
       # step passes `swift test --skip-build`, which the compile check
@@ -1204,6 +1243,35 @@ jobs:
       # restored the build of their own key).
       - name: Stamp Source Times
         run: .github/scripts/stamp-source-times.sh
+      # What the test step adds to `swift test` for this part, and what the
+      # part's coverage report says it is a part of, which the line coverage
+      # check reads. Before the build, so that a part this step does not know
+      # fails in seconds.
+      - name: Select the Part's Tests
+        id: part
+        env:
+          PART: ${{ matrix.part }}
+        run: |
+          case "$PART" in
+            all)
+              selection=''
+              report_part='1 of 1'
+              ;;
+            seams-and-mocks)
+              selection='--filter ^SafeDIToolSeamTests\. --filter ^SafeDIToolMockTests\.'
+              report_part='1 of 2'
+              ;;
+            the-rest)
+              selection='--skip ^SafeDIToolSeamTests\. --skip ^SafeDIToolMockTests\.'
+              report_part='2 of 2'
+              ;;
+            *)
+              echo "::error::No part of the Xcode 26 tests is named $PART."
+              exit 1
+              ;;
+          esac
+          echo "selection=$selection" >> "$GITHUB_OUTPUT"
+          echo "report-part=$report_part" >> "$GITHUB_OUTPUT"
       # GitHub's macOS images export ImageVersion (for example
       # 20261102.0473.1) from ~/.bashrc; it is not in the `env` context, so
       # a step reads it for the cache key below. The OS build stands in if
@@ -1355,20 +1423,28 @@ jobs:
           xcrun swift build --build-tests $SWIFT_TEST_ARGUMENTS
       # After the build rather than at the job's end, so the cache holds
       # the build alone and a failing test does not lose it.
+      # One part saves it: the two build the same sources, under one key.
       - name: Save Build Directory
-        if: ${{ github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true' }}
+        if: ${{ github.ref == 'refs/heads/main' && steps.build-cache.outputs.cache-hit != 'true' && matrix.part != 'the-rest' }}
         uses: actions/cache/save@v6
         with:
           path: .build
           key: ${{ steps.build-cache.outputs.cache-primary-key }}
+      # A part's limit is twice the longer part's test step in the one run
+      # that has measured the two with every check compiling, rounded up to
+      # 5 minutes: 32.1 minutes for seams-and-mocks and 30.8 for the-rest
+      # (run 45034492743), half each of the 62.7 the one job took then (run
+      # 44843308363). One run is thin: set it again from the step lists once
+      # eight two-part runs exist. The one job keeps the whole suite's limit.
       - name: Test Framework
         id: tests
-        timeout-minutes: 85
+        timeout-minutes: ${{ matrix.part == 'all' && 85 || 65 }}
         env:
           SAFEDI_COMPILE_CHECK_PASSED_CACHE: ${{ github.workspace }}/.compile-check-cache/passed.txt
+          SELECTION: ${{ steps.part.outputs.selection }}
         run: |
-          # shellcheck disable=SC2086 # The arguments are words to split.
-          xcrun swift test --skip-build $SWIFT_TEST_ARGUMENTS
+          # shellcheck disable=SC2086 # The arguments and the selection are words to split.
+          xcrun swift test --skip-build $SWIFT_TEST_ARGUMENTS $SELECTION
       # A run keeps in its branch's cache only the value comparison outputs it
       # read or printed and those the newest artifacts of its identity hold,
       # since the restore adds other runs' outputs to the directory, and keeps
@@ -1387,13 +1463,35 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: .compile-check-cache
-          key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
+          # Each part saves its own list. The next run restores the newer of
+          # the two and reads the other part's passes from the list "Build
+          # and Test on Xcode 26" uploads to share.
+          key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.part }}
       - name: Upload Passed Compile Checks to Share
-        if: ${{ always() }}
+        if: ${{ always() && matrix.part == 'all' }}
         continue-on-error: true
         uses: ./.github/actions/upload-passed-compile-checks
         with:
           identity: ${{ steps.compile-check-identity.outputs.identity }}
+      # Two parts would upload to share under one name, and the second would
+      # replace the first. Each hands on the checks it passed and the value
+      # comparison outputs it printed, and "Build and Test on Xcode 26" joins
+      # and uploads them, as "Save Passed Compile Checks of Verify" does for
+      # Verify's groups.
+      - name: Upload Passed Compile Checks of the Part
+        if: ${{ always() && matrix.part != 'all' && hashFiles('.compile-check-cache/passed.txt') != '' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: xcode-passed-compile-checks-${{ matrix.part }}
+          path: |
+            .compile-check-cache/passed-in-run-${{ github.run_id }}.txt
+            .compile-check-cache/value-outputs/
+            .compile-check-cache/value-outputs-written-in-run-${{ github.run_id }}.txt
+          retention-days: 1
+          include-hidden-files: true
+          # A re-run of the job replaces what an earlier attempt uploaded.
+          overwrite: true
       - name: Prepare Coverage Reports
         run: ./Scripts/prepare-coverage-reports.sh
       # "Check Line Coverage on Linux" unions this report with the Linux
@@ -1401,16 +1499,19 @@ jobs:
       # never depends on Codecov, and with the root its paths start with,
       # the commit it measured and the platform it ran on.
       - name: Stage Coverage Report for the Line Coverage Check
+        env:
+          REPORT_PART: ${{ steps.part.outputs.report-part }}
         run: |
           mkdir line-coverage
           cp .build/artifacts/SafeDIPackageTests.lcov line-coverage/coverage.lcov
           pwd -P > line-coverage/checkout-root.txt
           echo "$GITHUB_SHA" > line-coverage/commit.txt
           echo macos > line-coverage/platform.txt
+          echo "$REPORT_PART" > line-coverage/part.txt
       - name: Upload Coverage Report for the Line Coverage Check
         uses: actions/upload-artifact@v7
         with:
-          name: line-coverage-macos
+          name: line-coverage-macos${{ matrix.part != 'all' && format('-{0}', matrix.part) || '' }}
           path: line-coverage/
           retention-days: 7
           if-no-files-found: error
@@ -1420,14 +1521,80 @@ jobs:
       # upload the staged copy too.
       - name: Remove the Staged Coverage Report
         run: rm -r line-coverage
+      # Each part uploads under the one flag, and Codecov sums a flag's
+      # uploads. codecov.yml holds its status for one `macos` upload, so with
+      # two parts the status, which gates nothing, is first posted from one
+      # part and then corrected by the other.
       - name: Upload Coverage Reports
         if: success()
         uses: codecov/codecov-action@v7
         with:
-          fail_ci_if_error: true
+          # Codecov may refuse the upload of a fork's own run, which has no token for it, after every test has
+          # passed, so only this repository's runs fail on a refused upload.
+          fail_ci_if_error: ${{ github.repository == 'dfed/SafeDI' }}
           verbose: true
           os: macos
           flags: macos
+
+  # Reports the parts of the Xcode 26 tests under the name the one job had,
+  # which the required check is, and fails unless every part passed: skipped,
+  # a part would satisfy the check. With two parts it also joins the compile
+  # checks they passed into the one list other runs read, which cannot fail
+  # the job, since sharing only saves compiles. It only reads results and
+  # moves lists, so it runs on Linux and needs no container.
+  spm:
+    name: Build and Test on Xcode 26
+    needs: [changes, spm-plan, spm-tests]
+    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Require Every Part
+        env:
+          PARTS: ${{ needs.spm-plan.outputs.parts || '["all"]' }}
+          PARTS_RESULT: ${{ needs.spm-tests.result }}
+        run: |
+          echo "Build and Test on Xcode 26, parts $PARTS: $PARTS_RESULT"
+          test "$PARTS_RESULT" = success
+      - name: Checkout Repo
+        if: ${{ !cancelled() && needs.spm-plan.outputs.split == 'true' }}
+        uses: actions/checkout@v7
+      # The limits only stop a stalled transfer, as in "Save Passed Compile
+      # Checks of Verify", whose steps these are.
+      - name: Download the Parts' Passed Compile Checks
+        if: ${{ !cancelled() && needs.spm-plan.outputs.split == 'true' }}
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: xcode-passed-compile-checks-*
+          path: part-compile-checks
+      - name: Join the Parts' Passed Compile Checks
+        if: ${{ !cancelled() && needs.spm-plan.outputs.split == 'true' }}
+        continue-on-error: true
+        run: |
+          mkdir -p .compile-check-cache/value-outputs
+          parts=$(find part-compile-checks -name "passed-in-run-$GITHUB_RUN_ID.txt" 2>/dev/null | wc -l)
+          if [ "$parts" -gt 0 ]; then
+            find part-compile-checks -name "passed-in-run-$GITHUB_RUN_ID.txt" -exec cat {} + | LC_ALL=C sort -u > ".compile-check-cache/passed-in-run-$GITHUB_RUN_ID.txt"
+            find part-compile-checks -path '*/value-outputs/*' -type f -exec cp -t .compile-check-cache/value-outputs/ {} +
+            find part-compile-checks -name "value-outputs-written-in-run-$GITHUB_RUN_ID.txt" -exec cat {} + | LC_ALL=C sort -u > ".compile-check-cache/value-outputs-written-in-run-$GITHUB_RUN_ID.txt"
+            echo "Passed compile checks of $parts parts: $(wc -l < ".compile-check-cache/passed-in-run-$GITHUB_RUN_ID.txt") passed in this run."
+          else
+            echo "No part uploaded passed compile checks."
+          fi
+          rm -rf part-compile-checks
+      # Under macOS's name, which this Linux job gives: the parts passed
+      # these checks with Xcode's compiler, under the identity they computed.
+      - name: Upload Passed Compile Checks to Share
+        if: ${{ !cancelled() && needs.spm-plan.outputs.split == 'true' && needs.spm-tests.outputs.compile-check-identity != '' }}
+        continue-on-error: true
+        uses: ./.github/actions/upload-passed-compile-checks
+        with:
+          identity: ${{ needs.spm-tests.outputs.compile-check-identity }}
+          operating-system: macOS
 
   # Builds the test bundle that "Build and Test on Linux", the graph fuzzer's
   # shards and "Repeat Tests on Linux" all run, in a job of its own so that
@@ -1893,7 +2060,9 @@ jobs:
         if: success()
         uses: codecov/codecov-action@v7
         with:
-          fail_ci_if_error: true
+          # Codecov may refuse the upload of a fork's own run, which has no token for it, after every test has
+          # passed, so only this repository's runs fail on a refused upload.
+          fail_ci_if_error: ${{ github.repository == 'dfed/SafeDI' }}
           verbose: true
           os: linux
           flags: linux
@@ -1910,14 +2079,97 @@ jobs:
   # after another in one job they took 9.7 to 25.3 minutes and ended run
   # 43755152593. Coverage is not collected: the bundle is built for
   # coverage, so its profiles go to the runner's temporary directory.
-  # Checks that every base corpus graph SafeDI 2.3.0 accepts still compiles
-  # and builds the same values, on every pull request and push to main, so a
+  # Checks that every graph of the base, seam and public mock corpora that
+  # SafeDI 2.3.0 accepts still compiles and builds the same values, on every pull request and push to main, so a
   # break is attributed or fixed in the change that makes it rather than
   # found before a release candidate. release-acceptance.yml's jobs run in
   # this run from the bundle "Build Tests on Linux" built: one job that
-  # builds 2.3.0 (restored from a cache after its first run on main), four
-  # shards and the job that combines their reports. No required check.
+  # builds 2.3.0 (restored from a cache after its first run on main), the
+  # shards of each corpus and the job that combines their reports. No required check.
   # graph-fuzzer.yml's `release_acceptance` input checks a branch by hand.
+  # Chooses whether the Xcode 26 tests run as one job or two, which the comment
+  # on "Build and Test on Xcode 26 (…)" explains: two when few of the suite's
+  # compile checks have passed under this commit's identity.
+  #
+  # The macOS jobs' own list of passed checks is keyed on an identity that
+  # hashes Xcode's compiler and SDK, so only a macOS runner can look it up,
+  # and a macOS job that only chose would queue for the runner the choice is
+  # meant to save. This job reads Linux's list instead, as "Build and Test on
+  # Linux" restores it: the two identities hash the same sources, manifest
+  # and verifier, so a change that empties one empties the other. They differ
+  # after a new Xcode or runner image, which empties only macOS's, and such a
+  # run keeps the one job, as every run did before this one existed.
+  #
+  # Both macOS parts and the line coverage check read this one answer, so
+  # they cannot disagree about how many reports there are. A failure here
+  # leaves the answer empty, which each reads as one job.
+  spm-plan:
+    name: Choose How the Xcode 26 Tests Run
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    # About twice what its steps take: the checkout, the two restores, of
+    # which the second stops itself after three minutes, and a count.
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # To read the passed compile checks other runs uploaded.
+      actions: read
+    env: *linux-test-environment
+    outputs:
+      parts: ${{ steps.choose.outputs.parts }}
+      split: ${{ steps.choose.outputs.split }}
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Compute Compile Check Identity
+        id: compile-check-identity
+        run: |
+          # Assign first, so a failing script fails this step, as in "Build
+          # and Test on Linux".
+          # shellcheck disable=SC2086 # The arguments are words to split.
+          identity=$(.github/scripts/compile-check-identity.sh $SWIFT_TEST_ARGUMENTS)
+          test "${#identity}" -eq 64
+          echo "identity=$identity" >> "$GITHUB_OUTPUT"
+      - name: Restore Passed Compile Checks
+        uses: actions/cache/restore@v6
+        with:
+          path: .compile-check-cache
+          key: compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            compile-checks-v1-${{ runner.os }}-${{ steps.compile-check-identity.outputs.identity }}-
+      - name: Restore Shared Passed Compile Checks
+        continue-on-error: true
+        timeout-minutes: 3
+        uses: ./.github/actions/restore-shared-compile-checks
+        with:
+          identity: ${{ steps.compile-check-identity.outputs.identity }}
+      # Two jobs below half of what a run skips when every check has passed:
+      # main's run 44839883136 skipped 4,260 on macOS, and the first run of a
+      # change to the macro plugin's sources skipped none (run 44843308363).
+      # A list between the two is a run that was cancelled part way, which
+      # the one job finishes in less than a second runner's build takes once
+      # half the checks are skipped.
+      - name: Choose One Job or Two
+        id: choose
+        env:
+          FEWEST_PASSED_CHECKS_FOR_ONE_JOB: 2000
+        run: |
+          passed=0
+          if [ -f .compile-check-cache/passed.txt ]; then
+            passed=$(wc -l < .compile-check-cache/passed.txt)
+          fi
+          if [ "$passed" -lt "$FEWEST_PASSED_CHECKS_FOR_ONE_JOB" ]; then
+            echo "$passed compile checks have passed under this identity, fewer than $FEWEST_PASSED_CHECKS_FOR_ONE_JOB: the Xcode 26 tests run as two jobs."
+            echo 'parts=["seams-and-mocks","the-rest"]' >> "$GITHUB_OUTPUT"
+            echo "split=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "$passed compile checks have passed under this identity: the Xcode 26 tests run as one job."
+            echo 'parts=["all"]' >> "$GITHUB_OUTPUT"
+            echo "split=false" >> "$GITHUB_OUTPUT"
+          fi
+
   release-acceptance:
     name: Release Acceptance
     needs: [changes, linux-build]
@@ -1927,6 +2179,62 @@ jobs:
     uses: ./.github/workflows/release-acceptance.yml
     with:
       bundle: graph-fuzzer-test-bundle
+
+  # Compiles the hand-written calls of every generated declaration the
+  # Manual documents (Scripts/release-checks/written-calls.sh) against the
+  # code this change's SafeDITool generates, so that a change that breaks a
+  # documented call form fails on its own pull request rather than at the
+  # next release. It reuses the tool, macros and SafeDI module "Build Tests
+  # on Linux" bundles, so it builds nothing. It runs main's copy of the
+  # fixtures, so that a pull request cannot pass by editing a call: a change
+  # that documents a new call form adds it, and the check runs it once that
+  # change is on main. Main's copy holds every call the last stable release's
+  # copy holds, since no change edits one of those; the check before a stable
+  # tag still runs that release's own copy, as
+  # `.claude/rules/releases-and-packaging.md` says.
+  written-calls:
+    name: Check Written Calls on Linux
+    needs: [changes, linux-build]
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Download Test Bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: graph-fuzzer-test-bundle
+      - name: Unpack Test Bundle
+        run: tar -xzf graph-fuzzer-test-bundle.tar.gz
+      # The script is zsh's, which the container lacks. Retried for the
+      # reason "Install curl for Codecov" gives.
+      - name: Install zsh
+        uses: ./.github/actions/retry
+        with:
+          command: command -v zsh >/dev/null || { apt-get update && apt-get install -y --no-install-recommends zsh; }
+      # The checkout is the container's, so git needs telling that this user
+      # may read it.
+      - name: Fetch Main
+        uses: ./.github/actions/retry
+        with:
+          command: git config --global --add safe.directory "$GITHUB_WORKSPACE" && git fetch --no-tags --depth=1 origin main
+      - name: Check Out Main's Fixtures
+        run: git worktree add --detach "$RUNNER_TEMP/main" FETCH_HEAD
+      # The check took 8 seconds on a 4-core Linux machine with a release
+      # tool (2026-11-20); the limit leaves room for a slower runner and the
+      # bundle's coverage-instrumented tool.
+      - name: Compile Written Calls
+        timeout-minutes: 2
+        run: |
+          products="$GITHUB_WORKSPACE/.build/x86_64-unknown-linux-gnu/release"
+          "$RUNNER_TEMP/main/Scripts/release-checks/written-calls.sh" --keep-going \
+            --tool "$products/SafeDITool" --output "$RUNNER_TEMP/written-calls"
 
   linux-repeat-pass:
     name: Repeat Tests on Linux (pass ${{ matrix.pass }})
@@ -2033,6 +2341,15 @@ jobs:
           fi
       - name: Smoke test
         run: .build/release/SafeDITool --version
+      # The only place a miscompile of the tool shows before a publish: 2.3.1's
+      # release binaries, built as this job builds, made `query` return no
+      # modules or crash, while every test passed, because no job ran a
+      # command of a binary built this way. A crash or wrong output ends the
+      # step at once; the limit is for a hang. Not yet measured on a runner
+      # (under a minute on a 4-core Linux machine); set it from the first runs.
+      - name: Run generate and query with the Release SafeDITool
+        timeout-minutes: 5
+        run: Scripts/query-release-smoke-test.sh .build/release/SafeDITool
 
   # Compares how long `SafeDITool generate` takes on synthetic dependency
   # graphs, the change's tool against the tool of the commit it is based on,
@@ -2042,7 +2359,14 @@ jobs:
   # every other check and was found only by a benchmark run by hand, or when
   # its `generate` processes' median peak memory is 1.3 times the base's and
   # 8 MB more: main's tool against itself differed by 1% at most on every
-  # shape (45 to 308 MB, 2026-11-20).
+  # shape (45 to 308 MB, 2026-11-20). Four shapes with the largest peaks,
+  # each one module without seams (a graph of screens that reach one
+  # another, with and without mocks, thirty-three mocks over layers of
+  # screens, and a mock 1,500 levels deep), fail at 1.1 times with the same
+  # 8 MB, since memory is decided where the peak is largest. It also fails
+  # when a module's `.safedi`
+  # file is twice the base's size, because storing seam signatures once made
+  # one 400 times its size unnoticed.
   # The base is the main commit a pull request branched from, and for a push
   # to main the commit before the push. Its tool comes from the cache the
   # push to main that built it saved; when the cache has none, the job builds
@@ -2167,16 +2491,15 @@ jobs:
         with:
           path: .build
           key: ${{ steps.build-cache.outputs.cache-primary-key }}
-      # The comparison of all eight shapes took 3.9 minutes in a probe run in
-      # this container (44630955284), whose medians summed to 19.4 seconds a
-      # tool: 4.7 and 5.2 for the public mock and fill shapes, 2.4 to 2.5 for
-      # the other E24 shapes, 1.3 for E32-inline, under 1 for the rest. The
-      # I800-seam shape takes about 13 seconds more (probe run 44359835414).
-      # The limit is more than twice that because a slower generator is what
-      # this step exists to report: with the head five times as slow on every
-      # shape, its six runs of each and the base's take about 13 minutes.
+      # The comparison of every shape took 5.6 minutes in this container
+      # (run 44968921336, comparing a tool with itself). Before the four
+      # large-memory shapes it took 3.9 minutes for eight shapes (probe run
+      # 44630955284) and about 13 seconds more for I800-seam (probe run
+      # 44359835414), so those four add about a minute and a half. The limit
+      # is about twice the measurement: a head tool slow enough to pass it
+      # fails the wall-time limit on its shapes first.
       - name: Compare Generate Time
-        timeout-minutes: 15
+        timeout-minutes: 12
         run: |
           python3 -I Scripts/generate-time-check.py --summary "$GITHUB_STEP_SUMMARY" \
             .generate-time/base/SafeDITool .generate-time/head/SafeDITool "$RUNNER_TEMP/generate-time"
@@ -2207,6 +2530,140 @@ jobs:
         with:
           path: .generate-time/cached
           key: generate-time-tool-${{ runner.os }}-swift-6.2-${{ steps.commits.outputs.head }}
+
+  # Builds the SafeDITool of the pull request's base, which each fuzzer shard
+  # below runs beside this commit's over the shard's graphs
+  # (SafeDIToolBaseComparisonTests/longRun), comparing exit statuses,
+  # diagnostics, generated files and `.safedi` bytes; "Check Graph Fuzzer
+  # Corpus on Linux" judges the result. A rewrite that means to change no
+  # output says `Generated output: unchanged` in its description and then
+  # fails on any difference, so it can delete the code it replaces rather
+  # than keep both in the tree to compare them. See
+  # .claude/rules/fuzzer-base-comparison.md.
+  #
+  # The base is `github.event.pull_request.base.sha`: the tip of the branch
+  # beneath a stacked pull request, or of main. ci.yml's jobs otherwise
+  # build `github.sha` alone, to keep a cache from holding a build of a
+  # commit nobody reviewed; the base is always a commit of this repository,
+  # and the one cache this job saves holds only the tool, under a key made
+  # of the base's tree hashes of what the tool is built from (`Sources`,
+  # `Package.swift`, `Package.resolved`) and the compiler, so a restack
+  # that leaves the parent's sources alone reuses it. Main's own tool,
+  # which "Check Generate Time on Linux" saves on every push to main, is the
+  # second place it looks.
+  #
+  # Also prints the generator's lines of code at the base and the head
+  # (Swift under Sources/SafeDICore/Generators, blank and comment-only
+  # lines left out), as information that fails nothing.
+  base-tool:
+    name: Build the Base SafeDITool on Linux
+    needs: changes
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.changes.outputs.source != 'false' }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    # A cold build is the job's long pole: 8.6 minutes locally, and 10 to 11
+    # on CI for "Check Generate Time on Linux"'s build of the same product.
+    # The build step keeps its own 25; this bounds the fetch, cache and
+    # upload steps around it.
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      BASE: ${{ github.event.pull_request.base.sha }}
+      HEAD: ${{ github.event.pull_request.head.sha }}
+    steps:
+      # This commit, for its scripts and its retry action; the base and the
+      # head beside it, for their trees.
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Fetch the Base and the Head
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git fetch --no-tags --depth=1 origin "$BASE" "$HEAD"
+      - name: Count Generator Lines
+        run: |
+          base_lines=$(.github/scripts/count-generator-lines.sh "$BASE")
+          head_lines=$(.github/scripts/count-generator-lines.sh "$HEAD")
+          {
+            echo "## Generator lines of code"
+            echo ""
+            echo "Swift under \`Sources/SafeDICore/Generators\`, blank and comment-only lines left out. Information only."
+            echo ""
+            echo "| Base | Head | Change |"
+            echo "| ---: | ---: | ---: |"
+            printf '| %s | %s | %+d |\n' "$base_lines" "$head_lines" "$((head_lines - base_lines))"
+          } >> "$GITHUB_STEP_SUMMARY"
+      # The key names every input to the tool's build: the trees of the
+      # base's `Sources`, `Package.swift` and `Package.resolved`, the runner's
+      # operating system, the container image, and a hash of the compiler's
+      # `swift --version`, which tells two compilers that image tag has named
+      # apart.
+      - name: Compute Base Tool Cache Key
+        id: key
+        run: |
+          compiler=$(swift --version 2>&1 | sha256sum | cut -c1-16)
+          test "${#compiler}" -eq 16
+          sources=$(git rev-parse "$BASE:Sources" "$BASE:Package.swift" "$BASE:Package.resolved" | sha256sum | cut -c1-16)
+          test "${#sources}" -eq 16
+          echo "key=base-safedi-tool-$RUNNER_OS-swift-6.2-$compiler-$sources" >> "$GITHUB_OUTPUT"
+      - name: Restore the Base Tool
+        id: cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .base-tool
+          key: ${{ steps.key.outputs.key }}
+      # The tool "Check Generate Time on Linux" saved for this commit when it
+      # was main's, built the same way.
+      - name: Restore Main's Tool
+        id: main-cache
+        if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/restore@v6
+        with:
+          path: .generate-time/cached
+          key: generate-time-tool-${{ runner.os }}-swift-6.2-${{ github.event.pull_request.base.sha }}
+      - name: Check Out the Base
+        if: ${{ steps.cache.outputs.cache-hit != 'true' && steps.main-cache.outputs.cache-hit != 'true' }}
+        run: git worktree add --detach base "$BASE"
+      - name: Resolve Package Dependencies
+        if: ${{ steps.cache.outputs.cache-hit != 'true' && steps.main-cache.outputs.cache-hit != 'true' }}
+        uses: ./.github/actions/retry
+        with:
+          command: swift package resolve --package-path base
+      # As "Check Generate Time on Linux" builds it, whose build of a base
+      # from nothing took 10.3 and 11.2 minutes (runs 44053665790 and
+      # 44055931063); the limit is about twice that.
+      - name: Build the Base Tool
+        if: ${{ steps.cache.outputs.cache-hit != 'true' && steps.main-cache.outputs.cache-hit != 'true' }}
+        timeout-minutes: 25
+        run: swift build -c release --package-path base --product SafeDITool
+      - name: Stage the Base Tool
+        if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+        run: |
+          mkdir -p .base-tool
+          if [ -x .generate-time/cached/SafeDITool ]; then
+            cp .generate-time/cached/SafeDITool .base-tool/SafeDITool
+          else
+            cp base/.build/release/SafeDITool .base-tool/SafeDITool
+          fi
+      # Saved from a pull request too: the cache serves the restacks of this
+      # pull request, whose base keeps its sources, and holds one binary.
+      - name: Save the Base Tool
+        if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .base-tool
+          key: ${{ steps.key.outputs.key }}
+      - name: Check the Base Tool
+        run: .base-tool/SafeDITool --version
+      - name: Upload the Base Tool
+        uses: actions/upload-artifact@v7
+        with:
+          name: base-safedi-tool
+          path: .base-tool/SafeDITool
+          retention-days: 3
 
   # Fails when the compiler spends too long on one function of SafeDICore in
   # a release build (Scripts/function-compile-time-check.py): one initializer
@@ -2299,14 +2756,18 @@ jobs:
   # that caused it.
   graph-fuzzer:
     name: Fuzz Dependency Graphs on Linux (${{ matrix.corpus }} seeds ${{ matrix.starting-seed }}+${{ matrix.iterations }})
-    needs: [changes, linux-build]
+    # The base tool, which only a pull request builds, is waited for but not
+    # required: a shard runs whatever its build's result, and compares with
+    # the base only when it built.
+    needs: [changes, linux-build, base-tool]
     if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux-build.result == 'success' }}
     runs-on: ubuntu-latest
     container: swift:6.2
-    # Above the fuzzer step's limit by more than the longest the job's other
-    # steps have taken, so that a shard that runs out of time still uploads:
-    # one job spent 11 minutes initializing its container (run 43879263598).
-    timeout-minutes: 40
+    # Above the fuzzer's and the base comparison's limits together by more
+    # than the longest the job's other steps have taken, so that a shard that
+    # runs out of time still uploads: one job spent 11 minutes initializing
+    # its container (run 43879263598).
+    timeout-minutes: 45
     permissions:
       contents: read
     strategy:
@@ -2452,6 +2913,34 @@ jobs:
           SAFEDI_GRAPH_FUZZER_REPORT: ${{ github.workspace }}/graph-fuzzer/report.txt
           LLVM_PROFILE_FILE: ${{ runner.temp }}/graph-fuzzer-profiles/graph-fuzzer-%p.profraw
         run: .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing --filter 'SafeDIToolGraphFuzzerTests/longRun'
+      - name: Download the Base Tool
+        if: ${{ !cancelled() && needs.base-tool.result == 'success' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: base-safedi-tool
+          path: base-tool
+      # Runs the shard's graphs through the base's SafeDITool and this
+      # commit's, the one the bundle holds, and writes what differs to
+      # base-comparison.txt, which "Check Graph Fuzzer Corpus on Linux"
+      # judges. It fails only when it cannot compare every seed. Its
+      # profiles go to a folder of their own, so the fuzzer's coverage
+      # report reads the fuzzer's alone. Measured across the 22 shards of run
+      # 44878123154: 1.1 minutes at most (base seeds 3750+1250), 0.5 on
+      # average; the limit is about twice the longest.
+      - name: Compare with the Base Tool
+        if: ${{ !cancelled() && needs.base-tool.result == 'success' }}
+        timeout-minutes: 3
+        env:
+          SAFEDI_BASE_COMPARISON_BASE_TOOL: ${{ github.workspace }}/base-tool/SafeDITool
+          SAFEDI_BASE_COMPARISON_HEAD_TOOL: ${{ github.workspace }}/.build/x86_64-unknown-linux-gnu/release/SafeDITool
+          SAFEDI_BASE_COMPARISON_FEATURES: ${{ matrix.features }}
+          SAFEDI_BASE_COMPARISON_STARTING_SEED: ${{ matrix.starting-seed }}
+          SAFEDI_BASE_COMPARISON_ITERATIONS: ${{ matrix.iterations }}
+          SAFEDI_BASE_COMPARISON_REPORT: ${{ github.workspace }}/graph-fuzzer/base-comparison.txt
+          LLVM_PROFILE_FILE: ${{ runner.temp }}/base-comparison-profiles/base-comparison-%p.profraw
+        run: |
+          chmod +x base-tool/SafeDITool
+          .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing --filter 'SafeDIToolBaseComparisonTests/longRun'
       - name: Summarize
         if: ${{ !cancelled() }}
         run: .github/scripts/summarize-graph-fuzzer-report.sh "$REPORT" "$SUMMARY" ${{ matrix.starting-seed }} ${{ matrix.iterations }} "${{ matrix.features }}"
@@ -2485,11 +2974,13 @@ jobs:
   # This is the one check to require for the fuzzer.
   graph-fuzzer-corpus:
     name: Check Graph Fuzzer Corpus on Linux
-    needs: [changes, graph-fuzzer]
+    needs: [changes, graph-fuzzer, base-tool]
     if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # To read the pull request's current description (below).
+      pull-requests: read
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
@@ -2500,6 +2991,44 @@ jobs:
           path: reports
       - name: Combine Shard Reports
         run: python3 .github/scripts/combine-graph-fuzzer-reports.py "$RUNNER_TEMP/graph-fuzzer-corpus.md" reports/*/report.txt
+      # Judges the shards' comparisons with the base's SafeDITool: a pull
+      # request whose description holds the line `Generated output:
+      # unchanged` fails on any difference; any other pull request gets the
+      # list in the summary. The description is read as it is now, not as
+      # the event that started the run carried it, so a re-run of this job
+      # after the line is added judges it; it is read through the
+      # environment, never spelled into the script.
+      - name: Compare Generated Output with the Base
+        if: ${{ !cancelled() }}
+        env:
+          BASE_TOOL_RESULT: ${{ needs.base-tool.result }}
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+          EVENT_PULL_REQUEST_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python3 -I .github/scripts/combine-base-comparison-reports.py --self-test
+          PULL_REQUEST_BODY="$EVENT_PULL_REQUEST_BODY"
+          if [ -n "$PULL_REQUEST" ]; then
+            if live_body=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PULL_REQUEST" --jq '.body // ""'); then
+              PULL_REQUEST_BODY="$live_body"
+            else
+              echo "::warning::Could not read the pull request's current description; judging the one the run's event carried."
+            fi
+          fi
+          export PULL_REQUEST_BODY
+          python3 -I .github/scripts/combine-base-comparison-reports.py reports >> "$GITHUB_STEP_SUMMARY"
+      # Prints what the shards' reports say the pins should be, for a session
+      # that cannot download this run's artifacts: the analysis's report, then
+      # its pins.json as lines that
+      # .claude/skills/apply-fuzzer-pins/apply-fuzzer-pins.py reads back from
+      # a saved copy of this job's log. It runs when the step above fails,
+      # which is when pins moved, and it never fails the job.
+      - name: Print the Pins the Reports Derive
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: .github/scripts/report-graph-fuzzer-pins.sh reports
 
   # Fails on any line under Sources/ or Plugins/ that no test executes on
   # Linux or macOS, over the whole tree, from the lcov reports the two test
@@ -2514,11 +3043,10 @@ jobs:
   # jobs run, so a Markdown-only pull request skips it, and a skipped job
   # that is not a matrix job reports success under its own name, so it
   # needs no stand-in. It only reads reports with Python, as "Check Graph
-  # Fuzzer Corpus on Linux" does, so it runs on Linux with no container. It
-  # also runs the expectation regenerator's fixture self-test, last.
+  # Fuzzer Corpus on Linux" does, so it runs on Linux with no container.
   line-coverage:
     name: Check Line Coverage on Linux
-    needs: [changes, spm, linux]
+    needs: [changes, spm-plan, spm, linux]
     if: ${{ !cancelled() && (needs.changes.outputs.source != 'false' || (github.event_name == 'push' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-latest
     permissions:
@@ -2526,35 +3054,21 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
-      # .claude/skills/apply-fuzzer-pins/apply-fuzzer-pins.py writes a corpus
-      # run's values into the fuzzer's pins, so it proves on fixtures that it
-      # refuses values that are not known to be of the commit it edits.
-      - name: Check the Fuzzer Pins Script Against Its Fixtures
-        run: python3 -I .claude/skills/apply-fuzzer-pins/apply-fuzzer-pins.py --self-test "$RUNNER_TEMP/apply-fuzzer-pins-self-test"
-      # .claude/skills/verify-touched/verify-touched.py chooses the suites a
-      # local run tests before a full Verify, so it proves on fixtures which
-      # suites a change selects and which lines of a run it reports.
-      - name: Check the Touched Suites Script Against Its Fixtures
-        run: python3 -I .claude/skills/verify-touched/verify-touched.py --self-test
-      # .claude/skills/pre-review/pre-review.py prints the block a hand-back
-      # carries, so it proves on fixtures which changes owe a pins run, which
-      # run it accepts as one, and what makes a block say it is not ready.
-      - name: Check the Pre-Review Script Against Its Fixtures
-        run: python3 -I .claude/skills/pre-review/pre-review.py --self-test
-      # .claude/skills/ci-step-limits/step-limits.py says which step limits a
-      # larger suite has outgrown, so it proves on fixtures which steps it
-      # measures, how it matches a matrix job, and each verdict.
-      - name: Check the Step Limits Script Against Its Fixtures
-        run: python3 -I .claude/skills/ci-step-limits/step-limits.py --self-test
+      # .github/scripts/analyze-graph-fuzzer-pins.py derives the fuzzer's pins in
+      # "Check Graph Fuzzer Corpus on Linux"; this checks how it fills its
+      # inputs from a run and what it does without them.
+      - name: Check the Fuzzer Pins Analysis Against Its Fixtures
+        run: python3 -I .github/scripts/analyze-graph-fuzzer-pins.py --self-test "$RUNNER_TEMP/analyze-graph-fuzzer-pins-self-test"
       # The check is the only thing between an unexecuted line and main, so
       # its script proves on fixtures that it unions the platforms, resolves
       # symbolic links and refuses missing data before it reads the reports.
       - name: Check the Script Against Its Fixtures
         run: python3 -I Scripts/unexecuted-lines.py --self-test "$RUNNER_TEMP/unexecuted-lines-self-test"
-      # This job has no container, so it does not run as the superuser, and
-      # the script's read-only file case runs here.
-      - name: Check the Edit Script Against Its Fixtures
-        run: python3 -I .claude/skills/apply-edit/apply-edit.py --self-test "$RUNNER_TEMP/apply-edit-self-test"
+      # Scripts/changed-line-coverage.sh is how a change is checked before it
+      # is pushed; its report of the files no report records must agree with
+      # this job's, or a change passes there and fails here.
+      - name: Check the Changed Line Coverage Script Against Its Fixtures
+        run: python3 -I Scripts/changed-line-coverage.py --self-test "$RUNNER_TEMP/changed-line-coverage-self-test"
       # .github/actions/restore-shared-compile-checks/restore-from-artifacts.js
       # decides which other runs' passed compile checks a test job skips, so
       # it proves on fixtures that it takes no line from a fork, another
@@ -2576,18 +3090,21 @@ jobs:
         with:
           pattern: line-coverage-*
           path: ${{ runner.temp }}/line-coverage
+      # When the Xcode 26 tests ran as two jobs, each uploaded the report of
+      # its part, and the script sums the two. It refuses a part without the
+      # other, whichever directories this step names, since each report says
+      # which part of how many it is.
       - name: Find Lines No Test Executes
-        run: python3 -I Scripts/unexecuted-lines.py --summary "$GITHUB_STEP_SUMMARY" --commit "$GITHUB_SHA" linux="$RUNNER_TEMP/line-coverage/line-coverage-linux" macos="$RUNNER_TEMP/line-coverage/line-coverage-macos"
-      # .claude/skills/regenerate-expectations/regenerate-expectations.py rewrites test expectations from
-      # what the test helpers record, so its fixtures prove it rewrites only
-      # literals that equalled a recorded output and refuses records made over
-      # other test sources. It reads no report and runs here only because this
-      # job already runs Python self-tests, so it adds no job. It runs last and
-      # whatever the coverage steps concluded, so a failure here never hides
-      # which lines no test executes, and still fails the job.
-      - name: Check the Expectation Regenerator Against Its Fixtures
-        if: ${{ !cancelled() }}
-        run: python3 -I .claude/skills/regenerate-expectations/regenerate-expectations.py --self-test "$RUNNER_TEMP/regenerate-expectations-self-test"
+        env:
+          XCODE_TESTS_SPLIT: ${{ needs.spm-plan.outputs.split }}
+        run: |
+          reports="$RUNNER_TEMP/line-coverage"
+          if [ "$XCODE_TESTS_SPLIT" = true ]; then
+            macos=(macos="$reports/line-coverage-macos-seams-and-mocks" macos="$reports/line-coverage-macos-the-rest")
+          else
+            macos=(macos="$reports/line-coverage-macos")
+          fi
+          python3 -I Scripts/unexecuted-lines.py --summary "$GITHUB_STEP_SUMMARY" --commit "$GITHUB_SHA" linux="$reports/line-coverage-linux" "${macos[@]}"
 
   # Lists the generator lines the change adds or modifies that no graph of the
   # fuzzer's corpora executed, from the shards' coverage profiles, split by
@@ -2904,6 +3421,74 @@ jobs:
       # `.claude/rules` within the limits the root CLAUDE.md states.
       - name: Check Claude Instruction Files
         run: Scripts/check-claude-instruction-files.sh
+      # A merge resolved by hand can commit its conflict markers, and in a
+      # Markdown file nothing else fails on them: main once held them in a rules
+      # file. This job runs for Markdown-only changes too, so the check is here.
+      - name: Check for Merge Conflict Markers
+        run: |
+          if git grep -nI -E '^(<{7}|>{7}) ' -- . ; then
+            echo "::error::The lines above are merge conflict markers. Resolve the conflict and remove them."
+            exit 1
+          fi
+
+  # Runs the fixture self-test of each script under `.claude/skills`. It runs
+  # on every change, with no `if:`, because the classifier above leaves a
+  # change under `.claude/` out of `source`: these steps are the only thing
+  # in this workflow that reads a file there, so nothing a `.claude/` change
+  # can alter goes unchecked when the build and test jobs skip, and its first
+  # step fails when another job starts to read one. Each step
+  # runs whatever the others concluded, so one run names every script that
+  # fails. The scripts need only Python, so the job runs on Linux with no
+  # container, in about half a minute.
+  skill-self-tests:
+    name: Check Agent Skill Scripts on Linux
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      # The skip is sound only while nothing the build and test jobs run
+      # reads a file under `.claude/`. This step fails when a step of another
+      # job, or Swift code under Sources, Plugins or Tests, names one.
+      - name: Check That No Skipped Job Reads a Skipped Path
+        run: python3 -I .github/scripts/check-skipped-paths.py --self-test && python3 -I .github/scripts/check-skipped-paths.py
+      # .claude/skills/apply-fuzzer-pins/apply-fuzzer-pins.py writes a corpus
+      # run's values into the fuzzer's pins, so it proves on fixtures that it
+      # refuses values that are not known to be of the commit it edits.
+      - name: Check the Fuzzer Pins Script Against Its Fixtures
+        if: ${{ !cancelled() }}
+        run: python3 -I .claude/skills/apply-fuzzer-pins/apply-fuzzer-pins.py --self-test "$RUNNER_TEMP/apply-fuzzer-pins-self-test"
+      # .claude/skills/verify-touched/verify-touched.py chooses the suites a
+      # local run tests before a full Verify, so it proves on fixtures which
+      # suites a change selects and which lines of a run it reports.
+      - name: Check the Touched Suites Script Against Its Fixtures
+        if: ${{ !cancelled() }}
+        run: python3 -I .claude/skills/verify-touched/verify-touched.py --self-test
+      # .claude/skills/pre-review/pre-review.py prints the block a hand-back
+      # carries, so it proves on fixtures which changes owe a pins run, which
+      # run it accepts as one, and what makes a block say it is not ready.
+      - name: Check the Pre-Review Script Against Its Fixtures
+        if: ${{ !cancelled() }}
+        run: python3 -I .claude/skills/pre-review/pre-review.py --self-test
+      # .claude/skills/ci-step-limits/step-limits.py says which step limits a
+      # larger suite has outgrown, so it proves on fixtures which steps it
+      # measures, how it matches a matrix job, and each verdict.
+      - name: Check the Step Limits Script Against Its Fixtures
+        if: ${{ !cancelled() }}
+        run: python3 -I .claude/skills/ci-step-limits/step-limits.py --self-test
+      # This job has no container, so it does not run as the superuser, and
+      # the script's read-only file case runs here.
+      - name: Check the Edit Script Against Its Fixtures
+        if: ${{ !cancelled() }}
+        run: python3 -I .claude/skills/apply-edit/apply-edit.py --self-test "$RUNNER_TEMP/apply-edit-self-test"
+      # .claude/skills/regenerate-expectations/regenerate-expectations.py rewrites test expectations from
+      # what the test helpers record, so its fixtures prove it rewrites only
+      # literals that equalled a recorded output and refuses records made over
+      # other test sources.
+      - name: Check the Expectation Regenerator Against Its Fixtures
+        if: ${{ !cancelled() }}
+        run: python3 -I .claude/skills/regenerate-expectations/regenerate-expectations.py --self-test "$RUNNER_TEMP/regenerate-expectations-self-test"
 
   lint-swift:
     name: Lint Swift

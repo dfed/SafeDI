@@ -1941,6 +1941,11 @@ struct CalledBuilders: Sendable {
 		self.holes = holes
 		self.builders = builders
 		self.scopeEnums = scopeEnums
+		var holeBySite = [SeamSignature.Hole.Site: SeamSignature.Hole]()
+		for hole in holes where holeBySite[hole.site] == nil {
+			holeBySite[hole.site] = hole
+		}
+		self.holeBySite = holeBySite
 		let enumsByKey = Dictionary(scopeEnums.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
 		self.enumsByKey = enumsByKey
 		carrierValuesBySeam = SeamCarrierValues.bySeam(of: scopeEnums)
@@ -2006,14 +2011,9 @@ struct CalledBuilders: Sendable {
 		Self.sites(sitesReached(by: builder, in: enumsByKey), onRoutesOf: builder.enumKey, holeBySite: holeBySite)
 	}
 
-	/// Each hole by its site, the first of `holes` at a site.
-	var holeBySite: [SeamSignature.Hole.Site: SeamSignature.Hole] {
-		var holeBySite = [SeamSignature.Hole.Site: SeamSignature.Hole]()
-		for hole in holes where holeBySite[hole.site] == nil {
-			holeBySite[hole.site] = hole
-		}
-		return holeBySite
-	}
+	/// Each hole by its site, the first of `holes` at a site: found once for the call, never once for each builder whose
+	/// routes are asked for, which grew a call's construction with the square of its hole types.
+	let holeBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]
 
 	/// The sites of `sites` that a route from the root enum of `rootKey` reaches (see `sitesReachedOnItsRoutes(by:in:)`).
 	static func sites(_ sites: Set<SeamSignature.Hole.Site>, onRoutesOf rootKey: SeamSignature.ScopeEnum.Key, holeBySite: [SeamSignature.Hole.Site: SeamSignature.Hole]) -> Set<SeamSignature.Hole.Site> {
