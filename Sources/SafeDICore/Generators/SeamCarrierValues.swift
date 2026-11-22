@@ -68,7 +68,18 @@ struct SeamCarrierValues: Sendable {
 		var endsByLevel = [String: [Int]]()
 		for (level, lengths) in lengthsByLevel where !inconsistentLevels.contains(level) {
 			let sorted = lengths.sorted()
-			endsByLevel[level] = Self.chainsEveryRun ? sorted : Array(sorted.prefix(1))
+			if Self.chainsEveryRun {
+				endsByLevel[level] = sorted
+			} else {
+				// One struct of the shortest case's values, and a run more wherever the values after the last run hold one
+				// narrower than the public carrier, which travels only as a struct field at its own access.
+				let fields = longestByLevel[level] ?? []
+				var ends = Array(sorted.prefix(1))
+				for length in sorted.dropFirst() where fields[(ends.last ?? 0)..<length].contains(where: { $0.access < .public }) {
+					ends.append(length)
+				}
+				endsByLevel[level] = ends
+			}
 		}
 		self.endsByLevel = endsByLevel
 	}
