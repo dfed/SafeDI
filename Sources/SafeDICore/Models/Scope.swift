@@ -2818,7 +2818,7 @@ struct SeamHoles: Sendable {
 			}
 			for (path, hole) in sitesByPath {
 				guard hole.scopeSeamType == seamType, let enumPlace = hole.enumPlace, let level = SeamCarrierValues.level(ofEnum: enumPlace.enumType(qualifiedBy: nil)) else { continue }
-				let fields = enumPlace.values ?? hole.fields
+				let fields = enumPlace.values
 				guard !fields.isEmpty else { continue }
 				carrierSitesByPath[path] = CarrierSite(use: carrierValues.use(ofLevel: level, count: fields.count), formations: [])
 				takersByBody[Body(path: Array(path.dropLast()), level: level), default: []].append(Taker(path: path, fields: fields))
