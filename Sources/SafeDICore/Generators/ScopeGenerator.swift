@@ -5955,6 +5955,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// loop reads: neither this scope's construction nor a generated child that is not on the loop. Only a mock root has any. A
 	/// production scope's children are its type's own properties, which its construction reads, while a mock root's are
 	/// also the properties it promotes, some only because the tree of a member of their loop receives them.
+	// D1 lane hook (lane B): the mock lowering reads which loop members its level binds no wrapper of.
+	/// `loopMembersReadOnlyInsideTheirLoop()`, read by the mock lowering.
+	nonisolated var mockLoweringLoopMembersReadOnlyInsideTheirLoop: Set<Int> {
+		Set(loopMembersReadOnlyInsideTheirLoop())
+	}
+
 	nonisolated private func loopMembersReadOnlyInsideTheirLoop() -> [Int] {
 		guard case let .root(instantiable, _) = scopeData else { return [] }
 		let siblingGraph = Self.siblingGraph(of: propertiesToGenerate, requiredOnlyIfAvailableAliasProperties: requiredOnlyIfAvailableAliasProperties)
