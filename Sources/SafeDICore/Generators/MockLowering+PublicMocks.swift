@@ -359,8 +359,12 @@ extension MockLowering.Walk {
 			// The site binds its property from the builder, as an alias binds its own: no override reads it.
 			return .lowered(.alias(MockLowering.AliasBinding(
 				property: property,
+				bindingName: property.label,
 				fulfillingProperty: Property(label: site.builderLabel, typeDescription: site.builtType),
+				fulfillingName: site.builderLabel,
 				isErased: erasedToConcreteExistential,
+				isOnlyIfAvailable: false,
+				isBoundToNil: false,
 				declarationReference: nil,
 			)))
 		case .root, .fill, .property, .alias:
