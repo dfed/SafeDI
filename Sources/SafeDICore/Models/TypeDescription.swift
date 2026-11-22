@@ -453,7 +453,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 
 	/// The type a closure's `throws(E)` names, or `nil` when it names `any Error`: Swift reads `throws(any Error)` and
 	/// `throws` as one type, so neither `==` nor `hash` tells them apart, while `asSource` keeps each spelling.
-	private static func thrownTypeBeyondAnyError(_ thrownType: TypeDescription?) -> TypeDescription? {
+	static func thrownTypeBeyondAnyError(_ thrownType: TypeDescription?) -> TypeDescription? {
 		thrownType == .simple(name: "Error") || thrownType == .nested(name: "Error", parentType: .simple(name: "Swift"))
 			? nil
 			: thrownType
@@ -586,7 +586,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	/// Whether a metatype of `instanceType` spelled with `.Type` (`isType`) or `.Protocol` is the existential
 	/// metatype: `Service.Type` and `any Service.Type` are, while `(any Service).Type` is the metatype of the
 	/// existential itself, `Service.Protocol`.
-	private static func isExistentialMetatype(ofInstanceType instanceType: TypeDescription, isType: Bool) -> Bool {
+	static func isExistentialMetatype(ofInstanceType instanceType: TypeDescription, isType: Bool) -> Bool {
 		switch instanceType {
 		case .any:
 			false
