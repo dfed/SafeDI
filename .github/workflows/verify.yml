@@ -7,7 +7,10 @@ name: Verify
 # checks are unaffected.
 #
 # Two modes test; a third, `warm`, only saves a build (see "Warm the Release
-# Verify Build Cache" below). `release`, the default, runs the same build as
+# Verify Build Cache" below), and a fourth, `function-compile-time`, runs no
+# test: it times the compiler on each function of SafeDICore as ci.yml's
+# "Check Function Compile Time on Linux" does (see "Verify Function Compile
+# Time on Linux" below). `release`, the default, runs the same build as
 # "Build Tests on Linux" in ci.yml, with the passed-compile-check cache of
 # "Build and Test on Linux". It builds SafeDI's own targets in release with
 # code coverage, starting from the build of main's newest commit that "Warm
@@ -65,13 +68,14 @@ on:
         required: false
         default: ''
       mode:
-        description: '`release` builds as "Build Tests on Linux" does; `fast` builds in debug without coverage and needs a filter; `warm` saves this branch a release build for its later `release` runs and tests nothing.'
+        description: '`release` builds as "Build Tests on Linux" does; `fast` builds in debug without coverage and needs a filter; `warm` saves this branch a release build for its later `release` runs and tests nothing; `function-compile-time` runs only the check of the compiler''s time on each function of SafeDICore, and tests nothing.'
         required: false
         type: choice
         options:
           - release
           - fast
           - warm
+          - function-compile-time
         default: release
       pins:
         description: With `release` and an empty filter, also fuzz every corpus from the same build, check the corpora's pins and report the changed lines no corpus graph executed (graph-fuzzer.yml's `coverage` jobs).
@@ -103,7 +107,7 @@ jobs:
   verify:
     # Nothing here needs macOS, so it uses the Linux test job's container.
     name: Verify on Linux
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'warm' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'warm' && inputs.mode != 'function-compile-time' }}
     runs-on: ubuntu-latest
     container: swift:6.2
     timeout-minutes: 75
@@ -1030,6 +1034,65 @@ jobs:
           path: .build
           key: verify-debug-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}-${{ steps.fast-build-arguments.outputs.hash }}
 
+  # ci.yml's "Check Function Compile Time on Linux" for one branch, by hand:
+  # `gh workflow run verify.yml --ref <branch> -f mode=function-compile-time`.
+  # That check fails a pull request when the compiler spends too long on one
+  # function of SafeDICore, and it is the only place that says so: the limit
+  # is about this container's Swift 6.2, and a newer compiler on a
+  # contributor's machine type-checks the same function several times faster.
+  # A stack of pull requests runs CI on its top only, so a slow function in a
+  # lower one surfaced when the whole stack ran. This mode answers in the time
+  # of one build of SafeDICore, with no test job and no cache.
+  #
+  # It always times, whatever the branch changed, since asking for it is the
+  # reason to run it. Keep its container, its build command and its check in
+  # step with ci.yml's job, whose comments hold the measurements: the build
+  # took 537 to 733 s there, so the limit is the same 25 minutes.
+  function-compile-time:
+    name: Verify Function Compile Time on Linux
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'function-compile-time' }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      # A filter or `pins` belongs to a mode that tests; a run that ignored
+      # one would read as having tested.
+      - name: Refuse Inputs This Mode Does Not Read
+        env:
+          FILTER: ${{ inputs.filter }}
+          PINS: ${{ inputs.pins }}
+        run: |
+          if [ -n "$FILTER" ] || [ "$PINS" = true ]; then
+            echo "::error::mode=function-compile-time runs no test, so it takes no filter and no pins."
+            exit 1
+          fi
+      - name: Install Python
+        uses: ./.github/actions/retry
+        with:
+          command: command -v python3 >/dev/null || { apt-get update && apt-get install -y --no-install-recommends python3; }
+      - name: Check the Script
+        run: python3 -I Scripts/function-compile-time-check.py --self-test "$RUNNER_TEMP/function-compile-time-self-test"
+      - name: Resolve Package Dependencies
+        uses: ./.github/actions/retry
+        with:
+          command: swift package resolve
+      - name: Build SafeDICore with the Compiler's Timers
+        timeout-minutes: 25
+        run: |
+          set -o pipefail
+          swift build -c release --traits sourceBuild --target SafeDICore -v \
+            -Xswiftc -Xfrontend -Xswiftc -debug-time-function-bodies \
+            -Xswiftc -Xllvm -Xswiftc -sil-print-pass-time -Xswiftc -Xllvm -Xswiftc -sil-min-pass-time=20 \
+            > "$RUNNER_TEMP/function-compile-time.log" 2>&1 || { tail -n 200 "$RUNNER_TEMP/function-compile-time.log"; exit 1; }
+      - name: Check Each Function's Time
+        run: python3 -I Scripts/function-compile-time-check.py --summary "$GITHUB_STEP_SUMMARY" "$RUNNER_TEMP/function-compile-time.log"
+
   # Deletes the branch this run was dispatched on when it is a scratch ref:
   # one a tool pushed only to run this workflow on a commit, named
   # `verify/…`, `probe/…` or `coverage/…`. A tool that is killed never
@@ -1090,6 +1153,7 @@ jobs:
       - fuzz
       - verify-test-partition
       - verify-passed-compile-checks
+      - function-compile-time
       - warm-release-cache
       - prune-release-cache
       - warm-fast-cache
