@@ -961,7 +961,7 @@ extension DependencyTreeGenerator {
 	/// `firstPassSeamRoot` again, so that the first pass settles it. The pass reads nothing but its own seam root that the
 	/// first pass changed: every seam its tree reaches is in a settled component, and its own entries in `knownSeamRoots`
 	/// and `ownScopeEnums` are read only by a call of the seam itself or of a seam with holes. Of its seam root, the tree
-	/// reads two things (see `seams.md`):
+	/// reads two things (see `seam-signature-passes.md`):
 	/// - The parameters, put in scope at the root: the same when the first pass added none, compared by spelling, deferral
 	///   and internal name in order. A `nil` root, a seam equal to its own initializer, is computed again from
 	///   `initialSeamRoot`, as the first pass was.
