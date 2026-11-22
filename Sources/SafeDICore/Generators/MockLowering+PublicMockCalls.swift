@@ -133,6 +133,13 @@ extension ScopeGenerator {
 		))
 	}
 
+	/// Whether the leaf of `generator`, a call of another module's public mock, receives `property`: an internal caller's leaf
+	/// receives each builder the call passes up, while a `.public` caller's receives none and passes its own struct's member.
+	private func callsLeafReceivesBuilder(of generator: ScopeGenerator, _ property: Property) -> Bool {
+		guard case let .property(instantiable, _, _, _, _, _) = generator.scopeData else { return false }
+		return instantiable.dependencies.contains { $0.property == property }
+	}
+
 	/// The name `mock()` binds each builder a call of another module's public mock in the tree passes up under, by the
 	/// property the call's leaf receives it as, as `seamMockBuilders` names it for a mock that takes no other builder: a
 	/// builder of its own per property, labeled as the leaf receives it, which `mock()` binds apart from the leaf's binding of
@@ -149,7 +156,8 @@ extension ScopeGenerator {
 			if let publicMockCall = generator.publicMockCall {
 				let passedUpLabels = Set(publicMockCall.passedUpBuilders.map(\.label))
 				for parameter in publicMockCall.passedParameters {
-					guard let builder = parameter.builder, passedUpLabels.contains(builder.label) else { continue }
+					// A `.public` caller's leaf receives no builder: the call passes its own struct's member.
+					guard let builder = parameter.builder, passedUpLabels.contains(builder.label), callsLeafReceivesBuilder(of: generator, parameter.dependency.property) else { continue }
 					// A builder of the `@Sendable` family, or one a `@Sendable` builder function captures, is not lowered yet.
 					guard !builder.enumKey.isSendable, !generator.buildsInSendableFunction else { return .unsupported(.publicMockCall) }
 					let property = parameter.dependency.property
@@ -273,7 +281,8 @@ extension MockLowering.Walk {
 		}
 		let innerIndent = filledCall == nil ? indent : "\(indent)\(ScopeGenerator.standardIndent)"
 		let holeBuilders = filledCallBuilders.fillPlaceBindings.holeBuildersByCall[ObjectIdentifier(generator)] ?? [:]
-		let structValuesByLabel = filledCall == nil ? [:] : generator.publicMockBuilderStructValuesByLabel
+		let structValuesByLabel = generator.publicMockBuilderStructValuesByLabel
+		let holeArgumentValuesByLabel = generator.holeArgumentValuesByLabel
 		let lazilyInstantiatedInstances = generator.mockLoweringLazilyInstantiatedInstanceProperties
 		var arguments = [String]()
 		// What the override closure is handed for each argument: a builder as `publicMockOverrideBuilders` says, which reads
@@ -285,16 +294,8 @@ extension MockLowering.Walk {
 			argument.label == "_" ? value : "\(argument.label.spelledAsArgumentLabel): \(value)"
 		}
 		for argument in initializer.arguments {
-			if let builderStruct = structValuesByLabel[argument.innerLabel] {
-				let fillsStruct = builderStruct.replacingOccurrences(of: "\n\(ScopeGenerator.standardIndent)", with: "\n\(innerIndent)")
-				arguments.append(labeled(holeBuilders[argument.innerLabel]?.structValue(fillsStruct: fillsStruct) ?? fillsStruct, as: argument))
-				if let overrideBuilders {
-					// A builder an internal mock passes up whole is not lowered yet.
-					guard let overrideBuilder = overrideBuilders[argument.innerLabel], case .fill = overrideBuilder else { return .unsupported(.publicMockCall) }
-					overrideArguments.append(argument.innerLabel)
-				}
-			} else if let dependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }),
-			          let builderName = filledCallBuilders.passedUpBuilderNames[dependency.property]
+			if let dependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }),
+			   let builderName = filledCallBuilders.passedUpBuilderNames[dependency.property]
 			{
 				// A builder the call passes up is the builder `mock()` takes, which the call's builder function binds under the
 				// label the leaf receives it as. An override closure handed it is not lowered yet.
@@ -302,6 +303,18 @@ extension MockLowering.Walk {
 				guard scope.contains(dependency.property), overrideBuilders == nil, filledCall == nil, property.propertyType.isConstant else { return .unsupported(.publicMockCall) }
 				passedUpBuilderBindings.append("let \(dependency.property.label): \(dependency.property.typeDescription.strippingEscaping.asSource) = \(builderName)")
 				arguments.append(labeled(".init(__safeDI_noScope: \(dependency.property.label))", as: argument))
+			} else if let builderStruct = structValuesByLabel[argument.innerLabel] {
+				let fillsStruct = builderStruct.replacingOccurrences(of: "\n\(ScopeGenerator.standardIndent)", with: "\n\(innerIndent)")
+				arguments.append(labeled(holeBuilders[argument.innerLabel]?.structValue(fillsStruct: fillsStruct) ?? fillsStruct, as: argument))
+				if let overrideBuilders {
+					// A builder an internal mock passes up whole is not lowered yet.
+					guard let overrideBuilder = overrideBuilders[argument.innerLabel], case .fill = overrideBuilder else { return .unsupported(.publicMockCall) }
+					overrideArguments.append(argument.innerLabel)
+				}
+			} else if overrideBuilders == nil, let holeValue = holeArgumentValuesByLabel[argument.innerLabel] {
+				// A builder a `.public` caller's call passes up, as its own struct's member. An override closure handed one is not
+				// lowered yet: the leaf receives no builder, so the values below find no dependency of its label.
+				arguments.append(labeled(holeValue, as: argument))
 			} else {
 				// A value the call passes is the root level's binding of its label, which an optional parameter takes as it is.
 				guard let dependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }),
