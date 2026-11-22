@@ -129,23 +129,24 @@ actor ModuleReferenceResolver {
 		var headsByModuleName = [String: [(path: String, ownEntryChecksum: UInt64?)]]()
 		if let transitiveModuleInfoListPath {
 			let paths = try Set(String(contentsOfFile: transitiveModuleInfoListPath, encoding: .utf8).parsedPathListCSV()).sorted()
-			let heads = try await withThrowingTaskGroup(of: (index: Int, head: ModuleInfoFile.Head).self) { taskGroup in
+			let reads = await withTaskGroup(
+				of: (index: Int, read: Result<ModuleInfoFile.Head, UnreadableModuleInfoError>).self,
+				returning: [(index: Int, read: Result<ModuleInfoFile.Head, UnreadableModuleInfoError>)].self,
+			) { taskGroup in
 				for (index, path) in paths.enumerated() {
 					taskGroup.addTask {
-						do {
-							return try (index, ModuleInfoFile.Head(moduleInfoData: Data(contentsOf: path.asFileURL)))
-						} catch let error as BinaryFileReadError {
-							throw UnreadableModuleInfoError(path: path.asFileURL.path, reason: "\(error) \(BinaryFile.unreadableFileExplanation)")
-						}
+						(index: index, read: Result { () throws(UnreadableModuleInfoError) in try UnreadableModuleInfoError.readingHead(path.asFileURL) })
 					}
 				}
-				var heads = [(index: Int, head: ModuleInfoFile.Head)]()
-				for try await head in taskGroup {
-					heads.append(head)
+				var reads = [(index: Int, read: Result<ModuleInfoFile.Head, UnreadableModuleInfoError>)]()
+				for await read in taskGroup {
+					reads.append(read)
 				}
-				return heads.sorted { $0.index < $1.index }
+				return reads
 			}
-			for (index, head) in heads {
+			// The files are read in parallel, so their failures arrive in any order: the one reported is that of the first path.
+			for (index, read) in reads.sorted(by: { $0.index < $1.index }) {
+				let head = try read.get()
 				headsByModuleName[head.moduleName, default: []].append((path: paths[index], ownEntryChecksum: head.ownEntryChecksum))
 			}
 			headReadPaths = Set(paths)
