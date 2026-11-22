@@ -568,6 +568,8 @@ extension MockLowering {
 		/// The statement that binds a constant node with no children, whose override `overrideRead` reads.
 		func constantBindingLine(overrideRead nodePath: String?, indent: String) -> String {
 			// Only the `if` expression that reads an override needs the property's type, which its two branches share.
+			// D1 lane hook (lane C): a child the mock promotes for an optional receive, such as a value a called public mock
+			// builds when passed `nil`, is bound as the value it builds.
 			let annotation = isFulfilledByAnotherType && !isErased && nodePath != nil ? ": \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource)" : ""
 			return "\(indent)let \(property.label)\(annotation) = \(constructionReading(override: nodePath, builderCall: "\(ReservedName.configurationBuilderPropertyName)(\(builderArguments))"))"
 		}
@@ -715,7 +717,8 @@ extension MockLowering {
 		let wrapperTypeSource = property.typeDescription.unwrapped.asSource
 		// D1 lane hook (lane B): the binding of each wrapper kind.
 		if property.propertyType.isConstant {
-			return ["\(indent)let \(property.label): \(property.typeDescription.asSource) = \(functionName)()"]
+			// D1 lane hook (lane C): a promoted child is bound as the value it builds, as `constantBindingLine` binds it.
+			return ["\(indent)let \(property.label): \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource) = \(functionName)()"]
 		} else if forwardedProperties.isEmpty {
 			return ["\(indent)let \(property.label) = \(wrapperTypeSource)(\(functionName))"]
 		} else {
