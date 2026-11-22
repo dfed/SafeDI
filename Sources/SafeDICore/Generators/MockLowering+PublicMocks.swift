@@ -88,10 +88,17 @@ extension ScopeGenerator {
 		var namesFillsDeclare = Set<String>()
 		// What the mock's root level declares, which a fill reading a value of the caller's scope reads.
 		var rootLevelProperties = Set<Property>()
+		let rootDependencies: Set<Property> = if case let .root(instantiable, _) = scopeData { Set(instantiable.dependencies.map(\.property)) } else { [] }
 		for child in orderedChildren {
 			if let property = child.generator.property {
 				rootLevelProperties.insert(property)
 			}
+		}
+		// A child the mock promotes for an optional receive of a call inside a fill, a dependency the called public mock builds
+		// when passed `nil`, is bound as the value it builds, which the walk does not lower yet.
+		let promotesOptionalChild = orderedChildren.contains { child in
+			guard child.generator.publicMockCall == nil, let property = child.generator.property else { return false }
+			return property.typeDescription.isOptional && !rootDependencies.contains(property)
 		}
 		for child in orderedChildren where child.generator.publicMockCall != nil && child.generator.fillsABuilder {
 			let generator = child.generator
@@ -107,12 +114,21 @@ extension ScopeGenerator {
 				      fill.receivedProperties.allSatisfy({ rootLevelProperties.contains($0) || rootLevelProperties.contains($0.asUnwrappedProperty) })
 				else { return .unsupported(.fill) }
 			}
+			// A place inside a fill takes a required builder, which is not lowered yet. A call inside a fill is generated with the
+			// fill, reading the builders `mock()` takes optional for the places it fills as the call does.
 			let fillPlaces = generator.fillPlaces(insideSendableFunction: false)
-			guard fillPlaces.places.isEmpty, fillPlaces.calls.isEmpty else { return .unsupported(.fill) }
+			guard fillPlaces.places.isEmpty, fillPlaces.calls.isEmpty || !promotesOptionalChild else { return .unsupported(.fill) }
 			let filledCall = FilledCall(generator: generator, isInsideSendableFunction: false, enclosingCalls: [])
 			guard filledCall.filledBuilders.count == publicMockCall.builders.count else { return .unsupported(.fill) }
+			for callInsideFill in fillPlaces.calls {
+				guard let calledMock = callInsideFill.generator.publicMockCall,
+				      calledMock.passedUpBuilders.isEmpty,
+				      callInsideFill.filledBuilders.count + callInsideFill.reenteredBuilders.count == calledMock.builders.count
+				else { return .unsupported(.fill) }
+			}
 			namesFillsDeclare.formUnion(fillPlaces.declaredLabels)
 			filledCalls.append(filledCall)
+			filledCalls.append(contentsOf: fillPlaces.calls)
 			calls.append(.init(generator: generator, propertiesGeneratedLater: child.propertiesGeneratedLater))
 		}
 		guard !calls.isEmpty else { return .lowered(.none) }
