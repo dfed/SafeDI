@@ -834,13 +834,12 @@ extension MockLowering {
 			// D1 lane hook (lane D): a node whose type repeats a configured node around it, or beneath one, records nothing.
 			if configuredNode.hasConfiguration, configurationEntry.recordsConfiguration {
 				let parentConcreteType = instantiable.concreteInstantiable.asSource
-				var record = ConfigurationRecord(
-					of: configuredNode,
-					children: children.filter { child in child.concreteType.map { !isPruned($0, beneath: parentConcreteType) } ?? true },
-				)
+				// A child beneath an edge in `cycleEdges` has no member in its parent's configuration, public or internal.
+				let recordedChildren = children.filter { child in child.concreteType.map { !isPruned($0, beneath: parentConcreteType) } ?? true }
+				var record = ConfigurationRecord(of: configuredNode, children: recordedChildren)
 				// D1 lane hook (lane C): a public mock's node records the construction its type's construction function makes.
 				if buildsPublicMock {
-					record.publicConstruction = MockLowering.publicConstructionRecord(of: configuredNode, children: children, orderedBy: generator)
+					record.publicConstruction = MockLowering.publicConstructionRecord(of: configuredNode, children: recordedChildren, orderedBy: generator)
 				}
 				configurationRecords.append(record)
 			}
