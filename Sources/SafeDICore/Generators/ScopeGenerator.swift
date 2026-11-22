@@ -1714,6 +1714,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			/// The labels the case's type binds from the case's property on, in an enum nested by type, which hide every value
 			/// of the label a type further out binds (`SeamSignature.ScopeEnum.Values.labelsBoundLater`).
 			let labelsBoundLater: Set<String>
+			/// Whether the case's level is a carrier's `let` child (`SeamSignature.ScopeEnum.Case.isLetChildOfCarrier`), which the
+			/// caller's carrier is formed with, not a closure that forms it.
+			var isLetChild = false
 
 			/// Whether the case's enum is of a seam the called seam calls, which binds the case's deferred parameters from a
 			/// call of its own: their memo holds what that call passed, which no declaration of the caller's is.
@@ -2171,6 +2174,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						let reachedSites = sitesReached(from: innerKey, onRoutesOf: family)
 						let target = dispatcherInstance(of: innerKey)
 						var dispatcherCase = Case(name: enumCase.name, hasForwardedValue: false, target: nil, values: enumCase.values?.fields, labelsBoundLater: enumCase.values?.labelsBoundLater ?? [])
+						dispatcherCase.isLetChild = enumCase.isLetChildOfCarrier(inSendableEnum: scopeEnum.key.isSendable) && ReservedName.seamCarrier(ofEnum: scopeEnum.type) != nil
 						if case .fill = enumCase.kind {
 							dispatcherCase.isFillCase = true
 							dispatcherCase.carriedInnerKey = SeamSignature.ScopeEnum.carriedInnerKey(of: enumCase)
@@ -2185,6 +2189,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							isFillCase: dispatcherCase.isFillCase,
 							carriedInnerKey: dispatcherCase.carriedInnerKey,
 							labelsBoundLater: dispatcherCase.labelsBoundLater,
+							isLetChild: dispatcherCase.isLetChild,
 						)
 					}
 				}
@@ -2333,6 +2338,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							var dispatcherCase = Case(name: enumCase.name, carriesPayload: enumCase.values != nil, hasForwardedValue: false, target: target, values: enumCase.values?.fields, labelsBoundLater: enumCase.values?.labelsBoundLater ?? [])
 							// The called seam's levels are bound by calls the caller's seam makes.
 							dispatcherCase.carriesDeferredFields = true
+							dispatcherCase.isLetChild = enumCase.isLetChildOfCarrier(inSendableEnum: scopeEnum.key.isSendable) && ReservedName.seamCarrier(ofEnum: scopeEnum.type) != nil
 							// A place's site path ends at its property.
 							if case let .place(sites) = enumCase.kind {
 								dispatcherCase.returnsWrapperBuilder = sites.first?.path.last?.propertyType.isAnyInstantiator ?? false
@@ -2521,7 +2527,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					let argumentLabel = Self.isFill(target) ? label : target.reusedCarriedInnerScopes.first { $0.type == carriedInnerScope.type }?.upName ?? carriedInnerScope.upName
 					// A carrier's member takes the case's values as arguments, which the closure binds under the payload's name.
 					let memberArguments = takesValuesAsArguments ? (dispatcherCase.values ?? []).map { SeamHoles.argumentName(of: $0, inPayloadNamed: payloadName) }.joined(separator: ", ") : payloadName
-					return ("\(argumentLabel.spelledAsArgumentLabel): \(carriedInnerScope.upName).\(dispatcherCase.name.spelledAsMemberReference)(\(memberArguments))", true)
+					let member = "\(carriedInnerScope.upName).\(dispatcherCase.name.spelledAsMemberReference)"
+					return ("\(argumentLabel.spelledAsArgumentLabel): \(dispatcherCase.isLetChild ? member : "\(member)(\(memberArguments))")", true)
 				} else if readsOwnPayload, (dispatcherCase.carriedLabels.contains(label) && dispatcherCase.handsOn(parameter)) || (parameter.bindsMemo && labelsHiddenByReenteringCalls.contains(label) && dispatcherCase.values?.contains { $0.property.label == label } == true), let field = dispatcherCase.values?.first(where: { $0.property.label == label }) {
 					// A target that binds a deferred parameter's memo is handed the memo, whose instance it reads where it reads the
 					// value: also a deferred field `carriedLabels` leaves out where a call inside a fill passes a fill of this call on
@@ -2585,7 +2592,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						// the builder is returned, so the builder captures the level's struct, never the payload.
 						call = readsValues ? "{ [level = \(call)] _ in level }" : "{ _ in \(call) }"
 					}
-					members.append((dispatcherCase.name, ["\(dispatcherCase.name.spelledAsArgumentLabel): \(closureHead(of: dispatcherCase, payloadName: valuesName, readsPayload: readsValues)) \(call) }"]))
+					if dispatcherCase.isLetChild, !Self.isFill(target) {
+						// A carrier's `let` child is formed with its parent, by the next level's function.
+						members.append((dispatcherCase.name, ["\(dispatcherCase.name.spelledAsArgumentLabel): \(call)"]))
+					} else {
+						members.append((dispatcherCase.name, ["\(dispatcherCase.name.spelledAsArgumentLabel): \(closureHead(of: dispatcherCase, payloadName: valuesName, readsPayload: readsValues)) \(call) }"]))
+					}
 				} else {
 					// A fill nested by type takes the case's payload, and each value it reads that the payload does not carry, under
 					// its label: this function's own, or the caller's.
@@ -7843,7 +7855,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				builderParameter
 			}
 		}
-		var members = [(name: String, type: String, noScopeValue: String)]()
+		var members = [(name: String, type: String, noScopeValue: String, isLetChild: Bool)]()
 		var ignoredArguments = [String: String]()
 		for enumCase in scopeEnum.cases {
 			let returnType: String
@@ -7875,10 +7887,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let parameters = (enumCase.values?.fields ?? []).map { field in
 					(field.memoType ?? field.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)).asSource
 				}
-				members.append((enumCase.name, "\(sendableAttribute)(\(parameters.joined(separator: ", "))) -> \(returnType)", noScopeValue))
+				if enumCase.isLetChildOfCarrier(inSendableEnum: isSendable) {
+					// A level the member hands no value, outside every loop of levels: the carrier holds the child carrier itself,
+					// formed where this carrier is formed.
+					members.append((enumCase.name, returnType, noScopeValue, true))
+				} else {
+					members.append((enumCase.name, "\(sendableAttribute)(\(parameters.joined(separator: ", "))) -> \(returnType)", noScopeValue, false))
+				}
 				ignoredArguments[enumCase.name] = parameters.isEmpty ? "" : "\(Array(repeating: "_", count: parameters.count).joined(separator: ", ")) in "
 			} else {
-				members.append((enumCase.name, "\(sendableAttribute)(\(enumCase.memberValuesTypeName ?? "")) -> \(returnType)", noScopeValue))
+				members.append((enumCase.name, "\(sendableAttribute)(\(enumCase.memberValuesTypeName ?? "")) -> \(returnType)", noScopeValue, false))
 			}
 		}
 		var lines = [
@@ -7894,7 +7912,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lines.append("\(memberIndent)public let \(member.name.spelledAsMemberDeclarationName): \(member.type)")
 		}
 		lines.append("")
-		lines.append("\(memberIndent)public init(\(members.map { "\($0.name): @escaping \($0.type)" }.joined(separator: ", "))) {")
+		lines.append("\(memberIndent)public init(\(members.map { "\($0.name): \($0.isLetChild ? "" : "@escaping ")\($0.type)" }.joined(separator: ", "))) {")
 		for member in members {
 			lines.append("\(bodyIndent)self.\(member.name) = \(member.name)")
 		}
@@ -7902,7 +7920,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("")
 		lines.append("\(memberIndent)public \(carrierName == nil ? "" : "convenience ")init(\(ReservedName.noScopeArgumentLabel) \(builderParameter): @escaping \(noScopeType.asSource)) {")
 		if carrierName != nil {
-			lines.append("\(bodyIndent)self.init(\(members.map { "\($0.name.spelledAsArgumentLabel): { \(ignoredArguments[$0.name] ?? "")\($0.noScopeValue) }" }.joined(separator: ", ")))")
+			lines.append("\(bodyIndent)self.init(\(members.map { "\($0.name.spelledAsArgumentLabel): \($0.isLetChild ? $0.noScopeValue : "{ \(ignoredArguments[$0.name] ?? "")\($0.noScopeValue) }")" }.joined(separator: ", ")))")
 		} else {
 			for member in members {
 				lines.append("\(bodyIndent)self.\(member.name) = { _ in \(member.noScopeValue) }")

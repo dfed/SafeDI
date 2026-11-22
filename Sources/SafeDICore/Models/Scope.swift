@@ -2803,6 +2803,7 @@ struct SeamHoles: Sendable {
 			fields = member.fields
 			memberCall = (parentName, caseName)
 			isCalledInsideFunction = member.isCalledInsideFunction
+			isLetChild = member.isLetChild
 		}
 
 		let bindingName: String
@@ -2815,6 +2816,8 @@ struct SeamHoles: Sendable {
 		let memberCall: (parentName: String, caseName: String)
 		/// Whether the member is called at the top of the builder function of the binding's property, not before it.
 		let isCalledInsideFunction: Bool
+		/// Whether the struct is a carrier's `let` child, which the binding reads rather than calls.
+		let isLetChild: Bool
 
 		/// The line that binds the payload, each field read as
 		/// `valuesArguments(of:readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)` reads it.
@@ -2825,7 +2828,8 @@ struct SeamHoles: Sendable {
 		/// The value `line(readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)` binds.
 		func expression(readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property>, bindingNamesPassedByName: [String: String] = [:], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:]) -> String {
 			if case let .nested(_, enumType, _) = type, ReservedName.seamCarrier(ofEnum: enumType) != nil {
-				// A seam's carrier takes the level's values as its member's arguments.
+				// A seam's carrier takes the level's values as its member's arguments, and holds a level handed none as a `let`.
+				guard !isLetChild else { return "\(memberCall.parentName).\(memberCall.caseName)" }
 				return "\(memberCall.parentName).\(memberCall.caseName)(\(SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames, labeled: false)))"
 			}
 			let payload = "\(type.asSource)(\(SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)))"

@@ -304,7 +304,7 @@ extension SeamSignature.Hole.RouteStep {
 			values: values.map { Values(bindingName: $0.bindingName, type: $0.type, fields: $0.fields.map { $0.withoutPositions() }, bindingPath: $0.bindingPath) },
 			innerScope: innerScope,
 			leadsIntoFill: leadsIntoFill,
-			member: member.map { Member(bindingName: $0.bindingName, valuesType: $0.valuesType, fields: $0.fields.map { $0.withoutPositions() }, levelType: $0.levelType, bindingPath: $0.bindingPath, isCalledInsideFunction: $0.isCalledInsideFunction) },
+			member: member.map { Member(bindingName: $0.bindingName, valuesType: $0.valuesType, fields: $0.fields.map { $0.withoutPositions() }, levelType: $0.levelType, bindingPath: $0.bindingPath, isCalledInsideFunction: $0.isCalledInsideFunction, isLetChild: $0.isLetChild) },
 		)
 	}
 }

@@ -858,6 +858,7 @@ extension SeamSignature.Hole.RouteStep.Member: BinarySchemaMember {
 				BinaryLayoutField("levelType", \.levelType),
 				BinaryLayoutField("bindingPath", \.bindingPath),
 				BinaryLayoutField("isCalledInsideFunction", \.isCalledInsideFunction),
+				BinaryLayoutField("isLetChild", \.isLetChild),
 			],
 			unwrittenProperties: [],
 		)
@@ -871,6 +872,7 @@ extension SeamSignature.Hole.RouteStep.Member: BinarySchemaMember {
 			levelType: reader.read(),
 			bindingPath: reader.read(),
 			isCalledInsideFunction: reader.read(),
+			isLetChild: reader.read(),
 		)
 	}
 
@@ -881,6 +883,7 @@ extension SeamSignature.Hole.RouteStep.Member: BinarySchemaMember {
 		writer.write(levelType)
 		writer.write(bindingPath)
 		writer.write(isCalledInsideFunction)
+		writer.write(isLetChild)
 	}
 }
 
