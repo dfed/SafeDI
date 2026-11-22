@@ -33,6 +33,24 @@ public enum CodeTaskStart {
 			observer()
 		}
 	}
+
+	/// Orders the early starts, when set: by the tests, never by the tool, which check that the order in which the
+	/// early starts finish never reaches what `generate` reports.
+	@TaskLocal public static var ordering: (any CodeTaskStartOrdering)?
+}
+
+/// Holds each early start until its turn, and the roots’ code until every early start has finished, so a test can
+/// force the order in which the early starts finish. Set as `CodeTaskStart.ordering` by the tests, never by the tool.
+public protocol CodeTaskStartOrdering: Sendable {
+	/// Called once for each scope whose code starts early, as it starts.
+	func registerStart()
+	/// Awaited by each early start before it generates its code; `finish` is called once it has.
+	func waitForTurn() async -> Int
+	/// Called once the early start that `waitForTurn` returned `turn` to has generated its code, or thrown.
+	func finish(_ turn: Int) async
+	/// Awaited before the roots’ code is asked for: lets each registered start take its turn, in the order the test
+	/// chooses, and returns once every one has finished.
+	func runEveryStart() async
 }
 
 /// The code tasks the generators of a root’s dependency tree still hold once its code is generated. A task keeps the
@@ -47,7 +65,7 @@ public enum HeldCodeTasks {
 }
 
 /// The children a production body plans at once, each on a task of its own
-/// (`ScopeGenerator.dependencyTreeCode(of:leadingWhitespace:fillPlaceBindings:)`): a root the type key lays out starts no
+/// (`ScopeGenerator.childCode(of:codeGeneration:leadingWhitespace:fillPlaceBindings:)`): a root the type key lays out starts no
 /// code early, so its tree is planned in parallel this way. Each body's count is handed to `observer`, which the tests set,
 /// never the tool.
 public enum ConcurrentChildCode {

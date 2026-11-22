@@ -244,6 +244,22 @@ extension SeamSignature.Hole.Field: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		if reader.sharesSignatureValues {
+			self = try reader.readSharedByBytes { reader throws(BinaryDecodingError) in try Self(readingUnsharedFrom: &reader) }
+		} else {
+			try self.init(readingUnsharedFrom: &reader)
+		}
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		if writer.sharesSignatureValues {
+			writer.writeSharedByBytes { writeUnshared(to: &$0) }
+		} else {
+			writeUnshared(to: &writer)
+		}
+	}
+
+	private init(readingUnsharedFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
 			property: reader.read(),
 			access: reader.read(),
@@ -260,7 +276,7 @@ extension SeamSignature.Hole.Field: BinarySchemaMember {
 		)
 	}
 
-	func write(to writer: inout BinaryWriter) {
+	private func writeUnshared(to writer: inout BinaryWriter) {
 		writer.write(property)
 		writer.write(access)
 		writer.write(accessCause)
@@ -1346,6 +1362,22 @@ extension SeamSignature.Hole.UncarriedDeclaration.Reason: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		if reader.sharesSignatureValues {
+			self = try reader.readSharedByBytes { reader throws(BinaryDecodingError) in try Self(readingUnsharedFrom: &reader) }
+		} else {
+			try self.init(readingUnsharedFrom: &reader)
+		}
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		if writer.sharesSignatureValues {
+			writer.writeSharedByBytes { writeUnshared(to: &$0) }
+		} else {
+			writeUnshared(to: &writer)
+		}
+	}
+
+	private init(readingUnsharedFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		self = switch try reader.readTag() as Tag {
 		case .receivesPathScopeOnlyIfAvailable:
 			try .receivesPathScopeOnlyIfAvailable(type: reader.read())
@@ -1362,7 +1394,7 @@ extension SeamSignature.Hole.UncarriedDeclaration.Reason: BinarySchemaMember {
 		}
 	}
 
-	func write(to writer: inout BinaryWriter) {
+	private func writeUnshared(to writer: inout BinaryWriter) {
 		switch self {
 		case let .receivesPathScopeOnlyIfAvailable(type):
 			writer.writeTag(Tag.receivesPathScopeOnlyIfAvailable)

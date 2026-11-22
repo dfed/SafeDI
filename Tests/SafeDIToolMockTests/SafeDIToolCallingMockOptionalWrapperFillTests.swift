@@ -257,6 +257,7 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        fill_AnyHoleBuilder: ErasedInstantiator<Int, AnyHole>.Builder? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_session() -> Session {
@@ -267,7 +268,7 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		            func __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: LazilyInstantiated<Session>?) -> ErasedInstantiator<Int, AnyHole>.Builder {
 		                func __safeDI_holeBuilder(ticket: Int) -> Fill {
 		                    func __safeDI_screenBuilder() -> Screen {
-		                        Screen.__safeDI_mock(fill_AnyHoleBuilder: __safeDI_fill_AnyHoleBuilder_Screen(), session: session)
+		                        Screen.__safeDI_mock(fill_AnyHoleBuilder: fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session)
 		                    }
 		                    let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 		                    return Fill(ticket: ticket, session: session, screenBuilder: screenBuilder)
@@ -278,7 +279,7 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		                .init(holeBuilder: { values in __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: values.session) })
 		            }
 		            _ = Screen.__safeDI_Screen_mock_8C12403263F5CE07.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(__safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: session), session) } else { Screen.__safeDI_mock(fill_AnyHoleBuilder: __safeDI_fill_AnyHoleBuilder_Screen(), session: session) }
+		            return if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(fill_AnyHoleBuilder ?? __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: session), session) } else { Screen.__safeDI_mock(fill_AnyHoleBuilder: fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen(), session: session) }
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        return Root(screen: screen, session: session)
@@ -401,6 +402,7 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		    }
 
 		    static func mock(
+		        fill_AnyHoleBuilder: ErasedInstantiator<Int, AnyHole>.Builder? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
 		        func __safeDI_session() -> Session {
@@ -411,7 +413,7 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		            func __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: LazilyInstantiated<Session>) -> ErasedInstantiator<Int, AnyHole>.Builder {
 		                func __safeDI_holeBuilder(ticket: Int) -> Fill {
 		                    func __safeDI_screenBuilder() -> Screen {
-		                        Screen.__safeDI_mock(session: session, fill_AnyHoleBuilder: __safeDI_fill_AnyHoleBuilder_Screen())
+		                        Screen.__safeDI_mock(session: session, fill_AnyHoleBuilder: fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen())
 		                    }
 		                    let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
 		                    return Fill(ticket: ticket, session: session.instance, screenBuilder: screenBuilder)
@@ -422,7 +424,7 @@ struct SafeDIToolCallingMockOptionalWrapperFillTests: ~Copyable {
 		                .init(holeBuilder: { values in __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: values.session) })
 		            }
 		            _ = Screen.__safeDI_Screen_mock_83809BBB9344E886.self // If this line does not compile, compile the code SafeDI generates for module Feed into Feed: under Bazel, add Feed’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(session, __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: session)) } else { Screen.__safeDI_mock(session: session, fill_AnyHoleBuilder: __safeDI_fill_AnyHoleBuilder_Screen()) }
+		            return if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder(session, fill_AnyHoleBuilder ?? __safeDI_fill_AnyHoleBuilder_Screen_holeBuilder(session: session)) } else { Screen.__safeDI_mock(session: session, fill_AnyHoleBuilder: fill_AnyHoleBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_fill_AnyHoleBuilder_Screen()) }
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        return Root(screen: screen, session: session)

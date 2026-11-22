@@ -49,6 +49,33 @@ struct GeneratedCodeTests {
 	}
 
 	@Test
+	func spelled_writesSpelledTextInPlaceOfItsCode_whenPlanHoldsCodeSpelledBeforehand() {
+		let code = GeneratedCode.indented(.lines([.text("a"), .spelled(.indented(.text("b\n\nc"), by: "\t"))]), by: "  ")
+		#expect(code.spelled() == "  a\n  \tb\n  \tc")
+	}
+
+	@Test
+	func release_returnsWithoutNestingALevelsRelease_whenTaskDropsPlanAHundredThousandLevelsDeep() async {
+		// A concurrency thread's stack is half a megabyte on Apple platforms, which releasing a level from within the
+		// release of the level above it overflowed long before a hundred thousand levels.
+		let spelled = await Task.detached {
+			var code = GeneratedCode.text("x")
+			for level in 0..<100_000 {
+				switch level % 3 {
+				case 0:
+					code = .indented(code, by: "")
+				case 1:
+					code = .sequence([code])
+				default:
+					code = .lines([code])
+				}
+			}
+			return code.spelled()
+		}.value
+		#expect(spelled == "x")
+	}
+
+	@Test
 	func spelled_writesPlaceCodeAsItIs_whenPlanHoldsPlace() {
 		let place = PlacePlan(code: .text("x\ny"))
 		#expect(GeneratedCode.indented(.place(place), by: "\t").spelled() == "\tx\n\ty")
@@ -71,7 +98,7 @@ struct GeneratedCodeTests {
 
 	/// The text the emitter wrote before plans: every level indents its whole code again.
 	private static func reindentingEveryLevel(_ code: GeneratedCode) -> String {
-		switch code {
+		switch code.node {
 		case let .text(text):
 			text
 		case let .sequence(pieces):
@@ -82,6 +109,8 @@ struct GeneratedCodeTests {
 			indentation.isEmpty
 				? reindentingEveryLevel(code)
 				: GeneratedCodeText.indentingNonEmptyLines(of: reindentingEveryLevel(code), by: indentation)
+		case let .spelled(text):
+			text
 		case let .place(plan):
 			reindentingEveryLevel(plan.code)
 		}
@@ -89,7 +118,7 @@ struct GeneratedCodeTests {
 
 	private static func randomCode(depth: Int, using generator: inout SeededGenerator) -> GeneratedCode {
 		let tokens = ["x", "\n", "\r", "é", "\u{301}", " ", "\n\n", "\r\n"]
-		let kind = depth == 0 ? 0 : Int(generator.next() % 5)
+		let kind = depth == 0 ? 0 : Int(generator.next() % 6)
 		switch kind {
 		case 0:
 			let count = Int(generator.next() % 5)
@@ -100,6 +129,8 @@ struct GeneratedCodeTests {
 		case 3:
 			let indentations = ["", "\t", "    ", "\r"]
 			return .indented(randomCode(depth: depth - 1, using: &generator), by: indentations[Int(generator.next() % UInt64(indentations.count))])
+		case 4:
+			return .spelled(randomCode(depth: depth - 1, using: &generator))
 		default:
 			return .place(PlacePlan(code: randomCode(depth: depth - 1, using: &generator)))
 		}

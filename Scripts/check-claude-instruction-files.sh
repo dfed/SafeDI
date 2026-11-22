@@ -8,8 +8,14 @@ status=0
 characters() { python3 -c 'import sys; print(len(open(sys.argv[1], encoding="utf-8").read()))' "$1"; }
 words() { python3 -c 'import sys; print(len(open(sys.argv[1], encoding="utf-8").read().split()))' "$1"; }
 for file in .claude/rules/*.md; do
-	if ! { head -1 "$file" | grep -q '^---$' && sed -n '2,10p' "$file" | grep -q '^paths:'; }; then
+	# One process reads the file: under `pipefail`, a `sed … | grep -q` fails at random, because
+	# grep exits at its first match and sed, still writing, dies of the closed pipe.
+	if ! awk 'NR == 1 && $0 != "---" { exit 1 } NR >= 2 && NR <= 10 && /^paths:/ { found = 1 } END { exit !found }' "$file"; then
 		echo "$file: every rules file needs paths: frontmatter, or it loads in every session"
+		status=1
+	fi
+	if ! grep -qF "\`$(basename "$file")\`" CLAUDE.md && ! grep -qF "\`$file\`" CLAUDE.md; then
+		echo "$file: not named in CLAUDE.md's \"Where the rest lives\" table, which a session started outside the worktree reads its rules from"
 		status=1
 	fi
 	if (( $(characters "$file") > 32000 )); then
@@ -31,6 +37,12 @@ instruction_files=(CLAUDE.md .claude/rules/*.md)
 while IFS= read -r file; do instruction_files+=("$file"); done < <(git ls-files '*/CLAUDE.md')
 if grep -nE '(^|[[:space:]])@[A-Za-z0-9_.~/-]*(/|\.md)' "${instruction_files[@]}"; then
 	echo "an @path import loads eagerly with the importing file; name files in backticks instead"
+	status=1
+fi
+if ! python3 Scripts/check-instruction-symbols.py; then
+	status=1
+fi
+if ! python3 Scripts/check-instruction-load.py; then
 	status=1
 fi
 exit $status

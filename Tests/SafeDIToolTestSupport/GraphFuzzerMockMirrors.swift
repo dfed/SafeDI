@@ -495,22 +495,22 @@ struct GraphFuzzerMockMirrorModel {
 	}
 
 	/// Memoizes `receivedProperties(ofTypeNamed:)` as `ReceivedPropertiesCache` does: a walk that re-enters a scope
-	/// whose walk is unfinished takes nothing from it, and a result that lacks what such a scope receives is reused only
-	/// until that scope's walk finishes.
+	/// whose walk is unfinished takes nothing from it, and a result that lacks what such scopes receive is reused only
+	/// until the walk of any of them finishes.
 	struct ReceivedPropertiesCache {
 		var complete = [String: ReceivedProperties]()
 		var unfinishedWalkDepths = [String: Int]()
-		var incomplete = [String: (receivedProperties: ReceivedProperties, shallowestUnfinishedWalkDepth: Int)]()
+		var incomplete = [String: (receivedProperties: ReceivedProperties, unfinishedWalkDepthsReentered: Set<Int>)]()
 
 		/// The walk of `typeName` the cache answers, or `nil`: a finished walk, nothing from a walk still unfinished, with
-		/// its depth, or a walk that lacks what a scope still being walked receives, until that scope's walk finishes.
-		func walk(ofTypeNamed typeName: String) -> (receivedProperties: ReceivedProperties, shallowestUnfinishedWalkDepth: Int?)? {
+		/// its depth, or a walk that lacks what scopes still being walked receive, until the walk of any of them finishes.
+		func walk(ofTypeNamed typeName: String) -> (receivedProperties: ReceivedProperties, unfinishedWalkDepthsReentered: Set<Int>)? {
 			if let complete = complete[typeName] {
-				(complete, nil)
+				(complete, [])
 			} else if let unfinishedWalkDepth = unfinishedWalkDepths[typeName] {
-				(ReceivedProperties(), unfinishedWalkDepth)
+				(ReceivedProperties(), [unfinishedWalkDepth])
 			} else if let incomplete = incomplete[typeName] {
-				(incomplete.receivedProperties, incomplete.shallowestUnfinishedWalkDepth)
+				(incomplete.receivedProperties, incomplete.unfinishedWalkDepthsReentered)
 			} else {
 				nil
 			}
@@ -521,7 +521,7 @@ struct GraphFuzzerMockMirrorModel {
 		walkReceivedProperties(ofTypeNamed: typeName, cache: &cache).receivedProperties
 	}
 
-	private func walkReceivedProperties(ofTypeNamed typeName: String, cache: inout ReceivedPropertiesCache) -> (receivedProperties: ReceivedProperties, shallowestUnfinishedWalkDepth: Int?) {
+	private func walkReceivedProperties(ofTypeNamed typeName: String, cache: inout ReceivedPropertiesCache) -> (receivedProperties: ReceivedProperties, unfinishedWalkDepthsReentered: Set<Int>) {
 		if let cachedWalk = cache.walk(ofTypeNamed: typeName) {
 			cachedWalk
 		} else {
@@ -529,7 +529,7 @@ struct GraphFuzzerMockMirrorModel {
 		}
 	}
 
-	private func walkReceivedPropertiesUncached(ofTypeNamed typeName: String, cache: inout ReceivedPropertiesCache) -> (receivedProperties: ReceivedProperties, shallowestUnfinishedWalkDepth: Int?) {
+	private func walkReceivedPropertiesUncached(ofTypeNamed typeName: String, cache: inout ReceivedPropertiesCache) -> (receivedProperties: ReceivedProperties, unfinishedWalkDepthsReentered: Set<Int>) {
 		let walkDepth = cache.unfinishedWalkDepths.count
 		cache.unfinishedWalkDepths[typeName] = walkDepth
 		let propertiesToGenerate = propertiesToGenerate(ofTypeNamed: typeName)
@@ -538,10 +538,10 @@ struct GraphFuzzerMockMirrorModel {
 		var received = Set<GraphFuzzerMirrorProperty>()
 		var onlyIfAvailable = Set<GraphFuzzerMirrorProperty>()
 		var required = Set<GraphFuzzerMirrorProperty>()
-		var shallowestUnfinishedWalkDepth: Int?
+		var unfinishedWalkDepthsReentered = Set<Int>()
 		for case let .instantiated(_, childTypeName, _) in propertiesToGenerate {
 			let walkedChild = walkReceivedProperties(ofTypeNamed: childTypeName, cache: &cache)
-			shallowestUnfinishedWalkDepth = [shallowestUnfinishedWalkDepth, walkedChild.shallowestUnfinishedWalkDepth].compactMap(\.self).min()
+			unfinishedWalkDepthsReentered.formUnion(walkedChild.unfinishedWalkDepthsReentered)
 			let childReceived = walkedChild.receivedProperties.received
 			let childOnlyIfAvailable = walkedChild.receivedProperties.onlyIfAvailable
 			// A forwarded `x: X` fulfills an `x: X?` beneath it, as a declared one does.
@@ -580,15 +580,16 @@ struct GraphFuzzerMockMirrorModel {
 		}
 		cache.unfinishedWalkDepths[typeName] = nil
 		if !cache.incomplete.isEmpty {
-			cache.incomplete = cache.incomplete.filter { $0.value.shallowestUnfinishedWalkDepth != walkDepth }
+			cache.incomplete = cache.incomplete.filter { !$0.value.unfinishedWalkDepthsReentered.contains(walkDepth) }
 		}
 		let receivedProperties = ReceivedProperties(received: received, onlyIfAvailable: onlyIfAvailable.subtracting(required))
-		if let shallowestUnfinishedWalkDepth, shallowestUnfinishedWalkDepth < walkDepth {
-			cache.incomplete[typeName] = (receivedProperties, shallowestUnfinishedWalkDepth)
-			return (receivedProperties, shallowestUnfinishedWalkDepth)
+		unfinishedWalkDepthsReentered.remove(walkDepth)
+		if !unfinishedWalkDepthsReentered.isEmpty {
+			cache.incomplete[typeName] = (receivedProperties, unfinishedWalkDepthsReentered)
+			return (receivedProperties, unfinishedWalkDepthsReentered)
 		} else {
 			cache.complete[typeName] = receivedProperties
-			return (receivedProperties, nil)
+			return (receivedProperties, [])
 		}
 	}
 
