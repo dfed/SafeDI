@@ -5331,6 +5331,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		).map { $0.spelled() }
 	}
 
+	// D1 lane hook (lane C): the mock lowering reads a call's fills as the emitter generates them, storing nothing.
+	/// The code of the fills with `propertiesGeneratedLater` and `fillPlaceBindings`, as
+	/// `prepareFillCode(propertiesGeneratedLater:fillPlaceBindings:)` generates it, without keeping it in `fillCodeByKey`.
+	func mockLoweringFillCode(propertiesGeneratedLater: Set<Property>, fillPlaceBindings: FillPlaceBindings) async throws -> [String] {
+		try await generateProperties(
+			propertiesGeneratedLater: propertiesGeneratedLater,
+			enclosingFunctionNames: [:],
+			leadingMemberWhitespace: "",
+			fillPlaceBindings: fillPlaceBindings,
+		).map { $0.spelled() }
+	}
+
 	/// The code of the fills `prepareFillCode(propertiesGeneratedLater:fillPlaceBindings:)` generated with
 	/// `propertiesGeneratedLater` and `fillPlaceBindings`.
 	func fillCode(propertiesGeneratedLater: Set<Property>, fillPlaceBindings: FillPlaceBindings) -> [String] {

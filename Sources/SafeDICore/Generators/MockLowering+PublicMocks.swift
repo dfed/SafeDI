@@ -24,6 +24,12 @@ extension ScopeGenerator {
 	func lowerPublicMockRoot(of _: Instantiable, context _: MockContext) -> MockLowering.Result {
 		.unsupported(.publicMockRoot)
 	}
+
+	/// The builders `mock()` takes optional for the places its calls of other modules' public mocks fill, from the root's
+	/// children, `orderedChildren`, in generation order, or the first rule the calls meet.
+	func filledCallBuilders(of _: [OrderedChild]) -> MockLowering.Lowering<MockLowering.FilledCallBuilders> {
+		.lowered(.none)
+	}
 }
 
 /// Stage D1's lowering of lane C's family: public mock roots, the sites of their holes, the payloads and members bound before
@@ -78,6 +84,33 @@ extension MockLowering {
 				"\(indent)\(call.guardLine(for: calledType))",
 				"\(indent)let \(property.label) = \(calledType.asSource).\(call.functionName)(\(ReservedName.mockOverridesParameterName): \(nodePath))",
 			]
+		}
+	}
+}
+
+extension MockLowering {
+	/// The builders `mock()` takes optional for the places its root-level calls of other modules' public mocks fill
+	/// (`ScopeGenerator.filledCallBuilders(of:)`), and the calls, in generation order, each taken by the walk as it reaches it.
+	struct FilledCallBuilders {
+		/// A call that fills builders, with the `propertiesGeneratedLater` its fills are generated with.
+		struct Call {
+			let generator: ScopeGenerator
+			let propertiesGeneratedLater: Set<Property>
+		}
+
+		/// The calls the walk has not reached yet.
+		var calls: [Call]
+		/// Each builder's label and its declaration, in label order.
+		let parameters: [(label: String, declaration: String)]
+		/// The builders each call hands its called builders, which its fills are generated with.
+		let fillPlaceBindings: ScopeGenerator.FillPlaceBindings
+
+		/// No call fills a builder.
+		static let none = FilledCallBuilders(calls: [], parameters: [], fillPlaceBindings: ScopeGenerator.FillPlaceBindings(bindingsByGenerator: [:]))
+
+		/// The declarations of the builders, one per line at `indent`, each followed by a comma.
+		func parameterLines(indent: String) -> [String] {
+			parameters.map { "\(indent)\($0.declaration)" }
 		}
 	}
 }
