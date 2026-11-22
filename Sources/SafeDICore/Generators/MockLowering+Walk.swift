@@ -267,6 +267,9 @@ extension MockLowering {
 		// D1 lane hook (lane C): a public mock builds each configured node with its type's construction function.
 		/// Whether the walk lowers a public mock, whose configured nodes call their types' construction functions.
 		var buildsPublicMock = false
+		// D1 lane hook (lane C): the bindings the node around the walk is passed by name, which a payload bound inside its
+		// builder function reads (`ScopeGenerator.MockParameterNode.ValuesBinding.line`).
+		var enclosingBindingNamesPassedByName = [String: String]()
 		// D1 lane hook (lane B): the extractor of the `@Sendable` builder function the walk is inside, and the names of each
 		// level it is in, from which such a function's locals are claimed (`MockLowering+Wrappers.swift`).
 		var sendableOverrideExtractor: ScopeGenerator.SendableOverrideExtractor?
@@ -645,8 +648,19 @@ extension MockLowering {
 			let enclosingExtractor = startsExtraction ? startExtraction(inFunctionNamed: node.functionName) : sendableOverrideExtractor
 			let wasInsideSendableFunction = isInsideSendableFunction
 			isInsideSendableFunction = node.requiresSendable
+			// D1 lane hook (lane C): the payloads of the cases nested by type that lead through the node to a place, bound before
+			// its builder function, after a wrapper's override locals and before a constant's, and the members a `@Sendable`
+			// function calls at its top (`MockLowering+PublicMocks.swift`).
+			let valuesBindingLines = generator.valuesBindingsBeforeBuilderFunction.map { "\(indent)\($0.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: [:]))" }
+			if !isWrapped {
+				lines.append(contentsOf: valuesBindingLines)
+			}
 			let declarationIndex = lines.count
+			if isWrapped {
+				lines.append(contentsOf: valuesBindingLines)
+			}
 			lines.append(node.builderFunctionDeclarationLine(indent: indent))
+			lines.append(contentsOf: generator.memberCallsInsideBuilderFunction.map { "\(indent)\(ScopeGenerator.standardIndent)\($0.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: [:]))" })
 			lines.append(contentsOf: rebindingLines)
 			lines.append(contentsOf: node.receiverBindingLines(indent: indent))
 			let insertedAncestor = ancestorTypes.insert(cycleNodeKey).inserted
@@ -658,6 +672,8 @@ extension MockLowering {
 			let enclosingOverridePathReachable = overridePathReachable
 			let enclosingRenames = renames
 			renames = functionRenames
+			let bindingNamesPassedByNameAround = enclosingBindingNamesPassedByName
+			enclosingBindingNamesPassedByName = bindingNamesPassedByName
 			parentConcreteType = instantiable.concreteInstantiable.asSource
 			overridePathReachable = overrideReachable
 			// D1 lane hook (lane D): the configured types around the node's children.
@@ -674,6 +690,7 @@ extension MockLowering {
 			parentConcreteType = enclosingParentConcreteType
 			overridePathReachable = enclosingOverridePathReachable
 			renames = enclosingRenames
+			enclosingBindingNamesPassedByName = bindingNamesPassedByNameAround
 			labels = siblingLabels
 			ancestorDeclarationsByLabel[property.label]?.removeLast()
 			bodyLabels.removeLast()
@@ -725,7 +742,8 @@ extension MockLowering {
 			lines.append(contentsOf: endLines)
 			if isLoopMember {
 				// The lines after the construction and the function's closing brace bind the member.
-				lastLoopMemberLineCounts = LoopMemberLineCounts(prelude: preludeLines.count, binding: endLines.count - 2)
+				// D1 lane hook (lane C): a member's payloads are bound in its prelude, before every member's function.
+				lastLoopMemberLineCounts = LoopMemberLineCounts(prelude: preludeLines.count + (isWrapped ? valuesBindingLines.count : 0), binding: endLines.count - 2)
 			}
 			return .lowered(configuredNode)
 		}
