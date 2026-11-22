@@ -545,8 +545,10 @@ extension ScopeGenerator {
 	/// The parameter a public mock takes for a node it builds for a received dependency: the node's value, optional. A
 	/// lazily instantiated node is taken as the wrapper its tree receives, as the type's initializer takes it, so a caller
 	/// hands its own wrapper and nothing is built until the tree reads it.
-	static func publicMockParameterProperty(of node: MockParameterNode) -> Property {
-		Property(label: node.propertyLabel, typeDescription: .optional(node.typeDescription.unwrapped))
+	// D1 lane hook (lane C): read from the node's property, whose label and type the node's are, which the mock lowering
+	// names too.
+	static func publicMockParameterProperty(of property: Property) -> Property {
+		Property(label: property.label, typeDescription: .optional(property.typeDescription.unwrapped))
 	}
 }
 
@@ -814,8 +816,9 @@ extension ScopeGenerator {
 			flatReceivedParameters: zip(parameters.flatReceivedProperties, parameterNames.flatReceivedNames).map { (property: $0, name: $1) },
 			flatReceivedParameterMockDefaults: parameters.flatReceivedParameterMockDefaults,
 			flatUncoveredParameters: parameters.flatUncoveredParameters,
+			// D1 lane hook (lane C): a promoted node is passed as its property, which the mock lowering can name too.
 			promotedNodes: publicMockPromotedNodes(of: instantiable, in: treePropertyNodes).map { node in
-				(node: node, name: disambiguatedLabel(for: node, labelMap: parameters.rootLabelMap))
+				(property: node.property, name: disambiguatedLabel(for: node, labelMap: parameters.rootLabelMap))
 			},
 			onlyIfAvailableOverrides: parameterNames.onlyIfAvailableOverrides,
 			wrapperParameterByInstance: parameters.publicMockWrapperParameterByInstance,
@@ -901,17 +904,19 @@ extension ScopeGenerator {
 		flatReceivedParameters: [(property: Property, name: String)],
 		flatReceivedParameterMockDefaults: [Property: FlatParameterMockDefault],
 		flatUncoveredParameters: [MockRootParameters.UncoveredParameter],
-		promotedNodes: [(node: MockParameterNode, name: String)],
+		promotedNodes: [(property: Property, name: String)],
 		onlyIfAvailableOverrides: [OnlyIfAvailableOverride],
 		wrapperParameterByInstance: [Property: Property],
 		parameterTree: [MockTreeItem],
 		builders shapedBuilders: DependencyTreeGenerator.ShapedBuilders?,
 		hasOverrides: Bool,
 		typesDeclaredEscaping: Set<TypeDescription>,
+		// D1 lane hook (lane C): the mock lowering, which reads no parameter tree, hands the receivers' modules it finds.
+		receiverModulesByLabel givenReceiverModulesByLabel: [String: Set<String?>]? = nil,
 		context: PublicMockContext,
 	) -> PublicMockPlan {
 		let typeName = instantiable.concreteInstantiable.asSource
-		let receiverModulesByLabel = receiverModules(in: parameterTree, context: context)
+		let receiverModulesByLabel = givenReceiverModulesByLabel ?? receiverModules(in: parameterTree, context: context)
 		// The cause of each access computed, by type and receive label, which a parameter of that access records.
 		var accessCauses = [String: TypeAccessProof.Cause]()
 		func access(of type: TypeDescription, receivedAs label: String?) -> AccessLevel {
@@ -1044,19 +1049,19 @@ extension ScopeGenerator {
 		// default-valued or forwarded parameter of the mocked type, or another promoted dependency, such as another
 		// `LazilyInstantiated` of the label, which takes its label too. It then takes the name its binding is named apart by.
 		let leadingParameterNames = Set(leadingParameters.map(\.name))
-		func labelOrName(of node: MockParameterNode, named name: String) -> String {
-			node.property.propertyType.isLazilyInstantiated ? node.propertyLabel : name
+		func labelOrName(of property: Property, named name: String) -> String {
+			property.propertyType.isLazilyInstantiated ? property.label : name
 		}
 		var promotedParameterCountByName = [String: Int]()
-		for (node, name) in promotedNodes {
-			promotedParameterCountByName[labelOrName(of: node, named: name), default: 0] += 1
+		for (property, name) in promotedNodes {
+			promotedParameterCountByName[labelOrName(of: property, named: name), default: 0] += 1
 		}
-		for (node, name) in promotedNodes {
-			let parameterProperty = publicMockParameterProperty(of: node)
-			let preferredName = labelOrName(of: node, named: name)
+		for (property, name) in promotedNodes {
+			let parameterProperty = publicMockParameterProperty(of: property)
+			let preferredName = labelOrName(of: property, named: name)
 			let parameterName = leadingParameterNames.contains(preferredName) || promotedParameterCountByName[preferredName, default: 0] > 1 ? name : preferredName
-			promotedParameterNames[node.property] = parameterName
-			optionalReceivedParameters.append(PublicMockParameter(name: parameterName, type: parameterProperty.typeDescription, typeSource: parameterProperty.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: parameterProperty.typeDescription, receivedAs: node.propertyLabel), accessCause: cause(of: parameterProperty.typeDescription, receivedAs: node.propertyLabel), role: .received(parameterProperty, isRequired: false), isBuiltWhenNil: true, builtWrapper: node.property.propertyType.isLazilyInstantiated ? node.property : nil))
+			promotedParameterNames[property] = parameterName
+			optionalReceivedParameters.append(PublicMockParameter(name: parameterName, type: parameterProperty.typeDescription, typeSource: parameterProperty.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: parameterProperty.typeDescription, receivedAs: property.label), accessCause: cause(of: parameterProperty.typeDescription, receivedAs: property.label), role: .received(parameterProperty, isRequired: false), isBuiltWhenNil: true, builtWrapper: property.propertyType.isLazilyInstantiated ? property : nil))
 		}
 		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
 			// A value the tree receives lazily is taken as the wrapper it receives (`ScopeGenerator.publicMockWrapperParameters`).

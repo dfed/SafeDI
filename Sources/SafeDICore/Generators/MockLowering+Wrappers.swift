@@ -82,21 +82,23 @@ extension MockLowering {
 	/// The value a node hands its construction for each argument of `initializer` a dependency in `dependencies`
 	/// fulfills, in the initializer's order: the dependency's label, or the instance of the lazy wrapper in scope where a
 	/// received dependency is read by value through it (`lazilyInstantiatedInstanceProperties`), or `nil` for a receive
-	/// only if available that nothing provides where the node is built (`unavailableProperties`).
+	/// only if available that nothing provides where the node is built (`unavailableProperties`), each read under the name
+	/// the node is passed it by (`bindingNamesPassedByName`).
 	static func argumentValues(
 		of initializer: Initializer,
 		given dependencies: [Dependency],
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		unavailableProperties: Set<Property>,
+		bindingNamesPassedByName: [String: String] = [:],
 	) -> [(label: String, value: String)] {
 		initializer.arguments.compactMap { argument in
 			guard let dependency = dependencies.first(where: argument.isFulfilled(by:)) else { return nil }
 			let value = if dependency.source == .received(onlyIfAvailable: true), unavailableProperties.contains(dependency.property) {
 				"nil"
 			} else if dependency.source.isReceived, lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty) {
-				"\(argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+				"\(bindingNamesPassedByName[argument.innerLabel] ?? argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 			} else {
-				argument.innerLabel
+				bindingNamesPassedByName[argument.innerLabel] ?? argument.innerLabel
 			}
 			return (label: argument.label.spelledAsArgumentLabel, value: value)
 		}
@@ -111,17 +113,24 @@ extension MockLowering {
 
 	/// The binding of a wrapper whose type is `typeDescription`, named `bindingName`, around the builder function named
 	/// `functionName`, which takes `forwardedProperties` from the wrapper's argument, then `cycleParameterArguments`; the
-	/// lines after the first at `indent`.
+	/// lines after the first at `indent`. A rename of the wrapper, `declaredProperty`, is bound as its own declaration.
 	static func wrapperBindingLines(
 		of typeDescription: TypeDescription,
 		named bindingName: String,
+		declaredAs declaredProperty: Property? = nil,
 		handing functionName: String,
 		forwardedProperties: [Property],
 		cycleParameterArguments: [String] = [],
 		indent: String,
 	) -> [String] {
 		let unwrappedType = typeDescription.unwrapped
-		let binding = unwrappedType.isConstructedByAnnotation ? "\(bindingName): \(unwrappedType.asSource)" : bindingName
+		let binding = if let declaredProperty {
+			declaredProperty.asSource
+		} else if unwrappedType.isConstructedByAnnotation {
+			"\(bindingName): \(unwrappedType.asSource)"
+		} else {
+			bindingName
+		}
 		let wrapperType = unwrappedType.spelledForConstruction
 		guard !forwardedProperties.isEmpty || !cycleParameterArguments.isEmpty else {
 			return ["\(indent)let \(binding) = \(wrapperType)(\(functionName))"]
