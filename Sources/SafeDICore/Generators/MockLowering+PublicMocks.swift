@@ -118,7 +118,11 @@ extension ScopeGenerator {
 		guard !calls.isEmpty else { return .lowered(.none) }
 		// Whether a type the tree builds inline may be another module's public mock, whose places read the builders: a module
 		// SafeDI knows no name of counts as another.
-		let ownModuleName: String? = if case let .root(instantiable, _) = scopeData { instantiable.moduleName } else { nil }
+		let ownModuleName: String? = if case let .root(instantiable, _) = scopeData {
+			instantiable.moduleName
+		} else {
+			nil
+		}
 		func isPublicMockOfAnotherModule(_ instantiable: Instantiable) -> Bool {
 			instantiable.generateMock == .public && (ownModuleName == nil || instantiable.moduleName != ownModuleName)
 		}
