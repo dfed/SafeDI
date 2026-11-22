@@ -48,6 +48,8 @@ extension ScopeGenerator {
 		var walk = MockLowering.Walk(cycleEdges: context.cycleEdges, rootLabels: signature.labels, uncoveredProperties: signature.uncoveredProperties)
 		// D1 lane hook (lane D): the defaults a type's hand-written mock declares, which its configuration's fields take.
 		walk.handWrittenMockDefaultParameters = context.handWrittenMockDefaultParameters
+		// D1 lane hook (lane C): a public mock builds each configured node with its type's construction function.
+		walk.buildsPublicMock = instantiable.generateMock == .public
 		// D1 lane hook (lane C): the builders `mock()` takes optional for the places its calls fill.
 		switch filledCallBuilders(of: orderedChildren, context: context) {
 		case let .lowered(filledCallBuilders):
@@ -91,6 +93,10 @@ extension ScopeGenerator {
 		// D1 lane hook (lane C): every call that fills builders is a node the walk reached.
 		guard walk.filledCallBuilders.calls.isEmpty else {
 			return .unsupported(.fill)
+		}
+		// D1 lane hook (lane C): a public mock's tiers, overrides and guard (`MockLowering+PublicMocks.swift`).
+		guard instantiable.generateMock != .public else {
+			return publicMockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: walk.rootRenames, configurations: walk.configurationRecords, context: context)
 		}
 		return .lowered(Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, builderParameterLines: walk.filledCallBuilders.parameterLines(indent: bodyIndent), rootRenames: walk.rootRenames, context: context), configurations: walk.configurationRecords)
 	}
@@ -259,6 +265,9 @@ extension MockLowering {
 		var isBeneathRepeatedConfiguredAncestor = false
 		// D1 lane hook (lane C): the builders `mock()` takes optional for the places its calls fill, and the calls not reached yet.
 		var filledCallBuilders = FilledCallBuilders.none
+		// D1 lane hook (lane C): a public mock builds each configured node with its type's construction function.
+		/// Whether the walk lowers a public mock, whose configured nodes call their types' construction functions.
+		var buildsPublicMock = false
 		// D1 lane hook (lane B): the extractor of the `@Sendable` builder function the walk is inside, and the names of each
 		// level it is in, from which such a function's locals are claimed (`MockLowering+Wrappers.swift`).
 		var sendableOverrideExtractor: ScopeGenerator.SendableOverrideExtractor?
@@ -692,12 +701,28 @@ extension MockLowering {
 			// D1 lane hook (lane D): a node whose type repeats a configured node around it, or beneath one, records nothing.
 			if configuredNode.hasConfiguration, configurationEntry.recordsConfiguration {
 				let parentConcreteType = instantiable.concreteInstantiable.asSource
-				configurationRecords.append(ConfigurationRecord(
+				var record = ConfigurationRecord(
 					of: configuredNode,
 					children: children.filter { child in child.concreteType.map { !isPruned($0, beneath: parentConcreteType) } ?? true },
-				))
+				)
+				// D1 lane hook (lane C): a public mock's node records the construction its type's construction function makes.
+				if buildsPublicMock {
+					record.publicConstruction = MockLowering.publicConstructionRecord(of: configuredNode, children: children)
+				}
+				configurationRecords.append(record)
 			}
-			let endLines = configuredNode.builderFunctionEndLines(overrideRead: functionOverrideRead, indent: indent)
+			// D1 lane hook (lane C): a public mock's configured node calls its type's construction function.
+			let endLines: [String]
+			if buildsPublicMock, configuredNode.hasConfiguration {
+				switch configuredNode.publicBuilderFunctionEndLines(children: children, overrideRead: functionOverrideRead, indent: indent) {
+				case let .lowered(lowered):
+					endLines = lowered
+				case let .unsupported(rule):
+					return .unsupported(rule)
+				}
+			} else {
+				endLines = configuredNode.builderFunctionEndLines(overrideRead: functionOverrideRead, indent: indent)
+			}
 			lines.append(contentsOf: endLines)
 			if isLoopMember {
 				// The lines after the construction and the function's closing brace bind the member.
