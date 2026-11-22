@@ -13,9 +13,11 @@
 # expected group names fails the script, so the list keeps in step with the matrix. OUTPUT receives the report and
 # what it was made from (coverage.lcov, changed-lines.txt, head.txt, missing-groups.txt, failed-groups.txt).
 #
-# The report is advisory and exits non-zero only when it cannot make one. It reads Linux alone, so it lists a line
-# only macOS executes, which "Check Line Coverage on Linux" counts as executed; and it reads changed lines alone, so
-# it does not see an unchanged line whose only test a change removed. That check stays the gate for both.
+# Exits 1 when it lists a line, and when it cannot make a report. It was advisory once, and a run that listed lines
+# stayed green, so a change went to a pull request with a line no test executed. It reads Linux alone, so it lists,
+# and fails on, a line only macOS executes, which "Check Line Coverage on Linux" counts as executed: a change to
+# such a line is judged by that check, and its Verify run fails here by design. It reads changed lines alone, so it
+# does not see an unchanged line whose only test a change removed. That check stays the gate for both.
 set -euo pipefail
 
 bundle=$1
@@ -106,5 +108,6 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
   cat "$output/report.md" >> "$GITHUB_STEP_SUMMARY"
 fi
 if [ "$status" -eq 1 ]; then
-  echo "::warning::$(tail -1 "$output/changed-lines.txt")"
+  echo "::error::$(tail -1 "$output/changed-lines.txt"). Cover each listed line with a test or remove it. A line only macOS executes is listed too: \"Check Line Coverage on Linux\" judges that one."
+  exit 1
 fi
