@@ -7121,7 +7121,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the level function capture check judges over the public mock corpus (`Corpus.levelFunctionCaptureCounts`).
 	/// Pins: derived on CI.
-	static let publicMockCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 631, judgedWithNamed: 388, named: 1_008, conversions: 0, fills: 436)
+	static let publicMockCorpusLevelFunctionCaptureCounts = GraphFuzzerLevelFunctionCaptureCounts(judged: 641, judgedWithNamed: 422, named: 1_129, conversions: 0, fills: 528)
 
 	/// What the retention oracle judges over the public mock corpus (`Corpus.retentionCounts`). Pins: derived on CI.
 	static let publicMockCorpusRetentionCounts = GraphFuzzerRetentionCounts(judged: 716, judgedDrawingRetentionShape: 136, judgedThroughHandWrittenBuilder: 96, unpairedExperiments: 0)
@@ -8755,7 +8755,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Pinned by `publicMockSmokeAndKnownIssueFixtureHash`.
 	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 37, 43, 46, 59, 98, 142, 151, 189, 197, 208, 215, 253, 551, 555, 836, 1_339, 1_649, 2_687, 2_840]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x4C606B32622B9A6E
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x76097F9BB74E8DE4
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
