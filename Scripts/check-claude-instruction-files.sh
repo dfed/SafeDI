@@ -8,7 +8,9 @@ status=0
 characters() { python3 -c 'import sys; print(len(open(sys.argv[1], encoding="utf-8").read()))' "$1"; }
 words() { python3 -c 'import sys; print(len(open(sys.argv[1], encoding="utf-8").read().split()))' "$1"; }
 for file in .claude/rules/*.md; do
-	if ! { head -1 "$file" | grep -q '^---$' && sed -n '2,10p' "$file" | grep -q '^paths:'; }; then
+	# One process reads the file: under `pipefail`, a `sed … | grep -q` fails at random, because
+	# grep exits at its first match and sed, still writing, dies of the closed pipe.
+	if ! awk 'NR == 1 && $0 != "---" { exit 1 } NR >= 2 && NR <= 10 && /^paths:/ { found = 1 } END { exit !found }' "$file"; then
 		echo "$file: every rules file needs paths: frontmatter, or it loads in every session"
 		status=1
 	fi
