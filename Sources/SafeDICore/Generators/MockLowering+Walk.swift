@@ -34,13 +34,22 @@ extension ScopeGenerator {
 		guard unavailableOptionalProperties.isEmpty, receivedOnlyByPublicMockCalls.isEmpty else {
 			return .unsupported(.onlyIfAvailable)
 		}
+		// D1 lane hook (lane D): the parameters `mock()` takes before its overrides (`lowerRootSignature(of:context:)`).
+		let signature: MockLowering.RootSignature
+		switch lowerRootSignature(of: instantiable, context: context) {
+		case let .lowered(lowered):
+			signature = lowered
+		case let .unsupported(rule):
+			return .unsupported(rule)
+		}
 		let bodyIndent = "\(Self.standardIndent)\(Self.standardIndent)"
-		var walk = MockLowering.Walk(cycleEdges: context.cycleEdges)
+		// No node binds a parameter’s label again, at any depth: the emitter names the parameter apart.
+		var walk = MockLowering.Walk(cycleEdges: context.cycleEdges, ancestorLabels: signature.labels)
 		var bindingLines = [String]()
 		let nodes: [MockLowering.TreeNode]
 		switch await walk.children(
 			of: orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator),
-			inScope: [],
+			inScope: signature.properties,
 			path: ReservedName.mockOverridesParameterName,
 			indent: bodyIndent,
 			lines: &bindingLines,
@@ -50,22 +59,22 @@ extension ScopeGenerator {
 		case let .unsupported(rule):
 			return .unsupported(rule)
 		}
-		// Every dependency of the mocked type is a node of its tree, so `mock()` takes nothing but the overrides.
-		let nodeProperties = Set(nodes.map(\.property))
-		guard instantiable.dependencies.allSatisfy({ nodeProperties.contains($0.property) }) else {
+		// Every dependency of the mocked type is a node of its tree or a parameter of `mock()`.
+		let providedProperties = Set(nodes.map(\.property)).union(signature.properties)
+		guard instantiable.dependencies.allSatisfy({ providedProperties.contains($0.property) }) else {
 			return .unsupported(.flatParameter)
 		}
 		// A configuration `Sendable`-typed makes the overrides' storage `Sendable`, which lane B's family lowers.
 		guard !nodes.contains(where: { $0.builtNode.map { $0.hasConfiguration && context.sendableConfigurationTypeNames.contains($0.instantiable.concreteInstantiable.asSource) } ?? false }) else {
 			return .unsupported(.wrapper)
 		}
-		return .lowered(Self.mockWithTree(of: instantiable, nodes: nodes, bindingLines: bindingLines, context: context), configurations: walk.configurationRecords)
+		return .lowered(Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, context: context), configurations: walk.configurationRecords)
 	}
 
 	/// The first rule the parameters and construction of the mocked type itself meet that the walk does not lower yet.
 	private static func unsupportedRuleOfMockedType(_ instantiable: Instantiable) -> MockLowering.Rule? {
-		guard instantiable.mockInitializer == nil, instantiable.customMockName == nil, let initializer = instantiable.initializer else { return .handWrittenMock }
-		guard !initializer.arguments.contains(where: \.hasDefaultValue) else { return .defaultValuedParameter }
+		// The initializer's default-valued arguments are parameters of `mock()` (`lowerRootSignature(of:context:)`).
+		guard instantiable.mockInitializer == nil, instantiable.customMockName == nil, instantiable.initializer != nil else { return .handWrittenMock }
 		for dependency in instantiable.dependencies {
 			switch dependency.source {
 			case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential):
@@ -81,24 +90,33 @@ extension ScopeGenerator {
 			case .aliased(_, _, onlyIfAvailable: false):
 				break
 			case .forwarded:
-				return .flatParameter
+				// A parameter of `mock()` (`lowerRootSignature(of:context:)`).
+				break
 			}
 		}
 		return nil
 	}
 
 	/// The mock of `instantiable` whose tree's top-level nodes are `nodes`, in generation order, bound by `bindingLines`:
-	/// its `SafeDIOverrides`, and `mock()`, which binds each node and returns the type built from them.
-	private static func mockWithTree(of instantiable: Instantiable, nodes: [MockLowering.TreeNode], bindingLines: [String], context: MockContext) -> String {
+	/// its `SafeDIOverrides` where a node has an override, and `mock()`, which takes `signature`'s parameters and the
+	/// overrides, binds each node and returns the type built from them.
+	private static func mockWithTree(of instantiable: Instantiable, signature: MockLowering.RootSignature, nodes: [MockLowering.TreeNode], bindingLines: [String], context: MockContext) -> String {
 		let indent = standardIndent
 		let bodyIndent = "\(indent)\(indent)"
 		let typeName = instantiable.concreteInstantiable.asSource
 		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
+		// A mock that takes nothing and binds nothing is one call of the type's construction.
+		guard !nodes.isEmpty || !signature.parameters.isEmpty else { return mockWithoutTree(of: instantiable, context: context) }
 		var lines = ["extension \(typeName) {"]
-		lines.append(contentsOf: overridesStruct(of: nodes.compactMap(\.overridesField), sendableConfigurationTypeNames: context.sendableConfigurationTypeNames, indent: indent))
-		lines.append("")
+		let overridesFields = nodes.compactMap(\.overridesField)
+		var parameterLines = signature.parameterLines(indent: bodyIndent)
+		if !overridesFields.isEmpty {
+			lines.append(contentsOf: overridesStruct(of: overridesFields, sendableConfigurationTypeNames: context.sendableConfigurationTypeNames, indent: indent))
+			lines.append("")
+			parameterLines.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): \(ReservedName.mockOverridesTypeName) = .init()")
+		}
 		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
-		lines.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): \(ReservedName.mockOverridesTypeName) = .init()")
+		lines.append(parameterLines.joined(separator: ",\n"))
 		lines.append("\(indent)) -> \(instantiable.concreteInstantiable.asSource) {")
 		lines.append(contentsOf: bindingLines)
 		let argumentList = instantiable.initializer?.createMockInitializerArgumentList(given: instantiable.dependencies) ?? ""

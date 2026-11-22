@@ -68,6 +68,7 @@ public enum MockLoweringShadow {
 		of roots: [MockLowering.LoweredRoot],
 		emittedConfigurationCode _: String?,
 		mockConditionalCompilation _: String?,
+		sendableConfigurationTypeNames _: Set<String>,
 	) -> [Comparison] {
 		var comparisons = roots.map { root in
 			Comparison(mockedType: root.mockedType.asSource, outcome: .unsupported(.configurationStructs), subject: .mergedCode)
@@ -186,7 +187,7 @@ extension ScopeGenerator {
 
 	/// The mock of a type whose `mock()` takes no parameter and builds nothing but the type: one call of its hand-written
 	/// mock, its `instantiate()` or its initializer.
-	private static func mockWithoutTree(of instantiable: Instantiable, context: MockContext) -> String {
+	static func mockWithoutTree(of instantiable: Instantiable, context: MockContext) -> String {
 		let typeName = instantiable.concreteInstantiable.asSource
 		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
 		let returnType = (instantiable.mockCallReturnType ?? instantiable.concreteInstantiable).asSource
