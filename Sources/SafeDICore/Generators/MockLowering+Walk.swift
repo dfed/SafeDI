@@ -547,6 +547,9 @@ extension MockLowering {
 			guard labels.insert(bindingName).inserted else { return .unsupported(.siblingLabelCollision) }
 			// D1 lane hook (lane B): a closer passes the function's cycle parameters (`MockLowering+CycleParameters.swift`).
 			guard let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: scope) else { return .unsupported(.onlyIfAvailable) }
+			// D1 lane hook (lane D): a cycle parameter whose label is named apart is passed its rename, which the lowering's
+			// arguments do not read yet.
+			guard !generator.cycleParameters.contains(where: { renames[$0.property.label] != nil }) else { return .unsupported(.cycle) }
 			// D1 lane hook (lane B): a closer on a loop of builders declares the `_received` function its wrappers hand, with
 			// the loop's functions, and is bound with the loop's wrappers where its level binds it (`MockLowering+Loops.swift`).
 			if let loopMembership, let member = loopMembers[property] {
@@ -635,6 +638,9 @@ extension MockLowering {
 			// D1 lane hook (lane B): what the node's binding passes its builder function's cycle parameters, read where the node
 			// is built, and the parameters, the nearest declarations of their labels in the function.
 			guard let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: scope) else { return .unsupported(.onlyIfAvailable) }
+			// D1 lane hook (lane D): a cycle parameter whose label is named apart is passed its rename, which the lowering's
+			// arguments do not read yet.
+			guard !generator.cycleParameters.contains(where: { renames[$0.property.label] != nil }) else { return .unsupported(.cycle) }
 			let scope = scope.union(generator.reboundProperties).union(MockLowering.cycleParameterForms(of: generator))
 			// D1 lane hook (lane B): a `Sendable` wrapper's, or a cycle's, builder function is `@Sendable`, and every override
 			// read inside it is read into a local before the outermost such function.
@@ -650,9 +656,9 @@ extension MockLowering {
 			let hasConfiguration = childGenerators.contains { $0.mockLoweringBuiltProperty != nil } || !defaultFields.isEmpty
 			let nodePath = "\(path).\(bindingName)"
 			// The node's builder function binds again under its label each receive named apart, from the names its own
-			// declarations, its children and forwarded properties, do not hide (`ScopeGenerator.removingRenames`).
+			// declarations, its children, forwarded properties and cycle parameters, do not hide (`ScopeGenerator.removingRenames`).
 			let functionRenames = MockLowering.removingRenames(
-				hiddenBy: childGenerators.compactMap(\.property) + (isWrapped ? forwarded : []),
+				hiddenBy: childGenerators.compactMap(\.property) + (isWrapped ? forwarded : []) + MockLowering.cycleParameterForms(of: generator).sorted(),
 				from: renames,
 			)
 			var receiverBindings = [(property: Property, name: String)]()
