@@ -61,13 +61,23 @@ extension ScopeGenerator {
 		case let .unsupported(rule):
 			return .unsupported(rule)
 		}
+		// D1 lane hook (lane B): `mock()` first binds each override of what its tree receives only if available, which the
+		// receives beneath read.
+		var bindingLines = signature.onlyIfAvailableOverrides.map { override in
+			"\(bodyIndent)let \(override.name): \(override.typeDescription.asSource) = \(ReservedName.mockOverridesParameterName).\(override.name)"
+		}
 		// D1 lane hook (lane C): `mock()` first binds each builder a call passes up apart from its label.
-		var bindingLines = walk.filledCallBuilders.leadingBindingLines(indent: bodyIndent)
+		bindingLines.append(contentsOf: walk.filledCallBuilders.leadingBindingLines(indent: bodyIndent))
+		// D1 lane hook (lane B): each override binds its receive's label, in the optional form a receive only if available
+		// reads.
+		let overrideProperties = Set(signature.onlyIfAvailableOverrides.flatMap { override in
+			[override.receivedProperty, Property(label: override.receivedProperty.label, typeDescription: override.typeDescription)]
+		})
 		let nodes: [MockLowering.TreeNode]
 		switch await walk.children(
 			of: orderedChildren,
 			loops: mockLoweringLoopMemberships,
-			inScope: signature.properties,
+			inScope: signature.properties.union(overrideProperties),
 			path: ReservedName.mockOverridesParameterName,
 			indent: bodyIndent,
 			lines: &bindingLines,
@@ -90,7 +100,7 @@ extension ScopeGenerator {
 			walk.rootLabelsNamedApart.contains(dependency.property.label) && lazilyInstantiatedInstances.contains(dependency.property.asUnwrappedProperty)
 		}) else { return .unsupported(.siblingLabelCollision) }
 		// Every dependency of the mocked type is a node of its tree or a parameter of `mock()`.
-		let providedProperties = Set(nodes.map(\.property)).union(signature.properties)
+		let providedProperties = Set(nodes.map(\.property)).union(signature.properties).union(overrideProperties)
 		guard instantiable.dependencies.allSatisfy({ providedProperties.contains($0.property) }) else {
 			return .unsupported(.flatParameter)
 		}
@@ -109,23 +119,9 @@ extension ScopeGenerator {
 	private static func unsupportedRuleOfMockedType(_ instantiable: Instantiable) -> MockLowering.Rule? {
 		// The initializer's default-valued arguments are parameters of `mock()` (`lowerRootSignature(of:context:)`).
 		guard instantiable.mockInitializer == nil, instantiable.customMockName == nil, instantiable.initializer != nil else { return .handWrittenMock }
-		for dependency in instantiable.dependencies {
-			switch dependency.source {
-			case .instantiated:
-				// D1 lane hook (lane B): every wrapper kind is a node of the tree, erased or fulfilled by another type alike.
-				break
-			case let .received(onlyIfAvailable):
-				// D1 lane hook (lane B): a received wrapper is a node the mock promotes, which the walk checks it binds.
-				guard !onlyIfAvailable else { return .onlyIfAvailable }
-			case .aliased(_, _, onlyIfAvailable: true):
-				return .onlyIfAvailable
-			case .aliased(_, _, onlyIfAvailable: false):
-				break
-			case .forwarded:
-				// A parameter of `mock()` (`lowerRootSignature(of:context:)`).
-				break
-			}
-		}
+		// D1 lane hook (lane B): every dependency of the mocked type is a node of its tree (a wrapper of any kind, erased or
+		// fulfilled by another type alike, a received wrapper the mock promotes, an alias), a parameter of `mock()` or an
+		// override's binding, which the walk checks it binds.
 		return nil
 	}
 
@@ -138,13 +134,13 @@ extension ScopeGenerator {
 		let typeName = instantiable.concreteInstantiable.asSource
 		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
 		// A mock that takes nothing and binds nothing is one call of the type's construction.
-		guard !nodes.isEmpty || !signature.parameters.isEmpty else { return mockWithoutTree(of: instantiable, context: context) }
+		guard !nodes.isEmpty || !signature.parameters.isEmpty || !signature.onlyIfAvailableOverrides.isEmpty else { return mockWithoutTree(of: instantiable, context: context) }
 		var lines = ["extension \(typeName) {"]
 		let overridesFields = nodes.compactMap(\.overridesField)
 		// D1 lane hook (lane C): the builders `mock()` takes, listed among the flat received parameters by label.
 		var parameterLines = signature.parameterLines(indent: bodyIndent, builders: builders)
-		if !overridesFields.isEmpty {
-			lines.append(contentsOf: overridesStruct(of: overridesFields, sendableConfigurationTypeNames: context.sendableConfigurationTypeNames, indent: indent))
+		if !overridesFields.isEmpty || !signature.onlyIfAvailableOverrides.isEmpty {
+			lines.append(contentsOf: overridesStruct(of: overridesFields, onlyIfAvailableOverrides: signature.onlyIfAvailableOverrides, sendableConfigurationTypeNames: context.sendableConfigurationTypeNames, indent: indent))
 			lines.append("")
 			parameterLines.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): \(ReservedName.mockOverridesTypeName) = .init()")
 		} else if nodes.contains(where: \.isPropertyNode) {
@@ -182,7 +178,7 @@ extension ScopeGenerator {
 	}
 
 	/// The mock's `SafeDIOverrides`: the member that configures each node, in generation order.
-	private static func overridesStruct(of fields: [MockLowering.OverridesField], sendableConfigurationTypeNames: Set<String>, indent: String) -> [String] {
+	private static func overridesStruct(of fields: [MockLowering.OverridesField], onlyIfAvailableOverrides: [OnlyIfAvailableOverride], sendableConfigurationTypeNames: Set<String>, indent: String) -> [String] {
 		let innerIndent = "\(indent)\(standardIndent)"
 		let memberIndent = "\(innerIndent)\(standardIndent)"
 		var lines = [
@@ -200,16 +196,32 @@ extension ScopeGenerator {
 			)
 		})
 		lines.append("\(innerIndent)init(")
-		lines.append(zip(storage.fields, fields).map { storageField, field in
+		var initParameters = zip(storage.fields, fields).map { storageField, field in
 			"\(memberIndent)\(storageField.name.spelledAsAssigningParameter(labeled: storageField.name)): \(storageField.typeSource) = \(field.defaultValue)"
-		}.joined(separator: ",\n"))
+		}
+		// D1 lane hook (lane B): each override of what the mock receives only if available, after the storage's fields and
+		// stored beside the storage (`generateSafeDIOverridesStruct`).
+		for override in onlyIfAvailableOverrides {
+			initParameters.append("\(memberIndent)\(override.name.spelledAsAssigningParameter(labeled: override.name)): \(override.typeDescription.asSource) = nil")
+		}
+		lines.append(initParameters.joined(separator: ",\n"))
 		lines.append("\(innerIndent)) {")
-		lines.append(contentsOf: storage.initialization(to: storage.fields.map(\.name.spelledAsAssigningParameterName), indent: memberIndent))
+		if !storage.fields.isEmpty {
+			lines.append(contentsOf: storage.initialization(to: storage.fields.map(\.name.spelledAsAssigningParameterName), indent: memberIndent))
+		}
+		for override in onlyIfAvailableOverrides {
+			lines.append("\(memberIndent)self.\(override.name) = \(override.name.spelledAsAssigningParameterName)")
+		}
 		lines.append("\(innerIndent)}")
 		lines.append("")
 		lines.append(contentsOf: storage.readers(indent: innerIndent))
-		lines.append("")
-		lines.append(contentsOf: storage.declarations(indent: innerIndent))
+		for override in onlyIfAvailableOverrides {
+			lines.append("\(innerIndent)let \(override.name.spelledAsMemberDeclarationName): \(override.typeDescription.asSource)")
+		}
+		if !storage.fields.isEmpty {
+			lines.append("")
+			lines.append(contentsOf: storage.declarations(indent: innerIndent))
+		}
 		lines.append("\(indent)}")
 		return lines
 	}
