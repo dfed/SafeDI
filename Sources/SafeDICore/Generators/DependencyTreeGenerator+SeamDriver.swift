@@ -180,6 +180,7 @@ extension DependencyTreeGenerator {
 						reach: Self.moduleReach(viewedFrom: moduleSeam.declaringModule, instantiables: visible.instantiables, plainTypeDeclarations: visible.plainTypeDeclarations, modulesReadByRunOfModule: emittingModule?.modulesReadByRunOfModule),
 					)
 				},
+				internerSpace: internerSpace,
 			)
 			errors += computation.errors
 			for (seamType, seamRoot) in computation.seamRoots where !computation.failedSeams.contains(seamType) {
@@ -211,6 +212,7 @@ extension DependencyTreeGenerator {
 			seams: seams,
 			checkingModule: emittingModuleToCheck,
 			proof: { ownAccessProof.proof },
+			internerSpace: internerSpace,
 		)
 		var errors = ownComputation.errors
 		// Each generated seam is computed again over the declarations its callers see, when those differ from this
@@ -245,6 +247,7 @@ extension DependencyTreeGenerator {
 						reach: Self.moduleReach(viewedFrom: seams.currentModule, instantiables: callersVisibleInstantiables, plainTypeDeclarations: seams.callersVisiblePlainTypeDeclarations, modulesReadByRunOfModule: emittingModule?.modulesReadByRunOfModule),
 					)
 				},
+				internerSpace: internerSpace,
 			)
 			for seamType in generatedSeamTypes.sorted() {
 				guard let seam = typeDescriptionToFulfillingInstantiableMap[seamType],
@@ -444,7 +447,7 @@ extension DependencyTreeGenerator {
 			isReadableFile: emittingModule?.isReadableFile,
 		)
 		// Every tree of the seam world reads its scopes frozen, once.
-		let seamWorld = SeamWorld(validatedWorld: validatedWorld, frozenScopeMap: FrozenScopeMap(freezing: seamScopeMap.lazy.map { (key: $0.key, scope: $0.value) }))
+		let seamWorld = SeamWorld(validatedWorld: validatedWorld, frozenScopeMap: FrozenScopeMap(freezing: seamScopeMap.lazy.map { (key: $0.key, scope: $0.value) }, interningIn: internerSpace))
 		// A seam whose signature equals its own initializer's generates no code: its file holds the header alone.
 		var generatedSeams = [(seam: Instantiable, seamRoot: ScopeGenerator.SeamRoot, rootScope: Scope)]()
 		// Once for every seam: taken for each, it copied every scope's declaration once per seam.
@@ -474,7 +477,6 @@ extension DependencyTreeGenerator {
 				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
 				scopeGenerator: record.createScopeGenerator(
 					in: table,
-					for: nil,
 					lazilyInstantiatedInstanceProperties: [],
 					erasedToConcreteExistential: false,
 					declaredTypeNames: declaredTypeNames,
@@ -676,6 +678,7 @@ extension DependencyTreeGenerator {
 		seams: SeamResolution,
 		checkingModule: EmittingModule?,
 		proof makeProof: () -> TypeAccessProof,
+		internerSpace: ConstructionInternerSpace,
 	) throws -> SeamSignatureComputation {
 		let seamInstantiables = seamTypes.sorted().compactMap { instantiables[$0] }.filter(\.generatesDependencyTree)
 		guard !seamInstantiables.isEmpty else { return SeamSignatureComputation(seamRoots: [:], errors: [], failedSeams: [], proof: nil) }
@@ -684,6 +687,9 @@ extension DependencyTreeGenerator {
 		let proof = makeProof()
 		let ownSeamTypes = Set(seamInstantiables.map(\.concreteInstantiable))
 		let declaredTypeNames = namesOfTypesDeclaredAtFileScope(instantiables: Array(instantiables.values), plainTypeDeclarations: plainTypeDeclarations)
+		// The declarations of this map are given the interner before any of its scopes is frozen, as the generator's own
+		// are: a seam module's view, or the callers', can hold declarations the generator's map does not.
+		internerSpace.internDeclarations(of: declarationsInInterningOrder(of: instantiables))
 		// The base of every pass's table: the seam world of every declaration, in which every seam is built and none is
 		// called. A record of a type that is no seam depends on the declarations alone, so every pass reads it from here; a
 		// pass overlays the records of the seams it calls (`FrozenScopeMap.overlaying`).
@@ -697,7 +703,7 @@ extension DependencyTreeGenerator {
 			aliasDeclarationReferences: aliasDeclarationReferences,
 			checkingModule: checkingModule,
 		)
-		let baseFrozenScopeMap = FrozenScopeMap(freezing: baseScopeMap.lazy.map { (key: $0.key, scope: $0.value) })
+		let baseFrozenScopeMap = FrozenScopeMap(freezing: baseScopeMap.lazy.map { (key: $0.key, scope: $0.value) }, interningIn: internerSpace)
 		func initialSeamRoot(of seam: Instantiable) -> ScopeGenerator.SeamRoot {
 			let parameters = Self.ownParameters(of: seam, proof: proof)
 			return ScopeGenerator.SeamRoot(
@@ -734,7 +740,8 @@ extension DependencyTreeGenerator {
 		// Each seam's position in `seamInstantiables`, so that a component's seams are listed in that order without a
 		// scan of every seam per component.
 		let seamIndicesBySeamType = Dictionary(grouping: seamInstantiables.indices, by: { seamInstantiables[$0].concreteInstantiable })
-		for component in Self.stronglyConnectedComponents(of: seamInstantiables, in: instantiables, among: ownSeamTypes) {
+		let seamComponents = Self.stronglyConnectedComponents(of: seamInstantiables, in: instantiables, among: ownSeamTypes)
+		for component in seamComponents.components {
 			let componentSeams = component.flatMap { seamIndicesBySeamType[$0] ?? [] }.sorted().map { seamInstantiables[$0] }
 			let reachableTypeDescriptions = Self.typesReachable(fromRoots: component, in: instantiables)
 			// A component settles in a fixed point in which every input to `seamRoot` only grows: a tree built with more
@@ -752,6 +759,14 @@ extension DependencyTreeGenerator {
 			var errorsOfLastPass = [DependencyTreeGeneratorError]()
 			var failedSeamsOfLastPass = Set<TypeDescription>()
 			var settled = false
+			// A component of one seam that does not reach itself settles after its first pass when the pass that would
+			// confirm it would read nothing the first pass changed (`confirmingPassFindsNothingNew`). The seam's signature,
+			// holes included, then comes from a tree the first pass built with the construction memo on, since its root had no
+			// holes yet; the memo oracle checks that tree too. In a test, the confirming pass runs anyway and must find the
+			// same signature (`SeamSignatureObservation.confirmsSkippedPasses`).
+			let maySkipConfirmingPass = componentSeams.count == 1 && !seamComponents.seamsReachingThemselves.contains(componentSeams[0].concreteInstantiable)
+			var isFirstPass = true
+			var skippedPass: SkippedPass?
 			for _ in 0..<Self.seamSignatureComputationLimit(forComponentOf: component.count) {
 				let scopeMap = Self.createSeamScopeMapping(
 					in: instantiables,
@@ -775,7 +790,7 @@ extension DependencyTreeGenerator {
 					// The table every pass's map would freeze to, compared by key: what the pass's map holds and its seams
 					// reach, the same record; what it does not hold, no record. A key whose scope the seams do not reach
 					// keeps the base's record, which construction never reads.
-					let passTable = FrozenScopeMap(freezing: scopeMap.lazy.map { (key: $0.key, scope: $0.value) }).table
+					let passTable = FrozenScopeMap(freezing: scopeMap.lazy.map { (key: $0.key, scope: $0.value) }, interningIn: internerSpace).table
 					let reachedScopes = Set(FrozenScopeMap.scopesReached(from: rootScopes, passScopeMap: scopeMap, fulfillingKey: fulfillingKey).map(ObjectIdentifier.init))
 					let passKeys = scopeMap.compactMap { reachedScopes.contains(ObjectIdentifier($0.value)) ? $0.key : nil }
 					let expected = passTable.projectionByKey(passKeys)
@@ -790,6 +805,7 @@ extension DependencyTreeGenerator {
 					overlayOracle(mismatches)
 				}
 				var changed = false
+				var skipsConfirmingPass = false
 				var passErrors = [DependencyTreeGeneratorError]()
 				var passFailedSeams = Set<TypeDescription>()
 				for (seam, rootScope) in zip(componentSeams, rootScopes) {
@@ -815,6 +831,9 @@ extension DependencyTreeGenerator {
 						)
 						if seamRoot?.signature.settledContent != previousSeamRoot?.signature.settledContent {
 							changed = true
+						}
+						if isFirstPass, maySkipConfirmingPass {
+							skipsConfirmingPass = Self.confirmingPassFindsNothingNew(after: seamRoot, startingFrom: initialSeamRoot(of: seam), in: generator)
 						}
 						seamRoots[seam.concreteInstantiable] = seamRoot
 					} catch let error as DependencyTreeGeneratorError {
@@ -843,12 +862,37 @@ extension DependencyTreeGenerator {
 						}
 					}
 				}
-				if !changed {
+				if let skippedPass {
+					// The test's confirming pass, run as every second pass runs, must have found what the first found. Its
+					// state is put back to the first pass's, so the test generates what the tool generates.
+					let seamType = componentSeams[0].concreteInstantiable
+					skippedPass.confirm(StoredSeamSignature(seamType: seamType, signature: passFailedSeams.isEmpty ? (seamRoots[seamType] ?? nil)?.signature : nil), !passFailedSeams.isEmpty)
+					seamRoots[seamType] = .some(skippedPass.seamRoot)
+					knownSeamRoots = skippedPass.knownSeamRoots
+					ownScopeEnums = skippedPass.ownScopeEnums
+					settled = true
+					break
+				}
+				if !changed || skipsConfirmingPass && passErrors.isEmpty {
+					if changed, let confirmsSkippedPass = SeamSignatureObservation.confirmsSkippedPasses {
+						let seamType = componentSeams[0].concreteInstantiable
+						let seamRoot = seamRoots[seamType] ?? nil
+						skippedPass = SkippedPass(seamRoot: seamRoot, knownSeamRoots: knownSeamRoots, ownScopeEnums: ownScopeEnums, confirm: { confirmed, threw in
+							confirmsSkippedPass(SkippedConfirmingPass(
+								skipped: StoredSeamSignature(seamType: seamType, signature: seamRoot?.signature),
+								confirmed: confirmed,
+								confirmingPassThrew: threw,
+							))
+						})
+						isFirstPass = false
+						continue
+					}
 					errorsOfLastPass = passErrors
 					failedSeamsOfLastPass = passFailedSeams
 					settled = true
 					break
 				}
+				isFirstPass = false
 			}
 			if !settled {
 				// A component holds at least one seam, so the first by location exists.
@@ -885,8 +929,9 @@ extension DependencyTreeGenerator {
 
 	/// The strongly connected components of the graph in which a seam reaches another when its tree, built from
 	/// `instantiables` without entering any seam of `seamTypes`, instantiates it, in reverse topological order: a
-	/// component after every component it reaches. Tarjan's algorithm on an explicit stack.
-	static func stronglyConnectedComponents(of seams: [Instantiable], in instantiables: [TypeDescription: Instantiable], among seamTypes: Set<TypeDescription>) -> [Set<TypeDescription>] {
+	/// component after every component it reaches (Tarjan's algorithm on an explicit stack), and the seams that reach
+	/// themselves, which Tarjan's algorithm returns as a component of one seam like any other.
+	static func stronglyConnectedComponents(of seams: [Instantiable], in instantiables: [TypeDescription: Instantiable], among seamTypes: Set<TypeDescription>) -> SeamComponents {
 		var reachedSeamsBySeam = [TypeDescription: [TypeDescription]]()
 		for seam in seams {
 			var reachedSeams = Set<TypeDescription>()
@@ -906,7 +951,70 @@ extension DependencyTreeGenerator {
 			}
 			reachedSeamsBySeam[seam.concreteInstantiable] = reachedSeams.sorted()
 		}
-		return stronglyConnectedComponents(of: seams.map(\.concreteInstantiable), edges: { reachedSeamsBySeam[$0, default: []] })
+		return SeamComponents(
+			components: stronglyConnectedComponents(of: seams.map(\.concreteInstantiable), edges: { reachedSeamsBySeam[$0, default: []] }),
+			seamsReachingThemselves: Set(reachedSeamsBySeam.compactMap { seamType, reachedSeams in reachedSeams.contains(seamType) ? seamType : nil }),
+		)
+	}
+
+	/// Whether a second pass over `seam`'s component, a component of one seam that does not reach itself, would find
+	/// `firstPassSeamRoot` again, so that the first pass settles it. The pass reads nothing but its own seam root that the
+	/// first pass changed: every seam its tree reaches is in a settled component, and its own entries in `knownSeamRoots`
+	/// and `ownScopeEnums` are read only by a call of the seam itself or of a seam with holes. Of its seam root, the tree
+	/// reads two things (see `seams.md`):
+	/// - The parameters, put in scope at the root: the same when the first pass added none, compared by spelling, deferral
+	///   and internal name in order. A `nil` root, a seam equal to its own initializer, is computed again from
+	///   `initialSeamRoot`, as the first pass was.
+	/// - The holes, builders and call routes (`SeamHoles`): read by code generation and the construction memo's sharing
+	///   alone, but for reads made only where the tree calls a seam or a public mock, or builds a fill or passes a hole up.
+	///   So the tree must hold none of those.
+	private static func confirmingPassFindsNothingNew(after firstPassSeamRoot: ScopeGenerator.SeamRoot?, startingFrom initialSeamRoot: ScopeGenerator.SeamRoot, in generator: ScopeGenerator) -> Bool {
+		if let firstPassSeamRoot {
+			let firstParameters = firstPassSeamRoot.signature.parameters
+			let initialParameters = initialSeamRoot.signature.parameters
+			guard firstParameters.count == initialParameters.count else { return false }
+			for (first, initial) in zip(firstParameters, initialParameters) {
+				guard first.property.label == initial.property.label,
+				      first.property.typeDescription.asSource == initial.property.typeDescription.asSource,
+				      first.deferral == initial.deferral,
+				      // Implied today by the checks above: the first pass adds no parameter, and a seam's own parameters are never
+				      // deferred (`ownParameter`), so none is renamed apart from the tree's builder functions. Kept as a guard.
+				      first.internalName == initial.internalName
+				else { return false }
+			}
+		}
+		var visited = Set<ObjectIdentifier>()
+		var generatorsToVisit = [generator]
+		while let visiting = generatorsToVisit.popLast() {
+			// No shape found today needs this check: the seams a call reaches are in components settled before this one, and
+			// the seam does not call itself (`seamsReachingThemselves`), so a call reads no signature the first pass changed,
+			// and no seam test or seam corpus seed differs without it, even where the seam's fill of another seam's hole
+			// builds a place that is a hole of this seam. Kept as a guard, since the reads of `SeamHoles` it excludes were
+			// never shown not to reach a signature.
+			guard visiting.seamCall == nil, visiting.publicMockCall == nil, visiting.fillKey == nil, visiting.passedUpHoles.isEmpty else { return false }
+			for child in visiting.children where visited.insert(ObjectIdentifier(child)).inserted {
+				generatorsToVisit.append(child)
+			}
+		}
+		return true
+	}
+
+	/// A first pass whose confirming pass runs only for a test (`SeamSignatureObservation.confirmsSkippedPasses`): the
+	/// state the skip left, which is put back after the confirming pass, and where to report what that pass found.
+	private struct SkippedPass {
+		let seamRoot: ScopeGenerator.SeamRoot?
+		let knownSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?]
+		let ownScopeEnums: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]
+		let confirm: (_ confirmed: StoredSeamSignature, _ threw: Bool) -> Void
+	}
+
+	/// The strongly connected components of the seam-reaches-seam graph (`stronglyConnectedComponents(of:in:among:)`).
+	struct SeamComponents {
+		/// The components, in reverse topological order.
+		let components: [Set<TypeDescription>]
+		/// The seams whose trees instantiate themselves, directly or through types that are not seams: each a component of
+		/// one seam, whose pass reads its own signature.
+		let seamsReachingThemselves: Set<TypeDescription>
 	}
 
 	/// The strongly connected components of a graph, in reverse topological order: a component after every component it
@@ -1278,7 +1386,6 @@ extension DependencyTreeGenerator {
 		let (table, rootRecord) = world.frozenScopeMap.freezing(rootScope: rootScope)
 		return try rootRecord.createScopeGenerator(
 			in: table,
-			for: nil,
 			nearestDeclarations: nearestDeclarations,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			seamRoot: seamRoot,
@@ -2009,4 +2116,21 @@ extension DependencyTreeGenerator {
 		leaf.sourceFilePath = seam.sourceFilePath
 		return leaf
 	}
+}
+
+/// The test hooks of seam signature computation: test only.
+public enum SeamSignatureObservation {
+	/// Called, when set, for each seam whose first signature pass settled it without the pass that confirms it
+	/// (`DependencyTreeGenerator.confirmingPassFindsNothingNew`), after running that pass anyway as every second pass runs:
+	/// the two must find the same signature. The tool generates from the first pass's either way.
+	@TaskLocal public static var confirmsSkippedPasses: (@Sendable (SkippedConfirmingPass) -> Void)?
+}
+
+/// A seam's signature from the first pass that settled it, and the one the confirming pass the tool skipped finds.
+public struct SkippedConfirmingPass: Sendable {
+	/// What the first pass found, which the tool keeps.
+	public let skipped: StoredSeamSignature
+	/// What the confirming pass found: no signature when it threw (`confirmingPassThrew`).
+	public let confirmed: StoredSeamSignature
+	public let confirmingPassThrew: Bool
 }
