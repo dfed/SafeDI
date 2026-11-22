@@ -211,6 +211,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			    }
 
 			    static func mock(
+			        apiBuilder: (() -> any Api)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> FeatureScreen {
 			        func __safeDI_feature() -> Feature {
@@ -224,7 +225,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			                )
 			            }
 			            _ = Feature.__safeDI_Feature_mock_78B17FED03E67B07.self\(Self.featureCallComment)
-			            return Feature.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Feature(), safeDIOverrides: safeDIOverrides.feature)
+			            return Feature.__safeDI_mock(apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Feature(), safeDIOverrides: safeDIOverrides.feature)
 			        }
 			        let feature: Feature = __safeDI_feature()
 			        return FeatureScreen(feature: feature)
@@ -464,6 +465,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			    }
 
 			    static func mock(
+			        apiBuilder: (() -> any Api)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> FeatureScreen {
 			        func __safeDI_feature() -> Feature {
@@ -480,7 +482,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			                .init(featureBuilder: { _ in __safeDI_apiBuilder_Feature() })
 			            }
 			            _ = Feature.__safeDI_Feature_mock_54BF86ACC74B5A85.self\(Self.featureCallComment)
-			            return Feature.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Feature(), safeDIOverrides: safeDIOverrides.feature)
+			            return Feature.__safeDI_mock(apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Feature(), safeDIOverrides: safeDIOverrides.feature)
 			        }
 			        let feature: Feature = __safeDI_feature()
 			        return FeatureScreen(feature: feature)
@@ -673,6 +675,8 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			    }
 
 			    static func mock(
+			        apiBuilder: (() -> any Api)? = nil,
+			        apiSendableBuilder: (@Sendable () -> any Api)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> FeatureScreen {
 			        func __safeDI_feature() -> Feature {
@@ -686,7 +690,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			                .init(next: { _ in __safeDI_apiBuilder_Feature() })
 			            }
 			            _ = Feature.__safeDI_Feature_mock_FDA6FCC2E103CC22.self\(Self.featureCallComment)
-			            return Feature.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Feature(), apiSendableBuilder: __safeDI_apiSendableBuilder_Feature(), safeDIOverrides: safeDIOverrides.feature)
+			            return Feature.__safeDI_mock(apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Feature(), apiSendableBuilder: apiSendableBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiSendableBuilder_Feature(), safeDIOverrides: safeDIOverrides.feature)
 			        }
 			        let feature: Feature = __safeDI_feature()
 			        return FeatureScreen(feature: feature)
@@ -883,6 +887,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			    }
 
 			    static func mock(
+			        apiBuilder: (() -> any Api)? = nil,
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> FeatureScreen {
 			        func __safeDI_feature() -> Feature {
@@ -897,7 +902,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			                )
 			            }
 			            _ = Feature.__safeDI_Feature_mock_0C6E5276DEE99EF1.self\(Self.featureCallComment)
-			            return Feature.__safeDI_mock(apiBuilder: __safeDI_apiBuilder_Feature(), safeDIOverrides: safeDIOverrides.feature)
+			            return Feature.__safeDI_mock(apiBuilder: apiBuilder.map { .init(__safeDI_noScope: $0) } ?? __safeDI_apiBuilder_Feature(), safeDIOverrides: safeDIOverrides.feature)
 			        }
 			        let feature: Feature = __safeDI_feature()
 			        return FeatureScreen(feature: feature)
