@@ -374,19 +374,22 @@ private struct TypeKeyLayout {
 	func lookUp(_ label: String, inBody body: Int, before index: Int) -> PathValue {
 		var body = body
 		var index = index
-		while true {
-			if let positions = bodies[body].positionsByLabel[label], let position = positions.last(where: { $0 < index }) {
-				return .statement(body: body, index: position)
-			}
-			guard body != 0 else { return .none }
-			if bodies[body].forwardedLabels.contains(label) {
-				return .forwarded(body: body, label: label)
-			} else if bodies[body].cycleParameterLabels.contains(label) {
-				return .cycleParameter(body: body, label: label)
-			} else {
-				index = bodies[body].position
-				body = bodies[body].parent
-			}
+		while body != 0,
+		      bodies[body].positionsByLabel[label]?.contains(where: { $0 < index }) != true,
+		      !bodies[body].forwardedLabels.contains(label),
+		      !bodies[body].cycleParameterLabels.contains(label)
+		{
+			index = bodies[body].position
+			body = bodies[body].parent
+		}
+		if let position = bodies[body].positionsByLabel[label]?.last(where: { $0 < index }) {
+			return .statement(body: body, index: position)
+		} else if body == 0 {
+			return .none
+		} else if bodies[body].forwardedLabels.contains(label) {
+			return .forwarded(body: body, label: label)
+		} else {
+			return .cycleParameter(body: body, label: label)
 		}
 	}
 
@@ -756,33 +759,38 @@ private struct TypeKeyLayout {
 	/// reach. Each pass refines the last, since a body's key starts with its class, so the count of classes grows with
 	/// every pass that changes the partition and the passes end within one per body.
 	private func refine(_ classes: [Int]) -> [Int] {
-		var previous = classes
 		var previousCount = Set(classes.dropFirst()).count
-		while true {
-			var interned = [[Int]: Int]()
-			var next = [Int](repeating: 0, count: bodies.count)
-			for body in bodies.indices.dropFirst() {
-				var key = [previous[body]]
-				for statement in bodies[body].statements {
-					switch statement {
-					case let .built(child):
-						key.append(previous[child])
-					case let .closer(_, target):
-						key.append(previous[target])
-					case .inline, .alias:
-						key.append(0)
-					}
-				}
-				next[body] = interned[key] ?? {
-					let id = interned.count + 1
-					interned[key] = id
-					return id
-				}()
-			}
-			guard interned.count != previousCount else { return next }
-			previousCount = interned.count
-			previous = next
+		var next = refinementPass(of: classes)
+		while next.count != previousCount {
+			previousCount = next.count
+			next = refinementPass(of: next.classes)
 		}
+		return next.classes
+	}
+
+	/// One pass of `refine`: each place's class is joined by the classes its body's calls reach, with the count of classes.
+	private func refinementPass(of previous: [Int]) -> (classes: [Int], count: Int) {
+		var interned = [[Int]: Int]()
+		var next = [Int](repeating: 0, count: bodies.count)
+		for body in bodies.indices.dropFirst() {
+			var key = [previous[body]]
+			for statement in bodies[body].statements {
+				switch statement {
+				case let .built(child):
+					key.append(previous[child])
+				case let .closer(_, target):
+					key.append(previous[target])
+				case .inline, .alias:
+					key.append(0)
+				}
+			}
+			next[body] = interned[key] ?? {
+				let id = interned.count + 1
+				interned[key] = id
+				return id
+			}()
+		}
+		return (next, interned.count)
 	}
 
 	// MARK: Placement
@@ -874,29 +882,27 @@ private struct TypeKeyLayout {
 	// MARK: Outcomes
 
 	/// The nearest declaration of `label` the type key's code sees before the statement at `index` of `owner`'s body.
-	func typeLookUp(_ searchedLabel: String, inClass owner: Int, before index: Int) -> TypeDeclaration {
-		let label = searchedLabel
-		var owner = owner
-		var index = index
-		while true {
-			let statements = statements(ofClass: owner)
-			for position in stride(from: min(index, statements.count) - 1, through: 0, by: -1) where self.label(of: statements[position]) == label {
-				return .statement(owner: owner, index: position)
-			}
-			guard owner != 0 else { return .none }
-			if representative(of: owner)?.forwardedProperties.contains(where: { $0.label == label }) == true {
-				return .forwarded(owner: owner, label: label)
-			}
-			switch outcomes[owner][label] {
-			case .passed:
-				return .read(owner: owner, label: label)
-			case .none?:
-				return .none
-			case .captured?, nil:
-				index = placementIndex[owner]
-				owner = placementOwner[owner]
-			}
+	func typeLookUp(_ label: String, inClass owner: Int, before index: Int) -> TypeDeclaration {
+		if let position = lastPosition(of: label, inClass: owner, before: index) {
+			.statement(owner: owner, index: position)
+		} else if owner == 0 {
+			.none
+		} else if representative(of: owner)?.forwardedProperties.contains(where: { $0.label == label }) == true {
+			.forwarded(owner: owner, label: label)
+		} else if outcomes[owner][label] == .passed {
+			.read(owner: owner, label: label)
+		} else {
+			// Every function is declared in the root's body (`computePlacement`), so a function that captures its read, or
+			// reads none, sees the root's declarations before its own. One that reads none has no declaration there: the
+			// first root statement that reaches it is before the path that resolved the read to none.
+			lastPosition(of: label, inClass: 0, before: placementIndex[owner]).map { .statement(owner: 0, index: $0) } ?? .none
 		}
+	}
+
+	/// The position of the last statement of `owner`'s body before `index` that declares `label`.
+	private func lastPosition(of label: String, inClass owner: Int, before index: Int) -> Int? {
+		let statements = statements(ofClass: owner)
+		return stride(from: min(index, statements.count) - 1, through: 0, by: -1).first { self.label(of: statements[$0]) == label }
 	}
 
 	/// The type key's declaration for a path declaration.
@@ -1061,24 +1067,22 @@ private struct TypeKeyLayout {
 	private func evaluate(_ declaration: TypeDeclaration, inBody body: Int) -> PathValue {
 		var declaration = declaration
 		var body = body
-		while true {
-			switch declaration {
-			case .none:
-				return PathValue.none
-			case let .statement(owner, index):
-				return .statement(body: instance(ofClass: owner, enclosing: body), index: index)
-			case let .forwarded(owner, label):
-				return .forwarded(body: instance(ofClass: owner, enclosing: body), label: label)
-			case let .read(owner, label):
-				let place = instance(ofClass: owner, enclosing: body)
-				if bodies[place].cycleParameterLabels.contains(label) {
-					return normalized(.cycleParameter(body: place, label: label))
-				} else {
-					let parent = bodies[place].parent
-					declaration = typeLookUp(label, inClass: classByBody[parent], before: bodies[place].position)
-					body = parent
-				}
-			}
+		// A read that is no cycle parameter is what the call passes: the declaration the caller's class sees.
+		while case let .read(owner, label) = declaration, !bodies[instance(ofClass: owner, enclosing: body)].cycleParameterLabels.contains(label) {
+			let place = instance(ofClass: owner, enclosing: body)
+			let parent = bodies[place].parent
+			declaration = typeLookUp(label, inClass: classByBody[parent], before: bodies[place].position)
+			body = parent
+		}
+		switch declaration {
+		case .none:
+			return PathValue.none
+		case let .statement(owner, index):
+			return .statement(body: instance(ofClass: owner, enclosing: body), index: index)
+		case let .forwarded(owner, label):
+			return .forwarded(body: instance(ofClass: owner, enclosing: body), label: label)
+		case let .read(owner, label):
+			return normalized(.cycleParameter(body: instance(ofClass: owner, enclosing: body), label: label))
 		}
 	}
 
