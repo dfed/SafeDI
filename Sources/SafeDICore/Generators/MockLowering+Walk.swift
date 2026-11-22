@@ -569,9 +569,22 @@ extension MockLowering {
 					receiverBindings.append((dependency.property, name))
 				}
 			}
-			// A receive beneath a receiver that reads its label by name is handed the name instead
-			// (`ScopeGenerator.receivedBindingNamesPassedByName`), which the walk does not lower yet.
-			guard receiverBindings.isEmpty || childGenerators.isEmpty else { return .unsupported(.siblingLabelCollision) }
+			// A receive named apart whose label a receive beneath reads by name is handed the name instead of bound again
+			// under its label, which would hide the binding that receive reads (`ScopeGenerator.receivedBindingNamesPassedByName`).
+			var bindingNamesPassedByName = [String: String]()
+			if !childGenerators.isEmpty {
+				for binding in receiverBindings {
+					switch MockLowering.receiveReadsLabelByName(binding.property.label, beneath: childGenerators, renames: renames) {
+					case true?:
+						bindingNamesPassedByName[binding.property.label] = binding.name
+					case false?:
+						break
+					case nil:
+						return .unsupported(.siblingLabelCollision)
+					}
+				}
+				receiverBindings.removeAll { bindingNamesPassedByName[$0.property.label] != nil }
+			}
 			let overrideRead: String? = isCycleNode || !overrideReachable ? nil : readingOverride(
 				hasConfiguration ? "\(nodePath).\(builder)" : nodePath,
 				localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(builder)",
@@ -596,6 +609,7 @@ extension MockLowering {
 						given: instantiable.dependencies,
 						lazilyInstantiatedInstanceProperties: generator.mockLoweringLazilyInstantiatedInstanceProperties,
 						unavailableProperties: unavailableProperties,
+						bindingNamesPassedByName: bindingNamesPassedByName,
 					),
 					nodePath: nodePath,
 					overrideReachable: overrideReachable,
@@ -1046,6 +1060,39 @@ extension MockLowering {
 			}
 		}
 		return parts.joined(separator: ", ")
+	}
+
+	/// Whether a receive among `generators`, or beneath them up to a node that declares `label`, reads `label` by name: a
+	/// receive or an alias's fulfilling property whose form `renames` does not name apart; or `nil` where the walk cannot
+	/// tell yet (`ScopeGenerator.receiveReadsLabelByName`).
+	static func receiveReadsLabelByName(_ label: String, beneath generators: [ScopeGenerator], renames: [String: [TypeDescription: String]]) -> Bool? {
+		let names = renames[label] ?? [:]
+		// A stack of its own, since a mock tree can be as deep as the module has types.
+		var generatorsToVisit = generators
+		while let generator = generatorsToVisit.popLast() {
+			switch generator.scopeData {
+			case let .alias(_, fulfillingProperty, _, onlyIfAvailable, _):
+				guard fulfillingProperty.label == label else { continue }
+				// D1 lane hook (lane B): an alias bound to `nil`, or of a lazy wrapper's instance.
+				guard !onlyIfAvailable, !generator.mockLoweringLazilyInstantiatedInstanceProperties.contains(fulfillingProperty.asUnwrappedProperty) else { return nil }
+				guard names[fulfillingProperty.typeDescription] != nil else { return true }
+			case let .property(instantiable, _, _, _, isPropertyCycle, seamCall):
+				guard seamCall == nil else { return nil }
+				for dependency in instantiable.dependencies where dependency.source.isReceived && dependency.property.label == label && !generator.unavailableOptionalProperties.contains(dependency.property) {
+					// D1 lane hook (lane B): a receive of a lazy wrapper's instance reads the wrapper named apart.
+					guard !generator.mockLoweringLazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty) else { return nil }
+					guard names[dependency.property.typeDescription] != nil || names[dependency.property.asUnwrappedProperty.typeDescription] != nil else { return true }
+				}
+				// The builder function of a node that instantiates, forwards or renames the label declares it, and what is
+				// beneath reads that.
+				if !isPropertyCycle, !instantiable.dependencies.contains(where: { !$0.source.isReceived && $0.property.label == label }) {
+					generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator))
+				}
+			case .root, .hole, .fill:
+				return nil
+			}
+		}
+		return false
 	}
 
 	static func builderFunctionName(boundAs bindingName: String) -> String {
