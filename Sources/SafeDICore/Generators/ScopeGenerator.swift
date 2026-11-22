@@ -10553,7 +10553,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let builderTypesDeclaredEscaping: Set<TypeDescription>
 		let isExtensionBased: Bool
 		let defaultParameters: [MockParameterNode.DefaultParameter]
-		let constructionArguments: [Initializer.Argument]
 		let constructionIsolation: String?
 		let dependencies: [Dependency]
 		let constructionReturnType: TypeDescription
@@ -10582,16 +10581,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				instantiable.initializer
 			}
-			if let constructionInitializer {
-				constructionArguments = constructionInitializer.arguments
-				defaultParameters = MockParameterNode.DefaultParameter.defaultParameters(
+			let constructionArguments = constructionInitializer?.arguments ?? []
+			defaultParameters = constructionInitializer.map { constructionInitializer in
+				MockParameterNode.DefaultParameter.defaultParameters(
 					of: constructionInitializer,
 					dependencies: instantiable.dependencies,
 				)
-			} else {
-				constructionArguments = []
-				defaultParameters = []
-			}
+			} ?? []
 			constructionIsolation = constructionInitializer?.spelledIsolation
 			isExtensionBased = instantiable.declarationType.isExtension
 			dependencies = instantiable.dependencies
@@ -10712,12 +10708,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Non-dependency default-valued parameters from this type's init or customMock.
 		var defaultParameters: [DefaultParameter] {
 			construction.defaultParameters
-		}
-
-		/// All arguments from the init or customMock that will be used for construction.
-		/// Determines the builder closure signature (positional unlabeled parameters).
-		var constructionArguments: [Initializer.Argument] {
-			construction.constructionArguments
 		}
 
 		/// The isolation the init or customMock spells (`Initializer.spelledIsolation`), which a public mock's
