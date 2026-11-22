@@ -82,7 +82,7 @@ extension ScopeGenerator {
 	/// at the root's level, fill every place of each builder they take, and hold no place or call in their fills; or the
 	/// first rule the calls meet. Each family of hole type is one builder, labeled from its stem
 	/// (`stemsOfOptionalBuilders`) apart from `safeDIOverrides`, in label order.
-	func filledCallBuilders(of orderedChildren: [OrderedChild]) -> MockLowering.Lowering<MockLowering.FilledCallBuilders> {
+	func filledCallBuilders(of orderedChildren: [OrderedChild], context _: MockContext) -> MockLowering.Lowering<MockLowering.FilledCallBuilders> {
 		var calls = [MockLowering.FilledCallBuilders.Call]()
 		var filledCalls = [FilledCall]()
 		var namesFillsDeclare = Set<String>()
@@ -383,7 +383,7 @@ extension MockLowering {
 
 extension MockLowering {
 	/// The builders `mock()` takes optional for the places its root-level calls of other modules' public mocks fill
-	/// (`ScopeGenerator.filledCallBuilders(of:)`), and the calls, in generation order, each taken by the walk as it reaches it.
+	/// (`ScopeGenerator.filledCallBuilders(of:context:)`), and the calls, in generation order, each taken by the walk as it reaches it.
 	struct FilledCallBuilders {
 		/// A call that fills builders, with the `propertiesGeneratedLater` its fills are generated with.
 		struct Call {

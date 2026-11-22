@@ -38,7 +38,7 @@ extension ScopeGenerator {
 		let orderedChildren = orderedChildrenComputedAfresh(propertiesGeneratedLater: [])
 		var walk = MockLowering.Walk(ancestorTypes: [instantiable.concreteInstantiable])
 		// D1 lane hook (lane C): the builders `mock()` takes optional for the places its calls fill.
-		switch filledCallBuilders(of: orderedChildren) {
+		switch filledCallBuilders(of: orderedChildren, context: context) {
 		case let .lowered(filledCallBuilders):
 			walk.filledCallBuilders = filledCallBuilders
 		case let .unsupported(rule):
