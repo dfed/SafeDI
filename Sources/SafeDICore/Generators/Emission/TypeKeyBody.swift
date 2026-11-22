@@ -1356,10 +1356,12 @@ private struct TypeKeyLayout {
 		}
 		if declaredType == parameterType || (parameterType.isOptional && parameterType.unwrapped == declaredType) {
 			return label
-		} else if parameterType.unwrapped.lazilyInstantiatedInstanceType == declaredType, !declaredType.isOptional {
-			return "\(parameterType.unwrapped.asSource) { \(label) }"
 		} else {
-			return nil
+			// The call is one of the function's call sites, whose declarations' types `computeParameterTypes` combined into
+			// `parameterType` (`parameterType(combining:)`), so a declaration that is not the parameter's type, or its
+			// unwrapped type, is the instance of the lazy wrapper the parameter takes.
+			guard parameterType.unwrapped.lazilyInstantiatedInstanceType == declaredType, !declaredType.isOptional else { return nil }
+			return "\(parameterType.unwrapped.asSource) { \(label) }"
 		}
 	}
 
