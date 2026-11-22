@@ -608,12 +608,12 @@ extension MockLowering {
 			// (`ownUnavailableProperties` in `ScopeGenerator`).
 			let unavailableProperties = generator.reboundProperties.isEmpty ? unavailableProperties : unavailableProperties.subtracting(generator.reboundProperties.flatMap(CycleParameter.forms(providedBy:)))
 			// D1 lane hook (lane D): a node whose type's hand-written mock returns a type its property can hold is built with the
-			// mock, as `MockConstruction(useMockInitializer:)` says, where the mock returns the concrete type.
+			// mock, as `MockConstruction(useMockInitializer:)` says, where the mock returns the concrete type, in an internal mock.
 			let usesMockInitializer = instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType)
 			// An argument of the mock neither a dependency fulfills nor a default fills is passed what a build that compiles
 			// no mock never compiles (`UnfulfilledMockParameter`).
 			guard let initializer = usesMockInitializer ? instantiable.mockInitializer : instantiable.initializer,
-			      !usesMockInitializer || instantiable.mockCallReturnType == instantiable.concreteInstantiable,
+			      !usesMockInitializer || instantiable.mockCallReturnType == instantiable.concreteInstantiable && !buildsPublicMock,
 			      initializer.arguments.allSatisfy({ argument in argument.hasDefaultValue || instantiable.dependencies.contains(where: argument.isFulfilled(by:)) })
 			else { return .unsupported(.handWrittenMock) }
 			guard !rootLabels.contains(property.label), labels.insert(bindingName).inserted else { return .unsupported(.siblingLabelCollision) }
