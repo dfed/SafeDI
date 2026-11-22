@@ -177,9 +177,9 @@ public enum MockLowering {
 		/// The members that configure the node's children, in the order a public configuration declares them (inline
 		/// order, `MockParameterNode.inlineOrderPosition`).
 		let childMembers: [ChildMember]
-		/// Whether the construction takes a default-valued parameter, whose member and provider the lowering does not
-		/// lower yet.
-		let hasDefaultParameters: Bool
+		/// The construction's default-valued parameters, each a member of the type's public configuration, with the default
+		/// its type's hand-written mock declares for the same label and type, else its own.
+		let defaultFields: [DefaultField]
 
 		/// An argument of the construction: its label, the name its value is bound under, and its type as declared.
 		struct Argument: Sendable, Equatable {
