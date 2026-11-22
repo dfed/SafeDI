@@ -583,6 +583,63 @@ struct SafeDIToolTransitiveModuleInfoTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func resolvingReferences_throwsErrorOfFirstPath_whenTwentyFourModulesBeneathDoNotExist() async throws {
+		let directory = try temporaryDirectory()
+		let missingPaths = (0..<24).reversed().map { directory.appendingPathComponent("Missing\($0).safedi").path }
+		let modulesBeneathCSV = try writeList(of: missingPaths, in: directory)
+
+		await assertThrowsError("Could not read the SafeDI module info file at \(directory.path)/Missing0.safedi: No file exists at that path.") {
+			try await ModuleReferenceResolver(transitiveModuleInfoListPath: modulesBeneathCSV).resolvingReferences(in: [(Self.fileReferringToDeep, "/App.safedi")])
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func resolvingReferences_throwsErrorOfFirstPath_whenTwentyFourModulesBeneathAreMalformed() async throws {
+		let directory = try temporaryDirectory()
+		var malformedPaths = [String]()
+		for index in (0..<24).reversed() {
+			let url = directory.appendingPathComponent("Malformed\(index).safedi")
+			try Data("malformed".utf8).write(to: url)
+			malformedPaths.append(url.path)
+		}
+		let modulesBeneathCSV = try writeList(of: malformedPaths, in: directory)
+
+		await assertThrowsError("Could not read the SafeDI module info file at \(directory.path)/Malformed0.safedi: The file is 9 bytes long, shorter than a module info file’s header. \(BinaryFile.unreadableFileExplanation)") {
+			try await ModuleReferenceResolver(transitiveModuleInfoListPath: modulesBeneathCSV).resolvingReferences(in: [(Self.fileReferringToDeep, "/App.safedi")])
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func resolvingReferences_throwsErrorNamingDirectory_whenModuleBeneathPathIsDirectory() async throws {
+		let directory = try temporaryDirectory()
+		let directoryNamedLikeModuleInfo = directory.appendingPathComponent("Folder.safedi")
+		try FileManager.default.createDirectory(at: directoryNamedLikeModuleInfo, withIntermediateDirectories: true)
+		let modulesBeneathCSV = try writeList(of: [directoryNamedLikeModuleInfo.path], in: directory)
+
+		await assertThrowsError("Could not read the SafeDI module info file at \(directoryNamedLikeModuleInfo.path): The path names a directory, or a file SafeDI may not open.") {
+			try await ModuleReferenceResolver(transitiveModuleInfoListPath: modulesBeneathCSV).resolvingReferences(in: [(Self.fileReferringToDeep, "/App.safedi")])
+		}
+	}
+
+	/// A new directory of its own, removed when the test ends.
+	private mutating func temporaryDirectory() throws -> URL {
+		let directory = URL.temporaryFile
+		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+		filesToDelete.append(directory)
+		return directory
+	}
+
+	/// Writes `paths` in `directory` as a run's modules beneath lists them, and returns the list's path.
+	private func writeList(of paths: [String], in directory: URL) throws -> String {
+		let list = directory.appendingPathComponent("modules-beneath.csv")
+		try paths.joined(separator: ",").write(to: list, atomically: true, encoding: .utf8)
+		return list.path
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsDisagreementNamingBothFiles_whenTwoModulesBeneathNameTheReferencedModule() async throws {
 		var paths = [String]()
 		for checksum: UInt64 in [1, 2] {
