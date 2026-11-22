@@ -136,7 +136,7 @@ extension DependencyTreeGenerator {
 							builtWrapper: parameter.builtWrapper,
 							builder: parameter.builder,
 						)
-					case .constructionDefault, .overrides:
+					case .constructionDefault, .overrides, .optionalBuilder:
 						nil
 					}
 				},
