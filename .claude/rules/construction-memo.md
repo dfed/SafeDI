@@ -69,7 +69,7 @@ These are every `var` `ScopeGenerator` stores; everything else is a `let` set at
 
 | State | Why it does not depend on the root or the place |
 |---|---|
-| `fillCodeByPropertiesGeneratedLater` | Written only on a scope with non-empty `holeArguments`, never memoizable, and keyed by its whole input. |
+| `fillCodeByKey` | Written only on a scope with non-empty `holeArguments`, never memoizable, and keyed by its whole input (`FillCodeKey`: the properties generated later and the fill place bindings). |
 | `unavailablePropertiesToGenerateCodeTask`, `unavailablePropertiesToGeneratedCode` | Keyed by `UnavailablePropertiesCacheKey`, every argument of `generatePropertyCode` but the constant `codeGeneration`. Several places can share one generator, and the oracle compares construction only, so a new emission argument goes in the key. |
 | `rootMockParameterTreeTask` | A mock root only; a root place is never stored. |
 
