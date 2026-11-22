@@ -662,8 +662,8 @@ extension DependencyTreeGenerator {
 			erasedToConcreteTypeMap: erasedToConcreteTypeMap,
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 			publicMockTypeDescriptionToScopeMap: publicMockTypeDescriptionToScopeMap,
-			frozenScopeMap: FrozenScopeMap(freezing: typeDescriptionToScopeMap.lazy.map { (key: $0.key, scope: $0.value) }),
-			frozenPublicMockScopeMap: publicMockTypeDescriptionToScopeMap.map { map in FrozenScopeMap(freezing: map.lazy.map { (key: $0.key, scope: $0.value) }) },
+			frozenScopeMap: FrozenScopeMap(freezing: typeDescriptionToScopeMap.lazy.map { (key: $0.key, scope: $0.value) }, interningIn: internerSpace),
+			frozenPublicMockScopeMap: publicMockTypeDescriptionToScopeMap.map { map in FrozenScopeMap(freezing: map.lazy.map { (key: $0.key, scope: $0.value) }, interningIn: internerSpace) },
 			flatParameterMockDefaults: flatParameterMockDefaults(in: typeDescriptionToScopeMap, emittingModule: mockEmittingModule),
 			handWrittenMockLocationsByConcreteType: handWrittenMockLocationsByConcreteType,
 		)
