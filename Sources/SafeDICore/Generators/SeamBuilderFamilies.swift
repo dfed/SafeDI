@@ -265,9 +265,12 @@ extension DependencyTreeGenerator {
 			bindsReceivesAgain: bindsReceivesAgain,
 			namesApartAtRoot: namesApartAtRoot,
 		)
+		// Whether a place carries a field narrower than the seam, which a same-package caller reads: such a seam keeps its
+		// builder structs until it declares a carrier per tier (the package carrier beside the public one).
+		let holdsFieldNarrowerThanSeam = flatHoles.contains { hole in hole.fields.contains { $0.access < seamTypeAccess } }
 		for holeType in orderedHoleTypes {
 			let stem = stemByHoleType[holeType, default: ""]
-			let typeNames = scopeTypeNames.isSeams && !callsBuildersOfOtherSeams && reenteringCalls.isEmpty ? ScopeTypeNames.seamCarriers : scopeTypeNames
+			let typeNames = scopeTypeNames.isSeams && !callsBuildersOfOtherSeams && reenteringCalls.isEmpty && !holdsFieldNarrowerThanSeam ? ScopeTypeNames.seamCarriers : scopeTypeNames
 			let rootTypeNames = (plain: "\(typeNames.plain)\(stem)".spelledAsIdentifier, sendable: "\(typeNames.sendable)\(stem)".spelledAsIdentifier)
 			let builtType = flatHoles.builtType(of: holeType)
 			// The enums, nested by type.

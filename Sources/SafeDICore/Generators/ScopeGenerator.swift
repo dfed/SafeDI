@@ -2519,7 +2519,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				if let carriedInnerScope = carriedInnerScopes.first(where: { $0.name == label }) {
 					// A level function an enclosing call declares takes the struct under its own name for it.
 					let argumentLabel = Self.isFill(target) ? label : target.reusedCarriedInnerScopes.first { $0.type == carriedInnerScope.type }?.upName ?? carriedInnerScope.upName
-					return ("\(argumentLabel.spelledAsArgumentLabel): \(carriedInnerScope.upName).\(dispatcherCase.name.spelledAsMemberReference)(\(payloadName))", true)
+					// A carrier's member takes the case's values as arguments, which the closure binds under the payload's name.
+					let memberArguments = takesValuesAsArguments ? (dispatcherCase.values ?? []).map { SeamHoles.argumentName(of: $0, inPayloadNamed: payloadName) }.joined(separator: ", ") : payloadName
+					return ("\(argumentLabel.spelledAsArgumentLabel): \(carriedInnerScope.upName).\(dispatcherCase.name.spelledAsMemberReference)(\(memberArguments))", true)
 				} else if readsOwnPayload, (dispatcherCase.carriedLabels.contains(label) && dispatcherCase.handsOn(parameter)) || (parameter.bindsMemo && labelsHiddenByReenteringCalls.contains(label) && dispatcherCase.values?.contains { $0.property.label == label } == true), let field = dispatcherCase.values?.first(where: { $0.property.label == label }) {
 					// A target that binds a deferred parameter's memo is handed the memo, whose instance it reads where it reads the
 					// value: also a deferred field `carriedLabels` leaves out where a call inside a fill passes a fill of this call on
@@ -7871,7 +7873,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// A carrier's member takes the values its level binds before the case's property, in field order: a deferred
 				// parameter's as its memo, which a fill reads the instance of where its tree reads the value.
 				let parameters = (enumCase.values?.fields ?? []).map { field in
-					"_ \(field.property.label.spelledAsIdentifier): \((field.memoType ?? field.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)).asSource)"
+					(field.memoType ?? field.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)).asSource
 				}
 				members.append((enumCase.name, "\(sendableAttribute)(\(parameters.joined(separator: ", "))) -> \(returnType)", noScopeValue))
 				ignoredArguments[enumCase.name] = parameters.isEmpty ? "" : "\(Array(repeating: "_", count: parameters.count).joined(separator: ", ")) in "
@@ -7900,7 +7902,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("")
 		lines.append("\(memberIndent)public \(carrierName == nil ? "" : "convenience ")init(\(ReservedName.noScopeArgumentLabel) \(builderParameter): @escaping \(noScopeType.asSource)) {")
 		if carrierName != nil {
-			lines.append("\(bodyIndent)self.init(\(members.map { "\($0.name): { \(ignoredArguments[$0.name] ?? "")\($0.noScopeValue) }" }.joined(separator: ", ")))")
+			lines.append("\(bodyIndent)self.init(\(members.map { "\($0.name.spelledAsArgumentLabel): { \(ignoredArguments[$0.name] ?? "")\($0.noScopeValue) }" }.joined(separator: ", ")))")
 		} else {
 			for member in members {
 				lines.append("\(bodyIndent)self.\(member.name) = { _ in \(member.noScopeValue) }")
