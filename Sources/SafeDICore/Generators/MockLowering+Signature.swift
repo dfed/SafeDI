@@ -91,6 +91,22 @@ extension MockLowering {
 			forwardedParameters + rootDefaultParameters + flatReceivedParameters + uncoveredParameters
 		}
 
+		/// The signature without the flat received parameters of `properties`, which another kind of parameter takes in their
+		/// place: a builder a call of another module's public mock passes up (lane C's family).
+		func removingFlatReceivedParameters(_ properties: Set<Property>) -> RootSignature {
+			RootSignature(
+				forwardedParameters: forwardedParameters,
+				rootDefaultParameters: rootDefaultParameters,
+				flatReceivedParameters: flatReceivedParameters.filter { !properties.contains($0.property) },
+				uncoveredParameters: uncoveredParameters,
+				sharedValueDocumentation: sharedValueDocumentation,
+				onlyIfAvailableOverrides: onlyIfAvailableOverrides,
+				renamesByLabelAndType: renamesByLabelAndType,
+				uncoveredParameterNamesByLabelAndType: uncoveredParameterNamesByLabelAndType,
+				typesDeclaredEscaping: typesDeclaredEscaping,
+			)
+		}
+
 		/// The parameters' declarations in `mock()`, at `indent`.
 		func parameterLines(indent: String) -> [String] {
 			parameters.map { parameter in
