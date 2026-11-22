@@ -249,15 +249,7 @@ extension ScopeGenerator {
 		if hasOverrides {
 			// The members are in inline order: the build's order without a child that holds a place starting after its
 			// siblings (`MockParameterNode.inlineOrderPosition`).
-			let children = propertiesToGenerate
-			var inlinePositionByProperty = [Property: Int]()
-			for (position, index) in computeOrderedPropertyToGenerateIndices(startingCarriersLast: false).enumerated() {
-				guard let property = children[index].property, inlinePositionByProperty[property] == nil else { continue }
-				inlinePositionByProperty[property] = position
-			}
-			let inlineOrderedNodes = nodes.enumerated().sorted { lhs, rhs in
-				(inlinePositionByProperty[lhs.element.property] ?? Int.max, lhs.offset) < (inlinePositionByProperty[rhs.element.property] ?? Int.max, rhs.offset)
-			}.map(\.element)
+			let inlineOrderedNodes = inlineOrdered(nodes, property: \.property)
 			lines.append(MockLowering.publicOverridesStruct(
 				members: inlineOrderedNodes.compactMap(MockLowering.PublicConstructionRecord.ChildMember.init(of:)),
 				mockedTypeModuleName: instantiable.moduleName,
@@ -298,11 +290,28 @@ extension ScopeGenerator {
 	}
 }
 
+extension ScopeGenerator {
+	/// The elements in inline order: the build's order without a child that holds a place starting after its siblings
+	/// (`MockParameterNode.inlineOrderPosition`), an element of no child keeping its place after them.
+	nonisolated func inlineOrdered<Element>(_ elements: [Element], property: (Element) -> Property) -> [Element] {
+		let children = propertiesToGenerate
+		var inlinePositionByProperty = [Property: Int]()
+		for (position, index) in computeOrderedPropertyToGenerateIndices(startingCarriersLast: false).enumerated() {
+			guard let property = children[index].property, inlinePositionByProperty[property] == nil else { continue }
+			inlinePositionByProperty[property] = position
+		}
+		return elements.enumerated().sorted { lhs, rhs in
+			(inlinePositionByProperty[property(lhs.element)] ?? Int.max, lhs.offset) < (inlinePositionByProperty[property(rhs.element)] ?? Int.max, rhs.offset)
+		}.map(\.element)
+	}
+}
+
 extension MockLowering {
 	/// The construction a public mock's configured `node`, whose children are `children`, builds its type with, which its
-	/// configuration record carries.
-	static func publicConstructionRecord(of node: ConstantNode, children: [TreeNode]) -> PublicConstructionRecord? {
-		PublicConstructionRecord(of: node, children: children)
+	/// configuration record carries, its children in the inline order of `generator`, the node's, as the configuration's
+	/// members are.
+	static func publicConstructionRecord(of node: ConstantNode, children: [TreeNode], orderedBy generator: ScopeGenerator) -> PublicConstructionRecord? {
+		PublicConstructionRecord(of: node, children: generator.inlineOrdered(children, property: \.property))
 	}
 }
 
