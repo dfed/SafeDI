@@ -5146,7 +5146,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	let fieldsCarriedBySites: Set<Property>
 	/// The received properties that are in scope only as the instance of a `LazilyInstantiated` property created
 	/// further up the tree. Passing one to this scope’s initializer reads that instance, which instantiates it.
-	private let lazilyInstantiatedInstanceProperties: Set<Property>
+	let lazilyInstantiatedInstanceProperties: Set<Property>
 	// D1 lane hook (lane B): the mock lowering reads which by-value receives pass a lazy wrapper's instance.
 	/// `lazilyInstantiatedInstanceProperties`, read by the mock lowering.
 	nonisolated var mockLoweringLazilyInstantiatedInstanceProperties: Set<Property> {
