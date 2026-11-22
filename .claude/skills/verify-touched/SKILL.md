@@ -15,4 +15,4 @@ Every changed path matches a rule or runs the whole suite. A Swift file of a tes
 
 `--runner COMMAND` (or `SAFEDI_VERIFY_RUNNER`) puts a command before `swift test`, for a machine that queues heavy work. The script makes a `TMPDIR` of the run's own, inside the inherited `TMPDIR` when that is outside the system temporary directory and the checkout, else inside the SwiftPM folder `CLAUDE.md` names, and removes only that folder when it ends or is terminated; terminating it ends `swift test` too. It exits with `swift test`'s status, 0 without a run when no changed path reaches a test, 1 when the run passed and ran no test, and 2 for wrong arguments or a base git cannot find.
 
-After changing the script, a test target, a source directory or a path a test reads, run `python3 -I S --self-test`, which also checks that every tracked file matches a rule. "Check Line Coverage on Linux" runs the same.
+After changing the script, a test target, a source directory or a path a test reads, run `python3 -I S --self-test`, which also checks that every tracked file matches a rule. "Check Agent Skill Scripts on Linux" runs the same.

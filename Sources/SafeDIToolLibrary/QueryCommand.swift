@@ -48,7 +48,7 @@ public struct QueryNeeds: AsyncParsableCommand {
 
 	@Option(parsing: .upToNextOption, help: "Directories containing Swift files to include, relative to the executing directory, as `generate` takes them. Each directory is a module holding the Swift files found in it recursively, named after its last path component, or after as many trailing components as tell it apart from the other modules (`Home/Sources`); a Swift file named directly belongs to its directory’s module. The files are read as `generate` reads a module’s own files: the module’s `#SafeDIConfiguration` applies to them, and its `additionalDirectoriesToInclude` is not followed, since every module is named here.") var include: [String] = []
 
-	@Option(parsing: .upToNextOption, help: "`.safedi` module info files to include, relative to the executing directory, as `generate --module-info-output` writes them. Each file is a module holding the declarations its build read, named after the file without its `.safedi` extension and without a trailing `_safedi` (`App_safedi.safedi`, which the Bazel macro writes for a library named `App`, is the module `App`), or after as many trailing path components as tell it apart from the other modules. A file is read as `generate --dependent-module-info-file-path` reads one, with what its build read under that build’s compilation conditions, so `--active-compilation-conditions` does not apply to it.") var moduleInfo: [String] = []
+	@Option(parsing: .upToNextOption, help: "`.safedi` module info files to include, relative to the executing directory, as `generate --module-info-output` writes them. Each file is a module holding the declarations its build read, named after the module the file records, whatever the file is called; two files that record one module are an error. A file is read as `generate --dependent-module-info-file-path` reads one, with what its build read under that build’s compilation conditions, so `--active-compilation-conditions` does not apply to it.") var moduleInfo: [String] = []
 
 	@Option(parsing: .upToNextOption, help: "The compilation conditions that are active for the build, matching the compiler’s -D flags. SafeDI declarations in `#if` blocks of the files under `--include` are read only when the block’s condition evaluates to true.") var activeCompilationConditions: [String] = []
 
@@ -169,14 +169,15 @@ public struct QueryNeeds: AsyncParsableCommand {
 			))
 		}
 
-		// Each view builds the scope map its types' mock roots are built from once, for every type named. The mock view's
-		// results are read first, type by type, so that a missing name is reported from the full map.
-		let mockResults = await mockGenerator.requirements(of: mockQueries)
-		let productionResults = await productionGenerator.requirements(of: typeEntries.map {
+		// Each view builds the scope map its types' mock roots are built from once, for every type named. The two views are
+		// separate generators, so they are built side by side; the mock view's results are read first, type by type, so that
+		// a missing name is reported from the full map, whichever view finishes first.
+		async let productionResults = productionGenerator.requirements(of: typeEntries.map {
 			DependencyTreeGenerator.RequirementsQuery(typeName: $0.typeName, generatesMock: $0.generatesMock, mockEmittingModule: nil)
 		})
+		let mockResults = await mockGenerator.requirements(of: mockQueries)
 		var typeReports = [TypeReport]()
-		for (typeEntry, productionResult) in zip(typeEntries, productionResults) {
+		for (typeEntry, productionResult) in await zip(typeEntries, productionResults) {
 			let typeName = typeEntry.typeName
 			let mockMethodName = typeEntry.mockMethodName
 			let generatingModuleNames = typeEntry.generatingModuleNames
@@ -242,20 +243,17 @@ public struct QueryNeeds: AsyncParsableCommand {
 			throw QueryError.noModuleIncluded
 		}
 		let activeCompilationConditions = Set(activeCompilationConditions)
-		let reads = await withTaskGroup(
-			of: (name: String, read: Result<ParsedQueryModule, any Error>).self,
-			returning: [(name: String, read: Result<ParsedQueryModule, any Error>)].self,
-		) { taskGroup in
+		let reads = await withTaskGroup(of: ModuleRead.self, returning: [ModuleRead].self) { taskGroup in
 			for includedModule in includedModules {
 				taskGroup.addTask {
 					do {
-						return try await (name: includedModule.name, read: .success(ParsedQueryModule(reading: includedModule, activeCompilationConditions: activeCompilationConditions)))
+						return try await ModuleRead(name: includedModule.name, read: .success(ParsedQueryModule(reading: includedModule, activeCompilationConditions: activeCompilationConditions)))
 					} catch {
-						return (name: includedModule.name, read: .failure(error))
+						return ModuleRead(name: includedModule.name, read: .failure(error))
 					}
 				}
 			}
-			var reads = [(name: String, read: Result<ParsedQueryModule, any Error>)]()
+			var reads = [ModuleRead]()
 			for await read in taskGroup {
 				reads.append(read)
 			}
@@ -266,6 +264,22 @@ public struct QueryNeeds: AsyncParsableCommand {
 		return try reads
 			.sorted { $0.name < $1.name }
 			.map { try $0.read.get() }
+	}
+
+	/// One module's read, as a task of `readIncludedModules` returns it. A struct, not a tuple: release builds of Swift 6.3
+	/// with `-Osize` (2.3.1's published Linux binary), Swift 6.4.1 and 6.4.2 on Linux, and 2.3.1's published macOS
+	/// binary miscompiled the task group's `(name: String, read: Result<ParsedQueryModule, any Error>)`, so `query`
+	/// crashed in `swift_taskGroup_wait_next_throwing`, or returned no modules. Swift 6.2 with `-O` compiles it correctly.
+	private struct ModuleRead: Sendable {
+		let name: String
+		let read: Result<ParsedQueryModule, any Error>
+	}
+
+	/// One module info file's read, as a task of `readModuleInfoFiles` returns it. A struct, not a tuple, for the
+	/// miscompilation `ModuleRead` describes.
+	private struct ModuleInfoFileRead: Sendable {
+		let index: Int
+		let read: Result<ModuleInfoFile, any Error>
 	}
 
 	/// How the report attributes each file the modules hold, keyed by the file's path as read.
@@ -309,15 +323,15 @@ public struct QueryNeeds: AsyncParsableCommand {
 			}
 		}
 		let reads = await withTaskGroup(
-			of: (index: Int, read: Result<ModuleInfoFile, any Error>).self,
+			of: ModuleInfoFileRead.self,
 			returning: [Result<ModuleInfoFile, any Error>].self,
 		) { taskGroup in
 			for (index, path) in pathsToRead.enumerated() {
 				taskGroup.addTask {
-					(index: index, read: Result { try ParsedQueryModule.readModuleInfoFile(at: path) })
+					ModuleInfoFileRead(index: index, read: Result { try ParsedQueryModule.readModuleInfoFile(at: path) })
 				}
 			}
-			var indexedReads = [(index: Int, read: Result<ModuleInfoFile, any Error>)]()
+			var indexedReads = [ModuleInfoFileRead]()
 			for await indexedRead in taskGroup {
 				indexedReads.append(indexedRead)
 			}

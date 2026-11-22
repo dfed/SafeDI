@@ -37,7 +37,7 @@ coverage report of step 3 is made there too.
 
 `--coverage` adds `Scripts/changed-line-coverage.sh BASE` as a step, in that worktree: every changed line under
 `Sources/` and `Plugins/` runs in a test. Without it the block says nothing of unit-test coverage, which
-"Check Line Coverage on Linux" gates on CI.
+"Check Agent Skill Scripts on Linux" gates on CI.
 
 It then lists these for the hand-back to answer, which fail nothing:
 

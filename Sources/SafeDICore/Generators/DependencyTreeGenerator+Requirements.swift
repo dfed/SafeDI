@@ -121,7 +121,7 @@ extension DependencyTreeGenerator {
 		else { return nil }
 		let instantiable = mockRootInstantiable(for: scope.instantiable, scope: scope)
 		// The context a public mock's root reads, made only for one.
-		let publicMockContext = instantiable.generateMock == .public ? makePublicMockContext() : nil
+		let publicMockContext = instantiable.generateMock == .public ? makePublicMockContext(proof: ownAccessProof().proof) : nil
 		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation()
 		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var scopesWithValidatedDeclarations = Set<ObjectIdentifier>()
@@ -282,8 +282,9 @@ extension DependencyTreeGenerator {
 				reason: .noInstantiableFulfillsType(uncoveredParameter.instantiatedType),
 			))
 		}
-		// The builders the internal mock of a type that generates its dependency tree takes in place of its places' parameters.
-		for builder in parameters.seamMockBuilders {
+		// The builders the internal mock of a type that generates its dependency tree takes in place of its places' parameters;
+		// a builder it takes optional, for places its calls fill, is no requirement.
+		for builder in parameters.seamMockBuilders where !builder.isOptional {
 			requiredParameters.append(TypeRequirements.RequiredParameter(
 				label: builder.label,
 				typeSource: builder.parameterType.strippingEscaping.asSource,

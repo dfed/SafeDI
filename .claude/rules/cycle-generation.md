@@ -10,8 +10,6 @@ paths:
   - "Tests/**/*OnlyIfAvailable*.swift"
 ---
 
-<!-- Moved from CLAUDE.md §Cycle mechanisms and §Common Pitfalls at 337e5e22. Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 # Cycle mechanisms: generation
 
 This file holds the mechanisms generation uses; the validation half of the table is in `cycle-validation.md`.
@@ -34,7 +32,7 @@ A deliberate gap, to be fixed: where a call of the builder function a lazy cycle
 
 ## Walks
 
-- **No synchronous recursion per level of a tree.** A dependency tree, a chain of received dependencies, a chain of siblings that require one another, and a mock parameter tree can each be as deep as the module has types, while `generate` and the tests run on concurrency threads, whose stack is half a megabyte on Apple platforms (a debug frame of the old instantiation walk took 40 KB, so a chain of 13 overflowed). Walk them with an explicit stack that keeps the recursive visiting order, so every diagnostic and memo is unchanged (the walks of `DependencyTreeGenerator`, `Scope.createScopeGenerator`, `ScopeGenerator.orderedPropertyToGenerateIndices`), or recurse through `async` functions, whose frames the task allocates (`ScopeGenerator`'s tree walks, the mock emitter `generateMockBodyBindings`, and the mock tree walks). An object that owns the next level of a tree hands what it owns to `DeferredRelease` in its `deinit` (`Scope`, `ScopeGenerator`, `MockTreeItems`); a new owning link needs the same, or releasing a deep tree nests a deinitializer per level. `SafeDIToolDeepTreeTests` builds chains deeper than any recursion could go.
+- **No synchronous recursion per level of a tree.** A dependency tree, a chain of received dependencies, a chain of siblings that require one another, and a mock parameter tree can each be as deep as the module has types, while `generate` and the tests run on concurrency threads, whose stack is half a megabyte on Apple platforms (a debug frame of the old instantiation walk took 40 KB, so a chain of 13 overflowed). Walk them with an explicit stack that keeps the recursive visiting order, so every diagnostic and memo is unchanged (the walks of `DependencyTreeGenerator`, `Scope.createScopeGenerator`, `ScopeGenerator.orderedPropertyToGenerateIndices`), or recurse through `async` functions, whose frames the task allocates (`ScopeGenerator`'s tree walks, the mock emitter `generateMockBodyBindings`, and the mock tree walks). An object that owns the next level of a tree holds it in a `let` of `DeferredReleaseSlot`, whose deinitializer hands it to `DeferredRelease` (`ScopeGenerator`, `MockTreeItems`, `NearestDeclarations`' layers), so a `Sendable` owner needs no mutable stored property; one that changes what it owns after `init` (`Scope`) swaps it out in its own `deinit` and calls `DeferredRelease.release(_:)`. A new owning link needs one of the two, or releasing a deep tree nests a deinitializer per level. `SafeDIToolDeepTreeTests` builds chains deeper than any recursion could go.
 - A memoized walk with a cycle sentinel must not cache a result that took nothing from a scope still being walked: that result is wrong from any other entry point, and which entry point walks first can follow set order. `collectReceivedProperties` keeps such results only until the scope they lack finishes its walk.
 
 ## Property kinds and erasure
