@@ -7,8 +7,6 @@ paths:
   - "Tests/**/*PublicMock*.swift"
 ---
 
-<!-- Keep this file under 32,000 characters (Scripts/check-claude-instruction-files.sh): Claude truncates an on-demand file at 40,000. -->
-
 # The contract for seams and public mocks
 
 Every design, change and review of a seam (`generateDependencyTree: true`) or a public mock (`generateMock: .public`) is judged against these seven rules, in this order; rules 1–4 outrank rules 5–7. The baseline is the inline build: the same types generated in one module, with no seam and no public mock call. How seams and public mocks are generated is in `seams.md`, `seam-holes.md` and `public-mocks.md`.
