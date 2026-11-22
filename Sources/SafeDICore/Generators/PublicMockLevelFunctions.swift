@@ -146,85 +146,126 @@ struct PublicMockLevelFunctions: Sendable {
 		var names = GeneratedNameAllocator(reserving: reservedNames.union(dispatchers.map(\.functionName)))
 		var indexBySpecialization = [String: Int]()
 		var usedBaseNames = Set<String>()
-		/// The index of the function of `dispatcher` given `environment`, the values the routes to it bind, by label.
-		func function(of dispatcher: ScopeGenerator.FillDispatcher, given environment: [String: SeamSignature.Hole.Field]) -> Int {
+		/// The index of the function of `dispatcher` given `environment`, the values the routes to it bind, by label, and the
+		/// level whose members are still to be built where the function is new.
+		func function(of dispatcher: ScopeGenerator.FillDispatcher, given environment: [String: SeamSignature.Hole.Field]) -> (index: Int, level: LevelUnderConstruction?) {
 			let relevant = relevantLabelsByKey[dispatcher.key] ?? []
 			let parameters = environment.filter { relevant.contains($0.key) }.values.sorted { $0.property < $1.property }
 			let specialization = ([dispatcher.key] + parameters.map { "\($0.property.label): \($0.property.typeDescription.asSource)" }).joined(separator: "\u{1F}")
 			if let index = indexBySpecialization[specialization] {
-				return index
+				return (index, nil)
 			}
 			let name = usedBaseNames.insert(dispatcher.functionName).inserted ? dispatcher.functionName : names.claim(dispatcher.functionName)
 			let index = functions.count
 			indexBySpecialization[specialization] = index
 			let relevantCarried = dispatcher.carriedInnerScopes.filter { relevant.contains($0.name) }
 			functions.append(Function(dispatcher: dispatcher, name: name, parameters: parameters, carriedInnerScopes: relevantCarried))
-			let carriedByName = Dictionary(relevantCarried.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
-			let ownEnvironment = Dictionary(parameters.map { ($0.property.label, $0) }, uniquingKeysWith: { first, _ in first })
-			var members = [Member]()
-			for dispatcherCase in dispatcher.cases {
-				// A call declares level functions only for the builders it fills, and it fills every place of such a builder
-				// (`DependencyTreeGenerator.holesFilled(byCallsOf:in:)` decides per hole type, and a gate passes a hole type up
-				// whole), so every case of their dispatchers has a target, which is a fill, a level of this call, or a level an
-				// enclosing call declares: no input reaches the `continue`, nor a case that emits no member.
-				guard let target = dispatcherCase.target else { continue }
-				let payloadFields = Dictionary((dispatcherCase.values ?? []).map { ($0.property.label, $0) }, uniquingKeysWith: { first, _ in first })
-				if let fillParameters = fillParametersByKey[target.key] {
-					// The fill takes each value it reads beside the payload from this function's own parameter: a value no level on the
-					// routes binds is the caller's, which the root level function takes (`callerReads`). A label the case's type binds
-					// later is never one of them: the payload carries each value the type builds before the place, and a value it builds
-					// after the place, which a fill reads, is production's error (`DependencyTreeGenerator.validateFills`). Nor does a level
-					// bind a value in a form that does not provide the one the fill reads: that is production's hidden-receive error.
-					let arguments = fillParameters.compactMap { parameter -> Argument? in
-						let label = parameter.property.label
-						if let carried = carriedByName[label] {
-							return Argument(label: label, readsPayload: true, heldForm: parameter.property, handedForm: parameter.property, carriedUpName: carried.upName)
+			return (index, LevelUnderConstruction(
+				index: index,
+				dispatcher: dispatcher,
+				relevantCarried: relevantCarried,
+				carriedByName: Dictionary(relevantCarried.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first }),
+				ownEnvironment: Dictionary(parameters.map { ($0.property.label, $0) }, uniquingKeysWith: { first, _ in first }),
+			))
+		}
+		/// Builds the members of `level` and of every new level its cases lead to, depth first in case order, as a walk that
+		/// recursed into each case's level would: the levels can be as deep as the called mock's tree, so those in progress are
+		/// held on an explicit stack, not the thread's, whose half megabyte on Apple platforms a few hundred levels of recursion
+		/// overflowed. A case that leads to a new level adds its member before the level beneath is built, since the member reads only the function's
+		/// parameters and carried structs, which `function(of:given:)` sets.
+		func buildMembers(startingAt level: LevelUnderConstruction) {
+			var levelsInProgress = [level]
+			while var level = levelsInProgress.popLast() {
+				var levelBeneath: LevelUnderConstruction?
+				while levelBeneath == nil, level.nextCaseIndex < level.dispatcher.cases.count {
+					let dispatcherCase = level.dispatcher.cases[level.nextCaseIndex]
+					level.nextCaseIndex += 1
+					// A call declares level functions only for the builders it fills, and it fills every place of such a builder
+					// (`DependencyTreeGenerator.holesFilled(byCallsOf:in:)` decides per hole type, and a gate passes a hole type up
+					// whole), so every case of their dispatchers has a target, which is a fill, a level of this call, or a level an
+					// enclosing call declares: no input reaches the `continue`, nor a case that emits no member.
+					guard let target = dispatcherCase.target else { continue }
+					let payloadFields = Dictionary((dispatcherCase.values ?? []).map { ($0.property.label, $0) }, uniquingKeysWith: { first, _ in first })
+					if let fillParameters = fillParametersByKey[target.key] {
+						// The fill takes each value it reads beside the payload from this function's own parameter: a value no level on the
+						// routes binds is the caller's, which the root level function takes (`callerReads`). A label the case's type binds
+						// later is never one of them: the payload carries each value the type builds before the place, and a value it builds
+						// after the place, which a fill reads, is production's error (`DependencyTreeGenerator.validateFills`). Nor does a level
+						// bind a value in a form that does not provide the one the fill reads: that is production's hidden-receive error.
+						let arguments = fillParameters.compactMap { parameter -> Argument? in
+							let label = parameter.property.label
+							if let carried = level.carriedByName[label] {
+								return Argument(label: label, readsPayload: true, heldForm: parameter.property, handedForm: parameter.property, carriedUpName: carried.upName)
+							}
+							return level.ownEnvironment[label].map { Argument(label: label, readsPayload: false, heldForm: $0.property, handedForm: parameter.property) }
 						}
-						return ownEnvironment[label].map { Argument(label: label, readsPayload: false, heldForm: $0.property, handedForm: parameter.property) }
-					}
-					members.append(.fill(caseName: dispatcherCase.name, target: target, arguments: arguments, isIdentity: arguments.allSatisfy { $0.heldForm == $0.handedForm && $0.carriedUpName == nil }))
-				} else if let targetDispatcher = dispatchersByKey[target.key] {
-					// The level beneath is handed the values this case's payload carries, and those this function takes that the
-					// case's type does not bind later.
-					var childEnvironment = ownEnvironment
-					for label in dispatcherCase.labelsBoundLater {
-						childEnvironment[label] = nil
-					}
-					for (label, field) in payloadFields {
-						childEnvironment[label] = field
-					}
-					let childIndex = function(of: targetDispatcher, given: childEnvironment)
-					var arguments = functions[childIndex].carriedInnerScopes.compactMap { childCarried in
-						carriedByName[childCarried.name].map { carried in
-							let property = Property(label: childCarried.name, typeDescription: childCarried.type)
-							return Argument(label: childCarried.upName, readsPayload: true, heldForm: property, handedForm: property, carriedUpName: carried.upName)
+						level.members.append(.fill(caseName: dispatcherCase.name, target: target, arguments: arguments, isIdentity: arguments.allSatisfy { $0.heldForm == $0.handedForm && $0.carriedUpName == nil }))
+					} else if let targetDispatcher = dispatchersByKey[target.key] {
+						// The level beneath is handed the values this case's payload carries, and those this function takes that the
+						// case's type does not bind later.
+						var childEnvironment = level.ownEnvironment
+						for label in dispatcherCase.labelsBoundLater {
+							childEnvironment[label] = nil
 						}
-					}
-					arguments += functions[childIndex].parameters.map { parameter in
-						Argument(label: parameter.property.label, readsPayload: payloadFields[parameter.property.label] != nil, heldForm: parameter.property, handedForm: parameter.property)
-					}
-					members.append(.level(caseName: dispatcherCase.name, functionIndex: childIndex, arguments: arguments))
-				} else if let call = enclosingLevelCalls[target.key] {
-					// The re-entered function takes each struct under its own name for it, in its own order.
-					let carriedArguments = target.reusedCarriedInnerScopes.compactMap { reused in
-						relevantCarried.first { $0.type == reused.type }.map { carried in
-							let property = Property(label: carried.name, typeDescription: carried.type)
-							return Argument(label: reused.upName, readsPayload: true, heldForm: property, handedForm: property, carriedUpName: carried.upName)
+						for (label, field) in payloadFields {
+							childEnvironment[label] = field
 						}
+						let (childIndex, newLevel) = function(of: targetDispatcher, given: childEnvironment)
+						var arguments = functions[childIndex].carriedInnerScopes.compactMap { childCarried in
+							level.carriedByName[childCarried.name].map { carried in
+								let property = Property(label: childCarried.name, typeDescription: childCarried.type)
+								return Argument(label: childCarried.upName, readsPayload: true, heldForm: property, handedForm: property, carriedUpName: carried.upName)
+							}
+						}
+						arguments += functions[childIndex].parameters.map { parameter in
+							Argument(label: parameter.property.label, readsPayload: payloadFields[parameter.property.label] != nil, heldForm: parameter.property, handedForm: parameter.property)
+						}
+						level.members.append(.level(caseName: dispatcherCase.name, functionIndex: childIndex, arguments: arguments))
+						levelBeneath = newLevel
+					} else if let call = enclosingLevelCalls[target.key] {
+						// The re-entered function takes each struct under its own name for it, in its own order.
+						let carriedArguments = target.reusedCarriedInnerScopes.compactMap { reused in
+							level.relevantCarried.first { $0.type == reused.type }.map { carried in
+								let property = Property(label: carried.name, typeDescription: carried.type)
+								return Argument(label: reused.upName, readsPayload: true, heldForm: property, handedForm: property, carriedUpName: carried.upName)
+							}
+						}
+						level.members.append(.reentry(caseName: dispatcherCase.name, call: call, carriedArguments: carriedArguments))
 					}
-					members.append(.reentry(caseName: dispatcherCase.name, call: call, carriedArguments: carriedArguments))
+				}
+				if let levelBeneath {
+					levelsInProgress.append(level)
+					levelsInProgress.append(levelBeneath)
+				} else {
+					functions[level.index].members = level.members
 				}
 			}
-			functions[index].members = members
-			return index
 		}
 		for root in roots {
 			guard rootFunctionIndexByKey[root.dispatcherKey] == nil, let dispatcher = dispatchersByKey[root.dispatcherKey] else { continue }
-			rootFunctionIndexByKey[root.dispatcherKey] = function(of: dispatcher, given: callerReads.mapValues(\.field))
+			let (index, level) = function(of: dispatcher, given: callerReads.mapValues(\.field))
+			rootFunctionIndexByKey[root.dispatcherKey] = index
+			if let level {
+				buildMembers(startingAt: level)
+			}
 		}
 		for root in roots {
 			rootCallsByLabel[root.label] = rootFunctionIndexByKey[root.dispatcherKey].map { rootCall(of: functions[$0], for: root) }
 		}
+	}
+
+	/// A level function whose members are being built: the cases of its dispatcher still to visit, and what each member reads
+	/// of the function.
+	private struct LevelUnderConstruction {
+		let index: Int
+		let dispatcher: ScopeGenerator.FillDispatcher
+		/// The structs of the caller's levels the function is handed (`Function.carriedInnerScopes`), and by name.
+		let relevantCarried: [ScopeGenerator.FillDispatcher.CarriedInnerScope]
+		let carriedByName: [String: ScopeGenerator.FillDispatcher.CarriedInnerScope]
+		/// The function's parameters, by label.
+		let ownEnvironment: [String: SeamSignature.Hole.Field]
+		var nextCaseIndex = 0
+		var members = [Member]()
 	}
 
 	/// What a call inside a fill that re-enters a level function hands it beside the structs of the caller's levels.
