@@ -12,6 +12,10 @@ for file in .claude/rules/*.md; do
 		echo "$file: every rules file needs paths: frontmatter, or it loads in every session"
 		status=1
 	fi
+	if ! grep -qF "\`$(basename "$file")\`" CLAUDE.md && ! grep -qF "\`$file\`" CLAUDE.md; then
+		echo "$file: not named in CLAUDE.md's \"Where the rest lives\" table, which a session started outside the worktree reads its rules from"
+		status=1
+	fi
 	if (( $(characters "$file") > 32000 )); then
 		echo "$file: over 32,000 characters; Claude truncates on-demand files at 40,000"
 		status=1
@@ -31,6 +35,9 @@ instruction_files=(CLAUDE.md .claude/rules/*.md)
 while IFS= read -r file; do instruction_files+=("$file"); done < <(git ls-files '*/CLAUDE.md')
 if grep -nE '(^|[[:space:]])@[A-Za-z0-9_.~/-]*(/|\.md)' "${instruction_files[@]}"; then
 	echo "an @path import loads eagerly with the importing file; name files in backticks instead"
+	status=1
+fi
+if ! python3 Scripts/check-instruction-symbols.py; then
 	status=1
 fi
 exit $status

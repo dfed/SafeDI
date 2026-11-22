@@ -33,7 +33,7 @@ Formatting changes from `./CLI/lint.sh` go in a commit of their own, after the c
 - `Scripts/unexecuted-lines.py` is "Check Line Coverage on Linux": it needs both test jobs' reports, so it cannot check a local run. To read a CI run's result locally, download the run's reports (`gh run download RUN -p 'line-coverage-*'`) and run it as the job does, from a checkout of the commit their `commit.txt` names (for a pull request, GitHub's merge commit, which `git fetch origin SHA` fetches); `--self-test DIRECTORY` checks the script against fixtures.
 - Tools only agents run are skills under `.claude/skills/`: `verify-touched` runs the suites a branch touches, before any full Verify. Before a review, run `pre-review` on the final head and put its block in the hand-back: lint, the touched suites, every fuzzer corpus with its pins on CI when the change owes them, and the lists a reviewer would otherwise ask for (32 of the 49 findings of one day's review rounds were ones an existing command shows).
 - `Scripts/generate-time-check.py BASE_TOOL HEAD_TOOL DIRECTORY` is "Check Generate Time on Linux": it times two builds of `SafeDITool` generating synthetic seam, inline and public mock graphs in alternating runs, and fails when the second takes twice as long on one.
-- `Scripts/check-claude-instruction-files.sh` fails when an instruction file could be truncated or would load at launch by mistake; "Check Markdown links" runs it.
+- `Scripts/check-claude-instruction-files.sh` fails when an instruction file could be truncated or would load at launch by mistake, when a rules file is missing from the table under "Where the rest lives", or when an instruction file names a Swift symbol no other tracked file contains (`Scripts/check-instruction-symbols.py`); "Check Markdown links" runs it.
 
 ### CI
 
@@ -168,11 +168,12 @@ If your session started outside the worktree you are editing, scoped rules and n
 | `generateDependencyTree: true` (seams) | `.claude/rules/seams.md`, `seam-access-proof.md`, `seam-generation.md`, `seam-builder-structs.md`, `seam-holes.md`, `seam-hole-fills.md` |
 | a seam's or public mock's design: the contract, retention, hand-written builders | `.claude/rules/seam-and-mock-contract.md` |
 | a generator's design: type spelling, cost, captures, parallel work, runtime safety | `.claude/rules/generator-design.md` |
+| the construction memo; a decision made while code is emitted | `.claude/rules/construction-memo.md`, `emission-decisions.md` |
 | a source rule, `SourceRuleTests`, a waiver | `.claude/rules/source-rules.md` |
 | a change's tests, before writing them | `.claude/rules/test-design.md` |
 | `Documentation/`, `README.md` | `.claude/rules/documentation.md` |
 | a breaking-change judgment, release notes, `publish.yml`, packaging | `.claude/rules/releases-and-packaging.md` |
-| "Graph fuzzer" | `.claude/rules/fuzzer-overview.md`, then `fuzzer-known-issues.md`, `fuzzer-seam-draws.md`, `fuzzer-seam-oracles.md`, `fuzzer-builder-surface.md`, `fuzzer-gating-checks.md`, `fuzzer-corpora.md`, `fuzzer-seam-dependencies.md`, `fuzzer-value-oracles.md`, `fuzzer-remedy-oracle.md`, `fuzzer-calling-mocks.md`, `fuzzer-calling-mock-draw.md`, `fuzzer-calling-mock-limits.md`, `fuzzer-query-oracle.md` |
+| "Graph fuzzer" | `.claude/rules/fuzzer-overview.md`, then `fuzzer-known-issues.md`, `fuzzer-seam-draws.md`, `fuzzer-seam-oracles.md`, `fuzzer-builder-surface.md`, `fuzzer-gating-checks.md`, `fuzzer-corpora.md`, `fuzzer-seam-dependencies.md`, `fuzzer-value-oracles.md`, `fuzzer-remedy-oracle.md`, `fuzzer-calling-mocks.md`, `fuzzer-calling-mock-draw.md`, `fuzzer-calling-mock-limits.md`, `fuzzer-query-oracle.md`, `fuzzer-public-mock-corpus.md`, `fuzzer-release-acceptance.md` |
 | Bazel rules | `bazel/CLAUDE.md` |
 | the macro target's sources (what it compiles of SafeDICore) | `Sources/SafeDIMacros/CLAUDE.md` |
 | the Tuist plugin | `TuistPlugins/CLAUDE.md` |
