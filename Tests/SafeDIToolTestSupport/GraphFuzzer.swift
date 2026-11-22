@@ -2763,6 +2763,7 @@ enum GraphFuzzerGenerator {
 			aliasChainRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.aliasChainRandomSeedMask)
 			siblingAliasChainRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.siblingAliasChainRandomSeedMask)
 			passedLabelRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.passedLabelRandomSeedMask)
+			cycleWalkRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.cycleWalkRandomSeedMask)
 			erasedOptionalRenameRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.erasedOptionalRenameRandomSeedMask)
 			forwardedTupleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.forwardedTupleRandomSeedMask)
 			proofRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.proofRandomSeedMask)
@@ -2863,9 +2864,9 @@ enum GraphFuzzerGenerator {
 			// Decided last, so that the rest of a seed's graph does not depend on whether it has the extension.
 			let extensionSource = random.percentChance(25) ? extensionDeclarationSource(addingPropertyToOneOf: &declarations) : nil
 			let seamDeclarations = addingSeam(
-				to: addingMockPassedLabelAboveAliasCycle(to: addingForwardedTuples(to: addingErasedRenamesOfOptionalDependencies(to: addingReceiversOfDependenciesMocksCannotBuild(
+				to: addingReceiveThroughCycleWalkedEarlier(to: addingMockPassedLabelAboveAliasCycle(to: addingForwardedTuples(to: addingErasedRenamesOfOptionalDependencies(to: addingReceiversOfDependenciesMocksCannotBuild(
 					to: addingSiblingAliasChains(to: addingAliasChains(to: addingDependenciesMocksCannotBuild(to: addingPropertiesLabeledAsGeneratedNames(to: declarations)))),
-				)))),
+				))))),
 			)
 			let aliasDeclarations = addingUncreatedAliasExtensions(to: addingUncreatedAliasShapes(to: addingSpelledProperties(to: seamDeclarations)))
 			// The mock vocabulary is drawn after every other pass, from a stream of its own, so that every other draw of a
@@ -3194,6 +3195,8 @@ enum GraphFuzzerGenerator {
 		private var siblingAliasChainRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingMockPassedLabelAboveAliasCycle`, as `generatedNameRandom` does for its pass.
 		private var passedLabelRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only the choices of `addingReceiveThroughCycleWalkedEarlier`, as `generatedNameRandom` does for its pass.
+		private var cycleWalkRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingErasedRenamesOfOptionalDependencies`, as `generatedNameRandom` does for its pass.
 		private var erasedOptionalRenameRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingForwardedTuples`, as `generatedNameRandom` does for its pass.
@@ -4567,6 +4570,68 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let passedLabelRandomSeedMask: UInt64 = 0x706173734C61626C
+
+		/// In the base corpus, now and then adds a small tree that names nothing else of the graph and that no root
+		/// reaches, in which screens open one another through instantiators, so that a mock's walk of what its tree
+		/// receives reaches a screen again before the walk that first reached it has finished. `CycleWalkScreen0`, with
+		/// `generateMock: true`, opens `CycleWalkScreen5`, which instantiates `cycleWalkContext`, and `CycleWalkScreen7`;
+		/// beneath them `Screen5` opens `Screen3`, `Screen3` and `Screen2` open `Screen6`, `Screen6` opens `Screen4`,
+		/// `Screen4` opens `Screen2` and `Screen7`, and `Screen7` opens `Screen0` and `Screen4`, mostly through an
+		/// instantiator only where the edge closes a cycle and now and then through one everywhere. `Screen6` receives
+		/// `cycleWalkContext`, required or only if available, so along `Screen0` → `Screen7` → `Screen4` → `Screen2` →
+		/// `Screen6`, where no screen declares it, it is what the mock binds at its root: an override, built when not
+		/// overridden where the receive is required, and the override or `nil` where it is only if available
+		/// (`receiveThroughCycleWalkedEarlier`). The mock's walk reaches `Screen7` first beneath `Screen4`, before
+		/// `Screen4`'s walk has finished, and a result taken from that unfinished walk once left `Screen7`'s builder
+		/// function passed `nil` – an unread override, which draws a warning – or, where the receive is required, made
+		/// the value a parameter of `mock()`, which the mirror model sees where the other screens are built in place.
+		/// Every cycle closes through an instantiator, since the tool rejects one that does not, and the mock's tree
+		/// holds three back-edges, so most graphs show `lazyCycleConfigurationFieldReason` under a renaming. `cycleWalkRandom` draws only for this pass, so every other graph is drawn as
+		/// before.
+		private mutating func addingReceiveThroughCycleWalkedEarlier(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, cycleWalkRandom.percentChance(5) else { return declarations }
+			var declarations = declarations
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func screenName(_ index: Int) -> String {
+				"\(prefix)CycleWalkScreen\(index)"
+			}
+			let contextTypeName = "\(prefix)CycleWalkContext"
+			let isOnlyIfAvailable = cycleWalkRandom.percentChance(50)
+			// Mostly, only the edges that close a cycle – `Screen7` opening `Screen0` and `Screen4`, and `Screen2` opening
+			// `Screen6` – go through an instantiator and every other screen is built in place, so that each cycle has one
+			// back-edge and the renaming oracle judges the graph; now and then every edge does.
+			let opensEveryScreenThroughAnInstantiator = cycleWalkRandom.percentChance(20)
+			let cycleClosingEdges: Set<[Int]> = [[7, 0], [7, 4], [2, 6]]
+			func opens(_ index: Int, from opener: Int) -> PropertyDeclaration {
+				if opensEveryScreenThroughAnInstantiator || cycleClosingEdges.contains([opener, index]) {
+					PropertyDeclaration(attribute: "@Instantiated", label: "cycleWalkScreen\(index)Builder", type: "\(instantiator)<\(screenName(index))>")
+				} else {
+					PropertyDeclaration(attribute: "@Instantiated", label: "cycleWalkScreen\(index)", type: screenName(index))
+				}
+			}
+			let receive = PropertyDeclaration(
+				attribute: isOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received",
+				label: "cycleWalkContext",
+				type: contextTypeName + (isOnlyIfAvailable ? "?" : ""),
+			)
+			let screens: [(index: Int, arguments: [String], properties: [PropertyDeclaration])] = [
+				(0, ["generateMock: true"], [opens(5, from: 0), opens(7, from: 0)]),
+				(2, [], [opens(6, from: 2)]),
+				(3, [], [opens(6, from: 3)]),
+				(4, [], [opens(2, from: 4), opens(7, from: 4)]),
+				(5, [], [PropertyDeclaration(attribute: "@Instantiated", label: receive.label, type: contextTypeName), opens(3, from: 5)]),
+				(6, [], [receive, opens(4, from: 6)]),
+				(7, [], [opens(0, from: 7), opens(4, from: 7)]),
+			]
+			for screen in screens {
+				declarations.append(TypeDeclaration(name: screenName(screen.index), instantiableArguments: screen.arguments, properties: screen.properties, declaresHelperTypes: false, additionalConformances: conformances))
+			}
+			declarations.append(TypeDeclaration(name: contextTypeName, instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances))
+			return declarations
+		}
+
+		private static let cycleWalkRandomSeedMask: UInt64 = 0x6379636C6557616B
 
 		/// The name of the type `property` builds: its `fulfilledByType:`, the generic of its wrapper, or its type.
 		private static func builtTypeName(of property: PropertyDeclaration) -> String {
@@ -9908,6 +9973,11 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// takes a value under a label that a scope its tree builds declares again, so an alias beneath that scope names the
 	/// scope's `x`, in validation as in generation (`addingMockPassedLabelAboveAliasCycle`).
 	case onlyIfAvailableAliasBeneathLabelAMockIsPassed
+	/// A type with `generateMock: true` whose tree reaches, through screens that open one another, a type that receives
+	/// a value along a path that declares none, which the mock binds at its root, where the mock's walk of what its tree
+	/// receives reaches a screen again before the walk that first reached it has finished
+	/// (`addingReceiveThroughCycleWalkedEarlier`).
+	case receiveThroughCycleWalkedEarlier
 	/// An alias with `erasedToConcreteExistential: true` whose `ofType:` is not optional.
 	case erasedAlias
 	/// An alias with `erasedToConcreteExistential: true` whose `ofType:` is optional (`ofType: X?.self`), which wraps the
@@ -10527,6 +10597,10 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 		}) {
 			features.insert(.onlyIfAvailableAliasBeneathLabelAMockIsPassed)
+		}
+		// The draw's screens name nothing else of the graph, so its mocked screen names the shape.
+		if mockedTypeNames.contains(where: { $0.hasSuffix("CycleWalkScreen0") }) {
+			features.insert(.receiveThroughCycleWalkedEarlier)
 		}
 		if unbuildablePropertiesInstantiatedByTypeName.contains(where: { ownerName, instantiatedProperties in
 			unbuildablePropertiesReceivedByTypeName.contains { receiverName, receivedProperties in

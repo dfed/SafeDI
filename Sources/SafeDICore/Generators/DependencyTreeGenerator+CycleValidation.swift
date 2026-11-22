@@ -947,9 +947,10 @@ extension DependencyTreeGenerator {
 	/// A scope's received properties as one walk found them.
 	struct WalkedReceivedProperties {
 		let receivedProperties: ReceivedProperties
-		/// The depth of the shallowest scope whose walk was unfinished and whose received properties
-		/// `receivedProperties` therefore lacks, or `nil` when it lacks none.
-		let shallowestUnfinishedWalkDepth: Int?
+		/// The depths of the scopes whose walks were unfinished when this walk re-entered them, and whose received
+		/// properties `receivedProperties` therefore lacks: empty when it lacks none. The result is stale once any of
+		/// them finishes, not only the shallowest, since it lacks what each of them receives.
+		let unfinishedWalkDepthsReentered: Set<Int>
 	}
 
 	/// Mirrors ScopeGenerator's `receivedProperties` and `onlyIfAvailableUnwrappedReceivedProperties`
@@ -1026,12 +1027,12 @@ extension DependencyTreeGenerator {
 	) -> ReceivedPropertiesWalkStart {
 		let id = ObjectIdentifier(scope)
 		if let complete = cache.complete[id] {
-			return .walked(WalkedReceivedProperties(receivedProperties: complete, shallowestUnfinishedWalkDepth: nil))
+			return .walked(WalkedReceivedProperties(receivedProperties: complete, unfinishedWalkDepthsReentered: []))
 		} else if let unfinishedWalkDepth = cache.unfinishedWalkDepths[id] {
 			// A cycle re-entered this scope. Its unfinished walk accounts for what it receives.
 			return .walked(WalkedReceivedProperties(
 				receivedProperties: ReceivedProperties(received: [], onlyIfAvailable: [], requiredAliasFulfillingProperties: [], passedByPublicMockCalls: [], builtWhenNilByPublicMockCalls: []),
-				shallowestUnfinishedWalkDepth: unfinishedWalkDepth,
+				unfinishedWalkDepthsReentered: [unfinishedWalkDepth],
 			))
 		} else if let incomplete = cache.incomplete[id] {
 			return .walked(incomplete)
@@ -1103,14 +1104,14 @@ extension DependencyTreeGenerator {
 		var childRequiredReceived = Set<Property>()
 		// The properties the instantiated children's subtrees require through `onlyIfAvailable` aliases.
 		var childRequiredAliasFulfillingProperties = Set<Property>()
-		var shallowestUnfinishedWalkDepth: Int?
+		var unfinishedWalkDepthsReentered = Set<Int>()
 
 		/// Collects from an instantiated child — mirrors ScopeGenerator's receivedProperties aggregation.
 		/// Aliases are handled in `finished(cache:)`'s own-dependency loop: alias children's receivedProperties
 		/// = [fulfillingProperty], but the own-dependency union unconditionally adds the same
 		/// fulfillingProperty, making the child-path subtraction/filter redundant.
 		mutating func record(_ walkedChild: WalkedReceivedProperties) {
-			shallowestUnfinishedWalkDepth = [shallowestUnfinishedWalkDepth, walkedChild.shallowestUnfinishedWalkDepth].compactMap(\.self).min()
+			unfinishedWalkDepthsReentered.formUnion(walkedChild.unfinishedWalkDepthsReentered)
 			// Fills are walked after every child, so the tree walked last is a fill's once one is walked.
 			guard nextFillIndex == 0 else {
 				recordFill(walkedChild, fieldForms: fills[nextFillIndex - 1].fieldForms)
@@ -1236,9 +1237,10 @@ extension DependencyTreeGenerator {
 			let id = ObjectIdentifier(scope)
 			cache.unfinishedWalkDepths[id] = nil
 			if !cache.incomplete.isEmpty {
-				// Results that lack what this scope receives are stale now that its walk has finished.
+				// Results that lack what this scope receives are stale now that its walk has finished, whatever shallower
+				// walks they re-entered too.
 				let walkDepth = walkDepth
-				cache.incomplete = cache.incomplete.filter { $0.value.shallowestUnfinishedWalkDepth != walkDepth }
+				cache.incomplete = cache.incomplete.filter { !$0.value.unfinishedWalkDepthsReentered.contains(walkDepth) }
 			}
 			let receivedProperties = ReceivedProperties(
 				received: received,
@@ -1247,17 +1249,20 @@ extension DependencyTreeGenerator {
 				passedByPublicMockCalls: passedByPublicMockCalls,
 				builtWhenNilByPublicMockCalls: builtWhenNilByPublicMockCalls,
 			)
-			if let shallowestUnfinishedWalkDepth, shallowestUnfinishedWalkDepth < walkDepth {
+			// This walk accounts for every walk that re-entered this scope, so the result lacks only what the walks above
+			// it that this tree re-entered receive.
+			unfinishedWalkDepthsReentered.remove(walkDepth)
+			if !unfinishedWalkDepthsReentered.isEmpty {
 				let walkedReceivedProperties = WalkedReceivedProperties(
 					receivedProperties: receivedProperties,
-					shallowestUnfinishedWalkDepth: shallowestUnfinishedWalkDepth,
+					unfinishedWalkDepthsReentered: unfinishedWalkDepthsReentered,
 				)
 				cache.incomplete[id] = walkedReceivedProperties
 				return walkedReceivedProperties
 			} else {
 				// Every walk that re-entered this scope is accounted for in this one.
 				cache.complete[id] = receivedProperties
-				return WalkedReceivedProperties(receivedProperties: receivedProperties, shallowestUnfinishedWalkDepth: nil)
+				return WalkedReceivedProperties(receivedProperties: receivedProperties, unfinishedWalkDepthsReentered: [])
 			}
 		}
 	}

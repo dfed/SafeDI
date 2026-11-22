@@ -1191,6 +1191,14 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func corpusAcceptedFeatureCounts_holdAtLeastTenGraphs_forReceiveThroughCycleWalkedEarlier() {
+		// A mock whose walk of what its tree receives reaches a screen again before the walk that first reached it has
+		// finished (`addingReceiveThroughCycleWalkedEarlier`) stands in for unit tests of what such a mock binds only while
+		// it lands in at least ten graphs the tool accepts, which the corpus runs pin exactly.
+		#expect(Self.corpusAcceptedFeatureCounts[.receiveThroughCycleWalkedEarlier, default: 0] >= Self.gatingDrawJudgedGraphFloor)
+	}
+
+	@Test
 	func acceptedDrawFeatureCounts_holdAtLeastTenGraphs_forTheAliasSpellingRoll() {
 		// An existential's rename naming the protocol without `any` in `ofType:`, met before every other receive of the value,
 		// stands in for unit tests of how a seam and a mock spell a value their tree's receivers spell apart only while it
@@ -6735,13 +6743,15 @@ struct SafeDIToolGraphFuzzerTests {
 	/// reports (378's alias, spelled with the tracker's optional form, is the graph 2.2.0 accepted and generated a mock
 	/// for that did not compile), and 99's does not, so the mock binds the alias to the scope's tracker. Seed 520 has a
 	/// constant that closes a cycle an instantiator defers (`constantCycleCloser`), since 466's graph, which had one, is
-	/// now rejected.
+	/// now rejected. Seed 327 draws screens that open one another, beneath which a screen receives only if available what a
+	/// mock binds at its root (`addingReceiveThroughCycleWalkedEarlier`); without the walk's fix its mock passes the screen
+	/// built again `nil`, leaving its binding of the override unread, which draws a warning.
 	/// It is small because compiling generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on
 	/// every pull request. Compiling the batch is one `swiftc` invocation when nothing fails, and comparing its values
 	/// one compile and one link.
-	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516, 5_889, 6_388]
+	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 327, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xF25091B1AE8F2B17
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x56175982232F2A91
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -6751,15 +6761,15 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x321B90B3829DBAC0
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x3F77AD4281B24308
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0x00D6FB77C725297D
+	static let corpusFixtureHash: UInt64 = 0xE4EFEC5D4A4B5A94
 
-	static let corpusPartitionHash: UInt64 = 0x5B0833371CCED0EA
+	static let corpusPartitionHash: UInt64 = 0xCE2ED71E61228691
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
@@ -6771,9 +6781,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// corpus, so a generator change that stops drawing a feature, or a tool change that stops accepting the graphs that
 	/// draw it, changes these and must update them deliberately, with the hashes and the accepted-seed pins.
 	static let corpusAcceptedFeatureCounts: [GraphFuzzerFeature: Int] = [
-		.constantProperty: 2_586,
+		.constantProperty: 2_592,
 		.erasedConstantProperty: 450,
-		.instantiatorProperty: 2_165,
+		.instantiatorProperty: 2_168,
 		.sendableInstantiatorProperty: 916,
 		.erasedInstantiatorProperty: 1_382,
 		.sendableErasedInstantiatorProperty: 493,
@@ -6784,14 +6794,15 @@ struct SafeDIToolGraphFuzzerTests {
 		.receivedLazilyInstantiatedInstance: 277,
 		.forwardedProperty: 1_686,
 		.optionalForwardedProperty: 889,
-		.requiredReceive: 2_481,
+		.requiredReceive: 2_487,
 		.requiredOptionalReceive: 215,
-		.onlyIfAvailableReceive: 2_220,
+		.onlyIfAvailableReceive: 2_230,
 		.requiredAlias: 1_097,
 		.onlyIfAvailableAlias: 1_033,
 		.aliasOfOnlyIfAvailableAlias: 78,
 		.aliasOfOptionalFormOfProperty: 83,
 		.onlyIfAvailableAliasBeneathLabelAMockIsPassed: 104,
+		.receiveThroughCycleWalkedEarlier: 142,
 		.erasedAlias: 228,
 		.erasedRenameOfOptionalDependency: 37,
 		.forwardedTupleOptionalElement: 82,
@@ -6816,9 +6827,9 @@ struct SafeDIToolGraphFuzzerTests {
 		.forwardedPropertiesTypealiasArgument: 156,
 		.forwardedTupleBuilderReceivedByMockedType: 137,
 		.multipleRoots: 1_765,
-		.generateMock: 2_441,
-		.lazyCycle: 1_294,
-		.constantCycleCloser: 39,
+		.generateMock: 2_455,
+		.lazyCycle: 1_374,
+		.constantCycleCloser: 151,
 		.builderReceivedInsideItsTree: 179,
 		.sendableBuilderReceivedInsideItsTree: 68,
 		.builderReceivedInsideItsTreeBesideBuilderLeftNil: 40,
@@ -6833,7 +6844,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.dependencyMockCannotBuildReceivedLazilyBesideItsMockedOwner: 68,
 		.dependencyMockCannotBuildLazilyInstantiatedReceivedAsOtherKindBesideItsMockedOwner: 9,
 		.sendableAndNonSendableWrappers: 567,
-		.mockedTypeOnLazyCycle: 589,
+		.mockedTypeOnLazyCycle: 704,
 		.typesReceivingEachOtherOnlyIfAvailable: 298,
 		.labelReceivedAsInstanceAndAsInstantiator: 244,
 		.sameLabelReceivedAsDifferentUnbuildableWrappers: 134,
@@ -6972,7 +6983,7 @@ struct SafeDIToolGraphFuzzerTests {
 		acceptedFeatureCounts: corpusAcceptedFeatureCounts,
 		knownIssues: knownIssues,
 		knownIssuesName: "knownIssues",
-		staleSeedRemedy: { _, _ in "remove it from `knownIssuesBesideReportedIssueShapes`, or from `repeatedAncestorLazyCycleSeeds` for a reported issue’s shape, and from `seamCorpusSeedsOfOtherShapes` when it is listed there" },
+		staleSeedRemedy: { _, _ in "remove it from `knownIssuesBesideReportedIssueShapes`, or from `repeatedAncestorLazyCycleSeeds` or `receiveThroughCycleWalkedEarlierLazyCycleSeeds` for a reported issue’s shape, and from `seamCorpusSeedsOfOtherShapes` when it is listed there" },
 		valueOracleInspectedGraphCount: corpusValueOracleInspectedGraphCount,
 		spellingDrawFeatures: [],
 		omittedValueGraphCount: 0,
@@ -6993,8 +7004,8 @@ struct SafeDIToolGraphFuzzerTests {
 	static let corpusValueOracleCounts = GraphFuzzerValueOracleCounts(
 		rootPairCount: 5_248,
 		rootPairsSum: GraphFuzzerSeedSetSum(value: 0x5892AF524297D9FB),
-		mirroredPairCount: 4_593,
-		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0x06E682D7EAFBF1AE),
+		mirroredPairCount: 4_733,
+		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0xD32945DE68E7FB94),
 		skipCounts: [
 			.requiredParameter: 1_666,
 			.twoFormsOfOneLabel: 182,
@@ -7009,16 +7020,16 @@ struct SafeDIToolGraphFuzzerTests {
 			.requiredAliasOfPromotedDependency: 402,
 			.promotedWrapperReceivedInAnotherForm: 66,
 			.instanceOfPromotedWrapperPassedToMockedType: 4,
-			.onlyIfAvailableReceiveInMockedTypesTreeLeftUnbuilt: 650,
+			.onlyIfAvailableReceiveInMockedTypesTreeLeftUnbuilt: 723,
 		],
 		drawnMocksMatchingOnlyAfterNormalizationCount: 786,
 		mirroredPairsTakingSamplesCount: 972,
 		forwardedPropertiesSampleCount: 2_727,
-		overridePairCount: 5_681,
-		overridePairsSum: GraphFuzzerSeedSetSum(value: 0x681F58375464D737),
+		overridePairCount: 5_808,
+		overridePairsSum: GraphFuzzerSeedSetSum(value: 0x94535DAD56C1113E),
 		overrideFieldKindCounts: [
-			.builder: 4_061,
-			.configuration: 1_620,
+			.builder: 4_094,
+			.configuration: 1_714,
 		],
 		pinnedPlacePairCount: 105,
 	)
@@ -9154,11 +9165,30 @@ struct SafeDIToolGraphFuzzerTests {
 		4_123,
 	]
 
+	/// Why a graph that draws `GraphFuzzerGenerator.addingReceiveThroughCycleWalkedEarlier`'s screens changes under a
+	/// renaming: the screens open one another through instantiators, lazy cycles, which show `lazyCycleConfigurationFieldReason`.
+	static let receiveThroughCycleWalkedEarlierLazyCycleReason = "The screens of the roll of a receive through a cycle walked earlier open one another through instantiators, and which back-edge of a lazy cycle loses its override follows the order of type names, so one field of a configuration struct, with the reads of it, is present under one naming and absent under another"
+
+	/// The seeds of the base corpus whose graphs draw the screens of `addingReceiveThroughCycleWalkedEarlier` and whose lazy
+	/// cycles lose another field of their configuration under a renaming, copied from a run of the roll's seeds.
+	static let receiveThroughCycleWalkedEarlierLazyCycleSeeds: [UInt64] = [
+		95, 121, 243, 259, 346, 413, 490, 497, 507, 512, 528, 653, 724, 744, 939, 966, 1_005, 1_043, 1_073, 1_293, 1_295,
+		1_533, 1_547, 1_570, 1_585, 1_617, 1_627, 1_648, 1_827, 1_860, 2_034, 2_067, 2_093, 2_153, 2_176, 2_371, 2_394,
+		2_452, 2_496, 2_564, 2_616, 2_679, 2_727, 2_729, 2_839, 2_860, 2_890, 2_931, 2_967, 2_985, 3_035, 3_040, 3_079,
+		3_284, 3_484, 3_502, 3_524, 3_580, 3_714, 3_718, 3_815, 3_924, 3_956, 4_033, 4_051, 4_088, 4_219, 4_273, 4_277,
+		4_297, 4_322, 4_439, 4_623, 4_695,
+	]
+
 	/// `issues` with the shapes of the reported issues the base corpus's rolls draw, each combined with a seed's other
 	/// shapes in an entry of its own, since a seed is listed once. Only the base corpus draws these rolls, so the seam
 	/// corpus inherits `knownIssuesBesideReportedIssueShapes`.
 	private static func addingReportedIssueShapes(to issues: [GraphFuzzerKnownIssue]) -> [GraphFuzzerKnownIssue] {
-		GraphFuzzerKnownIssue.adding(.renamedGraphDiffers(.mockConfigurationFieldPresence), reason: repeatedAncestorLazyCycleReason, seeds: repeatedAncestorLazyCycleSeeds, to: issues)
+		GraphFuzzerKnownIssue.adding(
+			.renamedGraphDiffers(.mockConfigurationFieldPresence),
+			reason: receiveThroughCycleWalkedEarlierLazyCycleReason,
+			seeds: receiveThroughCycleWalkedEarlierLazyCycleSeeds,
+			to: GraphFuzzerKnownIssue.adding(.renamedGraphDiffers(.mockConfigurationFieldPresence), reason: repeatedAncestorLazyCycleReason, seeds: repeatedAncestorLazyCycleSeeds, to: issues),
+		)
 	}
 
 	/// `knownIssues` but for the shapes of the reported issues only the base corpus draws (`addingReportedIssueShapes`).
