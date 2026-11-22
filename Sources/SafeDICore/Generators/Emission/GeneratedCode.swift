@@ -100,6 +100,14 @@ struct GeneratedCode: Sendable {
 
 	/// The text of the code.
 	func spelled() -> String {
+		// Text no level indents is written as it is, so it is its own spelling: a mock's text, tens of megabytes on a deep
+		// chain, is not copied into the writer's bytes, which grow by doubling, and then into a string again.
+		switch node {
+		case let .text(text), let .spelled(text):
+			return text
+		case .sequence, .lines, .indented:
+			break
+		}
 		var writer = GeneratedCodeWriter()
 		writer.write(self)
 		return writer.text

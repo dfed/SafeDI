@@ -17,11 +17,13 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
-
-/// The declarations being built above a place, outermost first, each with the IDs a cycle's lookup compares: the
-/// property as cycle validation sees it (a lazily instantiated property as the constant it stands for) and the concrete
-/// type it is built for, each by its class, which is `==`. A lazily instantiated declaration's instance is an entry of
-/// its own, just inside the declaration.
+/// The declarations being built above a place, each with the IDs a cycle's lookup compares: the property as cycle
+/// validation sees it (a lazily instantiated property as the constant it stands for) and the concrete type it is built
+/// for, each by its class, which is `==`. A lazily instantiated declaration's instance is an entry of its own, just inside
+/// the declaration. Indices count from the outermost entry.
+///
+/// A scope's children share its stack: each pushes onto it without copying it, so a chain of n places holds n entries,
+/// where a copy per place held n²/2. Its nodes are released through `DeferredRelease`, since a stack is as deep as the tree.
 struct ContextStack: Sendable {
 	/// One declaration being built.
 	struct Entry: Sendable {
@@ -46,7 +48,7 @@ struct ContextStack: Sendable {
 		for (property, concreteType) in zip(propertyStack, concreteTypeStack).reversed() {
 			let propertyID = space.intern(property)
 			let concreteTypeID = space.intern(concreteType)
-			entries.append(Entry(
+			pushEntry(Entry(
 				property: property,
 				propertyID: propertyID,
 				concreteType: concreteType,
@@ -59,17 +61,24 @@ struct ContextStack: Sendable {
 		}
 	}
 
+	/// How many entries the stack holds.
+	var count: Int {
+		innermost?.count ?? 0
+	}
+
 	/// The entries, outermost first.
-	private(set) var entries = [Entry]()
+	var entries: [Entry] {
+		entriesInnermostFirst.reversed()
+	}
 
 	/// The properties of the entries, innermost first.
 	var propertiesInnermostFirst: [Property] {
-		entries.reversed().map(\.property)
+		entriesInnermostFirst.map(\.property)
 	}
 
 	/// The concrete types of the entries, innermost first.
 	var concreteTypesInnermostFirst: [TypeDescription] {
-		entries.reversed().map(\.concreteType)
+		entriesInnermostFirst.map(\.concreteType)
 	}
 
 	/// Puts `property`, built for `concreteType` by the scope at `depth`, on the stack, and, inside it, its instance where
@@ -83,7 +92,7 @@ struct ContextStack: Sendable {
 		interner: ConstructionInterner,
 	) {
 		let concreteTypeClass = interner.classID(of: concreteTypeID)
-		entries.append(Entry(
+		pushEntry(Entry(
 			property: property,
 			propertyID: propertyID,
 			concreteType: concreteType,
@@ -94,7 +103,7 @@ struct ContextStack: Sendable {
 		))
 		if let lazilyInstantiatedProperty = interner.lazilyInstantiated(propertyID), let instanceProperty = property.asLazilyInstantiatedInstanceProperty {
 			let instancePropertyID = interner.instance(of: lazilyInstantiatedProperty)
-			entries.append(Entry(
+			pushEntry(Entry(
 				property: instanceProperty,
 				propertyID: instancePropertyID,
 				concreteType: concreteType,
@@ -113,8 +122,66 @@ struct ContextStack: Sendable {
 	func entryClosedOn(byPropertyID propertyID: PropertyID, concreteTypeID: TypeID, interner: ConstructionInterner) -> (entry: Entry, index: Int)? {
 		let validatedPropertyClass = interner.classID(of: interner.asValidatedForDependencyCycles(propertyID))
 		let concreteTypeClass = interner.classID(of: concreteTypeID)
-		guard let entryIndex = entries.lastIndex(where: { $0.validatedPropertyClass == validatedPropertyClass && $0.concreteTypeClass == concreteTypeClass }) else { return nil }
-		let index = entries[entryIndex].isInstanceOfEntryOutside ? entryIndex - 1 : entryIndex
-		return (entries[index], index)
+		var node = innermost
+		while let current = node, current.entry.validatedPropertyClass != validatedPropertyClass || current.entry.concreteTypeClass != concreteTypeClass {
+			node = current.outer
+		}
+		guard let found = node else { return nil }
+		guard found.entry.isInstanceOfEntryOutside, let outer = found.outer else {
+			return (found.entry, found.count - 1)
+		}
+		return (outer.entry, outer.count - 1)
 	}
+
+	private var entriesInnermostFirst: [Entry] {
+		var entries = [Entry]()
+		var node = innermost
+		while let current = node {
+			entries.append(current.entry)
+			node = current.outer
+		}
+		return entries
+	}
+
+	private mutating func pushEntry(_ entry: Entry) {
+		innermost = Node(entry: entry, outer: innermost)
+	}
+
+	/// An entry, and the entries outside it, which every stack pushed onto it shares.
+	private final class Node: Sendable {
+		init(entry: Entry, outer: Node?) {
+			self.entry = entry
+			count = (outer?.count ?? 0) + 1
+			if count.isMultiple(of: Self.directlyReleasedRunLength) {
+				directOuter = nil
+				deferredOuter = DeferredReleaseSlot(outer.map { [$0] } ?? [])
+			} else {
+				directOuter = outer
+				deferredOuter = DeferredReleaseSlot([])
+			}
+		}
+
+		let entry: Entry
+		/// How many entries this node and those outside it hold.
+		let count: Int
+
+		/// The entry just outside this one.
+		var outer: Node? {
+			directOuter ?? deferredOuter.value.first
+		}
+
+		/// How many nodes in a row release the node outside them directly. Releasing a node releases the run outside it
+		/// recursively, so the run's length bounds that recursion; the node that ends a run hands its outer node to
+		/// `DeferredRelease` instead, so releasing a chain of any depth never recurses deeper than one run. Deferring every
+		/// node's release would cost an allocation and a thread-local lookup per node, which a shallow tree, holding many
+		/// short stacks, pays for nothing.
+		private static let directlyReleasedRunLength = 64
+
+		/// The node outside this one, unless this node ends a run.
+		private let directOuter: Node?
+		/// The node outside this one when this node ends a run, and nothing otherwise.
+		private let deferredOuter: DeferredReleaseSlot<[Node]>
+	}
+
+	private var innermost: Node?
 }

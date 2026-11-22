@@ -1595,7 +1595,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			// The fill's stack is the path of the seam whose tree holds the site, put on it above this tree.
 			contextStack: fillContext.contextStack,
 			depth: depth + 1,
-			fillPathStackCount: fillContext.contextStack.entries.count,
+			fillPathStackCount: fillContext.contextStack.count,
 			nearestDeclarations: fillNearestDeclarations,
 			lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties.filter { !fieldLabels.contains($0.label) && !mockRootBoundLabels.contains($0.label) }.union(fieldInstanceProperties),
 			seamRoot: nil,
