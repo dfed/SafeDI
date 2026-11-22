@@ -316,7 +316,8 @@ extension MockLowering {
 			// D1 lane hook (lane B): the loops of builders among the level's children, each emitted as one unit.
 			let enclosingLoopMembers = loopMembers
 			let enclosingLoopUnit = loopUnit
-			loopMembers = MockLowering.loopMembers(among: generators, loops: loops)
+			// The enclosing functions a cycle-closing node beneath refers to by name are in scope too.
+			loopMembers = MockLowering.loopMembers(among: generators, loops: loops, namesInScope: Set(ancestorDeclarationsByLabel.values.flatMap { $0.map(\.functionName) }))
 			loopUnit = nil
 			defer {
 				loopMembers = enclosingLoopMembers
@@ -507,6 +508,25 @@ extension MockLowering {
 			guard labels.insert(bindingName).inserted else { return .unsupported(.siblingLabelCollision) }
 			// D1 lane hook (lane B): a closer passes the function's cycle parameters (`MockLowering+CycleParameters.swift`).
 			guard let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: scope) else { return .unsupported(.onlyIfAvailable) }
+			// D1 lane hook (lane B): a closer on a loop of builders declares the `_received` function its wrappers hand, with
+			// the loop's functions, and is bound with the loop's wrappers where its level binds it (`MockLowering+Loops.swift`).
+			if let loopMembership, let member = loopMembers[property] {
+				let receivedFunctionLines = MockLowering.receivedFunctionLines(
+					of: member,
+					property: property,
+					cycleParameterArguments: cycleParameterArguments,
+					among: loopMembers,
+					typesDeclaredEscaping: generator.typesDeclaredEscaping,
+					isSendable: generator.buildsInSendableFunction || property.propertyType.isSendable,
+					indent: indent,
+				)
+				let bindingLines = loopMembership.declaresBinding
+					? MockLowering.bindingLines(of: property, boundAs: bindingName, callingFunctionNamed: member.functionName, forwardedProperties: forwardedProperties, indent: indent)
+					: []
+				lines.append(contentsOf: receivedFunctionLines + bindingLines)
+				lastLoopMemberLineCounts = LoopMemberLineCounts(prelude: 0, binding: bindingLines.count)
+				return .lowered(.cycleClosing(property, bindingName: bindingName, concreteType: instantiable.concreteInstantiable))
+			}
 			lines.append(contentsOf: MockLowering.bindingLines(
 				of: property,
 				boundAs: bindingName,
@@ -553,13 +573,12 @@ extension MockLowering {
 			let childGenerators = generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator)
 			// D1 lane hook (lane B): a member of a loop of builders first rebinds the members its tree receives
 			// (`MockLowering+Loops.swift`).
-			let isLoopMember = loopMembership != nil
 			var rebindingLines = [String]()
-			if let loopMembership {
+			// The walk of the node's children sets and clears the membership of each child.
+			let ownLoopMembership = loopMembership
+			if ownLoopMembership != nil {
 				guard isWrapped,
-				      loopMembership.declaresBinding,
-				      generator.cycleParameters.isEmpty,
-				      let memberRebindingLines = MockLowering.rebindingLines(of: generator.reboundProperties, among: loopMembers, indent: "\(indent)\(ScopeGenerator.standardIndent)")
+				      let memberRebindingLines = MockLowering.rebindingLines(of: generator.reboundProperties, among: loopMembers, ownProperty: property, indent: "\(indent)\(ScopeGenerator.standardIndent)")
 				else { return .unsupported(.cycle) }
 				rebindingLines = memberRebindingLines
 			}
@@ -733,12 +752,29 @@ extension MockLowering {
 					children: children.filter { child in child.concreteType.map { !isPruned($0, beneath: parentConcreteType) } ?? true },
 				))
 			}
-			let endLines = configuredNode.builderFunctionEndLines(overrideRead: functionOverrideRead, indent: indent)
-			lines.append(contentsOf: endLines)
-			if isLoopMember {
-				// The lines after the construction and the function's closing brace bind the member.
-				lastLoopMemberLineCounts = LoopMemberLineCounts(prelude: preludeLines.count, binding: endLines.count - 2)
+			var endLines = configuredNode.builderFunctionEndLines(overrideRead: functionOverrideRead, indent: indent)
+			if let loopMembership = ownLoopMembership, let member = loopMembers[property] {
+				// The construction and the function's closing brace, then the member's `_received` function, then its binding,
+				// which hands that function, where its level binds it.
+				let bindingLines = loopMembership.declaresBinding
+					? member.receivedFunctionName == nil
+					? Array(endLines.dropFirst(2))
+					: MockLowering.wrapperBindingLines(of: property.typeDescription, named: bindingName, handing: member.functionName, forwardedProperties: member.forwardedProperties, indent: indent)
+					: []
+				endLines = Array(endLines.prefix(2))
+				endLines.append(contentsOf: MockLowering.receivedFunctionLines(
+					of: member,
+					property: property,
+					cycleParameterArguments: cycleParameterArguments,
+					among: loopMembers,
+					typesDeclaredEscaping: generator.typesDeclaredEscaping,
+					isSendable: generator.buildsInSendableFunction || property.propertyType.isSendable,
+					indent: indent,
+				))
+				endLines.append(contentsOf: bindingLines)
+				lastLoopMemberLineCounts = LoopMemberLineCounts(prelude: preludeLines.count, binding: bindingLines.count)
 			}
+			lines.append(contentsOf: endLines)
 			return .lowered(configuredNode)
 		}
 
