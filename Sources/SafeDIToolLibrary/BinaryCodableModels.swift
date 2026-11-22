@@ -293,6 +293,8 @@ extension ModuleInfo: BinarySchemaMember {
 // MARK: - SafeDICore types
 
 extension ImportStatement: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -308,23 +310,28 @@ extension ImportStatement: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			attribute: reader.read(),
 			kind: reader.read(),
 			moduleName: reader.read(),
 			type: reader.read(),
-			accessLevel: reader.read(),
-			sourceFilePath: reader.read(),
+			accessLevel: reader.readOptional(flaggedIn: &fieldFlags),
+			sourceFilePath: reader.readOptional(flaggedIn: &fieldFlags),
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(attribute)
 		writer.write(kind)
 		writer.write(moduleName)
 		writer.write(type)
-		writer.write(accessLevel)
-		writer.write(sourceFilePath)
+		writer.writeOptional(accessLevel, flaggedIn: &fieldFlags)
+		writer.writeOptional(sourceFilePath, flaggedIn: &fieldFlags)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
@@ -455,6 +462,8 @@ extension SafeDIConfiguration: BinarySchemaMember {
 }
 
 extension Instantiable: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -497,77 +506,82 @@ extension Instantiable: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		// `instantiableTypes` is written as its first element and then the rest, so it is never empty.
 		try self.init(
 			instantiableType: reader.read(),
-			isRoot: reader.read(),
-			generatesDependencyTree: reader.read(),
-			initializer: reader.read() as Initializer?,
+			isRoot: fieldFlags.next(),
+			generatesDependencyTree: fieldFlags.next(),
+			initializer: reader.readOptional(flaggedIn: &fieldFlags) as Initializer?,
 			otherInitializers: reader.read(),
 			additionalInstantiables: reader.read() as [TypeDescription],
 			dependencies: reader.read(),
 			declarationType: reader.read(),
 			access: reader.read(),
 			enclosingTypeAccess: reader.read(),
-			enclosingExtensionAccess: reader.read() as AccessDeclaration?,
+			enclosingExtensionAccess: reader.readOptional(flaggedIn: &fieldFlags) as AccessDeclaration?,
 			generatedInitializerAttributes: reader.read(),
 			mockAttributes: reader.read(),
-			declarationIsolation: reader.read() as String?,
+			declarationIsolation: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 			generateMock: reader.read(),
-			mockGenerationArgumentRange: reader.read() as Dependency.SourceRange?,
-			mockOnly: reader.read(),
-			mockInitializer: reader.read() as Initializer?,
-			mockReturnType: reader.read() as TypeDescription?,
-			customMockName: reader.read() as String?,
-			mockDeclarationLocation: reader.read() as Dependency.DeclarationLocation?,
-			mockDeclarationAccess: reader.read() as AccessDeclaration?,
-			mockDeclarationModuleName: reader.read() as String?,
-			mockDeclarationPackageName: reader.read() as String?,
-			declarationLocation: reader.read() as Dependency.DeclarationLocation?,
-			moduleName: reader.read() as String?,
-			packageName: reader.read() as String?,
+			mockGenerationArgumentRange: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.SourceRange?,
+			mockOnly: fieldFlags.next(),
+			mockInitializer: reader.readOptional(flaggedIn: &fieldFlags) as Initializer?,
+			mockReturnType: reader.readOptional(flaggedIn: &fieldFlags) as TypeDescription?,
+			customMockName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
+			mockDeclarationLocation: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?,
+			mockDeclarationAccess: reader.readOptional(flaggedIn: &fieldFlags) as AccessDeclaration?,
+			mockDeclarationModuleName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
+			mockDeclarationPackageName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
+			declarationLocation: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?,
+			moduleName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
+			packageName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 		)
-		sourceFilePath = try reader.read() as String?
-		isInsideCompilerDecidedBlock = try reader.read()
+		sourceFilePath = try reader.readOptional(flaggedIn: &fieldFlags) as String?
+		isInsideCompilerDecidedBlock = fieldFlags.next()
 		dependencyLabelsInUnselectedClauses = try reader.read()
 		dependencyLabelsInsideConditionalBlocks = try reader.read()
+		try fieldFlags.finish()
 	}
 
 	/// Every type description a file holds is part of an instantiable, which names the one that nests too deeply.
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.writeDescribed(as: concreteInstantiable.asSource) { writer in
 			writer.write(concreteInstantiable)
-			writer.write(isRoot)
-			writer.write(generatesDependencyTree)
-			writer.write(initializer)
+			fieldFlags.append(isRoot)
+			fieldFlags.append(generatesDependencyTree)
+			writer.writeOptional(initializer, flaggedIn: &fieldFlags)
 			writer.write(otherInitializers)
 			writer.write(additionalInstantiables)
 			writer.write(dependencies)
 			writer.write(declarationType)
 			writer.write(access)
 			writer.write(enclosingTypeAccess)
-			writer.write(enclosingExtensionAccess)
+			writer.writeOptional(enclosingExtensionAccess, flaggedIn: &fieldFlags)
 			writer.write(generatedInitializerAttributes)
 			writer.write(mockAttributes)
-			writer.write(declarationIsolation)
+			writer.writeOptional(declarationIsolation, flaggedIn: &fieldFlags)
 			writer.write(generateMock)
-			writer.write(mockGenerationArgumentRange)
-			writer.write(mockOnly)
-			writer.write(mockInitializer)
-			writer.write(mockReturnType)
-			writer.write(customMockName)
-			writer.write(mockDeclarationLocation)
-			writer.write(mockDeclarationAccess)
-			writer.write(mockDeclarationModuleName)
-			writer.write(mockDeclarationPackageName)
-			writer.write(declarationLocation)
-			writer.write(moduleName)
-			writer.write(packageName)
-			writer.write(sourceFilePath)
-			writer.write(isInsideCompilerDecidedBlock)
+			writer.writeOptional(mockGenerationArgumentRange, flaggedIn: &fieldFlags)
+			fieldFlags.append(mockOnly)
+			writer.writeOptional(mockInitializer, flaggedIn: &fieldFlags)
+			writer.writeOptional(mockReturnType, flaggedIn: &fieldFlags)
+			writer.writeOptional(customMockName, flaggedIn: &fieldFlags)
+			writer.writeOptional(mockDeclarationLocation, flaggedIn: &fieldFlags)
+			writer.writeOptional(mockDeclarationAccess, flaggedIn: &fieldFlags)
+			writer.writeOptional(mockDeclarationModuleName, flaggedIn: &fieldFlags)
+			writer.writeOptional(mockDeclarationPackageName, flaggedIn: &fieldFlags)
+			writer.writeOptional(declarationLocation, flaggedIn: &fieldFlags)
+			writer.writeOptional(moduleName, flaggedIn: &fieldFlags)
+			writer.writeOptional(packageName, flaggedIn: &fieldFlags)
+			writer.writeOptional(sourceFilePath, flaggedIn: &fieldFlags)
+			fieldFlags.append(isInsideCompilerDecidedBlock)
 			writer.write(dependencyLabelsInUnselectedClauses)
 			writer.write(dependencyLabelsInsideConditionalBlocks)
 		}
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 
 	/// Every type the instantiable fulfills but its concrete type.
@@ -608,6 +622,8 @@ extension Instantiable.DeclarationType: BinarySchemaMember {
 }
 
 extension Instantiable.DependencyLabelInUnselectedClause: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -621,19 +637,24 @@ extension Instantiable.DependencyLabelInUnselectedClause: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			label: reader.read(),
 			clause: reader.read(),
-			clauseLocation: reader.read() as Dependency.DeclarationLocation?,
-			isDeclaredDirectlyInClause: reader.read(),
+			clauseLocation: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?,
+			isDeclaredDirectlyInClause: fieldFlags.next(),
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(label)
 		writer.write(clause)
-		writer.write(clauseLocation)
-		writer.write(isDeclaredDirectlyInClause)
+		writer.writeOptional(clauseLocation, flaggedIn: &fieldFlags)
+		fieldFlags.append(isDeclaredDirectlyInClause)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
@@ -665,6 +686,8 @@ extension ReservedTypeNameDeclaration: BinarySchemaMember {
 }
 
 extension PlainTypeDeclaration: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -681,20 +704,24 @@ extension PlainTypeDeclaration: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			typeDescription: reader.read(),
 			access: reader.read(),
 			enclosingTypeAccess: reader.read(),
-			enclosingExtensionAccess: reader.read() as AccessDeclaration?,
-			moduleName: reader.read() as String?,
-			packageName: reader.read() as String?,
-			sourceFilePath: reader.read() as String?,
+			enclosingExtensionAccess: reader.readOptional(flaggedIn: &fieldFlags) as AccessDeclaration?,
+			moduleName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
+			packageName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
+			sourceFilePath: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 		)
+		try fieldFlags.finish()
 	}
 
 	/// A declaration's type nests one level for each type that encloses it. When that is too deep, the outermost type
 	/// enclosing it names it: spelling the declared type recurses as deeply as it nests.
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		var outermostType = typeDescription
 		while let enclosingType = outermostType.popNested {
 			outermostType = enclosingType
@@ -703,11 +730,12 @@ extension PlainTypeDeclaration: BinarySchemaMember {
 			writer.write(typeDescription)
 			writer.write(access)
 			writer.write(enclosingTypeAccess)
-			writer.write(enclosingExtensionAccess)
-			writer.write(moduleName)
-			writer.write(packageName)
-			writer.write(sourceFilePath)
+			writer.writeOptional(enclosingExtensionAccess, flaggedIn: &fieldFlags)
+			writer.writeOptional(moduleName, flaggedIn: &fieldFlags)
+			writer.writeOptional(packageName, flaggedIn: &fieldFlags)
+			writer.writeOptional(sourceFilePath, flaggedIn: &fieldFlags)
 		}
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
@@ -740,6 +768,8 @@ extension MockGeneration: BinarySchemaMember {
 }
 
 extension AccessDeclaration: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -754,21 +784,26 @@ extension AccessDeclaration: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			level: reader.read(),
-			spellsAccessModifier: reader.read() as Bool,
-			modifierRange: reader.read() as Dependency.SourceRange?,
-			declarationStartLocation: reader.read() as Dependency.DeclarationLocation?,
-			isExtension: reader.read(),
+			spellsAccessModifier: fieldFlags.next(),
+			modifierRange: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.SourceRange?,
+			declarationStartLocation: reader.readOptional(flaggedIn: &fieldFlags) as Dependency.DeclarationLocation?,
+			isExtension: fieldFlags.next(),
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(level)
-		writer.write(spellsAccessModifier)
-		writer.write(modifierRange)
-		writer.write(declarationStartLocation)
-		writer.write(isExtension)
+		fieldFlags.append(spellsAccessModifier)
+		writer.writeOptional(modifierRange, flaggedIn: &fieldFlags)
+		writer.writeOptional(declarationStartLocation, flaggedIn: &fieldFlags)
+		fieldFlags.append(isExtension)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
@@ -810,6 +845,8 @@ extension AccessLevel: BinarySchemaMember {
 }
 
 extension Initializer: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -827,31 +864,38 @@ extension Initializer: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			access: reader.read(),
-			isOptional: reader.read(),
-			isAsync: reader.read(),
-			doesThrow: reader.read(),
-			hasGenericParameter: reader.read(),
-			hasGenericWhereClause: reader.read(),
+			isOptional: fieldFlags.next(),
+			isAsync: fieldFlags.next(),
+			doesThrow: fieldFlags.next(),
+			hasGenericParameter: fieldFlags.next(),
+			hasGenericWhereClause: fieldFlags.next(),
 			arguments: reader.read(),
-			spelledIsolation: reader.read() as String?,
+			spelledIsolation: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(access)
-		writer.write(isOptional)
-		writer.write(isAsync)
-		writer.write(doesThrow)
-		writer.write(hasGenericParameter)
-		writer.write(hasGenericWhereClause)
+		fieldFlags.append(isOptional)
+		fieldFlags.append(isAsync)
+		fieldFlags.append(doesThrow)
+		fieldFlags.append(hasGenericParameter)
+		fieldFlags.append(hasGenericWhereClause)
 		writer.write(arguments)
-		writer.write(spelledIsolation)
+		writer.writeOptional(spelledIsolation, flaggedIn: &fieldFlags)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
 extension Initializer.Argument: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -866,25 +910,32 @@ extension Initializer.Argument: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
-			outerLabel: reader.read() as String?,
+			outerLabel: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 			innerLabel: reader.read(),
 			typeDescription: reader.read(),
-			defaultValueExpression: reader.read() as String?,
-			defaultValueThrows: reader.read(),
+			defaultValueExpression: reader.readOptional(flaggedIn: &fieldFlags) as String?,
+			defaultValueThrows: fieldFlags.next(),
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
-		writer.write(outerLabel)
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
+		writer.writeOptional(outerLabel, flaggedIn: &fieldFlags)
 		writer.write(innerLabel)
 		writer.write(typeDescription)
-		writer.write(defaultValueExpression)
-		writer.write(defaultValueThrows)
+		writer.writeOptional(defaultValueExpression, flaggedIn: &fieldFlags)
+		fieldFlags.append(defaultValueThrows)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
 extension Dependency: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -900,24 +951,29 @@ extension Dependency: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		// `asInstantiatedType` is derived from `property` and `source`.
 		try self.init(
 			property: reader.read(),
 			source: reader.read(),
-			declarationLocation: reader.read() as DeclarationLocation?,
-			identifierRange: reader.read() as SourceRange?,
-			typeAnnotationRange: reader.read() as SourceRange?,
-			bareAttributeRange: reader.read() as SourceRange?,
+			declarationLocation: reader.readOptional(flaggedIn: &fieldFlags) as DeclarationLocation?,
+			identifierRange: reader.readOptional(flaggedIn: &fieldFlags) as SourceRange?,
+			typeAnnotationRange: reader.readOptional(flaggedIn: &fieldFlags) as SourceRange?,
+			bareAttributeRange: reader.readOptional(flaggedIn: &fieldFlags) as SourceRange?,
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(property)
 		writer.write(source)
-		writer.write(declarationLocation)
-		writer.write(identifierRange)
-		writer.write(typeAnnotationRange)
-		writer.write(bareAttributeRange)
+		writer.writeOptional(declarationLocation, flaggedIn: &fieldFlags)
+		writer.writeOptional(identifierRange, flaggedIn: &fieldFlags)
+		writer.writeOptional(typeAnnotationRange, flaggedIn: &fieldFlags)
+		writer.writeOptional(bareAttributeRange, flaggedIn: &fieldFlags)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
@@ -1451,6 +1507,8 @@ extension ViewedModuleReference: BinarySchemaMember {
 }
 
 extension ViewedModuleIdentity: BinarySchemaMember {
+	static let writesFieldFlags = true
+
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
@@ -1464,19 +1522,24 @@ extension ViewedModuleIdentity: BinarySchemaMember {
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		var fieldFlags = try reader.readFieldFlags()
 		try self.init(
 			moduleName: reader.read(),
-			packageName: reader.read() as String?,
+			packageName: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 			dependencyModuleNames: reader.read(),
-			mockConditionalCompilation: reader.read() as String?,
+			mockConditionalCompilation: reader.readOptional(flaggedIn: &fieldFlags) as String?,
 		)
+		try fieldFlags.finish()
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		var fieldFlags = BinaryFieldFlags()
+		let fieldsStart = writer.startFields()
 		writer.write(moduleName)
-		writer.write(packageName)
+		writer.writeOptional(packageName, flaggedIn: &fieldFlags)
 		writer.write(dependencyModuleNames)
-		writer.write(mockConditionalCompilation)
+		writer.writeOptional(mockConditionalCompilation, flaggedIn: &fieldFlags)
+		writer.finishFields(fieldFlags, startingAt: fieldsStart)
 	}
 }
 
