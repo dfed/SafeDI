@@ -102,7 +102,7 @@ extension ScopeGenerator {
 	/// be as deep as the module has types.
 	private func publicMockReceiverModules(context: PublicMockContext) -> [String: Set<String?>] {
 		var modulesByLabel = [String: Set<String?>]()
-		var generatorsToVisit = orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator)
+		var generatorsToVisit = orderedChildGenerators
 		while let generator = generatorsToVisit.popLast() {
 			if case let .property(instantiable, _, _, _, _, _) = generator.scopeData {
 				let moduleName = context.moduleNameByType[instantiable.concreteInstantiable]
@@ -117,7 +117,7 @@ extension ScopeGenerator {
 					}
 				}
 			}
-			generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator))
+			generatorsToVisit.append(contentsOf: generator.orderedChildGenerators)
 		}
 		return modulesByLabel
 	}
@@ -327,12 +327,12 @@ extension ScopeGenerator {
 	/// from a parameter tree. Walked with a stack, since a tree can be as deep as the module has types.
 	private func publicMockNamesInBody(namesFillsDeclare: Set<String>) -> Set<String> {
 		var namesInBody = namesFillsDeclare
-		var generatorsToVisit = orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator)
+		var generatorsToVisit = orderedChildGenerators
 		while let generator = generatorsToVisit.popLast() {
 			guard case let .property(instantiable, property, _, _, _, _) = generator.scopeData else { continue }
 			namesInBody.insert(Self.functionName(toBuildPropertyNamed: property.label))
 			namesInBody.formUnion(instantiable.dependencies.map(\.property.label))
-			generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator))
+			generatorsToVisit.append(contentsOf: generator.orderedChildGenerators)
 		}
 		return namesInBody
 	}

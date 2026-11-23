@@ -91,8 +91,8 @@ extension MockLowering {
 			reservedNames.insert(MockLowering.builderFunctionName(boundAs: (index < bindingNames.count ? bindingNames[index] : nil) ?? property.label))
 		}
 		for (member, _) in memberGenerators {
-			for child in member.orderedChildrenComputedAfresh(propertiesGeneratedLater: []) {
-				guard case let .property(_, property, _, _, isPropertyCycle, _) = child.generator.scopeData, !isPropertyCycle else { continue }
+			for child in member.orderedChildGenerators {
+				guard case let .property(_, property, _, _, isPropertyCycle, _) = child.scopeData, !isPropertyCycle else { continue }
 				let functionName = ScopeGenerator.functionName(toBuildPropertyNamed: property.label)
 				reservedNames.insert(functionName)
 				reservedNames.insert(ReservedName.receivedBuilderFunctionName(of: functionName))

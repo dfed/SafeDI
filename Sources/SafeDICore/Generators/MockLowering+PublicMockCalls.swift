@@ -115,7 +115,7 @@ extension ScopeGenerator {
 			case .root, .hole, .fill:
 				break
 			}
-			generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator))
+			generatorsToVisit.append(contentsOf: generator.orderedChildGenerators)
 		}
 		// Each family of the fills' places is a builder `mock()` requires, which the calls' builders of that family join
 		// (`seamMockBuilders`); every other family a call fills is a builder `mock()` takes optional.
@@ -249,7 +249,7 @@ extension ScopeGenerator {
 					}
 				}
 			}
-			generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map { ($0.generator, capturesSendably) })
+			generatorsToVisit.append(contentsOf: generator.orderedChildGenerators.map { ($0, capturesSendably) })
 		}
 		guard !holeTypeByProperty.isEmpty else { return .lowered([:]) }
 		// One builder per hole type, labeled from its stem as the leaf receives it: a builder joining several properties, or
@@ -298,8 +298,8 @@ extension ScopeGenerator {
 			}
 			let enclosingPublicMock = foreignPublicMocks[instantiable.concreteInstantiable] ?? publicMockBuiltInline
 			let instantiatedTypes = Dictionary(instantiable.dependencies.map { ($0.property, $0.asInstantiatedType) }, uniquingKeysWith: { first, _ in first })
-			generatorsToVisit += generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map { child in
-				(child.generator, enclosingPublicMock, child.generator.property.flatMap { instantiatedTypes[$0] })
+			generatorsToVisit += generator.orderedChildGenerators.map { child in
+				(child, enclosingPublicMock, child.property.flatMap { instantiatedTypes[$0] })
 			}
 		}
 		return false

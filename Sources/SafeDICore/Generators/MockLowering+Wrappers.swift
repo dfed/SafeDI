@@ -40,8 +40,8 @@ extension MockLowering.Walk {
 			sendableOverrideExtractor.reserve(functionNames)
 			for generator in generators where generator.mockLoweringBuiltProperty != nil {
 				sendableOverrideExtractor.reserve(
-					generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).compactMap { child in
-						child.generator.mockLoweringBuiltProperty.map { ScopeGenerator.functionName(toBuildPropertyNamed: $0.label) }
+					generator.orderedChildGenerators.compactMap { child in
+						child.mockLoweringBuiltProperty.map { ScopeGenerator.functionName(toBuildPropertyNamed: $0.label) }
 					},
 				)
 			}

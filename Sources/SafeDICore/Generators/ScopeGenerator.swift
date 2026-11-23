@@ -6201,6 +6201,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 	}
 
+	/// The generators of the children, in `orderedPropertiesToGenerate`'s order, for a walk that reads no child's
+	/// availability.
+	nonisolated var orderedChildGenerators: [ScopeGenerator] {
+		orderedPropertyToGenerateIndices.map { propertiesToGenerate[$0] }
+	}
+
 	/// `orderedChildren(propertiesGeneratedLater:)`, with the indices of each property worked out afresh, for a walk of a
 	/// seam's tree that reads what generation will emit without awaiting each generator.
 	nonisolated func orderedChildrenComputedAfresh(propertiesGeneratedLater: Set<Property>) -> [OrderedChild] {

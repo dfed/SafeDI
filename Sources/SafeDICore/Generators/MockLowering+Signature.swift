@@ -561,7 +561,7 @@ extension ScopeGenerator {
 			for (index, dependency) in dependencies.enumerated() where declarationIndexByLabel[dependency.property.label] == nil {
 				declarationIndexByLabel[dependency.property.label] = index
 			}
-			return generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator).enumerated().compactMap { generationIndex, child in
+			return generator.orderedChildGenerators.enumerated().compactMap { generationIndex, child in
 				guard case let .property(_, property, _, _, _, _) = child.scopeData else { return nil }
 				let position = Position(declarationIndex: declarationIndexByLabel[property.label] ?? Int.max, generationIndex: generationIndex)
 				return Visit(
@@ -604,8 +604,8 @@ extension ScopeGenerator {
 		/// The properties the sites of holes among a generator's children bind, which no parameter covers
 		/// (`ScopeGenerator.uncoveredInstantiatedDependencies(ofMockedType:treePropertyNodes:holeSiteProperties:)`).
 		func holeSiteProperties(of generator: ScopeGenerator) -> [Property] {
-			generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).compactMap { child in
-				guard case let .hole(property, _, .some) = child.generator.scopeData else { return nil }
+			generator.orderedChildGenerators.compactMap { child in
+				guard case let .hole(property, _, .some) = child.scopeData else { return nil }
 				return property
 			}
 		}
