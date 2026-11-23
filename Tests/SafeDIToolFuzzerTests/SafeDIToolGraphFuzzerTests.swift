@@ -3784,6 +3784,14 @@ struct SafeDIToolGraphFuzzerTests {
 		try await Self.expectMockLoweringIdenticalToEmitter(forSeed: 1_095, reportLine: "mock-lowering: 62/62 roots identical (100.0%); 0 differ")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func fixture_lowersMockBuildingByValueTypeThatForwardsValues_forSeed907() async throws {
+		// The remedy oracle's graph forwards `lazyAnyT4` on `T1`, which `T0` builds by value as `AnyT1`, a graph production
+		// rejects; its mocks pass the value by name from the scope. Stage D1's lowering once left such a node unsupported.
+		try await Self.expectMockLoweringIdenticalToEmitter(forSeed: 907, reportLine: "mock-lowering: 10/10 roots identical (100.0%); 0 differ")
+	}
+
 	/// Expects stage D1's lowering of the mock roots of `seed`'s graph, drawn with `features`, to tally `reportLine`
 	/// against the emitter's code.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
