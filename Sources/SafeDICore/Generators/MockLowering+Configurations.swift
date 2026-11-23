@@ -49,9 +49,13 @@ extension MockLowering {
 		if let firstUnsupportedRoot {
 			return .unsupported(firstUnsupportedRoot.rule)
 		}
-		// A configuration `@Sendable`-typed, as a type a `Sendable` wrapper builds anywhere in the module has, takes
-		// `@Sendable` closures, which lane B's family lowers.
-		guard !loweredRoots.contains(where: { $0.records.contains { sendableConfigurationTypeNames.contains($0.concreteType.asSource) } }) else {
+		// D1 lane hook (lane C): a configuration `@Sendable`-typed, as a type a `Sendable` wrapper builds anywhere in the
+		// module has, takes `@Sendable` closures (`configurationStruct(amongConfigurationsTypedSendable:)`); a public mock's,
+		// and one with a child whose field the lowering does not spell there, is not lowered yet.
+		guard !loweredRoots.contains(where: { $0.records.contains { record in
+			sendableConfigurationTypeNames.contains(record.concreteType.asSource)
+				&& (record.publicConstruction != nil || record.childFields.contains { $0.sendableForm == nil })
+		} }) else {
 			return .unsupported(.wrapper)
 		}
 		let rootedTypeNames = Set(roots.map(\.mockedType.asSource))
@@ -63,7 +67,7 @@ extension MockLowering {
 			// A public mock's records describe its module-level configurations, which are lowered after these.
 			for record in records where record.publicConstruction == nil && seenTypeNames.insert(record.concreteType.asSource).inserted {
 				let typeName = record.concreteType.asSource
-				let structCode = record.configurationStruct
+				let structCode = record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)
 				if rootedTypeNames.contains(typeName) {
 					rootedStructs[typeName] = structCode
 				} else {
@@ -167,7 +171,9 @@ extension MockLowering.Walk {
 extension MockLowering.ConfigurationRecord {
 	/// The `SafeDIMockConfiguration` this record describes, nested in an extension of its type: a field per child, one per
 	/// default-valued parameter, then the builder that overrides how the type is built, each held in the configuration's storage.
-	var configurationStruct: String {
+	// D1 lane hook (lane C): a configuration `@Sendable`-typed, `typeNames` naming the types whose configurations are.
+	func configurationStruct(amongConfigurationsTypedSendable typeNames: Set<String>) -> String {
+		let requiresSendable = typeNames.contains(concreteType.asSource)
 		let indent = ScopeGenerator.standardIndent
 		let innerIndent = "\(indent)\(ScopeGenerator.standardIndent)"
 		let parameterIndent = "\(innerIndent)\(ScopeGenerator.standardIndent)"
@@ -178,22 +184,30 @@ extension MockLowering.ConfigurationRecord {
 		var parameters = [String]()
 		var fields = [ConfigurationStorage.Field]()
 		for childField in childFields {
-			parameters.append("\(parameterIndent)\(childField.name): \(childField.typeSource) = \(childField.defaultValue)")
+			// A child's field in a configuration `@Sendable`-typed is `@Sendable`, proven `Sendable` (`configurationField`).
+			let (typeSource, defaultValue, isProvenSendable) = if requiresSendable, let sendableForm = childField.sendableForm {
+				(sendableForm.typeSource, sendableForm.defaultValue, sendableForm.configuredTypeName.map(typeNames.contains) ?? true)
+			} else {
+				(childField.typeSource, childField.defaultValue, false)
+			}
+			parameters.append("\(parameterIndent)\(childField.name): \(typeSource) = \(defaultValue)")
 			fields.append(ConfigurationStorage.Field(
 				name: childField.name,
-				typeSource: childField.typeSource,
-				parameterTypeSource: childField.typeSource,
+				typeSource: typeSource,
+				parameterTypeSource: typeSource,
 				accessPrefix: "",
 				documentation: nil,
-				isProvenSendable: false,
+				isProvenSendable: isProvenSendable,
 			))
 		}
 		for defaultField in defaultFields {
-			let (parameter, field) = defaultField.configurationParameter(indent: parameterIndent)
+			let (parameter, field) = requiresSendable
+				? defaultField.sendableConfigurationParameter(indent: parameterIndent)
+				: defaultField.configurationParameter(indent: parameterIndent)
 			parameters.append(parameter)
 			fields.append(field)
 		}
-		let builderType = "(\(concreteBuilderClosureType))?"
+		let builderType = "(\(requiresSendable ? "@Sendable " : "")\(concreteBuilderClosureType))?"
 		parameters.append("\(parameterIndent)_ \(ReservedName.configurationBuilderPropertyName): \(builderType) = nil")
 		fields.append(ConfigurationStorage.Field(
 			name: ReservedName.configurationBuilderPropertyName,
@@ -201,7 +215,7 @@ extension MockLowering.ConfigurationRecord {
 			parameterTypeSource: builderType,
 			accessPrefix: "",
 			documentation: Self.builderDocumentation,
-			isProvenSendable: false,
+			isProvenSendable: requiresSendable,
 		))
 		let storage = ConfigurationStorage(fields: fields)
 		lines.append("\(innerIndent)init(")
@@ -258,5 +272,36 @@ extension MockLoweringShadow {
 			comparisons.append(Comparison(mockedType: "", outcome: .unsupported(rule), subject: .moduleConfigurations))
 		}
 		return comparisons
+	}
+}
+
+extension MockLowering.DefaultField {
+	// D1 lane hook (lane C): a default-valued field of a configuration `@Sendable`-typed.
+	/// The field's parameter of a configuration `@Sendable`-typed, at `indent`, and the field its storage holds: a closure
+	/// `@Sendable` at its top, or, for any other value, a `@Sendable` closure that returns it, which the construction calls
+	/// (`ScopeGenerator.generateConfigurationStruct`).
+	func sendableConfigurationParameter(indent: String) -> (parameter: String, field: ConfigurationStorage.Field) {
+		let field = { (typeSource: String, parameterTypeSource: String) in
+			ConfigurationStorage.Field(
+				name: label,
+				typeSource: typeSource,
+				parameterTypeSource: parameterTypeSource,
+				accessPrefix: "",
+				documentation: nil,
+				isProvenSendable: true,
+			)
+		}
+		if isClosureType, !isAutoclosure {
+			let closureSendable = valueTypeDescription.isSendableFunction ? "" : "@Sendable "
+			return (
+				parameter: "\(indent)\(label): \(closureSendable)@escaping \(valueTypeSource) = \(defaultExpression)",
+				field: field("\(closureSendable)\(valueTypeSource)", "\(closureSendable)@escaping \(valueTypeSource)"),
+			)
+		} else {
+			return (
+				parameter: "\(indent)\(label): @autoclosure @escaping @Sendable () -> \(valueTypeSource) = \(ScopeGenerator.autoclosureDefault(defaultExpression))",
+				field: field("@Sendable () -> \(valueTypeSource)", "@escaping @Sendable () -> \(valueTypeSource)"),
+			)
+		}
 	}
 }
