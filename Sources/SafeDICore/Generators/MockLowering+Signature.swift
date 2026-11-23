@@ -238,6 +238,7 @@ extension ScopeGenerator {
 		// lowered yet. An internal mock takes the wrapper's instance by value and binds the wrapper apart from its label
 		// (`generateMockRootCode`'s `lazilyInstantiatedReceivedProperties`), where the tree provides neither the wrapper nor
 		// its instance and the mocked type forwards no form of the label.
+		let tree = treeNames(of: instantiable)
 		var wrappedReceivedProperties = [Property]()
 		if instantiable.generateMock == .public {
 			let receivedLabels = receivedProperties.map(\.label)
@@ -252,13 +253,14 @@ extension ScopeGenerator {
 				      !isFulfilledByForwardedProperty(property)
 				else { continue }
 				let instance = property.asValidatedForDependencyCycles
-				// An instance the mocked type itself instantiates, which the mock may not build, is not lowered yet.
-				guard !instantiable.dependencies.contains(where: { dependency in
-					guard case .instantiated = dependency.source else { return false }
-					return dependency.property == instance.asUnwrappedProperty || dependency.lazilyInstantiatedInstanceProperty == instance.asUnwrappedProperty
-				}) else { return .unsupported(.wrapper) }
-				// A wrapper whose instance the tree provides is not made from it: the mock takes the wrapper as it is.
-				guard !Self.provides(instance, declaredProperties: propertiesToDeclare, forwardedProperties: []) else { continue }
+				// The instance of a wrapper the mocked type instantiates and the mock cannot build provides only that wrapper,
+				// which the lowering does not lower yet.
+				guard !tree.mockedTypeUncoveredProperties.contains(where: { $0.asLazilyInstantiatedInstanceProperty == instance.asUnwrappedProperty }) else { return .unsupported(.wrapper) }
+				// An instance the mocked type instantiates and the mock cannot build is the parameter `mock()` takes, which the
+				// wrapper is made from. Any other the tree provides is not made into the wrapper: the mock takes the wrapper as it is.
+				guard tree.mockedTypeUncoveredProperties.contains(instance.asUnwrappedProperty)
+					|| !Self.provides(instance, declaredProperties: propertiesToDeclare, forwardedProperties: [])
+				else { continue }
 				// The instance of one beside a property of its label and type the mocked type forwards is named apart from it,
 				// which the lowering does not lower yet.
 				guard !isFulfilledByForwardedProperty(instance) else { return .unsupported(.wrapper) }
@@ -302,7 +304,6 @@ extension ScopeGenerator {
 				flatReceivedProperties.append(property)
 			}
 		}
-		let tree = treeNames(of: instantiable)
 		let uncoveredParameters = tree.uncoveredParameters
 		let forwardedAndDefaultLabels = Set(forwardedParameters.map(\.name)).union(rootDefaultParameters.map(\.name))
 		let treeBindingNames = Self.bindingNames(of: tree.rootPropertyNodes, besideParametersKeepingTheirLabels: forwardedAndDefaultLabels)
@@ -373,11 +374,6 @@ extension ScopeGenerator {
 		for property in wrappedReceivedProperties where !lazilyInstantiatedPropertiesToBind.contains(property.asUnwrappedProperty) {
 			lazilyInstantiatedPropertiesToBind.append(property.asUnwrappedProperty)
 		}
-		// An instance the mocked type instantiates and the mock cannot build is the parameter the wrapper is made from, which
-		// the lowering does not bind yet.
-		guard !lazilyInstantiatedPropertiesToBind.contains(where: { property in
-			uncoveredParameters.contains { $0.property == property.asValidatedForDependencyCycles }
-		}) else { return .unsupported(.wrapper) }
 		let lazilyInstantiatedBindingNames = Self.namesApart(
 			preferredNames: lazilyInstantiatedPropertiesToBind.map { property in
 				"\(property.label)_\(property.propertyType.isSendable ? "sendableLazilyInstantiated" : "lazilyInstantiated")".spelledAsJoinedIdentifier
@@ -402,6 +398,11 @@ extension ScopeGenerator {
 			// The parameter may be named apart from its label; an optional instance, or an override, is mapped.
 			if let index = flatReceivedProperties.firstIndex(of: instanceProperty) {
 				lazilyInstantiatedBindings.append((bindingName, "\(wrapperTypeSource) { \(flatReceivedNames[index]) }"))
+			} else if tree.mockedTypeUncoveredProperties.contains(instanceProperty),
+			          let index = uncoveredParameters.firstIndex(where: { $0.property == instanceProperty })
+			{
+				// The instance is the parameter of a dependency the mocked type instantiates, which is always passed.
+				lazilyInstantiatedBindings.append((bindingName, "\(wrapperTypeSource) { \(uncoveredNames[index]) }"))
 			} else if let index = flatReceivedProperties.firstIndex(of: Property(label: instanceProperty.label, typeDescription: .optional(instanceProperty.typeDescription))) {
 				lazilyInstantiatedBindings.append((bindingName, "\(flatReceivedNames[index]).map { instance in \(wrapperTypeSource) { instance } }"))
 			} else {
@@ -504,6 +505,8 @@ extension ScopeGenerator {
 		/// The labels of the dependencies of every node of the tree, which its builder function declares
 		/// (`namesDeclaredInBuilderFunctions(of:)`).
 		let namesDeclaredInBuilderFunctions: Set<String>
+		/// The `@Instantiated` dependencies of the mocked type itself that the mock cannot build.
+		let mockedTypeUncoveredProperties: Set<Property>
 	}
 
 	/// The names in the tree of the mocked type, `instantiable`, that the names of `mock()`'s parameters are chosen from. The
@@ -594,7 +597,9 @@ extension ScopeGenerator {
 			}
 		}
 		// The mocked type is built in the body of `mock()`, outside every builder function.
+		var mockedTypeUncoveredProperties = Set<Property>()
 		for dependency in instantiable.dependencies where isInstantiated(dependency) && !builtProperties.contains(dependency.property) {
+			mockedTypeUncoveredProperties.insert(dependency.property)
 			add(dependency, createdBy: instantiable.concreteInstantiable, at: [], isHiddenWhereReferenced: false, isInstantiatedInSendableFunction: false)
 		}
 		var visits = Array(rootChildren.reversed())
@@ -662,6 +667,7 @@ extension ScopeGenerator {
 				return property
 			},
 			namesDeclaredInBuilderFunctions: namesDeclaredInBuilderFunctions,
+			mockedTypeUncoveredProperties: mockedTypeUncoveredProperties,
 		)
 	}
 }
