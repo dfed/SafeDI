@@ -77,11 +77,10 @@ extension MockLowering {
 			let label = labels.claim(family.isSendable ? DependencyTreeGenerator.sendableBuilderLabel(ofStem: stem) : DependencyTreeGenerator.plainBuilderLabel(ofStem: stem))
 			let familyPlaces = placesByFamily[family, default: []]
 			let familyPassedUpProperties = passedUpPropertiesByFamily[family, default: []]
-			let parameterType: TypeDescription
-			if familyPlaces.isEmpty, let first = familyPassedUpProperties.first {
-				parameterType = passedUpType(of: first).asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)
+			let parameterType: TypeDescription = if familyPlaces.isEmpty, let first = familyPassedUpProperties.first {
+				passedUpType(of: first).asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 			} else {
-				parameterType = ScopeGenerator.MockRootParameters.SeamMockBuilder.parameterType(ofPlaceProperties: familyPlaces.map(\.property), in: family)
+				ScopeGenerator.MockRootParameters.SeamMockBuilder.parameterType(ofPlaceProperties: familyPlaces.map(\.property), in: family)
 			}
 			guard familyPassedUpProperties.allSatisfy({ passedUpType(of: $0).strippingEscaping.asSource == parameterType.strippingEscaping.asSource }) else { return .unsupported(.publicMockCall) }
 			builders.append((label, family, parameterType))

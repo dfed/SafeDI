@@ -3614,7 +3614,7 @@ struct SafeDIToolGraphFuzzerTests {
 	func fixture_lowersHandWrittenMockArgumentsByLabel_forSeed1155() async throws {
 		// A `customMock` whose argument takes a dependency the generated mock passes it by label. Stage D1's lowering once
 		// matched the argument by label and type, left the argument out, and differed from the emitter.
-		try await Self.expectMockLoweringIdenticalToEmitter(forSeed: 1155, reportLine: "mock-lowering: 6/6 roots identical (100.0%); 0 differ")
+		try await Self.expectMockLoweringIdenticalToEmitter(forSeed: 1_155, reportLine: "mock-lowering: 6/6 roots identical (100.0%); 0 differ")
 	}
 
 	@Test
@@ -3622,7 +3622,7 @@ struct SafeDIToolGraphFuzzerTests {
 	func fixture_lowersHandWrittenMockArgumentsByLabel_forSeed1341() async throws {
 		// `T3`'s `customMock(t1Builder:t3:)` takes `t3`, the `S1341_T3` the type receives under its own label, which the
 		// generated mock passes `t3: t3`. Stage D1's lowering once left that argument out.
-		try await Self.expectMockLoweringIdenticalToEmitter(forSeed: 1341, reportLine: "mock-lowering: 12/12 roots identical (100.0%); 0 differ")
+		try await Self.expectMockLoweringIdenticalToEmitter(forSeed: 1_341, reportLine: "mock-lowering: 12/12 roots identical (100.0%); 0 differ")
 	}
 
 	/// Expects stage D1's lowering of the mock roots of `seed`'s graph to tally `reportLine` against the emitter's code.
