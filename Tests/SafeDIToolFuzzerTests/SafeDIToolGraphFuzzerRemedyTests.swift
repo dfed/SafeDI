@@ -3278,6 +3278,209 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 		#expect(run.failureLine == "The forward-receive remedy, which receives `t2` with `@Forwarded`, leaves at `S1_T1.t2` in S1_T1.swift: \(introduced)")
 	}
 
+	@Test(.enabled(if: compileVerificationIsEnabled, "The oracle compiles a remedied graph only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func results_reportTheRemedyKind_whenTheToolAcceptsTheRemediedGraphAndItsGeneratedCodeDoesNotCompile() async throws {
+		// The tool accepts the forwarded receive, and the generated code calls `S1_T1`'s initializer, which the fixture
+		// marks unavailable, so the remedied graph does not compile without depending on a defect of SafeDI.
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init(t1Builder: Instantiator<S1_T1>) {
+					self.t1Builder = t1Builder
+				}
+
+				@Instantiated let t1Builder: Instantiator<S1_T1>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				@available(*, unavailable)
+				public init(t2: S1_T2) {
+					self.t2 = t2
+				}
+
+				@Received let t2: S1_T2
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T2: Instantiable {
+				public init(seed: Int) {
+					self.seed = seed
+				}
+
+				@Forwarded let seed: Int
+			}
+			""",
+		])
+		let runs = try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [], multiModuleRenamings: [])
+		#expect(runs.remedyRuns.map(\.remedy.kind) == [.forwardReceive])
+
+		let failure = try #require(try await GraphFuzzerOracle.results(of: [runs]).first?.failure)
+
+		#expect(failure.kind == .generatedCodeDoesNotCompile)
+		#expect(failure.details.hasPrefix("The forward-receive remedy, which receives `t2` with `@Forwarded`, is accepted at `S1_T1.t2` in S1_T1.swift, and the remedied graph's generated code does not compile"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func edit_removesParameterFromHandWrittenMock_whenRemedyRemovesPropertyTheMockTakes() throws {
+		var files = try #require(GraphFuzzerRemedies.Files(Self.typeWithHandWrittenMock))
+
+		#expect(files.edit(typeNamed: "S1_T1") { properties in properties.filter { $0.label != "t0" } })
+		#expect(files.contents == [
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t2: S1_T2, flag: Bool = true) {
+					self.t2 = t2
+				}
+
+				@Received let t2: S1_T2
+
+				#if DEBUG
+				public static func mock(t2: S1_T2, flag: Bool = true) -> S1_T1 {
+					S1_T1(t2: t2, flag: flag)
+				}
+				#endif
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func edit_retypesParameterOfHandWrittenMock_whenRemedyRetypesPropertyTheMockTakes() throws {
+		var files = try #require(GraphFuzzerRemedies.Files(Self.typeWithHandWrittenMock))
+
+		#expect(files.edit(typeNamed: "S1_T1") { properties in
+			properties.map { $0.label == "t2" ? GraphFuzzerRemedyProperty(attribute: "@Received", label: "t2", type: "SendableInstantiator<S1_T2>") : $0 }
+		})
+		#expect(files.contents == [
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable {
+				public init(t0: S1_T0, t2: SendableInstantiator<S1_T2>, flag: Bool = true) {
+					self.t0 = t0
+					self.t2 = t2
+				}
+
+				@Received let t0: S1_T0
+				@Received let t2: SendableInstantiator<S1_T2>
+
+				#if DEBUG
+				public static func mock(t0: S1_T0, t2: SendableInstantiator<S1_T2>, flag: Bool = true) -> S1_T1 {
+					S1_T1(t0: t0, t2: t2, flag: flag)
+				}
+				#endif
+			}
+			""",
+		])
+	}
+
+	@Test
+	func declaredType_takesSendableForm_whenAdviceNamesBothFormsAndDeclaringTypeConformsToSendable() {
+		#expect(GraphFuzzerRemedies.declaredType(
+			advisedBy: "`t5` on `S1_T4` cannot build `S1_T5`, which has @Forwarded properties that only an instantiator is passed. Declare it as `Instantiator<S1_T5>`, or as `SendableInstantiator<S1_T5>` if `S1_T4` is Sendable.",
+			declaringTypeConformsToSendable: true,
+		) == "SendableInstantiator<S1_T5>")
+	}
+
+	@Test
+	func declaredType_takesPlainForm_whenAdviceNamesBothFormsAndDeclaringTypeDoesNotConformToSendable() {
+		#expect(GraphFuzzerRemedies.declaredType(
+			advisedBy: "`t5` on `S1_T4` cannot build `S1_T5`, which has @Forwarded properties that only an instantiator is passed. Declare it as `Instantiator<S1_T5>`, or as `SendableInstantiator<S1_T5>` if `S1_T4` is Sendable.",
+			declaringTypeConformsToSendable: false,
+		) == "Instantiator<S1_T5>")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func conformsToSendable_readsUncheckedSendable_whenTypeListsItAmongItsConformances() throws {
+		let files = try #require(GraphFuzzerRemedies.Files(GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable, S1_T1Protocol, @unchecked Sendable {
+				public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T2: Instantiable, S1_T2Protocol {
+				public init() {}
+			}
+			""",
+		])))
+
+		#expect(files.conformsToSendable(typeNamed: "S1_T1"))
+		#expect(!files.conformsToSendable(typeNamed: "S1_T2"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func conformsToSendable_readsProtocolThatRefinesSendable_whenTypeConformsOnlyThroughItsProtocol() throws {
+		let files = try #require(GraphFuzzerRemedies.Files(GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class S1_Root0: Instantiable {
+				public init() {}
+			}
+
+			public protocol S1_T1Protocol: AnyObject, Sendable {}
+			public protocol S1_T2Protocol: S1_T1Protocol {}
+			public protocol S1_T3Protocol: AnyObject {}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable, S1_T1Protocol {
+				public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T2: Instantiable, S1_T2Protocol {
+				public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T3: Instantiable, S1_T3Protocol {
+				public init() {}
+			}
+			""",
+		])))
+
+		#expect(files.conformsToSendable(typeNamed: "S1_T1"))
+		#expect(files.conformsToSendable(typeNamed: "S1_T2"))
+		#expect(!files.conformsToSendable(typeNamed: "S1_T3"))
+	}
+
+	/// A type with a hand-written mock that takes its initializer's parameters and passes each on, as the base corpus's
+	/// mock vocabulary draws one.
+	private static let typeWithHandWrittenMock = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+		"""
+		@Instantiable
+		public final class S1_T1: Instantiable {
+			public init(t0: S1_T0, t2: S1_T2, flag: Bool = true) {
+				self.t0 = t0
+				self.t2 = t2
+			}
+
+			@Received let t0: S1_T0
+			@Received let t2: S1_T2
+
+			#if DEBUG
+			public static func mock(t0: S1_T0, t2: S1_T2, flag: Bool = true) -> S1_T1 {
+				S1_T1(t0: t0, t2: t2, flag: flag)
+			}
+			#endif
+		}
+		""",
+	])
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func unremediedSiteCount_countsAnErrorOfAFamilyTheOracleReads_whenItIsAtALineThatIsNoPropertyOfAFinalClass() {
