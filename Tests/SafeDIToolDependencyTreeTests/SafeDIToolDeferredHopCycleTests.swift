@@ -1959,15 +1959,15 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
-			        @Sendable func __safeDI_a() -> A {
+			        @Sendable nonisolated func __safeDI_a() -> A {
 			            let b: B = __safeDI_b()
 			            return A(b: b)
 			        }
-			        @Sendable func __safeDI_b() -> B {
+			        @Sendable nonisolated func __safeDI_b() -> B {
 			            let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
 			            return B(cBuilder: cBuilder)
 			        }
-			        @Sendable func __safeDI_cBuilder() -> C {
+			        @Sendable nonisolated func __safeDI_cBuilder() -> C {
 			            let a: A = __safeDI_a()
 			            return C(a: a)
 			        }
@@ -2022,9 +2022,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    ) -> A {
 			        let __safeDI_b__b_cBuilder_safeDIBuilder = safeDIOverrides.b.cBuilder.safeDIBuilder
 			        let __safeDI_b__safeDIBuilder = safeDIOverrides.b.safeDIBuilder
-			        @Sendable func __safeDI_b() -> B {
-			            @Sendable func __safeDI_cBuilder() -> C {
-			                @Sendable func __safeDI_a() -> A {
+			        @Sendable nonisolated func __safeDI_b() -> B {
+			            @Sendable nonisolated func __safeDI_cBuilder() -> C {
+			                @Sendable nonisolated func __safeDI_a() -> A {
 			                    let b: B = __safeDI_b()
 			                    return A(b: b)
 			                }
@@ -2079,15 +2079,15 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
-			        @Sendable func __safeDI_a() -> A {
+			        @Sendable nonisolated func __safeDI_a() -> A {
 			            let b: B = __safeDI_b()
 			            return A(b: b)
 			        }
-			        @Sendable func __safeDI_b() -> B {
+			        @Sendable nonisolated func __safeDI_b() -> B {
 			            let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
 			            return B(cBuilder: cBuilder)
 			        }
-			        @Sendable func __safeDI_cBuilder() -> C {
+			        @Sendable nonisolated func __safeDI_cBuilder() -> C {
 			            let a = SendableLazilyInstantiated<A>(__safeDI_a)
 			            return C(a: a)
 			        }
@@ -2208,9 +2208,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    ) -> A {
 			        let __safeDI_b__b_cBuilder_safeDIBuilder = safeDIOverrides.b.cBuilder.safeDIBuilder
 			        let __safeDI_b__safeDIBuilder = safeDIOverrides.b.safeDIBuilder
-			        @Sendable func __safeDI_b() -> B {
-			            @Sendable func __safeDI_cBuilder() -> C {
-			                @Sendable func __safeDI_a() -> A {
+			        @Sendable nonisolated func __safeDI_b() -> B {
+			            @Sendable nonisolated func __safeDI_cBuilder() -> C {
+			                @Sendable nonisolated func __safeDI_a() -> A {
 			                    let b: B = __safeDI_b()
 			                    return A(b: b)
 			                }
@@ -2265,15 +2265,15 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
-			        @Sendable func __safeDI_a() -> A {
+			        @Sendable nonisolated func __safeDI_a() -> A {
 			            let b: B = __safeDI_b()
 			            return A(b: b)
 			        }
-			        @Sendable func __safeDI_b() -> B {
+			        @Sendable nonisolated func __safeDI_b() -> B {
 			            let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
 			            return B(cBuilder: cBuilder)
 			        }
-			        @Sendable func __safeDI_cBuilder() -> C {
+			        @Sendable nonisolated func __safeDI_cBuilder() -> C {
 			            let a = SendableLazilyInstantiated<A>(__safeDI_a)
 			            return C(a: a)
 			        }
@@ -2403,9 +2403,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    ) -> A {
 			        let __safeDI_b__b_cBuilder_safeDIBuilder = safeDIOverrides.b.cBuilder.safeDIBuilder
 			        let __safeDI_b__safeDIBuilder = safeDIOverrides.b.safeDIBuilder
-			        @Sendable func __safeDI_b() -> B {
-			            @Sendable func __safeDI_cBuilder() -> C {
-			                @Sendable func __safeDI_a() -> A {
+			        @Sendable nonisolated func __safeDI_b() -> B {
+			            @Sendable nonisolated func __safeDI_cBuilder() -> C {
+			                @Sendable nonisolated func __safeDI_a() -> A {
 			                    let b: B = __safeDI_b()
 			                    let x = X()
 			                    return A(b: b, x: x)
@@ -2512,9 +2512,9 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			    ) -> A {
 			        let __safeDI_b__b_cBuilder_safeDIBuilder = safeDIOverrides.b.cBuilder.safeDIBuilder
 			        let __safeDI_b__safeDIBuilder = safeDIOverrides.b.safeDIBuilder
-			        @Sendable func __safeDI_b() -> B {
+			        @Sendable nonisolated func __safeDI_b() -> B {
 			            func __safeDI_cBuilder() -> C {
-			                @Sendable func __safeDI_a() -> A {
+			                @Sendable nonisolated func __safeDI_a() -> A {
 			                    let b: B = __safeDI_b()
 			                    return A(b: b)
 			                }
@@ -2569,15 +2569,15 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
-			        @Sendable func __safeDI_a() -> A {
+			        @Sendable nonisolated func __safeDI_a() -> A {
 			            let b: B = __safeDI_b()
 			            return A(b: b)
 			        }
-			        @Sendable func __safeDI_b() -> B {
+			        @Sendable nonisolated func __safeDI_b() -> B {
 			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			            return B(cBuilder: cBuilder)
 			        }
-			        @Sendable func __safeDI_cBuilder() -> C {
+			        @Sendable nonisolated func __safeDI_cBuilder() -> C {
 			            let a = SendableLazilyInstantiated<A>(__safeDI_a)
 			            return C(a: a)
 			        }
@@ -2668,15 +2668,15 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
-			        @Sendable func __safeDI_a() -> A {
+			        @Sendable nonisolated func __safeDI_a() -> A {
 			            let b: B = __safeDI_b()
 			            return A(b: b)
 			        }
-			        @Sendable func __safeDI_b() -> B {
+			        @Sendable nonisolated func __safeDI_b() -> B {
 			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 			            return B(cBuilder: cBuilder)
 			        }
-			        @Sendable func __safeDI_cBuilder() -> C {
+			        @Sendable nonisolated func __safeDI_cBuilder() -> C {
 			            let a = SendableLazilyInstantiated<A>(__safeDI_a)
 			            return C(a: a)
 			        }

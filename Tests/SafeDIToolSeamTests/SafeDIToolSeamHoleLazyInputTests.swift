@@ -265,13 +265,13 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
-			        @Sendable func __safeDI_exportService() -> ExportService {
+			        @Sendable nonisolated func __safeDI_exportService() -> ExportService {
 			            ExportService()
 			        }
 			        let exportService = SendableLazilyInstantiated<ExportService>(__safeDI_exportService)
 			        func __safeDI_exportFeature() -> ExportFeature {
 			            _ = ExportFeature.__safeDI_ExportFeature_564572B42FCDFB7B.self\(Self.pluginComment(integration))
-			            @Sendable func __safeDI_uploaderSendableBuilder_ExportFeature_Panel_Scope_uploader(_ scope: ExportFeature.SafeDIScope_Uploader.Panel_Scope.uploader_Values) -> any Uploader {
+			            @Sendable nonisolated func __safeDI_uploaderSendableBuilder_ExportFeature_Panel_Scope_uploader(_ scope: ExportFeature.SafeDIScope_Uploader.Panel_Scope.uploader_Values) -> any Uploader {
 			                func __safeDI_uploader() -> DefaultUploader {
 			                    func __safeDI_jobBuilder() -> UploadJob {
 			                        UploadJob(exportService: exportService.instance)
@@ -337,7 +337,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
-			        @Sendable func __safeDI_exportService() -> ExportService {
+			        @Sendable nonisolated func __safeDI_exportService() -> ExportService {
 			            ExportService()
 			        }
 			        let exportService = SendableLazilyInstantiated<ExportService>(__safeDI_exportService)
@@ -345,7 +345,7 @@ struct SafeDIToolSeamHoleLazyInputTests: ~Copyable {
 			            _ = ExportFeature.__safeDI_ExportFeature_6AB1C2F5B579DAE9.self\(Self.pluginComment(integration))
 			            func __safeDI_uploaderBuilder_ExportFeature_uploader(_ scope: ExportFeature.SafeDIScope_Uploader.uploader_Values) -> any Uploader {
 			                func __safeDI_uploader() -> DefaultUploader {
-			                    @Sendable func __safeDI_jobBuilder() -> UploadJob {
+			                    @Sendable nonisolated func __safeDI_jobBuilder() -> UploadJob {
 			                        UploadJob(exportService: exportService.instance)
 			                    }
 			                    let jobBuilder = SendableInstantiator<UploadJob>(__safeDI_jobBuilder)

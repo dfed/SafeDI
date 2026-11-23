@@ -223,7 +223,7 @@ struct SafeDIToolCallingMockSendablePlaceTests: ~Copyable {
 		    ) -> F {
 		        let db = if let db { db } else if let safeDIBuilder = safeDIOverrides.db { safeDIBuilder() } else { Db() }
 		        let __safeDI_k__safeDIBuilder = safeDIOverrides.k
-		        @Sendable func __safeDI_k() -> K {
+		        @Sendable nonisolated func __safeDI_k() -> K {
 		            let __safeDI_apiSendableBuilder_k = __safeDI_apiSendableBuilder.k(SafeDISendableMockScope_Api.k_Values())
 		            let api: any Api = __safeDI_apiSendableBuilder_k.api(SafeDIMockScope_Api.K_Scope.api_Values())
 		            return if let safeDIBuilder = __safeDI_k__safeDIBuilder { safeDIBuilder(api) } else { K(api: api) }

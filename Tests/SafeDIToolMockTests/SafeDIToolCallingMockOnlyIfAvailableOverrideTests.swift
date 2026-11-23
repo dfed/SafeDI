@@ -818,7 +818,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableOverrideTests: ~Copyable {
 		    ) -> Screen {
 		        let __safeDI_wrapperBuilder__wrapperBuilder_cache_safeDIBuilder = safeDIOverrides.wrapperBuilder.cache
 		        let __safeDI_wrapperBuilder__safeDIBuilder = safeDIOverrides.wrapperBuilder.safeDIBuilder
-		        @Sendable func __safeDI_wrapperBuilder() -> Wrapper {
+		        @Sendable nonisolated func __safeDI_wrapperBuilder() -> Wrapper {
 		            _ = Cache.__safeDI_Cache_mock_215B449271BCAB93.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let cache = Cache.__safeDI_mock(filter: nil, safeDIOverrides: __safeDI_wrapperBuilder__wrapperBuilder_cache_safeDIBuilder?() ?? .init())
 		            return if let safeDIBuilder = __safeDI_wrapperBuilder__safeDIBuilder { safeDIBuilder(cache) } else { Wrapper(cache: cache) }
@@ -946,7 +946,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableOverrideTests: ~Copyable {
 		        let cache = Cache.__safeDI_mock(filter: nil, safeDIOverrides: safeDIOverrides.cache)
 		        let __safeDI_wrapperBuilder__wrapperBuilder_cache_safeDIBuilder = safeDIOverrides.wrapperBuilder.cache
 		        let __safeDI_wrapperBuilder__safeDIBuilder = safeDIOverrides.wrapperBuilder.safeDIBuilder
-		        @Sendable func __safeDI_wrapperBuilder() -> Wrapper {
+		        @Sendable nonisolated func __safeDI_wrapperBuilder() -> Wrapper {
 		            _ = Cache.__safeDI_Cache_mock_215B449271BCAB93.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            let cache = Cache.__safeDI_mock(filter: nil, safeDIOverrides: __safeDI_wrapperBuilder__wrapperBuilder_cache_safeDIBuilder?() ?? .init())
 		            return if let safeDIBuilder = __safeDI_wrapperBuilder__safeDIBuilder { safeDIBuilder(cache) } else { Wrapper(cache: cache) }
@@ -1106,7 +1106,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableOverrideTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let __safeDI_filter__safeDIBuilder = safeDIOverrides.filter
-		        @Sendable func __safeDI_filter() -> Filter {
+		        @Sendable nonisolated func __safeDI_filter() -> Filter {
 		            if let safeDIBuilder = __safeDI_filter__safeDIBuilder { safeDIBuilder() } else { Filter() }
 		        }
 		        let filter = SendableLazilyInstantiated<Filter>(__safeDI_filter)

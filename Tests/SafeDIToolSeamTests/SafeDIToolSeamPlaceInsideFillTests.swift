@@ -1133,7 +1133,7 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			                let service: any Service = __safeDI_service()
 			                return service
 			            }
-			            @Sendable func __safeDI_serviceSendableBuilder_Inner_Screen_Scope_service(_ scope: Inner.SafeDIScope_Service.Screen_Scope.service_Values, __safeDI_inner_serviceSendableBuilder: SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> any Service {
+			            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Inner_Screen_Scope_service(_ scope: Inner.SafeDIScope_Service.Screen_Scope.service_Values, __safeDI_inner_serviceSendableBuilder: SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> any Service {
 			                func __safeDI_service() -> DefaultService {
 			                    let gadget: any Gadget = __safeDI_inner_serviceSendableBuilder.gadget(SafeDIScope_Gadget.DefaultService_Scope.gadget_Values())
 			                    return DefaultService(gadget: gadget)
@@ -2433,7 +2433,7 @@ struct SafeDIToolSeamPlaceInsideFillTests: ~Copyable {
 			                }
 			                return { _ in AnyService(__safeDI_makeService()) }
 			            }
-			            @Sendable func __safeDI_defaultService_AnyServiceSendableBuilder_Inner_Screen_Scope_service(_ scope: Inner.SafeDIScope_DefaultService_AnyService.Screen_Scope.service_Values, __safeDI_inner_defaultService_AnyServiceSendableBuilder: SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> AnyService {
+			            @Sendable nonisolated func __safeDI_defaultService_AnyServiceSendableBuilder_Inner_Screen_Scope_service(_ scope: Inner.SafeDIScope_DefaultService_AnyService.Screen_Scope.service_Values, __safeDI_inner_defaultService_AnyServiceSendableBuilder: SafeDIScope_Gadget.DefaultService_Scope.__safeDI_Builder<any Gadget>) -> AnyService {
 			                func __safeDI_service() -> DefaultService {
 			                    let gadget: any Gadget = __safeDI_inner_defaultService_AnyServiceSendableBuilder.gadget(SafeDIScope_Gadget.DefaultService_Scope.gadget_Values())
 			                    return DefaultService(gadget: gadget)

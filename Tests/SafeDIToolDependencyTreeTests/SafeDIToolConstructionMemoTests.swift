@@ -170,11 +170,11 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 
 			extension First {
 			    public convenience init() {
-			        @Sendable func __safeDI_a() -> A {
+			        @Sendable nonisolated func __safeDI_a() -> A {
 			            let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
 			            return A(cBuilder: cBuilder)
 			        }
-			        @Sendable func __safeDI_cBuilder() -> C {
+			        @Sendable nonisolated func __safeDI_cBuilder() -> C {
 			            let a: A = __safeDI_a()
 			            return C(a: a)
 			        }
@@ -190,11 +190,11 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 
 			extension Second {
 			    public convenience init() {
-			        @Sendable func __safeDI_a() -> A {
+			        @Sendable nonisolated func __safeDI_a() -> A {
 			            let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
 			            return A(cBuilder: cBuilder)
 			        }
-			        @Sendable func __safeDI_cBuilder() -> C {
+			        @Sendable nonisolated func __safeDI_cBuilder() -> C {
 			            let a: A = __safeDI_a()
 			            return C(a: a)
 			        }

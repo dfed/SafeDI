@@ -208,7 +208,7 @@ struct SafeDIToolGraphFuzzerTests {
 		}
 		"""
 		#expect(features(receivingEachOther, [:]) == [.buildersReceivingEachOther])
-		#expect(features(receivingEachOther.replacingOccurrences(of: "Instantiator<", with: "SendableInstantiator<").replacingOccurrences(of: "func __safeDI_", with: "@Sendable func __safeDI_"), [:]) == [.sendableBuildersReceivingEachOther])
+		#expect(features(receivingEachOther.replacingOccurrences(of: "Instantiator<", with: "SendableInstantiator<").replacingOccurrences(of: "func __safeDI_", with: "@Sendable nonisolated func __safeDI_"), [:]) == [.sendableBuildersReceivingEachOther])
 		let selfReceiving = """
 		extension Root {
 		    public convenience init() {
@@ -247,11 +247,11 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(features("""
 		extension Root {
 		    public convenience init() {
-		        @Sendable func __safeDI_screenBuilder(session: Session) -> Screen {
+		        @Sendable nonisolated func __safeDI_screenBuilder(session: Session) -> Screen {
 		            let screenBuilder = SendableInstantiator<Screen> {
 		                __safeDI_screenBuilder(session: session)
 		            }
-		            @Sendable func __safeDI_stepBuilder() -> Step {
+		            @Sendable nonisolated func __safeDI_stepBuilder() -> Step {
 		                let session = Session()
 		                let screenBuilder = SendableInstantiator<Screen> {
 		                    __safeDI_screenBuilder(session: session)
@@ -261,7 +261,7 @@ struct SafeDIToolGraphFuzzerTests {
 		            let stepBuilder = SendableInstantiator<Step>(__safeDI_stepBuilder)
 		            return Screen(session: session, stepBuilder: stepBuilder, detail: Detail(screenBuilder: screenBuilder))
 		        }
-		        @Sendable func __safeDI_screenBuilder_received() -> Screen {
+		        @Sendable nonisolated func __safeDI_screenBuilder_received() -> Screen {
 		            __safeDI_screenBuilder(session: session)
 		        }
 		        let screenBuilder = SendableInstantiator<Screen>(__safeDI_screenBuilder_received)
@@ -1974,11 +1974,11 @@ struct SafeDIToolGraphFuzzerTests {
 		// The type key's function for a type a lazy cycle closes on takes the cycle's optional wrapper, which the root passes
 		// `nil` and the cycle's closer passes the wrapper; its constructions read the wrapper's instance.
 		let file = """
-		@Sendable func __safeDI_a(tag: SendableLazilyInstantiated<S7_Tag>?) -> S7_A {
+		@Sendable nonisolated func __safeDI_a(tag: SendableLazilyInstantiated<S7_Tag>?) -> S7_A {
 		    let reader = S7_Reader(tag: tag?.instance)
 		    return S7_A(reader: reader)
 		}
-		@Sendable func __safeDI_c(tag: SendableLazilyInstantiated<S7_Tag>) -> S7_C {
+		@Sendable nonisolated func __safeDI_c(tag: SendableLazilyInstantiated<S7_Tag>) -> S7_C {
 		    let a: S7_A = __safeDI_a(tag: tag)
 		    return S7_C(a: a)
 		}
@@ -1990,7 +1990,7 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test
 	func nilArgumentCountsThroughBuilderFunctions_countsAConstructionReadingTheWrappersInstance_whenACallPassesTheWrapperNil() {
 		let file = """
-		@Sendable func __safeDI_a(tag: SendableLazilyInstantiated<S7_Tag>?) -> S7_A {
+		@Sendable nonisolated func __safeDI_a(tag: SendableLazilyInstantiated<S7_Tag>?) -> S7_A {
 		    let reader = S7_Reader(tag: tag?.instance)
 		    return S7_A(reader: reader)
 		}
@@ -3380,20 +3380,20 @@ struct SafeDIToolGraphFuzzerTests {
 		extension S731_Root0 {
 		    public convenience init() {
 		        let t1 = S731_T1()
-		        @Sendable func __safeDI_link0(t1Alias: S731_T1?) -> S731_Link0 {
+		        @Sendable nonisolated func __safeDI_link0(t1Alias: S731_T1?) -> S731_Link0 {
 		            #sourceLocation(file: "S731_Link0.swift", line: 8)
 		            let t1AliasAlias: S731_T1? = t1Alias
 		            #sourceLocation()
 		            let link1: S731_Link1 = __safeDI_link1(t1AliasAlias: t1AliasAlias)
 		            return S731_Link0(t1AliasAlias: t1AliasAlias, link1: link1)
 		        }
-		        @Sendable func __safeDI_link1(t1AliasAlias: S731_T1?) -> S731_Link1 {
+		        @Sendable nonisolated func __safeDI_link1(t1AliasAlias: S731_T1?) -> S731_Link1 {
 		            #sourceLocation(file: "S731_Link1.swift", line: 7)
 		            let t1AliasAliasAlias: S731_T1? = t1AliasAlias
 		            #sourceLocation()
 		            return S731_Link1(t1AliasAliasAlias: t1AliasAliasAlias)
 		        }
-		        @Sendable func __safeDI_lazyT0() -> S731_T0 {
+		        @Sendable nonisolated func __safeDI_lazyT0() -> S731_T0 {
 		            #sourceLocation(file: "S731_T0.swift", line: 9)
 		            let anyT1Alias: S731_AnyT1? = S731_AnyT1(t1)
 		            #sourceLocation()
