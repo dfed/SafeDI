@@ -240,6 +240,13 @@ extension ScopeGenerator {
 		let mockedTypeUncoveredWrapperInstances = Set(tree.mockedTypeUncoveredProperties.compactMap(\.asLazilyInstantiatedInstanceProperty))
 		var wrappedReceivedProperties = [Property]()
 		if instantiable.generateMock == .public {
+			// A by-value form of a non-optional wrapper's instance is read through the wrapper the mock takes.
+			for wrapper in receivedProperties where wrapper.typeDescription.lazilyInstantiatedInstanceType != nil && !wrapper.typeDescription.isOptional {
+				let instance = wrapper.asValidatedForDependencyCycles
+				guard !receivedProperties.contains(where: { $0 != wrapper && $0.label == wrapper.label && $0.typeDescription.lazilyInstantiatedInstanceType != nil }) else { continue }
+				receivedProperties.remove(instance)
+				receivedProperties.remove(instance.asOptionalProperty)
+			}
 			let receivedLabels = receivedProperties.map(\.label)
 			guard !receivedProperties.contains(where: { property in
 				guard let instanceType = property.typeDescription.lazilyInstantiatedInstanceType else { return false }
