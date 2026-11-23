@@ -102,7 +102,8 @@ extension MockLowering {
 		uncoveredParameterNames: [String: [TypeDescription: String]] = [:],
 	) -> [(label: String, value: String)] {
 		initializer.arguments.compactMap { argument in
-			guard let dependency = dependencies.first(where: argument.isFulfilled(by:)) else { return nil }
+			// D1 lane hook (lane D): an argument takes the dependency of its label, whatever its type.
+			guard let dependency = MockLowering.dependency(passedTo: argument, among: dependencies) else { return nil }
 			let value = if dependency.source == .received(onlyIfAvailable: true), unavailableProperties.contains(dependency.property) {
 				"nil"
 			} else if dependency.source.isReceived, lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty) {
