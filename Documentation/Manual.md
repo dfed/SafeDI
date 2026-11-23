@@ -442,6 +442,7 @@ A `@Received` property can also receive a dependency only when it is available, 
 - `additionalMocksToGenerate`: Type names from dependent modules to generate `mock()` methods for in this module. The types must be `@Instantiable` in their home module. See [Cross-module mock generation](#cross-module-mock-generation). Default: `[]`.
 - `mockConditionalCompilation`: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation. Default: `"DEBUG"`.
 - `generatePlainDependencyTreeInitializers`: For each type this module declares with `generateDependencyTree: true`, whether SafeDI pairs each initializer whose labels start with `__safeDI_` with one that has readable labels, for code you write (see [Generating a dependency tree per module](#generating-a-dependency-tree-per-module)). Default: `false`.
+- `apiVersion`: The form of the mock API SafeDI generates for this module: `.v2`, or `.v3Unstable`, a preview of SafeDI 3’s mock API whose generated code and calls may change in any release. Every module of an app sets the same value, and SafeDI reports a module whose setting differs from that of a module it depends on. SafeDI 3 removes this parameter. Default: `.v2`.
 
 ## Delayed instantiation
 

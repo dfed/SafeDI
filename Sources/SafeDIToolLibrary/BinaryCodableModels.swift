@@ -431,6 +431,7 @@ extension SafeDIConfiguration: BinarySchemaMember {
 				BinaryLayoutField("additionalMocksToGenerate", \.additionalMocksToGenerate),
 				BinaryLayoutField("mockConditionalCompilation", \.mockConditionalCompilation),
 				BinaryLayoutField("generatePlainDependencyTreeInitializers", \.generatePlainDependencyTreeInitializers),
+				BinaryLayoutField("apiVersion", \.apiVersion),
 				BinaryLayoutField("declarationLocation", \.declarationLocation),
 				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
 			],
@@ -445,6 +446,7 @@ extension SafeDIConfiguration: BinarySchemaMember {
 			additionalMocksToGenerate: reader.read(),
 			mockConditionalCompilation: reader.read() as String?,
 			generatePlainDependencyTreeInitializers: reader.read(),
+			apiVersion: reader.read(),
 			declarationLocation: reader.read() as Dependency.DeclarationLocation?,
 		)
 		sourceFilePath = try reader.read() as String?
@@ -456,6 +458,7 @@ extension SafeDIConfiguration: BinarySchemaMember {
 		writer.write(additionalMocksToGenerate)
 		writer.write(mockConditionalCompilation)
 		writer.write(generatePlainDependencyTreeInitializers)
+		writer.write(apiVersion)
 		writer.write(declarationLocation)
 		writer.write(sourceFilePath)
 	}
@@ -770,6 +773,31 @@ extension MockGeneration: BinarySchemaMember {
 		case none
 		case `internal`
 		case `public`
+	}
+}
+
+extension SafeDIAPIVersion: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.enumeration(writtenAs: Tag.self) { _ in [] }
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		self = switch try reader.readTag() as Tag {
+		case .v2: .v2
+		case .v3Unstable: .v3Unstable
+		}
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		switch self {
+		case .v2: writer.writeTag(Tag.v2)
+		case .v3Unstable: writer.writeTag(Tag.v3Unstable)
+		}
+	}
+
+	enum Tag: UInt8, BinaryTag {
+		case v2
+		case v3Unstable
 	}
 }
 
