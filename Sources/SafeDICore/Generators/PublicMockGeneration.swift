@@ -39,6 +39,9 @@ struct PublicMockContext: Sendable {
 	/// For each `generateMock: .public` type declared inside an extension, the declarations of the extended type that
 	/// bound it (`DependencyTreeGenerator.extendedTypeAccessNeeds(of:in:)`), which a public mock needs to be `public`.
 	let extendedTypeAccessNeedsByType: [TypeDescription: [AccessNeed]]
+	/// The form of the mock API the module generates, which the whole app shares, so a calling module computes another
+	/// module's public mock in the form that module generated.
+	var apiVersion = SafeDIAPIVersion.v2
 
 	/// The access with which a declaration can name every type in `types`: the narrowest proof among them, a type with
 	/// no entry resolved to its plain declaration in the module the mocks are generated in and otherwise read from
@@ -725,6 +728,8 @@ struct PublicMockPlan: Sendable {
 	var builders = [SeamSignature.Builder]()
 	/// Every enum the builders reach: the mock's own, then those their cases hold.
 	var scopeEnums = [SeamSignature.ScopeEnum]()
+	/// In `.v3Unstable`, the members of the mock's `SafeDIOverrides` that hold the mocked type's own defaults.
+	var v3RootDefaultMembers = [PublicStructMember]()
 
 	/// The parameters the tier at `tier` takes, under that tier's names.
 	func parameters(ofTier tier: AccessLevel) -> [PublicMockParameter] {
@@ -908,7 +913,10 @@ extension ScopeGenerator {
 				leadingParameters.append(PublicMockParameter(name: property.label, type: property.typeDescription, typeSource: property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource, defaultSource: nil, defaultKind: .none, access: access(of: property.typeDescription, receivedAs: nil), role: .forwarded(property)))
 			}
 		}
-		for rootDefault in rootDefaultParameters {
+		// In `.v3Unstable`, the mocked type's own defaults are fields of its `SafeDIOverrides`, never parameters, and every
+		// public mock takes its `SafeDIOverrides`, which holds at least the type's builder.
+		let isV3 = context.apiVersion == .v3Unstable
+		for rootDefault in rootDefaultParameters where !isV3 {
 			let type = rootDefault.typeDescription
 			let typeAccess = access(of: type, receivedAs: nil)
 			if rootDefault.defaultExpression.hasPrefix("#") {
@@ -933,6 +941,37 @@ extension ScopeGenerator {
 				leadingParameters.append(optionalParameter(named: rootDefault.label, type: type, resolvedTo: rootDefault.defaultExpression, role: .constructionDefault))
 			}
 		}
+		// The members of `SafeDIOverrides` that hold the mocked type's own defaults in `.v3Unstable`, each read into a local
+		// of its label before the tree, as a parameter of `mock()` binds it in `.v2`.
+		var v3RootDefaultMembers = [PublicStructMember]()
+		for rootDefault in rootDefaultParameters where isV3 {
+			let type = rootDefault.typeDescription
+			let typeAccess = access(of: type, receivedAs: nil)
+			let read = "\(ReservedName.mockOverridesParameterName).\(rootDefault.label)"
+			let documentation = "`nil` keeps the default of `\(typeName)`’s `\(rootDefault.label.spelledWithoutBackticks)`."
+			func member(typeSource: String, defaultExpression: String, documentation: String) -> PublicStructMember {
+				PublicStructMember(name: rootDefault.label, typeSource: typeSource, parameterTypeSource: typeSource, access: typeAccess, defaultExpression: defaultExpression, omittedValue: defaultExpression, isUnlabeled: false, documentation: documentation)
+			}
+			if rootDefault.defaultExpression.hasPrefix("#") {
+				// A magic literal is evaluated where the configuration is made, as a parameter evaluates it where the mock is called.
+				v3RootDefaultMembers.append(member(typeSource: rootDefault.typeSource, defaultExpression: rootDefault.defaultExpression, documentation: "The default of `\(typeName)`’s `\(rootDefault.label.spelledWithoutBackticks)` unless set."))
+				defaultResolutions.append("\(bodyIndent)let \(rootDefault.label) = \(read)")
+			} else if let valueType = type.autoclosureValueType {
+				// An `@autoclosure` parameter is held as a closure that returns the value, which the construction calls.
+				let closureType = TypeDescription.optional(.closure(arguments: [], isAsync: false, doesThrow: false, returnType: valueType))
+				v3RootDefaultMembers.append(member(typeSource: closureType.asSource, defaultExpression: "nil", documentation: documentation))
+				defaultResolutions.append("\(bodyIndent)let \(rootDefault.label) = \(read) ?? { \(rootDefault.defaultExpression) }")
+			} else if type.isOptional {
+				// An optional-typed default is held as it is, defaulting to what the declaration's default evaluates to.
+				let isNilLiteral = rootDefault.defaultExpression == "nil"
+				let providerCall = isNilLiteral ? "nil" : provider(named: rootDefault.label, type: type, access: typeAccess, expression: rootDefault.defaultExpression)
+				v3RootDefaultMembers.append(member(typeSource: type.asSource, defaultExpression: providerCall, documentation: "The default of `\(typeName)`’s `\(rootDefault.label.spelledWithoutBackticks)` unless set."))
+				defaultResolutions.append("\(bodyIndent)let \(rootDefault.label) = \(read)")
+			} else {
+				v3RootDefaultMembers.append(member(typeSource: TypeDescription.optional(type).asSource, defaultExpression: "nil", documentation: documentation))
+				defaultResolutions.append("\(bodyIndent)let \(rootDefault.label) = \(read) ?? (\(rootDefault.defaultExpression))")
+			}
+		}
 		for (instanceProperty, name) in flatReceivedParameters {
 			// A value the tree receives lazily is taken as the wrapper it receives (`ScopeGenerator.publicMockWrapperParameters`).
 			let wrapper = wrapperParameterByInstance[instanceProperty]
@@ -949,7 +988,14 @@ extension ScopeGenerator {
 			}
 		}
 		for uncovered in flatUncoveredParameters {
-			let typeSource = uncovered.isSendableAutoclosure ? "@autoclosure @escaping @Sendable () -> \(uncovered.typeSource)" : uncovered.typeSource
+			// In `.v3Unstable`, a builder called once per instance (D12).
+			let typeSource = if isV3 {
+				"@escaping \(uncovered.isSendableAutoclosure ? "@Sendable " : "")() -> \(uncovered.typeSource)"
+			} else if uncovered.isSendableAutoclosure {
+				"@autoclosure @escaping @Sendable () -> \(uncovered.typeSource)"
+			} else {
+				uncovered.typeSource
+			}
 			leadingParameters.append(PublicMockParameter(name: uncovered.label, type: uncovered.property.typeDescription, typeSource: typeSource, defaultSource: nil, defaultKind: .none, access: access(of: uncovered.property.typeDescription, receivedAs: uncovered.property.label), role: .received(uncovered.property, isRequired: true), sharedValueDocumentation: uncovered.sharedValueDocumentation))
 		}
 		// Each builder, required, in builder order, as a seam takes it: what fills a place takes the values in scope at its
@@ -1011,12 +1057,12 @@ extension ScopeGenerator {
 			filledFamilies: givenFilledFamilies,
 			requiredBuilders: builders,
 			otherParameters: (leadingParameters + optionalReceivedParameters).map { (label: $0.name, access: $0.access) }
-				+ (hasOverrides ? [(label: ReservedName.mockOverridesParameterName, access: AccessLevel.public)] : []),
+				+ (hasOverrides || isV3 ? [(label: ReservedName.mockOverridesParameterName, access: AccessLevel.public)] : []),
 			widestTier: .public,
 			access: { access(of: $0, receivedAs: nil) },
 		)
 		var parameters = leadingParameters + optionalBuilders + optionalReceivedParameters
-		if hasOverrides {
+		if hasOverrides || isV3 {
 			let overridesType = TypeDescription.simple(name: ReservedName.mockOverridesTypeName)
 			parameters.append(PublicMockParameter(name: ReservedName.mockOverridesParameterName, type: overridesType, typeSource: overridesType.asSource, defaultSource: ".init()", defaultKind: .expression, access: .public, role: .overrides))
 		}
@@ -1044,6 +1090,7 @@ extension ScopeGenerator {
 		)
 		plan.holes = holes
 		plan.builders = builders
+		plan.v3RootDefaultMembers = v3RootDefaultMembers
 		plan.scopeEnums = shapedBuilders?.scopeEnums ?? []
 		return plan
 	}

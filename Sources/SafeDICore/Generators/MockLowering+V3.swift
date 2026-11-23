@@ -54,6 +54,7 @@ extension ScopeGenerator {
 		)
 		rootRecord.defaultFields = walk.configurationDefaultFields(of: instantiable, usesMockInitializer: usesMockInitializer)
 		rootRecord.isV3 = true
+		rootRecord.v3ConfigurationNames = context.v3ConfigurationNames
 
 		// The parameters, in order: forwarded, received that nothing builds (with the builders calls pass up), received only
 		// if available, a builder per dependency the mock cannot build, then received that the mock builds.
@@ -65,7 +66,7 @@ extension ScopeGenerator {
 			guard let parameterName = node.promotedParameterName else { continue }
 			let valueType = MockLowering.v3ReceivedValueType(of: node.property)
 			if node.hasConfiguration {
-				afterUncovered.append("\(bodyIndent)\(parameterName): SafeDIReceived<\(valueType.asSource), \(node.instantiable.concreteInstantiable.asSource).\(ReservedName.mockOverridesTypeName)> = .built(.init())")
+				afterUncovered.append("\(bodyIndent)\(parameterName): SafeDIReceived<\(valueType.asSource), \(context.v3ConfigurationNames.typeName(of: node.instantiable.concreteInstantiable))> = .built(.init())")
 			} else {
 				afterUncovered.append("\(bodyIndent)\(parameterName): \(TypeDescription.optional(valueType).asSource) = nil")
 			}
@@ -205,5 +206,32 @@ extension MockLowering.Walk {
 	/// The arguments a call of a cycle target hands its nearest parameters, from what is in scope.
 	func v3NearestArguments(of target: MockLowering.V3CycleTarget) -> [String] {
 		target.nearestTypes.map { type in v3NearestConfiguration(of: type)?.expression ?? "nil" }
+	}
+}
+
+extension MockLowering {
+	/// What `.v3Unstable` names each type's configuration in a module: `T.SafeDIOverrides`, nested in a type the module
+	/// declares, and `__safeDI_<Module>_<T>_MockConfiguration` at file scope for a type another module declares, since
+	/// that module may nest a `SafeDIOverrides` of its own in it, which a second would make ambiguous.
+	struct V3ConfigurationNames: Sendable, Equatable {
+		init() {
+			fileScopeNameByType = [:]
+		}
+
+		init(foreignTypes: [TypeDescription], moduleName: String?) {
+			fileScopeNameByType = PublicMockContext.configurationTypeNames(of: foreignTypes, moduleName: moduleName)
+		}
+
+		/// The name of the configuration of `type`.
+		func typeName(of type: TypeDescription) -> String {
+			fileScopeNameByType[type] ?? "\(type.asSource).\(ReservedName.mockOverridesTypeName)"
+		}
+
+		/// The name of the configuration of `type` where the module declares it at file scope, else `nil`.
+		func fileScopeName(of type: TypeDescription) -> String? {
+			fileScopeNameByType[type]
+		}
+
+		private let fileScopeNameByType: [TypeDescription: String]
 	}
 }

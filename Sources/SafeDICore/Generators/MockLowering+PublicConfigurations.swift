@@ -56,6 +56,8 @@ extension MockLowering {
 		mockedTypeModuleName: String?,
 		context: PublicMockContext,
 		indent: String,
+		// In `.v3Unstable`, the mocked type, and the members that hold its own defaults and builder, after its children's.
+		v3Root: (mockedType: TypeDescription, members: [PublicStructMember])? = nil,
 	) -> String {
 		let structMembers = members.map { member in
 			publicMember(
@@ -64,9 +66,16 @@ extension MockLowering {
 				admittedModules: [context.moduleName, mockedTypeModuleName, context.moduleNameByType[member.concreteType]],
 				requiresSendable: false,
 			)
-		}
+		} + (v3Root?.members ?? [])
 		var lines = [String]()
-		lines.append("\(indent)/// Overrides for the mock dependency tree.")
+		if let v3Root {
+			let typeName = v3Root.mockedType.asSource.spelledWithoutBackticks
+			lines.append("\(indent)/// Configures `\(typeName)` wherever a mock builds it: as the mocked type, or inside another module’s mock that calls this")
+			lines.append("\(indent)/// one. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its path, or that")
+			lines.append("\(indent)/// type’s defaults where there is none.")
+		} else {
+			lines.append("\(indent)/// Overrides for the mock dependency tree.")
+		}
 		lines.append("\(indent)nonisolated public struct \(ReservedName.mockOverridesTypeName) {")
 		lines.append(contentsOf: ScopeGenerator.publicStructBody(members: structMembers, indent: "\(indent)\(ScopeGenerator.standardIndent)"))
 		lines.append("\(indent)}")
@@ -238,13 +247,16 @@ extension MockLowering {
 			)
 		case let .built(isConfigured, builderClosureType, childRequiresSendable, accessTypes):
 			if isConfigured, let configurationTypeName = context.configurationTypeNameByType[member.concreteType] {
+				// In `.v3Unstable`, `nil` reads the type's defaults.
+				let isV3 = context.apiVersion == .v3Unstable
+				let typeSource = isV3 ? "\(configurationTypeName)?" : configurationTypeName
 				return PublicStructMember(
 					name: member.name,
-					typeSource: configurationTypeName,
-					parameterTypeSource: configurationTypeName,
+					typeSource: typeSource,
+					parameterTypeSource: typeSource,
 					access: .public,
-					defaultExpression: ".init()",
-					omittedValue: ".init()",
+					defaultExpression: isV3 ? "nil" : ".init()",
+					omittedValue: isV3 ? "nil" : ".init()",
 					isUnlabeled: false,
 					documentation: nil,
 				)

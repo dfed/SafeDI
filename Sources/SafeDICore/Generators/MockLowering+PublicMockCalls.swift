@@ -394,6 +394,7 @@ extension MockLowering.Walk {
 			calledType: instantiable.concreteInstantiable,
 			call: publicMockCall,
 			overridesAreSendable: overridesAreSendable,
+			isV3: isV3,
 			overrideClosureType: overrideBuilders.map { _ in
 				let parameterTypes = initializer.arguments.map { argument in
 					(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription)
@@ -515,7 +516,7 @@ extension MockLowering.Walk {
 			overrideRead = nodePath
 		}
 		if publicMockCall.takesOverrides {
-			arguments.append("\(ReservedName.mockOverridesParameterName): \(overridesAreSendable ? "\(overrideRead)?() ?? .init()" : overrideRead)")
+			arguments.append("\(ReservedName.mockOverridesParameterName): \(overridesAreSendable ? "\(overrideRead)?() ?? .init()" : isV3 ? "\(overrideRead) ?? .init()" : overrideRead)")
 		}
 		let unerasedCall = "\(instantiable.concreteInstantiable.asSource).\(publicMockCall.functionName)(\(arguments.joined(separator: ", ")))"
 		let defaultCall = erasedToConcreteExistential ? "\(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource)(\(unerasedCall))" : unerasedCall
@@ -671,6 +672,8 @@ extension MockLowering {
 		/// Whether the member that configures the call is a `@Sendable` closure: the call is built inside a `@Sendable`
 		/// function, or the configuration that holds the member is `@Sendable`-typed.
 		let overridesAreSendable: Bool
+		/// Whether the calling mock is `.v3Unstable`'s, whose member is optional, `nil` reading the called mock's defaults.
+		let isV3: Bool
 		/// For a call of a mock that takes no overrides, the type of the closure that builds the called type, where the call
 		/// offers one (`ScopeGenerator.MockParameterNode.offersOverrideClosure`).
 		let overrideClosureType: String?
@@ -688,8 +691,8 @@ extension MockLowering {
 					)
 					: OverridesField(
 						name: property.label,
-						typeSource: "\(calledType.asSource).\(ReservedName.mockOverridesTypeName)",
-						defaultValue: ".init()",
+						typeSource: "\(calledType.asSource).\(ReservedName.mockOverridesTypeName)\(isV3 ? "?" : "")",
+						defaultValue: isV3 ? "nil" : ".init()",
 						sendability: .never,
 					)
 			} else if let overrideClosureType {

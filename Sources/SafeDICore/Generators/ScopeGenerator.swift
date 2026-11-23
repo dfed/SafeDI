@@ -4439,6 +4439,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let foreignPublicMocks: [TypeDescription: SeamResolution.ForeignPublicMock]
 		/// The form of the mock API the module generates.
 		var apiVersion = SafeDIAPIVersion.v2
+		/// In `.v3Unstable`, the names of the module's configurations of the types another module declares
+		/// (`MockLowering.V3ConfigurationNames`).
+		var v3ConfigurationNames = MockLowering.V3ConfigurationNames()
 	}
 
 	let scopeData: ScopeData

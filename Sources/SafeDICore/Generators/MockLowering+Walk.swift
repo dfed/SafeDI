@@ -81,6 +81,7 @@ extension ScopeGenerator {
 			// The mocked type's configuration is the nearest of its type to every node of its tree.
 			walk.v3ConfigurationsInScope[instantiable.concreteInstantiable] = [MockLowering.V3ConfigurationInScope(expression: ReservedName.mockOverridesParameterName, isOptional: false)]
 		}
+		walk.v3ConfigurationNames = context.v3ConfigurationNames
 		walk.promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildren, regardlessOfMockKind: walk.isV3)
 		// Each override binds its receive's label, in the optional form a receive only if available
 		// reads.
@@ -427,6 +428,8 @@ extension MockLowering {
 		var v3ScopePushes = [(types: [TypeDescription], pushedTarget: Bool)]()
 		// The configured loop members `mock()` promotes, each bound from its `SafeDIReceived` before its loop.
 		var v3PromotedLoopMemberInstanceNames = [Property: String]()
+		/// In `.v3Unstable`, what the module names each type's configuration.
+		var v3ConfigurationNames = MockLowering.V3ConfigurationNames()
 		// The bindings the node around the walk is passed by name, which a payload bound inside its
 		// builder function reads (`ScopeGenerator.MockParameterNode.ValuesBinding.line`).
 		var enclosingBindingNamesPassedByName = [String: String]()
@@ -550,7 +553,7 @@ extension MockLowering {
 					let parameterName = promotedParameterNames[property] ?? bindingName
 					let instanceName = ReservedName.receivedInstanceName(of: bindingName)
 					let configurationName = "\(bindingName)Configuration".spelledAsJoinedIdentifier
-					lines.append("\(indent)let (\(instanceName), \(configurationName)): (\(TypeDescription.optional(MockLowering.v3ReceivedValueType(of: property)).asSource), \(instantiable.concreteInstantiable.asSource).\(ReservedName.mockOverridesTypeName)) = switch \(parameterName) {")
+					lines.append("\(indent)let (\(instanceName), \(configurationName)): (\(TypeDescription.optional(MockLowering.v3ReceivedValueType(of: property)).asSource), \(v3ConfigurationNames.typeName(of: instantiable.concreteInstantiable))) = switch \(parameterName) {")
 					lines.append("\(indent)case let .instance(instance): (instance, .init())")
 					lines.append("\(indent)case let .built(configuration): (nil, configuration)")
 					lines.append("\(indent)}")
@@ -1097,7 +1100,7 @@ extension MockLowering {
 				if !isPromotedInV3 {
 					let expression = v3ConfigurationExpression(of: concreteType, field: "\(path).\(bindingName)")
 					if v3Target != nil {
-						v3TargetParameters.append("_ \(configurationName): \(concreteType.asSource).\(ReservedName.mockOverridesTypeName)")
+						v3TargetParameters.append("_ \(configurationName): \(v3ConfigurationNames.typeName(of: concreteType))")
 						v3TargetArguments.append(expression)
 					} else {
 						v3ConfigurationLine = "\(indent)let \(configurationName) = \(expression)"
@@ -1105,7 +1108,7 @@ extension MockLowering {
 				}
 				if let v3Target {
 					for nearestType in v3Target.nearestTypes {
-						v3TargetParameters.append("_ \(Self.v3NearestParameterName(of: nearestType)): \(nearestType.asSource).\(ReservedName.mockOverridesTypeName)?")
+						v3TargetParameters.append("_ \(Self.v3NearestParameterName(of: nearestType)): \(v3ConfigurationNames.typeName(of: nearestType))?")
 					}
 					v3TargetArguments.append(contentsOf: v3NearestArguments(of: v3Target))
 				}
@@ -1210,6 +1213,7 @@ extension MockLowering {
 			node.v3ReceivedInstanceName = v3PromotedLoopMemberInstanceNames[property]
 			if isPromotedInV3, hasConfiguration, node.v3ReceivedInstanceName == nil {
 				node.v3ReceivedConfigurationName = nodePath
+				node.v3ReceivedConfigurationTypeName = v3ConfigurationNames.typeName(of: instantiable.concreteInstantiable)
 			}
 			node.v3TargetParameters = v3TargetParameters
 			node.cycleParameterArguments = cycleParameterArguments + v3TargetArguments
@@ -1414,6 +1418,7 @@ extension MockLowering {
 				let recordedChildren = children.filter { child in child.concreteType.map { !isPruned($0, beneath: parentConcreteType) } ?? true }
 				var record = ConfigurationRecord(of: configuredNode, children: recordedChildren)
 				record.isV3 = isV3
+				record.v3ConfigurationNames = v3ConfigurationNames
 				// What a configuration generated from the record imports.
 				record.fulfillers = configurationFulfillers(of: configuredNode)
 				// The construction the one-way check reads, with every child, pruned or not.
@@ -1542,6 +1547,8 @@ extension MockLowering {
 		/// In `.v3Unstable`, where the node is a configured member of a loop the mock promotes, the name of the instance
 		/// `mock()` was passed for it, `nil` where it builds the node, bound before the loop.
 		var v3ReceivedInstanceName: String?
+		/// The name of that configuration's type.
+		var v3ReceivedConfigurationTypeName: String?
 		// The `@Sendable` autoclosure parameters of the values the node's type instantiates that the
 		// mock cannot build, each bound in its builder function from the local `mock()` reads it into.
 		// Also the places it instantiates that a builder of `mock()` builds.
@@ -1663,8 +1670,8 @@ extension MockLowering {
 			if !cycleParameters.isEmpty {
 				parameterList += (parameterList.isEmpty ? "" : ", ") + cycleParameters.initializerFunctionParametersSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 			}
-			if let v3ReceivedConfigurationName {
-				parameterList += (parameterList.isEmpty ? "" : ", ") + "_ \(v3ReceivedConfigurationName): \(instantiable.concreteInstantiable.asSource).\(ReservedName.mockOverridesTypeName)"
+			if let v3ReceivedConfigurationName, let v3ReceivedConfigurationTypeName {
+				parameterList += (parameterList.isEmpty ? "" : ", ") + "_ \(v3ReceivedConfigurationName): \(v3ReceivedConfigurationTypeName)"
 			}
 			if !v3TargetParameters.isEmpty {
 				parameterList += (parameterList.isEmpty ? "" : ", ") + v3TargetParameters.joined(separator: ", ")
@@ -1971,30 +1978,37 @@ extension MockLowering {
 	}
 
 	static func rootArgumentList(of initializer: Initializer, given dependencies: [Dependency], renames: [String: [TypeDescription: String]], passingNilTo unavailableProperties: Set<Property>, readingInstancesOf instancesReadByValue: Set<Property> = []) -> String {
-		var parts = [String]()
+		rootArguments(of: initializer, given: dependencies, renames: renames, passingNilTo: unavailableProperties, readingInstancesOf: instancesReadByValue)
+			.map { "\($0.label): \($0.value)" }
+			.joined(separator: ", ")
+	}
+
+	/// The arguments `rootArgumentList` spells, each label, spelled as an argument label, and value.
+	static func rootArguments(of initializer: Initializer, given dependencies: [Dependency], renames: [String: [TypeDescription: String]], passingNilTo unavailableProperties: Set<Property>, readingInstancesOf instancesReadByValue: Set<Property> = []) -> [(label: String, value: String)] {
+		var parts = [(label: String, value: String)]()
 		for argument in initializer.arguments {
 			// An argument takes the dependency of its label, whatever its type.
 			if let dependency = MockLowering.dependency(passedTo: argument, among: dependencies) {
 				// A receive only if available nothing above provides is passed `nil`, as production passes it.
 				guard dependency.source != .received(onlyIfAvailable: true) || !unavailableProperties.contains(dependency.property) else {
-					parts.append("\(argument.label.spelledAsArgumentLabel): nil")
+					parts.append((label: argument.label.spelledAsArgumentLabel, value: "nil"))
 					continue
 				}
 				guard !instancesReadByValue.contains(dependency.property) else {
 					// Through the wrapper's name where the root's level names it apart, as
 					// `generateReturnArgumentList` reads `disambiguatedLazilyInstantiatedBinding`.
 					let wrapperName = renames[argument.innerLabel].flatMap { wrapperRename(ofInstanceOfType: dependency.property.typeDescription.unwrapped, among: $0) } ?? argument.innerLabel
-					parts.append("\(argument.label.spelledAsArgumentLabel): \(wrapperName).\(Dependency.lazilyInstantiatedInstancePropertyName)")
+					parts.append((label: argument.label.spelledAsArgumentLabel, value: "\(wrapperName).\(Dependency.lazilyInstantiatedInstancePropertyName)"))
 					continue
 				}
-				parts.append("\(argument.label.spelledAsArgumentLabel): \(renames[argument.innerLabel]?[dependency.property.typeDescription] ?? argument.innerLabel)")
+				parts.append((label: argument.label.spelledAsArgumentLabel, value: renames[argument.innerLabel]?[dependency.property.typeDescription] ?? argument.innerLabel))
 			} else if argument.hasDefaultValue, !argument.isLeftToItsDefault {
 				// An `@autoclosure` parameter of `mock()` is passed its call.
 				let parameterValue = argument.typeDescription.strippingEscaping.autoclosureValueType == nil ? argument.label : "\(argument.label)()"
-				parts.append("\(argument.label.spelledAsArgumentLabel): \(parameterValue)")
+				parts.append((label: argument.label.spelledAsArgumentLabel, value: parameterValue))
 			}
 		}
-		return parts.joined(separator: ", ")
+		return parts
 	}
 
 	/// Whether a receive among `generators`, or beneath them up to a node that declares `label`, reads `label` by name: a

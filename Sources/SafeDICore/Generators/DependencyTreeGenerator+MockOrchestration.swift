@@ -206,7 +206,7 @@ extension DependencyTreeGenerator {
 		let mockDeclarationLocations = mockDeclarationLocationsOfTypesWithHandWrittenMocks()
 
 		let foreignPublicMocks = seams.foreignPublicMocks
-		let mockContext = ScopeGenerator.MockContext(
+		var configuredMockContext = ScopeGenerator.MockContext(
 			mockConditionalCompilation: mockConditionalCompilation,
 			flatParameterMockDefaults: flatParameterMockDefaults,
 			cycleEdges: cycleEdges,
@@ -216,6 +216,20 @@ extension DependencyTreeGenerator {
 			foreignPublicMocks: foreignPublicMocks,
 			apiVersion: apiVersion,
 		)
+		switch apiVersion {
+		case .v2:
+			break
+		case .v3Unstable:
+			let moduleName = emittingModule?.identity.moduleName
+			configuredMockContext.v3ConfigurationNames = MockLowering.V3ConfigurationNames(
+				foreignTypes: typeDescriptionToFulfillingInstantiableMap.values.compactMap { instantiable in
+					guard let moduleName, let declaringModuleName = instantiable.moduleName, declaringModuleName != moduleName else { return nil }
+					return instantiable.concreteInstantiable
+				},
+				moduleName: moduleName,
+			)
+		}
+		let mockContext = configuredMockContext
 		let fulfillingInstantiables = typeDescriptionToFulfillingInstantiableMap
 		let loweredRoots = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
 			let (instantiable, mockRoot) = instantiableAndMockRoot
@@ -341,7 +355,7 @@ extension DependencyTreeGenerator {
 			}
 		}
 		let moduleName = emittingModule?.identity.moduleName
-		return PublicMockContext(
+		var context = PublicMockContext(
 			proof: proof,
 			unreadTypeComment: seams.carriesUnreadTypeComment ? UnreadTypeComment(proof: proof, mentioningModule: .generatedCode(ofModuleNamed: moduleName, isRunsOwnModule: true)) : nil,
 			moduleNameByType: moduleNameByType,
@@ -358,6 +372,8 @@ extension DependencyTreeGenerator {
 				}
 			},
 		)
+		context.apiVersion = apiVersion
+		return context
 	}
 
 	/// What every mock root is built from: the scope of each type a mock can build, and what completes a mock
