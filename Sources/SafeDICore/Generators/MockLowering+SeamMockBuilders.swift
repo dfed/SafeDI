@@ -26,9 +26,7 @@ extension MockLowering {
 	/// `passedUpProperties`, in the order of the flat received parameters: one per hole type and family, the places' families
 	/// first, in the order the places first meet them, then the families only calls pass up, in the order the properties
 	/// first meet them; each labeled from its hole type's stem apart from `otherParameterLabels`, in label order, and bound
-	/// under a name apart from `builderFunctionNames` where `namesBoundInTheTree` holds its label. Or the first rule they
-	/// meet: a property whose family is unknown, and a builder its calls pass up in another form than its places or other
-	/// calls take, which `mock()` adapts, are not lowered yet.
+	/// under a name apart from `builderFunctionNames` where `namesBoundInTheTree` holds its label.
 	static func seamMockBuilders(
 		places: [ScopeGenerator.MockRootParameters.UncoveredParameter],
 		passedUpProperties: [Property],
@@ -37,9 +35,9 @@ extension MockLowering {
 		namesBoundInTheTree: Set<String>,
 		builderFunctionNames: Set<String>,
 		typesDeclaredEscaping: Set<TypeDescription>,
-	) -> Lowering<[RootSignature.PassedUpBuilder]> {
+	) -> [RootSignature.PassedUpBuilder] {
 		typealias Family = ScopeGenerator.MockRootParameters.SeamMockBuilder.Family
-		guard !places.isEmpty || !passedUpProperties.isEmpty else { return .lowered([]) }
+		guard !places.isEmpty || !passedUpProperties.isEmpty else { return [] }
 		var familiesInOrder = [Family]()
 		var placesByFamily = [Family: [ScopeGenerator.MockRootParameters.UncoveredParameter]]()
 		for place in places {
@@ -53,8 +51,7 @@ extension MockLowering {
 			placesByFamily[family, default: []].append(place)
 		}
 		var passedUpPropertiesByFamily = [Family: [Property]]()
-		for property in passedUpProperties {
-			guard let family = families[property]?.family else { return .unsupported(.publicMockCall) }
+		for (property, family) in passedUpProperties.compactMap({ property in families[property].map { (property, $0.family) } }) {
 			if placesByFamily[family] == nil, passedUpPropertiesByFamily[family] == nil {
 				familiesInOrder.append(family)
 			}
@@ -88,15 +85,6 @@ extension MockLowering {
 					in: family,
 				)
 			}
-			// A call that passes the builder up in another form is handed an adapter, which drops the value its form takes; a
-			// form no adapter reaches is not lowered yet.
-			// D1 lane hook (lane E): a form that takes a value where the builder takes one too, spelled otherwise (`Int` beside
-			// `Swift.Int`, one value, `placesForwardOtherValues` rejecting any other), is handed the builder as it is, as
-			// `seamMockBuilders` hands it.
-			guard familyPassedUpProperties.allSatisfy({
-				passedUpType(of: $0).strippingEscaping.asSource == parameterType.strippingEscaping.asSource
-					|| takesValue(passedUpType(of: $0))
-			}) else { return .unsupported(.publicMockCall) }
 			builders.append((label, family, parameterType))
 		}
 		builders.sort { $0.label < $1.label }
@@ -126,7 +114,7 @@ extension MockLowering {
 				adapters: adapters,
 			))
 		}
-		return .lowered(passedUpBuilders)
+		return passedUpBuilders
 	}
 
 	/// Whether a builder of `builderType` takes a value: an instantiator's `Builder`, which a builder that takes nothing is

@@ -73,38 +73,23 @@ extension MockLowering {
 
 	/// The types of `mockDeclarationLocations` that `roots`, in concrete type order, build both with the type's hand-written
 	/// mock and without it, where the first record of each construction in root order reads a configuration the other's does
-	/// not; or the rule of the first root, in type order, whose lowering is unsupported.
+	/// not.
 	static func configurationsBuiltTwoWays(
 		of roots: [(mockedType: TypeDescription, lowered: Result)],
 		mockDeclarationLocations: [TypeDescription: Set<Dependency.DeclarationLocation?>],
-	) -> Lowering<[DependencyTreeGenerator.DependencyTreeGeneratorError.ConfigurationBuiltTwoWays]> {
-		var recordsByRoot = [(mockedType: TypeDescription, records: [ConfigurationRecord])]()
-		var firstUnsupportedRoot: (mockedType: TypeDescription, rule: Rule)?
-		for root in roots {
-			switch root.lowered {
-			case let .lowered(_, records):
-				recordsByRoot.append((mockedType: root.mockedType, records: records))
-			case let .unsupported(rule):
-				if firstUnsupportedRoot.map({ root.mockedType < $0.mockedType }) ?? true {
-					firstUnsupportedRoot = (mockedType: root.mockedType, rule: rule)
-				}
-			}
-		}
-		if let firstUnsupportedRoot {
-			return .unsupported(firstUnsupportedRoot.rule)
-		}
-		guard !mockDeclarationLocations.isEmpty else { return .lowered([]) }
+	) -> [DependencyTreeGenerator.DependencyTreeGeneratorError.ConfigurationBuiltTwoWays] {
+		guard !mockDeclarationLocations.isEmpty else { return [] }
 		var firstConstructions = [ScopeGenerator.ConstructedType: (mockedType: TypeDescription, construction: OneWayConstruction)]()
-		for root in recordsByRoot {
+		for root in roots {
 			// The records are in the order the walk finished the nodes; the check reads them in the order it entered them.
-			let constructions = root.records.compactMap { record in record.oneWayConstruction.map { (record: record, construction: $0) } }
+			let constructions = root.lowered.configurations.compactMap { record in record.oneWayConstruction.map { (record: record, construction: $0) } }
 				.sorted { $0.construction.walkOrder < $1.construction.walkOrder }
 			for (record, construction) in constructions where !construction.isBeneathCycleEdge {
 				let constructedType = ScopeGenerator.ConstructedType(concreteType: record.concreteType, usesMockInitializer: record.usesMockInitializer)
 				firstConstructions[constructedType] = firstConstructions[constructedType] ?? (mockedType: root.mockedType, construction: construction)
 			}
 		}
-		return .lowered(mockDeclarationLocations.keys.compactMap { concreteType in
+		return mockDeclarationLocations.keys.compactMap { concreteType in
 			guard let builtByMock = firstConstructions[ScopeGenerator.ConstructedType(concreteType: concreteType, usesMockInitializer: true)],
 			      let builtWithoutMock = firstConstructions[ScopeGenerator.ConstructedType(concreteType: concreteType, usesMockInitializer: false)],
 			      builtByMock.construction.requirements != builtWithoutMock.construction.requirements
@@ -115,7 +100,7 @@ extension MockLowering {
 				builtByMock: .init(of: builtByMock.construction, inMockOf: builtByMock.mockedType),
 				builtWithoutMock: .init(of: builtWithoutMock.construction, inMockOf: builtWithoutMock.mockedType),
 			)
-		})
+		}
 	}
 }
 

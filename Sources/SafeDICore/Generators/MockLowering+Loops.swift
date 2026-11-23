@@ -152,11 +152,10 @@ extension MockLowering {
 
 	/// The lines that begin a loop member's builder function, at `indent`: a binding of each of `reboundProperties`, the
 	/// members of `members` its tree receives, wrapping that member's function, the member `ownProperty` names its own
-	/// builder function with its own cycle parameters; or `nil` where one is no property node.
-	static func rebindingLines(of reboundProperties: [Property], among members: [Property: LoopMember], ownProperty: Property, indent: String) -> [String]? {
+	/// builder function with its own cycle parameters.
+	static func rebindingLines(of reboundProperties: [Property], among members: [Property: LoopMember], ownProperty: Property, indent: String) -> [String] {
 		var lines = [String]()
-		for property in reboundProperties {
-			guard let member = members[property] else { return nil }
+		for (property, member) in reboundProperties.compactMap({ property in members[property].map { (property, $0) } }) {
 			let isOwnWithCycleParameters = property == ownProperty && member.receivedFunctionName != nil
 			lines.append(contentsOf: memberBindingLines(
 				of: member,
@@ -219,17 +218,17 @@ extension MockLowering.Walk {
 	}
 
 	/// The lines of a call of another module's public mock that is a member, `property`, of the loop being lowered, at
-	/// `indent`: its builder function, declared by `functionDeclaration`, which first rebinds the members its tree
-	/// receives, then holds `bodyLines` and returns `call`; then its wrapper's binding where its level binds it. `nil` where
-	/// its function takes parameters a lazy cycle needs, which the call does not pass yet.
-	mutating func loopMemberCallLines(of generator: ScopeGenerator, property: Property, functionDeclaration: String, bodyLines: [String], call: String, indent: String) -> [String]? {
+	/// `indent`, of `loopMembership`: its builder function, declared by `functionDeclaration`, which first rebinds the
+	/// members its tree receives, then holds `bodyLines` and returns `call`; then its wrapper's binding where its level
+	/// binds it.
+	mutating func loopMemberCallLines(of generator: ScopeGenerator, property: Property, in loopMembership: MockLowering.LoopMembership, functionDeclaration: String, bodyLines: [String], call: String, indent: String) -> [String] {
 		let bodyIndent = "\(indent)\(ScopeGenerator.standardIndent)"
-		guard let loopMembership, let member = loopMembers[property], member.receivedFunctionName == nil, let rebindingLines = MockLowering.rebindingLines(of: generator.reboundProperties, among: loopMembers, ownProperty: property, indent: bodyIndent) else { return nil }
+		let rebindingLines = MockLowering.rebindingLines(of: generator.reboundProperties, among: loopMembers, ownProperty: property, indent: bodyIndent)
 		let statements = rebindingLines + bodyLines.map { "\(bodyIndent)\($0)" }
 		var lines = [functionDeclaration] + statements
 		lines.append("\(bodyIndent)\(statements.isEmpty ? "" : "return ")\(call)")
 		lines.append("\(indent)}")
-		let bindingLines = loopMembership.declaresBinding ? MockLowering.memberBindingLines(of: member, handing: member.functionName, indent: indent) : []
+		let bindingLines = loopMembership.declaresBinding ? loopMembers[property].map { MockLowering.memberBindingLines(of: $0, handing: $0.functionName, indent: indent) } ?? [] : []
 		lines.append(contentsOf: bindingLines)
 		lastLoopMemberLineCounts = MockLowering.LoopMemberLineCounts(prelude: 0, binding: bindingLines.count)
 		return lines

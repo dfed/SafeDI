@@ -27,39 +27,17 @@ import Foundation
 extension MockLowering {
 	/// The module's configuration code lowered from `roots`' records: each root's code with the configuration of its own
 	/// type merged in, in `roots`' order, the module's shared configuration code, `nil` where it has none, and the
-	/// declarations whose modules that code imports; or the rule of the first root, in type order, whose lowering is
-	/// unsupported, which decides every struct the module generates.
+	/// declarations whose modules that code imports.
 	static func configurationCode(
 		of roots: [LoweredRoot],
 		mockConditionalCompilation: String?,
 		sendableConfigurationTypeNames: Set<String>,
 		publicMockContext: PublicMockContext?,
-	) -> Lowering<(mergedCodes: [String], configurationCode: String?, fulfillers: Set<FulfillerImports.Fulfiller>)> {
-		var loweredRoots = [(code: String, records: [ConfigurationRecord])]()
-		var firstUnsupportedRoot: (mockedType: TypeDescription, rule: Rule)?
-		for root in roots {
-			switch root.lowered {
-			case let .lowered(code, records):
-				loweredRoots.append((code: code, records: records))
-			case let .unsupported(rule):
-				if firstUnsupportedRoot.map({ root.mockedType < $0.mockedType }) ?? true {
-					firstUnsupportedRoot = (mockedType: root.mockedType, rule: rule)
-				}
-			}
-		}
-		if let firstUnsupportedRoot {
-			return .unsupported(firstUnsupportedRoot.rule)
-		}
-		// D1 lane hook (lane C): a configuration `@Sendable`-typed, as a type a `Sendable` wrapper builds anywhere in the
-		// module has, takes `@Sendable` closures (`configurationStruct(amongConfigurationsTypedSendable:)`); a public mock's,
-		// and a public mock's module-level one too (`publicConfigurationDeclarations`); one with a child whose field the
-		// lowering does not spell there is not lowered yet.
-		guard !loweredRoots.contains(where: { $0.records.contains { record in
-			sendableConfigurationTypeNames.contains(record.concreteType.asSource)
-				&& record.publicConstruction == nil && record.childFieldSources.contains(where: \.lacksSendableForm)
-		} }) else {
-			return .unsupported(.wrapper)
-		}
+	) -> (mergedCodes: [String], configurationCode: String?, fulfillers: Set<FulfillerImports.Fulfiller>) {
+		let loweredRoots = roots.map { (code: $0.lowered.code, records: $0.lowered.configurations) }
+		// A configuration `@Sendable`-typed, as a type a `Sendable` wrapper builds anywhere in the module has, takes
+		// `@Sendable` closures (`configurationStruct(amongConfigurationsTypedSendable:)`); a public mock's, and a public mock's
+		// module-level one too (`publicConfigurationDeclarations`).
 		let rootedTypeNames = Set(roots.map(\.mockedType.asSource))
 		var seenTypeNames = Set<String>()
 		var rootedStructs = [String: String]()
@@ -67,7 +45,7 @@ extension MockLowering {
 		let rootsInOrder = zip(roots, loweredRoots).sorted { $0.0.mockedType < $1.0.mockedType }
 		let recordsInRootOrder = rootsInOrder.map(\.1.records)
 		let recordsReadingConfiguration = Self.recordsReadingConfiguration(of: loweredRoots.map(\.records))
-		// D1 lane hook (lane B): the declarations the shared file's configurations build, with the mocked type of each root
+		// The declarations the shared file's configurations build, with the mocked type of each root
 		// one comes from, as `generateMockCode`'s `recordFulfillers(configuredBy:inMockOf:)` records them.
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
 		func recordFulfillers(of record: ConfigurationRecord, inMockOf root: LoweredRoot) {
@@ -95,26 +73,19 @@ extension MockLowering {
 		// Then the configurations beneath repeated ancestors, a public mock's before an internal mock's, as
 		// `generateMockCode` takes them.
 		for isPublicMock in [true, false] {
-			switch Self.configurationsBeneathRepeatedAncestors(of: recordsInRootOrder, isPublicMock: isPublicMock) {
-			case let .lowered(records):
-				// A public mock's configuration there is a module-level declaration, which this lowering does not lower yet.
-				guard !isPublicMock || records.isEmpty else { return .unsupported(.cycle) }
-				for (rootIndex, record) in records where seenTypeNames.insert(record.concreteType.asSource).inserted {
-					let typeName = record.concreteType.asSource
-					if rootedTypeNames.contains(typeName) {
-						rootedStructs[typeName] = record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)
-					} else {
-						sharedExtensions.append((typeName: typeName, structCode: record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)))
-						// D1 lane hook (lane B): `generateMockCode` records the fulfillers of the node that reads the configuration,
-						// where its construction differs.
-						let structRecord = recordsReadingConfiguration[record.concreteType].flatMap { recordReadingConfiguration in
-							recordReadingConfiguration.oneWayConstruction?.requirements == record.oneWayConstruction?.requirements ? nil : recordReadingConfiguration
-						} ?? record
-						recordFulfillers(of: structRecord, inMockOf: rootsInOrder[rootIndex].0)
-					}
+			for (rootIndex, record) in Self.configurationsBeneathRepeatedAncestors(of: recordsInRootOrder, isPublicMock: isPublicMock) where seenTypeNames.insert(record.concreteType.asSource).inserted {
+				let typeName = record.concreteType.asSource
+				if rootedTypeNames.contains(typeName) {
+					rootedStructs[typeName] = record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)
+				} else {
+					sharedExtensions.append((typeName: typeName, structCode: record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)))
+					// `generateMockCode` records the fulfillers of the node that reads the configuration,
+					// where its construction differs.
+					let structRecord = recordsReadingConfiguration[record.concreteType].flatMap { recordReadingConfiguration in
+						recordReadingConfiguration.oneWayConstruction?.requirements == record.oneWayConstruction?.requirements ? nil : recordReadingConfiguration
+					} ?? record
+					recordFulfillers(of: structRecord, inMockOf: rootsInOrder[rootIndex].0)
 				}
-			case let .unsupported(rule):
-				return .unsupported(rule)
 			}
 		}
 		let mergedCodes = zip(roots, loweredRoots).map { root, loweredRoot in
@@ -127,7 +98,7 @@ extension MockLowering {
 			)
 			return code + "\n\n" + configurationCode.trimmingCharacters(in: .whitespacesAndNewlines)
 		}
-		// D1 lane hook (lane B): each construction carries the mocked type of the root whose walk recorded it.
+		// Each construction carries the mocked type of the root whose walk recorded it.
 		let publicRecords = rootsInOrder.flatMap { root, loweredRoot in
 			loweredRoot.records.compactMap { record in
 				record.publicConstruction.map { publicConstruction in
@@ -139,18 +110,14 @@ extension MockLowering {
 		}
 		var publicDeclarations = [String]()
 		if let publicMockContext {
-			switch Self.publicConfigurationDeclarations(of: publicRecords, context: publicMockContext, sendableConfigurationTypeNames: sendableConfigurationTypeNames) {
-			case let .lowered((declarations, publicFulfillers)):
-				publicDeclarations = declarations
-				fulfillers.formUnion(publicFulfillers)
-			case let .unsupported(rule):
-				return .unsupported(rule)
-			}
+			let (declarations, publicFulfillers) = Self.publicConfigurationDeclarations(of: publicRecords, context: publicMockContext, sendableConfigurationTypeNames: sendableConfigurationTypeNames)
+			publicDeclarations = declarations
+			fulfillers.formUnion(publicFulfillers)
 		}
 		let configurationCode = sharedExtensions.isEmpty && publicDeclarations.isEmpty
 			? nil
 			: Self.configurationCode(extensions: sharedExtensions, publicDeclarations: publicDeclarations, mockConditionalCompilation: mockConditionalCompilation)
-		return .lowered((mergedCodes: mergedCodes, configurationCode: configurationCode, fulfillers: fulfillers))
+		return (mergedCodes: mergedCodes, configurationCode: configurationCode, fulfillers: fulfillers)
 	}
 
 	/// For each type, the first record, across `recordsByRoot` in the roots' order and each root's records in the order its
@@ -180,12 +147,11 @@ extension MockLowering {
 	/// (`DependencyTreeGenerator.configurationsBeneathRepeatedAncestors`): each type a construction there reads the
 	/// configuration of, and each type whose configuration one of their configurations nests, transitively, unless a node of
 	/// the kind above every repeated ancestor configures the type; each from a node built with its initializer wherever one
-	/// is, else from one built with its hand-written mock. A nested configuration of a node that records none, as one that
-	/// closes a cycle, is not lowered yet.
+	/// is, else from one built with its hand-written mock.
 	private static func configurationsBeneathRepeatedAncestors(
 		of recordsInRootOrder: [[ConfigurationRecord]],
 		isPublicMock: Bool,
-	) -> Lowering<[(rootIndex: Int, record: ConfigurationRecord)]> {
+	) -> [(rootIndex: Int, record: ConfigurationRecord)] {
 		struct Candidate {
 			let rootIndex: Int
 			let record: ConfigurationRecord
@@ -241,8 +207,8 @@ extension MockLowering {
 			var typesToWalk = readTypes
 			while let type = typesToWalk.popLast() {
 				guard let chosen = chosenCandidates[type] else { continue }
-				for child in chosen.record.beneathRepeatedAncestor?.nestedChildren ?? [] where !typesConfiguredAbove.contains(child.concreteType) {
-					guard let recordIndex = child.recordIndex else { return .unsupported(.cycle) }
+				// A nested configuration's node is always recorded.
+				for (child, recordIndex) in (chosen.record.beneathRepeatedAncestor?.nestedChildren ?? []).compactMap({ child in child.recordIndex.map { (child, $0) } }) where !typesConfiguredAbove.contains(child.concreteType) {
 					if addCandidate(recordsInRootOrder[chosen.rootIndex][recordIndex], ofRootAt: chosen.rootIndex) {
 						foundCandidate = true
 					}
@@ -257,7 +223,7 @@ extension MockLowering {
 		for candidate in candidates where neededTypes.contains(candidate.record.concreteType) && !typesInOrder.contains(candidate.record.concreteType) {
 			typesInOrder.append(candidate.record.concreteType)
 		}
-		return .lowered(typesInOrder.compactMap { chosenCandidates[$0].map { (rootIndex: $0.rootIndex, record: $0.record) } })
+		return typesInOrder.compactMap { chosenCandidates[$0].map { (rootIndex: $0.rootIndex, record: $0.record) } }
 	}
 
 	/// The code that declares each of `extensions`' structs in an extension of its type, then `publicDeclarations`, under the
@@ -362,7 +328,7 @@ extension MockLowering.Walk {
 		return finishedConfiguredChildren.popLast() ?? []
 	}
 
-	// D1 lane hook (lane B): what `generateMockCode`'s `recordFulfillers(configuredBy:inMockOf:)` reads of a node.
+	// What `generateMockCode`'s `recordFulfillers(configuredBy:inMockOf:)` reads of a node.
 	/// The declarations whose modules a configuration of `node`'s type, generated from `node`, makes the shared configuration
 	/// file import: the type's, where `node`'s property does not name it, and that of its hand-written mock, where another
 	/// module writes it and the configuration's fields default to that mock's.
@@ -392,7 +358,7 @@ extension MockLowering.Walk {
 		// A child beneath an edge in `cycleEdges` has no member in its parent's configuration.
 		let recordedChildren = children.filter { child in child.concreteType.map { !isPruned($0, beneath: parentConcreteType) } ?? true }
 		var record = MockLowering.ConfigurationRecord(of: node, children: recordedChildren)
-		// D1 lane hook (lane B): what a configuration generated from the record imports.
+		// What a configuration generated from the record imports.
 		record.fulfillers = configurationFulfillers(of: node)
 		record.beneathRepeatedAncestor = MockLowering.ConfigurationRecord.BeneathRepeatedAncestor(
 			readsConfiguration: buildsPublicMock || readsConfigurationBuiltAfresh(of: node.instantiable, usesMockInitializer: node.usesMockInitializer),
@@ -422,7 +388,7 @@ extension MockLowering.Walk {
 extension MockLowering.ConfigurationRecord {
 	/// The `SafeDIMockConfiguration` this record describes, nested in an extension of its type: a field per child, one per
 	/// default-valued parameter, then the builder that overrides how the type is built, each held in the configuration's storage.
-	// D1 lane hook (lane C): a configuration `@Sendable`-typed, `typeNames` naming the types whose configurations are.
+	// A configuration `@Sendable`-typed, `typeNames` naming the types whose configurations are.
 	func configurationStruct(amongConfigurationsTypedSendable typeNames: Set<String>) -> String {
 		let requiresSendable = typeNames.contains(concreteType.asSource)
 		let indent = ScopeGenerator.standardIndent
@@ -487,7 +453,7 @@ extension MockLowering.ConfigurationRecord {
 }
 
 extension MockLowering.DefaultField {
-	// D1 lane hook (lane C): a default-valued field of a configuration `@Sendable`-typed.
+	// A default-valued field of a configuration `@Sendable`-typed.
 	/// The field's parameter of a configuration `@Sendable`-typed, at `indent`, and the field its storage holds: a closure
 	/// `@Sendable` at its top, or, for any other value, a `@Sendable` closure that returns it, which the construction calls
 	/// (`ScopeGenerator.generateConfigurationStruct`).

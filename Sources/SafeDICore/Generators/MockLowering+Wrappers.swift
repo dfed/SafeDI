@@ -50,7 +50,7 @@ extension MockLowering.Walk {
 				)
 			}
 		}
-		// D1 lane hook (lane C): and the locals the mock's body reads its `@Sendable` autoclosure parameters into, which the
+		// Also the locals the mock's body reads its `@Sendable` autoclosure parameters into, which the
 		// scopes inside a `@Sendable` function call.
 		var names = GeneratedNameAllocator(reserving: functionNames)
 		names.reserve(sendableAutoclosureBindings.values.map(\.localName))
@@ -98,11 +98,11 @@ extension MockLowering {
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		unavailableProperties: Set<Property>,
 		bindingNamesPassedByName: [String: String] = [:],
-		// D1 lane hook (lane B): the parameters of `mock()` named apart that the node's own uncovered dependencies are.
+		// The parameters of `mock()` named apart that the node's own uncovered dependencies are.
 		uncoveredParameterNames: [String: [TypeDescription: String]] = [:],
 	) -> [(label: String, value: String)] {
 		initializer.arguments.compactMap { argument in
-			// D1 lane hook (lane D): an argument takes the dependency of its label, whatever its type.
+			// An argument takes the dependency of its label, whatever its type.
 			guard let dependency = MockLowering.dependency(passedTo: argument, among: dependencies) else { return nil }
 			let value = if dependency.source == .received(onlyIfAvailable: true), unavailableProperties.contains(dependency.property) {
 				"nil"
