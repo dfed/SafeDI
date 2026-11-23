@@ -235,10 +235,16 @@ extension ScopeGenerator {
 				      !isFulfilledByForwardedProperty(property)
 				else { continue }
 				let instance = property.asValidatedForDependencyCycles
-				guard !Self.provides(instance, declaredProperties: propertiesToDeclare, forwardedProperties: []),
-				      !Self.provides(instance.asUnwrappedProperty, declaredProperties: propertiesToDeclare, forwardedProperties: []),
-				      !isFulfilledByForwardedProperty(instance)
-				else { return .unsupported(.wrapper) }
+				// An instance the mocked type itself instantiates, which the mock may not build, is not lowered yet.
+				guard !instantiable.dependencies.contains(where: { dependency in
+					guard case .instantiated = dependency.source else { return false }
+					return dependency.property == instance.asUnwrappedProperty || dependency.lazilyInstantiatedInstanceProperty == instance.asUnwrappedProperty
+				}) else { return .unsupported(.wrapper) }
+				// A wrapper whose instance the tree provides is not made from it: the mock takes the wrapper as it is.
+				guard !Self.provides(instance, declaredProperties: propertiesToDeclare, forwardedProperties: []) else { continue }
+				// The instance of one beside a property of its label and type the mocked type forwards is named apart from it,
+				// which the lowering does not lower yet.
+				guard !isFulfilledByForwardedProperty(instance) else { return .unsupported(.wrapper) }
 				wrappedReceivedProperties.append(property)
 			}
 			wrappedReceivedProperties.sort()
