@@ -456,6 +456,17 @@ struct MigrationCallTests {
 	}
 
 	@Test
+	func migrate_movesClosureIntoBuiltConfiguration_whenReceivedDependencyOverrideIsClosure() {
+		let result = migrate("""
+		let profile = Profile.mock(name: "n", clock: clock, safeDIOverrides: .init(user_Draft: { title in Draft(title: title) }))
+		""")
+		#expect(result.rewrittenFiles == [SourceFile(path: "Calls.swift", text: """
+		let profile = Profile.fake(name: "n", clock: clock, user: .built(.init({ title in Draft(title: title) })))
+		""")])
+		#expect(result.findings == [])
+	}
+
+	@Test
 	func migrate_renamesOnlyAndReportsSite_whenReceivedDependencyIsPassedTwice() {
 		let result = migrate("""
 		let panel = Panel.mock(id: 1, session: session, safeDIOverrides: .init(session: .init()))

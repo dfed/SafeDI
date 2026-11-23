@@ -138,6 +138,7 @@ public enum MigrationEdit: String, CaseIterable, Sendable {
 	case receivedValueWrappedAsInstance = "received dependency passed as .instance(…)"
 	case receivedNilDropped = "received dependency nil (build it) argument dropped"
 	case receivedOverrideMovedToBuilt = "received dependency override moved to a .built(…) argument"
+	case receivedOverrideClosureMovedToBuilt = "of which an override closure, as .built(.init(closure))"
 	case argumentsReordered = "arguments reordered by the role file (THREE-ZERO 2.1)"
 }
 

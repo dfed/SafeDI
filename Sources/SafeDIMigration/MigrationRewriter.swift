@@ -329,9 +329,14 @@ final class MigrationRewriter: SyntaxRewriter {
 					fields.append(field)
 					continue
 				}
-				guard let configuration = field.expression.as(FunctionCallExprSyntax.self),
-				      Self.isConfigurationLiteral(configuration)
-				else {
+				let configuration: ExprSyntax
+				if let literal = field.expression.as(FunctionCallExprSyntax.self), Self.isConfigurationLiteral(literal) {
+					configuration = field.expression.trimmed
+				} else if field.expression.is(ClosureExprSyntax.self) {
+					// A 2.x override closure is the configuration's builder in 3.0 (design note, "Migration rules settled after the rewriter spike").
+					log.count(.receivedOverrideClosureMovedToBuilt)
+					configuration = Self.wrapped(field.expression.trimmed, in: ".init")
+				} else {
 					log.report(.receivedBuildableOverrideNotLiteral, at: site(of: original), text: original.trimmedDescription)
 					fields.append(field)
 					continue
@@ -342,7 +347,7 @@ final class MigrationRewriter: SyntaxRewriter {
 					leadingTrivia: Self.leadingTriviaOfNewArgument(in: call.arguments),
 					label: .identifier(parameter.label),
 					colon: .colonToken(trailingTrivia: .space),
-					expression: Self.wrapped(field.expression.trimmed, in: ".built"),
+					expression: Self.wrapped(configuration, in: ".built"),
 				))
 			}
 			let newFieldTrivia = Self.leadingTriviaOfNewArgument(in: overridesLiteral.arguments)
