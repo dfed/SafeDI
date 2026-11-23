@@ -15144,7 +15144,8 @@ extension SeamCall {
 extension TypeDescription {
 	/// This type, or, for a throwing `@autoclosure`, the `@autoclosure` that does not throw and returns the same value: how a
 	/// mock takes a default-valued `@autoclosure` it calls where it builds the type (`Initializer.Argument.isLeftToItsDefault`).
-	fileprivate var autoclosureTakenWithoutThrowing: TypeDescription {
+	// D1 lane hook (lane D): the mock lowering takes the parameter so too.
+	var autoclosureTakenWithoutThrowing: TypeDescription {
 		guard case let .attributed(.closure(arguments, isAsync, true, _, returnType), specifiers, attributes) = self,
 		      attributes.contains("autoclosure")
 		else { return self }

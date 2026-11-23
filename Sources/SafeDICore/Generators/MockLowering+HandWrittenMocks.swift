@@ -48,3 +48,35 @@ extension MockLowering {
 		(instantiable.mockCallReturnType ?? instantiable.concreteInstantiable).asSource
 	}
 }
+
+/// Stage D1, lane D: what the mocked type's construction is passed of the nodes the root's level binds in another form
+/// than the dependency it fulfills (`generateReturnArgumentList`).
+extension MockLowering {
+	/// The mocked type's own dependencies, received or instantiated, read through the `LazilyInstantiated` wrapper
+	/// `instances` holds the instance of: each is passed the wrapper's instance. The root's level names none of their
+	/// labels apart.
+	static func rootInstancesReadByValue(of instantiable: Instantiable, among instances: Set<Property>) -> Set<Property> {
+		var properties = Set<Property>()
+		for dependency in instantiable.dependencies where instances.contains(dependency.property.asUnwrappedProperty) {
+			switch dependency.source {
+			case .received, .instantiated:
+				properties.insert(dependency.property)
+			case .aliased, .forwarded:
+				break
+			}
+		}
+		return properties
+	}
+
+	/// The mocked type's own receives only if available of the optional form of a node the root's level binds under the
+	/// receive's label: each is passed the node's non-optional value.
+	static func rootOptionalFormsProvidedByNodes(of instantiable: Instantiable, nodeProperties: Set<Property>, renames: [String: [TypeDescription: String]]) -> Set<Property> {
+		var properties = Set<Property>()
+		for dependency in instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) && dependency.property.typeDescription.isOptional {
+			let unwrapped = dependency.property.asUnwrappedProperty
+			guard nodeProperties.contains(unwrapped), renames[unwrapped.label]?[unwrapped.typeDescription] == nil, renames[unwrapped.label]?[dependency.property.typeDescription] == nil else { continue }
+			properties.insert(dependency.property)
+		}
+		return properties
+	}
+}
