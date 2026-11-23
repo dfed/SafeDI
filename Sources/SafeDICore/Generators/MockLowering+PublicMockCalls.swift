@@ -306,12 +306,9 @@ extension MockLowering.Walk {
 		guard let publicMockCall = generator.publicMockCall,
 		      case let .property(instantiable, property, forwardedProperties, erasedToConcreteExistential, isPropertyCycle, _) = generator.scopeData
 		else { return .unsupported(.publicMockCall) }
-		// A call whose own builder function is `@Sendable` starts the extraction of its override reads, which is not lowered
-		// yet; inside an enclosing `@Sendable` function the override is read through that function's extractor.
-		guard !generator.buildsInSendableFunction || sendableOverrideExtractor != nil,
-		      !isPropertyCycle,
+		guard !isPropertyCycle,
 		      !erasedToConcreteExistential,
-		      property.propertyType.isConstant || property.propertyType == .instantiator && forwardedProperties.isEmpty,
+		      property.propertyType.isConstant || [.instantiator, .sendableInstantiator].contains(property.propertyType) && forwardedProperties.isEmpty,
 		      property.typeDescription.asInstantiatedType == instantiable.concreteInstantiable
 		else { return .unsupported(.publicMockCall) }
 		guard !rootLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
@@ -342,6 +339,10 @@ extension MockLowering.Walk {
 				return "(\(parameterTypes.joined(separator: ", "))) -> \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource)"
 			},
 		)
+		// A call whose own builder function is `@Sendable` and reads an override starts the extraction of its override reads,
+		// which is not lowered yet; inside an enclosing `@Sendable` function the override is read through that function's
+		// extractor.
+		guard !generator.buildsInSendableFunction || sendableOverrideExtractor != nil || node.overridesField == nil else { return .unsupported(.publicMockCall) }
 		let nodePath = "\(path).\(property.label)"
 		// Inside a `@Sendable` function the member is read into a local before the outermost such function.
 		let overrideRead = readingOverride(nodePath, localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(ReservedName.configurationBuilderPropertyName)")
@@ -429,6 +430,7 @@ extension MockLowering.Walk {
 		}
 		let typeName = property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource
 		let functionName = ScopeGenerator.functionName(toBuildPropertyNamed: property.label)
+		let functionDecorator = generator.buildsInSendableFunction ? "@Sendable " : ""
 		// A call held in an instantiator is made in the builder function the instantiator holds.
 		let isInstantiator = !property.propertyType.isConstant
 		// A call a public mock promotes at its root's level reads its caller's value first, which only a plain call's binding
@@ -439,7 +441,7 @@ extension MockLowering.Walk {
 			lines.append("\(indent)\(publicMockCall.guardLine(for: instantiable.concreteInstantiable))")
 			// A call that passes a builder up binds it in a builder function of its own.
 			guard passedUpBuilderBindings.isEmpty else {
-				lines.append("\(indent)func \(functionName)() -> \(typeName) {")
+				lines.append("\(indent)\(functionDecorator)func \(functionName)() -> \(typeName) {")
 				lines.append(contentsOf: passedUpBuilderBindings.map { "\(indent)\(ScopeGenerator.standardIndent)\($0)" })
 				lines.append("\(indent)\(ScopeGenerator.standardIndent)return \(call)")
 				lines.append("\(indent)}")
@@ -447,7 +449,7 @@ extension MockLowering.Walk {
 				return .lowered(.publicMockCall(node))
 			}
 			if isInstantiator {
-				lines.append("\(indent)func \(functionName)() -> \(typeName) {")
+				lines.append("\(indent)\(functionDecorator)func \(functionName)() -> \(typeName) {")
 				lines.append("\(indent)\(ScopeGenerator.standardIndent)\(call)")
 				lines.append("\(indent)}")
 				lines.append("\(indent)let \(property.label) = \(property.typeDescription.asSource)(\(functionName))")
@@ -462,7 +464,7 @@ extension MockLowering.Walk {
 		} catch {
 			return .unsupported(.fill)
 		}
-		lines.append("\(indent)func \(functionName)() -> \(typeName) {")
+		lines.append("\(indent)\(functionDecorator)func \(functionName)() -> \(typeName) {")
 		// The members a `@Sendable` family's places inside the fills read, which the call's builder function calls at its top.
 		lines.append(contentsOf: generator.memberCallsInsideBuilderFunction.map { "\(innerIndent)\($0.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: [:]))" })
 		for line in fillCode.split(separator: "\n", omittingEmptySubsequences: false) where !fillCode.isEmpty {
