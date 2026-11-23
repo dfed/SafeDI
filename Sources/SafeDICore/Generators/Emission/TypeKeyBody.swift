@@ -35,12 +35,13 @@ enum TypeKeyBody {
 	/// root keeps `rootBody`, the path key's statements.
 	static func statements(ofRootBody rootBody: [GeneratedCode]) -> [GeneratedCode]? {
 		var layout = TypeKeyLayout()
-		guard layout.read(rootBody),
-		      layout.computeReads(),
-		      layout.computeClasses(),
-		      layout.computePlacement(),
-		      layout.computeOutcomes(),
-		      layout.computeParameterTypes(),
+		guard layout.read(rootBody) else { return nil }
+		GenerationWork.record(layout.bodies.count - 1, by: .layingOutTypeKeyViews)
+		guard layout.computeReads() else { return nil }
+		layout.computeClasses()
+		guard layout.computePlacement() else { return nil }
+		layout.computeOutcomes()
+		guard layout.computeParameterTypes(),
 		      layout.checkEveryRead()
 		else { return nil }
 		layout.computeDecoratorsAndNames()
@@ -55,18 +56,6 @@ private enum PathValue: Hashable {
 	case statement(body: Int, index: Int)
 	case forwarded(body: Int, label: String)
 	case cycleParameter(body: Int, label: String)
-
-	/// The body that declares the value, or `nil` for none.
-	var body: Int? {
-		switch self {
-		case .none:
-			nil
-		case let .statement(body, _),
-		     let .forwarded(body, _),
-		     let .cycleParameter(body, _):
-			body
-		}
-	}
 }
 
 /// A declaration of the type key's body: a statement of a class's body or the root's (class 0), a forwarded property of a
@@ -95,16 +84,49 @@ private struct CallSite: Hashable {
 }
 
 private struct TypeKeyLayout {
-	/// A body of the path key's walk: the root's (body 0), or a place's builder function.
+	/// A body of the path key's walk, laid out once for each view (R1b §2a): the root's (body 0), or the builder function
+	/// of the places of one plan node, in one family, whose look-ups outside it resolve to the same declarations and whose
+	/// cycle parameters are passed the same declarations. Every step asks a view what it would ask each of its places, and
+	/// asks it through the view's first place only, since every place answers alike: the key holds what each look-up
+	/// outside the view resolves to (`ViewKey.outerView`), and each place's call is checked where its parent makes it
+	/// (`checkEveryRead`'s `.built` case, run for every body that holds a place of the view).
 	struct Body {
+		/// The body holding the view's first place, which the walk reached it through.
 		let parent: Int
-		/// The index of the place's statement in its parent's body.
+		/// The index of the first place's statement in `parent`.
 		let position: Int
+		/// The parent bodies and statement indices of the view's other places, which count the places the view stands for.
+		var otherEdges = [(parent: Int, position: Int)]()
 		let record: BuiltPlaceRecord?
+		/// Whether the body is in the `@Sendable` family: its own function is `@Sendable`, or one enclosing it is.
+		let isInSendableFamily: Bool
+		/// The labels the body looks up outside it: its plan node's `Domain`, and the domains of the functions its closers
+		/// call.
+		let domainLabels: Set<String>
 		var statements = [Statement]()
 		var positionsByLabel = [String: [Int]]()
 		let forwardedLabels: Set<String>
 		let cycleParameterLabels: Set<String>
+
+		/// The parent body and statement index of each of the view's places.
+		var edges: [(parent: Int, position: Int)] {
+			[(parent, position)] + otherEdges
+		}
+	}
+
+	/// What a plan node's reads look up outside its own body, whatever context it is in: the labels, and the names of the
+	/// functions its closers call.
+	struct Domain {
+		var labels = Set<String>()
+		var closedOnFunctionNames = Set<String>()
+	}
+
+	/// What tells two places of one plan node apart (`Body`).
+	struct ViewKey: Hashable {
+		let node: PlanNode
+		let isInSendableFamily: Bool
+		let outerView: [String: PathValue]
+		let cycleArguments: [PathValue]
 	}
 
 	/// A statement of a body: a place built by its own function, a constant built in place, a cycle-closing scope, or a
@@ -117,6 +139,10 @@ private struct TypeKeyLayout {
 	}
 
 	var bodies = [Body]()
+	/// The views other than the root's in post-order of the view DAG.
+	var postOrder = [Int]()
+	/// The domain of each plan node the walk reached.
+	var domainsByNode = [PlanNode: Domain]()
 	/// The closing statements that call each body's function: their body and their index in it.
 	var closersByTarget = [Int: [(body: Int, index: Int)]]()
 	/// The labels each body's function reads and does not bind, in the order it first reads them.
@@ -153,7 +179,8 @@ private struct TypeKeyLayout {
 
 	/// Reads the places of the root's body, `rootBody`, depth first; `false` where a place records nothing.
 	mutating func read(_ rootBody: [GeneratedCode]) -> Bool {
-		bodies.append(Body(parent: -1, position: 0, record: nil, forwardedLabels: [], cycleParameterLabels: []))
+		bodies.append(Body(parent: -1, position: 0, record: nil, isInSendableFamily: false, domainLabels: [], forwardedLabels: [], cycleParameterLabels: []))
+		var viewsByKey = [ViewKey: Int]()
 		var frames = [(body: 0, children: rootBody, next: 0)]
 		while let frame = frames.last {
 			guard frame.next < frame.children.count else {
@@ -168,25 +195,53 @@ private struct TypeKeyLayout {
 			let label: String
 			switch record {
 			case let .built(built):
-				guard Self.areReads(built.arguments), Self.areReads(built.callCycleArguments) else { return false }
 				label = built.property.label
 				if built.hasFunction {
-					let newBody = bodies.count
-					bodies.append(Body(
-						parent: body,
-						position: position,
-						record: built,
-						forwardedLabels: Set(built.forwardedProperties.map(\.label)),
-						cycleParameterLabels: Set(built.cycleParameters.map(\.label)),
-					))
-					statement = .built(body: newBody)
-					frames.append((body: newBody, children: built.children, next: 0))
+					guard let domain = domain(of: built) else { return false }
+					let isInSendableFamily = built.isSendable || bodies[body].isInSendableFamily
+					// A closer passes the function it calls what that function reads, which the closer's body looks up outside
+					// itself: the labels of the target's domain are this view's too.
+					var labels = domain.labels
+					for name in domain.closedOnFunctionNames {
+						var target = body
+						while target != 0, bodies[target].record?.functionName != name {
+							target = bodies[target].parent
+						}
+						labels.formUnion(bodies[target].domainLabels)
+					}
+					var outerView = [String: PathValue]()
+					for label in labels {
+						outerView[label] = lookUp(label, inBody: body, before: position)
+					}
+					let key = ViewKey(
+						node: built.node,
+						isInSendableFamily: isInSendableFamily,
+						outerView: outerView,
+						cycleArguments: built.callCycleArguments.map { pathValue(of: $0, inBody: body, before: position) },
+					)
+					if let view = viewsByKey[key] {
+						bodies[view].otherEdges.append((parent: body, position: position))
+						statement = .built(body: view)
+					} else {
+						let newBody = bodies.count
+						bodies.append(Body(
+							parent: body,
+							position: position,
+							record: built,
+							isInSendableFamily: isInSendableFamily,
+							domainLabels: labels,
+							forwardedLabels: Set(built.forwardedProperties.map(\.label)),
+							cycleParameterLabels: Set(built.cycleParameters.map(\.label)),
+						))
+						viewsByKey[key] = newBody
+						statement = .built(body: newBody)
+						frames.append((body: newBody, children: built.children, next: 0))
+					}
 				} else {
 					guard built.children.isEmpty, built.cycleParameters.isEmpty else { return false }
 					statement = .inline(built)
 				}
 			case let .closer(closer):
-				guard Self.areReads(closer.cycleArguments) else { return false }
 				label = closer.property.label
 				// The function a closing scope calls is the nearest enclosing one of its name, as Swift resolves it.
 				var target = body
@@ -206,31 +261,84 @@ private struct TypeKeyLayout {
 		return true
 	}
 
+	/// What `built`'s body looks up outside itself, or `nil` where a place beneath it records nothing. The plan nodes
+	/// beneath it are computed first, each once, with a stack, since a plan can be as deep as the module has types.
+	private mutating func domain(of built: BuiltPlaceRecord) -> Domain? {
+		if let domain = domainsByNode[built.node] {
+			return domain
+		}
+		var stack = [built]
+		while let current = stack.last {
+			guard domainsByNode[current.node] == nil else {
+				stack.removeLast()
+				continue
+			}
+			var children = [PlaceRecord]()
+			for code in current.children {
+				guard let record = Self.record(of: code) else { return nil }
+				children.append(record)
+			}
+			let pending = children.compactMap { child -> BuiltPlaceRecord? in
+				guard case let .built(childBuilt) = child, childBuilt.hasFunction, domainsByNode[childBuilt.node] == nil else { return nil }
+				return childBuilt
+			}
+			guard pending.isEmpty else {
+				stack.append(contentsOf: pending)
+				continue
+			}
+			stack.removeLast()
+			let bound = Set(current.forwardedProperties.map(\.label)).union(current.cycleParameters.map(\.label))
+			var boundBefore = Set<String>()
+			var domain = Domain()
+			// A read of `nil` is in the domain too: the checks look up every label a function reads, whatever its places read.
+			func lookUp(_ read: PlaceRead) {
+				if !bound.contains(read.label), !boundBefore.contains(read.label) {
+					domain.labels.insert(read.label)
+				}
+			}
+			func close(_ name: String) {
+				if name != current.functionName {
+					domain.closedOnFunctionNames.insert(name)
+				}
+			}
+			for child in children {
+				switch child {
+				case let .built(childBuilt):
+					childBuilt.callCycleArguments.forEach(lookUp)
+					if childBuilt.hasFunction, let childDomain = domainsByNode[childBuilt.node] {
+						for label in childDomain.labels where !bound.contains(label) && !boundBefore.contains(label) {
+							domain.labels.insert(label)
+						}
+						childDomain.closedOnFunctionNames.forEach(close)
+					} else {
+						childBuilt.arguments.forEach(lookUp)
+					}
+					boundBefore.insert(childBuilt.property.label)
+				case let .closer(closer):
+					closer.cycleArguments.forEach(lookUp)
+					close(closer.closedOnFunctionName)
+					boundBefore.insert(closer.property.label)
+				case let .alias(alias):
+					if let fulfillingProperty = alias.fulfillingProperty, !bound.contains(fulfillingProperty.label), !boundBefore.contains(fulfillingProperty.label) {
+						domain.labels.insert(fulfillingProperty.label)
+					}
+					boundBefore.insert(alias.property.label)
+				}
+			}
+			current.arguments.forEach(lookUp)
+			domainsByNode[current.node] = domain
+		}
+		return domainsByNode[built.node]
+	}
+
 	/// The record of a place's code, as a body holds it: indented, around the place's plan.
 	private static func record(of code: GeneratedCode) -> PlaceRecord? {
 		var code = code
-		while true {
-			switch code.node {
-			case let .indented(inner, _):
-				code = inner
-			case let .place(plan):
-				return plan.record
-			case .text, .sequence, .lines, .spelled, .laidOut:
-				return nil
-			}
+		while case let .indented(inner, _) = code.node {
+			code = inner
 		}
-	}
-
-	/// Whether each of `reads` reads a declaration of its label, its lazy wrapper's instance, or `nil`.
-	private static func areReads(_ reads: [PlaceRead]) -> Bool {
-		reads.allSatisfy { read in
-			switch read.source {
-			case .binding, .lazyInstance, .nil:
-				true
-			case .forwardedSpread, .wrapper, .optionalWrapper, .builderArgument, .holeArgument:
-				false
-			}
-		}
+		guard case let .place(plan) = code.node else { return nil }
+		return plan.record
 	}
 
 	func label(of statement: Statement) -> String {
@@ -266,19 +374,22 @@ private struct TypeKeyLayout {
 	func lookUp(_ label: String, inBody body: Int, before index: Int) -> PathValue {
 		var body = body
 		var index = index
-		while true {
-			if let positions = bodies[body].positionsByLabel[label], let position = positions.last(where: { $0 < index }) {
-				return .statement(body: body, index: position)
-			}
-			guard body != 0 else { return .none }
-			if bodies[body].forwardedLabels.contains(label) {
-				return .forwarded(body: body, label: label)
-			} else if bodies[body].cycleParameterLabels.contains(label) {
-				return .cycleParameter(body: body, label: label)
-			} else {
-				index = bodies[body].position
-				body = bodies[body].parent
-			}
+		while body != 0,
+		      bodies[body].positionsByLabel[label]?.contains(where: { $0 < index }) != true,
+		      !bodies[body].forwardedLabels.contains(label),
+		      !bodies[body].cycleParameterLabels.contains(label)
+		{
+			index = bodies[body].position
+			body = bodies[body].parent
+		}
+		if let position = bodies[body].positionsByLabel[label]?.last(where: { $0 < index }) {
+			return .statement(body: body, index: position)
+		} else if body == 0 {
+			return .none
+		} else if bodies[body].forwardedLabels.contains(label) {
+			return .forwarded(body: body, label: label)
+		} else {
+			return .cycleParameter(body: body, label: label)
 		}
 	}
 
@@ -322,6 +433,7 @@ private struct TypeKeyLayout {
 		// body was last computed: recomputing any other gives what it holds, so every pass ends as a pass over every body
 		// would, at a cost that follows what changes.
 		let dependents = dependentsOfBodies()
+		postOrder = postOrderOfViews()
 		reads = Array(repeating: [], count: bodies.count)
 		guard settle(dependents: dependents, recompute: { layout, body in
 			let bodyReads = layout.readsOfBody(body)
@@ -330,7 +442,7 @@ private struct TypeKeyLayout {
 			return true
 		}) else { return false }
 		escapingReads = Array(repeating: [:], count: bodies.count)
-		for body in bodies.indices.dropFirst().reversed() {
+		for body in postOrder {
 			escapingReads[body] = escapingReadsOfBody(body)
 		}
 		requiredReads = Array(repeating: [], count: bodies.count)
@@ -360,18 +472,63 @@ private struct TypeKeyLayout {
 		return dependents
 	}
 
-	/// Runs passes over the bodies in reverse order until no body changes, recomputing a body only where it is dirty: never
-	/// computed, or a body it reads changed since. `recompute` returns whether the body changed. `false` where the passes
-	/// do not settle.
+	/// The views other than the root's, each after every view its body builds: post-order of the view DAG.
+	private func postOrderOfViews() -> [Int] {
+		var order = [Int]()
+		var isVisited = [Bool](repeating: false, count: bodies.count)
+		var frames = [(body: 0, next: 0)]
+		isVisited[0] = true
+		while let frame = frames.last {
+			let statements = bodies[frame.body].statements
+			guard frame.next < statements.count else {
+				frames.removeLast()
+				if frame.body != 0 {
+					order.append(frame.body)
+				}
+				continue
+			}
+			frames[frames.count - 1].next += 1
+			if case let .built(child) = statements[frame.next], !isVisited[child] {
+				isVisited[child] = true
+				frames.append((body: child, next: 0))
+			}
+		}
+		return order
+	}
+
+	/// How many places the views stand for, saturating at `Int.max`: each view stands for one place at each place of each
+	/// body holding it.
+	private func placeCount() -> Int {
+		var placesByBody = [Int](repeating: 0, count: bodies.count)
+		placesByBody[0] = 1
+		var total = 0
+		for body in postOrder.reversed() {
+			var places = 0
+			for edge in bodies[body].edges {
+				let (sum, overflow) = places.addingReportingOverflow(placesByBody[edge.parent])
+				places = overflow ? Int.max : sum
+			}
+			placesByBody[body] = places
+			let (sum, overflow) = total.addingReportingOverflow(places)
+			total = overflow ? Int.max : sum
+		}
+		return total
+	}
+
+	/// Runs passes over the views in post-order until no view changes, recomputing a view only where it is dirty: never
+	/// computed, or a view it reads changed since. `recompute` returns whether the view changed. `false` where the passes
+	/// do not settle within one pass per place, as many as the path key's per-place passes could take.
 	private mutating func settle(dependents: [[Int]], recompute: (inout TypeKeyLayout, Int) -> Bool) -> Bool {
 		var dirty = [Bool](repeating: true, count: bodies.count)
 		var anyDirty = true
 		var passes = 0
+		let (bound, overflow) = placeCount().addingReportingOverflow(2)
+		let passBound = overflow ? Int.max : bound
 		while anyDirty {
 			anyDirty = false
 			passes += 1
-			guard passes <= bodies.count + 2 else { return false }
-			for body in bodies.indices.dropFirst().reversed() where dirty[body] {
+			guard passes <= passBound else { return false }
+			for body in postOrder where dirty[body] {
 				dirty[body] = false
 				guard recompute(&self, body) else { continue }
 				for dependent in dependents[body] {
@@ -446,12 +603,17 @@ private struct TypeKeyLayout {
 	private func escapingReadsOfBody(_ body: Int) -> [String: PathValue] {
 		var escaping = [String: PathValue]()
 		func note(_ label: String, _ value: PathValue) {
-			if value == .none {
+			switch value {
+			case .none:
 				if escaping[label] == nil {
 					escaping[label] = PathValue.none
 				}
-			} else if value.body != body, escaping[label] == nil || escaping[label] == PathValue.none {
-				escaping[label] = value
+			case let .statement(declaringBody, _),
+			     let .forwarded(declaringBody, _),
+			     let .cycleParameter(declaringBody, _):
+				if declaringBody != body, escaping[label] == nil || escaping[label] == PathValue.none {
+					escaping[label] = value
+				}
 			}
 		}
 		let statements = bodies[body].statements
@@ -502,12 +664,9 @@ private struct TypeKeyLayout {
 
 	/// Partitions the places into classes: by what each builds and how, its reads, the shape of its body and the classes its
 	/// body calls, and the form of the declaration each read resolves to.
-	mutating func computeClasses() -> Bool {
+	mutating func computeClasses() {
 		let count = bodies.count
-		var families = [Bool](repeating: false, count: count)
-		for body in bodies.indices.dropFirst() {
-			families[body] = (bodies[body].record?.isSendable ?? false) || families[bodies[body].parent]
-		}
+		let families = bodies.map(\.isInSendableFamily)
 		var structuralKeys = [[String]: Int]()
 		var classes = [Int](repeating: 0, count: count)
 		for body in bodies.indices.dropFirst() {
@@ -518,7 +677,7 @@ private struct TypeKeyLayout {
 				return id
 			}()
 		}
-		guard var refined = refine(classes) else { return false }
+		var refined = refine(classes)
 		// Places alike in every other way are one class only where each read resolves to declarations of one form, or none.
 		var groupsByClass = [Int: [[String?]]]()
 		var groupedClasses = [[Int]: Int]()
@@ -543,8 +702,7 @@ private struct TypeKeyLayout {
 				return id
 			}()
 		}
-		guard let final = refine(classesWithForms) else { return false }
-		refined = final
+		refined = refine(classesWithForms)
 		// Classes are numbered in the order the walk first reaches a member.
 		var numbering = [Int: Int]()
 		classByBody = [Int](repeating: 0, count: count)
@@ -559,7 +717,6 @@ private struct TypeKeyLayout {
 			classByBody[body] = id
 			membersByClass[id].append(body)
 		}
-		return true
 	}
 
 	private func structuralKey(of body: Int, isInSendableFamily: Bool) -> [String] {
@@ -599,36 +756,41 @@ private struct TypeKeyLayout {
 	}
 
 	/// `classes` refined until alike places' bodies call alike places: a place's class joins the classes its body's calls
-	/// reach. `nil` where the partition does not settle.
-	private func refine(_ classes: [Int]) -> [Int]? {
-		var previous = classes
+	/// reach. Each pass refines the last, since a body's key starts with its class, so the count of classes grows with
+	/// every pass that changes the partition and the passes end within one per body.
+	private func refine(_ classes: [Int]) -> [Int] {
 		var previousCount = Set(classes.dropFirst()).count
-		for _ in 0...bodies.count {
-			var interned = [[Int]: Int]()
-			var next = [Int](repeating: 0, count: bodies.count)
-			for body in bodies.indices.dropFirst() {
-				var key = [previous[body]]
-				for statement in bodies[body].statements {
-					switch statement {
-					case let .built(child):
-						key.append(previous[child])
-					case let .closer(_, target):
-						key.append(previous[target])
-					case .inline, .alias:
-						key.append(0)
-					}
-				}
-				next[body] = interned[key] ?? {
-					let id = interned.count + 1
-					interned[key] = id
-					return id
-				}()
-			}
-			guard interned.count != previousCount else { return next }
-			previousCount = interned.count
-			previous = next
+		var next = refinementPass(of: classes)
+		while next.count != previousCount {
+			previousCount = next.count
+			next = refinementPass(of: next.classes)
 		}
-		return nil
+		return next.classes
+	}
+
+	/// One pass of `refine`: each place's class is joined by the classes its body's calls reach, with the count of classes.
+	private func refinementPass(of previous: [Int]) -> (classes: [Int], count: Int) {
+		var interned = [[Int]: Int]()
+		var next = [Int](repeating: 0, count: bodies.count)
+		for body in bodies.indices.dropFirst() {
+			var key = [previous[body]]
+			for statement in bodies[body].statements {
+				switch statement {
+				case let .built(child):
+					key.append(previous[child])
+				case let .closer(_, target):
+					key.append(previous[target])
+				case .inline, .alias:
+					key.append(0)
+				}
+			}
+			next[body] = interned[key] ?? {
+				let id = interned.count + 1
+				interned[key] = id
+				return id
+			}()
+		}
+		return (next, interned.count)
 	}
 
 	// MARK: Placement
@@ -686,13 +848,11 @@ private struct TypeKeyLayout {
 			// each level of nested local functions past about twenty.
 			guard let firstSite = externalSites.first else { return false }
 			let owner = 0
-			let index: Int
 			let isAttached = members.count == 1 && externalSites.count == 1 && allSites.count == 1 && firstSite.owner == owner
-			if isAttached {
-				index = firstSite.index
-			} else {
-				guard let firstReaching = firstStatement(of: owner, reaching: memberSet) else { return false }
-				index = firstReaching
+			// The functions are declared before the first statement of the root's body that reaches them: one that calls a
+			// member, or one that reaches a function that calls one, which is placed already, since callers are placed first.
+			let index = externalSites.reduce(Int.max) { first, site in
+				min(first, site.owner == owner ? site.index : placementIndex[site.owner])
 			}
 			for member in members {
 				placementOwner[member] = owner
@@ -719,67 +879,30 @@ private struct TypeKeyLayout {
 		return true
 	}
 
-	/// Whether the function of `owner` is declared in the body of `ancestor` or in a body beneath it.
-	private func isDeclared(_ owner: Int, within ancestor: Int) -> Bool {
-		var current = owner
-		while current != 0 {
-			let placed = placementOwner[current]
-			guard placed >= 0 else { return false }
-			if placed == ancestor {
-				return true
-			}
-			current = placed
-		}
-		return ancestor == 0
-	}
-
-	/// The index of the first statement of `owner`'s body whose calls, through the functions declared beneath that body,
-	/// reach a class of `targets`.
-	private func firstStatement(of owner: Int, reaching targets: Set<Int>) -> Int? {
-		var visited = Set<Int>()
-		for (index, statement) in statements(ofClass: owner).enumerated() {
-			guard let start = callee(of: statement) else { continue }
-			var stack = [start]
-			while let current = stack.popLast() {
-				if targets.contains(current) {
-					return index
-				}
-				guard visited.insert(current).inserted,
-				      placementOwner[current] >= 0,
-				      isDeclared(current, within: owner)
-				else { continue }
-				stack.append(contentsOf: calleesByClass[current].sorted())
-			}
-		}
-		return nil
-	}
-
 	// MARK: Outcomes
 
 	/// The nearest declaration of `label` the type key's code sees before the statement at `index` of `owner`'s body.
-	func typeLookUp(_ searchedLabel: String, inClass owner: Int, before index: Int) -> TypeDeclaration {
-		let label = searchedLabel
-		var owner = owner
-		var index = index
-		while true {
-			let statements = statements(ofClass: owner)
-			for position in stride(from: min(index, statements.count) - 1, through: 0, by: -1) where self.label(of: statements[position]) == label {
-				return .statement(owner: owner, index: position)
-			}
-			guard owner != 0 else { return .none }
-			if representative(of: owner)?.forwardedProperties.contains(where: { $0.label == label }) == true {
-				return .forwarded(owner: owner, label: label)
-			}
-			switch outcomes[owner][label] {
-			case .passed:
-				return .read(owner: owner, label: label)
-			case .none?:
-				return .none
-			case .captured?, nil:
-				index = placementIndex[owner]
-				owner = placementOwner[owner]
-			}
+	func typeLookUp(_ label: String, inClass owner: Int, before index: Int) -> TypeDeclaration {
+		if let position = lastPosition(of: label, inClass: owner, before: index) {
+			.statement(owner: owner, index: position)
+		} else if owner == 0 {
+			.none
+		} else if representative(of: owner)?.forwardedProperties.contains(where: { $0.label == label }) == true {
+			.forwarded(owner: owner, label: label)
+		} else if outcomes[owner][label] == .passed {
+			.read(owner: owner, label: label)
+		} else {
+			// Every function is declared in the root's body (`computePlacement`), so a function that captures its read, or
+			// reads none, sees the root's declarations before its own. One that reads none has no declaration there: the
+			// first root statement that reaches it is before the path that resolved the read to none.
+			lastPosition(of: label, inClass: 0, before: placementIndex[owner]).map { .statement(owner: 0, index: $0) } ?? .none
 		}
+	}
+
+	/// The position of the last statement of `owner`'s body before `index` that declares `label`.
+	private func lastPosition(of label: String, inClass owner: Int, before index: Int) -> Int? {
+		let statements = statements(ofClass: owner)
+		return stride(from: min(index, statements.count) - 1, through: 0, by: -1).first { self.label(of: statements[$0]) == label }
 	}
 
 	/// The type key's declaration for a path declaration.
@@ -792,53 +915,41 @@ private struct TypeKeyLayout {
 		case let .forwarded(body, label):
 			.forwarded(owner: classByBody[body], label: label)
 		case let .cycleParameter(body, label):
-			switch outcomes[classByBody[body]][label] {
-			case let .captured(declaration)?:
-				declaration
-			case .none?:
-				.none
-			case .passed?, nil:
-				.read(owner: classByBody[body], label: label)
-			}
+			// A function reads its cycle parameter from its caller, whatever the outcome of its label: no graph of the
+			// fuzzer's corpora settles one as captured or none, and a layout that reads it so is still checked against the
+			// path key read by read (`checkEveryRead`).
+			.read(owner: classByBody[body], label: label)
 		}
 	}
 
-	/// What each class's function does with each label it reads: `false` where the outcomes do not settle.
-	mutating func computeOutcomes() -> Bool {
-		outcomes = membersByClass.indices.map { owner in
-			guard owner != 0 else { return [:] }
-			return Dictionary(reads[membersByClass[owner][0]].map { ($0, ReadOutcome.passed) }, uniquingKeysWith: { first, _ in first })
-		}
-		for _ in 0..<16 {
-			var changed = false
-			for owner in membersByClass.indices.dropFirst() {
-				for label in reads[membersByClass[owner][0]] {
-					var declarations = [TypeDeclaration]()
-					for member in membersByClass[owner] {
-						declarations.append(typeDeclaration(for: resolution(of: label, atPlace: member)))
-						for closer in closersByTarget[member] ?? [] {
-							declarations.append(typeDeclaration(for: closerValue(of: label, closing: closer, onPlace: member)))
-						}
-					}
-					let outcome: ReadOutcome = if declarations.allSatisfy({ $0 == .none }) {
-						.none
-					} else if let first = declarations.first,
-					          declarations.allSatisfy({ $0 == first }),
-					          typeLookUp(label, inClass: placementOwner[owner], before: placementIndex[owner]) == first
-					{
-						.captured(first)
-					} else {
-						.passed
-					}
-					if outcomes[owner][label] != outcome {
-						outcomes[owner][label] = outcome
-						changed = true
+	/// What each class's function does with each label it reads. Every function is declared in the root's body
+	/// (`computePlacement`), and a cycle parameter is always read from the caller, so no outcome depends on another: one
+	/// pass settles them.
+	mutating func computeOutcomes() {
+		var outcomes = [[String: ReadOutcome]](repeating: [:], count: membersByClass.count)
+		for owner in membersByClass.indices.dropFirst() {
+			for label in reads[membersByClass[owner][0]] {
+				var declarations = [TypeDeclaration]()
+				for member in membersByClass[owner] {
+					declarations.append(typeDeclaration(for: resolution(of: label, atPlace: member)))
+					for closer in closersByTarget[member] ?? [] {
+						declarations.append(typeDeclaration(for: closerValue(of: label, closing: closer, onPlace: member)))
 					}
 				}
+				let outcome: ReadOutcome = if declarations.allSatisfy({ $0 == .none }) {
+					.none
+				} else if let first = declarations.first,
+				          declarations.allSatisfy({ $0 == first }),
+				          typeLookUp(label, inClass: placementOwner[owner], before: placementIndex[owner]) == first
+				{
+					.captured(first)
+				} else {
+					.passed
+				}
+				outcomes[owner][label] = outcome
 			}
-			guard changed else { return true }
 		}
-		return false
+		self.outcomes = outcomes
 	}
 
 	/// What the closing statement `closer` passes the function of `place` for `label`: its argument for a cycle parameter,
@@ -945,42 +1056,34 @@ private struct TypeKeyLayout {
 
 	// MARK: Checking every read
 
-	/// The innermost body of class `owner` that encloses `body`, the body itself included; the root for class 0.
-	private func instance(ofClass owner: Int, enclosing body: Int) -> Int? {
-		guard owner != 0 else { return 0 }
-		var current = body
-		while current != 0 {
-			if classByBody[current] == owner {
-				return current
-			}
-			current = bodies[current].parent
-		}
-		return nil
+	/// The body of class `owner` that encloses `body`, where `owner` is `body`'s class or the root's: what `typeLookUp`
+	/// finds in `body`'s class is declared in `body` itself or, since every function is declared in the root's body
+	/// (`computePlacement`), in the root's.
+	private func instance(ofClass owner: Int, enclosing body: Int) -> Int {
+		owner == 0 ? 0 : body
 	}
 
-	/// What the type key's `declaration`, read in `body`, holds there, as a path declaration; `nil` where it is no
-	/// declaration of the path key's.
-	private func evaluate(_ declaration: TypeDeclaration, inBody body: Int) -> PathValue? {
+	/// What the type key's `declaration`, which `typeLookUp` found in the class of `body`, holds in `body`, as a path
+	/// declaration.
+	private func evaluate(_ declaration: TypeDeclaration, inBody body: Int) -> PathValue {
 		var declaration = declaration
 		var body = body
-		while true {
-			switch declaration {
-			case .none:
-				return PathValue.none
-			case let .statement(owner, index):
-				return instance(ofClass: owner, enclosing: body).map { .statement(body: $0, index: index) }
-			case let .forwarded(owner, label):
-				return instance(ofClass: owner, enclosing: body).map { .forwarded(body: $0, label: label) }
-			case let .read(owner, label):
-				guard let place = instance(ofClass: owner, enclosing: body) else { return nil }
-				if bodies[place].cycleParameterLabels.contains(label) {
-					return normalized(.cycleParameter(body: place, label: label))
-				} else {
-					let parent = bodies[place].parent
-					declaration = typeLookUp(label, inClass: classByBody[parent], before: bodies[place].position)
-					body = parent
-				}
-			}
+		// A read that is no cycle parameter is what the call passes: the declaration the caller's class sees.
+		while case let .read(owner, label) = declaration, !bodies[instance(ofClass: owner, enclosing: body)].cycleParameterLabels.contains(label) {
+			let place = instance(ofClass: owner, enclosing: body)
+			let parent = bodies[place].parent
+			declaration = typeLookUp(label, inClass: classByBody[parent], before: bodies[place].position)
+			body = parent
+		}
+		switch declaration {
+		case .none:
+			return PathValue.none
+		case let .statement(owner, index):
+			return .statement(body: instance(ofClass: owner, enclosing: body), index: index)
+		case let .forwarded(owner, label):
+			return .forwarded(body: instance(ofClass: owner, enclosing: body), label: label)
+		case let .read(owner, label):
+			return normalized(.cycleParameter(body: instance(ofClass: owner, enclosing: body), label: label))
 		}
 	}
 
@@ -996,18 +1099,15 @@ private struct TypeKeyLayout {
 	private mutating func normalizeCycleParameters() {
 		for body in bodies.indices.dropFirst() {
 			guard let record = bodies[body].record else { continue }
-			for parameter in record.cycleParameters {
-				var values = [PathValue]()
-				if let argument = record.callCycleArguments.first(where: { $0.label == parameter.label }) {
-					values.append(normalized(pathValue(of: argument, inBody: bodies[body].parent, before: bodies[body].position)))
-				} else {
-					values.append(.none)
-				}
+			// The call passes each cycle parameter one argument of its label (`ScopeGenerator.cycleParameterReads`).
+			for argument in record.callCycleArguments {
+				let first = normalized(pathValue(of: argument, inBody: bodies[body].parent, before: bodies[body].position))
+				var values = [first]
 				for closer in closersByTarget[body] ?? [] {
-					values.append(normalized(closerValue(of: parameter.label, closing: closer, onPlace: body)))
+					values.append(normalized(closerValue(of: argument.label, closing: closer, onPlace: body)))
 				}
-				if let first = values.first, values.allSatisfy({ $0 == first }) {
-					normalizedCycleParameters[body, default: [:]][parameter.label] = first
+				if values.allSatisfy({ $0 == first }) {
+					normalizedCycleParameters[body, default: [:]][argument.label] = first
 				}
 			}
 		}
@@ -1035,7 +1135,7 @@ private struct TypeKeyLayout {
 					guard let fulfillingProperty = record.fulfillingProperty else { continue }
 					let expected = normalized(lookUp(fulfillingProperty.label, inBody: body, before: index))
 					let declaration = typeLookUp(fulfillingProperty.label, inClass: owner, before: index)
-					guard evaluate(declaration, inBody: body).map(normalized) == expected,
+					guard normalized(evaluate(declaration, inBody: body)) == expected,
 					      let typeModeType = type(of: declaration),
 					      let pathType = type(of: expected),
 					      typeModeType.asSource == pathType.asSource
@@ -1069,11 +1169,12 @@ private struct TypeKeyLayout {
 		guard !isNilAtEveryMember else { return true }
 		let expected = normalized(pathValue(of: read, inBody: body, before: index))
 		let declaration = typeLookUp(read.label, inClass: owner, before: index)
-		return evaluate(declaration, inBody: body).map(normalized) == expected
+		return normalized(evaluate(declaration, inBody: body)) == expected
 	}
 
 	/// Whether the call of `place`'s function from the statement at `index` of `body` passes each parameter what the path
-	/// key's call does, and, for a closing call, captures what the path key's function captures.
+	/// key's call does. Every function is declared in the root's body (`computePlacement`), so a closing call captures
+	/// what the path key's function captures.
 	private func checkCall(of place: Int, from body: Int, at index: Int, closer: ClosingPlaceRecord?) -> Bool {
 		let callee = classByBody[place]
 		let owner = classByBody[body]
@@ -1084,13 +1185,7 @@ private struct TypeKeyLayout {
 				normalized(resolution(of: label, atPlace: place))
 			}
 			let declaration = typeLookUp(label, inClass: owner, before: index)
-			guard evaluate(declaration, inBody: body).map(normalized) == expected else { return false }
-		}
-		if closer != nil, placementOwner[callee] != 0 {
-			// A closing call captures what the function captured where the path key's function was declared.
-			guard let callerInstance = instance(ofClass: placementOwner[callee], enclosing: body),
-			      callerInstance == instance(ofClass: placementOwner[callee], enclosing: bodies[place].parent)
-			else { return false }
+			guard normalized(evaluate(declaration, inBody: body)) == expected else { return false }
 		}
 		return true
 	}
@@ -1262,10 +1357,12 @@ private struct TypeKeyLayout {
 		}
 		if declaredType == parameterType || (parameterType.isOptional && parameterType.unwrapped == declaredType) {
 			return label
-		} else if parameterType.unwrapped.lazilyInstantiatedInstanceType == declaredType, !declaredType.isOptional {
-			return "\(parameterType.unwrapped.asSource) { \(label) }"
 		} else {
-			return nil
+			// The call is one of the function's call sites, whose declarations' types `computeParameterTypes` combined into
+			// `parameterType` (`parameterType(combining:)`), so a declaration that is not the parameter's type, or its
+			// unwrapped type, is the instance of the lazy wrapper the parameter takes.
+			guard parameterType.unwrapped.lazilyInstantiatedInstanceType == declaredType, !declaredType.isOptional else { return nil }
+			return "\(parameterType.unwrapped.asSource) { \(label) }"
 		}
 	}
 
@@ -1298,16 +1395,11 @@ private struct TypeKeyLayout {
 		let receivedType = read.property.typeDescription
 		if receivedType == declaredType || (receivedType.isOptional && receivedType.unwrapped == declaredType) {
 			return read.label
-		} else if let instanceType = declaredType.lazilyInstantiatedInstanceType {
-			if !declaredType.isOptional, receivedType.unwrapped == instanceType {
-				return "\(read.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
-			} else if declaredType.isOptional, receivedType.isOptional, receivedType == instanceType {
-				return "\(read.label)?.\(Dependency.lazilyInstantiatedInstancePropertyName)"
-			} else {
-				return nil
-			}
+		} else if let instanceType = declaredType.lazilyInstantiatedInstanceType, !declaredType.isOptional, receivedType.unwrapped == instanceType {
+			return "\(read.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 		} else {
-			return nil
+			guard let instanceType = declaredType.lazilyInstantiatedInstanceType, declaredType.isOptional, receivedType.isOptional, receivedType == instanceType else { return nil }
+			return "\(read.label)?.\(Dependency.lazilyInstantiatedInstancePropertyName)"
 		}
 	}
 }

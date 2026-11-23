@@ -73,6 +73,20 @@ struct BuiltPlaceRecord: Sendable {
 	let hasFunction: Bool
 	/// The code of the places the function's body builds, in order.
 	let children: [GeneratedCode]
+	/// The place's code as one node of the plan: made once each time a generator writes its code for a context, and
+	/// shared by every place that reads that code from the generator's cache.
+	let node: PlanNode
+}
+
+/// The identity of one node of a root's plan (`BuiltPlaceRecord.node`), compared by identity.
+final class PlanNode: Hashable, Sendable {
+	static func == (lhs: PlanNode, rhs: PlanNode) -> Bool {
+		lhs === rhs
+	}
+
+	func hash(into hasher: inout Hasher) {
+		hasher.combine(ObjectIdentifier(self))
+	}
 }
 
 /// A place that closes a cycle on the function the path key names `closedOnFunctionName`.
@@ -95,16 +109,4 @@ struct AliasPlaceRecord: Sendable {
 	let fulfillingProperty: Property?
 	/// The rename's code, its lines unindented.
 	let text: String
-}
-
-/// Which body a production root's code is laid out in. The type key is the tool's; a test sets the path key to compare
-/// with it.
-public enum ProductionBodyKey: Sendable {
-	/// Every place has a builder function of its own.
-	case path
-	/// Places that build one type alike share one builder function (`TypeKeyBody`).
-	case type
-
-	/// The key the current task lays production bodies out with.
-	@TaskLocal public static var current = ProductionBodyKey.type
 }
