@@ -153,10 +153,8 @@ extension ScopeGenerator {
 		}
 		// D1 lane hook (lane C): a public mock's tiers, overrides and guard (`MockLowering+PublicMocks.swift`).
 		guard instantiable.generateMock != .public else {
-			// D1 lane hook (lane B): a public mock's parameters named apart are lane C's to lower.
-			guard signature.renamesByLabelAndType.isEmpty else { return .unsupported(.siblingLabelCollision) }
-			guard unavailableOptionalProperties.isEmpty else { return .unsupported(.onlyIfAvailable) }
-			return publicMockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: walk.rootRenames, filledCallBuilders: walk.filledCallBuilders, configurations: walk.configurationRecords, context: context)
+			// D1 lane hook (lane C): a public mock's parameters named apart and its values passed `nil`, as the internal mock's.
+			return publicMockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, filledCallBuilders: walk.filledCallBuilders, configurations: walk.configurationRecords, context: context)
 		}
 		return .lowered(Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, builders: walk.filledCallBuilders.parameters, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, context: context), configurations: walk.configurationRecords)
 	}
