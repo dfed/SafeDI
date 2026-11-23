@@ -67,7 +67,7 @@ extension ScopeGenerator {
 		// D1 lane hook (lane B): the uncovered dependencies named apart, which the types that instantiate them are passed, and
 		// a receive beneath reads, from the mocked type's own for its whole tree (`routingReceives`).
 		walk.uncoveredParameterNames = signature.uncoveredParameterNamesByLabelAndType
-		walk.sendableAutoclosureNames = signature.sendableAutoclosureNames
+		walk.sendableAutoclosureBindings = signature.sendableAutoclosureBindings
 		walk.rootOverrideNames = Set(signature.onlyIfAvailableOverrides.map(\.name))
 		let mockedTypeUncoveredProperties = instantiable.dependencies.compactMap { dependency -> Property? in
 			guard case .instantiated = dependency.source, signature.uncoveredProperties.contains(dependency.property) else { return nil }
@@ -101,6 +101,10 @@ extension ScopeGenerator {
 		case let .unsupported(rule):
 			return .unsupported(rule)
 		}
+		// D1 lane hook (lane D): a seam's own places share their builders with the places its calls fill, or the places
+		// inside those fills, which the builders of `mock()` join by family (`seamMockBuilders`' `fillPlaces` and
+		// `filledCalls`): lane E's fill family, not lowered yet.
+		guard signature.placeProperties.isEmpty || walk.filledCallBuilders.calls.isEmpty else { return .unsupported(.fill) }
 		// D1 lane hook (lane C): a public mock's calls read each builder under the internal name its plan gives it.
 		if let optionalBuilderNames = publicMockOptionalBuilderNames(of: instantiable, signature: signature, filledCallBuilders: walk.filledCallBuilders, context: context) {
 			switch filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties, optionalBuilderNames: optionalBuilderNames) {
@@ -124,7 +128,7 @@ extension ScopeGenerator {
 		// type instantiates is bound under the parameter's name.
 		bindingLines.append(contentsOf: signature.sendableAutoclosureLocalBindingLines(indent: bodyIndent))
 		bindingLines.append(contentsOf: mockedTypeUncoveredProperties.compactMap { property in
-			signature.sendableAutoclosureNames[property].map { "\(bodyIndent)let \($0) = \(MockLowering.sendableAutoclosureLocalName(of: $0))()" }
+			signature.sendableAutoclosureBindings[property].map { "\(bodyIndent)\($0.binding)" }
 		})
 		// D1 lane hook (lane B): `mock()` then binds each override of what its tree receives only if available, which the
 		// receives beneath read.
@@ -209,7 +213,7 @@ extension ScopeGenerator {
 			// D1 lane hook (lane C): a public mock's parameters named apart and its values passed `nil`, as the internal mock's.
 			return publicMockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, filledCallBuilders: walk.filledCallBuilders, configurations: walk.configurationRecords, context: context)
 		}
-		return .lowered(Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, builders: walk.filledCallBuilders.parameters, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, context: context), configurations: walk.configurationRecords)
+		return .lowered(Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, builders: (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, context: context), configurations: walk.configurationRecords)
 	}
 
 	/// The mock of `instantiable` whose tree's top-level nodes are `nodes`, in generation order, bound by `bindingLines`:
@@ -221,7 +225,7 @@ extension ScopeGenerator {
 		let typeName = instantiable.concreteInstantiable.asSource
 		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
 		// A mock that takes nothing and binds nothing is one call of the type's construction.
-		guard !nodes.isEmpty || !signature.parameters.isEmpty || !signature.onlyIfAvailableOverrides.isEmpty else { return mockWithoutTree(of: instantiable, context: context, passingNilTo: unavailableProperties) }
+		guard !nodes.isEmpty || !signature.parameters.isEmpty || !signature.onlyIfAvailableOverrides.isEmpty || !builders.isEmpty else { return mockWithoutTree(of: instantiable, context: context, passingNilTo: unavailableProperties) }
 		var lines = ["extension \(typeName) {"]
 		let overridesFields = nodes.compactMap(\.overridesField)
 		// D1 lane hook (lane C): the builders `mock()` takes, listed among the flat received parameters by label.
@@ -369,7 +373,8 @@ extension MockLowering {
 		/// The names of the parameters of `mock()` named apart that uncovered dependencies are, by label and type.
 		var uncoveredParameterNames = [String: [TypeDescription: String]]()
 		// D1 lane hook (lane C): the `@Sendable` autoclosure parameters of `mock()`, by the property each stands for.
-		var sendableAutoclosureNames = [Property: String]()
+		// D1 lane hook (lane D): and the places its builders build.
+		var sendableAutoclosureBindings = [Property: ScopeGenerator.SendableAutoclosureParameter]()
 		/// The names the property nodes of the mock root's level are bound under.
 		var rootPropertyNodeBindingNames = Set<String>()
 		/// The labels the mock root's level names its nodes apart under.
@@ -451,13 +456,22 @@ extension MockLowering {
 		/// The nodes `generators` build, in generation order, where the nodes `scope` holds are bound before them, their
 		/// overrides at `path`, with their statements appended to `lines` at `indent`; or the first rule they meet.
 		mutating func children(
-			of orderedChildren: [ScopeGenerator.OrderedChild],
-			loops: [LoopMembership?] = [],
+			of allOrderedChildren: [ScopeGenerator.OrderedChild],
+			loops allLoops: [LoopMembership?] = [],
 			inScope scope: Set<Property>,
 			path: String,
 			indent: String,
 			lines: inout [String],
 		) async -> Lowering<[TreeNode]> {
+			// D1 lane hook (lane D): a hole without a site, in the tree of a seam's own internal mock, generates nothing and is
+			// no node of its level: a builder of `mock()` builds its place, which the type that instantiates it binds.
+			var orderedChildren = allOrderedChildren
+			var loops = allLoops
+			if allOrderedChildren.contains(where: \.generator.mockLoweringIsHoleWithoutSite) {
+				let keptIndices = allOrderedChildren.indices.filter { !allOrderedChildren[$0].generator.mockLoweringIsHoleWithoutSite }
+				orderedChildren = keptIndices.map { allOrderedChildren[$0] }
+				loops = keptIndices.map { $0 < allLoops.count ? allLoops[$0] : nil }
+			}
 			let generators = orderedChildren.map(\.generator)
 			let enclosingPropertiesGeneratedLater = propertiesGeneratedLater
 			defer { propertiesGeneratedLater = enclosingPropertiesGeneratedLater }
@@ -687,10 +701,21 @@ extension MockLowering {
 				// D1 lane hook (lane C): an alias only if available reads the node of its label the scope holds in the other
 				// optionality, which the mock binds non-optional: `let y: X? = x` from a promoted `x: X`, and
 				// `let aBuilderAlias: Instantiator<A>? = aBuilder` from a node promoted for `aBuilder: Instantiator<A>?`.
-				let scopeFulfillingProperty = scope.contains(fulfillingProperty) || !onlyIfAvailable
+				// D1 lane hook (lane D): a required alias of an optional form reads the node of its label the mock binds
+				// non-optional, as a promoted `x: X` beside a rename `ofType: X?.self`.
+				let scopeFulfillingProperty = scope.contains(fulfillingProperty) || !onlyIfAvailable && !fulfillingProperty.typeDescription.isOptional
 					? fulfillingProperty
 					: fulfillingProperty.typeDescription.isOptional ? fulfillingProperty.asUnwrappedProperty : fulfillingProperty.asOptionalProperty
-				guard isBoundToNil || scope.contains(scopeFulfillingProperty) else { return .unsupported(onlyIfAvailable ? .onlyIfAvailable : .alias) }
+				// D1 lane hook (lane D): an alias of the instance of a `LazilyInstantiated` its scope holds reads the wrapper's
+				// instance, from the name the wrapper is bound apart under, as `emitAliasBinding` reads it.
+				let instanceWrapper: Property? = if !isBoundToNil, generator.mockLoweringFulfillingPropertyIsLazilyInstantiatedInstance {
+					[Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType]
+						.map { Property(label: fulfillingProperty.label, typeDescription: .simple(name: $0, generics: [fulfillingProperty.typeDescription.unwrapped])) }
+						.first { scope.contains($0) }
+				} else {
+					nil
+				}
+				guard isBoundToNil || instanceWrapper != nil || scope.contains(scopeFulfillingProperty) else { return .unsupported(onlyIfAvailable ? .onlyIfAvailable : .alias) }
 				// An alias of a label named apart reads the name it is handed; one the mock root's level names apart is bound
 				// under its name.
 				let aliasBindingName = bindingName ?? property.label
@@ -699,7 +724,9 @@ extension MockLowering {
 					property: property,
 					bindingName: aliasBindingName,
 					fulfillingProperty: fulfillingProperty,
-					fulfillingName: lazilyInstantiatedNames[fulfillingProperty.label]?[scopeFulfillingProperty.typeDescription] ?? renames[fulfillingProperty.label]?[scopeFulfillingProperty.typeDescription] ?? fulfillingProperty.label,
+					fulfillingName: instanceWrapper.map { wrapper in
+						"\(renames[wrapper.label]?[wrapper.typeDescription] ?? wrapper.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+					} ?? lazilyInstantiatedNames[fulfillingProperty.label]?[scopeFulfillingProperty.typeDescription] ?? renames[fulfillingProperty.label]?[scopeFulfillingProperty.typeDescription] ?? fulfillingProperty.label,
 					isErased: erasedToConcreteExistential,
 					isOnlyIfAvailable: onlyIfAvailable,
 					isBoundToNil: isBoundToNil,
@@ -1000,7 +1027,7 @@ extension MockLowering {
 			)
 			node.cycleParameters = generator.cycleParameters.map(\.property)
 			node.renamedFunctionName = renamedFunctionName
-			node.sendableAutoclosureBindingNames = uncoveredInstantiatedProperties.compactMap { sendableAutoclosureNames[$0] }
+			node.sendableAutoclosureBindings = uncoveredInstantiatedProperties.compactMap { sendableAutoclosureBindings[$0] }
 			// D1 lane hook (lane C): a node a public mock promotes at its root's level reads its caller's value first.
 			if parentConcreteType == nil, promotedProperties.contains(property) {
 				node.promotedParameterName = bindingName
@@ -1015,7 +1042,7 @@ extension MockLowering {
 			let lazilyInstantiatedInstanceProperties = generator.mockLoweringLazilyInstantiatedInstanceProperties
 			// D1 lane hook (lane D): a node whose configuration holds its default-valued parameters is built in a builder
 			// function, as `MockParameterNode.requiresFunctionWrapper` says.
-			guard node.hasChildren || isWrapped || !receiverBindings.isEmpty || !defaultFields.isEmpty || !node.sendableAutoclosureBindingNames.isEmpty else {
+			guard node.hasChildren || isWrapped || !receiverBindings.isEmpty || !defaultFields.isEmpty || !node.sendableAutoclosureBindings.isEmpty else {
 				guard let rule = Self.unsupportedRule(ofDependenciesOf: instantiable, isWrapped: isWrapped, inScope: scope, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, unavailableProperties: unavailableProperties, childProperties: [], uncoveredProperties: uncoveredProperties) else {
 					lines.append(node.constantBindingLine(overrideRead: overrideRead, indent: indent))
 					return .lowered(node)
@@ -1285,8 +1312,9 @@ extension MockLowering {
 		var promotedParameterName: String?
 		// D1 lane hook (lane C): the `@Sendable` autoclosure parameters of the values the node's type instantiates that the
 		// mock cannot build, each bound in its builder function from the local `mock()` reads it into.
-		/// The names of the `@Sendable` autoclosure parameters whose values the node's builder function binds.
-		var sendableAutoclosureBindingNames = [String]()
+		// D1 lane hook (lane D): and the places it instantiates that a builder of `mock()` builds.
+		/// The `@Sendable` autoclosure parameters and builders whose values the node's builder function binds.
+		var sendableAutoclosureBindings = [ScopeGenerator.SendableAutoclosureParameter]()
 		// D1 lane hook (lane E): a place of another module's public mock built inline.
 		/// The builder `mock()` takes that the node reads where it is a place of another module's public mock the tree builds
 		/// inline, with the read of its override outside its builder function.
@@ -1424,7 +1452,7 @@ extension MockLowering {
 			let bodyIndent = "\(indent)\(ScopeGenerator.standardIndent)"
 			return receiverBindings.map { "\(bodyIndent)let \($0.property.label): \($0.property.typeDescription.asSource) = \($0.name)" }
 				// D1 lane hook (lane C): then the value of each `@Sendable` autoclosure parameter it instantiates.
-				+ sendableAutoclosureBindingNames.map { "\(bodyIndent)let \($0) = \(MockLowering.sendableAutoclosureLocalName(of: $0))()" }
+				+ sendableAutoclosureBindings.map { "\(bodyIndent)\($0.binding)" }
 		}
 
 		/// The lines that end the node's builder function, after its children's statements, and bind the node, whose
@@ -1433,7 +1461,7 @@ extension MockLowering {
 			let builder = ReservedName.configurationBuilderPropertyName
 			let bodyIndent = "\(indent)\(ScopeGenerator.standardIndent)"
 			// A constant's builder function always returns its construction (`BuilderBody`).
-			let returnPrefix = hasChildren || !receiverBindings.isEmpty || !sendableAutoclosureBindingNames.isEmpty || !isWrapped ? "return " : ""
+			let returnPrefix = hasChildren || !receiverBindings.isEmpty || !sendableAutoclosureBindings.isEmpty || !isWrapped ? "return " : ""
 			// A configuration's builder returns the concrete type, which an erased node wraps as its construction does.
 			let builderCall = isErased && hasConfiguration ? "\(erasedTypeSource)(\(builder)(\(builderArguments)))" : "\(builder)(\(builderArguments))"
 			var lines = ["\(bodyIndent)\(returnPrefix)\(readingInlinePlaceBuilder(constructionReading(override: overridePath, builderCall: builderCall), override: overridePath))"]
