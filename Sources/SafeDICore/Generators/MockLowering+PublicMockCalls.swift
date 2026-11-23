@@ -43,13 +43,39 @@ extension ScopeGenerator {
 				rootChildLabels.insert(property.label)
 			}
 		}
-		// A non-optional `LazilyInstantiated` or `SendableLazilyInstantiated` the root's level binds offers its instance too,
-		// which a fill reading the value by value reads.
-		for property in rootLevelProperties where property.typeDescription.unwrapped == property.typeDescription {
-			guard let instanceType = property.typeDescription.lazilyInstantiatedInstanceType else { continue }
-			rootLevelProperties.insert(Property(label: property.label, typeDescription: instanceType))
+		// A non-optional `LazilyInstantiated` or `SendableLazilyInstantiated` a level binds offers its instance too, which a
+		// fill reading the value by value reads.
+		func addingInstances(of properties: Set<Property>) -> Set<Property> {
+			var properties = properties
+			for property in properties where property.typeDescription.unwrapped == property.typeDescription {
+				guard let instanceType = property.typeDescription.lazilyInstantiatedInstanceType else { continue }
+				properties.insert(Property(label: property.label, typeDescription: instanceType))
+			}
+			return properties
 		}
-		for child in orderedChildren where child.generator.publicMockCall != nil && child.generator.fillsABuilder {
+		rootLevelProperties = addingInstances(of: rootLevelProperties)
+		// The calls that fill builders, in the order the walk reaches them (depth first, each level in generation order), each
+		// with what the levels above it declare, which a fill reading a value of the caller's scope reads, and the labels they
+		// bind. A call inside a `@Sendable` builder function is not lowered yet.
+		var callsInWalkOrder = [(child: OrderedChild, declaredAbove: Set<Property>, labelsBoundAbove: Set<String>)]()
+		var childrenToVisit = orderedChildren.reversed().map { (child: $0, declaredAbove: rootLevelProperties, labelsBoundAbove: rootChildLabels, isInsideSendableFunction: false) }
+		while let (child, declaredAbove, labelsBoundAbove, isInsideSendableFunction) = childrenToVisit.popLast() {
+			let generator = child.generator
+			if generator.publicMockCall != nil {
+				guard generator.fillsABuilder else { continue }
+				guard !isInsideSendableFunction else { return .unsupported(.fill) }
+				callsInWalkOrder.append((child, declaredAbove, labelsBoundAbove))
+				continue
+			}
+			guard case let .property(instantiable, _, _, _, false, _) = generator.scopeData else { continue }
+			let grandchildren = generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: generator.mockLoweringBodyPropertiesGeneratedLater(child.propertiesGeneratedLater))
+			let levelProperties = Set(grandchildren.compactMap(\.generator.property)).union(instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property))
+			let nestedDeclaredAbove = addingInstances(of: declaredAbove.union(levelProperties))
+			let nestedLabels = labelsBoundAbove.union(levelProperties.map(\.label))
+			let nestedIsInsideSendableFunction = isInsideSendableFunction || generator.buildsInSendableFunction
+			childrenToVisit.append(contentsOf: grandchildren.reversed().map { ($0, nestedDeclaredAbove, nestedLabels, nestedIsInsideSendableFunction) })
+		}
+		for (child, declaredAbove, labelsBoundAbove) in callsInWalkOrder {
 			let generator = child.generator
 			guard let publicMockCall = generator.publicMockCall,
 			      publicMockCall.passedUpBuilders.isEmpty,
@@ -63,9 +89,9 @@ extension ScopeGenerator {
 				// name, which is lowered where a parameter or an override is named apart, never a root child the walk names apart.
 				guard case .fill = fill.scopeData,
 				      fill.fillCallerReads.mockRootBindingByLabel.allSatisfy({ label, property in
-				      	!rootChildLabels.contains(label) && rootBindingNames[label]?[property.typeDescription] != nil
+				      	!labelsBoundAbove.contains(label) && rootBindingNames[label]?[property.typeDescription] != nil
 				      }),
-				      fill.receivedProperties.allSatisfy({ rootLevelProperties.contains($0) || rootLevelProperties.contains($0.asUnwrappedProperty) })
+				      fill.receivedProperties.allSatisfy({ declaredAbove.contains($0) || declaredAbove.contains($0.asUnwrappedProperty) })
 				else { return .unsupported(.fill) }
 			}
 			// A place inside a fill takes a required builder, which an internal mock takes (a public mock's are places of its own
