@@ -91,9 +91,9 @@ extension MockLowering {
 				for record in records where seenTypeNames.insert(record.concreteType.asSource).inserted {
 					let typeName = record.concreteType.asSource
 					if rootedTypeNames.contains(typeName) {
-						rootedStructs[typeName] = record.configurationStruct
+						rootedStructs[typeName] = record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)
 					} else {
-						sharedExtensions.append((typeName: typeName, structCode: record.configurationStruct))
+						sharedExtensions.append((typeName: typeName, structCode: record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)))
 					}
 				}
 			case let .unsupported(rule):
