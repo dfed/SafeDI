@@ -3281,8 +3281,8 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 	@Test(.enabled(if: compileVerificationIsEnabled, "The oracle compiles a remedied graph only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func results_reportTheRemedyKind_whenTheToolAcceptsTheRemediedGraphAndItsGeneratedCodeDoesNotCompile() async throws {
-		// The forwarded receive leaves `S1_Parent`, which no root builds, building `S1_T1` as a constant, which the mock
-		// of `S1_Mocked` builds without the value `S1_T1` now forwards: the tool accepts it, and the mock does not compile.
+		// The tool accepts the forwarded receive, and the generated code calls `S1_T1`'s initializer, which the fixture
+		// marks unavailable, so the remedied graph does not compile without depending on a defect of SafeDI.
 		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
 			"""
 			@Instantiable(isRoot: true)
@@ -3297,6 +3297,7 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 			"""
 			@Instantiable
 			public final class S1_T1: Instantiable {
+				@available(*, unavailable)
 				public init(t2: S1_T2) {
 					self.t2 = t2
 				}
@@ -3312,26 +3313,6 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 				}
 
 				@Forwarded let seed: Int
-			}
-			""",
-			"""
-			@Instantiable
-			public final class S1_Parent: Instantiable {
-				public init(t1: S1_T1) {
-					self.t1 = t1
-				}
-
-				@Instantiated let t1: S1_T1
-			}
-			""",
-			"""
-			@Instantiable(generateMock: true)
-			public final class S1_Mocked: Instantiable {
-				public init(parent: S1_Parent) {
-					self.parent = parent
-				}
-
-				@Received let parent: S1_Parent
 			}
 			""",
 		])
@@ -3398,6 +3379,44 @@ struct SafeDIToolGraphFuzzerRemedyTests {
 			}
 			""",
 		])
+	}
+
+	@Test
+	func declaredType_takesSendableForm_whenAdviceNamesBothFormsAndDeclaringTypeConformsToSendable() {
+		#expect(GraphFuzzerRemedies.declaredType(
+			advisedBy: "`t5` on `S1_T4` cannot build `S1_T5`, which has @Forwarded properties that only an instantiator is passed. Declare it as `Instantiator<S1_T5>`, or as `SendableInstantiator<S1_T5>` if `S1_T4` is Sendable.",
+			declaringTypeConformsToSendable: true,
+		) == "SendableInstantiator<S1_T5>")
+	}
+
+	@Test
+	func declaredType_takesPlainForm_whenAdviceNamesBothFormsAndDeclaringTypeDoesNotConformToSendable() {
+		#expect(GraphFuzzerRemedies.declaredType(
+			advisedBy: "`t5` on `S1_T4` cannot build `S1_T5`, which has @Forwarded properties that only an instantiator is passed. Declare it as `Instantiator<S1_T5>`, or as `SendableInstantiator<S1_T5>` if `S1_T4` is Sendable.",
+			declaringTypeConformsToSendable: false,
+		) == "Instantiator<S1_T5>")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func conformsToSendable_readsUncheckedSendable_whenTypeListsItAmongItsConformances() throws {
+		let files = try #require(GraphFuzzerRemedies.Files(GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"""
+			@Instantiable
+			public final class S1_T1: Instantiable, S1_T1Protocol, @unchecked Sendable {
+				public init() {}
+			}
+			""",
+			"""
+			@Instantiable
+			public final class S1_T2: Instantiable, S1_T2Protocol {
+				public init() {}
+			}
+			""",
+		])))
+
+		#expect(files.conformsToSendable(typeNamed: "S1_T1"))
+		#expect(!files.conformsToSendable(typeNamed: "S1_T2"))
 	}
 
 	/// A type with a hand-written mock that takes its initializer's parameters and passes each on, as the base corpus's

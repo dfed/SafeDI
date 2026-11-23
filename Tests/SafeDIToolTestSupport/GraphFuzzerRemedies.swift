@@ -822,19 +822,16 @@ enum GraphFuzzerRemedies {
 	static func followingForwardedReceive(_ remedy: GraphFuzzerRemedy, diagnostics: String, originalDiagnostics: String) -> GraphFuzzerRemedy? {
 		guard var files = Files(remedy.fixture) else { return nil }
 		let originalMessages = Set(originalDiagnostics.split(separator: "\n").compactMap { ReportedError($0)?.message })
-		let declarationMarker = " Declare it as `"
 		var declarations = [String]()
 		var retypedSites = Set<GraphFuzzerRemedy.Site>()
 		for diagnosticLine in diagnostics.split(separator: "\n") {
 			guard let error = ReportedError(diagnosticLine),
 			      !originalMessages.contains(error.message),
 			      isForwardedBuilderError(error.message),
-			      error.message.hasSuffix("`."),
-			      let declarationStart = error.message.range(of: declarationMarker, options: .backwards),
 			      let site = files.site(of: error),
+			      let declaredType = declaredType(advisedBy: error.message, declaringTypeConformsToSendable: files.conformsToSendable(typeNamed: site.typeName)),
 			      retypedSites.insert(site).inserted
 			else { continue }
-			let declaredType = String(error.message[declarationStart.upperBound...].dropLast("`.".count))
 			guard files.edit(typeNamed: site.typeName, { properties in
 				properties.map { $0.label == site.label ? GraphFuzzerRemedyProperty(attribute: $0.attribute, label: $0.label, type: declaredType) : $0 }
 			}) else { return nil }
@@ -848,6 +845,25 @@ enum GraphFuzzerRemedies {
 			description: "\(remedy.description), and \(declarations.joined(separator: ", and "))",
 			fixture: GraphFuzzerFixture(seed: remedy.fixture.seed, swiftFileContent: files.contents),
 		)
+	}
+
+	/// The type an error's "Declare it as `T`." advises, or `nil` for a message that advises none. Where the advice names
+	/// a plain and a `Sendable` form ("Declare it as `Instantiator<X>`, or as `SendableInstantiator<X>` if `Parent` is
+	/// Sendable."), the condition is the declaring type's, which the fixture shows: the `Sendable` form where that type
+	/// conforms to `Sendable`, else the plain one.
+	static func declaredType(advisedBy message: String, declaringTypeConformsToSendable: Bool) -> String? {
+		guard let declarationStart = message.range(of: " Declare it as `", options: .backwards) else { return nil }
+		let advice = message[declarationStart.upperBound...]
+		if advice.hasSuffix(" is Sendable."),
+		   let plainEnd = advice.range(of: "`, or as `"),
+		   let sendableEnd = advice[plainEnd.upperBound...].range(of: "` if `")
+		{
+			return String(declaringTypeConformsToSendable ? advice[plainEnd.upperBound..<sendableEnd.lowerBound] : advice[..<plainEnd.lowerBound])
+		} else if advice.hasSuffix("`."), !advice.dropLast("`.".count).contains("`") {
+			return String(advice.dropLast("`.".count))
+		} else {
+			return nil
+		}
 	}
 
 	/// Whether `message` is the error of a declaration that builds a type with `@Forwarded` properties otherwise than
@@ -1511,6 +1527,16 @@ enum GraphFuzzerRemedies {
 			return typeDeclaration.lines.lazy.compactMap { Self.property(on: lines[$0]) }.first { $0.label == label }
 		}
 
+		/// Whether the `final class` named `typeName` lists `Sendable`, checked or `@unchecked`, among its conformances.
+		func conformsToSendable(typeNamed typeName: String) -> Bool {
+			guard let (fileIndex, typeDeclaration) = typeDeclaration(named: typeName) else { return false }
+			let declarationLine = Self.lines(of: contents[fileIndex])[typeDeclaration.lines.lowerBound - 1]
+			guard let conformancesStart = declarationLine.firstIndex(of: ":") else { return false }
+			return declarationLine[declarationLine.index(after: conformancesStart)...].dropLast(" {".count)
+				.split(separator: ",")
+				.contains { $0.split(separator: " ").last == "Sendable" }
+		}
+
 		/// The first file that declares the `final class` named `typeName`, with that declaration.
 		private func typeDeclaration(named typeName: String) -> (fileIndex: Int, declaration: (name: String, lines: Range<Int>))? {
 			contents.indices.lazy.compactMap { fileIndex in
@@ -1789,11 +1815,6 @@ struct GraphFuzzerRemedyVariant {
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 extension GraphFuzzerOracle {
-	/// How many accepted remedies of each rejected graph the oracle compiles, read from
-	/// `SAFEDI_GRAPH_FUZZER_REMEDY_VARIANTS`, or every one when it is unset. MEASUREMENT ONLY: this switch times a corpus
-	/// shard with and without the compiles, and is deleted before the change lands, since no flag turns an oracle off.
-	static let compiledRemedyVariantLimit: Int? = ProcessInfo.processInfo.environment["SAFEDI_GRAPH_FUZZER_REMEDY_VARIANTS"].flatMap { Int($0) }
-
 	/// The remedied graphs of `toolRuns` the tool accepts, which the oracle compiles with their generated code as it
 	/// compiles every graph the tool accepts: a remedy the tool accepts must give code that compiles and draws no warning,
 	/// or its advice leads a person to a build that fails. Each seed's accepted remedies, in the order they run.
@@ -1807,7 +1828,6 @@ extension GraphFuzzerOracle {
 						false
 					}
 				}
-				.prefix(compiledRemedyVariantLimit ?? .max)
 				.enumerated()
 				.compactMap { index, remedyRun in GraphFuzzerRemedyVariant(seed: runs.fixture.seed, index: index, remedyRun: remedyRun) }
 		}
