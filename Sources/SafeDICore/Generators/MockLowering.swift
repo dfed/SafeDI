@@ -194,6 +194,11 @@ public enum MockLowering {
 		let constructionIsolation: String?
 		/// What the construction returns: the concrete type, or what a hand-written mock returns.
 		let constructionReturnType: TypeDescription
+		// D1 lane hook (lane C): a node beneath a repeated configured ancestor records only the construction it builds
+		// with, which declares a construction function (`ScopeGenerator.collectPublicConstructionNodes`).
+		/// Whether the record describes the type's module-level configuration too, as the node that records the
+		/// configuration's does.
+		var describesConfiguration = true
 		/// The construction's arguments, in the order it takes them.
 		let arguments: [Argument]
 		/// The types the builder that overrides the construction is handed, one per argument.

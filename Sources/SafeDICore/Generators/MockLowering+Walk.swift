@@ -735,7 +735,8 @@ extension MockLowering {
 			// D1 lane hook (lane C): a public mock builds such a node with its construction function, as an internal mock does
 			// with the mock (`publicConstructionArguments`).
 			guard let initializer = usesMockInitializer ? instantiable.mockInitializer : instantiable.initializer,
-			      !usesMockInitializer || instantiable.mockCallReturnType == instantiable.concreteInstantiable,
+			      // D1 lane hook (lane C): a public mock's construction function returns what the mock returns.
+			      !usesMockInitializer || buildsPublicMock || instantiable.mockCallReturnType == instantiable.concreteInstantiable,
 			      initializer.arguments.allSatisfy({ argument in argument.hasDefaultValue || instantiable.dependencies.contains(where: argument.isFulfilled(by:)) })
 			else { return .unsupported(.handWrittenMock) }
 			guard !rootLabels.contains(property.label) || (bindingName != property.label && rootPropertiesNamedApartFromParameters.contains(property)), labels.insert(bindingName).inserted else { return .unsupported(.siblingLabelCollision) }
@@ -993,6 +994,13 @@ extension MockLowering {
 				if buildsPublicMock {
 					record.publicConstruction = MockLowering.publicConstructionRecord(of: configuredNode, children: recordedChildren, orderedBy: generator)
 				}
+				configurationRecords.append(record)
+			} else if buildsPublicMock, configuredNode.hasConfiguration {
+				// D1 lane hook (lane C): every node a public mock builds with a construction function declares it, beneath a
+				// repeated configured ancestor too (`ScopeGenerator.collectPublicConstructionNodes`).
+				var record = ConfigurationRecord(of: configuredNode, children: [])
+				record.publicConstruction = MockLowering.publicConstructionRecord(of: configuredNode, children: [], orderedBy: generator)
+				record.publicConstruction?.describesConfiguration = false
 				configurationRecords.append(record)
 			}
 			// D1 lane hook (lane C): a public mock's configured node calls its type's construction function.
