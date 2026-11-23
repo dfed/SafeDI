@@ -1044,8 +1044,9 @@ extension MockLowering {
 			// D1 lane hook (lane B): every wrapper kind builds its type in a builder function, as an `Instantiator` does,
 			// erased or fulfilled by another type alike (`MockLowering+Wrappers.swift`).
 			let isWrapped = !property.propertyType.isConstant
-			guard isWrapped || forwardedProperties.isEmpty else { return .finished(.unsupported(.wrapper)) }
-			let forwarded = instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted { $0.label < $1.label }
+			// D1 lane hook (lane D): a node built by value is handed no forwarded value: its construction reads each by name from
+			// the scope, as the emitter's argument list does, in a graph production rejects (`mockCanBuild`).
+			let forwarded = isWrapped ? instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted { $0.label < $1.label } : []
 			// D1 lane hook (lane B): a receive only if available the node is built where nothing provides is passed `nil`.
 			// A member of a loop of builders is passed the wrappers its function makes again, and its type the parameters a lazy
 			// cycle closing on its function takes, as production passes them
@@ -1490,7 +1491,7 @@ extension MockLowering {
 						&& MockLowering.scope(scope, holdsWrapperOfInstance: dependency.property.asUnwrappedProperty)
 					else { return .flatParameter }
 				case .forwarded:
-					guard isWrapped else { return .wrapper }
+					break
 				case .received(onlyIfAvailable: true):
 					// D1 lane hook (lane B): a receive only if available is passed `nil` or what the scope provides; one the
 					// mock's root provides is an override (`MockLowering+OnlyIfAvailable.swift`).
