@@ -594,8 +594,6 @@ extension MockLowering {
 				      let bindingName
 				else { return await placeOrFillNode(of: generator, inScope: scope, path: path, indent: indent, lines: &lines) }
 				guard generator.publicMockCall == nil else {
-					// D1 lane hook (lane C): a call passed a wrapper `mock()` binds by name is not lowered yet.
-					guard !instantiable.dependencies.contains(where: { lazilyInstantiatedNames[$0.property.label] != nil }) else { return .unsupported(.wrapper) }
 					// D1 lane hook (lane C): a public mock binds the payload of a case of a place inside the call's fills before the
 					// call's builder function, as before any node's.
 					lines.append(contentsOf: generator.valuesBindingsBeforeBuilderFunction.map { "\(indent)\($0.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: [:]))" })

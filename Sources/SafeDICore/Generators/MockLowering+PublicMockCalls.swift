@@ -361,6 +361,7 @@ extension MockLowering.Walk {
 		let structValuesByLabel = generator.publicMockBuilderStructValuesByLabel
 		let holeArgumentValuesByLabel = generator.holeArgumentValuesByLabel
 		let lazilyInstantiatedInstances = generator.mockLoweringLazilyInstantiatedInstanceProperties
+		let lazilyInstantiatedNamesOfLabels = lazilyInstantiatedNames
 		var arguments = [String]()
 		// What the override closure is handed for each argument: a builder as `publicMockOverrideBuilders` says, which reads
 		// the values the call passes, and any other argument as the call passes it.
@@ -404,7 +405,20 @@ extension MockLowering.Walk {
 				      !generator.unavailableOptionalProperties.contains(dependency.property)
 				else { return .unsupported(.publicMockCall) }
 				let value: String
-				if dependency.source.isReceived, let renamedName = renames[dependency.property.label]?[dependency.property.typeDescription] {
+				if dependency.source.isReceived,
+				   lazilyInstantiatedInstances.contains(dependency.property.asUnwrappedProperty),
+				   let wrapperName = lazilyInstantiatedNamesOfLabels[dependency.property.label].flatMap({ namesByType in
+				   	[Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType].compactMap { namesByType[.simple(name: $0, generics: [dependency.property.typeDescription.unwrapped])] }.first
+				   })
+				{
+					// D1 lane hook (lane C): the instance of the wrapper `mock()` binds apart from the instance it takes
+					// (`dependencyArgument`).
+					value = "\(wrapperName).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+				} else if dependency.source.isReceived, let wrapperName = lazilyInstantiatedNamesOfLabels[dependency.property.label]?[dependency.property.typeDescription] {
+					// D1 lane hook (lane C): the wrapper `mock()` binds around the instance it takes, passed by name
+					// (`dependencyArgument`).
+					value = wrapperName
+				} else if dependency.source.isReceived, let renamedName = renames[dependency.property.label]?[dependency.property.typeDescription] {
 					// D1 lane hook (lane C): a receive the mock names apart is bound again under its label in the call's builder
 					// function (`emitReceiverBindings`). An override closure or a fill beside it is not lowered yet.
 					guard overrideBuilders == nil, filledCall == nil, property.propertyType.isConstant else { return .unsupported(.publicMockCall) }
