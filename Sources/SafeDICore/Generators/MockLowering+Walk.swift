@@ -129,11 +129,6 @@ extension ScopeGenerator {
 		// D1 lane hook (lane B): the mocked type's own receive of a flat received parameter or override named apart is bound
 		// again under its label before the tree, unless the root's level binds that label (`generateMockRootCode`'s
 		// `rootDependenciesToRebind`), when the mocked type is passed the name.
-		// The signature names an override apart from a label the root's property nodes keep until the level names them
-		// apart, where the emitter names it by its label: until the signature reads the level's names, it is not lowered.
-		guard signature.onlyIfAvailableOverrides.allSatisfy({ override in
-			override.name == override.receivedProperty.label || walk.rootPropertyNodeBindingNames.contains(override.receivedProperty.label) || !walk.rootLabelsNamedApart.contains(override.receivedProperty.label)
-		}) else { return .unsupported(.siblingLabelCollision) }
 		let rootLevelBindingNames = walk.rootPropertyNodeBindingNames.union(signature.onlyIfAvailableOverrides.map(\.name))
 		var rootRenames = walk.rootRenames
 		var rootReceiverBindingLines = [String]()
