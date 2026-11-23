@@ -14962,7 +14962,8 @@ extension [ScopeGenerator.MockTreeItem] {
 // MARK: - Instantiable
 
 extension Instantiable {
-	fileprivate static let incorrectlyConfiguredComment = "/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */"
+	// D1 lane hook (lane D): the mock lowering spells the comment too.
+	static let incorrectlyConfiguredComment = "/* @Instantiable type is incorrectly configured. Fix errors from @Instantiable macro to fix this error. */"
 
 	fileprivate func generateArgumentList(
 		unavailableProperties: Set<Property>? = nil,

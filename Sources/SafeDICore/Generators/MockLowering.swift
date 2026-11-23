@@ -265,7 +265,9 @@ extension ScopeGenerator {
 		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
 		let returnType = (instantiable.mockCallReturnType ?? instantiable.concreteInstantiable).asSource
 		let argumentList = (instantiable.mockInitializer ?? instantiable.initializer)?
-			.createMockInitializerArgumentList(given: instantiable.dependencies, unavailableProperties: unavailableProperties) ?? ""
+			.createMockInitializerArgumentList(given: instantiable.dependencies, unavailableProperties: unavailableProperties)
+			// D1 lane hook (lane D): a type whose declaration the macro rejects is built with the comment that says so.
+			?? Instantiable.incorrectlyConfiguredComment
 		let construction = if instantiable.mockInitializer != nil {
 			"\(typeName).\(instantiable.customMockName ?? InstantiableVisitor.mockMethodName)(\(argumentList))"
 		} else if instantiable.declarationType.isExtension {
