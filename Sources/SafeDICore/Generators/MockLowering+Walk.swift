@@ -168,7 +168,9 @@ extension ScopeGenerator {
 	/// The first rule the parameters and construction of the mocked type itself meet that the walk does not lower yet.
 	private static func unsupportedRuleOfMockedType(_ instantiable: Instantiable) -> MockLowering.Rule? {
 		// The initializer's default-valued arguments are parameters of `mock()` (`lowerRootSignature(of:context:)`).
-		guard instantiable.mockInitializer == nil, instantiable.customMockName == nil, instantiable.initializer != nil else { return .handWrittenMock }
+		// D1 lane hook (lane D): the mocked type's own hand-written mock builds it (`MockLowering+HandWrittenMocks.swift`), but a
+		// public mock's, which lane C's file builds.
+		guard MockLowering.rootConstructionInitializer(of: instantiable) != nil, instantiable.generateMock != .public || (instantiable.mockInitializer == nil && instantiable.customMockName == nil) else { return .handWrittenMock }
 		// D1 lane hook (lane B): every dependency of the mocked type is a node of its tree (a wrapper of any kind, erased or
 		// fulfilled by another type alike, a received wrapper the mock promotes, an alias), a parameter of `mock()` or an
 		// override's binding, which the walk checks it binds.
@@ -206,16 +208,14 @@ extension ScopeGenerator {
 		lines.append(contentsOf: signature.sharedValueDocumentationLines(indent: indent))
 		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
 		lines.append(parameterLines.joined(separator: ",\n"))
-		lines.append("\(indent)) -> \(instantiable.concreteInstantiable.asSource) {")
+		// D1 lane hook (lane D): the type the mocked type's hand-written mock returns.
+		lines.append("\(indent)) -> \(MockLowering.rootReturnType(of: instantiable)) {")
 		lines.append(contentsOf: bindingLines)
-		let argumentList = instantiable.initializer.map { initializer in
+		// D1 lane hook (lane D): the mocked type built with its hand-written mock where it has one.
+		let argumentList = MockLowering.rootConstructionInitializer(of: instantiable).map { initializer in
 			MockLowering.rootArgumentList(of: initializer, given: instantiable.dependencies, renames: rootRenames, passingNilTo: unavailableProperties)
 		} ?? ""
-		let construction = if instantiable.declarationType.isExtension {
-			"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
-		} else {
-			"\(typeName)(\(argumentList))"
-		}
+		let construction = MockLowering.rootConstruction(of: instantiable, argumentList: argumentList)
 		lines.append("\(bodyIndent)return \(construction)")
 		lines.append("\(indent)}")
 		lines.append("}")
