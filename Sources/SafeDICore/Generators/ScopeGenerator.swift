@@ -338,6 +338,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			? ReceivedBuilderLoops()
 			: Self.receivedBuilderLoops(of: propertiesToGenerate, requiredOnlyIfAvailableAliasProperties: aliasRequirements.requiredOnlyIfAvailableAliasProperties)
 		self.receivedBuilderLoops = receivedBuilderLoops
+		orderedPropertyToGenerateIndices = Self.orderedPropertyToGenerateIndices(
+			of: propertiesToGenerate,
+			receivedBuilderLoops: receivedBuilderLoops,
+			requiredOnlyIfAvailableAliasProperties: aliasRequirements.requiredOnlyIfAvailableAliasProperties,
+			placeHoldingProperties: placeHoldingProperties,
+			startingCarriersLast: true,
+		)
 		receivedBuilderLoopsChangedInTree = receivedBuilderLoops != (previousPassReceivedBuilderLoops ?? ReceivedBuilderLoops())
 			|| propertiesToGenerate.contains(where: \.receivedBuilderLoopsChangedInTree)
 		// In a seam's own tree, a loop whose members bind two or more payloads or levels holds them in one box, unless a
@@ -1256,6 +1263,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		onlyIfAvailableAliasFulfillingProperty = onlyIfAvailable ? fulfillingProperty : nil
 		self.fulfillingBindingIsOptional = onlyIfAvailable && fulfillingBindingIsOptional
 		requiredOnlyIfAvailableAliasProperties = []
+		orderedPropertyToGenerateIndices = []
 		requiredAliasFulfillingProperties = []
 		cycleClosedOnDeclarations = []
 		isReferencedByCycleClosingScope = false
@@ -1335,6 +1343,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		onlyIfAvailableDependencies = []
 		onlyIfAvailableAliasFulfillingProperty = nil
 		requiredOnlyIfAvailableAliasProperties = []
+		orderedPropertyToGenerateIndices = []
 		requiredAliasFulfillingProperties = []
 		cycleClosedOnDeclarations = []
 		isReferencedByCycleClosingScope = false
@@ -5133,6 +5142,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `placeHoldingProperties`, or, where this scope has none or the child declares no property (a fill), its subtree
 	/// holds a site on this path (`containsBuildSite`).
 	nonisolated func startsAsCarrier(_ child: ScopeGenerator) -> Bool {
+		Self.startsAsCarrier(child, placeHoldingProperties: placeHoldingProperties)
+	}
+
+	/// `startsAsCarrier(_:)` of a scope whose place-holding properties are `placeHoldingProperties`.
+	nonisolated private static func startsAsCarrier(_ child: ScopeGenerator, placeHoldingProperties: Set<Property>?) -> Bool {
 		if let placeHoldingProperties, let property = child.property {
 			placeHoldingProperties.contains(property)
 		} else {
@@ -5435,16 +5449,39 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// The indices in `propertiesToGenerate` of `orderedPropertiesToGenerate`. Kept as indices so that
-	/// `propertiesToGenerate` holds the only references this generator has to its children (see `deinit`).
-	private lazy var orderedPropertyToGenerateIndices: [Int] = computeOrderedPropertyToGenerateIndices()
+	/// `propertiesToGenerate` holds the only references this generator has to its children (see `deinit`). Worked out when
+	/// the generator is created, from nothing but what it and its children hold from their creation, so that every walk of
+	/// its tree, which reads it without awaiting the generator, shares one order.
+	private let orderedPropertyToGenerateIndices: [Int]
 
-	/// `orderedPropertyToGenerateIndices`, computed afresh, which reads nothing but what the generator and its
-	/// children hold from their creation, so a walk of a seam's tree can order a scope's children without awaiting it.
+	/// The order of the children, `orderedPropertyToGenerateIndices` where `startingCarriersLast`.
 	/// - Parameter startingCarriersLast: Whether a child that holds a place starts after its siblings that hold none
 	///   (`startsAsCarrier(_:)`), as the build does. `false` gives the inline build's order, declaration order with each
 	///   child after the siblings it depends upon, in which a mock's `SafeDIOverrides` and each configuration take their
 	///   members (`MockParameterNode.inlineOrderPosition`).
-	nonisolated func computeOrderedPropertyToGenerateIndices(startingCarriersLast: Bool = true) -> [Int] {
+	nonisolated func computeOrderedPropertyToGenerateIndices(startingCarriersLast: Bool) -> [Int] {
+		Self.orderedPropertyToGenerateIndices(
+			of: propertiesToGenerate,
+			receivedBuilderLoops: receivedBuilderLoops,
+			requiredOnlyIfAvailableAliasProperties: requiredOnlyIfAvailableAliasProperties,
+			placeHoldingProperties: placeHoldingProperties,
+			startingCarriersLast: startingCarriersLast,
+		)
+	}
+
+	/// `computeOrderedPropertyToGenerateIndices(startingCarriersLast:)` of a scope whose children are
+	/// `propertiesToGenerate`, before the scope's generator exists.
+	@inline(never)
+	nonisolated private static func orderedPropertyToGenerateIndices(
+		of propertiesToGenerate: [ScopeGenerator],
+		receivedBuilderLoops: ReceivedBuilderLoops,
+		requiredOnlyIfAvailableAliasProperties: Set<Property>,
+		placeHoldingProperties: Set<Property>?,
+		startingCarriersLast: Bool,
+	) -> [Int] {
+		func startsAsCarrier(_ child: ScopeGenerator) -> Bool {
+			Self.startsAsCarrier(child, placeHoldingProperties: placeHoldingProperties)
+		}
 		let siblingGraph = Self.siblingGraph(of: propertiesToGenerate, requiredOnlyIfAvailableAliasProperties: requiredOnlyIfAvailableAliasProperties)
 		// Each child is ordered as a unit of its own, but a loop of builders that receive one another, which is ordered as
 		// one unit (see `ReceivedBuilderLoops`): a receive inside a loop reads a rebinding in the receiving member's function,
@@ -6164,10 +6201,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 	}
 
-	/// `orderedChildren(propertiesGeneratedLater:)`, with the order computed afresh, for a walk of a seam's tree
-	/// that reads what generation will emit without awaiting each generator.
+	/// `orderedChildren(propertiesGeneratedLater:)`, with the indices of each property worked out afresh, for a walk of a
+	/// seam's tree that reads what generation will emit without awaiting each generator.
 	nonisolated func orderedChildrenComputedAfresh(propertiesGeneratedLater: Set<Property>) -> [OrderedChild] {
-		let orderedIndices = computeOrderedPropertyToGenerateIndices()
+		let orderedIndices = orderedPropertyToGenerateIndices
 		return orderedChildren(
 			propertiesGeneratedLater: propertiesGeneratedLater,
 			orderedIndices: orderedIndices,

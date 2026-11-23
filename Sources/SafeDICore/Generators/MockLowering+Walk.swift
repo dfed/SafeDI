@@ -350,6 +350,14 @@ extension MockLowering {
 		/// The default-valued parameters of each type's hand-written mock, by concrete type, whose defaults the fields of the
 		/// type's configuration take (`MockLowering+Defaults.swift`).
 		var handWrittenMockDefaultParameters = [TypeDescription: [ScopeGenerator.MockParameterNode.DefaultParameter]]()
+		/// The constructions the walk has worked out, which every later node of the same type and declaration shares, as the
+		/// emitter's nodes share theirs (`ScopeGenerator.MockConstructions`).
+		var mockConstructions = ScopeGenerator.MockConstructions()
+
+		/// The construction of a node of `instantiable`, built with its type's hand-written mock where `usesMockInitializer`.
+		mutating func mockConstruction(of instantiable: Instantiable, usesMockInitializer: Bool) -> ScopeGenerator.MockConstruction {
+			mockConstructions.construction(of: instantiable, useMockInitializer: usesMockInitializer, builderTypesDeclaredEscaping: [])
+		}
 		/// The concrete types whose configurations are `@Sendable`-typed, whose default fields are read as calls.
 		var sendableConfigurationTypeNames = Set<String>()
 		/// The concrete types of the configured nodes around the node the walk is at, and whether a node around it repeats one
@@ -981,6 +989,7 @@ extension MockLowering {
 				// D1 lane hook (lane D): the construction the one-way check reads, with every child, pruned or not.
 				record.oneWayConstruction = OneWayConstruction(
 					of: configuredNode,
+					construction: mockConstruction(of: configuredNode.instantiable, usesMockInitializer: configuredNode.usesMockInitializer),
 					children: children,
 					parentConcreteType: oneWayParentConcreteType,
 					isBeneathCycleEdge: !overrideReachable,
