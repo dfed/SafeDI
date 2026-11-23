@@ -2802,6 +2802,7 @@ enum GraphFuzzerGenerator {
 			guardedMockParameterRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.guardedMockParameterRandomSeedMask)
 			differingPinsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.differingPinsRandomSeedMask)
 			wrapperKindsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.wrapperKindsRandomSeedMask)
+			forwardingChildRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.forwardingChildRandomSeedMask)
 			seamDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ GraphFuzzerSeamDependencyDraw.seamRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
@@ -2882,6 +2883,8 @@ enum GraphFuzzerGenerator {
 			finalDeclarations = addingTypeBuiltTwiceWithDifferingPins(to: finalDeclarations)
 			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
 			finalDeclarations = addingLabelReceivedAsBothWrapperKinds(to: finalDeclarations)
+			// Drawn after it, from a stream of its own, so that every other draw of a graph it draws in is drawn as before.
+			finalDeclarations = addingForwardingTypeBuiltWithoutInstantiatorInMockTree(to: finalDeclarations)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -3319,6 +3322,9 @@ enum GraphFuzzerGenerator {
 		/// Draws only `addingLabelReceivedAsBothWrapperKinds`' choices: whether a graph gains `WrapKindsHost`'s tree, and
 		/// every shape of that tree.
 		private var wrapperKindsRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingForwardingTypeBuiltWithoutInstantiatorInMockTree`'s choices: whether a graph gains `FwdHost`'s
+		/// tree, and every shape of that tree.
+		private var forwardingChildRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -7958,6 +7964,78 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let wrapperKindsRandomSeedMask: UInt64 = 0x7772704B696E6473
+
+		// MARK: A type with a forwarded property built without an instantiator in a mock's tree
+
+		/// The base corpus's draw of a type with a `@Forwarded` property that a type only a mock builds instantiates.
+		/// `FwdHost`, whose mock is generated and which no root reaches, receives or instantiates `FwdParent`, which
+		/// instantiates `TFwdChild`, which forwards `fwdTag: String`: as a constant, a `LazilyInstantiated`, an erased constant
+		/// (`fulfilledByType:` with `erasedToConcreteExistential: true`), or an `Instantiator`, the one form that can pass the
+		/// forwarded value, each wrapper of the `Sendable` kind where the graph's types are `Sendable`. Half the time `FwdParent` also receives `fwdTag: String?` only if available, so the mock binds
+		/// an override of that label beside the child's forwarded parameter (seed 907's remedied graph). Production checks
+		/// only the trees its roots reach, so the mock alone rejects the three forms that cannot pass the value
+		/// (`createMockRootScopeGenerator`); a mock that built them anyway did not compile, which the compile reports, since
+		/// no root reaches the tree (seed 162 with the check reverted). The tool rejects those three forms, and so the
+		/// rest of their graph, about one graph in a hundred.
+		/// `forwardingChildRandom` draws only for this pass, after every other, and only in the base corpus.
+		private mutating func addingForwardingTypeBuiltWithoutInstantiatorInMockTree(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.isEmpty, forwardingChildRandom.percentChance(4) else { return declarations }
+			var declarations = declarations
+			let hostReceivesParent = forwardingChildRandom.percentChance(50)
+			let parentReceivesTag = forwardingChildRandom.percentChance(50)
+			// A `Sendable` graph's types conform to `Sendable`, so they hold `Sendable` wrappers; a mixed graph draws the kind.
+			let wrapperIsSendable = switch sendability {
+			case .sendable:
+				true
+			case .nonSendable:
+				false
+			case .mixed:
+				forwardingChildRandom.percentChance(50)
+			}
+			let conformances = sendability == .sendable ? [] : ["@unchecked Sendable"]
+			let childName = "\(prefix)TFwdChild"
+			let parentName = "\(prefix)FwdParent"
+			// Half the draws build the child through an instantiator, which the tool accepts, so that the rejected forms, which
+			// give up every other oracle of their graph, are about one graph in a hundred.
+			let childProperty = switch forwardingChildRandom.percentChance(50) ? 3 : forwardingChildRandom.integer(in: 0...2) {
+			case 0:
+				PropertyDeclaration(attribute: "@Instantiated", label: "fwdChild", type: childName)
+			case 1:
+				PropertyDeclaration(attribute: "@Instantiated", label: "fwdChild", type: "\(wrapperIsSendable ? "SendableLazilyInstantiated" : "LazilyInstantiated")<\(childName)>")
+			case 2:
+				PropertyDeclaration(
+					attribute: "@Instantiated(fulfilledByType: \"\(childName)\", erasedToConcreteExistential: true)",
+					label: "anyFwdChild",
+					type: "\(prefix)AnyTFwdChild",
+				)
+			default:
+				PropertyDeclaration(attribute: "@Instantiated", label: "fwdChildBuilder", type: "\(wrapperIsSendable ? "SendableInstantiator" : "Instantiator")<\(childName)>")
+			}
+			declarations.append(TypeDeclaration(
+				name: childName,
+				instantiableArguments: [],
+				properties: [PropertyDeclaration(attribute: "@Forwarded", label: "fwdTag", type: "String")],
+				declaresHelperTypes: true,
+				additionalConformances: conformances,
+			))
+			declarations.append(TypeDeclaration(
+				name: parentName,
+				instantiableArguments: [],
+				properties: [childProperty] + (parentReceivesTag ? [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "fwdTag", type: "String?")] : []),
+				declaresHelperTypes: false,
+				additionalConformances: conformances,
+			))
+			declarations.append(TypeDeclaration(
+				name: "\(prefix)FwdHost",
+				instantiableArguments: ["generateMock: true"],
+				properties: [PropertyDeclaration(attribute: hostReceivesParent ? "@Received" : "@Instantiated", label: "fwdParent", type: parentName)],
+				declaresHelperTypes: false,
+				additionalConformances: conformances,
+			))
+			return declarations
+		}
+
+		private static let forwardingChildRandomSeedMask: UInt64 = 0x66776443686C6421
 
 		// MARK: Cycle parameters
 
