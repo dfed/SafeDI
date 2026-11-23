@@ -2573,16 +2573,16 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
-		        @Sendable func __safeDI_grandchildA() -> GrandchildA {
+		        @Sendable nonisolated func __safeDI_grandchildA() -> GrandchildA {
 		            let recreated = Recreated()
 		            let greatGrandchild = GreatGrandchild(recreated: recreated)
 		            return GrandchildA(greatGrandchild: greatGrandchild, recreated: recreated)
 		        }
-		        @Sendable func __safeDI_grandchildB(recreated: Recreated) -> GrandchildB {
+		        @Sendable nonisolated func __safeDI_grandchildB(recreated: Recreated) -> GrandchildB {
 		            let greatGrandchild = GreatGrandchild(recreated: recreated)
 		            return GrandchildB(greatGrandchild: greatGrandchild)
 		        }
-		        @Sendable func __safeDI_childABuilder(recreated: Recreated) -> ChildA {
+		        @Sendable nonisolated func __safeDI_childABuilder(recreated: Recreated) -> ChildA {
 		            let grandchildA: GrandchildA = __safeDI_grandchildA()
 		            let grandchildB: GrandchildB = __safeDI_grandchildB(recreated: recreated)
 		            return ChildA(grandchildA: grandchildA, grandchildB: grandchildB, recreated: recreated)
@@ -3121,7 +3121,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		            let greatGrandchildInstantiator = SendableInstantiator<GreatGrandchild>(__safeDI_greatGrandchildInstantiator)
 		            return GrandchildBA(greatGrandchildInstantiator: greatGrandchildInstantiator)
 		        }
-		        @Sendable func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
+		        @Sendable nonisolated func __safeDI_greatGrandchildInstantiator() -> GreatGrandchild {
 		            GreatGrandchild()
 		        }
 		        func __safeDI_grandchildBB() -> GrandchildBB {
@@ -14055,11 +14055,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
-		        @Sendable func __safeDI_aBuilder() -> A {
+		        @Sendable nonisolated func __safeDI_aBuilder() -> A {
 		            let bBuilder = SendableInstantiator<B>(__safeDI_bBuilder)
 		            return A(bBuilder: bBuilder)
 		        }
-		        @Sendable func __safeDI_bBuilder() -> B {
+		        @Sendable nonisolated func __safeDI_bBuilder() -> B {
 		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		            return B(aBuilder: aBuilder)
 		        }
@@ -14128,16 +14128,16 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
-		        @Sendable func __safeDI_gBuilder() -> G {
+		        @Sendable nonisolated func __safeDI_gBuilder() -> G {
 		            let fBuilder = Instantiator<F>(__safeDI_fBuilder)
 		            return G(fBuilder: fBuilder)
 		        }
-		        @Sendable func __safeDI_fBuilder() -> F {
+		        @Sendable nonisolated func __safeDI_fBuilder() -> F {
 		            let gBuilder = Instantiator<G>(__safeDI_gBuilder)
 		            let sBuilder = SendableInstantiator<S>(__safeDI_sBuilder)
 		            return F(gBuilder: gBuilder, sBuilder: sBuilder)
 		        }
-		        @Sendable func __safeDI_sBuilder() -> S {
+		        @Sendable nonisolated func __safeDI_sBuilder() -> S {
 		            let fBuilder = Instantiator<F>(__safeDI_fBuilder)
 		            return S(fBuilder: fBuilder)
 		        }

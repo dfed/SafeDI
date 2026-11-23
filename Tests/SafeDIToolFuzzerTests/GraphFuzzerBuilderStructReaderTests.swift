@@ -601,9 +601,9 @@ struct GraphFuzzerBuilderStructReaderTests {
 	extension Root {
 	    public init() {
 	        func __safeDI_holeSeam() -> HoleSeam {
-	            @Sendable func __safeDI_holeServiceBuilder_HoleSeam_holeService(_ scope: HoleSeam.SafeDIScope_HoleService.holeService_Values) -> any HoleService {
+	            @Sendable nonisolated func __safeDI_holeServiceBuilder_HoleSeam_holeService(_ scope: HoleSeam.SafeDIScope_HoleService.holeService_Values) -> any HoleService {
 	                func __safeDI_holeService() -> HoleImpl {
-	                    @Sendable func __safeDI_holeSeamBuilder() -> HoleSeam {
+	                    @Sendable nonisolated func __safeDI_holeSeamBuilder() -> HoleSeam {
 	                        return HoleSeam(__safeDI_holeServiceBuilder: __safeDI_holeServiceBuilder_HoleSeam())
 	                    }
 	                    let holeSeamBuilder = SendableInstantiator<HoleSeam>(__safeDI_holeSeamBuilder)

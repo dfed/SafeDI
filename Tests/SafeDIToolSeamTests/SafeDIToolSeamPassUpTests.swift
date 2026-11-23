@@ -2419,8 +2419,8 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				    public convenience init() {
 				        func __safeDI_feature() -> Feature {
 				            _ = Feature.__safeDI_Feature_755DFDF5DD92EA7B.self // If this line does not compile, compile the code SafeDI generates for module Mid into Mid: under Bazel, add Mid’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            @Sendable func __safeDI_gadgetSendableBuilder_GadgetSeam_gadget() -> any Gadget {
-				                @Sendable func __safeDI_gadget() -> LiveGadget {
+				            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_GadgetSeam_gadget() -> any Gadget {
+				                @Sendable nonisolated func __safeDI_gadget() -> LiveGadget {
 				                    LiveGadget()
 				                }
 				                return __safeDI_gadget()
@@ -2623,7 +2623,7 @@ struct SafeDIToolSeamPassUpTests: ~Copyable {
 				    public convenience init(__safeDI_gadgetSendableBuilder: SafeDISendableScope_Gadget.__safeDI_Builder<any Gadget>) {
 				        func __safeDI_inner() -> Inner {
 				            _ = Inner.__safeDI_Inner_9056BBAB3F59A3D5.self // If this line does not compile, compile the code SafeDI generates for module Up into Up: under Bazel, add Up’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            @Sendable func __safeDI_serviceSendableBuilder_Inner_service() -> any Service {
+				            @Sendable nonisolated func __safeDI_serviceSendableBuilder_Inner_service() -> any Service {
 				                @Sendable nonisolated func __safeDI_service() -> GadgetSeam {
 				                    let __safeDI_gadgetSendableBuilder_inner_serviceSendableBuilder = __safeDI_gadgetSendableBuilder.inner_serviceSendableBuilder(SafeDISendableScope_Gadget.inner_serviceSendableBuilder_Values())
 				                    _ = GadgetSeam.__safeDI_GadgetSeam_F008142A1E900BA7.self

@@ -71,7 +71,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		valuesBindings: [SeamHoles.ValuesBinding] = [],
 		holdsLoopPayloadsInBoxes: Bool = false,
 		memberCallsInsideFunction: [SeamHoles.ValuesBinding] = [],
-		sendableFunctionsAreNonisolated: Bool = false,
 		isBuiltByFill: Bool = false,
 		fillReturnsWrapperBuilder: Bool = false,
 		innerScopesCalledWithForwardedValue: [String] = [],
@@ -122,7 +121,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		seamAndFillFields.passedUpHoles = passedUpHoles
 		seamAndFillFields.valuesBindings = valuesBindings
 		seamAndFillFields.memberCallsInsideFunction = memberCallsInsideFunction
-		self.sendableFunctionsAreNonisolated = sendableFunctionsAreNonisolated
 		self.isBuiltByFill = isBuiltByFill
 		self.fillReturnsWrapperBuilder = fillReturnsWrapperBuilder
 		seamAndFillFields.innerScopesCalledWithForwardedValue = innerScopesCalledWithForwardedValue
@@ -1293,7 +1291,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// An alias constructs nothing.
 		ownerPropertyStack = []
 		ownerConcreteTypeStack = []
-		sendableFunctionsAreNonisolated = false
 		isBuiltByFill = false
 		fillReturnsWrapperBuilder = false
 		containsBuildSite = false
@@ -1322,7 +1319,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		ownerPropertyStack: [Property],
 		ownerConcreteTypeStack: [TypeDescription],
 		ownerLazilyInstantiatedInstanceProperties: Set<Property> = [],
-		sendableFunctionsAreNonisolated: Bool,
 		carrierSite: SeamHoles.CarrierSite? = nil,
 	) {
 		scopeData = .hole(property: holeProperty, erasedToConcreteExistential: erasedToConcreteExistential, site: site)
@@ -1378,7 +1374,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		seamAndFillFields.valuesBindings = carrierSite?.formations ?? []
 		seamAndFillFields.siteCarrierUse = carrierSite?.use
 		seamAndFillFieldsStorage = SeamAndFillFieldsStorage.storing(seamAndFillFields)
-		self.sendableFunctionsAreNonisolated = sendableFunctionsAreNonisolated
 		isBuiltByFill = false
 		fillReturnsWrapperBuilder = false
 		containsBuildSite = true
@@ -2602,7 +2597,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			valueParameterList += parameters.filter { !carriedNames.contains($0.property.label) }.map { "\((parameterNames[$0.property] ?? $0.property.label).spelledAsArgumentLabel): \($0.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
 			let valueParameters = valueParameterList.joined(separator: ", ")
 			let builderType = ReservedName.levelType(ofEnum: enumType, built: returnType)
-			var lines = ["\(indent)\(ScopeGenerator.localFunctionPrefix(isSendable: isSendable, isNonisolated: true))func \(functionName)(\(valueParameters)) -> \(builderType.asSource) {"]
+			var lines = ["\(indent)\(ScopeGenerator.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(valueParameters)) -> \(builderType.asSource) {"]
 			if members.allSatisfy({ $0.lines.count == 1 }) {
 				lines.append("\(memberIndent).init(\(members.map { $0.lines[0] }.joined(separator: ", ")))")
 			} else if members.count == 1 {
@@ -5136,9 +5131,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		seamAndFillFieldsStorage?.fields.memberCallsInsideFunction ?? []
 	}
 
-	/// Whether each `@Sendable` local function this scope declares is spelled `@Sendable nonisolated`: in the tree of a
-	/// seam a builder of which takes a builder struct (`SeamHoles.declaresBuilderStructs`).
-	private let sendableFunctionsAreNonisolated: Bool
 	/// Whether a fill builds this scope's property: the fill returns the value a builder returns, so a wrapper's scope
 	/// declares its builder function and returns what the function builds, and leaves the wrapper to the seam.
 	private let isBuiltByFill: Bool
@@ -5908,17 +5900,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		memberCallsInsideFunction.map { "\(Self.standardIndent)\($0.line(readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties))" }
 	}
 
-	/// How this scope spells a `@Sendable` local function it declares (`sendableFunctionsAreNonisolated`).
+	/// How this scope spells a `@Sendable` local function it declares.
 	nonisolated private var sendableFunctionDecorator: String {
-		Self.localFunctionPrefix(isSendable: true, isNonisolated: sendableFunctionsAreNonisolated)
+		Self.localFunctionPrefix(isSendable: true)
 	}
 
-	/// How generated code spells the attributes of a local function it declares: `@Sendable` where the function is, and
-	/// `nonisolated` beside it where the code is a seam's that takes a builder struct, or the calling module's code for one,
-	/// whose `@Sendable` functions are called from closures no actor isolates.
-	static func localFunctionPrefix(isSendable: Bool, isNonisolated: Bool) -> String {
-		guard isSendable else { return "" }
-		return isNonisolated ? "@Sendable nonisolated " : "@Sendable "
+	/// How generated code spells the attributes of a local function it declares: `@Sendable nonisolated` where the function
+	/// is `@Sendable`, and nothing otherwise. A `Sendable` wrapper calls its function synchronously from any isolation, so the
+	/// function must be nonisolated, which is what Swift infers for a `@Sendable` local function in a module whose
+	/// declarations default to no isolation. A module whose declarations default to the main actor
+	/// (`-default-isolation MainActor`) infers the function to be on the main actor instead, and rejects it as `@Sendable`,
+	/// so the spelling says `nonisolated` (`SafeDIToolDefaultMainActorIsolationTests`).
+	static func localFunctionPrefix(isSendable: Bool) -> String {
+		isSendable ? "@Sendable nonisolated " : ""
 	}
 
 	/// The lines that bind the payloads of the cases on the routes to the places beneath this scope, which its parent emits
@@ -7549,7 +7543,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// `generateSeamRootCode`, lives until the 2.3.1 seam rework (R2a) plans seam bodies, fills and level
 			// functions on the builder graph and deletes today's seam emission with it. The caller side, a fill below,
 			// stays until fills are planned.
-			return Self.textPlace(valuesBindingLines + Self.buildSiteCode(of: property, at: site, functionName: builderFunctionNames.functionName, readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties, isNonisolated: sendableFunctionsAreNonisolated, carrierUse: siteCarrierUse))
+			return Self.textPlace(valuesBindingLines + Self.buildSiteCode(of: property, at: site, functionName: builderFunctionNames.functionName, readingInstancesOf: callSiteLazilyInstantiatedInstanceProperties, carrierUse: siteCarrierUse))
 		case let .fill(hole, functionName):
 			// A fill is hosted as its text until fills are planned (`.claude/rules/emission-decisions.md`).
 			let fillCode = try await generateFillCode(
@@ -7934,7 +7928,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// What the type key reads of the place, where it plans it: a place built by its own construction, with nothing but
 		// its children in its function's body.
 		let isPlannedByTypeKey = seamCall == nil && isPlannedByTypeKey(builderFunctionNames: builderFunctionNames, fillPlaceBindings: fillPlaceBindings)
-		func builtRecord(functionName: String, isNonisolated: Bool, hasFunction: Bool) throws(Initializer.GenerationError) -> PlaceRecord? {
+		func builtRecord(functionName: String, hasFunction: Bool) throws(Initializer.GenerationError) -> PlaceRecord? {
 			guard isPlannedByTypeKey, let arguments = try constructionReads(of: instantiable, unavailableProperties: unavailableProperties) else { return nil }
 			return .built(BuiltPlaceRecord(
 				property: property,
@@ -7948,7 +7942,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				callCycleArguments: cycleParameterReads(unavailableProperties: unavailableProperties),
 				functionName: functionName,
 				isSendable: buildsInSendableFunction,
-				isNonisolated: isNonisolated,
 				typesDeclaredEscaping: typesDeclaredEscaping,
 				lineEnd: constructionLineEnd,
 				hasFunction: hasFunction,
@@ -8033,9 +8026,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				Statement.function(BuilderNode(
 					name: functionName,
 					isSendable: buildsInSendableFunction,
-					// A fill that returns a wrapper's builder spells its builder function `nonisolated` where it is `@Sendable`, as
-					// the code that calls the fill is.
-					isNonisolated: fillReturnsWrapperBuilder || sendableFunctionsAreNonisolated,
 					parameters: functionParameters,
 					typesDeclaredEscaping: typesDeclaredEscaping,
 					returnType: instantiable.concreteInstantiable,
@@ -8108,7 +8098,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					fillPlaceBindings: fillPlaceBindings,
 				) : nil
 			} else {
-				try builtRecord(functionName: functionName, isNonisolated: sendableFunctionsAreNonisolated, hasFunction: true)
+				try builtRecord(functionName: functionName, hasFunction: true)
 			}
 			return place(code: .sequence([.text(valuesBindingLines), functionDeclaration, .text(instantiatorDeclaration(handing: functionName, forwardedArguments: forwardedArguments, inlinePlaceBuilder: inlinePlaceBuilder))])).with(record: record)
 		case .lazilyInstantiated,
@@ -8124,7 +8114,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let function = BuilderNode(
 				name: functionName,
 				isSendable: buildsInSendableFunction,
-				isNonisolated: sendableFunctionsAreNonisolated,
 				parameters: cycleParameters.map(\.property),
 				typesDeclaredEscaping: typesDeclaredEscaping,
 				returnType: instantiable.concreteInstantiable,
@@ -8139,7 +8128,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 
 			return PlacePlan(code: function.spelled(after: valuesBindingLines, followedBy: lastLine),
-			                 record: try builtRecord(functionName: functionName, isNonisolated: sendableFunctionsAreNonisolated, hasFunction: true))
+			                 record: try builtRecord(functionName: functionName, hasFunction: true))
 		case .constant:
 			let callArguments = cycleParameterArguments(unavailableProperties: unavailableProperties).joined(separator: ", ")
 			let generatedProperties = memberCallCode + seamGuardLines + fillPlaceBindingLines + childCode
@@ -8165,7 +8154,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				Statement.function(BuilderNode(
 					name: functionName,
 					isSendable: buildsInSendableFunction,
-					isNonisolated: sendableFunctionsAreNonisolated,
 					parameters: cycleParameters.map(\.property),
 					typesDeclaredEscaping: typesDeclaredEscaping,
 					returnType: instantiable.concreteInstantiable,
@@ -8187,7 +8175,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 			// The payloads a seam's tree binds before building a scope that leads to a place.
 			return PlacePlan(code: .sequence([.text(valuesBindingLines), functionDeclaration, binding.spelled, .text("\n")]),
-			                 record: try builtRecord(functionName: functionName, isNonisolated: sendableFunctionsAreNonisolated, hasFunction: hasGeneratedContent))
+			                 record: try builtRecord(functionName: functionName, hasFunction: hasGeneratedContent))
 		}
 	}
 
@@ -8627,10 +8615,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///   - lazilyInstantiatedBindingNames: In a public mock, the names the wrappers it binds apart from their instances' labels
 	///     have where the site is built, which the payload reads a field of such a wrapper by
 	///     (`SeamHoles.valuesArguments(of:readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)`).
-	///   - isNonisolated: Whether the tree spells a `@Sendable` local function it declares `nonisolated` too.
 	// Kept out of `generatePropertyCode`'s async frame, as the functions that write a property's scope are.
 	@inline(never)
-	static func buildSiteCode(of property: Property, at site: SeamSignature.Hole, functionName: String?, readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property> = [], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:], isNonisolated: Bool = false, carrierUse: SeamCarrierValues.Use? = nil) -> String {
+	static func buildSiteCode(of property: Property, at site: SeamSignature.Hole, functionName: String?, readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property> = [], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:], carrierUse: SeamCarrierValues.Use? = nil) -> String {
 		// A place nested by type is handed what its owner binds before it; the cases that lead to it carry what each type on
 		// the way binds, which the tree bound before building the next. A place in a `@Sendable` enum held in a `Sendable`
 		// wrapper carries nothing.
@@ -8666,7 +8653,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		let functionName = functionName ?? site.wrapperFunctionName ?? Self.functionName(toBuild: property)
 		return """
-		\(localFunctionPrefix(isSendable: propertyType.isSendable, isNonisolated: isNonisolated))func \(functionName)() -> \(site.builtType.asSource) {
+		\(localFunctionPrefix(isSendable: propertyType.isSendable))func \(functionName)() -> \(site.builtType.asSource) {
 		\(standardIndent)\(buildExpression)
 		}
 		\(declaration) = \(unwrappedType.spelledForConstruction)(\(functionName))
@@ -8748,7 +8735,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				return "\(field.property.label.spelledAsArgumentLabel): \(type.asSource)"
 			}
 			let builderType = TypeDescription.nested(name: Dependency.wrapperBuilderTypeName, parentType: hole.property.typeDescription.unwrapped, generics: [])
-			return (["\(Self.localFunctionPrefix(isSendable: isSendable, isNonisolated: true))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(builderType.asSource) {"]
+			return (["\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(builderType.asSource) {"]
 				+ body
 				+ ["}"]).joined(separator: "\n")
 		}
@@ -8760,7 +8747,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// An override closure of the call calls the fill with the values the call passes the called mock, and a level
 			// function's member with its payload's, each by itself: no other module can make the payload.
 			let parameters = fillMemberParameterFields(takingPayloadFields: true).map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
-			return (["\(isSendable ? "@Sendable " : "")func \(functionName)(\(parameters.joined(separator: ", "))) -> \(hole.builtType.asSource) {"]
+			return (["\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(hole.builtType.asSource) {"]
 				+ body
 				+ ["}"]).joined(separator: "\n")
 		}
@@ -8798,7 +8785,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			valuesType.map { ["_ \(scopeParameterName): \($0.asSource)"] } ?? []
 		}
 		parameters += fillParameterFields.map { "\($0.property.label.spelledAsArgumentLabel): \($0.boundTypeAsFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
-		return (["\(isSendable ? "@Sendable " : "")func \(functionName)(\(parameters.joined(separator: ", "))) -> \(hole.builtType.asSource) {"]
+		return (["\(Self.localFunctionPrefix(isSendable: isSendable))func \(functionName)(\(parameters.joined(separator: ", "))) -> \(hole.builtType.asSource) {"]
 			+ bindings
 			+ body
 			+ ["}"]).joined(separator: "\n")
@@ -14285,7 +14272,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 						lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
 					).joined(separator: ", ")
-					let functionDecorator = node.buildsInSendableFunction ? "@Sendable " : ""
+					let functionDecorator = ScopeGenerator.localFunctionPrefix(isSendable: node.buildsInSendableFunction)
 
 					let receiverBindings = emitReceiverBindings(
 						for: node.dependencies,
@@ -14806,7 +14793,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					: forwardedProperties.initializerFunctionParametersSource(amongTypesDeclaredEscaping: node.typesDeclaredEscaping)
 				let callArguments = (forwardedProperties.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" } + cycleArguments).joined(separator: ", ")
 				let functionIndent = String(indent.dropLast(ScopeGenerator.standardIndent.count))
-				let decorator = node.buildsInSendableFunction || node.property.propertyType.isSendable ? "@Sendable " : ""
+				let decorator = ScopeGenerator.localFunctionPrefix(isSendable: node.buildsInSendableFunction || node.property.propertyType.isSendable)
 				var lines = ["\(functionIndent)\(decorator)func \(receivedFunctionName)(\(functionParameters)) -> \(node.instantiatedTypeSpelledAsDeclared.asSource) {"]
 				lines.append(contentsOf: memberLines)
 				lines.append("\(indent)\(memberLines.isEmpty ? "" : "return ")\(functionName)(\(callArguments))")
@@ -15058,11 +15045,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		let forwardedArguments = forwardedArgumentList.joined(separator: ", ")
 
-		let functionDecorator = if node.buildsInSendableFunction {
-			"@Sendable "
-		} else {
-			""
-		}
+		let functionDecorator = ScopeGenerator.localFunctionPrefix(isSendable: node.buildsInSendableFunction)
 
 		var lines = InstantiatorBindingLines()
 

@@ -1497,7 +1497,7 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Service {
 		        let __safeDI_profileBuilder__safeDIBuilder = safeDIOverrides.profileBuilder
-		        @Sendable func __safeDI_profileBuilder() -> SendableProfile {
+		        @Sendable nonisolated func __safeDI_profileBuilder() -> SendableProfile {
 		            let userService: any UserService = userServiceSendableBuilder()
 		            return if let safeDIBuilder = __safeDI_profileBuilder__safeDIBuilder { safeDIBuilder(userService) } else { SendableProfile(userService: userService) }
 		        }
@@ -2559,13 +2559,13 @@ struct SafeDIToolSeamOwnMockBuilderTests: ~Copyable {
 		    ) -> Screen {
 		        _ = D.__safeDI_D_mock_1410F11B00C13F09.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let __safeDI_dBuilder__safeDIBuilder = safeDIOverrides.dBuilder
-		        @Sendable func __safeDI_dBuilder() -> D {
+		        @Sendable nonisolated func __safeDI_dBuilder() -> D {
 		            let apiBuilder: () -> any Api = apiSendableBuilder
 		            return if let safeDIBuilder = __safeDI_dBuilder__safeDIBuilder { safeDIBuilder(apiBuilder) } else { D.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder)) }
 		        }
 		        let dBuilder = SendableInstantiator<D>(__safeDI_dBuilder)
 		        let __safeDI_gadgetBuilder__safeDIBuilder = safeDIOverrides.gadgetBuilder
-		        @Sendable func __safeDI_gadgetBuilder() -> Gadget {
+		        @Sendable nonisolated func __safeDI_gadgetBuilder() -> Gadget {
 		            let api: any Api = apiSendableBuilder()
 		            return if let safeDIBuilder = __safeDI_gadgetBuilder__safeDIBuilder { safeDIBuilder(api) } else { Gadget(api: api) }
 		        }

@@ -358,10 +358,10 @@ struct SafeDIToolValidatedAdviceTests: ~Copyable {
 
 		extension Root {
 		    public init() {
-		        @Sendable func __safeDI_t2Builder() -> T2 {
+		        @Sendable nonisolated func __safeDI_t2Builder() -> T2 {
 		            T2()
 		        }
-		        @Sendable func __safeDI_t1Builder() -> T1 {
+		        @Sendable nonisolated func __safeDI_t1Builder() -> T1 {
 		            let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
 		            return T1(t2Builder: t2Builder)
 		        }
@@ -389,11 +389,11 @@ struct SafeDIToolValidatedAdviceTests: ~Copyable {
 
 		extension Root {
 		    public init() {
-		        @Sendable func __safeDI_t2Builder() -> T2 {
+		        @Sendable nonisolated func __safeDI_t2Builder() -> T2 {
 		            T2()
 		        }
 		        let t2Builder = SendableInstantiator<T2>(__safeDI_t2Builder)
-		        @Sendable func __safeDI_t1Builder() -> T1 {
+		        @Sendable nonisolated func __safeDI_t1Builder() -> T1 {
 		            T1(t2Builder: t2Builder)
 		        }
 		        let t1Builder = SendableInstantiator<T1>(__safeDI_t1Builder)

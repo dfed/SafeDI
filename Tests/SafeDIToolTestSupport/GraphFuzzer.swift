@@ -10475,7 +10475,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 
 		/// The name of the builder function the line declares, when it declares one.
 		var declaredBuilderFunctionName: Substring? {
-			let declaration = content.hasPrefix("@Sendable ") ? content.dropFirst("@Sendable ".count) : content
+			let declaration = content.hasPrefix("@Sendable nonisolated ") ? content.dropFirst("@Sendable nonisolated ".count) : content
 			guard declaration.hasPrefix("func __safeDI_") else { return nil }
 			return declaration.dropFirst("func ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
 		}
@@ -12511,15 +12511,15 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		let levelFunction = try! NSRegularExpression(pattern: #"^( *)(?:@Sendable )?(?:nonisolated )?func (__safeDI_\w+)\([^)]*\) -> (\w+)\.(SafeDI(?:Sendable)?Scope_\w+(?:\.\w+_Scope)*\.__safeDI_Builder|__safeDI_\w+Carrier(?:_\w+)?)<(.*) \{$"#)
 		let calledLevelFunction = try! NSRegularExpression(pattern: #"(?:\bin |: )(__safeDI_\w+)\("#)
 		// A fill takes a case's payload; a dispatcher, the enum, which is no fill.
-		let fillDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+_Scope_*)?\.\w+_Values"#)
-		let dispatcherDeclaration = try! NSRegularExpression(pattern: #"^ *(?:@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?(?:, [^)]*)?\) -> "#)
+		let fillDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable nonisolated )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+_Scope_*)?\.\w+_Values"#)
+		let dispatcherDeclaration = try! NSRegularExpression(pattern: #"^ *(?:@Sendable nonisolated )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?(?:, [^)]*)?\) -> "#)
 		// A dispatcher that returns a level's builder struct, which a call passes by calling it.
 		let levelFunctionDeclaration = try! NSRegularExpression(pattern: #"^ *(?:@Sendable (?:nonisolated )?)?func (__safeDI_\w+)\([^)]*\) -> (\w+)\.(?:SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?\.__safeDI_Builder|__safeDI_\w+Carrier(?:_\w+)?)<"#)
 		// A carrier's level function, and its member that a caller fills: a closure whose body builds the place, which its
 		// line opens and lines after it close (`.init(api: { scope in`, `holeRouteService: {`).
 		let carrierLevelFunction = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?(?:nonisolated )?func __safeDI_\w+\([^)]*\) -> \w+\.__safeDI_\w+Carrier(?:_\w+)?<"#)
 		let carrierFillMember = try! NSRegularExpression(pattern: #"(?:\.init\(|, |^ *)\w+: \{(?: \w+ in)?$"#)
-		let enclosingDispatcherDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func __safeDI_\w+\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?(?:, [^)]*)?\) -> "#)
+		let enclosingDispatcherDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable nonisolated )?func __safeDI_\w+\(_ scope: (\w+)\.SafeDI(?:Sendable)?Scope_\w+(?:\.\w+)?(?:, [^)]*)?\) -> "#)
 		// A case holding its fill's body ends its line at the colon; one that calls a fill or a dispatcher returns on its line.
 		let inlinedFillCase = try! NSRegularExpression(pattern: #"^( *)case (?:let )?\.[^:]+:$"#)
 		func firstMatch(_ expression: NSRegularExpression, in line: String) -> [String]? {

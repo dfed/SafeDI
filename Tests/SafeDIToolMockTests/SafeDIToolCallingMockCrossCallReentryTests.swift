@@ -705,7 +705,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Book {
 		        _ = Page.__safeDI_Page_mock_4A57B09DFB8A9D2C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Page", declaringModule: "Core"))
-		        @Sendable func __safeDI_pageBuilder() -> Page {
+		        @Sendable nonisolated func __safeDI_pageBuilder() -> Page {
 		            Page.__safeDI_mock(serviceBuilder: __safeDI_serviceSendableBuilder.pageBuilder(SafeDISendableMockScope_Service.pageBuilder_Values()))
 		        }
 		        let pageBuilder = SendableInstantiator<Page>(__safeDI_pageBuilder)
@@ -762,7 +762,7 @@ struct SafeDIToolCallingMockCrossCallReentryTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        func __safeDI_page() -> Page {
-		            @Sendable func __safeDI_serviceBuilder_Page_service() -> any Service {
+		            @Sendable nonisolated func __safeDI_serviceBuilder_Page_service() -> any Service {
 		                func __safeDI_service() -> DefaultService {
 		                    func __safeDI_book() -> Book {
 		                        @Sendable nonisolated func __safeDI_serviceSendableBuilder_Book() -> Book.SafeDISendableMockScope_Service.__safeDI_Builder<any Service> {

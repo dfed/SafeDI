@@ -1441,7 +1441,7 @@ struct HoleBoundApartShape: CustomTestStringConvertible, Sendable {
 			    ) -> Screen {
 			        let __safeDI_gadget = gadget
 			        let __safeDI_panel__safeDIBuilder = safeDIOverrides.panel
-			        @Sendable func __safeDI_panel() -> Panel {
+			        @Sendable nonisolated func __safeDI_panel() -> Panel {
 			            let gadget = __safeDI_gadget()
 			            return if let safeDIBuilder = __safeDI_panel__safeDIBuilder { safeDIBuilder(gadget) } else { Panel(gadget: gadget) }
 			        }
