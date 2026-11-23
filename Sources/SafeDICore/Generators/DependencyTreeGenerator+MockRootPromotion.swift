@@ -277,19 +277,34 @@ extension DependencyTreeGenerator {
 			scopesBuiltForRequiredProperties: scopesBuiltForRequiredProperties,
 		)
 
-		// The mock's tree builds the type of each scope the mock root's scope reaches.
+		// The mock's tree builds the type of each scope the mock root's scope reaches. Each constant or lazily instantiated
+		// `@Instantiated` dependency it builds, at any depth – beneath the mocked type's own children, beneath a promoted
+		// dependency, inside an instantiator – must build a type without `@Forwarded` properties, as production requires of
+		// the trees its roots reach (`createTypeDescriptionToScopeMapping`). A type no root reaches is checked only here,
+		// where a mock builds it. The scope each dependency is built with is the mock's (`mockScope(instantiating:as:in:)`),
+		// and every such dependency is reported, in source order, as production reports them.
 		var instantiablesInMockTree = [Instantiable]()
 		var visitedScopesInMockTree = Set<ObjectIdentifier>()
 		var scopesInMockTreeToVisit = [mockRootScope]
+		var forwardedPropertyErrors = [DependencyTreeGeneratorError]()
 		while let scopeToVisit = scopesInMockTreeToVisit.popLast() {
 			// A tree an earlier mock root's walk validated is not walked again.
 			guard !scopesWithValidatedDeclarations.contains(ObjectIdentifier(scopeToVisit)),
 			      visitedScopesInMockTree.insert(ObjectIdentifier(scopeToVisit)).inserted
 			else { continue }
 			instantiablesInMockTree.append(scopeToVisit.instantiable)
-			for case let .instantiated(_, childScope, _) in scopeToVisit.propertiesToGenerate {
+			for case let .instantiated(property, childScope, _) in scopeToVisit.propertiesToGenerate {
 				scopesInMockTreeToVisit.append(childScope)
+				// A promoted dependency is one the mocked type receives, which production builds above it.
+				if let dependency = scopeToVisit.instantiable.dependencies.first(where: { $0.property == property && $0.source.isInstantiated }),
+				   let error = forwardedPropertyError(for: dependency, instantiable: childScope.instantiable, parent: scopeToVisit.instantiable)
+				{
+					forwardedPropertyErrors.append(error)
+				}
 			}
+		}
+		if let error = DependencyTreeGeneratorError.reportingAll(of: forwardedPropertyErrors) {
+			throw error
 		}
 		try Self.validateDependencyLabelsAreDistinct(in: instantiablesInMockTree)
 		try Self.validateRenamesAreSpelledAsTheMacroAccepts(in: instantiablesInMockTree)
