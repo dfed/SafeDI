@@ -397,7 +397,7 @@ extension MockLowering.Walk {
 				// A builder the call passes up is the builder `mock()` takes, which the call's builder function binds under the
 				// label the leaf receives it as, and which an override closure is handed as it is (`.callersBuilder`).
 				// `mock()` takes it as the flat received parameter of its property (`lowerRootSignature(of:context:)`).
-				guard scope.contains(dependency.property), filledCall == nil, property.propertyType.isConstant else { return .unsupported(.publicMockCall) }
+				guard scope.contains(dependency.property), filledCall == nil else { return .unsupported(.publicMockCall) }
 				if let overrideBuilders {
 					guard case .callersBuilder = overrideBuilders[argument.innerLabel] else { return .unsupported(.publicMockCall) }
 					overrideArguments.append(dependency.property.label)
@@ -500,12 +500,17 @@ extension MockLowering.Walk {
 		guard let filledCall else {
 			lines.append("\(indent)\(publicMockCall.guardLine(for: instantiable.concreteInstantiable))")
 			// A call that passes a builder up binds it in a builder function of its own.
+			// An instantiator's builder function, which takes what the instantiator forwards, binds them inside it.
 			guard passedUpBuilderBindings.isEmpty else {
-				lines.append("\(indent)\(functionDecorator)func \(functionName)() -> \(typeName) {")
+				lines.append("\(indent)\(functionDecorator)func \(functionName)(\(isInstantiator ? functionParameters : "")) -> \(typeName) {")
 				lines.append(contentsOf: passedUpBuilderBindings.map { "\(indent)\(ScopeGenerator.standardIndent)\($0)" })
 				lines.append("\(indent)\(ScopeGenerator.standardIndent)return \(call)")
 				lines.append("\(indent)}")
-				lines.append("\(indent)let \(property.label): \(typeName) = \(functionName)()")
+				if isInstantiator {
+					lines.append(contentsOf: instantiatorBindingLines())
+				} else {
+					lines.append("\(indent)let \(property.label): \(typeName) = \(functionName)()")
+				}
 				return .lowered(.publicMockCall(node))
 			}
 			if isInstantiator {
