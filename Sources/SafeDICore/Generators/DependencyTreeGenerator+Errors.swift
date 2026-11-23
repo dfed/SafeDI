@@ -1377,6 +1377,9 @@ extension DependencyTreeGenerator {
 			let instantiable: Instantiable
 			/// The type with which the dependency can instead build `instantiable`.
 			let suggestedPropertyType: TypeDescription
+			/// The `Sendable` form of `suggestedPropertyType`, which the advice names besides it when the declaration of
+			/// `parent` does not say whether `parent` is `Sendable`, or `nil` when it does.
+			let sendableAlternative: TypeDescription?
 			let forwardedDeclarations: [LocatedProperty]
 			/// The type that declares the dependency.
 			let parent: TypeDescription
@@ -1387,7 +1390,7 @@ extension DependencyTreeGenerator {
 					SourceDiagnostic(
 						severity: .error,
 						location: dependency.declarationLocation,
-						message: "`\(dependency.property.asSource)` on `\(parent.asSource)` cannot build `\(instantiable.concreteInstantiable.asSource)`, which has @\(Dependency.Source.forwardedRawValue) properties that only an instantiator is passed. Declare it as `\(suggestedPropertyType.asSource)`.",
+						message: "`\(dependency.property.asSource)` on `\(parent.asSource)` cannot build `\(instantiable.concreteInstantiable.asSource)`, which has @\(Dependency.Source.forwardedRawValue) properties that only an instantiator is passed. Declare it as `\(suggestedPropertyType.asSource)`\(sendableAlternative.map { ", or as `\($0.asSource)` if `\(parent.asSource)` is Sendable" } ?? "").",
 					),
 				] + forwardedDeclarations.map {
 					SourceDiagnostic(

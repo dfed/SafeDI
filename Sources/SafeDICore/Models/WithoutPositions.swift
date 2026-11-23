@@ -58,6 +58,8 @@ extension Instantiable {
 			packageName: packageName,
 		)
 		instantiable.sourceFilePath = sourceFilePath
+		instantiable.conformanceListNamesSendable = conformanceListNamesSendable
+		instantiable.conformanceListNamesOtherTypes = conformanceListNamesOtherTypes
 		instantiable.dependencyLabelsInUnselectedClauses = dependencyLabelsInUnselectedClauses.map {
 			DependencyLabelInUnselectedClause(label: $0.label, clause: $0.clause, clauseLocation: nil, isDeclaredDirectlyInClause: $0.isDeclaredDirectlyInClause)
 		}
