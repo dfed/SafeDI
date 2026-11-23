@@ -31,11 +31,6 @@ extension ScopeGenerator {
 		if let rule = Self.unsupportedRuleOfMockedType(instantiable) {
 			return .unsupported(rule)
 		}
-		// D1 lane hook (lane B): the mocked type's own receives only if available that nothing above provides are passed `nil`
-		// (`rootArgumentList(of:given:renames:passingNilTo:)`).
-		guard receivedOnlyByPublicMockCalls.isEmpty else {
-			return .unsupported(.onlyIfAvailable)
-		}
 		// D1 lane hook (lane D): the parameters `mock()` takes before its overrides (`lowerRootSignature(of:context:)`).
 		let signature: MockLowering.RootSignature
 		switch lowerRootSignature(of: instantiable, context: context) {
