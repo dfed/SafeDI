@@ -1226,7 +1226,7 @@ extension MockLowering {
 			// D1 lane hook (lane D): a node whose configuration holds its default-valued parameters is built in a builder
 			// function, as `MockParameterNode.requiresFunctionWrapper` says.
 			guard node.hasChildren || isWrapped || !receiverBindings.isEmpty || !defaultFields.isEmpty || !node.sendableAutoclosureBindings.isEmpty else {
-				guard let rule = Self.unsupportedRule(ofDependenciesOf: instantiable, isWrapped: isWrapped, inScope: scope, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, unavailableProperties: unavailableProperties, childProperties: [], uncoveredProperties: uncoveredProperties) else {
+				guard let rule = Self.unsupportedRule(ofDependenciesOf: instantiable, inScope: scope, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, unavailableProperties: unavailableProperties, childProperties: [], uncoveredProperties: uncoveredProperties) else {
 					lines.append(node.constantBindingLine(overrideRead: overrideRead, indent: indent))
 					return .finished(.lowered(node))
 				}
@@ -1366,7 +1366,7 @@ extension MockLowering {
 			case let .unsupported(rule):
 				return .unsupported(rule)
 			}
-			if let rule = Self.unsupportedRule(ofDependenciesOf: instantiable, isWrapped: isWrapped, inScope: scope, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, unavailableProperties: unavailableProperties, childProperties: Set(children.map(\.property)), uncoveredProperties: uncoveredProperties) {
+			if let rule = Self.unsupportedRule(ofDependenciesOf: instantiable, inScope: scope, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, unavailableProperties: unavailableProperties, childProperties: Set(children.map(\.property)), uncoveredProperties: uncoveredProperties) {
 				return .unsupported(rule)
 			}
 			// The construction is inside the function, so a function that starts the extraction reads its own override
@@ -1468,7 +1468,6 @@ extension MockLowering {
 		/// `childProperties`, meets that the walk does not lower yet.
 		private static func unsupportedRule(
 			ofDependenciesOf instantiable: Instantiable,
-			isWrapped: Bool,
 			inScope scope: Set<Property>,
 			lazilyInstantiatedInstanceProperties: Set<Property>,
 			unavailableProperties: Set<Property>,
@@ -1491,6 +1490,8 @@ extension MockLowering {
 						&& MockLowering.scope(scope, holdsWrapperOfInstance: dependency.property.asUnwrappedProperty)
 					else { return .flatParameter }
 				case .forwarded:
+					// D1 lane hook (lane D): a wrapper's builder function takes the value, and a node built by value reads it
+					// by name from the scope.
 					break
 				case .received(onlyIfAvailable: true):
 					// D1 lane hook (lane B): a receive only if available is passed `nil` or what the scope provides; one the
