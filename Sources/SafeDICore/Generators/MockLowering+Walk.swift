@@ -1324,11 +1324,10 @@ extension MockLowering {
 				finishConfiguredNode(configuredNode, recordIndex: nil)
 			}
 			// A public mock's configured node calls its type's construction function.
-			var endLines: [String]
-			if buildsPublicMock, configuredNode.hasConfiguration {
-				endLines = configuredNode.publicBuilderFunctionEndLines(children: children, overrideRead: functionOverrideRead, indent: indent)
+			var endLines: [String] = if buildsPublicMock, configuredNode.hasConfiguration {
+				configuredNode.publicBuilderFunctionEndLines(children: children, overrideRead: functionOverrideRead, indent: indent)
 			} else {
-				endLines = configuredNode.builderFunctionEndLines(overrideRead: functionOverrideRead, indent: indent)
+				configuredNode.builderFunctionEndLines(overrideRead: functionOverrideRead, indent: indent)
 			}
 			if let loopMembership = ownLoopMembership, let member = loopMembers[property] {
 				// The construction and the function's closing brace, then the member's `_received` function, then its binding,
@@ -1912,7 +1911,6 @@ extension MockLowering {
 		}
 		return renames
 	}
-
 }
 
 extension MockLowering.ConfigurationRecord {

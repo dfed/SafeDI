@@ -368,31 +368,31 @@ extension MockLowering.Walk {
 		lines: inout [String],
 	) async -> MockLowering.TreeNode? {
 		guard case let .hole(property, erasedToConcreteExistential, site?) = generator.scopeData else { return nil }
-			// A site held in a wrapper builds it around the function its level names, apart from a function a cycle-closing
-			// scope beneath refers to (`ScopeGenerator.mockLoweringBuilderFunctionNames`).
-			let holeFunctionName = pendingRenamedFunctionName
-			pendingRenamedFunctionName = nil
-			// The site calls its place's member on the struct its route leads to, handed the values in scope there, as the
-			// emitter's `MockAliasNode.holeSite` does.
-			lines.append(GeneratedCodeText.indentingNonEmptyLines(
-				of: ScopeGenerator.buildSiteCode(
-					of: property,
-					at: site,
-					functionName: holeFunctionName,
-					readingInstancesOf: generator.mockLoweringCallSiteLazilyInstantiatedInstanceProperties,
-				),
-				by: indent,
-			))
-			// The site binds its property from the builder, as an alias binds its own: no override reads it.
-			return .alias(MockLowering.AliasBinding(
-				property: property,
-				bindingName: property.label,
-				fulfillingProperty: Property(label: site.builderLabel, typeDescription: site.builtType),
-				fulfillingName: site.builderLabel,
-				isErased: erasedToConcreteExistential,
-				isOnlyIfAvailable: false,
-				isBoundToNil: false,
-				declarationReference: nil,
-			))
+		// A site held in a wrapper builds it around the function its level names, apart from a function a cycle-closing
+		// scope beneath refers to (`ScopeGenerator.mockLoweringBuilderFunctionNames`).
+		let holeFunctionName = pendingRenamedFunctionName
+		pendingRenamedFunctionName = nil
+		// The site calls its place's member on the struct its route leads to, handed the values in scope there, as the
+		// emitter's `MockAliasNode.holeSite` does.
+		lines.append(GeneratedCodeText.indentingNonEmptyLines(
+			of: ScopeGenerator.buildSiteCode(
+				of: property,
+				at: site,
+				functionName: holeFunctionName,
+				readingInstancesOf: generator.mockLoweringCallSiteLazilyInstantiatedInstanceProperties,
+			),
+			by: indent,
+		))
+		// The site binds its property from the builder, as an alias binds its own: no override reads it.
+		return .alias(MockLowering.AliasBinding(
+			property: property,
+			bindingName: property.label,
+			fulfillingProperty: Property(label: site.builderLabel, typeDescription: site.builtType),
+			fulfillingName: site.builderLabel,
+			isErased: erasedToConcreteExistential,
+			isOnlyIfAvailable: false,
+			isBoundToNil: false,
+			declarationReference: nil,
+		))
 	}
 }

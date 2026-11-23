@@ -375,7 +375,7 @@ extension MockLowering.Walk {
 		of generator: ScopeGenerator,
 		publicMockCall: PublicMockCall,
 		building built: (instantiable: Instantiable, property: Property, forwardedProperties: Set<Property>, erasedToConcreteExistential: Bool),
-		inScope scope: Set<Property>,
+		inScope _: Set<Property>,
 		path: String,
 		indent: String,
 		lines: inout [String],
@@ -411,11 +411,10 @@ extension MockLowering.Walk {
 		// A call that fills builders is made in a builder function of its own, which declares the fills and names the guard
 		// first; it passes each builder the struct of the builder `mock()` takes optional for the builder's places, or of
 		// its fills where that builder is `nil`. Any other call names the guard where it is made.
-		let filledCall: MockLowering.FilledCallBuilders.Call?
-		if generator.fillsABuilder, !filledCallBuilders.calls.isEmpty {
-			filledCall = filledCallBuilders.calls.removeFirst()
+		let filledCall: MockLowering.FilledCallBuilders.Call? = if generator.fillsABuilder, !filledCallBuilders.calls.isEmpty {
+			filledCallBuilders.calls.removeFirst()
 		} else {
-			filledCall = nil
+			nil
 		}
 		let innerIndent = filledCall == nil ? indent : "\(indent)\(ScopeGenerator.standardIndent)"
 		let holeBuilders = filledCallBuilders.fillPlaceBindings.holeBuildersByCall[ObjectIdentifier(generator)] ?? [:]

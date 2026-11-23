@@ -389,10 +389,9 @@ extension ScopeGenerator {
 			let isInstanceBesideForwardedProperty = wrapperByInstanceBesideForwardedProperty[property] != nil
 			guard isInstanceBesideForwardedProperty || !forwardedProperties.contains(property),
 			      !property.typeDescription.isOptional
-			      || !receivedNonOptionalProperties.contains(property.asUnwrappedProperty) && (isInstanceBesideForwardedProperty || !forwardedProperties.contains(property.asUnwrappedProperty))
-			else { continue }
-			guard mockedTypeUncoveredWrapperInstances.contains(property.asUnwrappedProperty)
-				|| !Self.provides(property, declaredProperties: propertiesToDeclare, forwardedProperties: [])
+			      || !receivedNonOptionalProperties.contains(property.asUnwrappedProperty) && (isInstanceBesideForwardedProperty || !forwardedProperties.contains(property.asUnwrappedProperty)),
+			      mockedTypeUncoveredWrapperInstances.contains(property.asUnwrappedProperty)
+			      || !Self.provides(property, declaredProperties: propertiesToDeclare, forwardedProperties: [])
 			else { continue }
 			// A property every receiver receives only if available is an override, defaulting to `nil`; one any requires is a
 			// parameter.

@@ -74,18 +74,18 @@ extension MockLowering {
 		// `generateMockCode` takes them.
 		for isPublicMock in [true, false] {
 			for (rootIndex, record) in Self.configurationsBeneathRepeatedAncestors(of: recordsInRootOrder, isPublicMock: isPublicMock) where seenTypeNames.insert(record.concreteType.asSource).inserted {
-					let typeName = record.concreteType.asSource
-					if rootedTypeNames.contains(typeName) {
-						rootedStructs[typeName] = record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)
-					} else {
-						sharedExtensions.append((typeName: typeName, structCode: record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)))
-						// `generateMockCode` records the fulfillers of the node that reads the configuration,
-						// where its construction differs.
-						let structRecord = recordsReadingConfiguration[record.concreteType].flatMap { recordReadingConfiguration in
-							recordReadingConfiguration.oneWayConstruction?.requirements == record.oneWayConstruction?.requirements ? nil : recordReadingConfiguration
-						} ?? record
-						recordFulfillers(of: structRecord, inMockOf: rootsInOrder[rootIndex].0)
-					}
+				let typeName = record.concreteType.asSource
+				if rootedTypeNames.contains(typeName) {
+					rootedStructs[typeName] = record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)
+				} else {
+					sharedExtensions.append((typeName: typeName, structCode: record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)))
+					// `generateMockCode` records the fulfillers of the node that reads the configuration,
+					// where its construction differs.
+					let structRecord = recordsReadingConfiguration[record.concreteType].flatMap { recordReadingConfiguration in
+						recordReadingConfiguration.oneWayConstruction?.requirements == record.oneWayConstruction?.requirements ? nil : recordReadingConfiguration
+					} ?? record
+					recordFulfillers(of: structRecord, inMockOf: rootsInOrder[rootIndex].0)
+				}
 			}
 		}
 		let mergedCodes = zip(roots, loweredRoots).map { root, loweredRoot in

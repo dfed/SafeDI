@@ -28,7 +28,7 @@ extension MockLowering {
 	/// `cycleParameterArgumentUnavailableProperties` reads them. `renames` are the names the mock binds a label apart
 	/// under, and `lazilyInstantiatedNames` the wrappers it binds around the instances it is passed, as
 	/// `mockCycleParameterArguments` reads them.
-	static func cycleParameterArguments(of generator: ScopeGenerator, inScope scope: Set<Property>, unavailableProperties: Set<Property>, renames: [String: [TypeDescription: String]], lazilyInstantiatedNames: [String: [TypeDescription: String]]) -> [String] {
+	static func cycleParameterArguments(of generator: ScopeGenerator, inScope _: Set<Property>, unavailableProperties: Set<Property>, renames: [String: [TypeDescription: String]], lazilyInstantiatedNames: [String: [TypeDescription: String]]) -> [String] {
 		let lazilyInstantiatedInstanceProperties = generator.mockLoweringCallSiteLazilyInstantiatedInstanceProperties
 		var arguments = [String]()
 		for parameter in generator.cycleParameters {
