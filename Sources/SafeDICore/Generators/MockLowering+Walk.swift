@@ -1050,7 +1050,10 @@ extension MockLowering {
 					guard childProperties.contains(dependency.property) || uncoveredProperties.contains(dependency.property) else { return .flatParameter }
 				case .received(onlyIfAvailable: false):
 					// D1 lane hook (lane B): a receive by value of a lazy wrapper's instance reads the wrapper in scope.
+					// D1 lane hook (lane D): a required receive of an optional form reads the non-optional node of its label, which
+					// the mock promotes for both forms.
 					guard scope.contains(dependency.property)
+						|| dependency.property.typeDescription.isOptional && scope.contains(dependency.property.asUnwrappedProperty)
 						|| lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty)
 						&& MockLowering.scope(scope, holdsWrapperOfInstance: dependency.property.asUnwrappedProperty)
 					else { return .flatParameter }
