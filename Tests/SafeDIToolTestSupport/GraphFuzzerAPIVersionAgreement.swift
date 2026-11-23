@@ -333,3 +333,43 @@ enum GraphFuzzerAPIVersionAgreement {
 		}
 	}
 }
+
+extension GraphFuzzerAPIVersionAgreement {
+	/// Seeds whose `.v3Unstable` mocks do not compile yet, by the shape the v3 work has still to lower. The long run expects
+	/// each to be `.currentDoesNotCompile` and reports one that agrees as stale, so the step that lowers a shape removes
+	/// its seeds.
+	struct PendingShape: Sendable {
+		let reason: String
+		let seeds: [UInt64]
+	}
+
+	static let pendingShapes = [
+		PendingShape(
+			reason: "A promoted received wrapper with nothing to configure takes `x: T? = nil` typed as the type it builds, not the wrapper",
+			seeds: [0, 6, 12, 15, 27, 36, 38, 41, 44, 68, 77, 80, 84, 91, 92, 94, 95, 97, 104, 108, 110, 120, 123, 126, 131, 132, 133, 139, 141, 144],
+		),
+		PendingShape(
+			reason: "A builder function a cycle closes on reads a configuration out of its scope, or before its declaration",
+			seeds: [9, 14, 25, 26, 30, 33, 55, 56, 74, 78, 93, 99, 101, 114, 116, 121, 135, 136, 140],
+		),
+		PendingShape(
+			reason: "`SafeDIReceived`'s `.built` case calls a builder function that takes more parameters than it passes",
+			seeds: [18, 31, 69],
+		),
+		PendingShape(
+			reason: "A builder function's type names the configurations of a cycle",
+			seeds: [107],
+		),
+	]
+
+	/// The reason `seed` is pending, if it is.
+	static func pendingReason(ofSeed seed: UInt64) -> String? {
+		pendingShapes.first { $0.seeds.contains(seed) }?.reason
+	}
+
+	/// Seeds of the ordinary suite's gate: graphs whose `.v2` and `.v3Unstable` mocks agree, together holding at least ten
+	/// compared graphs and ten D12 probes. A hand mutation that has `.v3Unstable` pass `nil` to the mocked type's receives
+	/// only if available fails seeds 23, 85 and 88 as values that differ; one whose `.v3Unstable` builder of an unbuildable
+	/// dependency is called twice per instance fails seeds 2, 7, 13, 45, 62, 73 and 90 in their D12 graphs.
+	static let smokeSeeds: [UInt64] = [2, 7, 13, 23, 45, 62, 64, 73, 85, 88, 90, 117]
+}
