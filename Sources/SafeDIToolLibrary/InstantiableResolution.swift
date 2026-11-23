@@ -163,6 +163,8 @@ func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable], 
 		)
 		normalizedInstantiable.sourceFilePath = unnormalizedInstantiable.sourceFilePath
 		normalizedInstantiable.isInsideCompilerDecidedBlock = unnormalizedInstantiable.isInsideCompilerDecidedBlock
+		normalizedInstantiable.conformanceListNamesSendable = unnormalizedInstantiable.conformanceListNamesSendable
+		normalizedInstantiable.conformanceListNamesOtherTypes = unnormalizedInstantiable.conformanceListNamesOtherTypes
 		normalizedInstantiable.dependencyLabelsInUnselectedClauses = unnormalizedInstantiable.dependencyLabelsInUnselectedClauses
 		normalizedInstantiable.dependencyLabelsInsideConditionalBlocks = unnormalizedInstantiable.dependencyLabelsInsideConditionalBlocks
 		return normalizedInstantiable
