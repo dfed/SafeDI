@@ -3775,6 +3775,15 @@ struct SafeDIToolGraphFuzzerTests {
 		try await Self.expectMockLoweringIdenticalToEmitter(forSeed: 137, features: [.generateMockPublic], reportLine: "mock-lowering: 55/55 roots identical (100.0%); 0 differ")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func fixture_lowersMockPassingNodeToOptionalFormItsTypeRequires_forSeed1095() async throws {
+		// `T3` requires `t2BuilderAlias: Instantiator<S1095_T2>?`, which its mock's root binds non-optional and passes
+		// `t2BuilderAlias: t2BuilderAlias`. Stage D1's lowering once passed a root a binding's optional form only where the
+		// root received it only if available.
+		try await Self.expectMockLoweringIdenticalToEmitter(forSeed: 1_095, reportLine: "mock-lowering: 62/62 roots identical (100.0%); 0 differ")
+	}
+
 	/// Expects stage D1's lowering of the mock roots of `seed`'s graph, drawn with `features`, to tally `reportLine`
 	/// against the emitter's code.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
