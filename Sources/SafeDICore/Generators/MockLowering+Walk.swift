@@ -179,7 +179,7 @@ extension ScopeGenerator {
 		// The initializer's default-valued arguments are parameters of `mock()` (`lowerRootSignature(of:context:)`).
 		// D1 lane hook (lane D): the mocked type's own hand-written mock builds it (`MockLowering+HandWrittenMocks.swift`), but a
 		// public mock's, which lane C's file builds.
-		guard MockLowering.rootConstructionInitializer(of: instantiable) != nil, instantiable.generateMock != .public || (instantiable.mockInitializer == nil && instantiable.customMockName == nil) else { return .handWrittenMock }
+		guard instantiable.generateMock != .public || (instantiable.mockInitializer == nil && instantiable.customMockName == nil) else { return .handWrittenMock }
 		// D1 lane hook (lane B): every dependency of the mocked type is a node of its tree (a wrapper of any kind, erased or
 		// fulfilled by another type alike, a received wrapper the mock promotes, an alias), a parameter of `mock()` or an
 		// override's binding, which the walk checks it binds.
@@ -223,7 +223,7 @@ extension ScopeGenerator {
 		// D1 lane hook (lane D): the mocked type built with its hand-written mock where it has one.
 		let argumentList = MockLowering.rootConstructionInitializer(of: instantiable).map { initializer in
 			MockLowering.rootArgumentList(of: initializer, given: instantiable.dependencies, renames: rootRenames, passingNilTo: unavailableProperties)
-		} ?? ""
+		} ?? Instantiable.incorrectlyConfiguredComment
 		let construction = MockLowering.rootConstruction(of: instantiable, argumentList: argumentList)
 		lines.append("\(bodyIndent)return \(construction)")
 		lines.append("\(indent)}")
