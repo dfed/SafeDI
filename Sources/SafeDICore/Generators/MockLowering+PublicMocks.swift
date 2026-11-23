@@ -33,6 +33,7 @@ extension ScopeGenerator {
 		nodes _: [MockLowering.TreeNode],
 		bindingLines _: [String],
 		rootRenames _: [String: [TypeDescription: String]],
+		filledCallBuilders _: MockLowering.FilledCallBuilders,
 		configurations _: [MockLowering.ConfigurationRecord],
 		context _: MockContext,
 	) -> MockLowering.Result {
@@ -41,8 +42,19 @@ extension ScopeGenerator {
 
 	/// The builders `mock()` takes optional for the places its calls of other modules' public mocks fill, from the root's
 	/// children, `orderedChildren`, in generation order, or the first rule the calls meet.
-	func filledCallBuilders(of _: [OrderedChild], context _: MockContext) -> MockLowering.Lowering<MockLowering.FilledCallBuilders> {
+	func filledCallBuilders(of _: [OrderedChild], context _: MockContext, optionalBuilderNames _: [MockRootParameters.SeamMockBuilder.Family: String]? = nil) -> MockLowering.Lowering<MockLowering.FilledCallBuilders> {
 		.lowered(.none)
+	}
+
+	/// The names a public mock's plan gives the builders it takes optional, by family, which the walk reads them under, or
+	/// `nil` where it takes none.
+	func publicMockOptionalBuilderNames(
+		of _: Instantiable,
+		signature _: MockLowering.RootSignature,
+		filledCallBuilders _: MockLowering.FilledCallBuilders,
+		context _: MockContext,
+	) -> [MockRootParameters.SeamMockBuilder.Family: String]? {
+		nil
 	}
 }
 
@@ -120,6 +132,12 @@ extension MockLowering {
 		let fillPlaceBindings: ScopeGenerator.FillPlaceBindings
 		/// The name `mock()` binds each builder a call passes up under, by the property the call's leaf receives it as.
 		var passedUpBuilderNames: [Property: String] = [:]
+		/// The families of hole type the calls fill, in the order `filledFamilies(of:)` gives, which a public mock's plan names.
+		var families = [ScopeGenerator.FilledFamily]()
+		/// The labels the calls' fills declare, which a public mock's optional builders are named apart from.
+		var namesFillsDeclare = Set<String>()
+		/// The names a public mock's plan gives its optional builders, by family, which the builders are read under.
+		var optionalBuilderNames: [ScopeGenerator.MockRootParameters.SeamMockBuilder.Family: String]?
 
 		/// No call fills a builder.
 		static let none = FilledCallBuilders(calls: [], parameters: [], fillPlaceBindings: ScopeGenerator.FillPlaceBindings(bindingsByGenerator: [:]))

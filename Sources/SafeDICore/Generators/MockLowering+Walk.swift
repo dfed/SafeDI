@@ -65,9 +65,19 @@ extension ScopeGenerator {
 		case let .unsupported(rule):
 			return .unsupported(rule)
 		}
+		// D1 lane hook (lane C): a public mock's calls read each builder under the internal name its plan gives it.
+		if let optionalBuilderNames = publicMockOptionalBuilderNames(of: instantiable, signature: signature, filledCallBuilders: walk.filledCallBuilders, context: context) {
+			switch filledCallBuilders(of: orderedChildren, context: context, optionalBuilderNames: optionalBuilderNames) {
+			case let .lowered(filledCallBuilders):
+				walk.filledCallBuilders = filledCallBuilders
+			case let .unsupported(rule):
+				return .unsupported(rule)
+			}
+		}
 		// D1 lane hook (lane B): `mock()` first binds each override of what its tree receives only if available, which the
 		// receives beneath read.
-		var bindingLines = signature.onlyIfAvailableOverrides.map { override in
+		// D1 lane hook (lane C): a public mock takes each as a parameter of `mock()` under the override's name, which binds it.
+		var bindingLines = instantiable.generateMock == .public ? [] : signature.onlyIfAvailableOverrides.map { override in
 			"\(bodyIndent)let \(override.name): \(override.typeDescription.asSource) = \(ReservedName.mockOverridesParameterName).\(override.name)"
 		}
 		// D1 lane hook (lane C): `mock()` first binds each builder a call passes up apart from its label.
@@ -137,7 +147,7 @@ extension ScopeGenerator {
 		guard instantiable.generateMock != .public else {
 			// D1 lane hook (lane B): a public mock's parameters named apart are lane C's to lower.
 			guard signature.renamesByLabelAndType.isEmpty else { return .unsupported(.siblingLabelCollision) }
-			return publicMockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: walk.rootRenames, configurations: walk.configurationRecords, context: context)
+			return publicMockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: walk.rootRenames, filledCallBuilders: walk.filledCallBuilders, configurations: walk.configurationRecords, context: context)
 		}
 		return .lowered(Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, builders: walk.filledCallBuilders.parameters, rootRenames: rootRenames, context: context), configurations: walk.configurationRecords)
 	}
@@ -554,7 +564,12 @@ extension MockLowering {
 				guard case let .property(instantiable, property, forwardedProperties, erasedToConcreteExistential, isPropertyCycle, seamCall) = generator.scopeData,
 				      let bindingName
 				else { return await placeOrFillNode(of: generator, inScope: scope, path: path, indent: indent, lines: &lines) }
-				guard generator.publicMockCall == nil else { return await publicMockCallNode(of: generator, inScope: scope, path: path, indent: indent, lines: &lines) }
+				guard generator.publicMockCall == nil else {
+					// D1 lane hook (lane C): a public mock binds the payload of a case of a place inside the call's fills before the
+					// call's builder function, as before any node's.
+					lines.append(contentsOf: generator.valuesBindingsBeforeBuilderFunction.map { "\(indent)\($0.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: [:]))" })
+					return await publicMockCallNode(of: generator, inScope: scope, path: path, indent: indent, lines: &lines)
+				}
 				guard !isPropertyCycle else {
 					return cycleClosingNode(of: generator, instantiable: instantiable, property: property, bindingName: bindingName, seamCall: seamCall, inScope: scope, indent: indent, lines: &lines)
 				}
