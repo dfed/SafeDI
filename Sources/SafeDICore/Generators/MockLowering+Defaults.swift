@@ -112,8 +112,9 @@ extension MockLowering.Walk {
 		let construction = ScopeGenerator.MockConstruction(instantiable: instantiable, useMockInitializer: usesMockInitializer, builderTypesDeclaredEscaping: [])
 		let handWrittenDefaults = handWrittenMockDefaultParameters[instantiable.concreteInstantiable, default: []]
 		let defaultFields = construction.defaultParameters.map { MockLowering.DefaultField(of: $0, handWrittenMockDefaultParameters: handWrittenDefaults) }
-		// A `@Sendable`-typed configuration stores each default as a `@Sendable` closure, read as a call.
-		guard defaultFields.isEmpty || !startsExtraction && !sendableConfigurationTypeNames.contains(instantiable.concreteInstantiable.asSource) else { return .unsupported(.wrapper) }
+		// A `@Sendable`-typed configuration stores each default as a `@Sendable` closure, which `constructionArguments` calls;
+		// its struct is lowered by the configuration family.
+		guard defaultFields.isEmpty || !startsExtraction else { return .unsupported(.wrapper) }
 		return .lowered(defaultFields)
 	}
 
@@ -136,6 +137,7 @@ extension MockLowering.Walk {
 			return publicConstructionArguments(of: construction, given: instantiable, dependencyArguments: dependencyArguments, nodePath: nodePath, overrideReachable: overrideReachable)
 		}
 		let handWrittenDefaults = handWrittenMockDefaultParameters[instantiable.concreteInstantiable, default: []]
+		let storesDefaultsAsClosures = sendableConfigurationTypeNames.contains(instantiable.concreteInstantiable.asSource)
 		let surfacedArguments = overrideReachable
 			? construction.callSiteArguments
 			: construction.callSiteArguments.filter { argument in
@@ -151,9 +153,12 @@ extension MockLowering.Walk {
 			let configurationRead = overrideReachable
 				? readingOverride("\(nodePath).\(argument.label)", localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(argument.label)")
 				: "\(instantiable.concreteInstantiable.asSource).\(ScopeGenerator.MockParameterNode.configurationStructName)().\(argument.label)"
-			// An `@autoclosure` parameter's field is a closure, called where the type is built.
-			let isAutoclosure = argument.typeDescription.strippingEscaping.autoclosureValueType != nil
-			return (label: argument.label.spelledAsArgumentLabel, value: isAutoclosure ? "\(configurationRead)()" : configurationRead)
+			// The field is a closure, called where the type is built, for an `@autoclosure` parameter, and for every value
+			// that is not a function where the configuration is `@Sendable`-typed (`resolveBuilderArguments`).
+			let typeDescription = argument.typeDescription.strippingEscaping
+			let isStoredAsClosure = typeDescription.autoclosureValueType != nil
+				|| (storesDefaultsAsClosures && !typeDescription.isClosure)
+			return (label: argument.label.spelledAsArgumentLabel, value: isStoredAsClosure ? "\(configurationRead)()" : configurationRead)
 		}
 	}
 
@@ -169,6 +174,9 @@ extension MockLowering.Walk {
 		nodePath: String,
 		overrideReachable: Bool,
 	) -> [(label: String, value: String)] {
+		// A `@Sendable`-typed configuration stores every default as a `@Sendable` closure, which the read calls
+		// (`ScopeGenerator.publicBuilderArguments`).
+		let storesDefaultsAsClosures = sendableConfigurationTypeNames.contains(instantiable.concreteInstantiable.asSource)
 		var dependencyValues = dependencyArguments[...]
 		return construction.callSiteArguments.compactMap { argument in
 			if instantiable.dependencies.contains(where: argument.isFulfilled(by:)) {
@@ -176,6 +184,7 @@ extension MockLowering.Walk {
 			}
 			let value = if overrideReachable {
 				readingOverride("\(nodePath).\(argument.label)", localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(argument.label)")
+					+ (storesDefaultsAsClosures ? "()" : "")
 			} else if let defaultParameter = construction.defaultParameters.first(where: { $0.label == argument.label }),
 			          // The construction's own default decides, as the emitter's does, whatever default the provider evaluates.
 			          MockLowering.DefaultField(of: defaultParameter, handWrittenMockDefaultParameters: []).hasPublicProvider
