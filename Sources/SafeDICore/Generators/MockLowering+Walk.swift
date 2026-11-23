@@ -726,7 +726,9 @@ extension MockLowering {
 			// D1 lane hook (lane C): a public mock builds such a node with its construction function, as an internal mock does
 			// with the mock (`publicConstructionArguments`).
 			guard let initializer = usesMockInitializer ? instantiable.mockInitializer : instantiable.initializer,
-			      !usesMockInitializer || instantiable.mockCallReturnType == instantiable.concreteInstantiable,
+			      // D1 lane hook (lane D): an internal mock builds a node whose hand-written mock returns another of the type's
+			      // types as its property holds it, the configuration's builder returning the concrete type.
+			      !usesMockInitializer || instantiable.mockCallReturnType == instantiable.concreteInstantiable || !buildsPublicMock,
 			      initializer.arguments.allSatisfy({ argument in argument.hasDefaultValue || instantiable.dependencies.contains(where: argument.isFulfilled(by:)) })
 			else { return .unsupported(.handWrittenMock) }
 			// D1 lane hook (lane B): a node inside a builder function binds its label again there, hiding the root's binding of
