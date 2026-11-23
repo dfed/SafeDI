@@ -76,6 +76,11 @@ extension ScopeGenerator {
 		walk.buildsPublicMock = instantiable.generateMock == .public
 		// The nodes a public mock promotes, each bound from its caller's value when passed one.
 		walk.isV3 = context.apiVersion == .v3Unstable
+		if walk.isV3 {
+			walk.v3CycleTargets = walk.v3CycleTargets(beneath: orderedChildren.map(\.generator))
+			// The mocked type's configuration is the nearest of its type to every node of its tree.
+			walk.v3ConfigurationsInScope[instantiable.concreteInstantiable] = [MockLowering.V3ConfigurationInScope(expression: ReservedName.mockOverridesParameterName, isOptional: false)]
+		}
 		walk.promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildren, regardlessOfMockKind: walk.isV3)
 		// Each override binds its receive's label, in the optional form a receive only if available
 		// reads.
@@ -414,6 +419,12 @@ extension MockLowering {
 		// local of its own, and a node the mock promotes reads the instance or configuration `mock()` is passed for it.
 		/// Whether the walk lowers `.v3Unstable`'s mock API.
 		var isV3 = false
+		// In `.v3Unstable`, the configurations in lexical scope by type, innermost last, the builder functions a cycle closes
+		// on, and those around the node the walk is at, innermost last, with the types each node pushed into scope.
+		var v3ConfigurationsInScope = [TypeDescription: [V3ConfigurationInScope]]()
+		var v3CycleTargets = [ObjectIdentifier: V3CycleTarget]()
+		var v3TargetsAround = [(declaration: ScopeGenerator.BuiltDeclaration, target: V3CycleTarget)]()
+		var v3ScopePushes = [(types: [TypeDescription], pushedTarget: Bool)]()
 		// The bindings the node around the walk is passed by name, which a payload bound inside its
 		// builder function reads (`ScopeGenerator.MockParameterNode.ValuesBinding.line`).
 		var enclosingBindingNamesPassedByName = [String: String]()
@@ -668,7 +679,7 @@ extension MockLowering {
 					lines.append(contentsOf: generator.valuesBindingsBeforeBuilderFunction.map { "\(indent)\($0.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: [:]))" })
 					return try await publicMockCallNode(of: generator, publicMockCall: publicMockCall, building: (instantiable, property, forwardedProperties, erasedToConcreteExistential), inScope: scope, path: path, indent: indent, lines: &lines)
 				} else if isPropertyCycle {
-					return cycleClosingNode(of: generator, instantiable: instantiable, property: property, bindingName: bindingName, inScope: scope, indent: indent, lines: &lines)
+					return cycleClosingNode(of: generator, instantiable: instantiable, property: property, bindingName: bindingName, inScope: scope, path: path, indent: indent, lines: &lines)
 				}
 				return try await .built(builtNode(
 					of: generator,
@@ -743,7 +754,8 @@ extension MockLowering {
 		/// question the walk asks of the cycle edges.
 		func isPruned(_ concreteType: TypeDescription, beneath parentConcreteType: String?) -> Bool {
 			// Nearly every mock graph has no cycle edge, and spelling the type is most of the question's cost.
-			guard !cycleEdges.isEmpty, let parentConcreteType else { return false }
+			// `.v3Unstable` prunes no edge: a configuration's fields are optional.
+			guard !isV3, !cycleEdges.isEmpty, let parentConcreteType else { return false }
 			return cycleEdges.contains(ScopeGenerator.CycleEdge(parent: parentConcreteType, child: concreteType.asSource))
 		}
 
@@ -757,6 +769,7 @@ extension MockLowering {
 			property: Property,
 			bindingName: String,
 			inScope scope: Set<Property>,
+			path: String,
 			indent: String,
 			lines: inout [String],
 		) -> TreeNode {
@@ -771,7 +784,13 @@ extension MockLowering {
 			// builder function too, since it reads no override.
 			// A closer passes the function's cycle parameters (`MockLowering+CycleParameters.swift`); a
 			// closer on a loop of builders passes a member of the level's loops its `_received` function wraps again.
-			let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: loopMembership == nil ? scope : scope.union(loopMembers.keys), unavailableProperties: unavailableProperties, renames: renames, lazilyInstantiatedNames: lazilyInstantiatedNames)
+			var cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: loopMembership == nil ? scope : scope.union(loopMembers.keys), unavailableProperties: unavailableProperties, renames: renames, lazilyInstantiatedNames: lazilyInstantiatedNames)
+			// In `.v3Unstable`, a closer hands the function the configuration it builds from: its parent's field for it, else the
+			// nearest configuration of its type, and the nearest configuration of each other type the function's subtree builds.
+			if isV3, let closedOn = generator.closedOnDeclaration, let target = v3TargetsAround.last(where: { $0.declaration == closedOn })?.target {
+				cycleParameterArguments.append(v3ConfigurationExpression(of: instantiable.concreteInstantiable, field: "\(path).\(bindingName)"))
+				cycleParameterArguments.append(contentsOf: v3NearestArguments(of: target))
+			}
 			// A closer on a loop of builders declares the `_received` function its wrappers hand, with
 			// the loop's functions, and is bound with the loop's wrappers where its level binds it (`MockLowering+Loops.swift`).
 			if let loopMembership, let member = loopMembers[property] {
@@ -971,7 +990,7 @@ extension MockLowering {
 			let cycleNodeKey = MockLowering.cycleNodeKey(of: property, builtAs: instantiable)
 			// A node that repeats a node around it reads no override of its own, and one beneath an edge in `cycleEdges`
 			// reads none of its own or beneath it: its parent's configuration has no field for it.
-			let isCycleNode = ancestorTypes.contains(cycleNodeKey)
+			let isCycleNode = !isV3 && ancestorTypes.contains(cycleNodeKey)
 			let overrideReachable = overridePathReachable && !isPruned(instantiable.concreteInstantiable, beneath: parentConcreteType)
 			let isErased = erasedToConcreteExistential
 			let isFulfilledByAnotherType = property.typeDescription.asInstantiatedType != instantiable.concreteInstantiable
@@ -1037,11 +1056,29 @@ extension MockLowering {
 			let isPromotedInV3 = isV3 && parentConcreteType == nil && promotedProperties.contains(property)
 			let nodePath: String
 			var v3ConfigurationLine: String?
+			// A builder function a cycle closes on takes its configuration, and the nearest configuration of each other type
+			// its subtree builds, as parameters, which each call hands it.
+			let v3Target = isV3 ? v3CycleTargets[ObjectIdentifier(generator)] : nil
+			var v3TargetParameters = [String]()
+			var v3TargetArguments = [String]()
 			if isV3, hasConfiguration {
 				let configurationName = "\(bindingName)Configuration".spelledAsJoinedIdentifier
 				nodePath = configurationName
+				let concreteType = instantiable.concreteInstantiable
 				if !isPromotedInV3 {
-					v3ConfigurationLine = "\(indent)let \(configurationName) = \(path).\(bindingName) ?? .init()"
+					let expression = v3ConfigurationExpression(of: concreteType, field: "\(path).\(bindingName)")
+					if v3Target != nil {
+						v3TargetParameters.append("_ \(configurationName): \(concreteType.asSource).\(ReservedName.mockOverridesTypeName)")
+						v3TargetArguments.append(expression)
+					} else {
+						v3ConfigurationLine = "\(indent)let \(configurationName) = \(expression)"
+					}
+				}
+				if let v3Target {
+					for nearestType in v3Target.nearestTypes {
+						v3TargetParameters.append("_ \(Self.v3NearestParameterName(of: nearestType)): \(nearestType.asSource).\(ReservedName.mockOverridesTypeName)?")
+					}
+					v3TargetArguments.append(contentsOf: v3NearestArguments(of: v3Target))
 				}
 			} else {
 				nodePath = "\(path).\(bindingName)"
@@ -1144,7 +1181,8 @@ extension MockLowering {
 			if isPromotedInV3, hasConfiguration {
 				node.v3ReceivedConfigurationName = nodePath
 			}
-			node.cycleParameterArguments = cycleParameterArguments
+			node.v3TargetParameters = v3TargetParameters
+			node.cycleParameterArguments = cycleParameterArguments + v3TargetArguments
 			// A place of another module's public mock the tree builds inline reads the builder `mock()`
 			// takes for its hole type and family (`MockLowering+PublicMockCalls.swift`).
 			if let inlinePlaceBuilder = filledCallBuilders.holeBuildersByInlinePlace[childIndexPath] {
@@ -1201,6 +1239,22 @@ extension MockLowering {
 			overridePathReachable = overrideReachable
 			// The configured types around the node's children.
 			let configurationEntry = enteringConfiguredNode(of: instantiable.concreteInstantiable)
+			// In `.v3Unstable`, the node's configuration, and a cycle target's nearest parameters, are in scope beneath it.
+			if isV3 {
+				var pushedTypes = [TypeDescription]()
+				if hasConfiguration {
+					v3ConfigurationsInScope[instantiable.concreteInstantiable, default: []].append(MockLowering.V3ConfigurationInScope(expression: nodePath, isOptional: false))
+					pushedTypes.append(instantiable.concreteInstantiable)
+				}
+				if let v3Target {
+					for nearestType in v3Target.nearestTypes {
+						v3ConfigurationsInScope[nearestType, default: []].append(MockLowering.V3ConfigurationInScope(expression: Self.v3NearestParameterName(of: nearestType), isOptional: true))
+						pushedTypes.append(nearestType)
+					}
+					v3TargetsAround.append((declaration: ScopeGenerator.BuiltDeclaration(property: property, concreteType: instantiable.concreteInstantiable), target: v3Target))
+				}
+				v3ScopePushes.append((types: pushedTypes, pushedTarget: v3Target != nil))
+			}
 			return .descending(DescendingBuiltNode(
 				generator: generator,
 				instantiable: instantiable,
@@ -1274,6 +1328,14 @@ extension MockLowering {
 			let configurationEntry = descending.configurationEntry
 			var node = descending.node
 			let finishedChildren = leavingConfiguredNode(configurationEntry)
+			if isV3, let pushes = v3ScopePushes.popLast() {
+				for type in pushes.types {
+					v3ConfigurationsInScope[type]?.removeLast()
+				}
+				if pushes.pushedTarget {
+					v3TargetsAround.removeLast()
+				}
+			}
 			parentConcreteType = enclosingParentConcreteType
 			overridePathReachable = enclosingOverridePathReachable
 			renames = enclosingRenames
@@ -1309,7 +1371,7 @@ extension MockLowering {
 			let configuredNode = node.configured(byChildren: children)
 			let oneWayParentConcreteType = parentConcreteType
 			// A node whose type repeats a configured node around it, or beneath one, records nothing.
-			if configuredNode.hasConfiguration, configurationEntry.recordsConfiguration {
+			if configuredNode.hasConfiguration, configurationEntry.recordsConfiguration || isV3 {
 				let parentConcreteType = instantiable.concreteInstantiable.asSource
 				// A child beneath an edge in `cycleEdges` has no member in its parent's configuration, public or internal.
 				let recordedChildren = children.filter { child in child.concreteType.map { !isPruned($0, beneath: parentConcreteType) } ?? true }
@@ -1437,6 +1499,9 @@ extension MockLowering {
 		/// In `.v3Unstable`, where the node is promoted and configured, the name its configuration is bound under where
 		/// `mock()` is passed one: the node is bound by a `switch` over the `SafeDIReceived` `mock()` takes for it.
 		var v3ReceivedConfigurationName: String?
+		/// In `.v3Unstable`, where a cycle closes on the node's builder function, the parameters it takes for its configuration
+		/// and the nearest configurations of the other types its subtree builds, after its cycle parameters.
+		var v3TargetParameters = [String]()
 		// The `@Sendable` autoclosure parameters of the values the node's type instantiates that the
 		// mock cannot build, each bound in its builder function from the local `mock()` reads it into.
 		// Also the places it instantiates that a builder of `mock()` builds.
@@ -1561,6 +1626,9 @@ extension MockLowering {
 			if let v3ReceivedConfigurationName {
 				parameterList += (parameterList.isEmpty ? "" : ", ") + "_ \(v3ReceivedConfigurationName): \(instantiable.concreteInstantiable.asSource).\(ReservedName.mockOverridesTypeName)"
 			}
+			if !v3TargetParameters.isEmpty {
+				parameterList += (parameterList.isEmpty ? "" : ", ") + v3TargetParameters.joined(separator: ", ")
+			}
 			return "\(indent)\(decorator)func \(functionName)(\(parameterList)) -> \(builtType) {"
 		}
 
@@ -1598,7 +1666,8 @@ extension MockLowering {
 				return MockLowering.bindingLines(of: property, boundAs: bindingName, callingFunctionNamed: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent)
 			}
 			if let v3ReceivedConfigurationName {
-				let call = "\(functionName)(\((cycleParameterArguments + [v3ReceivedConfigurationName]).joined(separator: ", ")))"
+				let targetArgumentCount = v3TargetParameters.count
+				let call = "\(functionName)(\((cycleParameterArguments.dropLast(targetArgumentCount) + [v3ReceivedConfigurationName] + cycleParameterArguments.suffix(targetArgumentCount)).joined(separator: ", ")))"
 				return [MockLowering.v3ReceivedBindingLine(of: property, boundAs: bindingName, passing: promotedParameterName, configurationName: v3ReceivedConfigurationName, building: call, indent: indent)]
 			}
 			guard property.propertyType.isConstant else {

@@ -112,3 +112,92 @@ extension MockLowering.ConfigurationRecord {
 		}
 	}
 }
+
+// MARK: - Cycles
+
+extension MockLowering {
+	/// A configuration in lexical scope where the walk is, in `.v3Unstable`: the expression that reads it, and whether that
+	/// expression is optional (a builder function's parameter for the nearest configuration of a type above its pass).
+	struct V3ConfigurationInScope {
+		let expression: String
+		let isOptional: Bool
+	}
+
+	/// A builder function a cycle closes on in `.v3Unstable`: each call hands it the configuration it builds from, and the
+	/// nearest configuration of each other configured type its subtree builds, which a later pass's nodes of that type
+	/// inherit.
+	struct V3CycleTarget {
+		/// The configured types of the function's subtree other than its own, by their spelling, in that order.
+		let nearestTypes: [TypeDescription]
+	}
+}
+
+extension MockLowering.Walk {
+	/// The builder functions of `generators`' trees, in `.v3Unstable`, that a cycle closes on, by generator.
+	mutating func v3CycleTargets(beneath generators: [ScopeGenerator]) -> [ObjectIdentifier: MockLowering.V3CycleTarget] {
+		struct Frame {
+			let generator: ScopeGenerator
+			let declaration: ScopeGenerator.BuiltDeclaration
+			var configuredTypes = Set<TypeDescription>()
+			var isClosedOn = false
+		}
+		var targets = [ObjectIdentifier: MockLowering.V3CycleTarget]()
+		var stack = [Frame]()
+		// Each entry is a generator to enter, or `nil` to leave the frame on top of `stack`.
+		var toVisit: [ScopeGenerator?] = generators.reversed()
+		while let next = toVisit.popLast() {
+			guard let generator = next else {
+				let frame = stack.removeLast()
+				if frame.isClosedOn {
+					targets[ObjectIdentifier(frame.generator)] = MockLowering.V3CycleTarget(
+						nearestTypes: frame.configuredTypes.subtracting([frame.declaration.concreteType]).sorted { $0.asSource < $1.asSource },
+					)
+				}
+				if !stack.isEmpty {
+					stack[stack.count - 1].configuredTypes.formUnion(frame.configuredTypes)
+				}
+				continue
+			}
+			guard case let .property(instantiable, property, _, _, isPropertyCycle, _) = generator.scopeData else { continue }
+			if isPropertyCycle {
+				if let closedOn = generator.closedOnDeclaration, let index = stack.lastIndex(where: { $0.declaration == closedOn }) {
+					stack[index].isClosedOn = true
+				}
+				continue
+			}
+			let usesMockInitializer = instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType)
+			let children = generator.orderedChildGenerators
+			let isConfigured = children.contains { $0.mockLoweringBuiltProperty != nil } || !configurationDefaultFields(of: instantiable, usesMockInitializer: usesMockInitializer).isEmpty
+			var frame = Frame(generator: generator, declaration: ScopeGenerator.BuiltDeclaration(property: property, concreteType: instantiable.concreteInstantiable))
+			if isConfigured {
+				frame.configuredTypes.insert(instantiable.concreteInstantiable)
+			}
+			stack.append(frame)
+			toVisit.append(nil)
+			toVisit.append(contentsOf: children.reversed())
+		}
+		return targets
+	}
+
+	/// The nearest configuration of `concreteType` in lexical scope, if any.
+	func v3NearestConfiguration(of concreteType: TypeDescription) -> MockLowering.V3ConfigurationInScope? {
+		v3ConfigurationsInScope[concreteType]?.last
+	}
+
+	/// The expression a node of `concreteType` reads its configuration from: the field `fieldPath` of its parent's, else the
+	/// nearest configuration of its type in scope, else its type's defaults.
+	func v3ConfigurationExpression(of concreteType: TypeDescription, field fieldPath: String) -> String {
+		guard let nearest = v3NearestConfiguration(of: concreteType) else { return "\(fieldPath) ?? .init()" }
+		return nearest.isOptional ? "\(fieldPath) ?? \(nearest.expression) ?? .init()" : "\(fieldPath) ?? \(nearest.expression)"
+	}
+
+	/// The name of a cycle target's parameter that holds the nearest configuration of `concreteType` above its pass.
+	static func v3NearestParameterName(of concreteType: TypeDescription) -> String {
+		"__safeDI_nearest_\(concreteType.asIdentifier)"
+	}
+
+	/// The arguments a call of a cycle target hands its nearest parameters, from what is in scope.
+	func v3NearestArguments(of target: MockLowering.V3CycleTarget) -> [String] {
+		target.nearestTypes.map { type in v3NearestConfiguration(of: type)?.expression ?? "nil" }
+	}
+}

@@ -110,6 +110,10 @@ public enum MockLowering {
 				case let .built(bindingName, hasConfiguration, _, concreteType, _, _) where hasConfiguration:
 					let typeSource = "\(concreteType.asSource).\(ReservedName.mockOverridesTypeName)?"
 					return ChildField(name: bindingName, typeSource: typeSource, defaultValue: "nil", sendableForm: .init(typeSource: typeSource, defaultValue: "nil", configuredTypeName: concreteType.asSource))
+				case let .spelled(field) where field.defaultValue == ".init()" && field.typeSource.hasSuffix(".\(ScopeGenerator.MockParameterNode.configurationStructName)"):
+					// A node that closes a cycle is configured like the node it repeats.
+					let typeSource = "\(field.typeSource.dropLast(ScopeGenerator.MockParameterNode.configurationStructName.count))\(ReservedName.mockOverridesTypeName)?"
+					return ChildField(name: field.name, typeSource: typeSource, defaultValue: "nil", sendableForm: field.sendableForm.map { .init(typeSource: typeSource, defaultValue: "nil", configuredTypeName: $0.configuredTypeName) })
 				case .built, .spelled:
 					return childField
 				}
