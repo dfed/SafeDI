@@ -201,13 +201,12 @@ extension ScopeGenerator {
 		// D1 lane hook (lane C): a public mock's root passes its instances alike (`publicMockWithTree`).
 		let rootInstancesReadByValue = MockLowering.rootInstancesReadByValue(of: instantiable, among: lazilyInstantiatedInstances)
 		providedProperties.formUnion(rootInstancesReadByValue)
-		if instantiable.generateMock != .public {
-			let rootOptionalForms = MockLowering.rootOptionalFormsProvidedByNodes(of: instantiable, nodeProperties: Set(nodes.map(\.property)).union(signature.properties), renames: rootRenames)
-			providedProperties.formUnion(rootOptionalForms)
-			// D1 lane hook (lane B): each such receive of a node named apart is passed the node's name.
-			for (label, names) in MockLowering.rootOptionalFormRenames(of: rootOptionalForms, renames: rootRenames) {
-				rootRenames[label, default: [:]].merge(names) { renamed, _ in renamed }
-			}
+		// D1 lane hook (lane D): a public mock's root passes them alike, as `generateReturnArgumentList` does for every root.
+		let rootOptionalForms = MockLowering.rootOptionalFormsProvidedByNodes(of: instantiable, nodeProperties: Set(nodes.map(\.property)).union(signature.properties), renames: rootRenames)
+		providedProperties.formUnion(rootOptionalForms)
+		// D1 lane hook (lane B): each such receive of a node named apart is passed the node's name.
+		for (label, names) in MockLowering.rootOptionalFormRenames(of: rootOptionalForms, renames: rootRenames) {
+			rootRenames[label, default: [:]].merge(names) { renamed, _ in renamed }
 		}
 		guard instantiable.dependencies.allSatisfy({ providedProperties.contains($0.property) }) else {
 			return .unsupported(.flatParameter)
