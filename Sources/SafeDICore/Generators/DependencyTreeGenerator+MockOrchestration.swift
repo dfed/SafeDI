@@ -191,14 +191,12 @@ extension DependencyTreeGenerator {
 				)
 			}
 
-		// Each root's tree is built, read and released in one task, at most `BoundedConcurrency.mockRootWidth` roots at once,
-		// so that the trees are not all alive together: a tree holds a node per path, and every root's tree held until the
-		// module's mocks were generated was most of the generator's peak memory. What the module generates after the roots is
-		// kept in nodes that hold their children and nothing beneath them (`ScopeGenerator.MockTreeSummary`).
+		// Each root is lowered in one task, at most `BoundedConcurrency.mockRootWidth` roots at once, from its finished
+		// generator tree (`ScopeGenerator.lowerMockRoot(context:)`), which records the configurations its tree reads.
 		//
-		// The sendable configuration types are unioned across every root before any root's code is generated: a struct is
-		// shared across every root that references the type, so the annotation has to agree, and each root's emission
-		// reads the union. They are read from the generator trees, which need no parameter tree.
+		// The sendable configuration types are unioned across every root before any root is lowered: a struct is shared
+		// across every root that references the type, so the annotation has to agree, and each root's lowering reads the
+		// union. They are read from the generator trees.
 		let sendableConfigurationTypeNames = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
 			let (_, mockRoot) = instantiableAndMockRoot
 			return mockRoot.sendableConfigurationTypeNames()
@@ -206,277 +204,59 @@ extension DependencyTreeGenerator {
 			union.formUnion(names)
 		}
 		let mockDeclarationLocations = mockDeclarationLocationsOfTypesWithHandWrittenMocks()
-		let concreteTypesWithHandWrittenMocks = Set(mockDeclarationLocations.keys)
 
 		let foreignPublicMocks = seams.foreignPublicMocks
-		// Generate each root's mock code.
-		let generatedRootsAndSummaries = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
+		let mockContext = ScopeGenerator.MockContext(
+			mockConditionalCompilation: mockConditionalCompilation,
+			flatParameterMockDefaults: flatParameterMockDefaults,
+			cycleEdges: cycleEdges,
+			handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+			sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+			publicMockContext: publicMockContext,
+			foreignPublicMocks: foreignPublicMocks,
+		)
+		let fulfillingInstantiables = typeDescriptionToFulfillingInstantiableMap
+		let loweredRoots = try await BoundedConcurrency.map(mockRoots, width: BoundedConcurrency.mockRootWidth) { instantiableAndMockRoot, _ in
 			let (instantiable, mockRoot) = instantiableAndMockRoot
-			let summary = await mockRoot.mockTreeSummary(
-				isPublicMock: instantiable.generateMock == .public,
-				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
-				concreteTypesWithHandWrittenMocks: concreteTypesWithHandWrittenMocks,
-				mockRoot: instantiable.concreteInstantiable,
-				cycleEdges: cycleEdges,
-			)
-			let mockContext = ScopeGenerator.MockContext(
-				mockConditionalCompilation: mockConditionalCompilation,
-				flatParameterMockDefaults: flatParameterMockDefaults,
-				cycleEdges: cycleEdges,
-				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
-				sendableConfigurationTypeNames: sendableConfigurationTypeNames,
-				publicMockContext: publicMockContext,
-				foreignPublicMocks: foreignPublicMocks,
-			)
 			async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
-			// SWITCH PROTOTYPE: the lowering produces every root it lowers.
-			let loweredRoot = try await mockRoot.lowerMockRoot(context: mockContext)
-			let code: String = if case let .lowered(loweredCode, _) = loweredRoot {
-				loweredCode
-			} else {
-				try await mockRoot.generateCode(codeGeneration: .mock(mockContext))
-			}
-			var lowered: MockLowering.Result? = loweredRoot
-			if let shadowObserver = MockLoweringShadow.observer {
-				shadowObserver(MockLoweringShadow.Comparison(
-					mockedType: instantiable.concreteInstantiable.asSource,
-					outcome: MockLoweringShadow.outcome(comparing: loweredRoot, with: code),
-				))
-				lowered = loweredRoot
-			}
-			let generatedRoot = await GeneratedMockRoot(
+			let lowered = try await mockRoot.lowerMockRoot(context: mockContext)
+			return await (
 				root: GeneratedRoot(
 					typeDescription: instantiable.concreteInstantiable,
 					sourceFilePath: instantiable.sourceFilePath,
-					code: code,
+					code: "",
 					fulfillers: fulfillers,
 				),
-				configurationTypes: summary.configurationTypes,
-				isPublicMock: instantiable.generateMock == .public,
-				publicConstructionNodes: summary.publicConstructionNodes,
+				lowered: MockLowering.LoweredRoot(
+					mockedType: instantiable.concreteInstantiable,
+					lowered: lowered,
+					emittedMergedCode: "",
+					mockedTypeFulfiller: fulfillingInstantiables[instantiable.concreteInstantiable].flatMap(FulfillerImports.Fulfiller.init(instantiable:)),
+				),
 			)
-			await mockRoot.releaseRootMockParameterTree()
-			return (generatedRoot: generatedRoot, configurationNodesByConstruction: summary.configurationNodesByConstruction, lowered: lowered)
 		}
-		let generatedRoots = generatedRootsAndSummaries.map(\.generatedRoot)
 
-		// The second whole-module gate, not run by `requirements(of:)`; see
-		// the note above `validateSendableBuildersCaptureNoNonSendableWrapper`. It runs after the roots' code is generated,
-		// so that an error generating a root's code is reported first, as when the gate read each tree after it.
-		let oneWayCheck = Result {
-			try Self.validateConfigurationsAreBuiltOneWay(
-				configurationNodesByConstruction: generatedRootsAndSummaries.map(\.configurationNodesByConstruction),
-				mockDeclarationLocations: mockDeclarationLocations,
-			)
-		}
-		// SWITCH PROTOTYPE: the lowering's one-way check decides the error.
-		let loweredRootsForSwitch = zip(mockRoots, generatedRootsAndSummaries).compactMap { mockRoot, generatedRootAndSummary in
-			generatedRootAndSummary.lowered.map { (mockedType: mockRoot.instantiable.concreteInstantiable, lowered: $0) }
-		}
-		if case let .lowered(conflicts) = MockLowering.configurationsBuiltTwoWays(of: loweredRootsForSwitch, mockDeclarationLocations: mockDeclarationLocations), !conflicts.isEmpty {
+		// The second whole-module gate, not run by `requirements(of:)`: a type whose constructions read its configuration
+		// two ways is rejected, read from the records of every root's lowering. It runs after the roots are lowered, so
+		// that an error lowering a root is reported first.
+		let configurationsBuiltTwoWays = MockLowering.configurationsBuiltTwoWays(
+			of: loweredRoots.map { (mockedType: $0.lowered.mockedType, lowered: $0.lowered.lowered) },
+			mockDeclarationLocations: mockDeclarationLocations,
+		)
+		if case let .lowered(conflicts) = configurationsBuiltTwoWays, !conflicts.isEmpty {
 			throw DependencyTreeGeneratorError.configurationBuiltTwoWays(conflicts)
 		}
-		// Stage D1's shadow of the one-way check, which only the tests set: the check read from the records of every root's
-		// lowering, compared with the diagnostics above.
-		// D1 lane hook (lane D): compared in `MockLowering+OneWay.swift`.
-		if let shadowObserver = MockLoweringShadow.observer {
-			let loweredRoots = zip(mockRoots, generatedRootsAndSummaries).compactMap { mockRoot, generatedRootAndSummary in
-				generatedRootAndSummary.lowered.map { (mockedType: mockRoot.instantiable.concreteInstantiable, lowered: $0) }
-			}
-			let emittedDiagnostics: [SourceDiagnostic] = switch oneWayCheck {
-			case .success:
-				[]
-			case let .failure(error):
-				(error as? DependencyTreeGeneratorError)?.sourceDiagnostics ?? []
-			}
-			shadowObserver(MockLoweringShadow.oneWayComparison(
-				of: loweredRoots,
-				mockDeclarationLocations: mockDeclarationLocations,
-				emittedDiagnostics: emittedDiagnostics,
-			))
-		}
-		let nodesReadingConfiguration = try oneWayCheck.get()
 
-		let rootedTypeNames = Set(generatedRoots.map(\.root.typeDescription.asSource))
-		// Deduplicate configuration types by type name across all roots.
-		// With cycleEdges applied uniformly, every root produces the same struct
-		// for a given type, so first-wins by alphabetical root order is stable.
-		// Each type's struct is generated once, from the first root that reaches it:
-		// the struct first-wins keeps, so the structs other roots would generate are
-		// never generated.
-		var seenTypeNames = Set<String>()
-		var rootedConfigurationExtensions = [String: String]()
-		var sharedConfigurationExtensions = [ConfigurationExtension]()
-		// The public mocks share one module-level configuration per type (`ScopeGenerator.publicConfigurationDeclarations`),
-		// generated from the first public mock root that reaches the type, in type order, as the internal structs are, and
-		// one construction function per construction they build the type with: a type built both with its hand-written mock,
-		// as an additional type the mock returns, and with its initializer, as itself or erased, is built through both
-		// `__safeDI_mock` and `__safeDI_init`, which read the one configuration, whichever root reaches the type first.
-		var seenPublicConfigurationTypes = Set<TypeDescription>()
-		var firstPublicConstructionNodes = [ScopeGenerator.ConstructedType: ScopeGenerator.MockParameterNode]()
-		// Which node of a construction is kept follows root names, yet changes no output: every node a type's one
-		// construction builds calls the same declaration (the same arguments, defaults, isolation and return type), so
-		// each generates the same function.
-		for result in generatedRoots.sorted(by: { $0.root.typeDescription < $1.root.typeDescription }) {
-			for node in result.publicConstructionNodes {
-				let constructedType = ScopeGenerator.ConstructedType(concreteType: node.concreteType, usesMockInitializer: node.useMockInitializer)
-				firstPublicConstructionNodes[constructedType] = firstPublicConstructionNodes[constructedType] ?? node
-			}
-		}
-		var publicConfigurationDeclarations = [String]()
-		// The shared file extends each configured type, which the property it is built for need not name.
+		var generatedRoots = loweredRoots.map(\.root)
+		var mockConfigurationCode: String?
 		var mockConfigurationFulfillers = Set<FulfillerImports.Fulfiller>()
-		func recordFulfillers(configuredBy structNode: ScopeGenerator.MockParameterNode, inMockOf mockedType: TypeDescription) {
-			if let instantiable = typeDescriptionToFulfillingInstantiableMap[structNode.concreteType] {
-				mockConfigurationFulfillers.formUnion(FulfillerImports.Fulfiller.fulfillers(
-					building: instantiable,
-					forPropertyOfType: structNode.instantiatedTypeDescription,
-					// The struct's parameters default to what the hand-written mock's do.
-					callingHandWrittenMock: !handWrittenMockDefaultParameters[structNode.concreteType, default: []].isEmpty,
-				))
-			}
-			// A mock listed in `additionalMocksToGenerate` extends a type of another module, whose other types its tree
-			// configures, and no file of this module need import that module.
-			if let fulfiller = typeDescriptionToFulfillingInstantiableMap[mockedType].flatMap(FulfillerImports.Fulfiller.init(instantiable:)) {
-				mockConfigurationFulfillers.insert(fulfiller)
-			}
-		}
-		// Every root's nodes above its repeated ancestors, and then every root's nodes beneath them, so that a type a tree
-		// configures only beneath a repeated ancestor changes nothing the module generates for the other types.
-		let sortedGeneratedRoots = generatedRoots.sorted(by: { $0.root.typeDescription < $1.root.typeDescription })
-		var configurationTypesInOrder = [(result: GeneratedMockRoot, configurationType: ScopeGenerator.MockParameterNode)]()
-		for result in sortedGeneratedRoots {
-			configurationTypesInOrder += result.configurationTypes.nodes.map { (result: result, configurationType: $0) }
-		}
-		// The public and internal mocks generate their own kinds of configuration, so each kind is resolved apart.
-		for isPublicMock in [true, false] {
-			configurationTypesInOrder += Self.configurationsBeneathRepeatedAncestors(
-				ofRoots: sortedGeneratedRoots.filter { $0.isPublicMock == isPublicMock },
-				cycleEdges: cycleEdges,
-			)
-		}
-		if let publicMockContext {
-			for (result, configurationType) in configurationTypesInOrder where result.isPublicMock && seenPublicConfigurationTypes.insert(configurationType.concreteType).inserted {
-				guard let configurationTypeName = publicMockContext.configurationTypeNameByType[configurationType.concreteType] else { continue }
-				let structNode = nodesReadingConfiguration[configurationType.concreteType].flatMap { nodeReadingConfiguration in
-					nodeReadingConfiguration.configurationRequirements == configurationType.configurationRequirements ? nil : nodeReadingConfiguration
-				} ?? configurationType
-				// `__safeDI_init` before `__safeDI_mock`. `validateConfigurationsAreBuiltOneWay` rejects a type whose two
-				// constructions take different parameters where both read the configuration, which `structNode` describes.
-				let constructionNodes = [false, true].compactMap { usesMockInitializer in
-					structNode.useMockInitializer == usesMockInitializer
-						? structNode
-						: firstPublicConstructionNodes[ScopeGenerator.ConstructedType(concreteType: configurationType.concreteType, usesMockInitializer: usesMockInitializer)]
-				}
-				publicConfigurationDeclarations.append(ScopeGenerator.publicConfigurationDeclarations(
-					for: structNode,
-					constructionNodes: constructionNodes,
-					configurationTypeName: configurationTypeName,
-					context: publicMockContext,
-					cycleEdges: cycleEdges,
-					requiresSendable: sendableConfigurationTypeNames.contains(configurationType.concreteType.asSource),
-					handWrittenMockDefaultParameters: handWrittenMockDefaultParameters[configurationType.concreteType, default: []],
-				))
-				for constructionNode in constructionNodes {
-					recordFulfillers(configuredBy: constructionNode, inMockOf: result.root.typeDescription)
-				}
-			}
-		}
-		for (result, configurationType) in configurationTypesInOrder where !result.isPublicMock && seenTypeNames.insert(configurationType.concreteType.asSource).inserted {
-			let typeName = configurationType.concreteType.asSource
-			// The first node can be one that reads no overrides from the struct, beneath a cycle edge, built
-			// the other way from the nodes that read them. The struct must describe those that read them.
-			let structNode = nodesReadingConfiguration[configurationType.concreteType].flatMap { nodeReadingConfiguration in
-				nodeReadingConfiguration.configurationRequirements == configurationType.configurationRequirements ? nil : nodeReadingConfiguration
-			} ?? configurationType
-			let structCode = ScopeGenerator.generateConfigurationStruct(
-				for: structNode,
-				cycleEdges: cycleEdges,
-				sendableConfigurationTypeNames: sendableConfigurationTypeNames,
-				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters[configurationType.concreteType, default: []],
-			)
-			if rootedTypeNames.contains(typeName) {
-				rootedConfigurationExtensions[typeName] = structCode
-			} else {
-				sharedConfigurationExtensions.append(ConfigurationExtension(typeName: typeName, structCode: structCode))
-				recordFulfillers(configuredBy: structNode, inMockOf: result.root.typeDescription)
-			}
-		}
-
-		var mergedGeneratedRoots = generatedRoots.map { result in
-			let configurationCode = rootedConfigurationExtensions[result.root.typeDescription.asSource].map { structCode in
-				generateMockConfigurationCode(
-					configurationExtensions: [ConfigurationExtension(typeName: result.root.typeDescription.asSource, structCode: structCode)],
-					mockConditionalCompilation: mockConditionalCompilation,
-				)
-			}
-			let code = if let configurationCode, !configurationCode.isEmpty {
-				result.root.code + "\n\n" + configurationCode.trimmingCharacters(in: .whitespacesAndNewlines)
-			} else {
-				result.root.code
-			}
-			return GeneratedRoot(
-				typeDescription: result.root.typeDescription,
-				sourceFilePath: result.root.sourceFilePath,
-				code: code,
-				fulfillers: result.root.fulfillers,
-			)
-		}
-
-		var mockConfigurationCode: String? = if sharedConfigurationExtensions.isEmpty, publicConfigurationDeclarations.isEmpty {
-			nil
-		} else {
-			generateMockConfigurationCode(
-				configurationExtensions: sharedConfigurationExtensions,
-				publicConfigurationDeclarations: publicConfigurationDeclarations,
-				mockConditionalCompilation: mockConditionalCompilation,
-			)
-		}
-
-		// Stage D1's shadow of the configuration structs, which only the tests set: each root's merged code and the module's
-		// shared configuration code, lowered from the records of every root's lowering.
-		// D1 lane hook (lane D): compared in `MockLowering+Configurations.swift`.
-		if let shadowObserver = MockLoweringShadow.observer {
-			let loweredRoots = zip(generatedRootsAndSummaries, mergedGeneratedRoots).compactMap { generatedRootAndSummary, mergedRoot in
-				generatedRootAndSummary.lowered.map { lowered in
-					// D1 lane hook (lane B): with the mocked type's declaration, which the shared configuration file can import.
-					MockLowering.LoweredRoot(
-						mockedType: mergedRoot.typeDescription,
-						lowered: lowered,
-						emittedMergedCode: mergedRoot.code,
-						mockedTypeFulfiller: typeDescriptionToFulfillingInstantiableMap[mergedRoot.typeDescription].flatMap(FulfillerImports.Fulfiller.init(instantiable:)),
-					)
-				}
-			}
-			for comparison in MockLoweringShadow.configurationComparisons(
-				of: loweredRoots,
-				emittedConfigurationCode: mockConfigurationCode,
-				emittedConfigurationFulfillers: mockConfigurationFulfillers,
-				mockConditionalCompilation: mockConditionalCompilation,
-				sendableConfigurationTypeNames: sendableConfigurationTypeNames,
-				publicMockContext: publicMockContext,
-			) {
-				shadowObserver(comparison)
-			}
-		}
-
-		// SWITCH PROTOTYPE: the lowering's configurations.
 		if case let .lowered((mergedCodes, configurationCode, configurationFulfillers)) = MockLowering.configurationCode(
-			of: zip(generatedRootsAndSummaries, mergedGeneratedRoots).compactMap { generatedRootAndSummary, mergedRoot in
-				generatedRootAndSummary.lowered.map {
-					MockLowering.LoweredRoot(
-						mockedType: mergedRoot.typeDescription,
-						lowered: $0,
-						emittedMergedCode: mergedRoot.code,
-						mockedTypeFulfiller: typeDescriptionToFulfillingInstantiableMap[mergedRoot.typeDescription].flatMap(FulfillerImports.Fulfiller.init(instantiable:)),
-					)
-				}
-			},
+			of: loweredRoots.map(\.lowered),
 			mockConditionalCompilation: mockConditionalCompilation,
 			sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 			publicMockContext: publicMockContext,
 		) {
-			mergedGeneratedRoots = zip(mergedGeneratedRoots, mergedCodes).map { root, code in
+			generatedRoots = zip(generatedRoots, mergedCodes).map { root, code in
 				GeneratedRoot(typeDescription: root.typeDescription, sourceFilePath: root.sourceFilePath, code: code, fulfillers: root.fulfillers)
 			}
 			mockConfigurationCode = configurationCode
@@ -487,7 +267,7 @@ extension DependencyTreeGenerator {
 		Self.releaseInBackground(mockRoots.map(\.scopeGenerator))
 		mockRoots = []
 		return MockGenerationResult(
-			generatedRoots: mergedGeneratedRoots,
+			generatedRoots: generatedRoots,
 			mockConfigurationCode: mockConfigurationCode,
 			mockConfigurationFulfillers: mockConfigurationFulfillers,
 		)
