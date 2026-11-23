@@ -574,7 +574,7 @@ extension MockLowering {
 				// An alias of a label named apart reads the name it is handed; one the mock root's level names apart is bound
 				// under its name.
 				let aliasBindingName = bindingName ?? property.label
-				guard aliasBindingName != property.label || !labelsNoAliasBindsAgain.contains(property.label), labels.insert(aliasBindingName).inserted else { return .unsupported(.siblingLabelCollision) }
+				guard aliasBindingName != property.label || !bodyLabels.isEmpty || !labelsNoAliasBindsAgain.contains(property.label), labels.insert(aliasBindingName).inserted else { return .unsupported(.siblingLabelCollision) }
 				let alias = AliasBinding(
 					property: property,
 					bindingName: aliasBindingName,
@@ -817,7 +817,7 @@ extension MockLowering {
 			var bindingNamesPassedByName = [String: String]()
 			if !childGenerators.isEmpty {
 				for binding in receiverBindings {
-					switch MockLowering.receiveReadsLabelByName(binding.property.label, beneath: childGenerators, renames: renames) {
+					switch MockLowering.receiveReadsLabelByName(binding.property.label, beneath: orderedChildren, renames: renames) {
 					case true?:
 						bindingNamesPassedByName[binding.property.label] = binding.name
 					case false?:
@@ -1462,16 +1462,18 @@ extension MockLowering {
 	/// Whether a receive among `generators`, or beneath them up to a node that declares `label`, reads `label` by name: a
 	/// receive or an alias's fulfilling property whose form `renames` does not name apart; or `nil` where the walk cannot
 	/// tell yet (`ScopeGenerator.receiveReadsLabelByName`).
-	static func receiveReadsLabelByName(_ label: String, beneath generators: [ScopeGenerator], renames: [String: [TypeDescription: String]]) -> Bool? {
+	static func receiveReadsLabelByName(_ label: String, beneath children: [ScopeGenerator.OrderedChild], renames: [String: [TypeDescription: String]]) -> Bool? {
 		let names = renames[label] ?? [:]
 		// A stack of its own, since a mock tree can be as deep as the module has types.
-		var generatorsToVisit = generators
-		while let generator = generatorsToVisit.popLast() {
+		var childrenToVisit = children
+		while let child = childrenToVisit.popLast() {
+			let generator = child.generator
 			switch generator.scopeData {
 			case let .alias(_, fulfillingProperty, _, onlyIfAvailable, _):
-				guard fulfillingProperty.label == label else { continue }
-				// D1 lane hook (lane B): an alias bound to `nil`, or of a lazy wrapper's instance.
-				guard !onlyIfAvailable, !generator.mockLoweringLazilyInstantiatedInstanceProperties.contains(fulfillingProperty.asUnwrappedProperty) else { return nil }
+				// D1 lane hook (lane B): an alias bound to `nil` reads nothing (`emitAliasBinding`).
+				guard fulfillingProperty.label == label, !ScopeGenerator.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: child.unavailableProperties) else { continue }
+				// D1 lane hook (lane B): an alias of a lazy wrapper's instance.
+				guard !generator.mockLoweringLazilyInstantiatedInstanceProperties.contains(fulfillingProperty.asUnwrappedProperty) else { return nil }
 				guard names[fulfillingProperty.typeDescription] != nil else { return true }
 			case let .property(instantiable, _, _, _, isPropertyCycle, seamCall):
 				guard seamCall == nil else { return nil }
@@ -1483,7 +1485,7 @@ extension MockLowering {
 				// The builder function of a node that instantiates, forwards or renames the label declares it, and what is
 				// beneath reads that.
 				if !isPropertyCycle, !instantiable.dependencies.contains(where: { !$0.source.isReceived && $0.property.label == label }) {
-					generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator))
+					childrenToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: generator.mockLoweringBodyPropertiesGeneratedLater(child.propertiesGeneratedLater)))
 				}
 			// D1 lane hook (lane C): a site of a public mock's hole binds its property from the builder's label, as an alias
 			// binds its own (`MockAliasNode.holeSite`).
