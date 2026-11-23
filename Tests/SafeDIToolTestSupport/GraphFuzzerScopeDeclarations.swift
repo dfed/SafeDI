@@ -611,7 +611,7 @@ private final class ScopeEnumCollector: SyntaxVisitor {
 		// Each enum before the enums nested in it, so that enums are listed in the order a reader meets them.
 		let enumIndex = enums.count
 		enums.append(GraphFuzzerScopeDeclarations.ScopeEnum(extendedType: extendedType, path: path, cases: []))
-		let cases = self.cases(of: enumDeclaration)
+		let cases = cases(of: enumDeclaration)
 		var nestedEnums = [EnumDeclSyntax]()
 		for member in enumDeclaration.memberBlock.members {
 			if let nestedEnum = member.decl.as(EnumDeclSyntax.self) {
