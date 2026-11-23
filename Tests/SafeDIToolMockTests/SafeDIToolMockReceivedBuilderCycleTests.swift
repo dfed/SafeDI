@@ -3978,6 +3978,199 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 		], "Unexpected output \(output.mockFiles)")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_wrapsLaterMemberAgainInReceivedFunction_whenMemberTakesLaterMemberAsCycleParameter() async throws {
+		// `aBuilder`’s function takes `bBuilder`, which `C` builds again beneath it, as a cycle parameter, and `bBuilder` is
+		// built after it on the root’s loop: `aBuilder`’s `_received` function wraps `bBuilder` again and passes it.
+		let output = try await executeSafeDIToolTest(swiftFileContent: [
+			Self.type("Root", attributes: "(isRoot: true, generateMock: true)", "@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>"),
+			Self.type("A", "@Received let bBuilder: Instantiator<B>", "@Instantiated let cBuilder: Instantiator<C>"),
+			Self.type("B", "@Received let aBuilder: Instantiator<A>"),
+			Self.type("C", "@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>"),
+		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.mockFiles == [
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            aBuilder: A.SafeDIMockConfiguration = .init(),
+			            bBuilder: ((Instantiator<A>) -> B)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                aBuilder: aBuilder,
+			                bBuilder: bBuilder
+			            )
+			        }
+
+			        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+			        var bBuilder: ((Instantiator<A>) -> B)? { __safeDI_storage.bBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                aBuilder: A.SafeDIMockConfiguration,
+			                bBuilder: ((Instantiator<A>) -> B)?
+			            ) {
+			                self.aBuilder = aBuilder
+			                self.bBuilder = bBuilder
+			            }
+
+			            let aBuilder: A.SafeDIMockConfiguration
+			            let bBuilder: ((Instantiator<A>) -> B)?
+			        }
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_aBuilder(bBuilder: Instantiator<B>) -> A {
+			            func __safeDI_cBuilder() -> C {
+			                func __safeDI_aBuilder_received() -> A {
+			                    let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			                    return __safeDI_aBuilder(bBuilder: bBuilder)
+			                }
+			                func __safeDI_bBuilder() -> B {
+			                    let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
+			                    return if let safeDIBuilder = safeDIOverrides.aBuilder.cBuilder.bBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+			                }
+			                let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
+			                let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			                return if let safeDIBuilder = safeDIOverrides.aBuilder.cBuilder.safeDIBuilder { safeDIBuilder(aBuilder, bBuilder) } else { C(aBuilder: aBuilder, bBuilder: bBuilder) }
+			            }
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(bBuilder, cBuilder) } else { A(bBuilder: bBuilder, cBuilder: cBuilder) }
+			        }
+			        func __safeDI_aBuilder_received() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return __safeDI_aBuilder(bBuilder: bBuilder)
+			        }
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
+			            return if let safeDIBuilder = safeDIOverrides.bBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
+			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        return Root(aBuilder: aBuilder, bBuilder: bBuilder)
+			    }
+			}
+			#endif
+			""",
+		], "Unexpected output \(output.mockFiles)")
+	}
+
+	// MARK: Tests – A call of another module's public mock on a loop
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_rebindsCallsWrapperInsideItsFunction_whenPublicMockCallIsMemberOfLoopOfBuilders() async throws {
+		// `Node`’s tree receives `nodeBuilder`, so `Screen`’s mock promotes it, a loop of one builder whose function calls
+		// `Node`’s public mock: the function first wraps itself again, binds the `apiBuilder` the call passes up, and returns
+		// the call.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: [
+			ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContent: [
+				"""
+				import SafeDI
+
+				public protocol Api {}
+
+				@Instantiable(generateMock: .public)
+				public final class Node: Instantiable {
+				    init(api: any Api, step: Step) { self.api = api; self.step = step }
+				    @Instantiated let api: any Api
+				    @Instantiated let step: Step
+				}
+
+				@Instantiable
+				public final class Step: Instantiable {
+				    public init(nodeBuilder: Instantiator<Node>) { self.nodeBuilder = nodeBuilder }
+				    @Received let nodeBuilder: Instantiator<Node>
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+				"""
+				import SafeDI
+				import Feature
+
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(node: Node) { self.node = node }
+				    @Instantiated let node: Node
+				}
+				""",
+			], dependencies: ["Feature"]),
+		], integration: .moduleInfo, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            nodeBuilder: Node.SafeDIOverrides = .init(),
+		            node: Node.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                nodeBuilder: nodeBuilder,
+		                node: node
+		            )
+		        }
+
+		        var nodeBuilder: Node.SafeDIOverrides { __safeDI_storage.nodeBuilder }
+		        var node: Node.SafeDIOverrides { __safeDI_storage.node }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                nodeBuilder: Node.SafeDIOverrides,
+		                node: Node.SafeDIOverrides
+		            ) {
+		                self.nodeBuilder = nodeBuilder
+		                self.node = node
+		            }
+
+		            let nodeBuilder: Node.SafeDIOverrides
+		            let node: Node.SafeDIOverrides
+		        }
+		    }
+
+		    static func mock(
+		        apiBuilder: @escaping () -> any Api,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let __safeDI_apiBuilder = apiBuilder
+		        _ = Node.__safeDI_Node_mock_836E5FB7AC49A953.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_nodeBuilder() -> Node {
+		            let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
+		            let apiBuilder: () -> any Api = __safeDI_apiBuilder
+		            return Node.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), nodeBuilder: nodeBuilder, safeDIOverrides: safeDIOverrides.nodeBuilder)
+		        }
+		        let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
+		        _ = Node.__safeDI_Node_mock_836E5FB7AC49A953.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_node() -> Node {
+		            let apiBuilder: () -> any Api = __safeDI_apiBuilder
+		            return Node.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), nodeBuilder: nodeBuilder, safeDIOverrides: safeDIOverrides.node)
+		        }
+		        let node: Node = __safeDI_node()
+		        return Screen(node: node)
+		    }
+		}
+		#endif
+		"""])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
