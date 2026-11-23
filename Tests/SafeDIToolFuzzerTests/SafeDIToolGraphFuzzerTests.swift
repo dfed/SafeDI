@@ -3755,8 +3755,8 @@ struct SafeDIToolGraphFuzzerTests {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func fixture_lowersHandWrittenMockArgumentsByLabel_forSeed1155() async throws {
 		// A `customMock` whose argument takes a dependency the generated mock passes it by label. Stage D1's lowering once
-		// matched the argument by label and type, left the argument out, and differed from the emitter.
-		try await Self.expectMockLoweringIdenticalToEmitter(forSeed: 1_155, reportLine: "mock-lowering: 6/6 roots identical (100.0%); 0 differ")
+		// matched the argument by label and type, left the argument out.
+		try await Self.expectRollPasses(forSeed: 1_155)
 	}
 
 	@Test
@@ -3764,7 +3764,7 @@ struct SafeDIToolGraphFuzzerTests {
 	func fixture_lowersHandWrittenMockArgumentsByLabel_forSeed1341() async throws {
 		// `T3`'s `customMock(t1Builder:t3:)` takes `t3`, the `S1341_T3` the type receives under its own label, which the
 		// generated mock passes `t3: t3`. Stage D1's lowering once left that argument out.
-		try await Self.expectMockLoweringIdenticalToEmitter(forSeed: 1_341, reportLine: "mock-lowering: 12/12 roots identical (100.0%); 0 differ")
+		try await Self.expectRollPasses(forSeed: 1_341)
 	}
 
 	@Test
@@ -3772,7 +3772,7 @@ struct SafeDIToolGraphFuzzerTests {
 	func fixture_lowersPublicMockPassingNodeToOptionalFormItsTypeReceivesOnlyIfAvailable_forSeed137() async throws {
 		// `T1`, whose public mock binds `badge: S137_Badge`, receives `badge: S137_Badge?` only if available, which the root
 		// is passed `badge: badge`. Stage D1's lowering once passed a public mock's root no node's optional form.
-		try await Self.expectMockLoweringIdenticalToEmitter(forSeed: 137, features: [.generateMockPublic], reportLine: "mock-lowering: 55/55 roots identical (100.0%); 0 differ")
+		try await Self.expectRollPasses(forSeed: 137, features: [.generateMockPublic])
 	}
 
 	@Test
@@ -3781,7 +3781,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// `T3` requires `t2BuilderAlias: Instantiator<S1095_T2>?`, which its mock's root binds non-optional and passes
 		// `t2BuilderAlias: t2BuilderAlias`. Stage D1's lowering once passed a root a binding's optional form only where the
 		// root received it only if available.
-		try await Self.expectMockLoweringIdenticalToEmitter(forSeed: 1_095, reportLine: "mock-lowering: 62/62 roots identical (100.0%); 0 differ")
+		try await Self.expectRollPasses(forSeed: 1_095)
 	}
 
 	@Test
@@ -3789,18 +3789,20 @@ struct SafeDIToolGraphFuzzerTests {
 	func fixture_lowersMockBuildingByValueTypeThatForwardsValues_forSeed907() async throws {
 		// The remedy oracle's graph forwards `lazyAnyT4` on `T1`, which `T0` builds by value as `AnyT1`, a graph production
 		// rejects; its mocks pass the value by name from the scope. Stage D1's lowering once left such a node unsupported.
-		try await Self.expectMockLoweringIdenticalToEmitter(forSeed: 907, reportLine: "mock-lowering: 10/10 roots identical (100.0%); 0 differ")
+		try await Self.expectRollPasses(forSeed: 907)
 	}
 
-	/// Expects stage D1's lowering of the mock roots of `seed`'s graph, drawn with `features`, to tally `reportLine`
-	/// against the emitter's code.
+	/// Expects `seed`'s graph, drawn with `features`, to pass every oracle but its corpus's known issues of the seed, as
+	/// the long run judges it: a roll of a shape stage D1's lowering of mocks once generated otherwise than the mock
+	/// emitter it replaced.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private static func expectMockLoweringIdenticalToEmitter(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature> = [], reportLine: String) async throws {
-		let tally = MockLoweringShadowChecks.Tally()
-		_ = try await MockLoweringShadowChecks.$tally.withValue(tally) {
-			try await GraphFuzzerOracle.results(forSeeds: [seed], features: features)
+	private static func expectRollPasses(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature> = []) async throws {
+		let knownIssue = corpus(for: features).knownIssues.first { $0.seeds.contains(seed) }
+		for result in try await GraphFuzzerOracle.results(forSeeds: [seed], features: features) {
+			for finding in GraphFuzzerFinding.findings(failure: result.failure, laterFailures: result.laterFailures, knownIssue: knownIssue, retentionIsJudged: result.isJudgedForRetention) {
+				record(finding, fixture: result.fixture)
+			}
 		}
-		#expect(tally.reportLine == reportLine)
 	}
 
 	@Test
