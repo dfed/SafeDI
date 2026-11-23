@@ -417,7 +417,6 @@ extension ScopeGenerator {
 		filledCallBuilders.holeBuildersByInlinePlace = inlinePlaceBuildersOutsideFills
 		filledCallBuilders.namesFillsDeclare = namesFillsDeclare
 		filledCallBuilders.builderBindingLines = builderBindingLines
-		filledCallBuilders.optionalBuilderNames = optionalBuilderNames
 		return .lowered(filledCallBuilders)
 	}
 
@@ -944,8 +943,6 @@ extension MockLowering {
 		/// The lines that bind each builder `mock()` takes for the calls' places under its internal name where that is not
 		/// its label, with the label, which orders them among the signature's passed-up builders (`RootSignature.passedUpBuilders`).
 		var builderBindingLines = [(label: String, line: String)]()
-		/// The names a public mock's plan gives its optional builders, by family, which the builders are read under.
-		var optionalBuilderNames: [ScopeGenerator.MockRootParameters.SeamMockBuilder.Family: String]?
 		/// The builder `mock()` takes that each place of another module's public mock the tree builds inline outside every
 		/// fill reads, by the place's scope generator.
 		var holeBuildersByInlinePlace = [ObjectIdentifier: ScopeGenerator.FillPlaceBindings.HoleBuilder]()
