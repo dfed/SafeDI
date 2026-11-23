@@ -819,15 +819,12 @@ extension MockLowering {
 			// D1 lane hook (lane D): a node whose type's hand-written mock returns a type its property can hold is built with the
 			// mock, as `MockConstruction(useMockInitializer:)` says, where the mock returns the concrete type, in an internal mock.
 			let usesMockInitializer = instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType)
-			// An argument of the mock neither a dependency fulfills nor a default fills is passed what a build that compiles
-			// no mock never compiles (`UnfulfilledMockParameter`).
+			// D1 lane hook (lane D): an argument of the mock neither a dependency fulfills nor a default fills reads its node's
+			// configuration as a default does (`resolveBuilderArguments`), in a build that compiles no mock
+			// (`UnfulfilledMockParameter`).
 			// D1 lane hook (lane C): a public mock builds such a node with its construction function, as an internal mock does
 			// with the mock (`publicConstructionArguments`).
-			guard let initializer = usesMockInitializer ? instantiable.mockInitializer : instantiable.initializer,
-			      // D1 lane hook (lanes C and D): a node whose hand-written mock returns another of the type's types is built with
-			      // it, an internal mock's as its property holds it, a public mock's by its construction function.
-			      initializer.arguments.allSatisfy({ argument in argument.hasDefaultValue || instantiable.dependencies.contains(where: argument.isFulfilled(by:)) })
-			else { return .unsupported(.handWrittenMock) }
+			guard let initializer = usesMockInitializer ? instantiable.mockInitializer : instantiable.initializer else { return .unsupported(.handWrittenMock) }
 			// D1 lane hook (lane B): a node inside a builder function binds its label again there, hiding the root's binding of
 			// it from the node's subtree, as Swift's lookup does; only a node of the root's level is named apart from it.
 			guard !bodyLabels.isEmpty || !rootLabels.contains(property.label) || (bindingName != property.label && rootPropertiesNamedApartFromParameters.contains(property)), labels.insert(bindingName).inserted else { return .unsupported(.siblingLabelCollision) }
@@ -1070,11 +1067,13 @@ extension MockLowering {
 			func readingDefaultsInsideFunction() -> [(label: String, value: String)] {
 				constructionArguments(of: initializer, given: instantiable, usesMockInitializer: usesMockInitializer, dependencyArguments: dependencyArguments, nodePath: nodePath, overrideReachable: overrideReachable)
 			}
-			if startsExtraction, isWrapped, !defaultFields.isEmpty {
+			// D1 lane hook (lane D): and an argument of its hand-written mock no dependency fulfills, which it reads as a default.
+			let readsConfiguration = constructionReadsConfiguration(of: instantiable, usesMockInitializer: usesMockInitializer)
+			if startsExtraction, isWrapped, readsConfiguration {
 				node.arguments = readingDefaultsInsideFunction()
 			}
 			let functionOverrideRead = startsExtraction ? overrideRead.map { readingOverride($0, localNameSuffix: builder) } : overrideRead
-			if startsExtraction, !isWrapped, !defaultFields.isEmpty {
+			if startsExtraction, !isWrapped, readsConfiguration {
 				node.arguments = readingDefaultsInsideFunction()
 			}
 			let preludeLines = startsExtraction ? endExtraction(restoring: enclosingExtractor, indent: indent) : []
@@ -1622,7 +1621,8 @@ extension MockLowering {
 	static func rootArgumentList(of initializer: Initializer, given dependencies: [Dependency], renames: [String: [TypeDescription: String]], passingNilTo unavailableProperties: Set<Property>, readingInstancesOf instancesReadByValue: Set<Property> = []) -> String {
 		var parts = [String]()
 		for argument in initializer.arguments {
-			if let dependency = dependencies.first(where: argument.isFulfilled(by:)) {
+			// D1 lane hook (lane D): an argument takes the dependency of its label, whatever its type.
+			if let dependency = MockLowering.dependency(passedTo: argument, among: dependencies) {
 				// D1 lane hook (lane B): a receive only if available nothing above provides is passed `nil`, as production passes it.
 				guard dependency.source != .received(onlyIfAvailable: true) || !unavailableProperties.contains(dependency.property) else {
 					parts.append("\(argument.label.spelledAsArgumentLabel): nil")

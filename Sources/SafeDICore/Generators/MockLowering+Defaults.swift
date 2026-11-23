@@ -114,6 +114,18 @@ extension MockLowering.Walk {
 		return .lowered(defaultFields)
 	}
 
+	/// Whether a construction of a node of `instantiable` reads an argument from the node's configuration: a default-valued
+	/// parameter, or an argument no dependency fulfills and no default fills, which only a build that compiles no mock
+	/// generates (`UnfulfilledMockParameter`) and which the emitter reads as it reads a default (`resolveBuilderArguments`).
+	mutating func constructionReadsConfiguration(of instantiable: Instantiable, usesMockInitializer: Bool) -> Bool {
+		Self.readsConfiguration(mockConstruction(of: instantiable, usesMockInitializer: usesMockInitializer), given: instantiable)
+	}
+
+	private static func readsConfiguration(_ construction: ScopeGenerator.MockConstruction, given instantiable: Instantiable) -> Bool {
+		!construction.defaultParameters.isEmpty
+			|| construction.callSiteArguments.contains(where: { MockLowering.dependency(passedTo: $0, among: instantiable.dependencies) == nil })
+	}
+
 	/// The arguments of `initializer`'s construction of `instantiable`, as `resolveBuilderArguments` passes them: each
 	/// dependency's value from `dependencyArguments`, in order, and each default-valued parameter the construction surfaces
 	/// read from the node's configuration at `nodePath`, or from one built afresh where no override reaches the node, which
@@ -128,7 +140,7 @@ extension MockLowering.Walk {
 		overrideReachable: Bool,
 	) -> [(label: String, value: String)] {
 		let construction = mockConstruction(of: instantiable, usesMockInitializer: usesMockInitializer)
-		guard !construction.defaultParameters.isEmpty else { return dependencyArguments }
+		guard Self.readsConfiguration(construction, given: instantiable) else { return dependencyArguments }
 		guard !buildsPublicMock else {
 			return publicConstructionArguments(of: construction, given: instantiable, dependencyArguments: dependencyArguments, nodePath: nodePath, overrideReachable: overrideReachable)
 		}
@@ -139,7 +151,7 @@ extension MockLowering.Walk {
 			: Self.argumentsSurfacedWithoutOverride(of: construction, usesMockInitializer: usesMockInitializer, handWrittenDefaults: handWrittenDefaults)
 		var dependencyValues = dependencyArguments[...]
 		return surfacedArguments.compactMap { argument in
-			if instantiable.dependencies.contains(where: argument.isFulfilled(by:)) {
+			if MockLowering.dependency(passedTo: argument, among: instantiable.dependencies) != nil {
 				return dependencyValues.popFirst()
 			}
 			let configurationRead = overrideReachable
@@ -198,7 +210,7 @@ extension MockLowering.Walk {
 		let storesDefaultsAsClosures = sendableConfigurationTypeNames.contains(instantiable.concreteInstantiable.asSource)
 		var dependencyValues = dependencyArguments[...]
 		return construction.callSiteArguments.compactMap { argument in
-			if instantiable.dependencies.contains(where: argument.isFulfilled(by:)) {
+			if MockLowering.dependency(passedTo: argument, among: instantiable.dependencies) != nil {
 				return dependencyValues.popFirst()
 			}
 			let value = if overrideReachable {
