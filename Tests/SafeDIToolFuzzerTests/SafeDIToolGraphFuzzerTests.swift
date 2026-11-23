@@ -3625,12 +3625,21 @@ struct SafeDIToolGraphFuzzerTests {
 		try await Self.expectMockLoweringIdenticalToEmitter(forSeed: 1_341, reportLine: "mock-lowering: 12/12 roots identical (100.0%); 0 differ")
 	}
 
-	/// Expects stage D1's lowering of the mock roots of `seed`'s graph to tally `reportLine` against the emitter's code.
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private static func expectMockLoweringIdenticalToEmitter(forSeed seed: UInt64, reportLine: String) async throws {
+	func fixture_lowersPublicMockPassingNodeToOptionalFormItsTypeReceivesOnlyIfAvailable_forSeed137() async throws {
+		// `T1`, whose public mock binds `badge: S137_Badge`, receives `badge: S137_Badge?` only if available, which the root
+		// is passed `badge: badge`. Stage D1's lowering once passed a public mock's root no node's optional form.
+		try await Self.expectMockLoweringIdenticalToEmitter(forSeed: 137, features: [.generateMockPublic], reportLine: "mock-lowering: 55/55 roots identical (100.0%); 0 differ")
+	}
+
+	/// Expects stage D1's lowering of the mock roots of `seed`'s graph, drawn with `features`, to tally `reportLine`
+	/// against the emitter's code.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func expectMockLoweringIdenticalToEmitter(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature> = [], reportLine: String) async throws {
 		let tally = MockLoweringShadowChecks.Tally()
 		_ = try await MockLoweringShadowChecks.$tally.withValue(tally) {
-			try await GraphFuzzerOracle.results(forSeeds: [seed])
+			try await GraphFuzzerOracle.results(forSeeds: [seed], features: features)
 		}
 		#expect(tally.reportLine == reportLine)
 	}
