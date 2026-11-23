@@ -304,7 +304,9 @@ extension DependencyTreeGenerator {
 	/// changes in it. A scope that builds hundreds of children, each building children of its own, would otherwise copy the
 	/// whole map for each, which made the walk grow with the square of the children. It holds one shared map, which every
 	/// scope beneath that changes little refers to, and the changes, which are folded into a new shared map once they are
-	/// many: a map is copied only when it has grown by half since its last copy.
+	/// many: a map is copied only when it has grown by half since its last copy. A map smaller than
+	/// `layeredMapMinimumSharedCount` is changed in place, copied when it is first changed as a plain dictionary is: a copy
+	/// that small costs less than writing and consulting two maps.
 	struct LayeredMap<Key: Hashable, Value> {
 		init(_ map: [Key: Value]) {
 			shared = map
@@ -318,19 +320,28 @@ extension DependencyTreeGenerator {
 
 		subscript(key: Key) -> Value? {
 			get {
-				if let change = changes[key] {
+				if !changes.isEmpty, let change = changes[key] {
 					change
 				} else {
 					shared[key]
 				}
 			}
 			set {
-				changes.updateValue(newValue, forKey: key)
+				if changes.isEmpty, shared.count < DependencyTreeGenerator.layeredMapMinimumSharedCount {
+					shared[key] = newValue
+				} else {
+					changes.updateValue(newValue, forKey: key)
+				}
 			}
 		}
 
 		subscript(key: Key, default defaultValue: @autoclosure () -> Value) -> Value {
 			self[key] ?? defaultValue()
+		}
+
+		/// Whether an entry of this map satisfies `predicate`, read without copying the map.
+		func contains(where predicate: ((key: Key, value: Value)) -> Bool) -> Bool {
+			changes.contains { key, value in value.map { predicate((key, $0)) } ?? false } || shared.contains { changes[$0.key] == nil && predicate($0) }
 		}
 
 		/// This map as one dictionary, copied only where something changed.
@@ -349,31 +360,43 @@ extension DependencyTreeGenerator {
 		}
 	}
 
+	/// The fewest entries a `LayeredMap` or `ReceivableProperties` shares before it keeps its changes apart rather than
+	/// copying itself whenever it changes.
+	static let layeredMapMinimumSharedCount = 32
+
 	/// What the scopes a scope is built inside make available to it, shared and changed as a `LayeredMap` is (see there),
-	/// with the shared properties by label, since the key of a clean subtree reads those of the few labels it reads.
+	/// with the shared properties of a large set by label, since the key of a clean subtree reads those of the few labels it
+	/// reads. A set made smaller than `layeredMapMinimumSharedCount` is changed in place, as a plain set is, until a scope
+	/// hands it on larger.
 	struct ReceivableProperties: PropertyMembership {
 		init(_ properties: Set<Property>) {
 			shared = properties
-			var sharedByLabel = [String: [Property]]()
-			for property in properties {
-				sharedByLabel[property.label, default: []].append(property)
+			if properties.count >= DependencyTreeGenerator.layeredMapMinimumSharedCount {
+				var sharedByLabel = [String: [Property]]()
+				for property in properties {
+					sharedByLabel[property.label, default: []].append(property)
+				}
+				self.sharedByLabel = sharedByLabel
+			} else {
+				sharedByLabel = nil
 			}
-			self.sharedByLabel = sharedByLabel
 			changes = [:]
 		}
 
-		/// The properties every scope built by one parent shares.
-		private let shared: Set<Property>
-		/// `shared`, by label.
-		private let sharedByLabel: [String: [Property]]
+		/// The properties every scope built by one parent shares; for a small set, which keeps no changes apart, every
+		/// property.
+		private var shared: Set<Property>
+		/// `shared`, by label, where it is large enough to keep its changes apart; `nil` for a small set.
+		private let sharedByLabel: [String: [Property]]?
 		/// What the scopes from the one that made `shared` down to this one changed: whether each property is receivable.
 		private var changes: [Property: Bool]
 
 		func contains(_ property: Property) -> Bool {
-			changes[property] ?? shared.contains(property)
+			changes.isEmpty ? shared.contains(property) : changes[property] ?? shared.contains(property)
 		}
 
 		mutating func insertIfAbsent(_ property: Property) -> Bool {
+			guard sharedByLabel != nil else { return shared.insert(property).inserted }
 			guard !contains(property) else { return false }
 			changes[property] = true
 			return true
@@ -383,7 +406,11 @@ extension DependencyTreeGenerator {
 		func withholding(_ properties: [Property]) -> Self {
 			var withheld = self
 			for property in properties {
-				withheld.changes[property] = false
+				if sharedByLabel == nil {
+					withheld.shared.remove(property)
+				} else {
+					withheld.changes[property] = false
+				}
 			}
 			return withheld
 		}
@@ -394,6 +421,8 @@ extension DependencyTreeGenerator {
 
 		/// Those of these properties whose label is one of `labels`.
 		func properties(labeledAnyOf labels: Set<String>) -> Set<Property> {
+			// A small set keeps no changes apart.
+			guard let sharedByLabel else { return shared.filter { labels.contains($0.label) } }
 			var properties = Set<Property>()
 			for label in labels {
 				for property in sharedByLabel[label, default: []] where changes[property] == nil {
@@ -420,7 +449,11 @@ extension DependencyTreeGenerator {
 
 		/// See `LayeredMap.compacted`.
 		var compacted: Self {
-			changes.count <= shared.count / 2 + 8 ? self : Self(asSet)
+			if sharedByLabel == nil {
+				shared.count < DependencyTreeGenerator.layeredMapMinimumSharedCount ? self : Self(shared)
+			} else {
+				changes.count <= shared.count / 2 + 8 ? self : Self(asSet)
+			}
 		}
 	}
 
@@ -467,22 +500,23 @@ extension DependencyTreeGenerator {
 		let propertyStack: [Property]
 		/// The concrete types of those scopes, beside `propertyStack`.
 		let parentTypeStack: [TypeDescription]
-		/// The property each label names at the cycle-closing scope.
-		let closestDeclarationByLabel: [String: DependencyTreeGeneratorError.LabelDeclaration]
+		/// The property each label names at the cycle-closing scope. The walk's own layered maps are kept as they are, since
+		/// nearly every tree built again returns before it reads more than a few labels of them.
+		let closestDeclarationByLabel: LayeredMap<String, DependencyTreeGeneratorError.LabelDeclaration>
 		/// See `ScopeToValidate.closestDeclarationDepthByLabel`.
-		let closestDeclarationDepthByLabel: [String: Int]
+		let closestDeclarationDepthByLabel: LayeredMap<String, Int>
 		/// The properties the scopes the cycle-closing scope is built inside make available to the scopes they build.
-		let enclosingReceivableProperties: Set<Property>
+		let enclosingReceivableProperties: ReceivableProperties
 		/// The properties the cycle-closing scope's own property makes receivable, which its tree is not given.
 		let receivablePropertiesOfClosingProperty: [Property]
 		/// The properties the scopes the cycle-closing scope is built inside make available to it, as the tree of any child
 		/// is given them, without the property it builds. Computed only where the tree built again is walked, which is rare.
 		var receivableProperties: Set<Property> {
-			enclosingReceivableProperties.subtracting(receivablePropertiesOfClosingProperty)
+			enclosingReceivableProperties.asSet.subtracting(receivablePropertiesOfClosingProperty)
 		}
 
 		/// See `ScopeToValidate.receivableDepthByProperty`.
-		let receivableDepthByProperty: [Property: Int]
+		let receivableDepthByProperty: LayeredMap<Property, Int>
 	}
 
 	/// What the walk of a tree in `validatePropertiesAreFulfillable` validates next. A cycle-closing scope's tree built
@@ -1717,10 +1751,10 @@ extension DependencyTreeGenerator {
 			cycleClosingScopeParent: Scope,
 			propertyStack: [Property],
 			parentTypeStack: [TypeDescription],
-			closestDeclarationByLabel: [String: DependencyTreeGeneratorError.LabelDeclaration],
-			closestDeclarationDepthByLabel: [String: Int],
+			closestDeclarationByLabel layeredClosestDeclarationByLabel: LayeredMap<String, DependencyTreeGeneratorError.LabelDeclaration>,
+			closestDeclarationDepthByLabel layeredClosestDeclarationDepthByLabel: LayeredMap<String, Int>,
 			receivableProperties: @autoclosure () -> Set<Property>,
-			receivableDepthByProperty: [Property: Int],
+			receivableDepthByProperty layeredReceivableDepthByProperty: LayeredMap<Property, Int>,
 			validatesCycles: Bool,
 			validatesHiddenProperties: Bool,
 			root: TypeDescription,
@@ -1732,9 +1766,12 @@ extension DependencyTreeGenerator {
 			// only once they have gathered every declaration between.
 			let judgedLabels = labelsJudged(inTreeOf: scope)
 			guard judgedLabels.contains(where: { label in
-				closestDeclarationDepthByLabel[label].map { $0 > closedOnDepth } == true && label != property.label
-			}) || receivableDepthByProperty.contains(where: { $0.value > closedOnDepth && judgedLabels.contains($0.key.label) })
+				layeredClosestDeclarationDepthByLabel[label].map { $0 > closedOnDepth } == true && label != property.label
+			}) || layeredReceivableDepthByProperty.contains(where: { $0.value > closedOnDepth && judgedLabels.contains($0.key.label) })
 			else { return }
+			let closestDeclarationByLabel = layeredClosestDeclarationByLabel.asDictionary
+			let closestDeclarationDepthByLabel = layeredClosestDeclarationDepthByLabel.asDictionary
+			let receivableDepthByProperty = layeredReceivableDepthByProperty.asDictionary
 			let receivableProperties = receivableProperties()
 			// The declarations between that bind the function's parameters. The property the cycle closes on is no
 			// parameter: the cycle-closing scope's own declaration of its label is that property, which the tree built again
@@ -2315,11 +2352,11 @@ extension DependencyTreeGenerator {
 							cycleClosingScopeParent: scope,
 							propertyStack: childPropertyStack,
 							parentTypeStack: childParentTypeStack,
-							closestDeclarationByLabel: childClosestDeclarationByLabel.asDictionary,
-							closestDeclarationDepthByLabel: childClosestDeclarationDepthByLabel.asDictionary,
-							enclosingReceivableProperties: childReceivableProperties.asSet,
+							closestDeclarationByLabel: childClosestDeclarationByLabel,
+							closestDeclarationDepthByLabel: childClosestDeclarationDepthByLabel,
+							enclosingReceivableProperties: childReceivableProperties,
 							receivablePropertiesOfClosingProperty: childPropertyToGenerate.receivableProperties,
-							receivableDepthByProperty: childReceivableDepthByProperty.asDictionary,
+							receivableDepthByProperty: childReceivableDepthByProperty,
 						)))
 						continue
 					}
