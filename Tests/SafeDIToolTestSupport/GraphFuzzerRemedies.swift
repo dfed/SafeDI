@@ -1779,7 +1779,13 @@ extension GraphFuzzerOracle {
 	static func remedyVariants(of toolRuns: [GraphFuzzerToolRuns]) -> [GraphFuzzerRemedyVariant] {
 		toolRuns.flatMap { runs in
 			runs.remedyRuns
-				.filter { if case .accepted = $0.outcome { true } else { false } }
+				.filter {
+					if case .accepted = $0.outcome {
+						true
+					} else {
+						false
+					}
+				}
 				.prefix(compiledRemedyVariantLimit ?? .max)
 				.enumerated()
 				.compactMap { index, remedyRun in GraphFuzzerRemedyVariant(seed: runs.fixture.seed, index: index, remedyRun: remedyRun) }
