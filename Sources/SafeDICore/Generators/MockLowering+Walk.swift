@@ -169,13 +169,13 @@ extension ScopeGenerator {
 		// `nil`.
 		var providedProperties = Set(nodes.map(\.property)).union(signature.properties).union(overrideProperties).union(unavailableOptionalProperties).union(signature.lazilyInstantiatedProperties)
 		// D1 lane hook (lane D): the mocked type's own receive or instantiation of a lazy wrapper's instance is passed the
-		// wrapper's instance, and a receive only if available of a node's optional form is passed the node, as
-		// `generateReturnArgumentList` passes them.
+		// wrapper's instance, and a receive only if available of the optional form of a node or a parameter of `mock()` is passed
+		// that binding, as `generateReturnArgumentList` passes them.
 		// D1 lane hook (lane C): a public mock's root passes its instances alike (`publicMockWithTree`).
 		let rootInstancesReadByValue = MockLowering.rootInstancesReadByValue(of: instantiable, among: lazilyInstantiatedInstances)
 		providedProperties.formUnion(rootInstancesReadByValue)
 		if instantiable.generateMock != .public {
-			providedProperties.formUnion(MockLowering.rootOptionalFormsProvidedByNodes(of: instantiable, nodeProperties: Set(nodes.map(\.property)), renames: rootRenames))
+			providedProperties.formUnion(MockLowering.rootOptionalFormsProvidedByNodes(of: instantiable, nodeProperties: Set(nodes.map(\.property)).union(signature.properties), renames: rootRenames))
 		}
 		guard instantiable.dependencies.allSatisfy({ providedProperties.contains($0.property) }) else {
 			return .unsupported(.flatParameter)
@@ -1099,7 +1099,10 @@ extension MockLowering {
 					guard childProperties.contains(dependency.property) || uncoveredProperties.contains(dependency.property) else { return .flatParameter }
 				case .received(onlyIfAvailable: false):
 					// D1 lane hook (lane B): a receive by value of a lazy wrapper's instance reads the wrapper in scope.
+					// D1 lane hook (lane D): a required receive of an optional form reads the non-optional node of its label, which
+					// the mock promotes for both forms.
 					guard scope.contains(dependency.property)
+						|| dependency.property.typeDescription.isOptional && scope.contains(dependency.property.asUnwrappedProperty)
 						|| lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty)
 						&& MockLowering.scope(scope, holdsWrapperOfInstance: dependency.property.asUnwrappedProperty)
 					else { return .flatParameter }

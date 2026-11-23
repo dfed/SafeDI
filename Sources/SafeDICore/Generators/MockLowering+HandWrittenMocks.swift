@@ -68,8 +68,8 @@ extension MockLowering {
 		return properties
 	}
 
-	/// The mocked type's own receives only if available of the optional form of a node the root's level binds under the
-	/// receive's label: each is passed the node's non-optional value.
+	/// The mocked type's own receives only if available of the optional form of a node the root's level binds, or a
+	/// parameter of `mock()`, under the receive's label: each is passed that non-optional value.
 	static func rootOptionalFormsProvidedByNodes(of instantiable: Instantiable, nodeProperties: Set<Property>, renames: [String: [TypeDescription: String]]) -> Set<Property> {
 		var properties = Set<Property>()
 		for dependency in instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) && dependency.property.typeDescription.isOptional {
