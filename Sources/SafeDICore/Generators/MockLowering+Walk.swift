@@ -1450,6 +1450,11 @@ extension MockLowering {
 				if !isPropertyCycle, !instantiable.dependencies.contains(where: { !$0.source.isReceived && $0.property.label == label }) {
 					generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator))
 				}
+			// D1 lane hook (lane C): a site of a public mock's hole binds its property from the builder's label, as an alias
+			// binds its own (`MockAliasNode.holeSite`).
+			case let .hole(_, _, site?):
+				guard site.builderLabel == label else { continue }
+				guard names[site.builtType] != nil else { return true }
 			case .root, .hole, .fill:
 				return nil
 			}
