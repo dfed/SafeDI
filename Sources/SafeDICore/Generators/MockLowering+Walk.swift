@@ -51,6 +51,19 @@ extension ScopeGenerator {
 		// D1 lane hook (lane C): the wrappers `mock()` binds around the instances it is passed, which their receivers are
 		// passed by name.
 		walk.lazilyInstantiatedNames = signature.lazilyInstantiatedBindingNamesByLabelAndType
+		// D1 lane hook (lane E): a public mock's wrapper parameters, as the emitter's `lazilyInstantiatedBindingNameMap` holds
+		// them, a non-optional one under its optional form too.
+		if instantiable.generateMock == .public {
+			for parameter in signature.flatReceivedParameters where parameter.property.typeDescription.lazilyInstantiatedInstanceType != nil {
+				walk.publicMockWrapperParameterNames[parameter.property.label, default: [:]][parameter.property.typeDescription] = parameter.name
+			}
+			for parameter in signature.flatReceivedParameters where parameter.property.typeDescription.lazilyInstantiatedInstanceType != nil && !parameter.property.typeDescription.isOptional {
+				let optionalType = TypeDescription.optional(parameter.property.typeDescription)
+				if walk.publicMockWrapperParameterNames[parameter.property.label]?[optionalType] == nil {
+					walk.publicMockWrapperParameterNames[parameter.property.label]?[optionalType] = parameter.name
+				}
+			}
+		}
 		// D1 lane hook (lane B): the uncovered dependencies named apart, which the types that instantiate them are passed, and
 		// a receive beneath reads, from the mocked type's own for its whole tree (`routingReceives`).
 		walk.uncoveredParameterNames = signature.uncoveredParameterNamesByLabelAndType
@@ -344,6 +357,9 @@ extension MockLowering {
 		// which a receive is passed by name, never bound again, until a declaration of the label hides it
 		// (`lazilyInstantiatedBindingNames`).
 		var lazilyInstantiatedNames = [String: [TypeDescription: String]]()
+		// D1 lane hook (lane E): the wrappers a public mock takes as parameters, by label and type, which a fill reading the
+		// caller's own wrapper binds its label to (`FillPlaceBindings.rootBindingNames`).
+		var publicMockWrapperParameterNames = [String: [TypeDescription: String]]()
 		/// The names the mock root's level gives the nodes it names apart, which no builder function beneath may declare.
 		var rootNamesApart = Set<String>()
 		/// The names the mock root's level gives the nodes it names apart, by label and then type, under which the mocked type
@@ -468,7 +484,7 @@ extension MockLowering {
 				// D1 lane hook (lane E): a fill reading the caller's own value from the root's binding binds its label to the name
 				// the root binds it apart under: a parameter, an override, a node of the level, or a wrapper `mock()` makes.
 				var rootBindingNames = renames
-				for (label, names) in lazilyInstantiatedNames {
+				for (label, names) in lazilyInstantiatedNames.merging(publicMockWrapperParameterNames, uniquingKeysWith: { names, parameterNames in names.merging(parameterNames) { name, _ in name } }) {
 					rootBindingNames[label, default: [:]].merge(names) { _, wrapperName in wrapperName }
 				}
 				filledCallBuilders.bindingRootNames(rootBindingNames)
