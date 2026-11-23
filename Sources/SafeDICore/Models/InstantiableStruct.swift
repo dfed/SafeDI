@@ -89,6 +89,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		get { storage.fields.instantiableTypes }
 		set { updateFields { $0.instantiableTypes = newValue } }
 	}
+
 	/// The concrete type that fulfills `instantiableTypes`.
 	public var concreteInstantiable: TypeDescription {
 		instantiableTypes[0]
@@ -98,6 +99,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public var isRoot: Bool {
 		storage.fields.isRoot
 	}
+
 	/// Whether SafeDI generates the type's dependency tree in the module that declares it, as an initializer that
 	/// takes what the tree needs from outside as parameters, which every other tree calls instead of building the
 	/// tree again. Never `true` together with `isRoot` or `mockOnly`, and never on an extension: the macro rejects
@@ -105,12 +107,14 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public var generatesDependencyTree: Bool {
 		storage.fields.generatesDependencyTree
 	}
+
 	/// A memberwise initializer for the concrete instantiable type.
 	/// If `nil`, the Instantiable type is incorrectly configured.
 	public private(set) var initializer: Initializer? {
 		get { storage.fields.initializer }
 		set { updateFields { $0.initializer = newValue } }
 	}
+
 	/// The type declaration's initializers other than `initializer`, in declaration order, which SafeDI never
 	/// constructs the type with. An initializer SafeDI generates for the type must not redeclare one of them. Empty
 	/// for an extension-based instantiable.
@@ -118,15 +122,18 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		get { storage.fields.otherInitializers }
 		set { updateFields { $0.otherInitializers = newValue } }
 	}
+
 	/// The ordered dependencies of this Instantiable.
 	public private(set) var dependencies: [Dependency] {
 		get { storage.fields.dependencies }
 		set { updateFields { $0.dependencies = newValue } }
 	}
+
 	/// The declaration type of the Instantiable’s concrete type.
 	public var declarationType: DeclarationType {
 		storage.fields.declarationType
 	}
+
 	/// The access spelled on the declaration this Instantiable was found on: the type declaration, or, for an
 	/// extension-based Instantiable, the extension, whose members default to it (`fileprivate` for a `private`
 	/// extension). Its level is `internal` when the declaration spells none. An extension's `instantiate()` records the
@@ -137,6 +144,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public var access: AccessDeclaration {
 		storage.fields.access
 	}
+
 	/// The access spelled on each class, actor, struct, and enum declaration in the file that encloses the declaration
 	/// this Instantiable was found on, outermost first. Each caps the declaration's effective access. Empty when no
 	/// type declaration encloses it, which is always the case for an extension-based Instantiable, whose own `access`
@@ -144,6 +152,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public var enclosingTypeAccess: [AccessDeclaration] {
 		storage.fields.enclosingTypeAccess
 	}
+
 	/// The access spelled on the extension that encloses the declaration this Instantiable was found on, if one does.
 	/// An extension is declared at file scope, so it can only be outermost. Unlike an enclosing type, it caps nothing:
 	/// it is only the default access of the one declaration directly inside it – the first entry of
@@ -162,18 +171,21 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public var generatedInitializerAttributes: String {
 		storage.fields.generatedInitializerAttributes
 	}
+
 	/// Attributes to add to the generated `mock()` method (e.g. `"@MainActor"`): the macro's `generatedAttributes` when
 	/// it is given, else its `mockAttributes`. The declaration's own: a `mockOnly` declaration merged into this one,
 	/// whose hand-written mock the generated `mock()` calls, contributes none.
 	public var mockAttributes: String {
 		storage.fields.mockAttributes
 	}
+
 	/// The isolation spelled on the type declaration this Instantiable was found on, which a member generated in an
 	/// extension of the type inherits: its global actor attribute (`"@MainActor"`), `"nonisolated"`, or `nil` when it
 	/// spells neither. Always `nil` for an extension-based Instantiable, whose extension a generated member is not in.
 	public var declarationIsolation: String? {
 		storage.fields.declarationIsolation
 	}
+
 	/// Whether the `mock()` generated for this type is isolated to a global actor: the type declaration spells one, or
 	/// `mockAttributes` does.
 	public var generatedMockIsGlobalActorIsolated: Bool {
@@ -184,6 +196,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public var generateMock: MockGeneration {
 		storage.fields.generateMock
 	}
+
 	/// Whether a `mock()` method is generated for this type, with any access.
 	public var generatesMock: Bool {
 		generateMock.generatesMock
@@ -207,6 +220,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public var mockOnly: Bool {
 		storage.fields.mockOnly
 	}
+
 	/// A user-defined `static func mock(...)` method, if one exists.
 	/// When present, mock generation calls this method instead of `init` or `instantiate`.
 	public var mockInitializer: Initializer? {
@@ -271,6 +285,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		get { storage.fields.moduleName }
 		set { updateFields { $0.moduleName = newValue } }
 	}
+
 	/// The package of the module that declares this Instantiable, which decides where a `package` declaration is visible:
 	/// the name a build system hands the compiler as `-package-name`, or, under SwiftPM, the package's identity, of which
 	/// `-package-name` carries the C99-mangled form (`swift-syntax` becomes `swift_syntax`), so a diagnostic that names
@@ -446,6 +461,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		get { storage.fields.dependencyLabelsInUnselectedClauses }
 		set { updateFields { $0.dependencyLabelsInUnselectedClauses = newValue } }
 	}
+
 	/// The labels of `dependencies` declared inside an `#if` block, in declaration order: those a hand-written mock moved
 	/// into another clause may not find. Covered by the same consulted conditions as `dependencyLabelsInUnselectedClauses`.
 	public var dependencyLabelsInsideConditionalBlocks: [String] {
@@ -490,6 +506,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		get { storage.fields.sourceFilePath }
 		set { updateFields { $0.sourceFilePath = newValue } }
 	}
+
 	/// Where the decorated declaration begins in source: its first attribute, as for `Dependency.declarationLocation`.
 	/// `nil` only when the declaration was parsed without a file context – macro expansion walks a detached
 	/// declaration – and such values never reach the dependency tree generator, which only consumes
@@ -532,7 +549,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		var packageName: String?
 		var declarationLocation: Dependency.DeclarationLocation?
 		var rarelySetFields: RarelySetFieldsBox?
-		var sourceFilePath: String? = nil
+		var sourceFilePath: String?
 		var isInsideCompilerDecidedBlock = false
 		var dependencyLabelsInUnselectedClauses = [DependencyLabelInUnselectedClause]()
 		var dependencyLabelsInsideConditionalBlocks = [String]()
