@@ -4,6 +4,7 @@
     pre-review.py [BASE] [--ref BRANCH] [--pins-run ID] [--no-wait] [--runner COMMAND]
                   [--matrix FILE --hand-back FILE]
     pre-review.py --pre-push [BASE] [--runner COMMAND]
+    pre-review.py --changed-lines [BASE] [--runner COMMAND]
     pre-review.py --report
     pre-review.py --self-test
 
@@ -44,14 +45,21 @@ coverage report of step 3 is made there too.
 
 `--pre-push` is the few minutes that come before every push that starts CI, so that a run of an hour is not spent
 on what this machine can show. It runs, at `HEAD` in the same worktree, lint, then side by side
-`Scripts/changed-line-coverage.sh BASE` (the suites the change touches first, generated code not compiled: a failing
-new test and an uncovered line both stop it) and the release build "Build Release SafeDITool on Linux" makes (the
+`Scripts/changed-line-coverage.sh --full BASE` (the whole suite, generated code not compiled: a failing test and an
+uncovered line both stop it; and, since "Check Line Coverage on Linux" judges the whole tree, every line the change
+did not touch that a test ran on BASE and none runs now, against BASE's own whole-suite counts, measured in the
+worktree the first time a base is seen on a machine and kept in the caches directory) and the release build "Build Release SafeDITool on Linux" makes (the
 product, then each target under `Sources/` and `Plugins/`, in a build folder of its own), which fails on any
 compiler warning located under `Sources/` or `Plugins/`. Only what a build compiles again can warn, so the first
 build on a machine reads everything and a later one the modules the change reaches. It prints a short block that
 names the head and the toolchain that compiled it: a pass under one Swift says nothing of another, and CI builds
 with Swift 6.2, Xcode 26 and Swift 6.3. It asks GitHub nothing, pushes nothing, starts no run and records nothing,
 and it is not the pre-review block: a hand-back still carries that one.
+
+`--changed-lines` runs `Scripts/changed-line-coverage.sh BASE` alone, at `HEAD` in that same worktree, and exits
+with its status: the quick answer while a change is being written (the suites the change touches first), from the
+build `--pre-push` keeps warm. Run from the checkout, the script builds into the checkout's own `.build`, and a
+build folder cannot be shared between two folders of sources, so a machine that uses both pays for two builds.
 
 It then lists these for the hand-back to answer, which fail nothing:
 
@@ -712,13 +720,153 @@ def pre_push_block(head, branch, base, commits, uncommitted, toolchain, steps):
     if uncommitted:
         lines.append("uncommitted changes in the checkout: they are not this head's, and no check saw them")
         ready = False
-    for name in ("lint", "changed-line coverage", "release build"):
+    for name in ("lint", "changed-line coverage", "whole-tree coverage", "release build"):
         text, passed, details = steps.get(name, ("not run", False, []))
         lines.append(f"{name}: {text}")
         lines += [f"  {detail}" for detail in details]
         ready = ready and passed
     lines.append("result: " + ("PUSH" if ready else "DO NOT PUSH"))
     return "\n".join(lines), ready
+
+
+# Lines "Check Line Coverage on Linux" leaves out of its counts (UNCOUNTED_TEXT in Scripts/unexecuted-lines.py).
+UNCOUNTED_TEXT = ("", "{", "}")
+
+
+def lines_in(root, path):
+    """The lines of the file at `path` inside `root`, or None when there is no such file."""
+    try:
+        return (pathlib.Path(root) / path).read_text(encoding="utf-8").split("\n")
+    except OSError:
+        return None
+
+
+def source_counts(lcov, root, lines_of=lines_in):
+    """How often each line under Sources and Plugins ran, by path inside `root`, from an lcov report made there. A
+    file the plugin compiles through a symbolic link and the file it links to are one file, whose counts are
+    summed, as Scripts/changed-line-coverage.py sums them. Lines are counted as Scripts/unexecuted-lines.py counts
+    them, so that this step lists no line "Check Line Coverage on Linux" leaves out: a line whose only text is a
+    brace, or nothing, is not counted (llvm-cov gives a zero to the closing brace after a `return`, which no test
+    can execute), and a negative count is none. `root` must still hold the commit the report measured."""
+    counts, current, source = {}, None, None
+    root = os.path.realpath(root)
+    for record in lcov.splitlines():
+        if record.startswith("SF:"):
+            path = os.path.relpath(os.path.realpath(record[3:]), root)
+            if path.startswith(("Sources/", "Plugins/")):
+                current, source = counts.setdefault(path, {}), lines_of(root, path)
+            else:
+                current, source = None, None
+        elif record.startswith("DA:") and current is not None:
+            number, count = record[3:].split(",")[:2]
+            if source is not None and int(number) <= len(source) and source[int(number) - 1].strip() in UNCOUNTED_TEXT:
+                continue
+            current[number] = current.get(number, 0) + max(int(count), 0)
+        elif record == "end_of_record":
+            current, source = None, None
+    return counts
+
+
+HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+
+
+def hunks_by_file(diff):
+    """Per file of a `git diff -U0 --no-renames`, its hunks as (first old line, old lines, first new line, new
+    lines). A file the diff adds or deletes whole is given as None: none of its lines is an unchanged line."""
+    hunks, path, whole = {}, None, False
+    for line in diff.splitlines():
+        if line.startswith("diff --git "):
+            path, whole = None, False
+        elif line.startswith(("--- /dev/null", "+++ /dev/null")):
+            whole = True
+            if path is not None:
+                hunks[path] = None
+        elif line.startswith("--- a/") and not whole:
+            path = line[6:]
+            hunks.setdefault(path, [])
+        elif line.startswith("+++ b/"):
+            path = line[6:]
+            hunks[path] = None if whole else hunks.get(path, [])
+        elif path is not None and hunks.get(path) is not None:
+            match = HUNK.match(line)
+            if match:
+                old_start, old_count, new_start, new_count = (int(group) if group is not None else 1 for group in match.groups())
+                hunks[path].append((old_start, old_count, new_start, new_count))
+    return hunks
+
+
+def base_line_of(number, hunks):
+    """The base's line for the head's unchanged line `number`, or None when the change added or edited it."""
+    shift = 0
+    for old_start, old_count, new_start, new_count in hunks:
+        if new_count and new_start <= number < new_start + new_count:
+            return None
+        # A hunk that only deletes names the head line before the deletion as its start.
+        if (new_start if new_count else new_start + 1) > number:
+            break
+        shift += old_count - new_count
+    return number + shift
+
+
+def lines_no_longer_executed(base_counts, head_counts, hunks):
+    """Every line the change did not touch that a test executed on the base and none executes on the head, as
+    (path, head line). Whole-tree coverage fails on such a line, and a report of changed lines never lists it."""
+    lost = []
+    for path in sorted(head_counts):
+        of_file = hunks.get(path, [])
+        if of_file is None or path not in base_counts:
+            continue
+        for number in sorted(head_counts[path], key=int):
+            if head_counts[path][number] != 0:
+                continue
+            base_number = base_line_of(int(number), of_file)
+            if base_number is not None and base_counts[path].get(str(base_number), 0) > 0:
+                lost.append((path, int(number)))
+    return lost
+
+
+def measured_on_one_platform(platform=sys.platform):
+    """What a reader of a whole-tree failure must know: the coverage gate takes a line as executed when Linux or
+    macOS executes it, and this machine measured one of them."""
+    this, other = ("Linux", "macOS") if platform.startswith("linux") else ("macOS", "Linux")
+    return f"measured on {this} only; CI also counts {other}, so push over a listed line only by saying in the pull request why {other} executes it"
+
+
+def base_counts_path(base):
+    return caches_directory() / "SafeDIPreReview" / "coverage" / f"{base}-{sys.platform}.json"
+
+
+def whole_suite_counts(runner, worktree, script, commit):
+    """The counts of the whole suite at the commit the worktree is checked out at, generated code not compiled, or
+    the reason there are none. `script` is the head's coverage script, so that an older base is measured the same
+    way; measured from the commit itself, its own report lists nothing."""
+    environment = {**os.environ, "SAFEDI_SKIP_COMPILE_CHECK": "1"}
+    (pathlib.Path(worktree.path) / ".build/coverage/full.lcov").unlink(missing_ok=True)
+    completed = subprocess.run(runner + ["bash", str(script), "--full", commit], capture_output=True, text=True, cwd=worktree.path, pass_fds=(worktree.lock,), env=environment)
+    lcov = pathlib.Path(worktree.path) / ".build/coverage/full.lcov"
+    if completed.returncode != 0 or not lcov.exists():
+        last = [line for line in (completed.stdout + completed.stderr).splitlines() if line.strip()][-1:]
+        return None, f"the whole suite did not give a report (status {completed.returncode}): {' '.join(last)[:200]}"
+    return source_counts(lcov.read_text(), worktree.path), None
+
+
+def base_counts_of(runner, worktree, base, head):
+    """The base's whole-suite counts on this platform: from the cache, or measured once in the worktree, which is
+    checked out at the base for it and back at the head after. Gives the counts, or None and the reason."""
+    cached = base_counts_path(base)
+    if cached.exists():
+        return json.loads(cached.read_text()), None
+    script = cached.parent / "changed-line-coverage.sh"
+    cached.parent.mkdir(parents=True, exist_ok=True)
+    script.write_text(output_of("git", "show", f"{head}:Scripts/changed-line-coverage.sh"))
+    try:
+        prepare_worktree(worktree.path, base)
+        counts, reason = whole_suite_counts(runner, worktree, script, base)
+    finally:
+        prepare_worktree(worktree.path, head)
+    if counts is not None:
+        cached.write_text(json.dumps(counts))
+    return counts, reason
 
 
 def report_text(path):
@@ -756,6 +904,16 @@ def release_build(runner, worktree, linux):
     return 0, seconds, lines
 
 
+def changed_lines(arguments, top, head, status):
+    """`--changed-lines`: the coverage script alone, at the head, in the worktree `--pre-push` builds in."""
+    runner = shlex.split(arguments.runner) if arguments.runner else []
+    if status:
+        print("pre-review: uncommitted changes in the checkout are not this head's, and this run does not see them", file=sys.stderr)
+    with scratch_worktree(top, head) as worktree:
+        completed = subprocess.run(runner + ["Scripts/changed-line-coverage.sh", arguments.base], cwd=worktree.path, pass_fds=(worktree.lock,))
+    sys.exit(completed.returncode)
+
+
 def pre_push(arguments, top, head, status):
     try:
         base = output_of("git", "merge-base", arguments.base, "HEAD")
@@ -767,14 +925,49 @@ def pre_push(arguments, top, head, status):
         sys.exit(2)
     runner = shlex.split(arguments.runner) if arguments.runner else []
     toolchain = " ".join(output_of("swift", "--version", check=False).split()) or "swift --version printed nothing"
-    steps = {}
+
+    class Steps(dict):
+        """Says each step's outcome when it is known, since the block is printed only at the end and a first run
+        on a machine takes most of an hour."""
+
+        def __setitem__(self, name, step):
+            super().__setitem__(name, step)
+            print(f"pre-review: {time.strftime('%H:%M:%S')} {name}: {step[0]}", file=sys.stderr, flush=True)
+
+    steps = Steps()
+    print(f"pre-review: {time.strftime('%H:%M:%S')} checking {head[:9]} against {base[:9]}; each step is reported as it ends", file=sys.stderr, flush=True)
     with scratch_worktree(top, head) as worktree:
         status_code, seconds, lines = timed(runner + ["./CLI/lint.sh", "--check"], worktree)
         steps["lint"] = (f"passed, {duration(seconds)}" if status_code == 0 else f"failed, {duration(seconds)}", status_code == 0, [] if status_code == 0 else lines[-5:])
 
+        # Before anything that builds the head: the base is measured in this worktree, once per base and platform.
+        started, base_was_kept = time.time(), base_counts_path(base).exists()
+        if not base_was_kept:
+            print(f"pre-review: {time.strftime('%H:%M:%S')} measuring the whole suite on the base {base[:9]}, once for this machine", file=sys.stderr, flush=True)
+        base_counts, no_base_counts = base_counts_of(runner, worktree, base, head)
+        base_seconds = time.time() - started
+
         def coverage():
-            status_code, seconds, lines = timed(runner + ["Scripts/changed-line-coverage.sh", arguments.base], worktree)
+            # The whole suite, not only the suites the change touches: a line the change did not touch can lose its
+            # only test, and only the whole suite shows that.
+            lcov = pathlib.Path(worktree.path) / ".build/coverage/full.lcov"
+            # The base's report, or an earlier run's, must not be read as this run's.
+            lcov.unlink(missing_ok=True)
+            status_code, seconds, lines = timed(runner + ["Scripts/changed-line-coverage.sh", "--full", arguments.base], worktree)
             steps["changed-line coverage"] = (f"{'passed' if status_code == 0 else 'failed'}, {duration(seconds)}", status_code == 0, [] if status_code == 0 else coverage_details(status_code, lines, report_text(pathlib.Path(worktree.path) / ".build/coverage/report.txt")))
+            if base_counts is None:
+                steps["whole-tree coverage"] = (f"not compared, {duration(base_seconds)}: {no_base_counts}", False, [])
+            elif not lcov.exists():
+                steps["whole-tree coverage"] = ("not compared: the head's run gave no report", False, [])
+            else:
+                hunks = hunks_by_file(output_of("git", "diff", "-U0", "--no-color", "--no-renames", base, head, "--", "Sources", "Plugins"))
+                lost = lines_no_longer_executed(base_counts, source_counts(lcov.read_text(), worktree.path), hunks)
+                measured = "base from the cache" if base_was_kept else f"base measured in {duration(base_seconds)}"
+                if lost:
+                    texts = [f"{path}:{number}: {(output_of('git', 'show', f'{head}:{path}').splitlines()[number - 1]).strip()[:160]}" for path, number in lost[:20]]
+                    steps["whole-tree coverage"] = (f"failed ({measured}): {len(lost)} line(s) the change did not touch ran in a test on {base[:9]} and run in none now; {measured_on_one_platform()}", False, texts + ([f"and {len(lost) - 20} more"] if len(lost) > 20 else []))
+                else:
+                    steps["whole-tree coverage"] = (f"passed ({measured}): every untouched line a test ran on {base[:9]} still runs in one", True, [])
 
         def release():
             status_code, seconds, lines = release_build(runner, worktree, sys.platform.startswith("linux"))
@@ -1302,6 +1495,8 @@ def run(arguments):
     top = output_of("git", "rev-parse", "--show-toplevel")
     os.chdir(top)
     head, status = output_of("git", "rev-parse", "HEAD"), output_of("git", "status", "--porcelain")
+    if arguments.changed_lines:
+        changed_lines(arguments, top, head, status)
     if arguments.pre_push:
         pre_push(arguments, top, head, status)
     ask_the_repository_of_origin()
@@ -1917,13 +2112,39 @@ def self_test():
     expect("only warnings in the checkout's own sources count, each once", source_warnings(build_log, "/work/SafeDI"), [build_log[0], build_log[3]])
     described = "\n".join(["Name: SafeDI", "Path: /work/SafeDI", "Targets:", "    Name: SafeDICore", "    C99name: SafeDICore", "    Path: Sources/SafeDICore", "    Name: SafeDIToolTests", "    Path: Tests/SafeDIToolTests", "    Name: SafeDIGenerator", "    Path: Plugins/SafeDIGenerator"])
     expect("the targets under Sources and Plugins", source_targets(described), ["SafeDICore", "SafeDIGenerator"])
-    passed_steps = {"lint": ("passed, 50 s", True, []), "changed-line coverage": ("passed, 5 min 9 s", True, []), "release build": ("passed, 2 min 0 s", True, [])}
+    lcov = "\n".join(["SF:/w/Sources/A.swift", "DA:1,2", "DA:2,0", "end_of_record", "SF:/w/Plugins/P/A.swift", "DA:1,0", "end_of_record", "SF:/w/Tests/T.swift", "DA:1,5", "end_of_record", "SF:/w/Sources/A.swift", "DA:2,3", "end_of_record"])
+    expect("counts are of Sources and Plugins, by path in the root, summed over records", source_counts(lcov, "/w", lambda root, path: None), {"Sources/A.swift": {"1": 2, "2": 3}, "Plugins/P/A.swift": {"1": 0}})
+    braces = "\n".join(["SF:/w/Sources/A.swift", "DA:1,1", "DA:2,0", "DA:3,0", "DA:4,0", "DA:5,-1", "DA:6,0", "end_of_record"])
+    expect(
+        "a line that is only a brace or empty is not counted, as the coverage gate leaves it out, and a negative count is none",
+        source_counts(braces, "/w", lambda root, path: ["func a() {", "\t\treturn 1", "\t}", "", "b()", "{"]),
+        {"Sources/A.swift": {"1": 1, "2": 0, "5": 0}},
+    )
+    diff = "\n".join([
+        "diff --git a/Sources/A.swift b/Sources/A.swift", "--- a/Sources/A.swift", "+++ b/Sources/A.swift", "@@ -3,0 +4,2 @@ context", "+x", "+y", "@@ -10 +12 @@", "-a", "+b", "@@ -20,3 +21,0 @@", "-a", "-b", "-c",
+        "diff --git a/Sources/New.swift b/Sources/New.swift", "new file mode 100644", "--- /dev/null", "+++ b/Sources/New.swift", "@@ -0,0 +1,2 @@", "+a", "+b",
+        "diff --git a/Sources/Gone.swift b/Sources/Gone.swift", "deleted file mode 100644", "--- a/Sources/Gone.swift", "+++ /dev/null", "@@ -1 +0,0 @@", "-a",
+    ])
+    hunks = hunks_by_file(diff)
+    expect("a diff's hunks per file, a file added or deleted whole as None", hunks, {"Sources/A.swift": [(3, 0, 4, 2), (10, 1, 12, 1), (20, 3, 21, 0)], "Sources/New.swift": None, "Sources/Gone.swift": None})
+    expect("an unchanged head line maps to its base line, an added or edited one to none", [base_line_of(number, hunks["Sources/A.swift"]) for number in (3, 4, 5, 6, 11, 12, 13, 21, 22)], [3, None, None, 4, 9, None, 11, 19, 23])
+    expect("a line the change did not touch that ran on the base and does not now is listed, and no other", lines_no_longer_executed(
+        {"Sources/A.swift": {"3": 1, "4": 1, "9": 0, "10": 4, "23": 2}, "Sources/B.swift": {"1": 1, "2": 0}},
+        {"Sources/A.swift": {"3": 0, "4": 0, "6": 0, "11": 0, "12": 0, "22": 0}, "Sources/B.swift": {"1": 0, "2": 0}, "Sources/New.swift": {"1": 0}, "Sources/Unrecorded.swift": {"1": 0}},
+        hunks,
+    ), [("Sources/A.swift", 3), ("Sources/A.swift", 6), ("Sources/A.swift", 22), ("Sources/B.swift", 1)])
+    passed_steps = {"lint": ("passed, 50 s", True, []), "changed-line coverage": ("passed, 5 min 9 s", True, []), "whole-tree coverage": ("passed (base from the cache): every untouched line a test ran on 123 still runs in one", True, []), "release build": ("passed, 2 min 0 s", True, [])}
+    expect("a whole-tree failure names the platform that measured it and the one CI also counts", [measured_on_one_platform("linux"), measured_on_one_platform("darwin")], [
+        "measured on Linux only; CI also counts macOS, so push over a listed line only by saying in the pull request why macOS executes it",
+        "measured on macOS only; CI also counts Linux, so push over a listed line only by saying in the pull request why Linux executes it",
+    ])
     expect("a pre-push block that passed names its head and toolchain", pre_push_block("abc", "lane", "origin/main at 123", 2, False, "Swift 6.4", passed_steps), ("\n".join([
         "Pre-push block",
         "head: abc (lane), 2 commit(s) measured from origin/main at 123",
         "toolchain: Swift 6.4: this says nothing of another Swift or platform",
         "lint: passed, 50 s",
         "changed-line coverage: passed, 5 min 9 s",
+        "whole-tree coverage: passed (base from the cache): every untouched line a test ran on 123 still runs in one",
         "release build: passed, 2 min 0 s",
         "result: PUSH",
     ]), True))
@@ -1955,6 +2176,7 @@ def main():
     parser.add_argument("--report", action="store_true")
     parser.add_argument("--coverage", action="store_true")
     parser.add_argument("--pre-push", action="store_true")
+    parser.add_argument("--changed-lines", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     arguments = parser.parse_args()
     if arguments.self_test:

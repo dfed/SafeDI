@@ -48,7 +48,7 @@ if (( compile_checks )); then
 else
 	export SAFEDI_SKIP_COMPILE_CHECK="${SAFEDI_SKIP_COMPILE_CHECK:-1}"
 fi
-mkdir -p .build/coverage; rm -f .build/coverage/report.txt .build/coverage/*.profdata
+mkdir -p .build/coverage; rm -f .build/coverage/report.txt .build/coverage/full.lcov .build/coverage/*.profdata
 git diff --name-only --diff-filter=ACMR "$base" -- 'Sources/*.swift' 'Plugins/*.swift' >.build/coverage/changed-files.txt
 # The suites the change touches: a test file is named for the suite it holds.
 if (( ${#first[@]} == 0 )); then
