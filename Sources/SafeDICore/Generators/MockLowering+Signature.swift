@@ -271,18 +271,26 @@ extension ScopeGenerator {
 					|| mockedTypeUncoveredWrapperInstances.contains(instance.asUnwrappedProperty)
 					|| !Self.provides(instance, declaredProperties: propertiesToDeclare, forwardedProperties: [])
 				else { continue }
-				// The instance of one beside a property of its label and type the mocked type forwards is named apart from it,
-				// which the lowering does not lower yet.
-				guard !isFulfilledByForwardedProperty(instance) else { return .unsupported(.wrapper) }
 				wrappedReceivedProperties.append(property)
 			}
 			wrappedReceivedProperties.sort()
+		}
+		// D1 lane hook (lane C): the instance of a wrapper beside a property of its label and type the mocked type forwards is
+		// taken too, named after the wrapper and read only by the wrapper bound for it, so a receive of the forwarded property
+		// is still passed the forwarded value (`lazilyInstantiatedPropertyByInstanceBesideForwardedProperty`).
+		var wrapperByInstanceBesideForwardedProperty = [Property: Property]()
+		for wrapper in wrappedReceivedProperties.reversed() where isFulfilledByForwardedProperty(wrapper.asValidatedForDependencyCycles) {
+			wrapperByInstanceBesideForwardedProperty[wrapper.asValidatedForDependencyCycles] = wrapper.asUnwrappedProperty
+		}
+		let wrappersBesideForwardedProperties = Set(wrapperByInstanceBesideForwardedProperty.values)
+		func isBesideForwardedProperty(_ property: Property) -> Bool {
+			wrappersBesideForwardedProperties.contains(property.asUnwrappedProperty)
 		}
 		if !wrappedReceivedProperties.isEmpty {
 			// A property received by value and the instance of a `LazilyInstantiated` received under its label are one
 			// parameter, spelled as the form the mock's order lists first.
 			var parameterProperties = Set<Property>()
-			for property in receivedProperties.sorted(by: { $0.precedesInMockOrder($1) }) where !isFulfilledByForwardedProperty(property) {
+			for property in receivedProperties.sorted(by: { $0.precedesInMockOrder($1) }) where !isFulfilledByForwardedProperty(property) || isBesideForwardedProperty(property) {
 				parameterProperties.insert(property.asValidatedForDependencyCycles)
 			}
 			receivedProperties = parameterProperties
@@ -290,7 +298,7 @@ extension ScopeGenerator {
 			onlyIfAvailableUnwrappedReceivedProperties = Set(onlyIfAvailableUnwrappedReceivedProperties.map(\.asValidatedForDependencyCycles))
 				.subtracting(
 					requiredReceivedProperties.lazy
-						.filter { !isFulfilledByForwardedProperty($0) }
+						.filter { !isFulfilledByForwardedProperty($0) || isBesideForwardedProperty($0) }
 						.map(\.asValidatedForDependencyCycles.asUnwrappedProperty),
 				)
 		}
@@ -302,9 +310,10 @@ extension ScopeGenerator {
 		var onlyIfAvailableReceivedProperties = [Property]()
 		for property in receivedProperties.sorted(by: { $0.precedesInMockOrder($1) }) {
 			// A forwarded `x: X` fulfills an `x: X?` too, and so does a received `x: X`, which the parameter of its own binds.
-			guard !forwardedProperties.contains(property),
+			let isInstanceBesideForwardedProperty = wrapperByInstanceBesideForwardedProperty[property] != nil
+			guard isInstanceBesideForwardedProperty || !forwardedProperties.contains(property),
 			      !property.typeDescription.isOptional
-			      || !receivedNonOptionalProperties.contains(property.asUnwrappedProperty) && !forwardedProperties.contains(property.asUnwrappedProperty)
+			      || !receivedNonOptionalProperties.contains(property.asUnwrappedProperty) && (isInstanceBesideForwardedProperty || !forwardedProperties.contains(property.asUnwrappedProperty))
 			else { continue }
 			// A node the mock promotes for an optional receive binds its non-optional value, which provides this one.
 			guard property.typeDescription.isOptional || !rootPropertyNodes.contains(property.asOptionalProperty) else { return .unsupported(.flatParameter) }
@@ -357,7 +366,7 @@ extension ScopeGenerator {
 			typeDescriptions: flatReceivedProperties.map { property in
 				instantiable.generateMock == .public && property.typeDescription.lazilyInstantiatedInstanceType != nil
 					? property.asValidatedForDependencyCycles.typeDescription
-					: property.typeDescription
+					: wrapperByInstanceBesideForwardedProperty[property]?.typeDescription ?? property.typeDescription
 			},
 			namesInScope: forwardedAndDefaultLabels
 				.union(uncoveredNames)
@@ -367,13 +376,13 @@ extension ScopeGenerator {
 		)
 		let ownOverrides = Self.onlyIfAvailableOverrides(
 			for: onlyIfAvailableReceivedProperties.filter { !onlyPublicMockCallsReceive.contains($0) },
-			namedAfter: [:],
+			namedAfter: wrapperByInstanceBesideForwardedProperty,
 			namesInMockScope: forwardedAndDefaultLabels.union(uncoveredNames).union(treeBindingNames),
 			reservedNames: Set(flatReceivedNames).union(namesDeclaredInBuilderFunctions),
 		)
 		let overridesOnlyPublicMockCallsReceive = onlyPublicMockCallsReceive.isEmpty ? [] : Self.onlyIfAvailableOverrides(
 			for: onlyIfAvailableReceivedProperties.filter { onlyPublicMockCallsReceive.contains($0) },
-			namedAfter: [:],
+			namedAfter: wrapperByInstanceBesideForwardedProperty,
 			namesInMockScope: forwardedAndDefaultLabels.union(uncoveredNames).union(treeBindingNames).union(flatReceivedNames).union(ownOverrides.map(\.name)),
 			reservedNames: Set(flatReceivedNames).union(namesDeclaredInBuilderFunctions),
 		)
@@ -383,10 +392,10 @@ extension ScopeGenerator {
 			onlyPublicMockCallsReceive.contains(property) ? overridesOnlyPublicMockCallsReceiveInOrder.next() : ownOverridesInOrder.next()
 		}
 		var renamesByLabelAndType = [String: [TypeDescription: String]]()
-		for (property, name) in zip(flatReceivedProperties, flatReceivedNames) where name != property.label {
+		for (property, name) in zip(flatReceivedProperties, flatReceivedNames) where name != property.label && wrapperByInstanceBesideForwardedProperty[property] == nil {
 			renamesByLabelAndType[property.label, default: [:]][property.typeDescription] = name
 		}
-		for override in onlyIfAvailableOverrides where override.name != override.receivedProperty.label {
+		for override in onlyIfAvailableOverrides where override.name != override.receivedProperty.label && wrapperByInstanceBesideForwardedProperty[override.receivedProperty] == nil {
 			renamesByLabelAndType[override.receivedProperty.label, default: [:]][override.receivedProperty.typeDescription] = override.name
 		}
 		// D1 lane hook (lane C): `mock()` binds each wrapper around the instance it is passed, under a name apart from its label
