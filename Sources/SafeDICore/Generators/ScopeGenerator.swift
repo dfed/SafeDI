@@ -10465,9 +10465,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-
-
-
 	// MARK: Mock scope context
 
 	/// Emits the `let <name> = <localName>()` bindings a scope needs for the `@Sendable` autoclosure
@@ -11330,19 +11327,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let child: String
 	}
 
-
-
-
-
-
 	/// A concrete type, and whether it is built with its hand-written mock.
 	struct ConstructedType: Hashable {
 		let concreteType: TypeDescription
 		let usesMockInitializer: Bool
 	}
-
-
-
 
 	/// Concrete type names referenced by this scope's mock parameter tree from a
 	/// `SendableInstantiator` scope. Aggregated across all roots before generation
@@ -11527,7 +11516,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		return (items, constructions)
 	}
-
 
 	/// The builder `mock()` takes for each place of a public mock of another module that a fill of one of `calls` builds
 	/// inline, as `holeBuildersByInlinePlace(in:buildersByFamily:foreignPublicMocks:)` finds them outside every fill, keyed
@@ -11761,7 +11749,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.sorted { (declarationIndexByLabel[nodes[$0].propertyLabel] ?? dependencies.count, $0) < (declarationIndexByLabel[nodes[$1].propertyLabel] ?? dependencies.count, $1) }
 			.map { nodes[$0] }
 	}
-
 
 	// MARK: Mock Parameter Naming
 
@@ -12124,11 +12111,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let suffix: String
 	}
 
-
-
-
-
-
 	/// `expression` as the default of an `@autoclosure` parameter: parenthesized when it is a closure literal, which
 	/// Swift otherwise reads as the autoclosure itself, so that `(() -> Void)? = {}` would declare a closure that
 	/// returns `()`. In parentheses, it is the value the autoclosure returns.
@@ -12203,30 +12185,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		private let functionName: String
 	}
 
-
-
-
 	/// Whether `renamingAliases` binds `alias`, an alias of the mocked type or a site of one of its holes, under a name of
 	/// its own, since its label is among `redeclaredNames` (`MockRootTopLevelNames.namesAliasesAreBoundApartFrom`).
 	static func isBoundApart(_ alias: MockAliasNode, from redeclaredNames: Set<String>) -> Bool {
 		redeclaredNames.contains(alias.property.label)
 	}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 }
 
 // MARK: - [MockTreeItem]
@@ -12293,7 +12256,6 @@ extension [ScopeGenerator.MockTreeItem] {
 			}
 		}
 	}
-
 }
 
 // MARK: - DefaultParameter

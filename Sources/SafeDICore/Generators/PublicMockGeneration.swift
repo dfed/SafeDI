@@ -562,11 +562,9 @@ struct PublicMockEmission: Sendable {
 	/// The concrete types whose configurations a `@Sendable` builder function reads, which hold each default as a
 	/// `@Sendable` closure.
 	let sendableConfigurationTypeNames: Set<String>
-
 }
 
 extension ScopeGenerator {
-
 	/// An expression that evaluates to the value the caller passed as `parameterName`, when it passed one, and
 	/// otherwise to `construction`, which may be an `if` expression itself.
 	static func passing(_ parameterName: String, orBuilding construction: String) -> String {
