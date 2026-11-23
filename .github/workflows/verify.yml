@@ -694,7 +694,10 @@ jobs:
   # request's "Check Line Coverage on Linux", which waits for both platforms'
   # full test jobs. It costs the run no build and no test: the bundle is
   # already built for coverage and the groups already write profiles.
-  # Advisory: it fails only when it cannot report, it runs when a group's
+  # It fails when it lists a line: left green, a run that listed lines let
+  # a change reach a pull request with a line no test executed. It runs only
+  # in a run of the whole suite in release mode (`split`), so a filtered run
+  # is never failed for lines its filter left out. It runs when a group's
   # tests failed, and it reads Linux alone, so the check stays the gate
   # (.github/scripts/report-verify-coverage.sh says what it cannot see).
   # The job's limit is "Report Changed Lines No Fuzzer Graph Executed on

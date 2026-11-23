@@ -1239,7 +1239,7 @@ public struct Generate: AsyncParsableCommand {
 		/// The signature the module info of the module named `moduleName` carries of `seam`, as that module's run named it.
 		func storedSignature(of seam: TypeDescription, inModuleNamed moduleName: String) -> StoredSeamSignature? {
 			guard readsStoredSeamSignatures else { return nil }
-			return moduleInfoView.storedSeamSignaturesByModuleName[moduleName]?.first { $0.seamType == seam }
+			return moduleInfoView.storedSeamSignaturesByModuleName[moduleName]?[seam]
 		}
 		/// The seam `seam` of the module named `moduleName`, whose visible declarations are resolved only when the
 		/// generator computes its signature: a module whose seams no tree reaches, or whose module info carries their
