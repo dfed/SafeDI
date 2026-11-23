@@ -359,12 +359,21 @@ extension ScopeGenerator {
 			? []
 			: Self.onlyIfAvailableReceivedProperties(onlyIfAvailableReceivedProperties, receivedOnlyBy: receivedOnlyByPublicMockCalls)
 		// A flat received parameter is named apart from the other parameters, the overrides and the root's tree bindings.
-		let flatReceivedNames = Self.namesApart(
-			preferredNames: flatReceivedProperties.map(\.label),
+		// D1 lane hook (lane C): a builder a call of another module's public mock passes up, beside another flat parameter of
+		// its label, is the seam mock builder its hole type labels, `_` appended while another parameter of `mock()` has the
+		// label (`seamMockBuilders`), and the other parameter keeps its label.
+		let builderIndicesLabeledApart = Set(flatReceivedProperties.indices.filter { index in
+			tree.passedUpBuilderProperties.contains(flatReceivedProperties[index])
+				&& flatReceivedProperties.contains { $0.label == flatReceivedProperties[index].label && $0 != flatReceivedProperties[index] }
+		})
+		let otherFlatReceivedIndices = flatReceivedProperties.indices.filter { !builderIndicesLabeledApart.contains($0) }
+		let otherFlatReceivedNames = Self.namesApart(
+			preferredNames: otherFlatReceivedIndices.map { flatReceivedProperties[$0].label },
 			// D1 lane hook (lane C): a public mock's wrapper parameter is named apart by the value it stands for, as the
 			// emitter names the instance it takes as that wrapper (`publicMockWrapperParameters`).
-			typeDescriptions: flatReceivedProperties.map { property in
-				instantiable.generateMock == .public && property.typeDescription.lazilyInstantiatedInstanceType != nil
+			typeDescriptions: otherFlatReceivedIndices.map { index in
+				let property = flatReceivedProperties[index]
+				return instantiable.generateMock == .public && property.typeDescription.lazilyInstantiatedInstanceType != nil
 					? property.asValidatedForDependencyCycles.typeDescription
 					: wrapperByInstanceBesideForwardedProperty[property]?.typeDescription ?? property.typeDescription
 			},
@@ -374,6 +383,21 @@ extension ScopeGenerator {
 				.union(treeBindingNames),
 			reservedNames: namesDeclaredInBuilderFunctions,
 		)
+		var flatReceivedNames = flatReceivedProperties.map(\.label)
+		for (index, name) in zip(otherFlatReceivedIndices, otherFlatReceivedNames) {
+			flatReceivedNames[index] = name
+		}
+		let otherParameterNames = forwardedAndDefaultLabels
+			.union(uncoveredNames)
+			.union(otherFlatReceivedNames)
+			.union(onlyIfAvailableReceivedProperties.map(\.label))
+		for index in builderIndicesLabeledApart.sorted() {
+			var name = flatReceivedProperties[index].label
+			while otherParameterNames.contains(name) {
+				name = "\(name)_".spelledAsJoinedIdentifier
+			}
+			flatReceivedNames[index] = name
+		}
 		let ownOverrides = Self.onlyIfAvailableOverrides(
 			for: onlyIfAvailableReceivedProperties.filter { !onlyPublicMockCallsReceive.contains($0) },
 			namedAfter: wrapperByInstanceBesideForwardedProperty,
@@ -392,7 +416,7 @@ extension ScopeGenerator {
 			onlyPublicMockCallsReceive.contains(property) ? overridesOnlyPublicMockCallsReceiveInOrder.next() : ownOverridesInOrder.next()
 		}
 		var renamesByLabelAndType = [String: [TypeDescription: String]]()
-		for (property, name) in zip(flatReceivedProperties, flatReceivedNames) where name != property.label && wrapperByInstanceBesideForwardedProperty[property] == nil {
+		for (index, (property, name)) in zip(flatReceivedProperties, flatReceivedNames).enumerated() where name != property.label && wrapperByInstanceBesideForwardedProperty[property] == nil && !builderIndicesLabeledApart.contains(index) {
 			renamesByLabelAndType[property.label, default: [:]][property.typeDescription] = name
 		}
 		for override in onlyIfAvailableOverrides where override.name != override.receivedProperty.label && wrapperByInstanceBesideForwardedProperty[override.receivedProperty] == nil {
@@ -455,12 +479,20 @@ extension ScopeGenerator {
 		for (parameter, name) in zip(uncoveredParameters, uncoveredNames) where name != parameter.property.label {
 			uncoveredParameterNamesByLabelAndType[parameter.property.label, default: [:]][parameter.property.typeDescription] = name
 		}
-		let flatReceivedParameters = zip(flatReceivedProperties, flatReceivedNames).map { property, name in
+		var flatReceivedParameters = zip(flatReceivedProperties, flatReceivedNames).map { property, name in
 			MockLowering.RootSignature.Parameter(
 				property: property,
 				defaultExpression: flatParameterMockDefaults[property.typeDescription]?.expression,
 				name: name,
 			)
+		}
+		// D1 lane hook (lane C): a builder labeled apart is listed among the flat received parameters by its label.
+		for builder in builderIndicesLabeledApart.sorted().map({ flatReceivedParameters[$0] }) {
+			var others = flatReceivedParameters
+			others.removeAll { $0.property == builder.property }
+			let position = others.firstIndex { $0.property.label > builder.name } ?? others.endIndex
+			others.insert(builder, at: position)
+			flatReceivedParameters = others
 		}
 		// A type that generates its dependency tree takes a builder for each hole type of its places in place of their
 		// parameters (`seamMockBuilders`), which lane C's family lowers.
@@ -538,6 +570,9 @@ extension ScopeGenerator {
 		let namesDeclaredInBuilderFunctions: Set<String>
 		/// The `@Instantiated` dependencies of the mocked type itself that the mock cannot build.
 		let mockedTypeUncoveredProperties: Set<Property>
+		/// The builders the calls of other modules' public mocks in the tree pass up, by the property each call's leaf
+		/// receives it as (`PublicMockCall.passesUpBuilder(receivedAs:)`).
+		let passedUpBuilderProperties: Set<Property>
 	}
 
 	/// The names in the tree of the mocked type, `instantiable`, that the names of `mock()`'s parameters are chosen from. The
@@ -633,11 +668,15 @@ extension ScopeGenerator {
 			mockedTypeUncoveredProperties.insert(dependency.property)
 			add(dependency, createdBy: instantiable.concreteInstantiable, at: [], isHiddenWhereReferenced: false, isInstantiatedInSendableFunction: false)
 		}
+		var passedUpBuilderProperties = Set<Property>()
 		var visits = Array(rootChildren.reversed())
 		while let visit = visits.popLast() {
 			guard case let .property(nodeInstantiable, _, _, _, isPropertyCycle, _) = visit.generator.scopeData else { continue }
 			for dependency in nodeInstantiable.dependencies {
 				namesDeclaredInBuilderFunctions.insert(dependency.property.label)
+				if let publicMockCall = visit.generator.publicMockCall, publicMockCall.passesUpBuilder(receivedAs: dependency.property) {
+					passedUpBuilderProperties.insert(dependency.property)
+				}
 			}
 			// A node that closes a cycle builds nothing beneath it, and its dependencies surface as no parameter.
 			guard !isPropertyCycle else { continue }
@@ -699,6 +738,7 @@ extension ScopeGenerator {
 			},
 			namesDeclaredInBuilderFunctions: namesDeclaredInBuilderFunctions,
 			mockedTypeUncoveredProperties: mockedTypeUncoveredProperties,
+			passedUpBuilderProperties: passedUpBuilderProperties,
 		)
 	}
 }

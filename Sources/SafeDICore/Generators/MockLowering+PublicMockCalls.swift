@@ -270,9 +270,6 @@ extension ScopeGenerator {
 			else { return .unsupported(.publicMockCall) }
 			let name = ScopeGenerator.functionName(toBuildPropertyNamed: property.label)
 			guard !builderFunctionNames.contains(name) else { return .unsupported(.publicMockCall) }
-			// A builder whose label another value the tree receives has is named apart (`mockRootParameterNames(of:)`), which
-			// is not lowered yet.
-			guard !receivedProperties.contains(where: { $0.label == property.label && $0 != property }) else { return .unsupported(.siblingLabelCollision) }
 			names[property] = name
 		}
 		return .lowered(names)
@@ -602,6 +599,8 @@ extension MockLowering {
 		let fillPlaceBindings: ScopeGenerator.FillPlaceBindings
 		/// The name `mock()` binds each builder a call passes up under, by the property the call's leaf receives it as.
 		var passedUpBuilderNames: [Property: String] = [:]
+		/// The name `mock()` takes each builder a call passes up under, where it is not the builder's label.
+		var passedUpBuilderParameterNames: [Property: String] = [:]
 		/// The families of hole type the calls fill, in the order `filledFamilies(of:)` gives, which a public mock's plan names.
 		var families = [ScopeGenerator.FilledFamily]()
 		/// The labels the calls' fills declare, which a public mock's optional builders are named apart from.
@@ -612,9 +611,23 @@ extension MockLowering {
 		/// No call fills a builder.
 		static let none = FilledCallBuilders(calls: [], parameters: [], fillPlaceBindings: ScopeGenerator.FillPlaceBindings(bindingsByGenerator: [:]))
 
-		/// The lines that bind each builder a call passes up apart from its label, before anything else `mock()` binds.
+		/// The lines that bind each builder a call passes up apart from its label, before anything else `mock()` binds. A
+		/// builder `mock()` takes under a name no binding of the tree has is read under that name, and bound to nothing.
 		func leadingBindingLines(indent: String) -> [String] {
-			passedUpBuilderNames.sorted { $0.key < $1.key }.map { "\(indent)let \($0.value) = \($0.key.label)" }
+			passedUpBuilderNames.sorted { $0.key < $1.key }.compactMap { property, name in
+				let parameterName = passedUpBuilderParameterNames[property] ?? property.label
+				return name == parameterName ? nil : "\(indent)let \(name) = \(parameterName)"
+			}
+		}
+
+		/// Reads each builder a call passes up that `mock()` takes under a name apart from its label under that name
+		/// (`seamMockBuilders`), where `parameterNames` holds the name of each flat parameter of `mock()`.
+		mutating func readPassedUpBuilders(underParameterNames parameterNames: [Property: String]) {
+			for property in passedUpBuilderNames.keys {
+				guard let parameterName = parameterNames[property], parameterName != property.label else { continue }
+				passedUpBuilderNames[property] = parameterName
+				passedUpBuilderParameterNames[property] = parameterName
+			}
 		}
 
 		/// The declarations of the builders, one per line at `indent`.
