@@ -51,10 +51,11 @@ extension MockLowering {
 		}
 		// D1 lane hook (lane C): a configuration `@Sendable`-typed, as a type a `Sendable` wrapper builds anywhere in the
 		// module has, takes `@Sendable` closures (`configurationStruct(amongConfigurationsTypedSendable:)`); a public mock's,
-		// and one with a child whose field the lowering does not spell there, is not lowered yet.
+		// and a public mock's module-level one too (`publicConfigurationDeclarations`); one with a child whose field the
+		// lowering does not spell there is not lowered yet.
 		guard !loweredRoots.contains(where: { $0.records.contains { record in
 			sendableConfigurationTypeNames.contains(record.concreteType.asSource)
-				&& (record.publicConstruction != nil || record.childFields.contains { $0.sendableForm == nil })
+				&& record.publicConstruction == nil && record.childFields.contains { $0.sendableForm == nil }
 		} }) else {
 			return .unsupported(.wrapper)
 		}
@@ -88,7 +89,7 @@ extension MockLowering {
 		let publicRecords = recordsInRootOrder.flatMap { records in records.compactMap(\.publicConstruction) }
 		var publicDeclarations = [String]()
 		if let publicMockContext {
-			switch Self.publicConfigurationDeclarations(of: publicRecords, context: publicMockContext) {
+			switch Self.publicConfigurationDeclarations(of: publicRecords, context: publicMockContext, sendableConfigurationTypeNames: sendableConfigurationTypeNames) {
 			case let .lowered(declarations):
 				publicDeclarations = declarations
 			case let .unsupported(rule):
