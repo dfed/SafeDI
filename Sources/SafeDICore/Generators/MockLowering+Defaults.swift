@@ -140,11 +140,7 @@ extension MockLowering.Walk {
 		let storesDefaultsAsClosures = sendableConfigurationTypeNames.contains(instantiable.concreteInstantiable.asSource)
 		let surfacedArguments = overrideReachable
 			? construction.callSiteArguments
-			: construction.callSiteArguments.filter { argument in
-				construction.dependencyInnerLabels.contains(argument.innerLabel)
-					|| !argument.hasDefaultValue
-					|| (!usesMockInitializer && handWrittenDefaults.contains(where: { $0.isDefault(forParameterLabeled: argument.label, ofType: argument.typeDescription.strippingEscaping) }))
-			}
+			: Self.argumentsSurfacedWithoutOverride(of: construction, usesMockInitializer: usesMockInitializer, handWrittenDefaults: handWrittenDefaults)
 		var dependencyValues = dependencyArguments[...]
 		return surfacedArguments.compactMap { argument in
 			if instantiable.dependencies.contains(where: argument.isFulfilled(by:)) {
@@ -159,6 +155,33 @@ extension MockLowering.Walk {
 			let isStoredAsClosure = typeDescription.autoclosureValueType != nil
 				|| (storesDefaultsAsClosures && !typeDescription.isClosure)
 			return (label: argument.label.spelledAsArgumentLabel, value: isStoredAsClosure ? "\(configurationRead)()" : configurationRead)
+		}
+	}
+
+	/// The arguments `construction` surfaces where no override reaches its node
+	/// (`ScopeGenerator.MockParameterNode.callSiteArgumentsForPrunedOverride(handWrittenMockDefaultParameters:)`): each
+	/// dependency, each parameter without a default, and, where the node is built with `init`, each default the type's
+	/// hand-written mock declares too.
+	private static func argumentsSurfacedWithoutOverride(
+		of construction: ScopeGenerator.MockConstruction,
+		usesMockInitializer: Bool,
+		handWrittenDefaults: [ScopeGenerator.MockParameterNode.DefaultParameter],
+	) -> [Initializer.Argument] {
+		construction.callSiteArguments.filter { argument in
+			construction.dependencyInnerLabels.contains(argument.innerLabel)
+				|| !argument.hasDefaultValue
+				|| (!usesMockInitializer && handWrittenDefaults.contains(where: { $0.isDefault(forParameterLabeled: argument.label, ofType: argument.typeDescription.strippingEscaping) }))
+		}
+	}
+
+	/// Whether the construction of a node of `instantiable` that no override reaches reads a default from a configuration it
+	/// builds afresh: whether an argument it surfaces there is no dependency
+	/// (`ScopeGenerator.MockParameterNode.readsConfigurationBuiltAfresh(handWrittenMockDefaultParameters:)`).
+	func readsConfigurationBuiltAfresh(of instantiable: Instantiable, usesMockInitializer: Bool) -> Bool {
+		let construction = ScopeGenerator.MockConstruction(instantiable: instantiable, useMockInitializer: usesMockInitializer, builderTypesDeclaredEscaping: [])
+		let handWrittenDefaults = handWrittenMockDefaultParameters[instantiable.concreteInstantiable, default: []]
+		return Self.argumentsSurfacedWithoutOverride(of: construction, usesMockInitializer: usesMockInitializer, handWrittenDefaults: handWrittenDefaults).contains { argument in
+			!construction.dependencyInnerLabels.contains(argument.innerLabel)
 		}
 	}
 
