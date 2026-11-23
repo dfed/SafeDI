@@ -136,6 +136,7 @@ extension ScopeGenerator {
 		nodes: [MockLowering.TreeNode],
 		bindingLines: [String],
 		rootRenames: [String: [TypeDescription: String]],
+		unavailableProperties: Set<Property>,
 		filledCallBuilders: MockLowering.FilledCallBuilders,
 		configurations: [MockLowering.ConfigurationRecord],
 		context: MockContext,
@@ -204,7 +205,7 @@ extension ScopeGenerator {
 		var body = plan.defaultResolutions
 		body.append(contentsOf: bindingLines)
 		let argumentList = instantiable.initializer.map { initializer in
-			MockLowering.rootArgumentList(of: initializer, given: instantiable.dependencies, renames: rootRenames, passingNilTo: [])
+			MockLowering.rootArgumentList(of: initializer, given: instantiable.dependencies, renames: rootRenames, passingNilTo: unavailableProperties)
 		} ?? ""
 		let construction = if instantiable.declarationType.isExtension {
 			"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"

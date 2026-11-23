@@ -31,11 +31,6 @@ extension ScopeGenerator {
 		if let rule = Self.unsupportedRuleOfMockedType(instantiable) {
 			return .unsupported(rule)
 		}
-		// D1 lane hook (lane B): the mocked type's own receives only if available that nothing above provides are passed `nil`
-		// (`rootArgumentList(of:given:renames:passingNilTo:)`).
-		guard receivedOnlyByPublicMockCalls.isEmpty else {
-			return .unsupported(.onlyIfAvailable)
-		}
 		// D1 lane hook (lane D): the parameters `mock()` takes before its overrides (`lowerRootSignature(of:context:)`).
 		let signature: MockLowering.RootSignature
 		switch lowerRootSignature(of: instantiable, context: context) {
@@ -156,10 +151,8 @@ extension ScopeGenerator {
 		}
 		// D1 lane hook (lane C): a public mock's tiers, overrides and guard (`MockLowering+PublicMocks.swift`).
 		guard instantiable.generateMock != .public else {
-			// D1 lane hook (lane B): a public mock's parameters named apart are lane C's to lower.
-			guard signature.renamesByLabelAndType.isEmpty else { return .unsupported(.siblingLabelCollision) }
-			guard unavailableOptionalProperties.isEmpty else { return .unsupported(.onlyIfAvailable) }
-			return publicMockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: walk.rootRenames, filledCallBuilders: walk.filledCallBuilders, configurations: walk.configurationRecords, context: context)
+			// D1 lane hook (lane C): a public mock's parameters named apart and its values passed `nil`, as the internal mock's.
+			return publicMockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, filledCallBuilders: walk.filledCallBuilders, configurations: walk.configurationRecords, context: context)
 		}
 		return .lowered(Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, builders: walk.filledCallBuilders.parameters, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, context: context), configurations: walk.configurationRecords)
 	}
@@ -716,8 +709,10 @@ extension MockLowering {
 			let usesMockInitializer = instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType)
 			// An argument of the mock neither a dependency fulfills nor a default fills is passed what a build that compiles
 			// no mock never compiles (`UnfulfilledMockParameter`).
+			// D1 lane hook (lane C): a public mock builds such a node with its construction function, as an internal mock does
+			// with the mock (`publicConstructionArguments`).
 			guard let initializer = usesMockInitializer ? instantiable.mockInitializer : instantiable.initializer,
-			      !usesMockInitializer || instantiable.mockCallReturnType == instantiable.concreteInstantiable && !buildsPublicMock,
+			      !usesMockInitializer || instantiable.mockCallReturnType == instantiable.concreteInstantiable,
 			      initializer.arguments.allSatisfy({ argument in argument.hasDefaultValue || instantiable.dependencies.contains(where: argument.isFulfilled(by:)) })
 			else { return .unsupported(.handWrittenMock) }
 			guard !rootLabels.contains(property.label) || (bindingName != property.label && rootPropertiesNamedApartFromParameters.contains(property)), labels.insert(bindingName).inserted else { return .unsupported(.siblingLabelCollision) }
@@ -1453,6 +1448,11 @@ extension MockLowering {
 				if !isPropertyCycle, !instantiable.dependencies.contains(where: { !$0.source.isReceived && $0.property.label == label }) {
 					generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator))
 				}
+			// D1 lane hook (lane C): a site of a public mock's hole binds its property from the builder's label, as an alias
+			// binds its own (`MockAliasNode.holeSite`).
+			case let .hole(_, _, site?):
+				guard site.builderLabel == label else { continue }
+				guard names[site.builtType] != nil else { return true }
 			case .root, .hole, .fill:
 				return nil
 			}
