@@ -687,7 +687,9 @@ extension MockLowering {
 				// D1 lane hook (lane C): an alias only if available reads the node of its label the scope holds in the other
 				// optionality, which the mock binds non-optional: `let y: X? = x` from a promoted `x: X`, and
 				// `let aBuilderAlias: Instantiator<A>? = aBuilder` from a node promoted for `aBuilder: Instantiator<A>?`.
-				let scopeFulfillingProperty = scope.contains(fulfillingProperty) || !onlyIfAvailable
+				// D1 lane hook (lane B): a required alias of an optional form reads the non-optional node the mock promotes for
+				// both forms (`ScopeGenerator.unwrappedOptionalRequiredReceivedProperties`).
+				let scopeFulfillingProperty = scope.contains(fulfillingProperty) || !onlyIfAvailable && !fulfillingProperty.typeDescription.isOptional
 					? fulfillingProperty
 					: fulfillingProperty.typeDescription.isOptional ? fulfillingProperty.asUnwrappedProperty : fulfillingProperty.asOptionalProperty
 				guard isBoundToNil || scope.contains(scopeFulfillingProperty) else { return .unsupported(onlyIfAvailable ? .onlyIfAvailable : .alias) }
