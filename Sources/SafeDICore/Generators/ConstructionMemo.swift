@@ -30,6 +30,13 @@
 /// answered above it reads, at the other place, the context the other place inherits, which the log checks. So no read
 /// differs, and the builds are equal.
 ///
+/// A log is matched as a set of reads, each with its answer: a candidate is reused only when every read its log holds is
+/// answered alike (`ConstructionLog.answeredAlike(in:)`), and the order decides only which read is asked first. A log is
+/// not kept in the order its build made the reads: a place that reuses a child's generator takes the child's reads in
+/// the order `answeredAlike(in:)` returns them, the reads of what a cycle closes on first, so two entries of one key can
+/// hold alike reads in different orders, as the entries of the memo the mock roots share do on a module of twelve mocks.
+/// So no lookup accepts a candidate on a matching prefix of its log, or compares two logs read by read in order.
+///
 /// A place is never stored or reused when it or anything in its subtree is a fill, is inside one, holds a hole, calls a
 /// seam or public mock with holes, or is in a tree with seam holes, which read context this log does not cover. A
 /// seam's or public mock's tree without holes is memoized, with a memo of its own: what it reads of its `SeamHoles` is
