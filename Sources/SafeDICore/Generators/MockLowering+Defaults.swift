@@ -112,8 +112,9 @@ extension MockLowering.Walk {
 		let construction = ScopeGenerator.MockConstruction(instantiable: instantiable, useMockInitializer: usesMockInitializer, builderTypesDeclaredEscaping: [])
 		let handWrittenDefaults = handWrittenMockDefaultParameters[instantiable.concreteInstantiable, default: []]
 		let defaultFields = construction.defaultParameters.map { MockLowering.DefaultField(of: $0, handWrittenMockDefaultParameters: handWrittenDefaults) }
-		// A `@Sendable`-typed configuration stores each default as a `@Sendable` closure, read as a call.
-		guard defaultFields.isEmpty || !startsExtraction && !sendableConfigurationTypeNames.contains(instantiable.concreteInstantiable.asSource) else { return .unsupported(.wrapper) }
+		// A `@Sendable`-typed configuration stores each default as a `@Sendable` closure, which `constructionArguments` calls;
+		// its struct is lowered by the configuration family.
+		guard defaultFields.isEmpty || !startsExtraction else { return .unsupported(.wrapper) }
 		return .lowered(defaultFields)
 	}
 
