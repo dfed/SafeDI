@@ -416,13 +416,17 @@ extension MockLowering.Walk {
 		case let .hole(property, erasedToConcreteExistential, site):
 			guard let site else { return .unsupported(.holeSite) }
 			guard !rootLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
+			// A site held in a wrapper builds it around the function its level names, apart from a function a cycle-closing
+			// scope beneath refers to (`ScopeGenerator.mockLoweringBuilderFunctionNames`).
+			let holeFunctionName = pendingRenamedFunctionName
+			pendingRenamedFunctionName = nil
 			// The site calls its place's member on the struct its route leads to, handed the values in scope there, as the
 			// emitter's `MockAliasNode.holeSite` does.
 			lines.append(GeneratedCodeText.indentingNonEmptyLines(
 				of: ScopeGenerator.buildSiteCode(
 					of: property,
 					at: site,
-					functionName: nil,
+					functionName: holeFunctionName,
 					readingInstancesOf: generator.mockLoweringCallSiteLazilyInstantiatedInstanceProperties,
 				),
 				by: indent,
