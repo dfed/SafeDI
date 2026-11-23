@@ -30,6 +30,9 @@ extension ScopeGenerator {
 		var calls = [MockLowering.FilledCallBuilders.Call]()
 		var filledCalls = [FilledCall]()
 		var namesFillsDeclare = Set<String>()
+		// The places inside the calls' fills, each a place of the builder `mock()` takes for its hole type and family, in the
+		// order the calls are generated (`fillPlaces(in:)`).
+		var fillPlaces = [FillPlace]()
 		// What the mock's root level declares, which a fill reading a value of the caller's scope reads.
 		var rootLevelProperties = Set<Property>()
 		for child in orderedChildren {
@@ -53,21 +56,25 @@ extension ScopeGenerator {
 				      fill.receivedProperties.allSatisfy({ rootLevelProperties.contains($0) || rootLevelProperties.contains($0.asUnwrappedProperty) })
 				else { return .unsupported(.fill) }
 			}
-			// A place inside a fill takes a required builder, which is not lowered yet. A call inside a fill is generated with the
-			// fill, reading the builders `mock()` takes optional for the places it fills as the call does.
-			let fillPlaces = generator.fillPlaces(insideSendableFunction: false)
-			guard fillPlaces.places.isEmpty else { return .unsupported(.fill) }
+			// A place inside a fill takes a required builder, which an internal mock takes (a public mock's are places of its own
+			// tree). A call inside a fill is generated with the fill, reading the builders `mock()` takes for the places it fills
+			// as the call does.
+			let callPlaces = generator.fillPlaces(insideSendableFunction: false)
+			guard optionalBuilderNames == nil || callPlaces.places.isEmpty else { return .unsupported(.fill) }
+			fillPlaces += callPlaces.places.map { place in
+				FillPlace(generator: place.generator, dependency: place.dependency, isInsideSendableFunction: place.isInsideSendableFunction, order: fillPlaces.count + place.order)
+			}
 			let filledCall = FilledCall(generator: generator, isInsideSendableFunction: false, enclosingCalls: [])
 			guard filledCall.filledBuilders.count == publicMockCall.builders.count else { return .unsupported(.fill) }
-			for callInsideFill in fillPlaces.calls {
+			for callInsideFill in callPlaces.calls {
 				guard let calledMock = callInsideFill.generator.publicMockCall,
 				      calledMock.passedUpBuilders.isEmpty,
 				      callInsideFill.filledBuilders.count + callInsideFill.reenteredBuilders.count == calledMock.builders.count
 				else { return .unsupported(.fill) }
 			}
-			namesFillsDeclare.formUnion(fillPlaces.declaredLabels)
+			namesFillsDeclare.formUnion(callPlaces.declaredLabels)
 			filledCalls.append(filledCall)
-			filledCalls.append(contentsOf: fillPlaces.calls)
+			filledCalls.append(contentsOf: callPlaces.calls)
 			calls.append(.init(generator: generator, propertiesGeneratedLater: child.propertiesGeneratedLater))
 		}
 		let namesOfPassedUpBuilders: [Property: String]
@@ -96,17 +103,61 @@ extension ScopeGenerator {
 			}
 			generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator))
 		}
-		let families = Self.filledFamilies(of: filledCalls)
+		// Each family of the fills' places is a builder `mock()` requires, which the calls' builders of that family join
+		// (`seamMockBuilders`); every other family a call fills is a builder `mock()` takes optional.
+		var fillPlacesByFamily = [MockRootParameters.SeamMockBuilder.Family: [FillPlace]]()
+		var requiredFamilies = [MockRootParameters.SeamMockBuilder.Family]()
+		for fillPlace in fillPlaces {
+			let family = MockRootParameters.SeamMockBuilder.Family(of: fillPlace)
+			if fillPlacesByFamily[family] == nil {
+				requiredFamilies.append(family)
+			}
+			fillPlacesByFamily[family, default: []].append(fillPlace)
+		}
+		var requiredHoleTypes = [SeamSignature.HoleType]()
+		for family in requiredFamilies where !requiredHoleTypes.contains(family.holeType) {
+			requiredHoleTypes.append(family.holeType)
+		}
+		let requiredStems = DependencyTreeGenerator.stems(of: requiredHoleTypes)
+		let allFamilies = Self.filledFamilies(of: filledCalls)
+		let families = allFamilies.filter { fillPlacesByFamily[$0.family] == nil }
 		let stems = Self.stemsOfOptionalBuilders(
 			of: families.map { ($0.family.holeType, $0.receivedProperty) },
-			besideOwnHoleTypes: [],
+			besideOwnHoleTypes: requiredHoleTypes,
 			passedUpHoleTypes: [],
-			requiredStems: [:],
+			requiredStems: requiredStems,
 		)
 		var labels = GeneratedNameAllocator(reserving: [ReservedName.mockOverridesParameterName])
 		var parameters = [(label: String, declaration: String)]()
 		var holeBuildersByCall = [ObjectIdentifier: [String: FillPlaceBindings.HoleBuilder]]()
 		var buildersByFamily = [MockRootParameters.SeamMockBuilder.Family: FillPlaceBindings.HoleBuilder]()
+		// A builder labeled as another parameter of `mock()` or a name of the tree is named apart, which is not lowered yet.
+		var namesBuildersAvoid = namesBoundInTheTree.union(receivedProperties.map(\.label))
+		if case let .root(instantiable, _) = scopeData {
+			namesBuildersAvoid.formUnion(instantiable.dependencies.map(\.property.label))
+			namesBuildersAvoid.formUnion((instantiable.initializer?.arguments ?? []).map(\.innerLabel))
+		}
+		var fillPlaceBindingsInOrder = [(order: Int, generator: ObjectIdentifier, binding: SendableAutoclosureParameter)]()
+		for family in requiredFamilies {
+			let stem = requiredStems[family.holeType, default: ""]
+			let label = labels.claim(family.isSendable ? DependencyTreeGenerator.sendableBuilderLabel(ofStem: stem) : DependencyTreeGenerator.plainBuilderLabel(ofStem: stem))
+			guard !namesFillsDeclare.contains(label), !namesBuildersAvoid.contains(label) else { return .unsupported(.fill) }
+			let places = fillPlacesByFamily[family, default: []]
+			let parameterType = MockRootParameters.SeamMockBuilder.parameterType(ofPlaceProperties: places.map(\.dependency.property), in: family)
+			parameters.append((label, "\(label): \(parameterType.asSource)"))
+			for place in places {
+				fillPlaceBindingsInOrder.append((place.order, place.generator, SendableAutoclosureParameter(name: place.dependency.property.label, localName: label, valueType: place.dependency.property.typeDescription)))
+			}
+			let holeBuilder = FillPlaceBindings.HoleBuilder(name: label, isOptional: false)
+			buildersByFamily[family] = holeBuilder
+			for callBuilder in allFamilies.first(where: { $0.family == family })?.callBuilders ?? [] {
+				holeBuildersByCall[callBuilder.call, default: [:]][callBuilder.label] = holeBuilder
+			}
+		}
+		var fillPlaceBindingsByGenerator = [ObjectIdentifier: [SendableAutoclosureParameter]]()
+		for (_, generator, binding) in fillPlaceBindingsInOrder.sorted(by: { $0.order < $1.order }) {
+			fillPlaceBindingsByGenerator[generator, default: []].append(binding)
+		}
 		for filled in families {
 			let stem = stems[filled.family.holeType, default: ""]
 			let label: String
@@ -117,6 +168,8 @@ extension ScopeGenerator {
 				label = labels.claim(filled.family.isSendable ? DependencyTreeGenerator.sendableBuilderLabel(ofStem: stem) : DependencyTreeGenerator.plainBuilderLabel(ofStem: stem))
 				// A builder whose label a name of the tree or of the fills has is called by a name apart, which `mock()` binds.
 				guard !namesFillsDeclare.contains(label), !namesBoundInTheTree.contains(label) else { return .unsupported(.fill) }
+				// Beside a required builder, a label another parameter of `mock()` has is named apart, which is not lowered yet.
+				guard fillPlaces.isEmpty || !namesBuildersAvoid.contains(label) else { return .unsupported(.fill) }
 			}
 			let parameterType = MockRootParameters.SeamMockBuilder.parameterType(ofPlaceProperties: filled.placeProperties, in: filled.family)
 			parameters.append((label, "\(label): \(TypeDescription.optional(parameterType.strippingEscaping).asSource) = nil"))
@@ -139,7 +192,7 @@ extension ScopeGenerator {
 		var filledCallBuilders = MockLowering.FilledCallBuilders(
 			calls: calls,
 			parameters: parameters,
-			fillPlaceBindings: FillPlaceBindings(bindingsByGenerator: [:], holeBuildersByCall: holeBuildersByCall, holeBuildersByInlinePlace: holeBuildersByInlinePlaceInFills),
+			fillPlaceBindings: FillPlaceBindings(bindingsByGenerator: fillPlaceBindingsByGenerator, holeBuildersByCall: holeBuildersByCall, holeBuildersByInlinePlace: holeBuildersByInlinePlaceInFills),
 		)
 		filledCallBuilders.families = families
 		filledCallBuilders.namesFillsDeclare = namesFillsDeclare
