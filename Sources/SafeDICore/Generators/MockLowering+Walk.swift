@@ -711,8 +711,10 @@ extension MockLowering {
 			let usesMockInitializer = instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType)
 			// An argument of the mock neither a dependency fulfills nor a default fills is passed what a build that compiles
 			// no mock never compiles (`UnfulfilledMockParameter`).
+			// D1 lane hook (lane C): a public mock builds such a node with its construction function, as an internal mock does
+			// with the mock (`publicConstructionArguments`).
 			guard let initializer = usesMockInitializer ? instantiable.mockInitializer : instantiable.initializer,
-			      !usesMockInitializer || instantiable.mockCallReturnType == instantiable.concreteInstantiable && !buildsPublicMock,
+			      !usesMockInitializer || instantiable.mockCallReturnType == instantiable.concreteInstantiable,
 			      initializer.arguments.allSatisfy({ argument in argument.hasDefaultValue || instantiable.dependencies.contains(where: argument.isFulfilled(by:)) })
 			else { return .unsupported(.handWrittenMock) }
 			guard !rootLabels.contains(property.label) || (bindingName != property.label && rootPropertiesNamedApartFromParameters.contains(property)), labels.insert(bindingName).inserted else { return .unsupported(.siblingLabelCollision) }
