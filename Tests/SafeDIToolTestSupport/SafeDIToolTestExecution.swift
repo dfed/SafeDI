@@ -401,6 +401,12 @@ func executeSafeDIToolTest(
 				+ (manifest.mockConfigurationOutputFilePath.map { [$0] } ?? [])
 			#expect(generatedFiles.keys.sorted() == plannedOutputFilePaths.map { ($0 as NSString).lastPathComponent }.sorted())
 		}
+		if let generatedFiles {
+			// A seam's carrier hands its members out only as calls: generated code never reads a closure member of a carrier
+			// apart from its carrier, so no closure the carrier stores outlives the carrier's own use (R2a, section 16).
+			let membersReadApart = GraphFuzzerCarrierMembers.membersReadApart(in: generatedFiles)
+			#expect(membersReadApart.isEmpty, "\(membersReadApart.joined(separator: "\n"))", sourceLocation: sourceLocation)
+		}
 
 		let moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
 		if let recordDirectory {

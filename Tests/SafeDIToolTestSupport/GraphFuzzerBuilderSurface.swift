@@ -43,11 +43,12 @@ enum GraphFuzzerBuilderSurface {
 
 	/// The generated type `parameter`'s type names, or `nil` for one that names none: a scope enum
 	/// (`SafeDIScope_…`, `SafeDISendableScope_…`, `SafeDIMockScope_…`, `SafeDISendableMockScope_…`), a scope's
-	/// `…_Values` struct, or a generated builder struct (`__safeDI_Builder…`).
+	/// `…_Values` struct, a generated builder struct (`__safeDI_Builder…`), a seam's carrier (`__safeDI_…Carrier…`), or a
+	/// carrier's run struct (`__safeDI_…Values<n>`).
 	static func generatedTypeNamed(by parameter: String) -> String? {
 		guard let colon = parameter.firstIndex(of: ":") else { return nil }
 		let type = String(parameter[parameter.index(after: colon)...])
-		for pattern in [#"SafeDI\w*Scope_\w*"#, #"\w+_Values\b"#, #"__safeDI_Builder\w*"#] {
+		for pattern in [#"SafeDI\w*Scope_\w*"#, #"\w+_Values\b"#, #"__safeDI_Builder\w*"#, #"__safeDI_\w+Carrier\w*"#, #"__safeDI_\w*Values\d+\b"#] {
 			if let range = type.range(of: pattern, options: .regularExpression) {
 				return String(type[range])
 			}
@@ -794,10 +795,20 @@ extension GraphFuzzerBuilderSurface {
 
 	/// The family, built type `T` and enum path (`SafeDIScope_Api`, `SafeDIScope_Api.Worker_Scope`) of the builder struct
 	/// `parameter`, a parameter of an initializer only generated code calls, takes – `SafeDIScope_….__safeDI_Builder<T>`, or
-	/// `SafeDISendableScope_….__safeDI_Builder<T>` for the `@Sendable` family – or `nil` for a parameter of another type, a
-	/// kept builder's closure over its scope enum included.
+	/// `SafeDISendableScope_….__safeDI_Builder<T>` for the `@Sendable` family, or the root carrier that took its place,
+	/// `__safeDI_<Stem>Carrier<T>` or `__safeDI_<Stem>SendableCarrier<T>`, whose path is its name – or `nil` for a
+	/// parameter of another type, a kept builder's closure over its scope enum included.
 	static func switchedBuilder(ofGeneratedOnlyParameter parameter: String) -> (isSendable: Bool, builtType: String, structPath: String)? {
 		let type = Parameter(parameter).type
+		// A seam's root carrier, `__safeDI_<Stem>Carrier<T>` or `__safeDI_<Stem>SendableCarrier<T>`, which took the root
+		// builder struct's place.
+		if let carrierRange = type.range(of: #"(?<![A-Za-z0-9_.])__safeDI_\w+Carrier<"#, options: .regularExpression),
+		   let lastAngleBracket = type.lastIndex(of: ">"),
+		   carrierRange.upperBound <= lastAngleBracket
+		{
+			let carrierName = String(type[carrierRange].dropLast())
+			return (carrierName.hasSuffix("SendableCarrier"), String(type[carrierRange.upperBound..<lastAngleBracket]), carrierName)
+		}
 		guard let structRange = type.range(of: #"(?<![A-Za-z0-9_])SafeDI(Sendable)?Scope_\w+(\.\w+)*\.__safeDI_Builder<"#, options: .regularExpression),
 		      let lastAngleBracket = type.lastIndex(of: ">"),
 		      structRange.upperBound <= lastAngleBracket
@@ -827,11 +838,30 @@ extension GraphFuzzerBuilderSurface {
 				if trimmed == "}" {
 					if indentation == openStructIndentation {
 						openStructIndentation = nil
+						if let carrier = openEnums.last, carrier.indentation == indentation, GraphFuzzerScopeDeclarations.isCarrierName(carrier.name) {
+							openEnums.removeLast()
+						}
 					} else if indentation == openEnums.last?.indentation {
 						openEnums.removeLast()
 					}
 				} else if openEnums.isEmpty, trimmed.hasPrefix("extension "), trimmed.hasSuffix(" {") {
 					extendedType = String(trimmed.dropFirst("extension ".count).dropLast(" {".count))
+				} else if openEnums.isEmpty, openStructIndentation == nil, let carrierRange = trimmed.range(of: #"final class __safeDI_\w+Carrier(_\w+)?<"#, options: .regularExpression) {
+					// A seam's carrier, which the extension declares at its outermost level, keyed by its name.
+					openEnums.append((indentation, String(trimmed[carrierRange].dropFirst("final class ".count).dropLast())))
+					openStructIndentation = indentation
+				} else if openStructIndentation != nil,
+				          openEnums.count == 1,
+				          GraphFuzzerScopeDeclarations.isCarrierName(openEnums[0].name),
+				          let extendedType,
+				          trimmed.hasPrefix("public let "),
+				          let colon = trimmed.range(of: ": ")
+				{
+					// A carrier's member holds the next level's carrier, or a closure that returns it, the place's value, or its
+					// wrapper's `Builder`.
+					let memberType = String(trimmed[colon.upperBound...])
+					let returnType = memberType.range(of: ") -> ").map { String(memberType[$0.upperBound...]) } ?? memberType
+					membersByStruct[extendedType + "." + openEnums[0].name, default: []].append(returnType)
 				} else if let enumRange = trimmed.range(of: #"enum \w+ \{$"#, options: .regularExpression) {
 					let name = String(trimmed[enumRange].dropFirst("enum ".count).dropLast(" {".count))
 					if !openEnums.isEmpty || name.range(of: #"^SafeDI(Sendable)?Scope_"#, options: .regularExpression) != nil {
@@ -887,6 +917,10 @@ extension GraphFuzzerBuilderSurface {
 	private static func levelStructTypes(in type: String) -> [String] {
 		let suffix = ".__safeDI_Builder"
 		return type.split { !($0.isLetter || $0.isNumber || $0 == "_" || $0 == ".") }.compactMap { token in
+			// A seam's carrier of a level, spelled by its name, qualified by its seam where it is another seam's.
+			if let lastComponent = token.split(separator: ".").last, GraphFuzzerScopeDeclarations.isCarrierName(String(lastComponent)) {
+				return String(token)
+			}
 			guard token.hasSuffix(suffix) else { return nil }
 			let structType = String(token.dropLast(suffix.count))
 			return structType.split(separator: ".").contains { GraphFuzzerScopeDeclarations.isRootEnumName(String($0)) } ? structType : nil
@@ -898,8 +932,9 @@ extension GraphFuzzerBuilderSurface {
 	/// called seam's, spelled from the seam's type, by the qualifiers of that type that a key holds.
 	private static func qualifiedStructType(_ structType: String, seenFrom memberStruct: String, membersByStruct: [String: [String]]) -> String {
 		let components = structType.split(separator: ".").map(String.init)
-		if GraphFuzzerScopeDeclarations.isRootEnumName(components.first ?? "") {
-			let extendedType = memberStruct.split(separator: ".").map(String.init).prefix { !GraphFuzzerScopeDeclarations.isRootEnumName($0) }
+		let isLevelStructName = { (name: String) in GraphFuzzerScopeDeclarations.isRootEnumName(name) || GraphFuzzerScopeDeclarations.isCarrierName(name) }
+		if isLevelStructName(components.first ?? "") {
+			let extendedType = memberStruct.split(separator: ".").map(String.init).prefix { !isLevelStructName($0) }
 			return (extendedType + components).joined(separator: ".")
 		} else {
 			// A seam's type the generated code qualifies by its module, which no key holds.

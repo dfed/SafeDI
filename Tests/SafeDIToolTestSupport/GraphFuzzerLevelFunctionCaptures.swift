@@ -27,7 +27,7 @@ import SwiftSyntax
 /// its fill reads, never the struct.
 ///
 /// - A **level function** is a function, at any nesting, whose declared return type's last member type is
-///   `__safeDI_Builder<…>`, and no parameter of which is a function type whose result names a scope enum. One that has
+///   `__safeDI_Builder<…>` or a seam's carrier (`__safeDI_ApiCarrier<…>`, `__safeDI_ApiCarrier_Screen<…>`), and no parameter of which is a function type whose result names a scope enum. One that has
 ///   such a parameter is a **conversion function**, which a seam that still takes a closure over its enum calls to
 ///   build the case its closure takes: it is counted, not judged, since it captures an outer level's values on purpose.
 /// - A **member closure** is a closure passed as a labeled argument (`__safeDI_noScope` aside) of an `.init(…)` call
@@ -47,7 +47,8 @@ import SwiftSyntax
 ///    argument of a direct call of a member of a parameter of its level function whose type is a builder struct
 ///    (`up.<member>(values)`, the caller's struct for the same level), or as the first argument of a direct call of a fill
 ///    function.
-/// 3. A level function takes a parameter whose type's last member ends in `_Values`.
+/// 3. A level function takes a parameter whose type's last member ends in `_Values`, or is a carrier's run struct
+///    (`__safeDI_ScreenValues2`).
 ///
 /// A fill function is judged on its `_Values` parameter, which nothing nested in it may refer to (finding 1), and which
 /// its own body may use only as the base of a member access (finding 2), each reported on the fill function.
@@ -128,6 +129,8 @@ struct GraphFuzzerLevelFunctionCaptures: Equatable {
 	static let builderStructName = "__safeDI_Builder"
 	static let noScopeLabel = "__safeDI_noScope"
 	static let valuesStructSuffix = "_Values"
+	static let carrierNamePattern = #"^__safeDI_\w+Carrier(_\w+)?$"#
+	static let carrierValuesNamePattern = #"^__safeDI_\w*Values\d+$"#
 	static let scopeEnumPrefixes = ["SafeDIScope_", "SafeDISendableScope_", "SafeDIMockScope_", "SafeDISendableMockScope_"]
 }
 
@@ -244,12 +247,20 @@ private struct FileJudgment {
 		}
 	}
 
+	/// Whether `type` is a level's builder struct, or a seam's carrier of a level (`__safeDI_ApiCarrier`,
+	/// `__safeDI_ApiSendableCarrier`, `__safeDI_ApiCarrier_Screen`), which took the builder struct's place.
 	private static func isBuilderStruct(_ type: TypeSyntax) -> Bool {
-		lastMemberName(of: type) == GraphFuzzerLevelFunctionCaptures.builderStructName
+		guard let name = lastMemberName(of: type) else { return false }
+		return name == GraphFuzzerLevelFunctionCaptures.builderStructName
+			|| name.range(of: GraphFuzzerLevelFunctionCaptures.carrierNamePattern, options: .regularExpression) != nil
 	}
 
+	/// Whether `type` is a struct of a level's values: a scope enum's `…_Values`, or a carrier's run struct
+	/// (`__safeDI_Values3`, `__safeDI_ScreenValues2`).
 	private static func isValuesStruct(_ type: TypeSyntax) -> Bool {
-		lastMemberName(of: type)?.hasSuffix(GraphFuzzerLevelFunctionCaptures.valuesStructSuffix) == true
+		guard let name = lastMemberName(of: type) else { return false }
+		return name.hasSuffix(GraphFuzzerLevelFunctionCaptures.valuesStructSuffix)
+			|| name.range(of: GraphFuzzerLevelFunctionCaptures.carrierValuesNamePattern, options: .regularExpression) != nil
 	}
 
 	/// The name a parameter is referred to by in the function's body.
