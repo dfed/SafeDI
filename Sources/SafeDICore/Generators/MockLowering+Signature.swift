@@ -80,6 +80,17 @@ extension MockLowering {
 		// parameter of `mock()` among the flat received parameters.
 		var passedUpBuilders = [PassedUpBuilder]()
 
+		// D1 lane hook (lane E): what the builders `mock()` takes are named apart from (`seamMockBuilders`).
+		var builderNaming = BuilderNaming(otherParameterLabels: [], namesBoundInTheTree: [], builderFunctionNames: [])
+
+		/// What the labels and internal names of the builders `mock()` takes are chosen apart from: the labels of its other
+		/// parameters, the names its tree binds and declares in builder functions, and those builder functions' names.
+		struct BuilderNaming {
+			let otherParameterLabels: Set<String>
+			let namesBoundInTheTree: Set<String>
+			let builderFunctionNames: Set<String>
+		}
+
 		/// A builder `mock()` takes for every builder of one hole type and family its tree's calls pass up
 		/// (`MockRootParameters.SeamMockBuilder`).
 		struct PassedUpBuilder {
@@ -91,14 +102,6 @@ extension MockLowering {
 			let properties: [Property]
 			/// The parameter's type as `mock()` declares it.
 			let typeSource: String
-		}
-
-		/// The lines that bind each builder a call passes up under its internal name where that is not its label, before
-		/// anything else `mock()` binds.
-		func passedUpBuilderBindingLines(indent: String) -> [String] {
-			passedUpBuilders.compactMap { builder in
-				builder.internalName == builder.label ? nil : "\(indent)let \(builder.internalName) = \(builder.label)"
-			}
 		}
 
 		/// The name each property a call's leaf receives a passed-up builder as reads it under.
@@ -402,9 +405,9 @@ extension ScopeGenerator {
 		// type and family, which `mock()` takes in place of the flat parameters of the properties the calls' leaves receive it
 		// as (`seamMockBuilders`); the other flat parameters are named without them.
 		let passedUpBuilders: [MockLowering.RootSignature.PassedUpBuilder]
-		switch Self.passedUpBuilders(
-			of: flatReceivedProperties.filter { tree.passedUpBuilderProperties.contains($0) },
-			families: tree.passedUpBuilderFamilies,
+		// D1 lane hook (lane E): the names the builders `mock()` takes for its calls' places are chosen apart from, which the
+		// builders the calls fill are named apart from too (`filledCallBuilders`).
+		let builderNaming = MockLowering.RootSignature.BuilderNaming(
 			otherParameterLabels: forwardedAndDefaultLabels
 				.union(onlyIfAvailableReceivedProperties.filter { !onlyPublicMockCallsReceive.contains($0) }.map(\.label))
 				.union(uncoveredNames)
@@ -412,6 +415,13 @@ extension ScopeGenerator {
 				.union(flatReceivedProperties.filter { !tree.passedUpBuilderProperties.contains($0) }.map(\.label)),
 			namesBoundInTheTree: treeBindingNames.union(namesDeclaredInBuilderFunctions),
 			builderFunctionNames: tree.builderFunctionNames,
+		)
+		switch Self.passedUpBuilders(
+			of: flatReceivedProperties.filter { tree.passedUpBuilderProperties.contains($0) },
+			families: tree.passedUpBuilderFamilies,
+			otherParameterLabels: builderNaming.otherParameterLabels,
+			namesBoundInTheTree: builderNaming.namesBoundInTheTree,
+			builderFunctionNames: builderNaming.builderFunctionNames,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 		) {
 		case let .lowered(builders):
@@ -578,6 +588,7 @@ extension ScopeGenerator {
 			namesDeclaredInBuilderFunctions: namesDeclaredInBuilderFunctions,
 		)
 		signature.passedUpBuilders = passedUpBuilders
+		signature.builderNaming = builderNaming
 		// D1 lane hook (lane B): the overrides' bindings, and the receives of parameters and overrides named apart, are
 		// `mock()`'s and the walk's (`lowerMockRootWithTree(of:context:)`).
 		// No two parameters or bindings of `mock()` share a name: the emitter names them apart.
