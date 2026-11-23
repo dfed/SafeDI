@@ -134,6 +134,12 @@ public enum FulfillerImports {
 		/// that declares the type, and not for one that writes a mock of it, whose method such an import does not bring in.
 		fileprivate let isMadeVisibleByImportOfItsType: Bool
 
+		// D1 lane hook (lane B): the mock lowering's shadow compares the fulfillers it records with the emitter's, one line each.
+		/// The fulfiller as one line, which orders and compares fulfillers by every field.
+		var shadowDescription: String {
+			"\(moduleName) \(outermostTypeName)\(isMadeVisibleByImportOfItsType ? "" : " (its mock)")"
+		}
+
 		/// Whether `importStatement` makes the type visible: it imports the whole module, or, through any module, since one
 		/// can re-export the type, that outermost type. A read file's import can spell the module in backticks.
 		fileprivate func isMadeVisible(by importStatement: ImportStatement) -> Bool {

@@ -83,7 +83,7 @@ extension MockLowering {
 		// D1 lane hook (lane C): the configurations `@Sendable`-typed, as a type a `Sendable` wrapper builds anywhere in the
 		// module has (`MockContext.sendableConfigurationTypeNames`).
 		sendableConfigurationTypeNames: Set<String>,
-	) -> Lowering<[String]> {
+	) -> Lowering<(declarations: [String], fulfillers: Set<FulfillerImports.Fulfiller>)> {
 		var recordsByType = [TypeDescription: [PublicConstructionRecord]]()
 		var typesInOrder = [TypeDescription]()
 		// D1 lane hook (lane C): the types every root configures above its repeated ancestors, then those configured only
@@ -95,6 +95,9 @@ extension MockLowering {
 			recordsByType[record.concreteType, default: []].append(record)
 		}
 		var declarations = [String]()
+		// D1 lane hook (lane B): the declarations each construction builds, and the mocked type of the root whose record
+		// introduced the type, as `generateMockCode` records them for every construction it declares a function for.
+		var fulfillers = Set<FulfillerImports.Fulfiller>()
 		for type in typesInOrder {
 			// A type configured only beneath a repeated ancestor takes its configuration from a node built with its initializer
 			// wherever one is.
@@ -112,8 +115,10 @@ extension MockLowering {
 				context: context,
 				requiresSendable: sendableConfigurationTypeNames.contains(type.asSource),
 			))
+			fulfillers.formUnion(constructionRecords.flatMap(\.fulfillers))
+			fulfillers.formUnion([typeRecords.first?.mockedTypeFulfiller].compactMap(\.self))
 		}
-		return .lowered(declarations)
+		return .lowered((declarations: declarations, fulfillers: fulfillers))
 	}
 
 	/// The module-level configuration `record` describes, named `configurationTypeName`, and the extension of its type that

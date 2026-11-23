@@ -428,12 +428,19 @@ extension DependencyTreeGenerator {
 		if let shadowObserver = MockLoweringShadow.observer {
 			let loweredRoots = zip(generatedRootsAndSummaries, mergedGeneratedRoots).compactMap { generatedRootAndSummary, mergedRoot in
 				generatedRootAndSummary.lowered.map { lowered in
-					MockLowering.LoweredRoot(mockedType: mergedRoot.typeDescription, lowered: lowered, emittedMergedCode: mergedRoot.code)
+					// D1 lane hook (lane B): with the mocked type's declaration, which the shared configuration file can import.
+					MockLowering.LoweredRoot(
+						mockedType: mergedRoot.typeDescription,
+						lowered: lowered,
+						emittedMergedCode: mergedRoot.code,
+						mockedTypeFulfiller: typeDescriptionToFulfillingInstantiableMap[mergedRoot.typeDescription].flatMap(FulfillerImports.Fulfiller.init(instantiable:)),
+					)
 				}
 			}
 			for comparison in MockLoweringShadow.configurationComparisons(
 				of: loweredRoots,
 				emittedConfigurationCode: mockConfigurationCode,
+				emittedConfigurationFulfillers: mockConfigurationFulfillers,
 				mockConditionalCompilation: mockConditionalCompilation,
 				sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 				publicMockContext: publicMockContext,

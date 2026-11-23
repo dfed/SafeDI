@@ -49,6 +49,10 @@ public enum MockLoweringShadow {
 		case mergedCode
 		/// The module's shared configuration code (`MockGenerationResult.mockConfigurationCode`), absent included.
 		case moduleConfigurations
+		// D1 lane hook (lane B): the imports of that code, read from the records (`MockLowering+Configurations.swift`).
+		/// The declarations the module's shared configuration code builds whose modules it imports
+		/// (`MockGenerationResult.mockConfigurationFulfillers`), one per line in sorted order, none included.
+		case moduleConfigurationFulfillers
 		// D1 lane hook (lane D): the one-way check read from the records (`MockLowering+OneWay.swift`).
 		/// The module's diagnostics of types built both with and without their hand-written mocks
 		/// (`validateConfigurationsAreBuiltOneWay`), none included.
@@ -160,6 +164,10 @@ public enum MockLowering {
 		// D1 lane hook (lane D): a node beneath a repeated ancestor (`MockLowering+Configurations.swift`).
 		/// Where the node is beneath a node whose type repeats one around it, what the module's choice of such a node reads.
 		var beneathRepeatedAncestor: BeneathRepeatedAncestor?
+		// D1 lane hook (lane B): what a configuration generated from the record makes the shared configuration file import.
+		/// The declarations whose modules code that builds the node's type for its property needs imported, where it does
+		/// not name them (`FulfillerImports.Fulfiller.fulfillers(building:forPropertyOfType:callingHandWrittenMock:)`).
+		var fulfillers = Set<FulfillerImports.Fulfiller>()
 
 		/// The configuration's fields for the node's children, in the order its initializer takes them.
 		var childFields: [ChildField] {
@@ -249,6 +257,12 @@ public enum MockLowering {
 		/// Whether the record describes the type's module-level configuration too, as the node that records the
 		/// configuration's does.
 		var describesConfiguration = true
+		// D1 lane hook (lane B): what the construction function and the module-level configuration make the shared file
+		// import: the record's own fulfillers, and the mocked type of the root whose walk recorded it.
+		/// The declarations whose modules the construction's code needs imported (`ConfigurationRecord.fulfillers`).
+		var fulfillers = Set<FulfillerImports.Fulfiller>()
+		/// The declaration of the type mocked by the root whose walk recorded the construction, with its module.
+		var mockedTypeFulfiller: FulfillerImports.Fulfiller?
 		/// The construction's arguments, in the order it takes them.
 		let arguments: [Argument]
 		/// The types the builder that overrides the construction is handed, one per argument.
@@ -292,6 +306,10 @@ public enum MockLowering {
 		let mockedType: TypeDescription
 		let lowered: Result
 		let emittedMergedCode: String
+		// D1 lane hook (lane B): a mock of a type of another module extends that type, whose module a configuration of the
+		// mock's tree in the shared file needs imported.
+		/// The mocked type's declaration, with its module, where SafeDI knows one.
+		var mockedTypeFulfiller: FulfillerImports.Fulfiller?
 	}
 }
 
