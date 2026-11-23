@@ -267,21 +267,32 @@ extension ScopeGenerator {
 				)
 			}
 		}
+		// D1 lane hook (lane C): a value the tree receives lazily is taken as the wrapper it receives, keyed by its instance,
+		// whose hand-written mock the wrapper defaults to (`ScopeGenerator.publicMockWrapperParameters`).
 		var flatReceivedParameterMockDefaults = [Property: FlatParameterMockDefault]()
+		var flatReceivedParameters = [(property: Property, name: String)]()
+		var wrapperParameterByInstance = [Property: Property]()
 		for parameter in signature.flatReceivedParameters {
-			flatReceivedParameterMockDefaults[parameter.property] = context.flatParameterMockDefaults[parameter.property.typeDescription]
+			var property = parameter.property
+			if property.typeDescription.lazilyInstantiatedInstanceType != nil {
+				let instance = property.asValidatedForDependencyCycles
+				wrapperParameterByInstance[instance] = property
+				property = instance
+			}
+			flatReceivedParameters.append((property: property, name: parameter.name))
+			flatReceivedParameterMockDefaults[property] = context.flatParameterMockDefaults[property.typeDescription]
 		}
 		return Self.publicMockPlan(
 			of: instantiable,
 			forwardedDependencies: forwardedDependencies,
 			forwardedDefaults: forwardedDefaults,
 			rootDefaultParameters: rootDefaultParameters,
-			flatReceivedParameters: signature.flatReceivedParameters.map { (property: $0.property, name: $0.name) },
+			flatReceivedParameters: flatReceivedParameters,
 			flatReceivedParameterMockDefaults: flatReceivedParameterMockDefaults,
 			flatUncoveredParameters: signature.uncoveredRootParameters,
 			promotedNodes: promotedNodes,
 			onlyIfAvailableOverrides: signature.onlyIfAvailableOverrides,
-			wrapperParameterByInstance: [:],
+			wrapperParameterByInstance: wrapperParameterByInstance,
 			parameterTree: [],
 			builders: mockBuilders,
 			hasOverrides: hasOverrides,

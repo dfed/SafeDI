@@ -251,7 +251,6 @@ extension ScopeGenerator {
 			guard !receivedProperties.contains(where: { property in
 				guard let instanceType = property.typeDescription.lazilyInstantiatedInstanceType else { return false }
 				return receivedLabels.count(where: { $0 == property.label }) > 1
-					|| flatParameterMockDefaults[instanceType.unwrapped] != nil
 			}) else { return .unsupported(.wrapper) }
 		} else {
 			for property in receivedProperties where property.typeDescription.lazilyInstantiatedInstanceType != nil {
