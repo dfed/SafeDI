@@ -90,6 +90,8 @@ extension MockLowering {
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		unavailableProperties: Set<Property>,
 		bindingNamesPassedByName: [String: String] = [:],
+		// D1 lane hook (lane B): the parameters of `mock()` named apart that the node's own uncovered dependencies are.
+		uncoveredParameterNames: [String: [TypeDescription: String]] = [:],
 	) -> [(label: String, value: String)] {
 		initializer.arguments.compactMap { argument in
 			guard let dependency = dependencies.first(where: argument.isFulfilled(by:)) else { return nil }
@@ -97,6 +99,8 @@ extension MockLowering {
 				"nil"
 			} else if dependency.source.isReceived, lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty) {
 				"\(bindingNamesPassedByName[argument.innerLabel] ?? argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+			} else if case .instantiated = dependency.source, let parameterName = uncoveredParameterNames[argument.innerLabel]?[dependency.property.typeDescription] {
+				parameterName
 			} else {
 				bindingNamesPassedByName[argument.innerLabel] ?? argument.innerLabel
 			}

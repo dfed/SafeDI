@@ -277,10 +277,8 @@ extension ScopeGenerator {
 			uncoveredParameterNamesByLabelAndType: uncoveredParameterNamesByLabelAndType,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 		)
-		// D1 lane hook (lane B): the uncovered parameters named apart, which lane B's family lowers; the overrides' bindings,
-		// and the receives of flat received parameters and overrides named apart, are `mock()`'s and the walk's
-		// (`lowerMockRootWithTree(of:context:)`).
-		guard signature.uncoveredParameterNamesByLabelAndType.isEmpty else { return .unsupported(.siblingLabelCollision) }
+		// D1 lane hook (lane B): the overrides' bindings, and the receives of parameters and overrides named apart, are
+		// `mock()`'s and the walk's (`lowerMockRootWithTree(of:context:)`).
 		// No two parameters or bindings of `mock()` share a name: the emitter names them apart.
 		guard signature.labels.count == signature.parameters.count + signature.onlyIfAvailableOverrides.count else { return .unsupported(.siblingLabelCollision) }
 		return .lowered(signature)

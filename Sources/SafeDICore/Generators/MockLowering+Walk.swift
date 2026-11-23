@@ -52,6 +52,15 @@ extension ScopeGenerator {
 		// D1 lane hook (lane B): a receive of a flat received parameter or override named apart from its label is handed that
 		// name, which its builder function binds again under the label.
 		walk.renames = signature.renamesByLabelAndType
+		// D1 lane hook (lane B): the uncovered dependencies named apart, which the types that instantiate them are passed, and
+		// a receive beneath reads, from the mocked type's own for its whole tree (`routingReceives`).
+		walk.uncoveredParameterNames = signature.uncoveredParameterNamesByLabelAndType
+		let mockedTypeUncoveredProperties = instantiable.dependencies.compactMap { dependency -> Property? in
+			guard case .instantiated = dependency.source, signature.uncoveredProperties.contains(dependency.property) else { return nil }
+			return dependency.property
+		}
+		walk.renames = MockLowering.removingRenames(hiddenBy: mockedTypeUncoveredProperties, from: walk.renames)
+		MockLowering.routeReceives(of: mockedTypeUncoveredProperties, toParametersNamed: walk.uncoveredParameterNames, in: &walk.renames)
 		walk.rootParametersKeepingTheirLabels = (signature.forwardedParameters + signature.rootDefaultParameters).map(\.property)
 		// D1 lane hook (lane D): the defaults a type's hand-written mock declares, which its configuration's fields take.
 		walk.handWrittenMockDefaultParameters = context.handWrittenMockDefaultParameters
@@ -300,6 +309,8 @@ extension MockLowering {
 		/// The names the mock root's level gives the nodes it names apart, by label and then type, under which the mocked type
 		/// is passed them.
 		var rootRenames = [String: [TypeDescription: String]]()
+		/// The names of the parameters of `mock()` named apart that uncovered dependencies are, by label and type.
+		var uncoveredParameterNames = [String: [TypeDescription: String]]()
 		/// The names the property nodes of the mock root's level are bound under.
 		var rootPropertyNodeBindingNames = Set<String>()
 		/// The labels the mock root's level names its nodes apart under.
@@ -755,10 +766,11 @@ extension MockLowering {
 				guard case .instantiated = dependency.source, uncoveredProperties.contains(dependency.property) else { return nil }
 				return dependency.property
 			}
-			let functionRenames = MockLowering.removingRenames(
+			var functionRenames = MockLowering.removingRenames(
 				hiddenBy: childGenerators.compactMap(\.property) + (isWrapped ? forwarded : []) + MockLowering.cycleParameterForms(of: generator).sorted() + uncoveredInstantiatedProperties,
 				from: renames,
 			)
+			MockLowering.routeReceives(of: uncoveredInstantiatedProperties, toParametersNamed: uncoveredParameterNames, in: &functionRenames)
 			var receiverBindings = [(property: Property, name: String)]()
 			for dependency in instantiable.dependencies {
 				// A receive the node passes `nil` is not rebound (`emitReceiverBindings`): the name may not be declared yet.
@@ -821,6 +833,7 @@ extension MockLowering {
 						lazilyInstantiatedInstanceProperties: generator.mockLoweringLazilyInstantiatedInstanceProperties,
 						unavailableProperties: unavailableProperties,
 						bindingNamesPassedByName: bindingNamesPassedByName,
+						uncoveredParameterNames: uncoveredParameterNames,
 					),
 					nodePath: nodePath,
 					overrideReachable: overrideReachable,
@@ -1431,6 +1444,16 @@ extension MockLowering {
 
 	static func builderFunctionName(boundAs bindingName: String) -> String {
 		"\(ReservedName.builderFunctionNamePrefix)\(bindingName)".spelledAsJoinedIdentifier
+	}
+
+	/// Routes the receives of `properties`, dependencies a type instantiates that the mock cannot build, to the parameters of
+	/// `mock()` they are named apart under, in `renames`, which a declaration of theirs has pruned (`routingReceives`).
+	static func routeReceives(of properties: [Property], toParametersNamed parameterNames: [String: [TypeDescription: String]], in renames: inout [String: [TypeDescription: String]]) {
+		for property in properties {
+			if let parameterName = parameterNames[property.label]?[property.typeDescription] {
+				renames[property.label, default: [:]][property.typeDescription] = parameterName
+			}
+		}
 	}
 
 	/// `renames` without the names that `declarations`, a builder function's children and parameters, hide: a receive of a
