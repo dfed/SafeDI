@@ -151,12 +151,13 @@ extension ScopeGenerator {
 		// `nil`.
 		var providedProperties = Set(nodes.map(\.property)).union(signature.properties).union(overrideProperties).union(unavailableOptionalProperties).union(signature.lazilyInstantiatedProperties)
 		// D1 lane hook (lane D): the mocked type's own receive or instantiation of a lazy wrapper's instance is passed the
-		// wrapper's instance, and a receive only if available of a node's optional form is passed the node, as
+		// wrapper's instance, and a receive only if available of the optional form of a node or a parameter of `mock()` is passed
+		// that binding, as
 		// `generateReturnArgumentList` passes them. A public mock's root is lane C's (`publicMockWithTree`).
 		let rootInstancesReadByValue = instantiable.generateMock == .public ? [] : MockLowering.rootInstancesReadByValue(of: instantiable, among: lazilyInstantiatedInstances)
 		providedProperties.formUnion(rootInstancesReadByValue)
 		if instantiable.generateMock != .public {
-			providedProperties.formUnion(MockLowering.rootOptionalFormsProvidedByNodes(of: instantiable, nodeProperties: Set(nodes.map(\.property)), renames: rootRenames))
+			providedProperties.formUnion(MockLowering.rootOptionalFormsProvidedByNodes(of: instantiable, nodeProperties: Set(nodes.map(\.property)).union(signature.properties), renames: rootRenames))
 		}
 		guard instantiable.dependencies.allSatisfy({ providedProperties.contains($0.property) }) else {
 			return .unsupported(.flatParameter)
