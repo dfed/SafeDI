@@ -256,12 +256,13 @@ extension MockLowering.PublicConstructionRecord {
 	init(of node: MockLowering.ConstantNode, children: [MockLowering.TreeNode]) {
 		// The arguments the construction is passed, which leave out a parameter left to its default
 		// (`ScopeGenerator.MockConstruction.callSiteArguments`).
-		let construction = ScopeGenerator.MockConstruction(instantiable: node.instantiable, useMockInitializer: false, builderTypesDeclaredEscaping: [])
+		// D1 lane hook (lane C): or its hand-written mock, which a public mock builds it with too.
+		let construction = ScopeGenerator.MockConstruction(instantiable: node.instantiable, useMockInitializer: node.usesMockInitializer, builderTypesDeclaredEscaping: [])
 		self.init(
 			concreteType: construction.concreteType,
-			usesMockInitializer: false,
+			usesMockInitializer: node.usesMockInitializer,
 			isExtensionBased: construction.isExtensionBased,
-			customMockName: nil,
+			customMockName: construction.customMockName,
 			constructionIsolation: construction.constructionIsolation,
 			constructionReturnType: construction.concreteType,
 			arguments: construction.callSiteArguments.map { Argument(label: $0.label, innerLabel: $0.innerLabel, typeDescription: $0.typeDescription) },

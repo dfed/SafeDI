@@ -180,7 +180,16 @@ extension ScopeGenerator {
 		// Each in the mocked type's own spelling where it receives the dependency, else its receivers' most explicit one.
 		let receivedProperties = MockedTypeSpellings(of: instantiable, treeReceivedProperties: receivedProperties).spellings(of: receivedProperties)
 		// The mock wraps the instance it is passed for a `LazilyInstantiated` it cannot build.
-		guard !receivedProperties.contains(where: { $0.typeDescription.lazilyInstantiatedInstanceType != nil }) else { return .unsupported(.wrapper) }
+		// D1 lane hook (lane C): a public mock takes the wrapper itself (`publicMockWrapperParameters`), where its tree receives
+		// the label in no other form; one beside its instance, or defaulted to a wrapper around a hand-written mock, is not
+		// lowered yet.
+		let receivedLabels = receivedProperties.map(\.label)
+		guard !receivedProperties.contains(where: { property in
+			guard let instanceType = property.typeDescription.lazilyInstantiatedInstanceType else { return false }
+			return instantiable.generateMock != .public
+				|| receivedLabels.count(where: { $0 == property.label }) > 1
+				|| flatParameterMockDefaults[instanceType.unwrapped] != nil
+		}) else { return .unsupported(.wrapper) }
 		let forwardedProperties = instantiable.forwardedReceivableProperties
 		let receivedNonOptionalProperties = Set(receivedProperties.filter { !$0.typeDescription.isOptional })
 		var flatReceivedProperties = [Property]()
