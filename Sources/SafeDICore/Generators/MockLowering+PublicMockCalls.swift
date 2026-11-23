@@ -550,9 +550,10 @@ extension MockLowering.Walk {
 				// the instance of the lazy wrapper the tree holds of it, read at the call (`dependencyArgument`).
 				guard let dependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }) else { return .unsupported(.publicMockCall) }
 				let value: String
-				if generator.unavailableOptionalProperties.contains(dependency.property) {
+				if generator.unavailableOptionalProperties.contains(dependency.property) || unavailableProperties.contains(dependency.property) {
 					// A value the call's leaf receives only if available that nothing provides where the call is made, or that a
 					// `@Sendable` function would capture, is passed `nil` (`constructionArgumentList(of:unavailableProperties:)`).
+					// D1 lane hook (lane B): so is one a sibling built after the call provides.
 					value = "nil"
 				} else if dependency.source == .forwarded {
 					// A value the called type forwards is the parameter of the builder function the instantiator holds.
