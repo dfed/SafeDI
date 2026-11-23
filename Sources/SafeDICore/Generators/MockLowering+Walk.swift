@@ -445,7 +445,10 @@ extension MockLowering {
 			let enclosingLoopMembers = loopMembers
 			let enclosingLoopUnit = loopUnit
 			// The enclosing functions a cycle-closing node beneath refers to by name are in scope too.
-			loopMembers = MockLowering.loopMembers(among: generators, loops: loops, bindingNames: bindingNames, namesInScope: Set(ancestorDeclarationsByLabel.values.flatMap { $0.map(\.functionName) }))
+			// A level without a loop has no member, and nearly every level has none.
+			loopMembers = loops.contains(where: { $0 != nil })
+				? MockLowering.loopMembers(among: generators, loops: loops, bindingNames: bindingNames, namesInScope: Set(ancestorDeclarationsByLabel.values.flatMap { $0.map(\.functionName) }))
+				: [:]
 			loopUnit = nil
 			defer {
 				loopMembers = enclosingLoopMembers
@@ -634,7 +637,9 @@ extension MockLowering {
 		/// parent's configuration has no field for it, so neither it nor anything beneath it reads an override. The one
 		/// question the walk asks of the cycle edges.
 		func isPruned(_ concreteType: TypeDescription, beneath parentConcreteType: String?) -> Bool {
-			parentConcreteType.map { cycleEdges.contains(ScopeGenerator.CycleEdge(parent: $0, child: concreteType.asSource)) } ?? false
+			// Nearly every mock graph has no cycle edge, and spelling the type is most of the question's cost.
+			guard !cycleEdges.isEmpty, let parentConcreteType else { return false }
+			return cycleEdges.contains(ScopeGenerator.CycleEdge(parent: parentConcreteType, child: concreteType.asSource))
 		}
 
 		/// The node of `generator`, which closes a cycle on a node around it of `property`, built as `instantiable`, whose
