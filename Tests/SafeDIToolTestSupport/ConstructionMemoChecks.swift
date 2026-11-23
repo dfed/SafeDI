@@ -40,6 +40,23 @@ enum ConstructionMemoChecks {
 		}
 	}
 
+	/// An observer that records an issue for each place the oracle's build with the memo builds again where it reuses a
+	/// generator (`ConstructionMemoOracle.reuseObserver`) whose build differs from the reused generator, or whose reads of its
+	/// context are not, as a set, the reads the reuse answered alike, then hands them to `enclosingObserver`.
+	static func recordingReuseDifferences(
+		handingOn enclosingObserver: (@Sendable (any Sendable, any Sendable, Bool) -> Void)?,
+	) -> @Sendable (any Sendable, any Sendable, Bool) -> Void {
+		{ rebuiltGenerator, reusedGenerator, readsAreAlike in
+			if let difference = difference(between: reusedGenerator, and: rebuiltGenerator) {
+				Issue.record(Comment(rawValue: "A place that reuses a generator builds another:\n\(difference)"))
+			}
+			if !readsAreAlike {
+				Issue.record(Comment(rawValue: "A place that reuses a generator reads other reads of its context than the reuse answered alike."))
+			}
+			enclosingObserver?(rebuiltGenerator, reusedGenerator, readsAreAlike)
+		}
+	}
+
 	/// The first line at which the descriptions of the two trees differ, with the line of each, or `nil` when the two
 	/// hold the same data on every path.
 	static func difference(between treeBuiltWithMemo: Any, and treeBuiltWithoutMemo: Any) -> String? {

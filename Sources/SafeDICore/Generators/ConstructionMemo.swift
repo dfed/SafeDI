@@ -442,6 +442,24 @@ struct ConstructionLog {
 		return reads
 	}
 
+	/// Whether this log and `other` hold the same reads, each with the same depth, as sets, each answered alike in both:
+	/// what the memo oracle asks of a place it builds again where a generator is reused (`ConstructionMemoOracle.reuseObserver`).
+	func holdsAlike(_ other: Self) -> Bool {
+		let answers = answersByRead
+		let otherAnswers = other.answersByRead
+		return answers.count == otherAnswers.count && answers.allSatisfy { read, answer in otherAnswers[read].map(answer.isAlike) ?? false }
+	}
+
+	/// Each read of this log, with the first answer it was added with.
+	private var answersByRead: [AnsweredRead: Answer] {
+		var answers = [AnsweredRead: Answer]()
+		_ = forEachRead(where: { _ in true }) { recorded in
+			answers[recorded.read] = recorded.answer
+			return true
+		}
+		return answers
+	}
+
 	/// Adds `log`'s reads to this log's, after the reads it has: a read both hold keeps this log's answer.
 	mutating func formUnion(_ log: Self) {
 		guard isRecording else { return }
@@ -739,6 +757,15 @@ public enum ConstructionMemoOracle {
 	/// Whether `DependencyTreeGenerator` creates its mock roots in reverse type order, so that a memo shared between them
 	/// carries other trees' generators to each; what it generates must not change.
 	@TaskLocal public static var buildsMockRootsInReverseOrder = false
+
+	/// Called, in the oracle's build with the memo, at each place that reuses a generator another place built: the place is
+	/// built again, and handed over with the reused generator, which must hold the same data, and with whether the reads the
+	/// build made of the place's context are the reads the reuse answered alike, as a set, each answered alike. The tree
+	/// keeps the reused generator. When unset, the oracle's build reuses as the tool does.
+	@TaskLocal public static var reuseObserver: (@Sendable (_ rebuiltGenerator: any Sendable, _ reusedGenerator: any Sendable, _ readsAreAlike: Bool) -> Void)?
+
+	/// `reuseObserver`, while the oracle builds its tree with the memo; `nil` in every other build.
+	@TaskLocal static var rebuildsReusedPlaces: (@Sendable (_ rebuiltGenerator: any Sendable, _ reusedGenerator: any Sendable, _ readsAreAlike: Bool) -> Void)?
 
 	/// Called with the concrete type of each place `Scope.createScopeGenerator` keys and looks up in a construction memo,
 	/// when set: by the tests, never by the tool. The oracle's own builds are not reported.
