@@ -215,25 +215,27 @@ extension ScopeGenerator {
 	private func passedUpBuilderNames(of orderedChildren: [OrderedChild]) -> MockLowering.Lowering<[Property: String]> {
 		var holeTypeByProperty = [Property: SeamSignature.HoleType]()
 		var builderFunctionNames = Set<String>()
-		var generatorsToVisit = orderedChildren.map(\.generator)
-		while let generator = generatorsToVisit.popLast() {
+		// Each generator with whether a `@Sendable` builder function encloses it.
+		var generatorsToVisit = orderedChildren.map { ($0.generator, false) }
+		while let (generator, isInsideSendableFunction) = generatorsToVisit.popLast() {
 			if let property = generator.property {
 				builderFunctionNames.insert(ScopeGenerator.functionName(toBuildPropertyNamed: property.label))
 			}
+			let capturesSendably = isInsideSendableFunction || generator.buildsInSendableFunction
 			if let publicMockCall = generator.publicMockCall {
 				let passedUpLabels = Set(publicMockCall.passedUpBuilders.map(\.label))
 				for parameter in publicMockCall.passedParameters {
 					// A `.public` caller's leaf receives no builder: the call passes its own struct's member.
 					guard let builder = parameter.builder, passedUpLabels.contains(builder.label), callsLeafReceivesBuilder(of: generator, parameter.dependency.property) else { continue }
 					// A builder of the `@Sendable` family, or one a `@Sendable` builder function captures, is not lowered yet.
-					guard !builder.enumKey.isSendable, !generator.buildsInSendableFunction else { return .unsupported(.publicMockCall) }
+					guard !builder.enumKey.isSendable, !capturesSendably else { return .unsupported(.publicMockCall) }
 					let property = parameter.dependency.property
 					guard holeTypeByProperty.updateValue(builder.enumKey.holeType, forKey: property).map({ $0 == builder.enumKey.holeType }) ?? true else {
 						return .unsupported(.publicMockCall)
 					}
 				}
 			}
-			generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator))
+			generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map { ($0.generator, capturesSendably) })
 		}
 		guard !holeTypeByProperty.isEmpty else { return .lowered([:]) }
 		// One builder per hole type, labeled from its stem as the leaf receives it: a builder joining several properties, or
@@ -344,8 +346,6 @@ extension MockLowering.Walk {
 		// extractor.
 		guard !generator.buildsInSendableFunction || sendableOverrideExtractor != nil || node.overridesField == nil else { return .unsupported(.publicMockCall) }
 		let nodePath = "\(path).\(property.label)"
-		// Inside a `@Sendable` function the member is read into a local before the outermost such function.
-		let overrideRead = readingOverride(nodePath, localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(ReservedName.configurationBuilderPropertyName)")
 		// A call that fills builders is made in a builder function of its own, which declares the fills and names the guard
 		// first; it passes each builder the struct of the builder `mock()` takes optional for the builder's places, or of
 		// its fills where that builder is `nil`. Any other call names the guard where it is made.
@@ -375,9 +375,13 @@ extension MockLowering.Walk {
 			   let builderName = filledCallBuilders.passedUpBuilderNames[dependency.property]
 			{
 				// A builder the call passes up is the builder `mock()` takes, which the call's builder function binds under the
-				// label the leaf receives it as. An override closure handed it is not lowered yet.
+				// label the leaf receives it as, and which an override closure is handed as it is (`.callersBuilder`).
 				// `mock()` takes it as the flat received parameter of its property (`lowerRootSignature(of:context:)`).
-				guard scope.contains(dependency.property), overrideBuilders == nil, filledCall == nil, property.propertyType.isConstant else { return .unsupported(.publicMockCall) }
+				guard scope.contains(dependency.property), filledCall == nil, property.propertyType.isConstant else { return .unsupported(.publicMockCall) }
+				if let overrideBuilders {
+					guard case .callersBuilder = overrideBuilders[argument.innerLabel] else { return .unsupported(.publicMockCall) }
+					overrideArguments.append(dependency.property.label)
+				}
 				passedUpBuilderBindings.append("let \(dependency.property.label): \(dependency.property.typeDescription.strippingEscaping.asSource) = \(builderName)")
 				arguments.append(labeled(".init(__safeDI_noScope: \(dependency.property.label))", as: argument))
 			} else if let builderStruct = structValuesByLabel[argument.innerLabel] {
@@ -419,6 +423,11 @@ extension MockLowering.Walk {
 				argumentByLabel[argument.innerLabel] = value
 			}
 		}
+		// Inside a `@Sendable` function the member is read into a local before the outermost such function, only where the
+		// call reads it.
+		let overrideRead = publicMockCall.takesOverrides || overrideBuilders != nil
+			? readingOverride(nodePath, localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(ReservedName.configurationBuilderPropertyName)")
+			: nodePath
 		if publicMockCall.takesOverrides {
 			arguments.append("\(ReservedName.mockOverridesParameterName): \(overridesAreSendable ? "\(overrideRead)?() ?? .init()" : overrideRead)")
 		}
