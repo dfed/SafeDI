@@ -219,8 +219,8 @@ extension MockLowering {
 			}
 		}
 
-		func parameterLines(indent: String, builders: [(label: String, declaration: String)] = []) -> [String] {
-			var lines = (forwardedParameters + rootDefaultParameters).map { line(of: $0, indent: indent) }
+		func parameterLines(indent: String, builders: [(label: String, declaration: String)] = [], includingRootDefaults: Bool = true, beforeUncovered: [String] = []) -> [String] {
+			var lines = (forwardedParameters + (includingRootDefaults ? rootDefaultParameters : [])).map { line(of: $0, indent: indent) }
 			var buildersToList = builders[...]
 			for parameter in flatReceivedParameters {
 				while let builder = buildersToList.first, builder.label < parameter.property.label {
@@ -230,8 +230,45 @@ extension MockLowering {
 				lines.append(line(of: parameter, indent: indent))
 			}
 			lines.append(contentsOf: buildersToList.map { "\(indent)\($0.declaration)" })
+			lines.append(contentsOf: beforeUncovered)
 			lines.append(contentsOf: uncoveredParameters.map { line(of: $0, indent: indent) })
 			return lines
+		}
+
+		/// The signature in `.v3Unstable`'s mock API: `mock()` takes a builder for each `@Instantiated` dependency it cannot
+		/// build, which each type that instantiates the dependency calls for an instance of its own, as the app creates one
+		/// for each, `@Sendable` where a `@Sendable` builder function calls it.
+		var v3: RootSignature {
+			let builderParameters = uncoveredRootParameters.map { parameter in
+				ScopeGenerator.MockRootParameters.UncoveredParameter(
+					property: parameter.property,
+					label: parameter.label,
+					typeSource: "@escaping \(parameter.isSendableAutoclosure ? "@Sendable " : "")() -> \(parameter.typeSource)",
+					instantiatedType: parameter.instantiatedType,
+					isSendableAutoclosure: true,
+					creatingTypes: parameter.creatingTypes,
+				)
+			}
+			var signature = RootSignature(
+				forwardedParameters: forwardedParameters,
+				rootDefaultParameters: rootDefaultParameters,
+				flatReceivedParameters: flatReceivedParameters,
+				uncoveredParameters: builderParameters.map {
+					Parameter(property: $0.property, defaultExpression: nil, typeSource: $0.typeSource, name: $0.label)
+				},
+				uncoveredRootParameters: builderParameters,
+				sharedValueDocumentation: [],
+				onlyIfAvailableOverrides: onlyIfAvailableOverrides,
+				renamesByLabelAndType: renamesByLabelAndType,
+				uncoveredParameterNamesByLabelAndType: uncoveredParameterNamesByLabelAndType,
+				typesDeclaredEscaping: typesDeclaredEscaping,
+				lazilyInstantiatedBindings: lazilyInstantiatedBindings,
+				lazilyInstantiatedBindingNamesByLabelAndType: lazilyInstantiatedBindingNamesByLabelAndType,
+				namesDeclaredInBuilderFunctions: namesDeclaredInBuilderFunctions,
+			)
+			signature.passedUpBuilders = passedUpBuilders
+			signature.builderNaming = builderNaming
+			return signature
 		}
 
 		private func line(of parameter: Parameter, indent: String) -> String {
@@ -248,7 +285,13 @@ extension MockLowering {
 extension ScopeGenerator {
 	/// The parameters of this mock root's `mock()` other than its overrides.
 	func lowerRootSignature(of instantiable: Instantiable, context: MockContext) -> MockLowering.RootSignature {
-		lowerRootSignature(of: instantiable, flatParameterMockDefaults: context.flatParameterMockDefaults)
+		let signature = lowerRootSignature(of: instantiable, flatParameterMockDefaults: context.flatParameterMockDefaults)
+		switch context.apiVersion {
+		case .v2:
+			return signature
+		case .v3Unstable:
+			return signature.v3
+		}
 	}
 
 	/// The same, read with the defaults of the module's flat parameters, which is all of the module's mock context the

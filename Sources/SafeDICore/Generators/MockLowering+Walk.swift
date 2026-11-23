@@ -75,7 +75,8 @@ extension ScopeGenerator {
 		// A public mock builds each configured node with its type's construction function.
 		walk.buildsPublicMock = instantiable.generateMock == .public
 		// The nodes a public mock promotes, each bound from its caller's value when passed one.
-		walk.promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildren)
+		walk.isV3 = context.apiVersion == .v3Unstable
+		walk.promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildren, regardlessOfMockKind: walk.isV3)
 		// Each override binds its receive's label, in the optional form a receive only if available
 		// reads.
 		let overrideProperties = Set(signature.onlyIfAvailableOverrides.flatMap { override in
@@ -143,7 +144,7 @@ extension ScopeGenerator {
 		// `mock()` then binds each override of what its tree receives only if available, which the
 		// receives beneath read.
 		// A public mock takes each as a parameter of `mock()` under the override's name, which binds it.
-		if instantiable.generateMock != .public {
+		if instantiable.generateMock != .public, !walk.isV3 {
 			bindingLines.append(contentsOf: signature.onlyIfAvailableOverrides.map { override in
 				"\(bodyIndent)let \(override.name): \(override.typeDescription.asSource) = \(ReservedName.mockOverridesParameterName).\(override.name)"
 			})
@@ -200,6 +201,8 @@ extension ScopeGenerator {
 		if let publicMockRoot {
 			// A public mock's parameters named apart and its values passed `nil`, as the internal mock's.
 			return publicMockWithTree(of: instantiable, plan: publicMockRoot.plan, publicMockContext: publicMockRoot.context, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, configurations: walk.configurationRecords, context: context)
+		} else if walk.isV3 {
+			return Self.v3MockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, builders: (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, walk: &walk, context: context)
 		} else {
 			return MockLowering.Result(code: Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, builders: (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, context: context), configurations: walk.configurationRecords)
 		}
@@ -407,6 +410,10 @@ extension MockLowering {
 		// A public mock builds each configured node with its type's construction function.
 		/// Whether the walk lowers a public mock, whose configured nodes call their types' construction functions.
 		var buildsPublicMock = false
+		// `.v3Unstable`'s mock API: each configured node reads its configuration one level down from its parent's, into a
+		// local of its own, and a node the mock promotes reads the instance or configuration `mock()` is passed for it.
+		/// Whether the walk lowers `.v3Unstable`'s mock API.
+		var isV3 = false
 		// The bindings the node around the walk is passed by name, which a payload bound inside its
 		// builder function reads (`ScopeGenerator.MockParameterNode.ValuesBinding.line`).
 		var enclosingBindingNamesPassedByName = [String: String]()
@@ -1025,7 +1032,20 @@ extension MockLowering {
 			// A default-valued parameter is a field of the node's configuration (`MockLowering+Defaults.swift`).
 			let defaultFields = configurationDefaultFields(of: instantiable, usesMockInitializer: usesMockInitializer)
 			let hasConfiguration = childGenerators.contains { $0.mockLoweringBuiltProperty != nil } || !defaultFields.isEmpty
-			let nodePath = "\(path).\(bindingName)"
+			// In `.v3Unstable`, a configured node reads its configuration into a local, a node the mock promotes from the
+			// parameter `mock()` takes for it.
+			let isPromotedInV3 = isV3 && parentConcreteType == nil && promotedProperties.contains(property)
+			let nodePath: String
+			var v3ConfigurationLine: String?
+			if isV3, hasConfiguration {
+				let configurationName = "\(bindingName)Configuration".spelledAsJoinedIdentifier
+				nodePath = configurationName
+				if !isPromotedInV3 {
+					v3ConfigurationLine = "\(indent)let \(configurationName) = \(path).\(bindingName) ?? .init()"
+				}
+			} else {
+				nodePath = "\(path).\(bindingName)"
+			}
 			// The node's builder function binds again under its label each receive named apart, from the names its own
 			// declarations, its children, forwarded properties and cycle parameters, do not hide (`ScopeGenerator.removingRenames`).
 			// Nor do the dependencies its type instantiates that the mock cannot build, whose receives
@@ -1077,7 +1097,7 @@ extension MockLowering {
 				}
 				receiverBindings.removeAll { bindingNamesPassedByName[$0.property.label] != nil }
 			}
-			let overrideRead: String? = isCycleNode || !overrideReachable ? nil : readingOverride(
+			let overrideRead: String? = isCycleNode || !overrideReachable || (isPromotedInV3 && !hasConfiguration) ? nil : readingOverride(
 				hasConfiguration ? "\(nodePath).\(builder)" : nodePath,
 				localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(builder)",
 			)
@@ -1121,6 +1141,9 @@ extension MockLowering {
 			if parentConcreteType == nil, promotedProperties.contains(property) {
 				node.promotedParameterName = promotedParameterNames[property] ?? bindingName
 			}
+			if isPromotedInV3, hasConfiguration {
+				node.v3ReceivedConfigurationName = nodePath
+			}
 			node.cycleParameterArguments = cycleParameterArguments
 			// A place of another module's public mock the tree builds inline reads the builder `mock()`
 			// takes for its hole type and family (`MockLowering+PublicMockCalls.swift`).
@@ -1131,6 +1154,9 @@ extension MockLowering {
 			// A node whose configuration holds its default-valued parameters is built in a builder
 			// function, as `MockParameterNode.requiresFunctionWrapper` says.
 			guard node.hasChildren || isWrapped || !receiverBindings.isEmpty || !defaultFields.isEmpty || !node.sendableAutoclosureBindings.isEmpty else {
+				if let v3ConfigurationLine {
+					lines.append(v3ConfigurationLine)
+				}
 				lines.append(node.constantBindingLine(overrideRead: overrideRead, indent: indent))
 				return .finished(node)
 			}
@@ -1142,6 +1168,9 @@ extension MockLowering {
 			// its builder function, after a wrapper's override locals and before a constant's, and the members a `@Sendable`
 			// function calls at its top (`MockLowering+PublicMocks.swift`).
 			let valuesBindingLines = generator.valuesBindingsBeforeBuilderFunction.map { "\(indent)\($0.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: [:]))" }
+			if let v3ConfigurationLine {
+				lines.append(v3ConfigurationLine)
+			}
 			if !isWrapped {
 				lines.append(contentsOf: valuesBindingLines)
 			}
@@ -1285,6 +1314,7 @@ extension MockLowering {
 				// A child beneath an edge in `cycleEdges` has no member in its parent's configuration, public or internal.
 				let recordedChildren = children.filter { child in child.concreteType.map { !isPruned($0, beneath: parentConcreteType) } ?? true }
 				var record = ConfigurationRecord(of: configuredNode, children: recordedChildren)
+				record.isV3 = isV3
 				// What a configuration generated from the record imports.
 				record.fulfillers = configurationFulfillers(of: configuredNode)
 				// The construction the one-way check reads, with every child, pruned or not.
@@ -1404,6 +1434,9 @@ extension MockLowering {
 		/// The parameter of a public mock that holds the value its caller passed for the node, which the node's binding reads
 		/// first (`ScopeGenerator.passing(_:orBuilding:)`).
 		var promotedParameterName: String?
+		/// In `.v3Unstable`, where the node is promoted and configured, the name its configuration is bound under where
+		/// `mock()` is passed one: the node is bound by a `switch` over the `SafeDIReceived` `mock()` takes for it.
+		var v3ReceivedConfigurationName: String?
 		// The `@Sendable` autoclosure parameters of the values the node's type instantiates that the
 		// mock cannot build, each bound in its builder function from the local `mock()` reads it into.
 		// Also the places it instantiates that a builder of `mock()` builds.
@@ -1484,6 +1517,10 @@ extension MockLowering {
 
 		/// The statement that binds a constant node with no children, whose override `overrideRead` reads.
 		func constantBindingLine(overrideRead nodePath: String?, indent: String) -> String {
+			if let v3ReceivedConfigurationName, let promotedParameterName {
+				let builtValue = constructionReading(override: nodePath, builderCall: "\(ReservedName.configurationBuilderPropertyName)(\(builderArguments))")
+				return MockLowering.v3ReceivedBindingLine(of: property, boundAs: bindingName, passing: promotedParameterName, configurationName: v3ReceivedConfigurationName, building: builtValue, indent: indent)
+			}
 			// Only the `if` expression that reads an override needs the property's type, which its two branches share.
 			// A child the mock promotes for an optional receive, such as a value a called public mock
 			// builds when passed `nil`, is bound as the value it builds.
@@ -1521,6 +1558,9 @@ extension MockLowering {
 			if !cycleParameters.isEmpty {
 				parameterList += (parameterList.isEmpty ? "" : ", ") + cycleParameters.initializerFunctionParametersSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 			}
+			if let v3ReceivedConfigurationName {
+				parameterList += (parameterList.isEmpty ? "" : ", ") + "_ \(v3ReceivedConfigurationName): \(instantiable.concreteInstantiable.asSource).\(ReservedName.mockOverridesTypeName)"
+			}
 			return "\(indent)\(decorator)func \(functionName)(\(parameterList)) -> \(builtType) {"
 		}
 
@@ -1557,6 +1597,10 @@ extension MockLowering {
 				}
 				return MockLowering.bindingLines(of: property, boundAs: bindingName, callingFunctionNamed: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent)
 			}
+			if let v3ReceivedConfigurationName {
+				let call = "\(functionName)(\((cycleParameterArguments + [v3ReceivedConfigurationName]).joined(separator: ", ")))"
+				return [MockLowering.v3ReceivedBindingLine(of: property, boundAs: bindingName, passing: promotedParameterName, configurationName: v3ReceivedConfigurationName, building: call, indent: indent)]
+			}
 			guard property.propertyType.isConstant else {
 				return [MockLowering.promotedWrapperBindingLine(of: property.typeDescription, named: bindingName, passing: promotedParameterName, handing: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent)]
 			}
@@ -1566,6 +1610,18 @@ extension MockLowering {
 
 	/// `lines` joined by newlines, in storage sized once for all of them: a mock's code can run to megabytes, which
 	/// `joined(separator:)` grows into by copying.
+	/// The statement that binds a node `mock()` promotes in `.v3Unstable` from the `SafeDIReceived` parameter it takes for it:
+	/// the instance it is passed, or the value `built` builds from the configuration it is passed, bound as
+	/// `configurationName`.
+	static func v3ReceivedBindingLine(of property: Property, boundAs bindingName: String, passing parameterName: String, configurationName: String, building built: String, indent: String) -> String {
+		[
+			"\(indent)let \(bindingName): \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource) = switch \(parameterName) {",
+			"\(indent)case let .instance(\(parameterName)): \(parameterName)",
+			"\(indent)case let .built(\(configurationName)): \(built)",
+			"\(indent)}",
+		].joined(separator: "\n")
+	}
+
 	static func joinedLines(_ lines: [String]) -> String {
 		var code = ""
 		code.reserveCapacity(lines.reduce(lines.count) { $0 + $1.utf8.count })
@@ -1772,6 +1828,16 @@ extension MockLowering {
 	/// The arguments the mocked type's construction `initializer` is handed for `dependencies`: each dependency's label, or
 	/// the name the mock root's level binds it apart under, by its label and type (`renames`).
 	// A dependency among `instancesReadByValue` is passed its wrapper's instance.
+	/// The arguments of `initializer` that a dependency fulfills, each label and value, as `rootArgumentList` passes them.
+	static func rootDependencyArguments(of initializer: Initializer, given dependencies: [Dependency], renames: [String: [TypeDescription: String]], passingNilTo unavailableProperties: Set<Property>, readingInstancesOf instancesReadByValue: Set<Property>) -> [(label: String, value: String)] {
+		initializer.arguments.compactMap { argument in
+			guard MockLowering.dependency(passedTo: argument, among: dependencies) != nil else { return nil }
+			let part = rootArgumentList(of: Initializer(arguments: [argument]), given: dependencies, renames: renames, passingNilTo: unavailableProperties, readingInstancesOf: instancesReadByValue)
+			let prefix = "\(argument.label.spelledAsArgumentLabel): "
+			return (label: argument.label.spelledAsArgumentLabel, value: part.hasPrefix(prefix) ? String(part.dropFirst(prefix.count)) : part)
+		}
+	}
+
 	static func rootArgumentList(of initializer: Initializer, given dependencies: [Dependency], renames: [String: [TypeDescription: String]], passingNilTo unavailableProperties: Set<Property>, readingInstancesOf instancesReadByValue: Set<Property> = []) -> String {
 		var parts = [String]()
 		for argument in initializer.arguments {
@@ -1919,14 +1985,7 @@ extension MockLowering.ConfigurationRecord {
 			// A child's field is the one the overrides hold for a node at the root: its override, its configuration, or the
 			// overrides of the public mock it calls.
 			// A built child's field is spelled where a configuration is generated from the record.
-			childFieldSources: children.compactMap { child in
-				if case let .built(childNode) = child {
-					return .built(bindingName: childNode.bindingName, hasConfiguration: childNode.hasConfiguration, requiresSendable: childNode.requiresSendable, concreteType: childNode.instantiable.concreteInstantiable, builderParameters: MockLowering.BuilderParameters(of: childNode.instantiable, usesMockInitializer: childNode.usesMockInitializer), propertyType: childNode.property.typeDescription)
-				}
-				return child.overridesField.map { field in
-					.spelled(ChildField(name: field.name, typeSource: field.typeSource, defaultValue: field.defaultValue, sendableForm: child.sendableConfigurationFieldForm))
-				}
-			},
+			childFieldSources: Self.childFieldSources(of: children),
 			builderParameters: MockLowering.BuilderParameters(of: node.instantiable, usesMockInitializer: node.usesMockInitializer),
 			defaultFields: node.defaultFields,
 		)

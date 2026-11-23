@@ -66,10 +66,12 @@ public enum MockLowering {
 		/// The declarations whose modules code that builds the node's type for its property needs imported, where it does
 		/// not name them (`FulfillerImports.Fulfiller.fulfillers(building:forPropertyOfType:callingHandWrittenMock:)`).
 		var fulfillers = Set<FulfillerImports.Fulfiller>()
+		/// Whether the configuration is `.v3Unstable`'s: named `SafeDIOverrides`, every child's field optional.
+		var isV3 = false
 
 		/// The configuration's fields for the node's children, in the order its initializer takes them.
 		var childFields: [ChildField] {
-			childFieldSources.map(\.childField)
+			childFieldSources.map { isV3 ? $0.v3ChildField : $0.childField }
 		}
 
 		/// The type of the closure that overrides how the node is built, returning its concrete type.
@@ -97,6 +99,18 @@ public enum MockLowering {
 						return ChildField(name: bindingName, typeSource: "(\(requiresSendable ? "@Sendable " : "")\(builderClosureType))?", defaultValue: "nil", sendableForm: .init(typeSource: "(@Sendable \(builderClosureType))?", defaultValue: "nil", configuredTypeName: nil))
 					}
 				case let .spelled(childField):
+					return childField
+				}
+			}
+
+			/// The child's field in `.v3Unstable`'s configuration: a configured child's configuration is optional and `nil` by
+			/// default, so that a child left unset reads its type's defaults.
+			var v3ChildField: ChildField {
+				switch self {
+				case let .built(bindingName, hasConfiguration, _, concreteType, _, _) where hasConfiguration:
+					let typeSource = "\(concreteType.asSource).\(ReservedName.mockOverridesTypeName)?"
+					return ChildField(name: bindingName, typeSource: typeSource, defaultValue: "nil", sendableForm: .init(typeSource: typeSource, defaultValue: "nil", configuredTypeName: concreteType.asSource))
+				case .built, .spelled:
 					return childField
 				}
 			}

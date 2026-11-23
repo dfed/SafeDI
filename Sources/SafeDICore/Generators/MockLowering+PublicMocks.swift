@@ -76,8 +76,9 @@ extension ScopeGenerator {
 	/// The properties of the root's children, `orderedChildren`, that the public mock of `instantiable` promotes for received
 	/// dependencies, which it takes as optional parameters (`publicMockPromotedNodes(of:in:)`): every child but the mocked
 	/// type's own instantiated properties and a `LazilyInstantiated` of one's instance.
-	func publicMockPromotedProperties(of instantiable: Instantiable, among orderedChildren: [OrderedChild]) -> Set<Property> {
-		guard instantiable.generateMock == .public else { return [] }
+	// In `.v3Unstable`, an internal mock promotes alike (`regardlessOfMockKind`).
+	func publicMockPromotedProperties(of instantiable: Instantiable, among orderedChildren: [OrderedChild], regardlessOfMockKind: Bool = false) -> Set<Property> {
+		guard instantiable.generateMock == .public || regardlessOfMockKind else { return [] }
 		let ownProperties = Set(instantiable.dependencies.lazy.filter { dependency in
 			switch dependency.source {
 			case .instantiated:
