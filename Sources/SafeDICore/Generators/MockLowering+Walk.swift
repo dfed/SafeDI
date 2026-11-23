@@ -378,6 +378,7 @@ extension MockLowering {
 		mutating func mockConstruction(of instantiable: Instantiable, usesMockInitializer: Bool) -> ScopeGenerator.MockConstruction {
 			mockConstructions.construction(of: instantiable, useMockInitializer: usesMockInitializer, builderTypesDeclaredEscaping: [])
 		}
+
 		/// The concrete types whose configurations are `@Sendable`-typed, whose default fields are read as calls.
 		var sendableConfigurationTypeNames = Set<String>()
 		/// The concrete types of the configured nodes around the node the walk is at, and whether a node around it repeats one
