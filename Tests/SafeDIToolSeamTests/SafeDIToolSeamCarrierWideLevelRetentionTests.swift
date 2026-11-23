@@ -25,7 +25,7 @@ import Testing
 /// A carrier level wider than the positional limit hands its values on in run structs, each formed by consuming the one
 /// before. Each test runs the code the tool generates in a program whose classes record which of them are alive, holds
 /// one builder of the seam's tree past its owner, and prints what is still alive, which is what the tree built inline keeps.
-struct SafeDIToolSeamCarrierRetentionTests: ~Copyable {
+struct SafeDIToolSeamCarrierWideLevelRetentionTests: ~Copyable {
 	// MARK: Initialization
 
 	init() {
