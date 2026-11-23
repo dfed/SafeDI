@@ -257,6 +257,10 @@ private final class GeneratedCodeSupplyReader: SyntaxVisitor {
 			values.insert("nil")
 		} else if let reference = expression.as(DeclReferenceExprSyntax.self) {
 			resolve(name: reference.baseName.text, at: Syntax(reference), receive: receive, into: &values, visitedFunctions: &visitedFunctions)
+		} else if let optionalChaining = expression.as(OptionalChainingExprSyntax.self) {
+			// An optional wrapper's instance, `x?.instance`, is read from `x`: a builder function the type key shares takes
+			// the optional wrapper as a parameter.
+			resolve(optionalChaining.expression, into: &values, visitedFunctions: &visitedFunctions)
 		} else if let memberAccess = expression.as(MemberAccessExprSyntax.self), memberAccess.declName.baseName.text == "instance", let base = memberAccess.base {
 			// A lazily instantiated value's instance is read from its wrapper.
 			resolve(base, into: &values, visitedFunctions: &visitedFunctions)

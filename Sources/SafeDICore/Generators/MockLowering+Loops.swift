@@ -193,7 +193,7 @@ extension MockLowering {
 		}
 		let parameters = member.forwardedProperties.isEmpty ? "" : member.forwardedProperties.initializerFunctionParametersSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)
 		let callArguments = member.forwardedProperties.map { "\($0.label.spelledAsArgumentLabel): \($0.label)" } + cycleArguments
-		let decorator = isSendable ? "@Sendable " : ""
+		let decorator = ScopeGenerator.localFunctionPrefix(isSendable: isSendable)
 		var lines = ["\(indent)\(decorator)func \(receivedFunctionName)(\(parameters)) -> \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource) {"]
 		lines.append(contentsOf: memberLines)
 		lines.append("\(bodyIndent)\(memberLines.isEmpty ? "" : "return ")\(member.builderFunctionName)(\(callArguments.joined(separator: ", ")))")

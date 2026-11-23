@@ -385,7 +385,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                let first: any First = __safeDI_first()
 		                return first
 		            }
-		            @Sendable func __safeDI_secondBuilder_SubB_second(_ scope: SubB.SafeDIScope_Second.second_Values, __safeDI_top_secondBuilder: SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>) -> any Second {
+		            @Sendable nonisolated func __safeDI_secondBuilder_SubB_second(_ scope: SubB.SafeDIScope_Second.second_Values, __safeDI_top_secondBuilder: SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>) -> any Second {
 		                func __safeDI_second() -> DefaultSecond {
 		                    let gadget: any Gadget = __safeDI_top_secondBuilder.gadget(SafeDIScope_Gadget.DefaultSecond_Scope.gadget_Values())
 		                    return DefaultSecond(gadget: gadget)
@@ -5213,7 +5213,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                let first: any First = __safeDI_first()
 		                return first
 		            }
-		            @Sendable func __safeDI_secondBuilder_SubB_second(_ scope: SubB.SafeDIScope_Second.second_Values, __safeDI_top_secondBuilder: SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>) -> any Second {
+		            @Sendable nonisolated func __safeDI_secondBuilder_SubB_second(_ scope: SubB.SafeDIScope_Second.second_Values, __safeDI_top_secondBuilder: SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>) -> any Second {
 		                func __safeDI_second() -> DefaultSecond {
 		                    let gadget: any Gadget = __safeDI_top_secondBuilder.gadget(SafeDIScope_Gadget.DefaultSecond_Scope.gadget_Values())
 		                    return DefaultSecond(gadget: gadget)
@@ -5427,7 +5427,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                let first: any First = __safeDI_first()
 		                return first
 		            }
-		            @Sendable func __safeDI_secondBuilder_SubB_second(_ scope: SubB.SafeDIScope_Second.second_Values, __safeDI_top_secondBuilder: SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>) -> any Second {
+		            @Sendable nonisolated func __safeDI_secondBuilder_SubB_second(_ scope: SubB.SafeDIScope_Second.second_Values, __safeDI_top_secondBuilder: SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>) -> any Second {
 		                func __safeDI_second() -> DefaultSecond {
 		                    let gadget: any Gadget = __safeDI_top_secondBuilder.gadget(SafeDIScope_Gadget.DefaultSecond_Scope.gadget_Values())
 		                    return DefaultSecond(gadget: gadget)
@@ -5596,7 +5596,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		            let __safeDI_gadgetSendableBuilder_top_firstSendableBuilder = __safeDI_gadgetSendableBuilder.top_firstSendableBuilder(SafeDISendableScope_Gadget.top_firstSendableBuilder_Values())
 		            let __safeDI_gadgetSendableBuilder_top_secondBuilder = __safeDI_gadgetSendableBuilder.top_secondBuilder(SafeDISendableScope_Gadget.top_secondBuilder_Values())
 		            _ = Top.__safeDI_Top_45070763E4B1ACC1.self\(seamCallComment(seam: "Top", module: "Feature"))
-		            @Sendable func __safeDI_firstBuilder_SubA_first(_ scope: SubA.SafeDIScope_First.first_Values, __safeDI_top_firstSendableBuilder: SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>) -> any First {
+		            @Sendable nonisolated func __safeDI_firstBuilder_SubA_first(_ scope: SubA.SafeDIScope_First.first_Values, __safeDI_top_firstSendableBuilder: SafeDIScope_Gadget.DefaultFirst_Scope.__safeDI_Builder<any Gadget>) -> any First {
 		                func __safeDI_first() -> DefaultFirst {
 		                    let __safeDI_gadgetSendableBuilder_relay_secondBuilder = __safeDI_top_firstSendableBuilder.relay_secondBuilder(SafeDIScope_Gadget.DefaultFirst_Scope.relay_secondBuilder_Values())
 		                    func __safeDI_relay() -> Relay {
@@ -5612,7 +5612,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                let first: any First = __safeDI_first()
 		                return first
 		            }
-		            @Sendable func __safeDI_secondBuilder_SubB_second(_ scope: SubB.SafeDIScope_Second.second_Values, __safeDI_top_secondBuilder: SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>) -> any Second {
+		            @Sendable nonisolated func __safeDI_secondBuilder_SubB_second(_ scope: SubB.SafeDIScope_Second.second_Values, __safeDI_top_secondBuilder: SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>) -> any Second {
 		                func __safeDI_second() -> DefaultSecond {
 		                    let gadget: any Gadget = __safeDI_top_secondBuilder.gadget(SafeDIScope_Gadget.DefaultSecond_Scope.gadget_Values())
 		                    return DefaultSecond(gadget: gadget)
@@ -5815,7 +5815,7 @@ struct SafeDIToolSeamReenteredFillTests: ~Copyable {
 		                let first: any First = __safeDI_first()
 		                return first
 		            }
-		            @Sendable func __safeDI_secondBuilder_SubB_second(_ scope: SubB.SafeDIScope_Second.second_Values, __safeDI_top_secondBuilder: SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>) -> any Second {
+		            @Sendable nonisolated func __safeDI_secondBuilder_SubB_second(_ scope: SubB.SafeDIScope_Second.second_Values, __safeDI_top_secondBuilder: SafeDIScope_Gadget.DefaultSecond_Scope.__safeDI_Builder<any Gadget>) -> any Second {
 		                func __safeDI_second() -> DefaultSecond {
 		                    let gadget: any Gadget = __safeDI_top_secondBuilder.gadget(SafeDIScope_Gadget.DefaultSecond_Scope.gadget_Values())
 		                    return DefaultSecond(gadget: gadget)

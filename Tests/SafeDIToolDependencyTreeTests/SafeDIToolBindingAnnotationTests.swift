@@ -113,25 +113,14 @@ struct SafeDIToolBindingAnnotationTests: ~Copyable {
 		            Thing.instantiate()
 		        }
 		        let thingBuilder: Instantiator<Thing> = Instantiator<Thing>(__safeDI_thingBuilder)
-		        func __safeDI_lazyThing() -> Thing {
-		            Thing.instantiate()
-		        }
-		        let lazyThing = LazilyInstantiated<Thing>(__safeDI_lazyThing)
+		        let lazyThing = LazilyInstantiated<Thing>(__safeDI_thingBuilder)
 		        func __safeDI_plain() -> Plain {
 		            let leaf = Leaf()
 		            return Plain(leaf: leaf)
 		        }
 		        let plain: Plain = __safeDI_plain()
-		        func __safeDI_plainBuilder() -> Plain {
-		            let leaf = Leaf()
-		            return Plain(leaf: leaf)
-		        }
-		        let plainBuilder = Instantiator<Plain>(__safeDI_plainBuilder)
-		        func __safeDI_lazyPlain() -> Plain {
-		            let leaf = Leaf()
-		            return Plain(leaf: leaf)
-		        }
-		        let lazyPlain = LazilyInstantiated<Plain>(__safeDI_lazyPlain)
+		        let plainBuilder = Instantiator<Plain>(__safeDI_plain)
+		        let lazyPlain = LazilyInstantiated<Plain>(__safeDI_plain)
 		        self.init(thing: thing, thingBuilder: thingBuilder, lazyThing: lazyThing, plain: plain, plainBuilder: plainBuilder, lazyPlain: lazyPlain)
 		    }
 		}

@@ -21,7 +21,7 @@
 import Foundation
 
 /// The code a production body plans, as a tree whose levels share their children's code instead of copying it: text, pieces
-/// written one after another, and a child's code each level indents.
+/// written one after another, a child's code each level indents, and the places of the body's walk.
 ///
 /// Each level of a tree used to indent its whole subtree's text again, so a place's text was copied once per level above
 /// it, and every scope's cache held its subtree's text. A level now holds its children's plans, and the root's plan is
@@ -49,6 +49,8 @@ struct GeneratedCode: Sendable {
 		case indented(GeneratedCode, by: String)
 		/// Code spelled while the rest of the tree was being generated, written as its text, with no plan kept.
 		case spelled(String)
+		/// A place of the body's walk (`PlacePlan`), whose code is written as it is.
+		case place(PlacePlan)
 	}
 
 	/// Text, written as it is.
@@ -76,6 +78,11 @@ struct GeneratedCode: Sendable {
 		GeneratedCode(storage: .children(Children(.spelled(code.spelled()), [])))
 	}
 
+	/// A place of the body's walk (`PlacePlan`), whose code is written as it is.
+	static func place(_ plan: PlacePlan) -> GeneratedCode {
+		GeneratedCode(storage: .children(Children(.place(record: plan.record), [plan.code])))
+	}
+
 	/// The empty code.
 	static let empty = GeneratedCode.sequence([])
 
@@ -94,6 +101,8 @@ struct GeneratedCode: Sendable {
 				.indented(children.codes[0], by: indentation)
 			case let .spelled(text):
 				.spelled(text)
+			case let .place(record):
+				.place(PlacePlan(code: children.codes[0], record: record))
 			}
 		}
 	}
@@ -105,7 +114,7 @@ struct GeneratedCode: Sendable {
 		switch node {
 		case let .text(text), let .spelled(text):
 			return text
-		case .sequence, .lines, .indented:
+		case .sequence, .lines, .indented, .place:
 			break
 		}
 		var writer = GeneratedCodeWriter()
@@ -126,6 +135,7 @@ struct GeneratedCode: Sendable {
 			case lines
 			case indented(String)
 			case spelled(String)
+			case place(record: PlaceRecord?)
 		}
 
 		init(_ kind: Kind, _ codes: [GeneratedCode]) {
@@ -142,6 +152,26 @@ struct GeneratedCode: Sendable {
 	}
 
 	private let storage: Storage
+}
+
+/// What a body's plan holds for one place: its code, and what the type key reads of it. A scope's cached code is reached
+/// once for every place that holds it.
+struct PlacePlan: Sendable {
+	/// The place's code, which holds the plans of the places beneath it.
+	let code: GeneratedCode
+	/// What the type key reads of the place (`TypeKeyBody`), or `nil` for a place it does not plan yet, whose root keeps
+	/// the path key's body.
+	let record: PlaceRecord?
+
+	init(code: GeneratedCode, record: PlaceRecord? = nil) {
+		self.code = code
+		self.record = record
+	}
+
+	/// This plan, with `record`.
+	func with(record: PlaceRecord?) -> PlacePlan {
+		PlacePlan(code: code, record: record)
+	}
 }
 
 /// Writes a plan's text, keeping for each level around the current piece whether its current line has begun, so each line
@@ -206,6 +236,8 @@ private struct GeneratedCodeWriter {
 						work.append(.endOfLevel)
 						work.append(.code(code))
 					}
+				case let .place(plan):
+					work.append(.code(plan.code))
 				}
 			case .lineFeed:
 				writeLineFeed(ofLevelAt: levels.count - 1)

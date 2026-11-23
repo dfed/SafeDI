@@ -414,9 +414,15 @@ struct MergedModuleInfoView {
 		}
 		// A module's file and every view carry the same signatures of its seams, without positions.
 		let directModuleNames = Set(directModules.map(\.file.moduleName))
-		var storedSeamSignatures = [String: [StoredSeamSignature]]()
+		// Keyed by seam, so that a run calling every seam of a module looks each up once rather than scanning the module's
+		// signatures per seam. Of two signatures of one seam, the first is kept.
+		var storedSeamSignatures = [String: [TypeDescription: StoredSeamSignature]]()
 		for (moduleName, declaration) in declarations where !declaration.entry.seamSignatures.isEmpty {
-			storedSeamSignatures[moduleName] = declaration.entry.seamSignatures
+			var signaturesBySeam = [TypeDescription: StoredSeamSignature]()
+			for signature in declaration.entry.seamSignatures where signaturesBySeam[signature.seamType] == nil {
+				signaturesBySeam[signature.seamType] = signature
+			}
+			storedSeamSignatures[moduleName] = signaturesBySeam
 		}
 		storedSeamSignaturesByModuleName = storedSeamSignatures
 		identitiesByModuleName = identities.mapValues(\.identity)
@@ -448,8 +454,8 @@ struct MergedModuleInfoView {
 	/// The modules whose files the run was given.
 	let directModuleNames: Set<String>
 	/// The signatures of the seams of each module the files carry the declarations of, by module name: the file's own,
-	/// with positions, for a module whose file the run was given.
-	let storedSeamSignaturesByModuleName: [String: [StoredSeamSignature]]
+	/// with positions, for a module whose file the run was given, each by the seam, as its module's run names it.
+	let storedSeamSignaturesByModuleName: [String: [TypeDescription: StoredSeamSignature]]
 	/// The view the run's own module info file carries.
 	let view: ModuleInfoView
 

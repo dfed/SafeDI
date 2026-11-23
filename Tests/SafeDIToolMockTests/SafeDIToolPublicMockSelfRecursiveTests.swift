@@ -585,7 +585,7 @@ struct SafeDIToolPublicMockSelfRecursiveTests: ~Copyable {
 			    ) -> Feature {
 			        let service: any Api = __safeDI_apiBuilder.service(SafeDIMockScope_Api.service_Values())
 			        let __safeDI_next__safeDIBuilder = safeDIOverrides.next.safeDIBuilder
-			        @Sendable func __safeDI_next() -> Feature {
+			        @Sendable nonisolated func __safeDI_next() -> Feature {
 			            let __safeDI_apiSendableBuilder_next = __safeDI_apiSendableBuilder.next(SafeDISendableMockScope_Api.next_Values())
 			            let service: any Api = __safeDI_apiSendableBuilder_next.service(SafeDIMockScope_Api.service_Values())
 			            let next = SendableInstantiator<Feature>(__safeDI_next)

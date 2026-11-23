@@ -158,7 +158,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				    ) -> D {
 				        let __safeDI_d__d_leaf_safeDIBuilder = safeDIOverrides.d.leaf
 				        let __safeDI_d__safeDIBuilder = safeDIOverrides.d.safeDIBuilder
-				        @Sendable func __safeDI_d() -> D {
+				        @Sendable nonisolated func __safeDI_d() -> D {
 				            let __safeDI_apiSendableBuilder_d = __safeDI_apiSendableBuilder.d(SafeDISendableMockScope_Api.d_Values())
 				            let d = if let d { d } else { SendableInstantiator<D>(__safeDI_d) }
 				            let __safeDI_apiSendableBuilder_leaf = __safeDI_apiSendableBuilder_d.leaf(SafeDIMockScope_Api.leaf_Values(d: d))
@@ -407,7 +407,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				    ) -> D {
 				        let __safeDI_d__d_leaf_safeDIBuilder = safeDIOverrides.d.leaf
 				        let __safeDI_d__safeDIBuilder = safeDIOverrides.d.safeDIBuilder
-				        @Sendable func __safeDI_d() -> D {
+				        @Sendable nonisolated func __safeDI_d() -> D {
 				            let __safeDI_apiSendableBuilder_d = __safeDI_apiSendableBuilder.d(SafeDISendableMockScope_Api.d_Values())
 				            let d = if let d { d } else { SendableInstantiator<D>(__safeDI_d) }
 				            let __safeDI_apiSendableBuilder_leaf = __safeDI_apiSendableBuilder_d.leaf(SafeDIMockScope_Api.leaf_Values(d: d))
@@ -602,7 +602,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				    ) -> D {
 				        let __safeDI_d__d_leaf_safeDIBuilder = safeDIOverrides.d.leaf
 				        let __safeDI_d__safeDIBuilder = safeDIOverrides.d.safeDIBuilder
-				        @Sendable func __safeDI_d() -> D {
+				        @Sendable nonisolated func __safeDI_d() -> D {
 				            let __safeDI_apiSendableBuilder_d = __safeDI_apiSendableBuilder.d(SafeDISendableMockScope_Api.d_Values())
 				            let d = if let d { d } else { SendableInstantiator<D>(__safeDI_d) }
 				            let __safeDI_apiSendableBuilder_leaf = __safeDI_apiSendableBuilder_d.leaf(SafeDIMockScope_Api.leaf_Values(d: d))
@@ -717,7 +717,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Screen {
 				        let __safeDI_d__safeDIBuilder = safeDIOverrides.d
-				        @Sendable func __safeDI_d() -> D {
+				        @Sendable nonisolated func __safeDI_d() -> D {
 				            let d = SendableInstantiator<D>(__safeDI_d)
 				            @Sendable nonisolated func __safeDI_apiBuilder_D() -> D.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 				                .init(leaf: { _ in __safeDI_apiBuilder_D_Leaf_Scope() })
@@ -877,7 +877,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				    ) -> D {
 				        let __safeDI_d__d_leaf_safeDIBuilder = safeDIOverrides.d.leaf
 				        let __safeDI_d__safeDIBuilder = safeDIOverrides.d.safeDIBuilder
-				        @Sendable func __safeDI_d() -> D {
+				        @Sendable nonisolated func __safeDI_d() -> D {
 				            let __safeDI_apiSendableBuilder_d = __safeDI_apiSendableBuilder.d(SafeDISendableMockScope_Api.d_Values())
 				            let d = if let d { d } else { SendableInstantiator<D>(__safeDI_d) }
 				            let __safeDI_apiSendableBuilder_leaf = __safeDI_apiSendableBuilder_d.leaf(SafeDIMockScope_Api.leaf_Values(d: d))
@@ -1003,7 +1003,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Screen {
 				        let __safeDI_d__safeDIBuilder = safeDIOverrides.d
-				        @Sendable func __safeDI_d() -> D {
+				        @Sendable nonisolated func __safeDI_d() -> D {
 				            let d = if let d { d } else { SendableInstantiator<D>(__safeDI_d) }
 				            @Sendable nonisolated func __safeDI_apiBuilder_D() -> D.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 				                .init(leaf: { _ in __safeDI_apiBuilder_D_Leaf_Scope() })
@@ -1167,7 +1167,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				    ) -> D {
 				        let __safeDI_d__d_leaf_safeDIBuilder = safeDIOverrides.d.leaf
 				        let __safeDI_d__safeDIBuilder = safeDIOverrides.d.safeDIBuilder
-				        @Sendable func __safeDI_d() -> D {
+				        @Sendable nonisolated func __safeDI_d() -> D {
 				            let __safeDI_apiSendableBuilder_d = __safeDI_apiSendableBuilder.d(SafeDISendableMockScope_Api.d_Values())
 				            let d = if let d { d } else { SendableInstantiator<D>(__safeDI_d) }
 				            let __safeDI_apiSendableBuilder_leaf = __safeDI_apiSendableBuilder_d.leaf(SafeDIMockScope_Api.leaf_Values(d: d))
@@ -1295,7 +1295,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Screen {
 				        let __safeDI_d__safeDIBuilder = safeDIOverrides.d
-				        @Sendable func __safeDI_d() -> D {
+				        @Sendable nonisolated func __safeDI_d() -> D {
 				            let d = SendableInstantiator<D>(__safeDI_d)
 				            @Sendable nonisolated func __safeDI_apiBuilder_D() -> D.SafeDIMockScope_Api.__safeDI_Builder<any Api> {
 				                .init(leaf: { _ in __safeDI_apiBuilder_D_Leaf_Scope() })
@@ -1686,7 +1686,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> D {
 				        let __safeDI_other__safeDIBuilder = safeDIOverrides.other
-				        @Sendable func __safeDI_other() -> Other {
+				        @Sendable nonisolated func __safeDI_other() -> Other {
 				            let __safeDI_apiSendableBuilder_other = __safeDI_apiSendableBuilder.other(SafeDISendableMockScope_Api.other_Values())
 				            let api: any Api = __safeDI_apiSendableBuilder_other.api(SafeDIMockScope_Api.Other_Scope.api_Values())
 				            return if let safeDIBuilder = __safeDI_other__safeDIBuilder { safeDIBuilder(api) } else { Other(api: api) }
@@ -2215,7 +2215,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> D {
 				        let __safeDI_other__safeDIBuilder = safeDIOverrides.other
-				        @Sendable func __safeDI_other() -> Other {
+				        @Sendable nonisolated func __safeDI_other() -> Other {
 				            let __safeDI_apiSendableBuilder_other = __safeDI_apiSendableBuilder.other(SafeDISendableMockScope_Api.other_Values())
 				            let api: any Api = __safeDI_apiSendableBuilder_other.api(SafeDIMockScope_Api.Other_Scope.api_Values())
 				            return if let safeDIBuilder = __safeDI_other__safeDIBuilder { safeDIBuilder(api) } else { Other(api: api) }
@@ -2887,13 +2887,13 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> D {
 				        _ = Other.__safeDI_Other_mock_98F7041399DB6FFD.self // If this line does not compile, compile the code SafeDI generates for module Base into Base: under Bazel, add Base’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				        @Sendable func __safeDI_other() -> Other {
+				        @Sendable nonisolated func __safeDI_other() -> Other {
 				            Other.__safeDI_mock(apiBuilder: __safeDI_apiSendableBuilder.other(SafeDISendableMockScope_Api.other_Values()))
 				        }
 				        let other = if let other { other } else { SendableInstantiator<Other>(__safeDI_other) }
 				        let __safeDI_d__d_leaf_safeDIBuilder = safeDIOverrides.d.leaf
 				        let __safeDI_d__safeDIBuilder = safeDIOverrides.d.safeDIBuilder
-				        @Sendable func __safeDI_d() -> D {
+				        @Sendable nonisolated func __safeDI_d() -> D {
 				            let d = if let d { d } else { SendableInstantiator<D>(__safeDI_d) }
 				            let leaf = if let safeDIBuilder = __safeDI_d__d_leaf_safeDIBuilder { safeDIBuilder(other, d) } else { Leaf(other: other, d: d) }
 				            return D.__safeDI_init(leaf: leaf, safeDIBuilder: __safeDI_d__safeDIBuilder)
@@ -3005,7 +3005,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        safeDIOverrides: SafeDIOverrides = .init()
 				    ) -> Screen {
 				        let __safeDI_other__safeDIBuilder = safeDIOverrides.other
-				        @Sendable func __safeDI_other() -> Other {
+				        @Sendable nonisolated func __safeDI_other() -> Other {
 				            func __safeDI_apiBuilder_Other_api() -> any Api {
 				                let api: any Api = LiveApi()
 				                return api
@@ -3018,7 +3018,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        }
 				        let other = SendableInstantiator<Other>(__safeDI_other)
 				        let __safeDI_d__safeDIBuilder = safeDIOverrides.d
-				        @Sendable func __safeDI_d() -> D {
+				        @Sendable nonisolated func __safeDI_d() -> D {
 				            let d = SendableInstantiator<D>(__safeDI_d)
 				            @Sendable nonisolated func __safeDI_apiSendableBuilder_D() -> D.SafeDISendableMockScope_Api.__safeDI_Builder<any Api> {
 				                .init(other: { _ in __safeDI_apiBuilder_Other() })
@@ -5148,7 +5148,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				        let __safeDI_apiSendableBuilder = apiSendableBuilder
 				        _ = D.__safeDI_D_mock_9254F2CA9ECAA712.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 				        let __safeDI_d__safeDIBuilder = safeDIOverrides.d
-				        @Sendable func __safeDI_d() -> D {
+				        @Sendable nonisolated func __safeDI_d() -> D {
 				            let d = SendableInstantiator<D>(__safeDI_d)
 				            let apiBuilder: () -> any Api = __safeDI_apiSendableBuilder
 				            let apiSendableBuilder: @Sendable () -> any Api = __safeDI_apiSendableBuilder
