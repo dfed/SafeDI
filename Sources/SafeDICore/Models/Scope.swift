@@ -496,9 +496,10 @@ extension ScopeRecord {
 		// pass's findings (see `CycleParameterPlan`), or `nil` where the tree is not planned.
 		var cycleParameterSeed: CycleParameterSeed?
 		var firstPassMemo = ConstructionMemo()
-		// The memo of the pass before, whose settled generators a pass reuses (see `ConstructionMemo.settledReuse`), and the
-		// place-holding properties that pass read.
+		// The memo of the pass before, whose generators a pass reuses where a place's key and reads match, its key naming
+		// what the place's build reads of the pass before (`SubtreeDigests`), and the place-holding properties that pass read.
 		var previousPassMemo: ConstructionMemo?
+		var subtreeDigests = SubtreeDigests()
 		var placeHoldingPropertiesOfPreviousPass: [TypeDescription: Set<Property>]?
 		// A tree with a seam root or a mock root's builders reads its own `SeamHoles` (its values bindings, member calls,
 		// builder structs and the names the seam binds), constant within the tree but not across trees, so its memo is never
@@ -526,9 +527,10 @@ extension ScopeRecord {
 				generatorsToStart = []
 			}
 			var passMemo = previousPassGenerator == nil && sharesMemo ? constructionMemo.memoForFirstPass : ConstructionMemo()
-			// A place whose generator the pass before built settled is reused across passes only while the passes share
-			// the place-holding properties every place's build reads.
-			let settledPassMemo = placeHoldingPropertiesByType == placeHoldingPropertiesOfPreviousPass ? previousPassMemo : nil
+			// A generator the pass before built is reused across passes only while the passes share the place-holding
+			// properties every place's build reads.
+			let reusablePassMemo = placeHoldingPropertiesByType == placeHoldingPropertiesOfPreviousPass ? previousPassMemo : nil
+			subtreeDigests.beginPass()
 			if previousPassGenerator == nil, ConstructionMemo.isEnabled, ConstructionSharingSchedule.current?.offersLaterPlacesCandidates == true {
 				// The sharing oracle offers each place what a place after it built: the first pass starts from what a
 				// discarded build of the same pass stored, which the schedule asks newest first.
@@ -548,7 +550,8 @@ extension ScopeRecord {
 					generatorsToStart: &discardedGeneratorsToStart,
 					placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 					memo: &passMemo,
-					settledPassMemo: nil,
+					previousPassMemo: nil,
+					subtreeDigests: &subtreeDigests,
 					root: root,
 					scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
 				)
@@ -568,7 +571,8 @@ extension ScopeRecord {
 				generatorsToStart: &generatorsToStart,
 				placeHoldingPropertiesByType: placeHoldingPropertiesByType,
 				memo: &passMemo,
-				settledPassMemo: settledPassMemo,
+				previousPassMemo: reusablePassMemo,
+				subtreeDigests: &subtreeDigests,
 				root: root,
 				scopesBuiltAtOnePlace: scopesBuiltAtOnePlace,
 			)
@@ -643,8 +647,11 @@ extension ScopeRecord {
 	/// - Parameter scopesBuiltAtOnePlace: The scopes the tree builds at one place only, whose places are not keyed, looked up
 	///   or stored, or `nil` where every place is keyed: where the memo carries generators to other trees, where the sharing
 	///   oracle's build offers each place what a later place built, and where the memo is off, which keys nothing. Otherwise no other place of the pass has its key, so a lookup can only miss,
-	///   and its entry could serve only the pass after (`ConstructionMemo.settledReuse`), which builds the place again
-	///   instead, reusing what the pass before stored of the places beneath it.
+	///   and its entry could serve only the pass after, which builds the place again instead, reusing what the pass before
+	///   stored of the places beneath it.
+	/// - Parameter previousPassMemo: The memo of the pass before, whose generators a place reuses where its key, which names
+	///   what its build reads of the pass before (`SubtreeDigests`), and its reads match, or `nil`.
+	/// - Parameter subtreeDigests: The digests of the pass before's subtrees, which every pass of the tree shares.
 	private func createScopeGenerator(
 		nearestDeclarations: NearestDeclarations,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
@@ -660,7 +667,8 @@ extension ScopeRecord {
 		generatorsToStart: inout [[ScopeGenerator]]?,
 		placeHoldingPropertiesByType: [TypeDescription: Set<Property>]?,
 		memo: inout ConstructionMemo,
-		settledPassMemo: ConstructionMemo?,
+		previousPassMemo: ConstructionMemo?,
+		subtreeDigests: inout SubtreeDigests,
 		root: ConstructionScope,
 		scopesBuiltAtOnePlace: ScopesBuiltAtOnePlace?,
 	) throws -> ScopeGenerator {
@@ -697,7 +705,7 @@ extension ScopeRecord {
 		// Set only in the oracle's build with the memo: each place that reuses a generator is built again, and the two compared.
 		let reuseObserver = ConstructionMemoOracle.rebuildsReusedPlaces
 		// The places the oracle is building again where the tool reuses a generator, innermost last, each with the index its
-		// scope has on the stack, the reuse, its key, and whether the reuse is the pass before's settled generator, which the
+		// scope has on the stack, the reuse, its key, and whether the reuse is a generator the pass before built, which the
 		// memo stores for the places after. What is built inside one is not stored: the tool does not build it.
 		var rebuiltPlaces = [(index: Int, reuse: ConstructionMemo.Reuse, key: ConstructionMemo.Key, storesEntry: Bool)]()
 		// The generators whose code this pass started or collected, each of which a place that reuses it does not start again.
@@ -712,19 +720,28 @@ extension ScopeRecord {
 				case let .instantiated(property, scope, erasedToConcreteExistential, propertyID):
 					try scopeGeneratorsUnderConstruction[index].validateForwardedProperties(ofChildBuilding: scope, as: property)
 					let key = reusesGenerators && scopesBuiltAtOnePlace?.contains(scope) != true
-						? scopeGeneratorsUnderConstruction[index].memoKey(ofChildBuilding: scope, as: property, erasedToConcreteExistential: erasedToConcreteExistential)
+						? scopeGeneratorsUnderConstruction[index].memoKey(
+							ofChildBuilding: scope,
+							as: property,
+							erasedToConcreteExistential: erasedToConcreteExistential,
+							previousPass: subtreeDigests.digest(
+								of: scopeGeneratorsUnderConstruction[index].previousPassChildGenerator,
+								seed: scopeGeneratorsUnderConstruction[index].childCycleParameterSeed,
+							),
+						)
 						: nil
 					if key != nil, let keyedPlaceObserver {
 						keyedPlaceObserver(scope.instantiable.concreteInstantiable.asSource)
 					}
 					let draw = key == nil ? nil : sharingSchedule?.draw(atLookup: &lookupCount)
-					// The generator another place built that this place reuses, and whether it is the pass before's settled one.
-					var found: (reuse: ConstructionMemo.Reuse, isSettledReuse: Bool)?
+					// The generator another place built that this place reuses, and whether the pass before built it.
+					var found: (reuse: ConstructionMemo.Reuse, isPreviousPassReuse: Bool)?
 					if let key, let reuse = memo.reuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property), drawing: draw) {
 						found = (reuse, false)
-					} else if let key, let reuse = settledPassMemo?.settledReuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property)) {
-						// The pass before built this place's generator settled: building the place again would build it again.
-						// Its code starts as the build would have started it, and the memo holds it for the places after it.
+					} else if let key, let reuse = previousPassMemo?.reuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property)) {
+						// The pass before built a place of this key from what this place reads of it: building the place again would
+						// build the same generator. Its code starts as the build would have started it, and the memo holds it for
+						// the places after it.
 						for group in reuse.entry.startedBeneath.groups {
 							let group = group.filter { startedGenerators.insert(ObjectIdentifier($0)).inserted }
 							guard !group.isEmpty else { continue }
@@ -734,7 +751,7 @@ extension ScopeRecord {
 						found = (reuse, true)
 					}
 					if let key, let found, reuseObserver == nil {
-						if found.isSettledReuse {
+						if found.isPreviousPassReuse {
 							memo.store(found.reuse.entry, for: key, keepingAlive: scope.identity)
 						}
 						scopeGeneratorsUnderConstruction[index].add(reusing: found.reuse)
@@ -748,7 +765,7 @@ extension ScopeRecord {
 						)
 						if let key, let found {
 							// The oracle builds the place it reuses a generator at, and checks the two (`ConstructionMemoOracle.reuseObserver`).
-							rebuiltPlaces.append((scopeGeneratorsUnderConstruction.count, found.reuse, key, found.isSettledReuse))
+							rebuiltPlaces.append((scopeGeneratorsUnderConstruction.count, found.reuse, key, found.isPreviousPassReuse))
 						} else {
 							child.memoKey = key
 						}
@@ -794,7 +811,6 @@ extension ScopeRecord {
 						scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].add(reusing: rebuilt.reuse)
 						continue
 					}
-					let isSettled = createdScope.isSettled(building: scopeGenerator)
 					// Inside a place the oracle builds again, nothing is stored: the tool does not build the place.
 					if let key = createdScope.memoKey, createdScope.isMemoizable, rebuiltPlaces.isEmpty {
 						memo.store(ConstructionMemo.Entry(
@@ -802,11 +818,10 @@ extension ScopeRecord {
 							generator: scopeGenerator,
 							subtreeScopeCount: createdScope.subtreeScopeCount,
 							startedBeneath: ConstructionMemo.StartedGenerators(log: startLog, positions: createdScope.startLogIndex..<startLog.groups.count),
-							isSettled: isSettled,
 							cycleClosingRedeclaredLabels: createdScope.cycleClosingRedeclaredLabels,
 						), for: key, keepingAlive: createdScope.builtScope.identity)
 					}
-					scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].add(childGenerator: scopeGenerator, createdBy: &createdScope, readsAnsweredAbove: readsAnsweredAbove, isSettled: isSettled)
+					scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].add(childGenerator: scopeGenerator, createdBy: &createdScope, readsAnsweredAbove: readsAnsweredAbove)
 				}
 			}
 		}
@@ -1458,7 +1473,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	private(set) var childGenerators = [ScopeGenerator]()
 	/// The `CycleClosingRedeclaredLabels` of `childGenerators`, merged in their order, which this scope's
 	/// generator is created from; then, once `scopeGenerator(collectingGeneratorsToStartInto:)` has created it, its own,
-	/// which `add(childGenerator:createdBy:readsAnsweredAbove:isSettled:)` merges into its parent's, and a memo entry of
+	/// which `add(childGenerator:createdBy:readsAnsweredAbove:)` merges into its parent's, and a memo entry of
 	/// the generator keeps for a place that reuses it (`ConstructionMemo.Entry`). No generator keeps one. An alias or a hole
 	/// has none.
 	private(set) var cycleClosingRedeclaredLabels = CycleClosingRedeclaredLabels()
@@ -1492,8 +1507,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// Adds `childGenerator`, the generator `child` created, to this scope's children.
 	/// - Parameters:
 	///   - readsAnsweredAbove: `child.readsAnsweredAbove`.
-	///   - isSettled: `child.isSettled(building: childGenerator)`.
-	mutating func add(childGenerator: ScopeGenerator, createdBy child: inout ScopeGeneratorUnderConstruction, readsAnsweredAbove: ConstructionLog, isSettled: Bool) {
+	mutating func add(childGenerator: ScopeGenerator, createdBy child: inout ScopeGeneratorUnderConstruction, readsAnsweredAbove: ConstructionLog) {
 		childGenerators.append(childGenerator)
 		if cycleClosingRedeclaredLabels.isEmpty {
 			// Nearly every scope has at most one child that takes part in a cycle, whose map it takes whole.
@@ -1506,9 +1520,6 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			childGeneratorsStartingBeneathALargeSubtree.append(SmallSubtree(generator: childGenerator, scopeCount: child.subtreeScopeCount))
 		}
 		log.formUnion(readsAnsweredAbove)
-		if !isSettled {
-			childrenAreSettled = false
-		}
 		if !child.isMemoizable {
 			isMemoizable = false
 		}
@@ -1530,20 +1541,6 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			childGeneratorsStartingBeneathALargeSubtree.append(SmallSubtree(generator: reuse.entry.generator, scopeCount: reuse.entry.subtreeScopeCount))
 		}
 		log.formUnion(reuse.reads)
-		if !reuse.entry.isSettled {
-			childrenAreSettled = false
-		}
-	}
-
-	/// Whether every child this scope created or reused found everywhere in its subtree what it read from the pass before
-	/// (see `ConstructionMemo.Entry.isSettled`).
-	private var childrenAreSettled = true
-
-	/// Whether `generator`, this scope's, found everywhere in its subtree what its build read from the pass before: its
-	/// children did, and it found the cycle parameters and loops of builders the pass before's generator for the place
-	/// found, spelled alike.
-	func isSettled(building generator: ScopeGenerator) -> Bool {
-		childrenAreSettled && ConstructionMemo.foundAlike(by: generator, asBy: previousPassGenerator, builtWithCycleParameters: ownCycleParameters)
 	}
 
 	/// What this scope's subtree read of the context above this scope (see `ConstructionMemo`).
@@ -1780,7 +1777,8 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// The key under which the generator of the child of this scope that builds `property` with `scope` is stored and looked
 	/// up in a construction memo, or `nil` where the child reads context the memo's log does not cover: it is inside a fill,
 	/// or in a tree with holes (see `ConstructionMemo`).
-	func memoKey(ofChildBuilding scope: ConstructionScope, as property: Property, erasedToConcreteExistential: Bool) -> ConstructionMemo.Key? {
+	/// - Parameter previousPass: The digest of what the child's build reads of the pass before (`SubtreeDigests`).
+	func memoKey(ofChildBuilding scope: ConstructionScope, as property: Property, erasedToConcreteExistential: Bool, previousPass: SubtreeDigests.ID) -> ConstructionMemo.Key? {
 		guard enclosingFills.isEmpty, seamHoles.isEmpty, fill == nil else { return nil }
 		return ConstructionMemo.Key(
 			scope: ObjectIdentifier(scope.identity),
@@ -1794,8 +1792,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 			reboundProperties: childReboundProperties,
 			spellings: Property.spellingsForConstructionMemo(of: property, childLazilyInstantiatedInstanceProperties, childReboundProperties),
-			previousPassGenerator: previousPassChildGenerator.map(ObjectIdentifier.init),
-			cycleParameterSeed: cycleParameterSeed?.child(at: childGenerators.count).map(ObjectIdentifier.init),
+			previousPass: previousPass,
 		)
 	}
 
@@ -1849,8 +1846,13 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		throw error
 	}
 
+	/// The seed of the child whose generator is created next, or `nil` where it has none.
+	var childCycleParameterSeed: CycleParameterSeed? {
+		cycleParameterSeed?.child(at: childGenerators.count)
+	}
+
 	/// The generator the pass before created for the child whose generator is created next, or `nil` in the first pass.
-	private var previousPassChildGenerator: ScopeGenerator? {
+	var previousPassChildGenerator: ScopeGenerator? {
 		guard let previousPassChildren = previousPassGenerator?.children,
 		      previousPassChildren.indices.contains(childGenerators.count)
 		else { return nil }

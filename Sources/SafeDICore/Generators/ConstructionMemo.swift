@@ -89,7 +89,6 @@ struct ConstructionMemo {
 			break
 		case .acrossTrees:
 			entriesByKey = firstPassMemo.entriesByKey
-			entriesByGenerator = firstPassMemo.entriesByGenerator
 			keyedScopes = firstPassMemo.keyedScopes
 		}
 	}
@@ -114,31 +113,9 @@ struct ConstructionMemo {
 		/// declared: `==` reads `any P` as `P`, so it alone would let a place reuse a generator that spells its property
 		/// otherwise.
 		let spellings: [[UInt8]]
-		/// The generator the pass before created for the place, whose children and findings the place's build reads. Two
-		/// places of the pass before that shared a generator share it here too.
-		let previousPassGenerator: ObjectIdentifier?
-		/// The settled cycle parameters the place is built with (`CycleParameterSeed`), which it reads in place of what
-		/// `previousPassGenerator` found, or `nil`.
-		let cycleParameterSeed: ObjectIdentifier?
-
-		/// This key with `previousPassGenerator` replaced.
-		func withPreviousPassGenerator(_ previousPassGenerator: ObjectIdentifier?) -> Key {
-			Key(
-				scope: scope,
-				property: property,
-				erasedToConcreteExistential: erasedToConcreteExistential,
-				forMockGeneration: forMockGeneration,
-				startsCodeGeneration: startsCodeGeneration,
-				validatesForwardedProperties: validatesForwardedProperties,
-				buildsWithHandWrittenMocks: buildsWithHandWrittenMocks,
-				mayPassNil: mayPassNil,
-				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
-				reboundProperties: reboundProperties,
-				spellings: spellings,
-				previousPassGenerator: previousPassGenerator,
-				cycleParameterSeed: cycleParameterSeed,
-			)
-		}
+		/// What the place's build reads of the generators the pass before created for its subtree, with the settled cycle
+		/// parameters a `CycleParameterSeed` gives it in place of what they found (`SubtreeDigests`): empty in a first pass.
+		let previousPass: SubtreeDigests.ID
 	}
 
 	/// A finished place's generator, with the reads of the context above it its subtree made and its scope count, which
@@ -150,10 +127,6 @@ struct ConstructionMemo {
 		/// The generators the build started or collected to start, in order, which a later pass that reuses the generator
 		/// collects again.
 		let startedBeneath: StartedGenerators
-		/// Whether the build found, everywhere in its subtree, what it read from the pass before: the same cycle parameters,
-		/// loops of builders and fill struct labels. Building the place again from this generator then reads what the build
-		/// read from the pass before, so it builds this generator again (see `settledReuse`).
-		let isSettled: Bool
 		/// The generator's `CycleClosingRedeclaredLabels`, which no generator keeps, for the parent of a place
 		/// that reuses it to merge.
 		let cycleClosingRedeclaredLabels: CycleClosingRedeclaredLabels
@@ -206,54 +179,13 @@ struct ConstructionMemo {
 		}
 	}
 
-	/// The generator the pass before built settled at the place `key` names, when `key`'s other fields equal the key it was
-	/// stored under and its reads are answered alike in `context`, with those reads as `context` answers them, or `nil`.
-	///
-	/// `key.previousPassGenerator` is that generator, `G`, which the pass before built from its own pass before's
-	/// generator, `G′`. Settled, `G` holds everything a build reads from the pass before as `G′` held it (its cycle parameters
-	/// and loops of builders, and its children, each settled in turn), so building the place from `G` takes the steps that
-	/// building it from `G′` took, which built `G`: the key's other fields and the reads are what the memo compares within a
-	/// pass. This memo is the pass before's.
-	func settledReuse(of key: Key, in context: ConstructionContext) -> Reuse? {
-		// A seeded place reads its cycle parameters from the seed, not from `G`.
-		guard key.cycleParameterSeed == nil,
-		      let previousPassGenerator = key.previousPassGenerator,
-		      let (storedKey, entry) = entriesByGenerator[previousPassGenerator],
-		      entry.isSettled,
-		      storedKey == key.withPreviousPassGenerator(storedKey.previousPassGenerator),
-		      let reads = entry.reads.answeredAlike(in: context)
-		else { return nil }
-		return Reuse(entry: entry, reads: reads)
-	}
-
-	/// Whether `generator` found the cycle parameters and loops of builders that `previousPassGenerator`, the generator the
-	/// pass before built for its place, found, compared as a memo compares answers: by `==` and by spelling.
-	/// - Parameter builtWithCycleParameters: The cycle parameters `generator`'s build read: `previousPassGenerator`'s, or a
-	///   seed's in their place.
-	static func foundAlike(by generator: ScopeGenerator, asBy previousPassGenerator: ScopeGenerator?, builtWithCycleParameters: [CycleParameter]) -> Bool {
-		let loops = generator.receivedBuilderLoops
-		let previousPassLoops = previousPassGenerator?.receivedBuilderLoops ?? ScopeGenerator.ReceivedBuilderLoops()
-		return ConstructionLog.Answer.cycleParameterContext(generator.foundCycleParameters)
-			.isAlike(.cycleParameterContext(builtWithCycleParameters))
-			&& loops == previousPassLoops
-			&& loops.reboundPropertiesByChildIndex.allSatisfy { index, properties in
-				previousPassLoops.reboundPropertiesByChildIndex[index].map(properties.isSpelledAlike) ?? false
-			}
-	}
-
 	/// Stores `entry` under `key`, keeping `scope`, the scope the key names, alive as long as the memo.
 	mutating func store(_ entry: Entry, for key: Key, keepingAlive scope: ScopeRecord) {
 		entriesByKey[key, default: []].append(entry)
-		let generator = ObjectIdentifier(entry.generator)
-		if entriesByGenerator[generator] == nil {
-			entriesByGenerator[generator] = (key, entry)
-		}
 		keyedScopes.append(scope)
 	}
 
 	private var entriesByKey = [Key: [Entry]]()
-	/// Each stored generator with the key and entry it was first stored under.
-	private var entriesByGenerator = [ObjectIdentifier: (key: Key, entry: Entry)]()
 	/// The scope identities `entriesByKey`'s keys name, kept so that no other identity can take one's address.
 	private var keyedScopes = [ScopeRecord]()
 
@@ -263,19 +195,16 @@ struct ConstructionMemo {
 		get {
 			var oracleMemo = ConstructionMemo(sharing: .acrossTrees)
 			oracleMemo.entriesByKey = oracleEntriesByKey
-			oracleMemo.entriesByGenerator = oracleEntriesByGenerator
 			oracleMemo.keyedScopes = oracleKeyedScopes
 			return oracleMemo
 		}
 		set {
 			oracleEntriesByKey = newValue.entriesByKey
-			oracleEntriesByGenerator = newValue.entriesByGenerator
 			oracleKeyedScopes = newValue.keyedScopes
 		}
 	}
 
 	private var oracleEntriesByKey = [Key: [Entry]]()
-	private var oracleEntriesByGenerator = [ObjectIdentifier: (key: Key, entry: Entry)]()
 	private var oracleKeyedScopes = [ScopeRecord]()
 
 	/// Whether `Scope.createScopeGenerator` reuses the generators of places it already built. Turned off only by the memo
@@ -732,7 +661,7 @@ extension [TypeDescription] {
 
 extension Set<Property> {
 	/// Whether `other`, which `==` equates with this set, spells each property as this set does.
-	fileprivate func isSpelledAlike(_ other: Set<Property>) -> Bool {
+	func isSpelledAlike(_ other: Set<Property>) -> Bool {
 		allSatisfy { property in
 			other.firstIndex(of: property).map { property.isSpelledAlike(other[$0]) } ?? false
 		}
