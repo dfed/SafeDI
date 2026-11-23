@@ -13002,7 +13002,7 @@ private struct GraphFuzzerListOrderCanonicalizer {
 		if let closer = closer(openedAt: index) {
 			let start = index
 			index += 1
-			if let contents = closer == "}" ? block() : group(closedBy: closer) {
+			if let contents = closer == "}" ? block(isArgumentNamedByLabel: text.hasSuffix(": ")) : group(closedBy: closer) {
 				text += "\(character)\(contents)\(closer)"
 				return
 			}
@@ -13070,8 +13070,9 @@ private struct GraphFuzzerListOrderCanonicalizer {
 	}
 
 	/// The items of the block whose `{` `index` follows, an `#if` region joined into one, sorted and joined, with `index`
-	/// moved past its `}`; or `nil` where no `}` balances it.
-	private mutating func block() -> String? {
+	/// moved past its `}`; or `nil` where no `}` balances it. A block passed under an argument label
+	/// (`isArgumentNamedByLabel`) may be a caller's closure for a carrier's member, whose parameter names are sorted.
+	private mutating func block(isArgumentNamedByLabel: Bool = false) -> String? {
 		var items = [String]()
 		var item = ""
 		while index < characters.count {
@@ -13079,8 +13080,8 @@ private struct GraphFuzzerListOrderCanonicalizer {
 			if character == "}" {
 				index += 1
 				items.append(item.trimmingCharacters(in: .whitespaces))
-				if let first = items.first {
-					items[0] = Self.closureParametersInCanonicalOrder(of: first)
+				if isArgumentNamedByLabel, let first = items.first {
+					items[0] = Self.carrierMemberClosureParametersInCanonicalOrder(of: first)
 				}
 				return Self.joiningRegions(of: items.filter { !$0.isEmpty }).sorted().joined(separator: "; ")
 			} else if character == ";" {
@@ -13104,19 +13105,24 @@ private struct GraphFuzzerListOrderCanonicalizer {
 		return nil
 	}
 
-	/// `item`, a block's first item, with the names of its closure parameter clause sorted, where it opens with one spelled
-	/// as names alone (`{ scope_a, scope_b, scope_c in`): a carrier's member takes a level's values positionally in the
-	/// order the level binds them, which for a seam's root is its pass-throughs' label order, so a caller's closure names
-	/// them in that order. Swapped names are left to the compile and value check, as swapped unlabeled arguments are.
-	private static func closureParametersInCanonicalOrder(of item: String) -> String {
+	/// `item`, the first item of a closure passed under an argument label, with the names of its parameter clause sorted
+	/// where it is a caller's closure for a carrier's member (`{ scope_a, scope_b, scope in`): every name is a payload
+	/// name `P` joined with a value's label, `P_<label>` (`SeamHoles.argumentName(of:inPayloadNamed:)`), for one `P`, or `P`
+	/// itself, the run struct. Such a member takes a level's values positionally in the order the level binds them, which
+	/// for a seam's root is its pass-throughs' label order: the label sort of equivalent parameters `CLAUDE.md`'s "What may
+	/// follow names" allows. No other list is touched: a closure whose names are not of that form, or that is not passed
+	/// under a label, keeps its order, and swapped names are left to the compile and value check, as swapped unlabeled
+	/// arguments are.
+	private static func carrierMemberClosureParametersInCanonicalOrder(of item: String) -> String {
 		guard let inRange = item.range(of: " in"), inRange.upperBound == item.endIndex || item[inRange.upperBound] == " " else {
 			return item
 		}
 		let names = item[..<inRange.lowerBound].components(separatedBy: ", ")
-		guard names.count > 1, names.allSatisfy({ name in
-			guard let first = name.first, first.isLetter || first == "_" else { return false }
-			return name.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" }
-		}) else {
+		guard names.count > 1,
+		      names.allSatisfy({ name in name.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" } && name.first?.isLetter == true }),
+		      let payloadName = names.first(where: { $0.contains("_") }).map({ String($0.prefix { $0 != "_" }) }),
+		      names.allSatisfy({ $0 == payloadName || ($0.hasPrefix(payloadName + "_") && $0.count > payloadName.count + 1) })
+		else {
 			return item
 		}
 		return names.sorted().joined(separator: ", ") + item[inRange.lowerBound...]

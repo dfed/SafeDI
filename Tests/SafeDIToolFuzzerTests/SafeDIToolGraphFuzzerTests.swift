@@ -547,12 +547,36 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(differences == [GraphFuzzerOutcomeDifference(aspect: .dependencyTreeListOrder, fileName: "FuzzFeature/S1_HoleSeam+SafeDI.swift")])
 	}
 
+	@Test(arguments: [
+		// Not a carrier member's names: no payload name joins them.
+		"        _ = Carrier(service: { first, second in\n            0\n        })\n",
+		// Not passed under an argument label.
+		"        let service = { scope_tag, scope_note in\n            0\n        }\n",
+		// Names of two payloads.
+		"        _ = Carrier(service: { scope_tag, values_note in\n            0\n        })\n",
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func differences_reportTreeCode_whenLabelOrderChangesClosureThatIsNoCarrierMembers(closure: String) throws {
+		// The sort of a closure's parameter names is scoped to a caller's closure for a carrier's member: any other closure
+		// whose names a label reversal reorders is the file's code.
+		let code = "extension Root {\n    func make() {\n\(closure)    }\n}\n"
+		let names = try #require(closure.range(of: #"\{ \w+, \w+ in"#, options: .regularExpression))
+		let parts = closure[names].dropFirst(2).dropLast(3).components(separatedBy: ", ")
+		let otherCode = code.replacingOccurrences(of: "{ \(parts[0]), \(parts[1]) in", with: "{ \(parts[1]), \(parts[0]) in")
+		#expect(otherCode != code)
+
+		let differences = Self.treeDifferences(code: code, otherCode: otherCode, renaming: Self.reversingLabels)
+
+		#expect(differences == [GraphFuzzerOutcomeDifference(aspect: .dependencyTreeCode, fileName: "FuzzFeature/S1_HoleSeam+SafeDI.swift")])
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func differences_reportTreeCode_whenClosureParameterNamesMoveIntoItsBody() {
-		// Only the names of the parameter clause are sorted: a name moved past `in` into the body is the file's code.
-		let code = "extension Root {\n    func make() -> (Int, Int) -> Int {\n        { first, second in\n            first\n        }\n    }\n}\n"
-		let otherCode = code.replacingOccurrences(of: "{ first, second in\n            first", with: "{ first, first in\n            second")
+		// Only the names of a carrier member closure's parameter clause are sorted: a name moved past `in` into the body is
+		// the file's code.
+		let code = "extension Root {\n    func make() -> Carrier {\n        .init(service: { scope_tag, scope_note in\n            scope_tag\n        })\n    }\n}\n"
+		let otherCode = code.replacingOccurrences(of: "{ scope_tag, scope_note in\n            scope_tag", with: "{ scope_tag, scope_tag in\n            scope_note")
 
 		let differences = Self.treeDifferences(code: code, otherCode: otherCode, renaming: Self.reversingLabels)
 
