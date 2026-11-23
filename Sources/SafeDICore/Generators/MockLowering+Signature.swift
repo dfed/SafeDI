@@ -132,7 +132,10 @@ extension MockLowering {
 
 		/// The names the parameters and the overrides' bindings bind, which no node of the tree may bind again.
 		var labels: Set<String> {
-			Set(parameters.map(\.name)).union(onlyIfAvailableOverrides.map(\.name))
+			// D1 lane hook (lane C): a builder a call passes up that `mock()` binds apart is in scope under that name alone,
+			// which the tree's names are apart from, so a node may bind its label.
+			let internalNameByLabel = Dictionary(passedUpBuilders.map { ($0.label, $0.internalName) }, uniquingKeysWith: { first, _ in first })
+			return Set(parameters.map { internalNameByLabel[$0.name] ?? $0.name }).union(onlyIfAvailableOverrides.map(\.name))
 		}
 
 		/// The properties of the `@Instantiated` dependencies the mock cannot build, which a type of the tree is passed.
