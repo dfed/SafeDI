@@ -35,7 +35,7 @@ extension MockLowering {
 		let isClosureType: Bool
 		let isDeclaredEscaping: Bool
 
-		init(of parameter: ScopeGenerator.MockParameterNode.DefaultParameter, handWrittenMockDefaultParameters: [ScopeGenerator.MockParameterNode.DefaultParameter]) {
+		init(of parameter: ScopeGenerator.DefaultParameter, handWrittenMockDefaultParameters: [ScopeGenerator.DefaultParameter]) {
 			label = parameter.label
 			valueTypeDescription = parameter.valueTypeDescription
 			defaultExpression = handWrittenMockDefaultParameters.first(where: {
@@ -173,7 +173,7 @@ extension MockLowering.Walk {
 	private static func argumentsSurfacedWithoutOverride(
 		of construction: ScopeGenerator.MockConstruction,
 		usesMockInitializer: Bool,
-		handWrittenDefaults: [ScopeGenerator.MockParameterNode.DefaultParameter],
+		handWrittenDefaults: [ScopeGenerator.DefaultParameter],
 	) -> [Initializer.Argument] {
 		construction.callSiteArguments.filter { argument in
 			construction.dependencyInnerLabels.contains(argument.innerLabel)
