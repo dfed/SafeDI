@@ -499,6 +499,13 @@ extension MockLowering.Walk {
 		guard !isPromoted || filledCall == nil && passedUpBuilderBindings.isEmpty && !isInstantiator else { return .unsupported(.publicMockCall) }
 		guard let filledCall else {
 			lines.append("\(indent)\(publicMockCall.guardLine(for: instantiable.concreteInstantiable))")
+			// D1 lane hook (lane B): a call on a loop of builders first rebinds the members its tree receives, and its level
+			// binds its wrapper where it reads it outside the loop (`MockLowering+Loops.swift`).
+			if loopMembership != nil {
+				guard let memberLines = loopMemberCallLines(of: generator, property: property, functionDeclaration: "\(indent)\(functionDecorator)func \(functionName)(\(functionParameters)) -> \(typeName) {", bodyLines: passedUpBuilderBindings, call: call, indent: indent) else { return .unsupported(.cycle) }
+				lines.append(contentsOf: memberLines)
+				return .lowered(.publicMockCall(node))
+			}
 			// A call that passes a builder up binds it in a builder function of its own.
 			// An instantiator's builder function, which takes what the instantiator forwards, binds them inside it.
 			guard passedUpBuilderBindings.isEmpty else {

@@ -3978,6 +3978,115 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 		], "Unexpected output \(output.mockFiles)")
 	}
 
+	// MARK: Tests – A call of another module's public mock on a loop
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_rebindsCallsWrapperInsideItsFunction_whenPublicMockCallIsMemberOfLoopOfBuilders() async throws {
+		// `Node`’s tree receives `nodeBuilder`, so `Screen`’s mock promotes it, a loop of one builder whose function calls
+		// `Node`’s public mock: the function first wraps itself again, binds the `apiBuilder` the call passes up, and returns
+		// the call.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: [
+			ModuleFixture(name: "Feature", packageName: "Feature", swiftFileContent: [
+				"""
+				import SafeDI
+
+				public protocol Api {}
+
+				@Instantiable(generateMock: .public)
+				public final class Node: Instantiable {
+				    init(api: any Api, step: Step) { self.api = api; self.step = step }
+				    @Instantiated let api: any Api
+				    @Instantiated let step: Step
+				}
+
+				@Instantiable
+				public final class Step: Instantiable {
+				    public init(nodeBuilder: Instantiator<Node>) { self.nodeBuilder = nodeBuilder }
+				    @Received let nodeBuilder: Instantiator<Node>
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+				"""
+				import SafeDI
+				import Feature
+
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(node: Node) { self.node = node }
+				    @Instantiated let node: Node
+				}
+				""",
+			], dependencies: ["Feature"]),
+		], integration: .moduleInfo, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            nodeBuilder: Node.SafeDIOverrides = .init(),
+		            node: Node.SafeDIOverrides = .init()
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                nodeBuilder: nodeBuilder,
+		                node: node
+		            )
+		        }
+
+		        var nodeBuilder: Node.SafeDIOverrides { __safeDI_storage.nodeBuilder }
+		        var node: Node.SafeDIOverrides { __safeDI_storage.node }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                nodeBuilder: Node.SafeDIOverrides,
+		                node: Node.SafeDIOverrides
+		            ) {
+		                self.nodeBuilder = nodeBuilder
+		                self.node = node
+		            }
+
+		            let nodeBuilder: Node.SafeDIOverrides
+		            let node: Node.SafeDIOverrides
+		        }
+		    }
+
+		    static func mock(
+		        apiBuilder: @escaping () -> any Api,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let __safeDI_apiBuilder = apiBuilder
+		        _ = Node.__safeDI_Node_mock_836E5FB7AC49A953.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_nodeBuilder() -> Node {
+		            let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
+		            let apiBuilder: () -> any Api = __safeDI_apiBuilder
+		            return Node.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), nodeBuilder: nodeBuilder, safeDIOverrides: safeDIOverrides.nodeBuilder)
+		        }
+		        let nodeBuilder = Instantiator<Node>(__safeDI_nodeBuilder)
+		        _ = Node.__safeDI_Node_mock_836E5FB7AC49A953.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        func __safeDI_node() -> Node {
+		            let apiBuilder: () -> any Api = __safeDI_apiBuilder
+		            return Node.__safeDI_mock(apiBuilder: .init(__safeDI_noScope: apiBuilder), nodeBuilder: nodeBuilder, safeDIOverrides: safeDIOverrides.node)
+		        }
+		        let node: Node = __safeDI_node()
+		        return Screen(node: node)
+		    }
+		}
+		#endif
+		"""])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
