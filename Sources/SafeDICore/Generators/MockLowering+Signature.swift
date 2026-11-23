@@ -191,26 +191,6 @@ extension MockLowering {
 			forwardedParameters + rootDefaultParameters + flatReceivedParameters + uncoveredParameters
 		}
 
-		/// The signature without the flat received parameters of `properties`, which another kind of parameter takes in their
-		/// place: a builder a call of another module's public mock passes up (lane C's family).
-		func removingFlatReceivedParameters(_ properties: Set<Property>) -> RootSignature {
-			RootSignature(
-				forwardedParameters: forwardedParameters,
-				rootDefaultParameters: rootDefaultParameters,
-				flatReceivedParameters: flatReceivedParameters.filter { !properties.contains($0.property) },
-				uncoveredParameters: uncoveredParameters,
-				uncoveredRootParameters: uncoveredRootParameters,
-				sharedValueDocumentation: sharedValueDocumentation,
-				onlyIfAvailableOverrides: onlyIfAvailableOverrides,
-				renamesByLabelAndType: renamesByLabelAndType,
-				uncoveredParameterNamesByLabelAndType: uncoveredParameterNamesByLabelAndType,
-				typesDeclaredEscaping: typesDeclaredEscaping,
-				lazilyInstantiatedBindings: lazilyInstantiatedBindings,
-				lazilyInstantiatedBindingNamesByLabelAndType: lazilyInstantiatedBindingNamesByLabelAndType,
-				namesDeclaredInBuilderFunctions: namesDeclaredInBuilderFunctions,
-			)
-		}
-
 		/// The parameters' declarations in `mock()`, at `indent`, with `builders` (label-sorted, each the full
 		/// `label: Type = default` text) listed among the flat received parameters as the emitter lists a seam's own mock's
 		/// builders: each before the first flat received parameter whose property's label sorts after the builder's, the rest

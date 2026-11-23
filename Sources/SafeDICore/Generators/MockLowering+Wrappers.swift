@@ -117,13 +117,6 @@ extension MockLowering {
 		}
 	}
 
-	/// Whether `scope` holds the lazy wrapper whose instance `property` is, by value.
-	static func scope(_ scope: Set<Property>, holdsWrapperOfInstance property: Property) -> Bool {
-		[Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType].contains { wrapperName in
-			scope.contains(Property(label: property.label, typeDescription: .simple(name: wrapperName, generics: [property.typeDescription])))
-		}
-	}
-
 	/// The binding of a wrapper whose type is `typeDescription`, named `bindingName`, around the builder function named
 	/// `functionName`, which takes `forwardedProperties` from the wrapper's argument, then `cycleParameterArguments`; the
 	/// lines after the first at `indent`. A rename of the wrapper, `declaredProperty`, is bound as its own declaration.

@@ -322,10 +322,6 @@ extension MockLowering {
 		/// The names `mock()` binds its overrides of what its tree receives only if available under, which a builder
 		/// function beneath the root may declare again: the emitter names an override apart only at the root's level.
 		var rootOverrideNames = Set<String>()
-		/// The names no alias at the walk's level may bind again: `rootLabels`, but for the overrides' beneath the root.
-		var labelsNoAliasBindsAgain: Set<String> {
-			bodyLabels.isEmpty ? rootLabels : rootLabels.subtracting(rootOverrideNames)
-		}
 
 		/// The declarations built around the node the walk is at, by label, innermost last: a node of a label one of them
 		/// has binds it again in its own builder function, which hides the farther one, as Swift's lookup does.
