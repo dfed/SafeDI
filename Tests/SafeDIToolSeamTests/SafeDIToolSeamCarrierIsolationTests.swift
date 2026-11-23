@@ -181,7 +181,7 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 		            let model = Model(id: id)
 		            let __safeDI_Screen_values2 = __safeDI_ScreenValues2(id: id, model: model)
 		            let api: any Api = __safeDI_apiBuilder_screenBuilder.api(__safeDI_Screen_values2)
-		            let __safeDI_Screen_values3 = __safeDI_ScreenValues3(previous: __safeDI_Screen_values2, api: api)
+		            let __safeDI_Screen_values3 = __safeDI_ScreenValues3(previous: consume __safeDI_Screen_values2, api: api)
 		            let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder_screenBuilder.detailBuilder(__safeDI_Screen_values3)
 		            func __safeDI_detailBuilder() -> Detail {
 		                let api: any Api = __safeDI_apiBuilder_detailBuilder.api()

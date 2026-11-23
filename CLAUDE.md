@@ -26,7 +26,7 @@ Formatting changes from `./CLI/lint.sh` go in a commit of their own, after the c
 ### Scripts and hooks
 
 - `./CLI/lint.sh --check` reports what SwiftFormat would change and changes nothing. The committed `PreToolUse` hook (`.claude/hooks/lint-before-push.sh`, wired in `.claude/settings.json`) runs it before `git push`, `gh stack` and `gh pr create`, in the worktree the command runs in, and blocks the command when it fails.
-- `Scripts/changed-line-coverage.sh [BASE]` runs the suite with coverage as CI does and prints every added or changed line under `Sources/` and `Plugins/` that no test executed (default base `upstream/main` where that remote exists, else `origin/main`).
+- `Scripts/changed-line-coverage.sh [--full] [--first REGEX]… [BASE]` runs the suites the change touches with coverage (every other test only for lines those leave, `--full` for the whole suite at once; generated code is not compiled unless `--compile-checks`), and prints every added or changed line under `Sources/` and `Plugins/` that no test executed (default base `upstream/main` where that remote exists, else `origin/main`).
 - `Scripts/fuzz-corpus.sh [--features …] [--seed N] [--iterations M|corpus] [--seeds N,N…] [--release]` runs the graph fuzzer's long run and prints its pin lines.
 - `Scripts/fuzzer-coverage-report.sh RUN [BASE]` lists the changed generator lines no fuzzer corpus graph executed, from a run's `fuzzer-coverage` artifact, against another base; `graph-fuzzer.yml`'s `coverage` input makes the report for a commit before review ("Coverage of a change" in `.claude/rules/fuzzer-corpora.md`).
 - `Scripts/multi-module-repro.sh [--conditions DEBUG,X] ROOT MODULE…` runs `generate` per module as Bazel and Tuist do and compiles the modules in order.
@@ -145,7 +145,7 @@ If your session started outside the worktree you are editing, scoped rules and n
 | promotion to the mock root, parameter naming | `.claude/rules/mock-root-promotion.md` |
 | `LazilyInstantiated` anywhere | `.claude/rules/lazily-instantiated.md` |
 | `generateMock: .public`, generated attributes; a public mock's or a seam's own mock's builders that take nothing | `.claude/rules/public-mocks.md`, `public-mock-builders.md`, `calling-mock-hole-builders.md` |
-| `generateDependencyTree: true` (seams) | `.claude/rules/seams.md`, `seam-access-proof.md`, `seam-generation.md`, `seam-builder-structs.md`, `seam-holes.md`, `seam-hole-fills.md`, `seam-signature-passes.md` |
+| `generateDependencyTree: true` (seams) | `.claude/rules/seams.md`, `seam-access-proof.md`, `seam-generation.md`, `seam-builder-structs.md`, `seam-carriers.md`, `seam-holes.md`, `seam-hole-fills.md`, `seam-signature-passes.md` |
 | a seam's or public mock's design: the contract, retention, hand-written builders | `.claude/rules/seam-and-mock-contract.md` |
 | a generator's design: type spelling, cost, captures, parallel work, runtime safety | `.claude/rules/generator-design.md` |
 | the construction memo; a decision made while code is emitted | `.claude/rules/construction-memo.md`, `emission-decisions.md` |
