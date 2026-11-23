@@ -3978,6 +3978,90 @@ struct SafeDIToolMockReceivedBuilderCycleTests: ~Copyable {
 		], "Unexpected output \(output.mockFiles)")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_wrapsLaterMemberAgainInReceivedFunction_whenMemberTakesLaterMemberAsCycleParameter() async throws {
+		// `aBuilder`’s function takes `bBuilder`, which `C` builds again beneath it, as a cycle parameter, and `bBuilder` is
+		// built after it on the root’s loop: `aBuilder`’s `_received` function wraps `bBuilder` again and passes it.
+		let output = try await executeSafeDIToolTest(swiftFileContent: [
+			Self.type("Root", attributes: "(isRoot: true, generateMock: true)", "@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>"),
+			Self.type("A", "@Received let bBuilder: Instantiator<B>", "@Instantiated let cBuilder: Instantiator<C>"),
+			Self.type("B", "@Received let aBuilder: Instantiator<A>"),
+			Self.type("C", "@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>"),
+		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.mockFiles == [
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            aBuilder: A.SafeDIMockConfiguration = .init(),
+			            bBuilder: ((Instantiator<A>) -> B)? = nil
+			        ) {
+			            __safeDI_storage = __safeDI_Storage(
+			                aBuilder: aBuilder,
+			                bBuilder: bBuilder
+			            )
+			        }
+
+			        var aBuilder: A.SafeDIMockConfiguration { __safeDI_storage.aBuilder }
+			        var bBuilder: ((Instantiator<A>) -> B)? { __safeDI_storage.bBuilder }
+
+			        private let __safeDI_storage: __safeDI_Storage
+
+			        private final class __safeDI_Storage {
+			            init(
+			                aBuilder: A.SafeDIMockConfiguration,
+			                bBuilder: ((Instantiator<A>) -> B)?
+			            ) {
+			                self.aBuilder = aBuilder
+			                self.bBuilder = bBuilder
+			            }
+
+			            let aBuilder: A.SafeDIMockConfiguration
+			            let bBuilder: ((Instantiator<A>) -> B)?
+			        }
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_aBuilder(bBuilder: Instantiator<B>) -> A {
+			            func __safeDI_cBuilder() -> C {
+			                func __safeDI_aBuilder_received() -> A {
+			                    let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			                    return __safeDI_aBuilder(bBuilder: bBuilder)
+			                }
+			                func __safeDI_bBuilder() -> B {
+			                    let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
+			                    return if let safeDIBuilder = safeDIOverrides.aBuilder.cBuilder.bBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+			                }
+			                let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
+			                let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			                return if let safeDIBuilder = safeDIOverrides.aBuilder.cBuilder.safeDIBuilder { safeDIBuilder(aBuilder, bBuilder) } else { C(aBuilder: aBuilder, bBuilder: bBuilder) }
+			            }
+			            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(bBuilder, cBuilder) } else { A(bBuilder: bBuilder, cBuilder: cBuilder) }
+			        }
+			        func __safeDI_aBuilder_received() -> A {
+			            let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			            return __safeDI_aBuilder(bBuilder: bBuilder)
+			        }
+			        func __safeDI_bBuilder() -> B {
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
+			            return if let safeDIBuilder = safeDIOverrides.bBuilder { safeDIBuilder(aBuilder) } else { B(aBuilder: aBuilder) }
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder_received)
+			        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+			        return Root(aBuilder: aBuilder, bBuilder: bBuilder)
+			    }
+			}
+			#endif
+			""",
+		], "Unexpected output \(output.mockFiles)")
+	}
+
 	// MARK: Tests – A call of another module's public mock on a loop
 
 	@Test

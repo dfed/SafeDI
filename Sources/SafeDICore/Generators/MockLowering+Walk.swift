@@ -775,8 +775,9 @@ extension MockLowering {
 			// builder function too, since it reads no override.
 			guard !property.propertyType.isConstant || forwardedProperties.isEmpty else { return .unsupported(.wrapper) }
 			guard labels.insert(bindingName).inserted else { return .unsupported(.siblingLabelCollision) }
-			// D1 lane hook (lane B): a closer passes the function's cycle parameters (`MockLowering+CycleParameters.swift`).
-			guard let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: scope, unavailableProperties: unavailableProperties, renames: renames, lazilyInstantiatedNames: lazilyInstantiatedNames) else { return .unsupported(.onlyIfAvailable) }
+			// D1 lane hook (lane B): a closer passes the function's cycle parameters (`MockLowering+CycleParameters.swift`); a
+			// closer on a loop of builders passes a member of the level's loops its `_received` function wraps again.
+			guard let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: loopMembership == nil ? scope : scope.union(loopMembers.keys), unavailableProperties: unavailableProperties, renames: renames, lazilyInstantiatedNames: lazilyInstantiatedNames) else { return .unsupported(.onlyIfAvailable) }
 			// D1 lane hook (lane B): a closer on a loop of builders declares the `_received` function its wrappers hand, with
 			// the loop's functions, and is bound with the loop's wrappers where its level binds it (`MockLowering+Loops.swift`).
 			if let loopMembership, let member = loopMembers[property] {
@@ -884,8 +885,9 @@ extension MockLowering {
 				rebindingLines = memberRebindingLines
 			}
 			// D1 lane hook (lane B): what the node's binding passes its builder function's cycle parameters, read where the node
-			// is built, and the parameters, the nearest declarations of their labels in the function.
-			guard let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: scope, unavailableProperties: self.unavailableProperties, renames: renames, lazilyInstantiatedNames: lazilyInstantiatedNames) else { return .unsupported(.onlyIfAvailable) }
+			// is built, and the parameters, the nearest declarations of their labels in the function. A member of a loop of
+			// builders passes a member of the level's loops its `_received` function wraps again (`receivedFunctionLines`).
+			guard let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: ownLoopMembership == nil ? scope : scope.union(loopMembers.keys), unavailableProperties: self.unavailableProperties, renames: renames, lazilyInstantiatedNames: lazilyInstantiatedNames) else { return .unsupported(.onlyIfAvailable) }
 			let scope = scope.union(generator.reboundProperties).union(MockLowering.cycleParameterForms(of: generator))
 			// D1 lane hook (lane B): a `Sendable` wrapper's, or a cycle's, builder function is `@Sendable`, and every override
 			// read inside it is read into a local before the outermost such function.
