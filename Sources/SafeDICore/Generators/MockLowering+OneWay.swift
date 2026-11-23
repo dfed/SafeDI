@@ -142,7 +142,7 @@ extension MockLoweringShadow {
 	) -> Comparison {
 		switch MockLowering.configurationsBuiltTwoWays(of: roots, mockDeclarationLocations: mockDeclarationLocations) {
 		case let .lowered(conflicts):
-			let loweredDiagnostics = conflicts.flatMap { $0.sourceDiagnostics }.sorted(by: SourceDiagnostic.precedesInSourceOrder)
+			let loweredDiagnostics = conflicts.flatMap(\.sourceDiagnostics).sorted(by: SourceDiagnostic.precedesInSourceOrder)
 			return Comparison(
 				mockedType: "",
 				outcome: outcome(comparing: .lowered(Self.text(of: loweredDiagnostics)), with: Self.text(of: emittedDiagnostics)),
