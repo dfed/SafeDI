@@ -833,6 +833,7 @@ extension MockLowering {
 			let argumentLazilyInstantiatedNames = generator.cycleParameters.isEmpty ? lazilyInstantiatedNames : functionLazilyInstantiatedNames
 			MockLowering.routeReceives(of: uncoveredInstantiatedProperties, toParametersNamed: uncoveredParameterNames, in: &functionRenames)
 			var receiverBindings = [(property: Property, name: String)]()
+			var publicWrapperParametersReadByName = [String: String]()
 			for dependency in instantiable.dependencies {
 				// A receive the node passes `nil` is not rebound (`emitReceiverBindings`): the name may not be declared yet.
 				guard case .received = dependency.source, !unavailableProperties.contains(dependency.property), let names = functionRenames[dependency.property.label] else { continue }
@@ -846,17 +847,23 @@ extension MockLowering {
 						.compactMap({ wrapper in names[wrapper].map { (property: Property(label: dependency.property.label, typeDescription: wrapper), name: $0) } })
 						.first
 					else { continue }
-					receiverBindings.append(wrapper)
+					// D1 lane hook (lane C): a public mock's wrapper parameter is read by name, its instance where the
+					// construction reads it, with no binding again (`dependencyArgument`, `lazilyInstantiatedBindingNames`).
+					if buildsPublicMock {
+						publicWrapperParametersReadByName[dependency.property.label] = wrapper.name
+					} else {
+						receiverBindings.append(wrapper)
+					}
 				} else if let name = names[dependency.property.typeDescription] ?? names[dependency.property.asUnwrappedProperty.typeDescription] {
 					receiverBindings.append((dependency.property, name))
 				}
 			}
 			// A receive named apart whose label a receive beneath reads by name is handed the name instead of bound again
 			// under its label, which would hide the binding that receive reads (`ScopeGenerator.receivedBindingNamesPassedByName`).
-			var bindingNamesPassedByName = [String: String]()
+			var bindingNamesPassedByName = publicWrapperParametersReadByName
 			if !childGenerators.isEmpty {
 				for binding in receiverBindings {
-					switch MockLowering.receiveReadsLabelByName(binding.property.label, beneath: orderedChildren, renames: renames, lazilyInstantiatedNames: functionLazilyInstantiatedNames) {
+					switch MockLowering.receiveReadsLabelByName(binding.property.label, beneath: orderedChildren, renames: renames, lazilyInstantiatedNames: functionLazilyInstantiatedNames, isPublicMock: buildsPublicMock) {
 					case true?:
 						bindingNamesPassedByName[binding.property.label] = binding.name
 					case false?:
@@ -1548,10 +1555,14 @@ extension MockLowering {
 	/// Whether a receive among `generators`, or beneath them up to a node that declares `label`, reads `label` by name: a
 	/// receive or an alias's fulfilling property whose form `renames` does not name apart; or `nil` where the walk cannot
 	/// tell yet (`ScopeGenerator.receiveReadsLabelByName`).
-	static func receiveReadsLabelByName(_ label: String, beneath children: [ScopeGenerator.OrderedChild], renames: [String: [TypeDescription: String]], lazilyInstantiatedNames: [String: [TypeDescription: String]]) -> Bool? {
+	static func receiveReadsLabelByName(_ label: String, beneath children: [ScopeGenerator.OrderedChild], renames: [String: [TypeDescription: String]], lazilyInstantiatedNames: [String: [TypeDescription: String]], isPublicMock: Bool) -> Bool? {
 		let names = renames[label] ?? [:]
 		// D1 lane hook (lane C): a receive of a wrapper the mock names apart reads that name, not the label.
 		let wrapperNames = lazilyInstantiatedNames[label] ?? [:]
+		// A wrapper's instance is read through a wrapper the flat parameters name apart. A public mock's wrapper parameter is
+		// none: the emitter names apart the instance it stands for (`publicMockWrapperParameters`), and
+		// `dependencyArgument` reads the wrapper by name.
+		let flatWrapperNames = isPublicMock ? [:] : names
 		// A stack of its own, since a mock tree can be as deep as the module has types.
 		var childrenToVisit = children
 		while let child = childrenToVisit.popLast() {
@@ -1560,15 +1571,23 @@ extension MockLowering {
 			case let .alias(_, fulfillingProperty, _, onlyIfAvailable, _):
 				// D1 lane hook (lane B): an alias bound to `nil` reads nothing (`emitAliasBinding`).
 				guard fulfillingProperty.label == label, !ScopeGenerator.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: child.unavailableProperties), wrapperNames[fulfillingProperty.typeDescription] == nil else { continue }
-				// D1 lane hook (lane B): an alias of a lazy wrapper's instance.
-				guard !generator.mockLoweringLazilyInstantiatedInstanceProperties.contains(fulfillingProperty.asUnwrappedProperty) else { return nil }
-				guard names[fulfillingProperty.typeDescription] != nil else { return true }
+				// D1 lane hook (lanes B and C): an alias of a lazy wrapper's instance reads the wrapper's binding named apart, if
+				// any, as `emitAliasBinding` resolves it.
+				if generator.mockLoweringLazilyInstantiatedInstanceProperties.contains(fulfillingProperty.asUnwrappedProperty) {
+					guard wrapperRename(ofInstanceOfType: fulfillingProperty.typeDescription.unwrapped, among: flatWrapperNames) != nil else { return true }
+				} else {
+					guard names[fulfillingProperty.typeDescription] != nil else { return true }
+				}
 			case let .property(instantiable, _, _, _, isPropertyCycle, seamCall):
 				guard seamCall == nil else { return nil }
 				for dependency in instantiable.dependencies where dependency.source.isReceived && dependency.property.label == label && !generator.unavailableOptionalProperties.contains(dependency.property) && wrapperNames[dependency.property.typeDescription] == nil {
-					// D1 lane hook (lane B): a receive of a lazy wrapper's instance reads the wrapper named apart.
-					guard !generator.mockLoweringLazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty) else { return nil }
-					guard names[dependency.property.typeDescription] != nil || names[dependency.property.asUnwrappedProperty.typeDescription] != nil else { return true }
+					// D1 lane hook (lanes B and C): a receive of a lazy wrapper's instance reads the wrapper's binding named apart, if
+					// any, as `dependencyArgument` resolves it.
+					if generator.mockLoweringLazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty) {
+						guard wrapperRename(ofInstanceOfType: dependency.property.typeDescription.unwrapped, among: flatWrapperNames) != nil else { return true }
+					} else {
+						guard names[dependency.property.typeDescription] != nil || names[dependency.property.asUnwrappedProperty.typeDescription] != nil else { return true }
+					}
 				}
 				// The builder function of a node that instantiates, forwards or renames the label declares it, and what is
 				// beneath reads that.
@@ -1585,6 +1604,15 @@ extension MockLowering {
 			}
 		}
 		return false
+	}
+
+	/// The name `names` gives the `LazilyInstantiated` or `SendableLazilyInstantiated` of `instanceType`, as
+	/// `ScopeGenerator.disambiguatedLazilyInstantiatedBinding` finds it.
+	private static func wrapperRename(ofInstanceOfType instanceType: TypeDescription, among names: [TypeDescription: String]) -> String? {
+		[Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType]
+			.lazy
+			.compactMap { names[TypeDescription.simple(name: $0, generics: [instanceType])] }
+			.first
 	}
 
 	/// The local `mock()` reads its `@Sendable` autoclosure parameter named `name` into, before any builder function.
