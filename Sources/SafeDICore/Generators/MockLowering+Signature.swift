@@ -175,12 +175,32 @@ extension ScopeGenerator {
 				typeSource: argument.typeDescription.asFunctionParameter.asSource,
 			))
 		}
-		// What only calls of other modules' public mocks receive is named after the rest (lane C's family).
-		guard receivedOnlyByPublicMockCalls.isEmpty else { return .unsupported(.onlyIfAvailable) }
+		// D1 lane hook (lane C): the mock takes no parameter or override for what only calls of other modules' public mocks
+		// receive and every call omits (`receivedOnlyByPublicMockCallsLeftOut`), and takes what they pass as a receive only if
+		// available.
+		let receivedOnlyByPublicMockCallsLeftOut = Self.receivedOnlyByPublicMockCallsLeftOut(
+			receivedOnlyByPublicMockCalls: receivedOnlyByPublicMockCalls,
+			passedByPublicMockCalls: passedByPublicMockCalls,
+			labelsReadInsideSendableFunctions: passedByPublicMockCallLabelsReadInsideSendableFunctions(of: instantiable),
+		)
 		// Each in the mocked type's own spelling where it receives the dependency, else its receivers' most explicit one.
-		let receivedProperties = MockedTypeSpellings(of: instantiable, treeReceivedProperties: receivedProperties).spellings(of: receivedProperties)
+		let receivedProperties = MockedTypeSpellings(of: instantiable, treeReceivedProperties: receivedProperties).spellings(of: receivedProperties.subtracting(receivedOnlyByPublicMockCallsLeftOut))
+		let onlyIfAvailableUnwrappedReceivedProperties = receivedOnlyByPublicMockCalls.isEmpty
+			? onlyIfAvailableUnwrappedReceivedProperties
+			: onlyIfAvailableUnwrappedReceivedProperties.filter { property in
+				receivedProperties.contains(property) || receivedProperties.contains(property.asOptionalProperty)
+			}
 		// The mock wraps the instance it is passed for a `LazilyInstantiated` it cannot build.
-		guard !receivedProperties.contains(where: { $0.typeDescription.lazilyInstantiatedInstanceType != nil }) else { return .unsupported(.wrapper) }
+		// D1 lane hook (lane C): a public mock takes the wrapper itself (`publicMockWrapperParameters`), where its tree receives
+		// the label in no other form; one beside its instance, or defaulted to a wrapper around a hand-written mock, is not
+		// lowered yet.
+		let receivedLabels = receivedProperties.map(\.label)
+		guard !receivedProperties.contains(where: { property in
+			guard let instanceType = property.typeDescription.lazilyInstantiatedInstanceType else { return false }
+			return instantiable.generateMock != .public
+				|| receivedLabels.count(where: { $0 == property.label }) > 1
+				|| flatParameterMockDefaults[instanceType.unwrapped] != nil
+		}) else { return .unsupported(.wrapper) }
 		let forwardedProperties = instantiable.forwardedReceivableProperties
 		let receivedNonOptionalProperties = Set(receivedProperties.filter { !$0.typeDescription.isOptional })
 		var flatReceivedProperties = [Property]()
@@ -228,22 +248,38 @@ extension ScopeGenerator {
 				.union(onlyIfAvailableReceivedProperties.map(\.label)),
 			hiddenEntries: tree.uncoveredIndicesHiddenWhereReferenced,
 		)
+		// D1 lane hook (lane C): an internal mock's override of what only calls of other modules' public mocks receive is
+		// named after the others, and apart from them and the flat received parameters, which keep their names beside it.
+		let onlyPublicMockCallsReceive: Set<Property> = instantiable.generateMock == .public || receivedOnlyByPublicMockCalls.isEmpty
+			? []
+			: Self.onlyIfAvailableReceivedProperties(onlyIfAvailableReceivedProperties, receivedOnlyBy: receivedOnlyByPublicMockCalls)
 		// A flat received parameter is named apart from the other parameters, the overrides and the root's tree bindings.
 		let flatReceivedNames = Self.namesApart(
 			preferredNames: flatReceivedProperties.map(\.label),
 			typeDescriptions: flatReceivedProperties.map(\.typeDescription),
 			namesInScope: forwardedAndDefaultLabels
 				.union(uncoveredNames)
-				.union(onlyIfAvailableReceivedProperties.map(\.label))
+				.union(onlyIfAvailableReceivedProperties.filter { !onlyPublicMockCallsReceive.contains($0) }.map(\.label))
 				.union(treeBindingNames),
 			reservedNames: namesDeclaredInBuilderFunctions,
 		)
-		let onlyIfAvailableOverrides = onlyIfAvailableReceivedProperties.isEmpty ? [] : Self.onlyIfAvailableOverrides(
-			for: onlyIfAvailableReceivedProperties,
+		let ownOverrides = Self.onlyIfAvailableOverrides(
+			for: onlyIfAvailableReceivedProperties.filter { !onlyPublicMockCallsReceive.contains($0) },
 			namedAfter: [:],
 			namesInMockScope: forwardedAndDefaultLabels.union(uncoveredNames).union(treeBindingNames),
 			reservedNames: Set(flatReceivedNames).union(namesDeclaredInBuilderFunctions),
 		)
+		let overridesOnlyPublicMockCallsReceive = onlyPublicMockCallsReceive.isEmpty ? [] : Self.onlyIfAvailableOverrides(
+			for: onlyIfAvailableReceivedProperties.filter { onlyPublicMockCallsReceive.contains($0) },
+			namedAfter: [:],
+			namesInMockScope: forwardedAndDefaultLabels.union(uncoveredNames).union(treeBindingNames).union(flatReceivedNames).union(ownOverrides.map(\.name)),
+			reservedNames: Set(flatReceivedNames).union(namesDeclaredInBuilderFunctions),
+		)
+		var ownOverridesInOrder = ownOverrides.makeIterator()
+		var overridesOnlyPublicMockCallsReceiveInOrder = overridesOnlyPublicMockCallsReceive.makeIterator()
+		let onlyIfAvailableOverrides = onlyIfAvailableReceivedProperties.compactMap { property in
+			onlyPublicMockCallsReceive.contains(property) ? overridesOnlyPublicMockCallsReceiveInOrder.next() : ownOverridesInOrder.next()
+		}
 		var renamesByLabelAndType = [String: [TypeDescription: String]]()
 		for (property, name) in zip(flatReceivedProperties, flatReceivedNames) where name != property.label {
 			renamesByLabelAndType[property.label, default: [:]][property.typeDescription] = name
@@ -292,10 +328,8 @@ extension ScopeGenerator {
 			uncoveredParameterNamesByLabelAndType: uncoveredParameterNamesByLabelAndType,
 			typesDeclaredEscaping: typesDeclaredEscaping,
 		)
-		// D1 lane hook (lane B): the uncovered parameters named apart, which lane B's family lowers; the overrides' bindings,
-		// and the receives of flat received parameters and overrides named apart, are `mock()`'s and the walk's
-		// (`lowerMockRootWithTree(of:context:)`).
-		guard signature.uncoveredParameterNamesByLabelAndType.isEmpty else { return .unsupported(.siblingLabelCollision) }
+		// D1 lane hook (lane B): the overrides' bindings, and the receives of parameters and overrides named apart, are
+		// `mock()`'s and the walk's (`lowerMockRootWithTree(of:context:)`).
 		// No two parameters or bindings of `mock()` share a name: the emitter names them apart.
 		guard signature.labels.count == signature.parameters.count + signature.onlyIfAvailableOverrides.count else { return .unsupported(.siblingLabelCollision) }
 		return .lowered(signature)

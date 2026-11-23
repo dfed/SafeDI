@@ -242,12 +242,13 @@ extension ScopeGenerator {
 
 	/// The mock of a type whose `mock()` takes no parameter and builds nothing but the type: one call of its hand-written
 	/// mock, its `instantiate()` or its initializer.
-	static func mockWithoutTree(of instantiable: Instantiable, context: MockContext) -> String {
+	// D1 lane hook (lane B): the mocked type's own receives only if available that nothing above provides, passed `nil`.
+	static func mockWithoutTree(of instantiable: Instantiable, context: MockContext, passingNilTo unavailableProperties: Set<Property> = []) -> String {
 		let typeName = instantiable.concreteInstantiable.asSource
 		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
 		let returnType = (instantiable.mockCallReturnType ?? instantiable.concreteInstantiable).asSource
 		let argumentList = (instantiable.mockInitializer ?? instantiable.initializer)?
-			.createMockInitializerArgumentList(given: instantiable.dependencies) ?? ""
+			.createMockInitializerArgumentList(given: instantiable.dependencies, unavailableProperties: unavailableProperties) ?? ""
 		let construction = if instantiable.mockInitializer != nil {
 			"\(typeName).\(instantiable.customMockName ?? InstantiableVisitor.mockMethodName)(\(argumentList))"
 		} else if instantiable.declarationType.isExtension {

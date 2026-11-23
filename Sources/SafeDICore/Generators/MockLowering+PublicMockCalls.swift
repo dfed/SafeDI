@@ -404,7 +404,13 @@ extension MockLowering.Walk {
 				      !generator.unavailableOptionalProperties.contains(dependency.property)
 				else { return .unsupported(.publicMockCall) }
 				let value: String
-				if dependency.source.isReceived, lazilyInstantiatedInstances.contains(dependency.property.asUnwrappedProperty) {
+				if dependency.source.isReceived, let renamedName = renames[dependency.property.label]?[dependency.property.typeDescription] {
+					// D1 lane hook (lane C): a receive the mock names apart is bound again under its label in the call's builder
+					// function (`emitReceiverBindings`). An override closure or a fill beside it is not lowered yet.
+					guard overrideBuilders == nil, filledCall == nil, property.propertyType.isConstant else { return .unsupported(.publicMockCall) }
+					passedUpBuilderBindings.append("let \(dependency.property.label): \(dependency.property.typeDescription.asSource) = \(renamedName)")
+					value = dependency.property.label
+				} else if dependency.source.isReceived, lazilyInstantiatedInstances.contains(dependency.property.asUnwrappedProperty) {
 					// A label the tree holds in both wrapper kinds is named apart, which is not lowered yet.
 					guard scope.count(where: { $0.label == dependency.property.label && $0.typeDescription.lazilyInstantiatedInstanceType != nil }) == 1 else { return .unsupported(.publicMockCall) }
 					value = "\(dependency.property.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
