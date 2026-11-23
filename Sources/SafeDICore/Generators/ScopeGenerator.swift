@@ -6480,6 +6480,41 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		bodyUnavailableProperties(unavailableProperties)
 	}
 
+	// D1 lane hook (lane B): the mock lowering names a level's builder functions apart from the enclosing functions its
+	// cycle-closing nodes refer to, as the mock emitter does (`generateMockBodyBindings`).
+	/// The name of the builder function of each of `generators`, one level of a mock's tree whose property nodes are bound
+	/// as `bindingNames` says, where `builderFunctionNames(for:enclosingFunctionNames:)` renames it, else `nil`; or `nil`
+	/// where no property node of the level takes part in a cycle, as the emitter skips such a level. The emitter also names
+	/// a hole held in a wrapper among them, which the lowering does not lower on such a level.
+	nonisolated static func mockLoweringBuilderFunctionNames(
+		of generators: [ScopeGenerator],
+		boundAs bindingNames: [String?],
+		enclosingFunctionNames: [BuiltDeclaration: String],
+	) -> [String?]? {
+		var candidates = [BuilderFunctionCandidate]()
+		var generatorIndices = [Int]()
+		for (index, generator) in generators.enumerated() {
+			guard case let .property(_, property, _, _, isPropertyCycle, _) = generator.scopeData, let declaration = generator.declaration else { continue }
+			let bindingName = index < bindingNames.count ? bindingNames[index] : nil
+			candidates.append(BuilderFunctionCandidate(
+				property: property,
+				declaration: declaration,
+				name: bindingName.flatMap { $0 == property.label ? nil : functionName(toBuildPropertyNamed: $0) },
+				declaresFunction: !isPropertyCycle,
+				cycleClosedOnDeclarations: generator.cycleClosedOnDeclarations,
+				isReferencedByCycleClosingScope: generator.isReferencedByCycleClosingScope,
+				referencedFillNames: Set(generator.referencedFillNamesByKey.values),
+			))
+			generatorIndices.append(index)
+		}
+		guard candidates.contains(where: { !$0.cycleClosedOnDeclarations.isEmpty || $0.isReferencedByCycleClosingScope }) else { return nil }
+		var names = [String?](repeating: nil, count: generators.count)
+		for (candidateIndex, builderFunctionNames) in builderFunctionNames(for: candidates, enclosingFunctionNames: enclosingFunctionNames).enumerated() {
+			names[generatorIndices[candidateIndex]] = builderFunctionNames.functionName
+		}
+		return names
+	}
+
 	/// The name of the builder function this scope, which closes a property cycle on `closedOnDeclaration` and is built for
 	/// `property`, calls or hands its wrapper: the function of the declaration it repeats, as the scopes enclosing it named
 	/// it. The two properties share a label, which the function is named after unless a rename moved it.
