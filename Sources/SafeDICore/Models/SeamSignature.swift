@@ -1281,12 +1281,13 @@ public struct SeamSignature: Sendable {
 			public let memberValuesTypeName: String?
 		}
 
-		public init(key: Key, typeName: String, rootTypeName: String? = nil, builderLabel: String, cases: [Case]) {
+		public init(key: Key, typeName: String, rootTypeName: String? = nil, builderLabel: String, cases: [Case], takesValuesPositionally: Bool = false) {
 			self.key = key
 			self.typeName = typeName
 			self.rootTypeName = rootTypeName
 			self.builderLabel = builderLabel
 			self.cases = cases
+			self.takesValuesPositionally = takesValuesPositionally
 		}
 
 		public let key: Key
@@ -1296,6 +1297,10 @@ public struct SeamSignature: Sendable {
 		/// The label of the builder this enum is handed to, which names its dispatcher.
 		public let builderLabel: String
 		public internal(set) var cases: [Case]
+		/// Whether this carrier enum's level hands its members their values positionally rather than in run structs: decided
+		/// once, by the seam's own module (`SeamCarrierValues.positionalLevels(of:memberAccess:)`), and recorded here, so a
+		/// caller reads the decision and never computes it again. `false` for every other enum.
+		public internal(set) var takesValuesPositionally: Bool
 		/// The enum's type, as a module that does not declare it spells it: qualified by the seam's type, through the root
 		/// enum.
 		var type: TypeDescription {

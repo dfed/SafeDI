@@ -1092,6 +1092,7 @@ extension SeamSignature.ScopeEnum: BinarySchemaMember {
 				BinaryLayoutField("rootTypeName", \.rootTypeName),
 				BinaryLayoutField("builderLabel", \.builderLabel),
 				BinaryLayoutField("cases", \.cases),
+				BinaryLayoutField("takesValuesPositionally", \.takesValuesPositionally),
 			],
 			unwrittenProperties: [],
 		)
@@ -1104,6 +1105,7 @@ extension SeamSignature.ScopeEnum: BinarySchemaMember {
 			rootTypeName: reader.read() as String?,
 			builderLabel: reader.read(),
 			cases: reader.read(),
+			takesValuesPositionally: reader.read(),
 		)
 	}
 
@@ -1113,6 +1115,7 @@ extension SeamSignature.ScopeEnum: BinarySchemaMember {
 		writer.write(rootTypeName)
 		writer.write(builderLabel)
 		writer.write(cases)
+		writer.write(takesValuesPositionally)
 	}
 }
 
