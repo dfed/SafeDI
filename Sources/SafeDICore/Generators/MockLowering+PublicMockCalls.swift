@@ -121,7 +121,9 @@ extension ScopeGenerator {
 			return .unsupported(rule)
 		}
 		let passesUpBuilders = !passedUpFamilies.isEmpty
-		guard !calls.isEmpty else { return .lowered(MockLowering.FilledCallBuilders(calls: [], parameters: [], fillPlaceBindings: FillPlaceBindings(bindingsByGenerator: [:]))) }
+		// Without calls, a place of another module's public mock the tree builds inline still reads the builder `mock()`
+		// takes for its family, a seam's own place's or one a call passes up.
+		guard !calls.isEmpty || !passedUpBuilders.isEmpty else { return .lowered(MockLowering.FilledCallBuilders(calls: [], parameters: [], fillPlaceBindings: FillPlaceBindings(bindingsByGenerator: [:]))) }
 		// Each builder the signature takes for a seam's own places and for the builders the calls pass up is a builder `mock()`
 		// requires (`RootSignature.passedUpBuilders`), which a call's builder of its family joins, read under its internal
 		// name; each of the family of its first place, or of the first property it is received as. The hole types of the
