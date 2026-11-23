@@ -31,10 +31,6 @@ extension ScopeGenerator {
 		      let initializer = instantiable.initializer,
 		      initializer.arguments.isEmpty
 		else {
-			// A construction function's defaults are not lowered yet.
-			guard !treeCallsPublicMock(of: orderedChildrenComputedAfresh(propertiesGeneratedLater: [])) else {
-				return .unsupported(.publicMockRoot)
-			}
 			return await lowerMockRootWithTree(of: instantiable, context: context)
 		}
 		let plan = Self.publicMockPlan(
@@ -127,23 +123,6 @@ extension ScopeGenerator {
 			generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator))
 		}
 		return modulesByLabel
-	}
-
-	/// Whether the tree of `orderedChildren` builds a type whose construction takes a default. Walked with a stack, since a
-	/// tree can be as deep as the module has types.
-	private func treeCallsPublicMock(of orderedChildren: [OrderedChild]) -> Bool {
-		var generatorsToVisit = orderedChildren.map(\.generator)
-		while let generator = generatorsToVisit.popLast() {
-			// A construction function's defaults are not lowered yet.
-			let constructionTakesDefault = if case let .property(instantiable, _, _, _, _, _) = generator.scopeData {
-				instantiable.initializer?.arguments.contains(where: \.hasDefaultValue) == true
-			} else {
-				false
-			}
-			guard !constructionTakesDefault else { return true }
-			generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator))
-		}
-		return false
 	}
 
 	/// The public mock of `instantiable`, whose tree's top-level nodes are `nodes`, in generation order, bound by
@@ -388,11 +367,11 @@ extension MockLowering.ConstantNode {
 	/// construction function handed the builder its override at `overridePath` reads, and bind the node; or the first rule
 	/// they meet that the lowering does not lower yet.
 	func publicBuilderFunctionEndLines(children: [MockLowering.TreeNode], overrideRead overridePath: String?, indent: String) -> MockLowering.Lowering<[String]> {
-		// A construction function's defaults, and an argument left to its default, are not lowered yet.
+		// The node passes its construction function every argument the function takes.
 		let record = MockLowering.PublicConstructionRecord(of: self, children: children)
-		guard defaultFields.isEmpty, !record.hasDefaultParameters, record.arguments.count == arguments.count else { return .unsupported(.defaultValuedParameter) }
+		guard record.arguments.count == arguments.count else { return .unsupported(.defaultValuedParameter) }
 		let bodyIndent = "\(indent)\(ScopeGenerator.standardIndent)"
-		let returnPrefix = hasChildren || !receiverBindings.isEmpty ? "return " : ""
+		let returnPrefix = hasChildren || !receiverBindings.isEmpty || !defaultFields.isEmpty ? "return " : ""
 		let erasedTo: TypeDescription? = if isErased {
 			isWrapped ? property.typeDescription.asInstantiatedTypeSpelledAsDeclared : property.typeDescription
 		} else {
