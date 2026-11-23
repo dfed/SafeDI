@@ -306,9 +306,9 @@ extension MockLowering.Walk {
 		guard let publicMockCall = generator.publicMockCall,
 		      case let .property(instantiable, property, forwardedProperties, erasedToConcreteExistential, isPropertyCycle, _) = generator.scopeData
 		else { return .unsupported(.publicMockCall) }
-		// A call nested in a type's builder function is configured by that type's configuration, which a `@Sendable` builder
-		// function reads as a closure.
-		guard !generator.buildsInSendableFunction,
+		// A call whose own builder function is `@Sendable` starts the extraction of its override reads, which is not lowered
+		// yet; inside an enclosing `@Sendable` function the override is read through that function's extractor.
+		guard !generator.buildsInSendableFunction || sendableOverrideExtractor != nil,
 		      !isPropertyCycle,
 		      !erasedToConcreteExistential,
 		      property.propertyType.isConstant || property.propertyType == .instantiator && forwardedProperties.isEmpty,
@@ -325,10 +325,14 @@ extension MockLowering.Walk {
 		// The call leaves a default-valued argument that is no dependency to its default, which the override's closure type
 		// leaves out too.
 		guard !initializer.arguments.contains(where: { $0.isLeftToItsDefault && !dependencyLabels.contains($0.innerLabel) }) else { return .unsupported(.publicMockCall) }
+		// The member that configures the call is a `@Sendable` closure where the call is built inside a `@Sendable` function,
+		// or where the configuration holding it is `@Sendable`-typed (`publicMockOverridesMember(sendable:)`).
+		let overridesAreSendable = isInsideSendableFunction || generator.buildsInSendableFunction || parentConcreteType.map(sendableConfigurationTypeNames.contains) ?? false
 		let node = MockLowering.PublicMockCallNode(
 			property: property,
 			calledType: instantiable.concreteInstantiable,
 			call: publicMockCall,
+			overridesAreSendable: overridesAreSendable,
 			overrideClosureType: overrideBuilders.map { _ in
 				let parameterTypes = initializer.arguments.map { argument in
 					(argument.typeDescription.strippingEscaping.autoclosureValueType ?? argument.typeDescription)
@@ -339,6 +343,8 @@ extension MockLowering.Walk {
 			},
 		)
 		let nodePath = "\(path).\(property.label)"
+		// Inside a `@Sendable` function the member is read into a local before the outermost such function.
+		let overrideRead = readingOverride(nodePath, localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(ReservedName.configurationBuilderPropertyName)")
 		// A call that fills builders is made in a builder function of its own, which declares the fills and names the guard
 		// first; it passes each builder the struct of the builder `mock()` takes optional for the builder's places, or of
 		// its fills where that builder is `nil`. Any other call names the guard where it is made.
@@ -407,7 +413,7 @@ extension MockLowering.Walk {
 			}
 		}
 		if publicMockCall.takesOverrides {
-			arguments.append("\(ReservedName.mockOverridesParameterName): \(nodePath)")
+			arguments.append("\(ReservedName.mockOverridesParameterName): \(overridesAreSendable ? "\(overrideRead)?() ?? .init()" : overrideRead)")
 		}
 		let defaultCall = "\(instantiable.concreteInstantiable.asSource).\(publicMockCall.functionName)(\(arguments.joined(separator: ", ")))"
 		let call: String
@@ -417,7 +423,7 @@ extension MockLowering.Walk {
 				overrideBuilders[argument.innerLabel]?.expression(argumentByLabel: argumentByLabel, holeBuilder: holeBuilders[argument.innerLabel]) ?? value
 			}
 			let overrideName = ReservedName.configurationBuilderPropertyName
-			call = "if let \(overrideName) = \(nodePath) { \(overrideName)(\(handed.joined(separator: ", "))) } else { \(defaultCall) }"
+			call = "if let \(overrideName) = \(overrideRead) { \(overrideName)(\(handed.joined(separator: ", "))) } else { \(defaultCall) }"
 		} else {
 			call = defaultCall
 		}
@@ -477,6 +483,9 @@ extension MockLowering {
 		/// The type whose public mock the node calls.
 		let calledType: TypeDescription
 		let call: PublicMockCall
+		/// Whether the member that configures the call is a `@Sendable` closure: the call is built inside a `@Sendable`
+		/// function, or the configuration that holds the member is `@Sendable`-typed.
+		let overridesAreSendable: Bool
 		/// For a call of a mock that takes no overrides, the type of the closure that builds the called type, where the call
 		/// offers one (`ScopeGenerator.MockParameterNode.offersOverrideClosure`).
 		let overrideClosureType: String?
@@ -485,14 +494,26 @@ extension MockLowering {
 		/// for a mock that takes none, the closure that builds the called type, where the call offers one.
 		var overridesField: OverridesField? {
 			if call.takesOverrides {
+				overridesAreSendable
+					? OverridesField(
+						name: property.label,
+						typeSource: "(@Sendable () -> \(calledType.asSource).\(ReservedName.mockOverridesTypeName))?",
+						defaultValue: "nil",
+						sendability: .always,
+					)
+					: OverridesField(
+						name: property.label,
+						typeSource: "\(calledType.asSource).\(ReservedName.mockOverridesTypeName)",
+						defaultValue: ".init()",
+						sendability: .never,
+					)
+			} else if let overrideClosureType {
 				OverridesField(
 					name: property.label,
-					typeSource: "\(calledType.asSource).\(ReservedName.mockOverridesTypeName)",
-					defaultValue: ".init()",
-					sendability: .never,
+					typeSource: "(\(overridesAreSendable ? "@Sendable " : "")\(overrideClosureType))?",
+					defaultValue: "nil",
+					sendability: overridesAreSendable ? .always : .never,
 				)
-			} else if let overrideClosureType {
-				OverridesField(name: property.label, typeSource: "(\(overrideClosureType))?", defaultValue: "nil", sendability: .never)
 			} else {
 				nil
 			}
