@@ -605,7 +605,13 @@ extension MockLowering {
 				// unavailable, as production binds it (`ScopeGenerator.aliasIsBoundToNil`), and otherwise from the property in
 				// scope; one the mock's root provides reads an override, which the walk does not lower yet.
 				let isBoundToNil = ScopeGenerator.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: unavailableProperties)
-				guard isBoundToNil || scope.contains(fulfillingProperty) else { return .unsupported(onlyIfAvailable ? .onlyIfAvailable : .alias) }
+				// D1 lane hook (lane C): an alias only if available reads the node of its label the scope holds in the other
+				// optionality, which the mock binds non-optional: `let y: X? = x` from a promoted `x: X`, and
+				// `let aBuilderAlias: Instantiator<A>? = aBuilder` from a node promoted for `aBuilder: Instantiator<A>?`.
+				let scopeFulfillingProperty = scope.contains(fulfillingProperty) || !onlyIfAvailable
+					? fulfillingProperty
+					: fulfillingProperty.typeDescription.isOptional ? fulfillingProperty.asUnwrappedProperty : fulfillingProperty.asOptionalProperty
+				guard isBoundToNil || scope.contains(scopeFulfillingProperty) else { return .unsupported(onlyIfAvailable ? .onlyIfAvailable : .alias) }
 				// An alias of a label named apart reads the name it is handed; one the mock root's level names apart is bound
 				// under its name.
 				let aliasBindingName = bindingName ?? property.label
@@ -614,7 +620,7 @@ extension MockLowering {
 					property: property,
 					bindingName: aliasBindingName,
 					fulfillingProperty: fulfillingProperty,
-					fulfillingName: lazilyInstantiatedNames[fulfillingProperty.label]?[fulfillingProperty.typeDescription] ?? renames[fulfillingProperty.label]?[fulfillingProperty.typeDescription] ?? fulfillingProperty.label,
+					fulfillingName: lazilyInstantiatedNames[fulfillingProperty.label]?[scopeFulfillingProperty.typeDescription] ?? renames[fulfillingProperty.label]?[scopeFulfillingProperty.typeDescription] ?? fulfillingProperty.label,
 					isErased: erasedToConcreteExistential,
 					isOnlyIfAvailable: onlyIfAvailable,
 					isBoundToNil: isBoundToNil,
