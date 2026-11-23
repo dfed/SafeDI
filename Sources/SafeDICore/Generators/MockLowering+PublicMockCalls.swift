@@ -47,7 +47,9 @@ extension ScopeGenerator {
 			else { return .unsupported(.fill) }
 			// A fill that reads a value of the caller's scope reads what the mock binds or offers for it.
 			for fill in generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: child.propertiesGeneratedLater).map(\.generator) {
+				// A fill that reads a value the mock root binds apart from its label rebinds it, which is not lowered yet.
 				guard case .fill = fill.scopeData,
+				      fill.fillCallerReads.mockRootBindingByLabel.isEmpty,
 				      fill.receivedProperties.allSatisfy({ rootLevelProperties.contains($0) || rootLevelProperties.contains($0.asUnwrappedProperty) })
 				else { return .unsupported(.fill) }
 			}
