@@ -670,12 +670,19 @@ extension ScopeGenerator {
 	/// since it can be as deep as the module has types.
 	private func treeNames(of instantiable: Instantiable) -> TreeNames {
 		/// A node of the tree that builds a type, and where it is among the nodes the type above it builds: its declaration
-		/// index there, or none for a node the mock promotes, then its index in generation order.
+		/// index there, or none for a node the mock promotes, then its index in generation order. A node keeps only its own
+		/// position and the index of the node above it, so a deep tree copies no path per node; the path and the names the
+		/// builder functions around a node declare are read back up the chain only for an uncovered dependency, which few
+		/// nodes have.
+		struct Node {
+			let parentIndex: Int?
+			let position: Position
+			/// The labels the node's own builder function declares, which hide a parameter of the same label beneath it.
+			var namesDeclared: [String]
+		}
 		struct Visit {
 			let generator: ScopeGenerator
-			let declarationPath: [Position]
-			/// The labels the builder functions around the node declare, which hide a parameter of the same label there.
-			let namesDeclaredByEnclosingBuilderFunctions: Set<String>
+			let nodeIndex: Int
 			/// Whether the node is built inside a `@Sendable` builder function: its own, or one around it.
 			let isInsideSendableFunction: Bool
 		}
@@ -687,19 +694,34 @@ extension ScopeGenerator {
 				(lhs.declarationIndex, lhs.generationIndex) < (rhs.declarationIndex, rhs.generationIndex)
 			}
 		}
-		/// The generators of the children that build a type, each at its position among them.
-		func propertyChildren(of generator: ScopeGenerator, declaredBy dependencies: [Dependency], at path: [Position], enclosedBy names: Set<String>, insideSendableFunction: Bool) -> [Visit] {
-			var declarationIndexByLabel = [String: Int]()
-			for (index, dependency) in dependencies.enumerated() where declarationIndexByLabel[dependency.property.label] == nil {
-				declarationIndexByLabel[dependency.property.label] = index
+		var nodes = [Node]()
+		func path(toNodeAt index: Int?) -> [Position] {
+			var path = [Position]()
+			var current = index
+			while let nodeIndex = current {
+				path.append(nodes[nodeIndex].position)
+				current = nodes[nodeIndex].parentIndex
 			}
-			return generator.orderedChildGenerators.enumerated().compactMap { generationIndex, child in
+			return path.reversed()
+		}
+		/// Whether a builder function around the node, its own excluded, declares `label`.
+		func isDeclaredAround(nodeAt index: Int, _ label: String) -> Bool {
+			var current = nodes[index].parentIndex
+			while let nodeIndex = current {
+				guard !nodes[nodeIndex].namesDeclared.contains(label) else { return true }
+				current = nodes[nodeIndex].parentIndex
+			}
+			return false
+		}
+		/// The generators of the children that build a type, each at its position among them.
+		func propertyChildren(of generator: ScopeGenerator, declaredBy dependencies: [Dependency], under parentIndex: Int?, insideSendableFunction: Bool) -> [Visit] {
+			generator.orderedChildGenerators.enumerated().compactMap { generationIndex, child in
 				guard case let .property(_, property, _, _, _, _) = child.scopeData else { return nil }
-				let position = Position(declarationIndex: declarationIndexByLabel[property.label] ?? Int.max, generationIndex: generationIndex)
+				let position = Position(declarationIndex: dependencies.firstIndex(where: { $0.property.label == property.label }) ?? Int.max, generationIndex: generationIndex)
+				nodes.append(Node(parentIndex: parentIndex, position: position, namesDeclared: []))
 				return Visit(
 					generator: child,
-					declarationPath: path + [position],
-					namesDeclaredByEnclosingBuilderFunctions: names,
+					nodeIndex: nodes.count - 1,
 					isInsideSendableFunction: insideSendableFunction || child.buildsInSendableFunction,
 				)
 			}
@@ -715,16 +737,16 @@ extension ScopeGenerator {
 		}
 		var properties = [Property]()
 		var dependencyByProperty = [Property: Dependency]()
-		var creatingTypesByProperty = [Property: [(path: [Position], type: TypeDescription)]]()
+		var creatingTypesByProperty = [Property: [(nodeIndex: Int?, type: TypeDescription)]]()
 		var hiddenProperties = Set<Property>()
 		var propertiesInstantiatedInSendableFunction = Set<Property>()
 		var namesDeclaredInBuilderFunctions = Set<String>()
-		func add(_ dependency: Dependency, createdBy type: TypeDescription, at path: [Position], isHiddenWhereReferenced: Bool, isInstantiatedInSendableFunction: Bool) {
+		func add(_ dependency: Dependency, createdBy type: TypeDescription, atNode nodeIndex: Int?, isHiddenWhereReferenced: Bool, isInstantiatedInSendableFunction: Bool) {
 			if dependencyByProperty[dependency.property] == nil {
 				properties.append(dependency.property)
 				dependencyByProperty[dependency.property] = dependency
 			}
-			creatingTypesByProperty[dependency.property, default: []].append((path: path, type: type))
+			creatingTypesByProperty[dependency.property, default: []].append((nodeIndex: nodeIndex, type: type))
 			if isHiddenWhereReferenced {
 				hiddenProperties.insert(dependency.property)
 			}
@@ -741,7 +763,7 @@ extension ScopeGenerator {
 				return property
 			}
 		}
-		let rootChildren = propertyChildren(of: self, declaredBy: instantiable.dependencies, at: [], enclosedBy: [], insideSendableFunction: false)
+		let rootChildren = propertyChildren(of: self, declaredBy: instantiable.dependencies, under: nil, insideSendableFunction: false)
 		var builtProperties = Set<Property>(holeSiteProperties(of: self))
 		for child in rootChildren {
 			guard let property = child.generator.property else { continue }
@@ -754,7 +776,7 @@ extension ScopeGenerator {
 		var mockedTypeUncoveredProperties = Set<Property>()
 		for dependency in instantiable.dependencies where isInstantiated(dependency) && !builtProperties.contains(dependency.property) {
 			mockedTypeUncoveredProperties.insert(dependency.property)
-			add(dependency, createdBy: instantiable.concreteInstantiable, at: [], isHiddenWhereReferenced: false, isInstantiatedInSendableFunction: false)
+			add(dependency, createdBy: instantiable.concreteInstantiable, atNode: nil, isHiddenWhereReferenced: false, isInstantiatedInSendableFunction: false)
 		}
 		var passedUpBuilderProperties = Set<Property>()
 		var visits = Array(rootChildren.reversed())
@@ -762,40 +784,39 @@ extension ScopeGenerator {
 		while let visit = visits.popLast() {
 			guard case let .property(nodeInstantiable, nodeProperty, _, _, isPropertyCycle, _) = visit.generator.scopeData else { continue }
 			builderFunctionNames.insert(ScopeGenerator.functionName(toBuildPropertyNamed: nodeProperty.label))
+			let publicMockCall = visit.generator.publicMockCall
 			for dependency in nodeInstantiable.dependencies {
 				namesDeclaredInBuilderFunctions.insert(dependency.property.label)
-				if let publicMockCall = visit.generator.publicMockCall, publicMockCall.passesUpBuilder(receivedAs: dependency.property) {
+				if let publicMockCall, publicMockCall.passesUpBuilder(receivedAs: dependency.property) {
 					passedUpBuilderProperties.insert(dependency.property)
 				}
 			}
 			// A node that closes a cycle builds nothing beneath it, and its dependencies surface as no parameter.
 			guard !isPropertyCycle else { continue }
-			let children = propertyChildren(of: visit.generator, declaredBy: nodeInstantiable.dependencies, at: visit.declarationPath, enclosedBy: [], insideSendableFunction: visit.isInsideSendableFunction)
-			let childLabels = Set(children.compactMap(\.generator.property?.label)).union(holeSiteProperties(of: visit.generator).map(\.label))
-			var uncoveredLabels = Set<String>()
-			for dependency in nodeInstantiable.dependencies where isInstantiated(dependency) && !childLabels.contains(dependency.property.label) {
-				uncoveredLabels.insert(dependency.property.label)
+			let children = propertyChildren(of: visit.generator, declaredBy: nodeInstantiable.dependencies, under: visit.nodeIndex, insideSendableFunction: visit.isInsideSendableFunction)
+			// Most types build every dependency they instantiate, so the labels their children build are gathered only for a
+			// type that instantiates one.
+			let childLabels: Set<String> = nodeInstantiable.dependencies.contains(where: isInstantiated)
+				? Set(children.compactMap(\.generator.property?.label)).union(holeSiteProperties(of: visit.generator).map(\.label))
+				: []
+			var namesDeclared = [String]()
+			for dependency in nodeInstantiable.dependencies {
+				let label = dependency.property.label
+				guard isInstantiated(dependency), !childLabels.contains(label) else {
+					namesDeclared.append(label)
+					continue
+				}
 				// A builder function around the type that declares the label would hide the parameter there.
 				add(
 					dependency,
 					createdBy: nodeInstantiable.concreteInstantiable,
-					at: visit.declarationPath,
-					isHiddenWhereReferenced: visit.namesDeclaredByEnclosingBuilderFunctions.contains(dependency.property.label),
+					atNode: visit.nodeIndex,
+					isHiddenWhereReferenced: isDeclaredAround(nodeAt: visit.nodeIndex, label),
 					isInstantiatedInSendableFunction: visit.isInsideSendableFunction,
 				)
 			}
-			var namesDeclared = visit.namesDeclaredByEnclosingBuilderFunctions
-			for dependency in nodeInstantiable.dependencies where !uncoveredLabels.contains(dependency.property.label) {
-				namesDeclared.insert(dependency.property.label)
-			}
-			visits.append(contentsOf: children.reversed().map {
-				Visit(
-					generator: $0.generator,
-					declarationPath: $0.declarationPath,
-					namesDeclaredByEnclosingBuilderFunctions: namesDeclared,
-					isInsideSendableFunction: $0.isInsideSendableFunction,
-				)
-			})
+			nodes[visit.nodeIndex].namesDeclared = namesDeclared
+			visits.append(contentsOf: children.reversed())
 		}
 		var parameters = [MockRootParameters.UncoveredParameter]()
 		for property in properties {
@@ -804,7 +825,11 @@ extension ScopeGenerator {
 				? property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asFunctionParameter.asSource
 				: property.typeDescription.asFunctionParameter.asSource
 			var creatingTypes = [TypeDescription]()
-			for (_, type) in (creatingTypesByProperty[property] ?? []).sorted(by: { $0.path.lexicographicallyPrecedes($1.path) }) where !creatingTypes.contains(type) {
+			let creations = creatingTypesByProperty[property] ?? []
+			let orderedCreations = creations.count < 2
+				? creations
+				: creations.map { (path: path(toNodeAt: $0.nodeIndex), type: $0.type) }.sorted(by: { $0.path.lexicographicallyPrecedes($1.path) }).map { (nodeIndex: Int?.none, type: $0.type) }
+			for (_, type) in orderedCreations where !creatingTypes.contains(type) {
 				creatingTypes.append(type)
 			}
 			parameters.append(MockRootParameters.UncoveredParameter(

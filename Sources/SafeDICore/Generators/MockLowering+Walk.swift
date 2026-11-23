@@ -51,6 +51,19 @@ extension ScopeGenerator {
 		// D1 lane hook (lane C): the wrappers `mock()` binds around the instances it is passed, which their receivers are
 		// passed by name.
 		walk.lazilyInstantiatedNames = signature.lazilyInstantiatedBindingNamesByLabelAndType
+		// D1 lane hook (lane E): a public mock's wrapper parameters, as the emitter's `lazilyInstantiatedBindingNameMap` holds
+		// them, a non-optional one under its optional form too.
+		if instantiable.generateMock == .public {
+			for parameter in signature.flatReceivedParameters where parameter.property.typeDescription.lazilyInstantiatedInstanceType != nil {
+				walk.publicMockWrapperParameterNames[parameter.property.label, default: [:]][parameter.property.typeDescription] = parameter.name
+			}
+			for parameter in signature.flatReceivedParameters where parameter.property.typeDescription.lazilyInstantiatedInstanceType != nil && !parameter.property.typeDescription.isOptional {
+				let optionalType = TypeDescription.optional(parameter.property.typeDescription)
+				if walk.publicMockWrapperParameterNames[parameter.property.label]?[optionalType] == nil {
+					walk.publicMockWrapperParameterNames[parameter.property.label]?[optionalType] = parameter.name
+				}
+			}
+		}
 		// D1 lane hook (lane B): the uncovered dependencies named apart, which the types that instantiate them are passed, and
 		// a receive beneath reads, from the mocked type's own for its whole tree (`routingReceives`).
 		walk.uncoveredParameterNames = signature.uncoveredParameterNamesByLabelAndType
@@ -81,7 +94,8 @@ extension ScopeGenerator {
 		// D1 lane hook (lane E): what `mock()` binds under its label before its tree, which a call's fill reads.
 		let rootBoundProperties = signature.properties.union(overrideProperties).union(signature.lazilyInstantiatedProperties)
 		// D1 lane hook (lane C): the builders `mock()` takes optional for the places its calls fill.
-		switch filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties) {
+		// D1 lane hook (lane E): a call's builder of a family the calls pass up reads the builder `mock()` takes for it.
+		switch filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties, passedUpBuilders: signature.passedUpBuilders) {
 		case let .lowered(filledCallBuilders):
 			walk.filledCallBuilders = filledCallBuilders
 		case let .unsupported(rule):
@@ -348,6 +362,9 @@ extension MockLowering {
 		// which a receive is passed by name, never bound again, until a declaration of the label hides it
 		// (`lazilyInstantiatedBindingNames`).
 		var lazilyInstantiatedNames = [String: [TypeDescription: String]]()
+		// D1 lane hook (lane E): the wrappers a public mock takes as parameters, by label and type, which a fill reading the
+		// caller's own wrapper binds its label to (`FillPlaceBindings.rootBindingNames`).
+		var publicMockWrapperParameterNames = [String: [TypeDescription: String]]()
 		/// The names the mock root's level gives the nodes it names apart, which no builder function beneath may declare.
 		var rootNamesApart = Set<String>()
 		/// The names the mock root's level gives the nodes it names apart, by label and then type, under which the mocked type
@@ -482,7 +499,7 @@ extension MockLowering {
 				// D1 lane hook (lane E): a fill reading the caller's own value from the root's binding binds its label to the name
 				// the root binds it apart under: a parameter, an override, a node of the level, or a wrapper `mock()` makes.
 				var rootBindingNames = renames
-				for (label, names) in lazilyInstantiatedNames {
+				for (label, names) in lazilyInstantiatedNames.merging(publicMockWrapperParameterNames, uniquingKeysWith: { names, parameterNames in names.merging(parameterNames) { name, _ in name } }) {
 					rootBindingNames[label, default: [:]].merge(names) { _, wrapperName in wrapperName }
 				}
 				filledCallBuilders.bindingRootNames(rootBindingNames)
@@ -496,12 +513,14 @@ extension MockLowering {
 			// D1 lane hook (lane B): a level whose nodes take part in a cycle renames a builder function that would hide an
 			// enclosing one a cycle-closing node beneath refers to, as the emitter does.
 			// Each declaration's ancestors are listed under its one label, innermost last, which the closer resolves to.
-			let enclosingFunctionNames = Dictionary(
-				ancestorDeclarationsByLabel.values.joined()
-					.filter { $0.functionName != MockLowering.builderFunctionName(boundAs: $0.declaration.property.label) }
-					.map { ($0.declaration, $0.functionName) },
-			) { _, innerFunctionName in innerFunctionName }
-			let renamedFunctionNames = ScopeGenerator.mockLoweringBuilderFunctionNames(of: generators, boundAs: bindingNames, enclosingFunctionNames: enclosingFunctionNames)
+			// The enclosing names are gathered only for a level that names a function apart, which nearly no level does.
+			let renamedFunctionNames = ScopeGenerator.mockLoweringBuilderFunctionNames(of: generators, boundAs: bindingNames) {
+				Dictionary(
+					ancestorDeclarationsByLabel.values.joined()
+						.filter { $0.functionName != MockLowering.builderFunctionName(boundAs: $0.declaration.property.label) }
+						.map { ($0.declaration, $0.functionName) },
+				) { _, innerFunctionName in innerFunctionName }
+			}
 			// A loop member's functions are named from its binding (`MockLowering.loopMembers`), so a loop is not lowered
 			// renamed yet.
 			let renamesFunction = renamedFunctionNames?.contains(where: { $0 != nil }) ?? false
@@ -553,8 +572,14 @@ extension MockLowering {
 				if membership == nil {
 					endLoopUnit(appendingTo: &lines)
 					lowering = await node(of: generator, bindingName: bindingName, inScope: scope, path: path, indent: indent, lines: &lines)
-				} else if case .property = generator.scopeData, generator.publicMockCall == nil {
-					lowering = await node(of: generator, bindingName: bindingName, inScope: scope, path: path, indent: indent, lines: &memberLines)
+				} else if case .property = generator.scopeData, generator.publicMockCall == nil || !generator.fillsABuilder && generator.valuesBindingsBeforeBuilderFunction.isEmpty {
+					// D1 lane hook (lane B): a call of another module's public mock on a loop reads in its function the members it
+					// rebinds there, and names its guard where its level makes it, before the loop's unit, as the emitter names it.
+					let memberScope = generator.publicMockCall == nil ? scope : scope.union(generator.reboundProperties)
+					lowering = await node(of: generator, bindingName: bindingName, inScope: memberScope, path: path, indent: indent, lines: &memberLines)
+					if case .lowered = lowering, generator.publicMockCall != nil {
+						lines.append(memberLines.removeFirst())
+					}
 				} else if case .alias = generator.scopeData {
 					// D1 lane hook (lane B): a rename the level declares of a member is bound with the loop's wrappers, after
 					// them, and its members' functions bind it again (`MockLowering.loopMembers`).
@@ -778,8 +803,9 @@ extension MockLowering {
 			// builder function too, since it reads no override.
 			guard !property.propertyType.isConstant || forwardedProperties.isEmpty else { return .unsupported(.wrapper) }
 			guard labels.insert(bindingName).inserted else { return .unsupported(.siblingLabelCollision) }
-			// D1 lane hook (lane B): a closer passes the function's cycle parameters (`MockLowering+CycleParameters.swift`).
-			guard let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: scope, unavailableProperties: unavailableProperties, renames: renames.merging(lazilyInstantiatedNames) { renamed, wrapperNames in renamed.merging(wrapperNames) { _, wrapperName in wrapperName } }) else { return .unsupported(.onlyIfAvailable) }
+			// D1 lane hook (lane B): a closer passes the function's cycle parameters (`MockLowering+CycleParameters.swift`); a
+			// closer on a loop of builders passes a member of the level's loops its `_received` function wraps again.
+			guard let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: loopMembership == nil ? scope : scope.union(loopMembers.keys), unavailableProperties: unavailableProperties, renames: renames, lazilyInstantiatedNames: lazilyInstantiatedNames) else { return .unsupported(.onlyIfAvailable) }
 			// D1 lane hook (lane B): a closer on a loop of builders declares the `_received` function its wrappers hand, with
 			// the loop's functions, and is bound with the loop's wrappers where its level binds it (`MockLowering+Loops.swift`).
 			if let loopMembership, let member = loopMembers[property] {
@@ -887,8 +913,9 @@ extension MockLowering {
 				rebindingLines = memberRebindingLines
 			}
 			// D1 lane hook (lane B): what the node's binding passes its builder function's cycle parameters, read where the node
-			// is built, and the parameters, the nearest declarations of their labels in the function.
-			guard let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: scope, unavailableProperties: self.unavailableProperties, renames: renames.merging(lazilyInstantiatedNames) { renamed, wrapperNames in renamed.merging(wrapperNames) { _, wrapperName in wrapperName } }) else { return .unsupported(.onlyIfAvailable) }
+			// is built, and the parameters, the nearest declarations of their labels in the function. A member of a loop of
+			// builders passes a member of the level's loops its `_received` function wraps again (`receivedFunctionLines`).
+			guard let cycleParameterArguments = MockLowering.cycleParameterArguments(of: generator, inScope: ownLoopMembership == nil ? scope : scope.union(loopMembers.keys), unavailableProperties: self.unavailableProperties, renames: renames, lazilyInstantiatedNames: lazilyInstantiatedNames) else { return .unsupported(.onlyIfAvailable) }
 			let scope = scope.union(generator.reboundProperties).union(MockLowering.cycleParameterForms(of: generator))
 			// D1 lane hook (lane B): a `Sendable` wrapper's, or a cycle's, builder function is `@Sendable`, and every override
 			// read inside it is read into a local before the outermost such function.
@@ -935,7 +962,8 @@ extension MockLowering {
 					else { continue }
 					// D1 lane hook (lane C): a public mock's wrapper parameter is read by name, its instance where the
 					// construction reads it, with no binding again (`dependencyArgument`, `lazilyInstantiatedBindingNames`).
-					if buildsPublicMock {
+					// A wrapper node the root's level names apart is bound again, as any receive named apart is.
+					if buildsPublicMock, !rootPropertyNodeBindingNames.contains(wrapper.name) {
 						publicWrapperParametersReadByName[dependency.property.label] = wrapper.name
 					} else {
 						receiverBindings.append(wrapper)
@@ -949,7 +977,7 @@ extension MockLowering {
 			var bindingNamesPassedByName = publicWrapperParametersReadByName
 			if !childGenerators.isEmpty {
 				for binding in receiverBindings {
-					switch MockLowering.receiveReadsLabelByName(binding.property.label, beneath: orderedChildren, renames: renames, lazilyInstantiatedNames: functionLazilyInstantiatedNames, isPublicMock: buildsPublicMock) {
+					switch MockLowering.receiveReadsLabelByName(binding.property.label, beneath: orderedChildren, renames: renames, lazilyInstantiatedNames: functionLazilyInstantiatedNames, publicMockNodeBindingNames: buildsPublicMock ? rootPropertyNodeBindingNames : nil) {
 					case true?:
 						bindingNamesPassedByName[binding.property.label] = binding.name
 					case false?:
@@ -1005,6 +1033,12 @@ extension MockLowering {
 				node.promotedParameterName = bindingName
 			}
 			node.cycleParameterArguments = cycleParameterArguments
+			// D1 lane hook (lane E): a place of another module's public mock the tree builds inline reads the builder `mock()`
+			// takes for its hole type and family (`MockLowering+PublicMockCalls.swift`).
+			if let inlinePlaceBuilder = filledCallBuilders.holeBuildersByInlinePlace[ObjectIdentifier(generator)] {
+				guard node.promotedParameterName == nil, ownLoopMembership == nil else { return .unsupported(.fill) }
+				node.inlinePlace = InlinePlace(builder: inlinePlaceBuilder, overrideRead: overrideRead)
+			}
 			let lazilyInstantiatedInstanceProperties = generator.mockLoweringLazilyInstantiatedInstanceProperties
 			// D1 lane hook (lane D): a node whose configuration holds its default-valued parameters is built in a builder
 			// function, as `MockParameterNode.requiresFunctionWrapper` says.
@@ -1281,6 +1315,10 @@ extension MockLowering {
 		// D1 lane hook (lane D): and the places it instantiates that a builder of `mock()` builds.
 		/// The `@Sendable` autoclosure parameters and builders whose values the node's builder function binds.
 		var sendableAutoclosureBindings = [ScopeGenerator.SendableAutoclosureParameter]()
+		// D1 lane hook (lane E): a place of another module's public mock built inline.
+		/// The builder `mock()` takes that the node reads where it is a place of another module's public mock the tree builds
+		/// inline, with the read of its override outside its builder function.
+		var inlinePlace: InlinePlace?
 
 		/// The node, configured in a configuration of its own where `children` hold a node that builds its type or its
 		/// construction takes a default-valued parameter.
@@ -1372,7 +1410,7 @@ extension MockLowering {
 			// D1 lane hook (lane C): a child the mock promotes for an optional receive, such as a value a called public mock
 			// builds when passed `nil`, is bound as the value it builds.
 			let annotation = isFulfilledByAnotherType && !isErased && nodePath != nil ? ": \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource)" : ""
-			return "\(indent)let \(bindingName)\(annotation) = \(passingPromotedValue(orBuilding: constructionReading(override: nodePath, builderCall: "\(ReservedName.configurationBuilderPropertyName)(\(builderArguments))")))"
+			return "\(indent)let \(bindingName)\(annotation) = \(passingPromotedValue(orBuilding: readingInlinePlaceBuilder(constructionReading(override: nodePath, builderCall: "\(ReservedName.configurationBuilderPropertyName)(\(builderArguments))"), override: nodePath)))"
 		}
 
 		/// `construction`, read after the value the public mock's caller passed for the node where it promotes the node.
@@ -1386,6 +1424,14 @@ extension MockLowering {
 			guard let overridePath else { return construction }
 			let builder = ReservedName.configurationBuilderPropertyName
 			return "if let \(builder) = \(overridePath) { \(builderCall) } else { \(construction) }"
+		}
+
+		/// `construction`, a constant's, read after the builder `mock()` takes where the node is a place of another module's
+		/// public mock built inline and no override at `overridePath` is set (`HoleBuilder.inlinePlaceValue`). A wrapper reads
+		/// the builder where it is made (`promotedBindingLines`).
+		private func readingInlinePlaceBuilder(_ construction: String, override overridePath: String?) -> String {
+			guard let inlinePlace, !isWrapped else { return construction }
+			return inlinePlace.builder.inlinePlaceValue(construction: construction, overrideExpression: overridePath)
 		}
 
 		/// The first line of the node's builder function, whose children's statements follow it.
@@ -1418,7 +1464,7 @@ extension MockLowering {
 			let returnPrefix = hasChildren || !receiverBindings.isEmpty || !sendableAutoclosureBindings.isEmpty || !isWrapped ? "return " : ""
 			// A configuration's builder returns the concrete type, which an erased node wraps as its construction does.
 			let builderCall = isErased && hasConfiguration ? "\(erasedTypeSource)(\(builder)(\(builderArguments)))" : "\(builder)(\(builderArguments))"
-			var lines = ["\(bodyIndent)\(returnPrefix)\(constructionReading(override: overridePath, builderCall: builderCall))"]
+			var lines = ["\(bodyIndent)\(returnPrefix)\(readingInlinePlaceBuilder(constructionReading(override: overridePath, builderCall: builderCall), override: overridePath))"]
 			lines.append("\(indent)}")
 			lines.append(contentsOf: promotedBindingLines(indent: indent))
 			return lines
@@ -1428,6 +1474,9 @@ extension MockLowering {
 		/// where it promotes the node.
 		func promotedBindingLines(indent: String) -> [String] {
 			guard let promotedParameterName else {
+				if let inlinePlace, isWrapped {
+					return inlinePlace.wrapperBindingLines(of: property.typeDescription, named: bindingName, handing: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent)
+				}
 				return MockLowering.bindingLines(of: property, boundAs: bindingName, callingFunctionNamed: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent)
 			}
 			guard property.propertyType.isConstant else {
@@ -1672,14 +1721,15 @@ extension MockLowering {
 	/// Whether a receive among `generators`, or beneath them up to a node that declares `label`, reads `label` by name: a
 	/// receive or an alias's fulfilling property whose form `renames` does not name apart; or `nil` where the walk cannot
 	/// tell yet (`ScopeGenerator.receiveReadsLabelByName`).
-	static func receiveReadsLabelByName(_ label: String, beneath children: [ScopeGenerator.OrderedChild], renames: [String: [TypeDescription: String]], lazilyInstantiatedNames: [String: [TypeDescription: String]], isPublicMock: Bool) -> Bool? {
+	static func receiveReadsLabelByName(_ label: String, beneath children: [ScopeGenerator.OrderedChild], renames: [String: [TypeDescription: String]], lazilyInstantiatedNames: [String: [TypeDescription: String]], publicMockNodeBindingNames: Set<String>?) -> Bool? {
 		let names = renames[label] ?? [:]
 		// D1 lane hook (lane C): a receive of a wrapper the mock names apart reads that name, not the label.
 		let wrapperNames = lazilyInstantiatedNames[label] ?? [:]
 		// A wrapper's instance is read through a wrapper the flat parameters name apart. A public mock's wrapper parameter is
 		// none: the emitter names apart the instance it stands for (`publicMockWrapperParameters`), and
-		// `dependencyArgument` reads the wrapper by name.
-		let flatWrapperNames = isPublicMock ? [:] : names
+		// `dependencyArgument` reads the wrapper by name. A wrapper node the root's level names apart is one, read through its
+		// name.
+		let flatWrapperNames = publicMockNodeBindingNames.map { nodeBindingNames in names.filter { nodeBindingNames.contains($0.value) } } ?? names
 		// A stack of its own, since a mock tree can be as deep as the module has types.
 		var childrenToVisit = children
 		while let child = childrenToVisit.popLast() {
