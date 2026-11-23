@@ -278,6 +278,7 @@ struct FileVisitorTests {
 					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 4, column: 1),
 				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 1),
+				conformanceListNamesOtherTypes: true,
 			),
 		])
 	}
@@ -358,6 +359,7 @@ struct FileVisitorTests {
 					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
 				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+				conformanceListNamesOtherTypes: true,
 			),
 			Instantiable(
 				instantiableType: .simple(name: "SomeOtherInstantiable"),
@@ -421,6 +423,7 @@ struct FileVisitorTests {
 					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
 				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+				conformanceListNamesOtherTypes: true,
 			),
 			Instantiable(
 				instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),

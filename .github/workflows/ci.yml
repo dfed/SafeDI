@@ -2495,9 +2495,11 @@ jobs:
       # (run 44968921336, comparing a tool with itself). Before the four
       # large-memory shapes it took 3.9 minutes for eight shapes (probe run
       # 44630955284) and about 13 seconds more for I800-seam (probe run
-      # 44359835414), so those four add about a minute and a half. The limit
-      # is about twice the measurement: a head tool slow enough to pass it
-      # fails the wall-time limit on its shapes first.
+      # 44359835414), so those four add about a minute and a half. With
+      # eleven timed runs of those four in place of five it took 6.0 minutes
+      # (run 45110501373, comparing a tool with itself). The limit is about
+      # twice the measurement: a head tool slow enough to pass it fails the
+      # wall-time limit on its shapes first.
       - name: Compare Generate Time
         timeout-minutes: 12
         run: |

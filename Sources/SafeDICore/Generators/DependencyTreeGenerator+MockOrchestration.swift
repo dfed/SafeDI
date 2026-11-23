@@ -683,28 +683,6 @@ extension DependencyTreeGenerator {
 			}
 		}
 
-		// Validate that this type's constant @Instantiated children have no @Forwarded properties.
-		// Use the mock scope map (not typeDescriptionToFulfillingInstantiableMap) because
-		// mockOnly types can win additional-type slots and may have different @Forwarded properties.
-		// Validate the scope a mock builds each dependency with (`mockScope(instantiating:as:in:)`).
-		for dependency in scope.instantiable.dependencies {
-			guard case .instantiated = dependency.source else { continue }
-			let childScope = Self.mockScope(
-				instantiating: dependency.property,
-				as: dependency.asInstantiatedType,
-				in: mockScopes.typeDescriptionToScopeMap,
-			)
-			if let childScope,
-			   let error = forwardedPropertyError(
-			   	for: dependency,
-			   	instantiable: childScope.instantiable,
-			   	parent: scope.instantiable,
-			   )
-			{
-				throw error
-			}
-		}
-
 		return try await createMockRootScopeGenerator(
 			for: instantiable,
 			scope: scope,

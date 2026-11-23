@@ -18,6 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import Foundation
+
 // MARK: - Remedy oracle
 
 /// A remedy an error of the tool states for a graph the tool rejects, which the remedy oracle applies to the graph's
@@ -820,19 +822,16 @@ enum GraphFuzzerRemedies {
 	static func followingForwardedReceive(_ remedy: GraphFuzzerRemedy, diagnostics: String, originalDiagnostics: String) -> GraphFuzzerRemedy? {
 		guard var files = Files(remedy.fixture) else { return nil }
 		let originalMessages = Set(originalDiagnostics.split(separator: "\n").compactMap { ReportedError($0)?.message })
-		let declarationMarker = " Declare it as `"
 		var declarations = [String]()
 		var retypedSites = Set<GraphFuzzerRemedy.Site>()
 		for diagnosticLine in diagnostics.split(separator: "\n") {
 			guard let error = ReportedError(diagnosticLine),
 			      !originalMessages.contains(error.message),
 			      isForwardedBuilderError(error.message),
-			      error.message.hasSuffix("`."),
-			      let declarationStart = error.message.range(of: declarationMarker, options: .backwards),
 			      let site = files.site(of: error),
+			      let declaredType = declaredType(advisedBy: error.message, declaringTypeConformsToSendable: files.conformsToSendable(typeNamed: site.typeName)),
 			      retypedSites.insert(site).inserted
 			else { continue }
-			let declaredType = String(error.message[declarationStart.upperBound...].dropLast("`.".count))
 			guard files.edit(typeNamed: site.typeName, { properties in
 				properties.map { $0.label == site.label ? GraphFuzzerRemedyProperty(attribute: $0.attribute, label: $0.label, type: declaredType) : $0 }
 			}) else { return nil }
@@ -846,6 +845,25 @@ enum GraphFuzzerRemedies {
 			description: "\(remedy.description), and \(declarations.joined(separator: ", and "))",
 			fixture: GraphFuzzerFixture(seed: remedy.fixture.seed, swiftFileContent: files.contents),
 		)
+	}
+
+	/// The type an error's "Declare it as `T`." advises, or `nil` for a message that advises none. Where the advice names
+	/// a plain and a `Sendable` form ("Declare it as `Instantiator<X>`, or as `SendableInstantiator<X>` if `Parent` is
+	/// Sendable."), the condition is the declaring type's, which the fixture shows: the `Sendable` form where that type
+	/// conforms to `Sendable`, else the plain one.
+	static func declaredType(advisedBy message: String, declaringTypeConformsToSendable: Bool) -> String? {
+		guard let declarationStart = message.range(of: " Declare it as `", options: .backwards) else { return nil }
+		let advice = message[declarationStart.upperBound...]
+		if advice.hasSuffix(" is Sendable."),
+		   let plainEnd = advice.range(of: "`, or as `"),
+		   let sendableEnd = advice[plainEnd.upperBound...].range(of: "` if `")
+		{
+			return String(declaringTypeConformsToSendable ? advice[plainEnd.upperBound..<sendableEnd.lowerBound] : advice[..<plainEnd.lowerBound])
+		} else if advice.hasSuffix("`."), !advice.dropLast("`.".count).contains("`") {
+			return String(advice.dropLast("`.".count))
+		} else {
+			return nil
+		}
 	}
 
 	/// Whether `message` is the error of a declaration that builds a type with `@Forwarded` properties otherwise than
@@ -1509,6 +1527,35 @@ enum GraphFuzzerRemedies {
 			return typeDeclaration.lines.lazy.compactMap { Self.property(on: lines[$0]) }.first { $0.label == label }
 		}
 
+		/// Whether the `final class` named `typeName` conforms to `Sendable`: lists it, checked or `@unchecked`, among its
+		/// conformances, or a protocol a file declares that refines it, at any depth.
+		func conformsToSendable(typeNamed typeName: String) -> Bool {
+			guard let (fileIndex, typeDeclaration) = typeDeclaration(named: typeName) else { return false }
+			let declarationLine = Self.lines(of: contents[fileIndex])[typeDeclaration.lines.lowerBound - 1]
+			return Self.inheritedNames(in: declarationLine).contains { names(sendable: $0, visited: []) }
+		}
+
+		/// Whether `name` is `Sendable`, or a protocol a file declares whose inherited names include one that is, at any depth.
+		private func names(sendable name: String, visited: Set<String>) -> Bool {
+			guard name != "Sendable" else { return true }
+			guard !visited.contains(name) else { return false }
+			return contents.lazy.flatMap(Self.lines(of:)).contains { line in
+				guard let protocolRange = line.range(of: "protocol \(name)") else { return false }
+				let rest = line[protocolRange.upperBound...]
+				return rest.hasPrefix(":") && Self.inheritedNames(in: line).contains { names(sendable: $0, visited: visited.union([name])) }
+			}
+		}
+
+		/// The names a declaration line lists after its first `:` and before its `{`, each without attributes such as
+		/// `@unchecked`.
+		private static func inheritedNames(in declarationLine: String) -> [String] {
+			guard let inheritanceStart = declarationLine.firstIndex(of: ":") else { return [] }
+			return declarationLine[declarationLine.index(after: inheritanceStart)...]
+				.prefix { $0 != "{" }
+				.split(separator: ",")
+				.compactMap { $0.split(separator: " ").last.map(String.init) }
+		}
+
 		/// The first file that declares the `final class` named `typeName`, with that declaration.
 		private func typeDeclaration(named typeName: String) -> (fileIndex: Int, declaration: (name: String, lines: Range<Int>))? {
 			contents.indices.lazy.compactMap { fileIndex in
@@ -1553,6 +1600,27 @@ enum GraphFuzzerRemedies {
 				regionEnd = max(regionEnd, lastPropertyLineIndex)
 			}
 			let parameters = editedProperties.map { "\($0.label): \(GraphFuzzerSpelling.escapingType(of: $0.type))" } + otherParameters
+			// A hand-written mock that takes the initializer's parameters and passes each on (the mock vocabulary's) takes
+			// the edited ones, so that it still compiles beside the edited initializer. It follows the properties, so its
+			// line indices hold after the edit's own replacement below.
+			let initializerParameters = String(initializerLine[parametersStart.upperBound..<parametersEnd.lowerBound])
+			let mockSignatureSuffix = ") -> \(typeName) {"
+			for mockIndex in typeDeclaration.lines where mockIndex > regionEnd && mockIndex + 1 < typeDeclaration.lines.upperBound {
+				let mockLine = lines[mockIndex]
+				guard let mockParametersStart = mockLine.range(of: "static func "),
+				      mockLine.hasSuffix(mockSignatureSuffix),
+				      let openingParenthesis = mockLine[mockParametersStart.upperBound...].firstIndex(of: "("),
+				      mockLine[mockLine.index(after: openingParenthesis)..<mockLine.index(mockLine.endIndex, offsetBy: -mockSignatureSuffix.count)] == initializerParameters
+				else { continue }
+				let callLine = lines[mockIndex + 1]
+				let callPrefix = String(callLine.prefix { $0 == "\t" || $0 == " " }) + "\(typeName)("
+				guard callLine.hasPrefix(callPrefix), callLine.hasSuffix(")") else { continue }
+				let otherArguments = GraphFuzzerOracle.topLevelParameters(String(callLine.dropFirst(callPrefix.count).dropLast()))
+					.map { $0.trimmingCharacters(in: .whitespaces) }
+					.filter { argument in !propertyLabels.contains(argument.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces)) }
+				lines[mockIndex] = String(mockLine[...openingParenthesis]) + parameters.joined(separator: ", ") + mockSignatureSuffix
+				lines[mockIndex + 1] = callPrefix + (editedProperties.map { "\($0.label): \($0.label)" } + otherArguments).joined(separator: ", ") + ")"
+			}
 			let initializerPrefix = String(initializerLine[..<parametersStart.upperBound])
 			let body = editedProperties.map { "\(indentation)\tself.\($0.label) = \($0.label)" } + otherBodyLines
 			var region = [String]()
@@ -1670,8 +1738,9 @@ extension GraphFuzzerOracle {
 	static let maximumForwardedReceiveFollowingRunCount = 6
 
 	/// Runs SafeDITool over each remedy the errors of `outcome` state for `fixture` (`GraphFuzzerRemedies`), when the tool
-	/// rejects a base or seam corpus graph, in one module or split across modules: tool runs only, no compile. A public
-	/// mock corpus graph gets none (`GraphFuzzerRemedies.reads(_:)`).
+	/// rejects a base or seam corpus graph, in one module or split across modules. The runs are of the tool only: a remedied
+	/// graph the tool accepts is compiled with the corpus's graphs, in their batch (`remedyVariants(of:)`). A public mock
+	/// corpus graph gets none (`GraphFuzzerRemedies.reads(_:)`).
 	static func remedyRuns(of fixture: GraphFuzzerFixture, outcome: GraphFuzzerToolOutcome) async throws -> [GraphFuzzerRemedyRun] {
 		guard GraphFuzzerRemedies.reads(fixture), case let .rejected(diagnostics) = outcome else { return [] }
 		var runs = [GraphFuzzerRemedyRun]()
@@ -1696,5 +1765,107 @@ extension GraphFuzzerOracle {
 			runs.append(GraphFuzzerRemedyRun(remedy: remedy, outcome: remedyOutcome, introducedErrors: introducedErrors))
 		}
 		return runs
+	}
+}
+
+/// A remedied graph the tool accepts, which the oracle compiles with its generated code beside the corpus's graphs
+/// (`GraphFuzzerOracle.remedyVariants(of:)`): the run of the remedy, of the base graph whose seed it answers, and the
+/// remedied graph renamed to a prefix of its own, so that each variant of one seed compiles in the same `swiftc`
+/// invocation as the rest of its batch, its errors attributed to it by that prefix as a graph's are to its seed.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+struct GraphFuzzerRemedyVariant {
+	/// The seed of the rejected graph whose error states the remedy.
+	let seed: UInt64
+	/// Which accepted remedy of the seed this is, counted from zero in the order the remedies run.
+	let index: Int
+	let remedyRun: GraphFuzzerRemedyRun
+	/// The remedied graph and its generated code, every `S<seed>_` and `s<seed>_` in them spelled with `compiledSeed`.
+	let compiledRuns: GraphFuzzerToolRuns
+
+	/// The seed the variant compiles under: one no corpus or exploration run draws, whose prefix holds no other seed's.
+	var compiledSeed: UInt64 {
+		compiledRuns.fixture.seed
+	}
+
+	/// The first seed past every seed a run draws, of which each variant's compiled seed is a multiple plus its own seed.
+	static let compiledSeedStride: UInt64 = 1_000_000_000_000
+
+	/// `remedyRun`, the `index`th accepted remedy of `seed`'s graph, renamed to compile beside other graphs, or `nil` when the
+	/// remedy is not accepted, or `seed` is past the seeds a variant can be renamed from.
+	init?(seed: UInt64, index: Int, remedyRun: GraphFuzzerRemedyRun) {
+		guard case let .accepted(generatedFiles, warnings) = remedyRun.outcome, seed < Self.compiledSeedStride else { return nil }
+		let compiledSeed = Self.compiledSeedStride * UInt64(index + 1) + seed
+		func renamed(_ text: String) -> String {
+			text
+				.replacingOccurrences(of: "S\(seed)_", with: "S\(compiledSeed)_")
+				.replacingOccurrences(of: "s\(seed)_", with: "s\(compiledSeed)_")
+		}
+		let fixture = GraphFuzzerFixture(seed: compiledSeed, swiftFileContent: remedyRun.remedy.fixture.swiftFileContent.map(renamed))
+		var renamedFiles = [String: String]()
+		for (fileName, contents) in generatedFiles {
+			renamedFiles[renamed(fileName)] = renamed(contents)
+		}
+		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: renamedFiles, warnings: warnings)
+		self.seed = seed
+		self.index = index
+		self.remedyRun = remedyRun
+		compiledRuns = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: outcome, secondOutcome: outcome)
+	}
+
+	/// `text`, a compile's output for the variant, with the seed's own prefix in place of the compiled seed's, so that it
+	/// names the types the remedied graph declares.
+	func restoringSeed(in text: String) -> String {
+		text
+			.replacingOccurrences(of: "S\(compiledSeed)_", with: "S\(seed)_")
+			.replacingOccurrences(of: "s\(compiledSeed)_", with: "s\(seed)_")
+	}
+
+	/// The failure of the seed's graph for the variant's `compileFailure`, which names the remedy's kind and site, and holds
+	/// the compile's output and the remedied graph.
+	func failure(for compileFailure: GraphFuzzerFailure) -> GraphFuzzerFailure {
+		let remedy = remedyRun.remedy
+		return GraphFuzzerFailure(
+			seed: seed,
+			kind: compileFailure.kind,
+			details: "\(remedy.kind.failureLinePrefix)which \(remedy.description), is accepted at \(remedy.site), and the remedied graph's \(compileFailure.kind.rawValue):\n\(restoringSeed(in: compileFailure.details))\nThe remedied graph:\n\(remedy.fixture.description)",
+		)
+	}
+}
+
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+extension GraphFuzzerOracle {
+	/// The remedied graphs of `toolRuns` the tool accepts, which the oracle compiles with their generated code as it
+	/// compiles every graph the tool accepts: a remedy the tool accepts must give code that compiles and draws no warning,
+	/// or its advice leads a person to a build that fails. Each seed's accepted remedies, in the order they run.
+	static func remedyVariants(of toolRuns: [GraphFuzzerToolRuns]) -> [GraphFuzzerRemedyVariant] {
+		toolRuns.flatMap { runs in
+			runs.remedyRuns
+				.filter {
+					if case .accepted = $0.outcome {
+						true
+					} else {
+						false
+					}
+				}
+				.enumerated()
+				.compactMap { index, remedyRun in GraphFuzzerRemedyVariant(seed: runs.fixture.seed, index: index, remedyRun: remedyRun) }
+		}
+	}
+
+	/// `compilationFailures`, the failures of a compile of graphs and of `variants`, with each variant's failure moved to its
+	/// seed (`GraphFuzzerRemedyVariant.failure(for:)`): after the failure the seed's graph has itself, if any, as further lines
+	/// of its details, as the failures of the seed's later variants are.
+	static func attributingFailures(of variants: [GraphFuzzerRemedyVariant], in compilationFailures: [UInt64: GraphFuzzerFailure]) -> [UInt64: GraphFuzzerFailure] {
+		var failures = compilationFailures
+		for variant in variants {
+			guard let compileFailure = failures.removeValue(forKey: variant.compiledSeed) else { continue }
+			let failure = variant.failure(for: compileFailure)
+			if let existingFailure = failures[variant.seed] {
+				failures[variant.seed] = GraphFuzzerFailure(seed: variant.seed, kind: existingFailure.kind, details: "\(existingFailure.details)\n\(failure.details)")
+			} else {
+				failures[variant.seed] = failure
+			}
+		}
+		return failures
 	}
 }

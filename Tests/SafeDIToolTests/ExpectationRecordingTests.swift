@@ -34,8 +34,10 @@ struct ExpectationRecordingTests: ~Copyable {
 	}
 
 	deinit {
+		// A record directory is listed before the call that writes into it, so a call that fails first leaves a path
+		// that was never created; trapping on its removal would hide that failure behind a crash of the whole suite.
 		for fileToDelete in filesToDelete {
-			try! FileManager.default.removeItem(at: fileToDelete)
+			try? FileManager.default.removeItem(at: fileToDelete)
 		}
 		try? FileManager.default.removeItem(at: recordDirectory)
 	}

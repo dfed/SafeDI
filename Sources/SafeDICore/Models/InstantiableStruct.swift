@@ -49,6 +49,8 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		declarationLocation: Dependency.DeclarationLocation? = nil,
 		moduleName: String? = nil,
 		packageName: String? = nil,
+		conformanceListNamesSendable: Bool = false,
+		conformanceListNamesOtherTypes: Bool = false,
 	) {
 		storage = Storage(holding: Fields(
 			instantiableTypes: [instantiableType] + (additionalInstantiables ?? []),
@@ -79,6 +81,8 @@ public struct Instantiable: Codable, Hashable, Sendable {
 				mockDeclarationModuleName: mockDeclarationModuleName,
 				mockDeclarationPackageName: mockDeclarationPackageName,
 			)),
+			conformanceListNamesSendable: conformanceListNamesSendable,
+			conformanceListNamesOtherTypes: conformanceListNamesOtherTypes,
 		))
 	}
 
@@ -452,6 +456,21 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		set { updateFields { $0.isInsideCompilerDecidedBlock = newValue } }
 	}
 
+	/// Whether the type’s declaration lists `Sendable` among what it conforms to, which requires each stored property
+	/// to be of a `Sendable` type. `@unchecked Sendable` is not counted, since it accepts a property of any type.
+	public var conformanceListNamesSendable: Bool {
+		get { storage.fields.conformanceListNamesSendable }
+		set { updateFields { $0.conformanceListNamesSendable = newValue } }
+	}
+
+	/// Whether the type’s declaration lists a type besides `Instantiable` and a counted `Sendable`, such as a protocol
+	/// or `@unchecked Sendable`, which may or may not make the type `Sendable`: only that type’s declaration says, and a
+	/// module’s generation may not read it. Advice that depends on whether the type is `Sendable` names both forms.
+	public var conformanceListNamesOtherTypes: Bool {
+		get { storage.fields.conformanceListNamesOtherTypes }
+		set { updateFields { $0.conformanceListNamesOtherTypes = newValue } }
+	}
+
 	/// The labels of the dependencies the declaration's members declare in the `#if` clauses SafeDITool's evaluation did
 	/// not select, in source order, each once, with the first such clause that declares it: what a hand-written mock may
 	/// take that this build's declaration does not declare. Empty where every clause is read, as the macro reads them.
@@ -551,6 +570,8 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		var rarelySetFields: RarelySetFieldsBox?
 		var sourceFilePath: String?
 		var isInsideCompilerDecidedBlock = false
+		var conformanceListNamesSendable = false
+		var conformanceListNamesOtherTypes = false
 		var dependencyLabelsInUnselectedClauses = [DependencyLabelInUnselectedClause]()
 		var dependencyLabelsInsideConditionalBlocks = [String]()
 	}
@@ -686,6 +707,8 @@ extension Instantiable {
 		case moduleName
 		case packageName
 		case isInsideCompilerDecidedBlock
+		case conformanceListNamesSendable
+		case conformanceListNamesOtherTypes
 		case dependencyLabelsInUnselectedClauses
 		case dependencyLabelsInsideConditionalBlocks
 		case declaredName
@@ -727,6 +750,8 @@ extension Instantiable {
 			)),
 			sourceFilePath: try container.decodeIfPresent(String.self, forKey: .sourceFilePath),
 			isInsideCompilerDecidedBlock: try container.decode(Bool.self, forKey: .isInsideCompilerDecidedBlock),
+			conformanceListNamesSendable: try container.decodeIfPresent(Bool.self, forKey: .conformanceListNamesSendable) ?? false,
+			conformanceListNamesOtherTypes: try container.decodeIfPresent(Bool.self, forKey: .conformanceListNamesOtherTypes) ?? false,
 			dependencyLabelsInUnselectedClauses: try container.decode([DependencyLabelInUnselectedClause].self, forKey: .dependencyLabelsInUnselectedClauses),
 			dependencyLabelsInsideConditionalBlocks: try container.decode([String].self, forKey: .dependencyLabelsInsideConditionalBlocks),
 		))
@@ -760,6 +785,13 @@ extension Instantiable {
 		try container.encodeIfPresent(moduleName, forKey: .moduleName)
 		try container.encodeIfPresent(packageName, forKey: .packageName)
 		try container.encode(isInsideCompilerDecidedBlock, forKey: .isInsideCompilerDecidedBlock)
+		// Written only when set, as the conformance lists of most declarations name neither.
+		if conformanceListNamesSendable {
+			try container.encode(conformanceListNamesSendable, forKey: .conformanceListNamesSendable)
+		}
+		if conformanceListNamesOtherTypes {
+			try container.encode(conformanceListNamesOtherTypes, forKey: .conformanceListNamesOtherTypes)
+		}
 		try container.encode(dependencyLabelsInUnselectedClauses, forKey: .dependencyLabelsInUnselectedClauses)
 		try container.encode(dependencyLabelsInsideConditionalBlocks, forKey: .dependencyLabelsInsideConditionalBlocks)
 		try container.encodeIfPresent(declaredName, forKey: .declaredName)

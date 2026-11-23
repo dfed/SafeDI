@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Usage: generate-time-check.py [--runs N] [--limit RATIO] [--memory-limit RATIO] [--large-memory-limit RATIO]
-                                [--size-limit RATIO] [--shapes NAME,…] [--summary FILE] BASE_TOOL HEAD_TOOL DIRECTORY
+"""Usage: generate-time-check.py [--runs N] [--large-memory-runs N] [--limit RATIO] [--memory-limit RATIO]
+                                [--large-memory-limit RATIO] [--size-limit RATIO] [--shapes NAME,…] [--summary FILE]
+                                BASE_TOOL HEAD_TOOL DIRECTORY
        generate-time-check.py --self-test DIRECTORY
 
 Compares how long two builds of `SafeDITool` take to `generate` synthetic dependency graphs, and exits 1 when
@@ -75,11 +76,18 @@ that the time is the processes starting, not the generator.
 
 Peak memory is each `generate` process's maximum resident set size, which the operating system reports for the child
 when it exits (`getrusage` through `os.wait4`); a shape's figure is the largest of its modules', and the figure compared
-is its median over the timed runs. It has far less noise than time, so its limit is tighter: a shape fails when the
+is its median over the timed runs. Its limit is tighter than time's: a shape fails when the
 head's median peak is MEMORY-LIMIT times the base's or more, and also more than 8 MB above it, because below that the
 peak is the process's own start, not the generator's work. The four large shapes fail at LARGE-MEMORY-LIMIT, with the
 same 8 MB: they are where a build's memory is decided, and each once peaked at 1.5 to 4.5 times what it needs now, so
 a tenth more on one of them is a tenth more on the largest module of a project shaped like it.
+
+A limit of a tenth needs more than five runs. The generator works in parallel, so one tool's peak on one graph
+varies with how its tasks happened to overlap: twelve runs each of two builds of C1500-mock-chain on a four-core
+Linux machine peaked between 236 and 307 MB, around 277. Two medians of five drawn from those twenty-four peaks are
+a tenth apart about once in seventy pairs, which failed a change that used no more memory (1.12 times), and two
+medians of eleven about once in fifteen hundred. So the four large shapes take LARGE-MEMORY-RUNS timed runs (default
+11) where that is more than N; each takes about a second, and their times are medians of the same runs.
 
 A shape the base tool cannot generate (a new attribute, say) is reported and not compared. A shape the head tool cannot
 generate fails the check: the shapes are valid SafeDI, so either the change broke them or they need updating with it.
@@ -284,6 +292,8 @@ SHAPES = {
 
 # The shapes whose peak memory is held to `--large-memory-limit`.
 LARGE_MEMORY_SHAPES = frozenset(["S12-mocks", "S16", "E32-inline-mocks", "C1500-mock-chain"])
+# How many timed runs those shapes take, when that is more than `--runs` ("Peak memory" in the header says why).
+LARGE_MEMORY_RUNS = 11
 
 
 # MARK: Running a tool
@@ -348,12 +358,14 @@ def generated_code(modules, output):
 # MARK: Comparing
 
 
-def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, size_limit, large_memory_limit=1.1, large_memory_shapes=LARGE_MEMORY_SHAPES):
+def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, size_limit, large_memory_limit=1.1, large_memory_shapes=LARGE_MEMORY_SHAPES, large_memory_runs=LARGE_MEMORY_RUNS):
     """Returns (the time and memory table's rows, the size table's rows, the failures)."""
     rows = []
     size_rows = []
     failures = []
+    every_shape_runs = runs
     for shape in shapes:
+        runs = max(every_shape_runs, large_memory_runs) if shape in large_memory_shapes else every_shape_runs
         modules = SHAPES[shape]()
         shape_memory_limit = min(memory_limit, large_memory_limit) if shape in large_memory_shapes else memory_limit
         sources = f"{directory}/{shape}/sources"
@@ -370,14 +382,14 @@ def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, 
                 sizes[label] = module_info_sizes(modules, f"{directory}/{shape}/{label}-warm-up")
         except Failure as failure:
             if label == "base":
-                rows.append(f"| {shape} | did not generate | | | | | | not compared |")
+                rows.append(f"| {shape} | | did not generate | | | | | | not compared |")
                 print(f"{shape}: the base tool did not generate it, so it is not compared: {failure}", flush=True)
                 try:
                     generate(head_tool, modules, sources, f"{directory}/{shape}/head-alone")
                 except Failure as head_failure:
                     failures.append(f"{shape}: the head tool did not generate it: {head_failure}")
             else:
-                rows.append(f"| {shape} | | did not generate | | | | | **failed** |")
+                rows.append(f"| {shape} | | | did not generate | | | | | **failed** |")
                 failures.append(f"{shape}: the head tool did not generate it: {failure}")
             continue
         for (name, _, _), base_size, head_size in zip(modules, sizes["base"], sizes["head"]):
@@ -401,7 +413,7 @@ def compare(base_tool, head_tool, directory, shapes, runs, limit, memory_limit, 
             failures.append(f"{shape}: `generate` needed {memory_ratio:.2f} times the base tool's peak memory ({megabytes(median['head'][2])} against {megabytes(median['base'][2])}, median of {runs}); the limit is {shape_memory_limit:g}")
         figure = lambda label: f"{median[label][0]:.3f} s / {median[label][1]:.3f} s"
         verdict = " and ".join(name for name, failed in (("time", over), ("memory", memory_over)) if failed)
-        rows.append(f"| {shape} | {figure('base')} | {figure('head')} | {ratio:.2f} | {megabytes(median['base'][2])} | {megabytes(median['head'][2])} | {memory_ratio:.2f} | {'identical' if code['base'] == code['head'] else 'differs'} | {f'**{verdict} over the limit**' if verdict else 'within the limits'} |")
+        rows.append(f"| {shape} | {runs} | {figure('base')} | {figure('head')} | {ratio:.2f} | {megabytes(median['base'][2])} | {megabytes(median['head'][2])} | {memory_ratio:.2f} | {'identical' if code['base'] == code['head'] else 'differs'} | {f'**{verdict} over the limit**' if verdict else 'within the limits'} |")
         print(f"{shape}: base {figure('base')}, head {figure('head')} (wall / CPU), ratio {ratio:.2f}; peak memory base {megabytes(median['base'][2])}, head {megabytes(median['head'][2])}, ratio {memory_ratio:.2f}", flush=True)
     return rows, size_rows, failures
 
@@ -410,10 +422,10 @@ def megabytes(size):
     return f"{size / 1024 / 1024:.1f} MB"
 
 
-def report(rows, size_rows, failures, runs, limit, memory_limit, size_limit, summary, large_memory_limit=1.1):
-    lines = [f"`generate` time and peak memory, head against base: median of {runs} alternating runs; a shape fails at {limit:g} times the base's wall time or {memory_limit:g} times its peak memory ({min(memory_limit, large_memory_limit):g} times for {', '.join(sorted(LARGE_MEMORY_SHAPES))}).", "",
-             "| Shape | Base wall / CPU | Head wall / CPU | Head / base (wall) | Base peak | Head peak | Head / base (peak) | Generated code | Verdict |",
-             "|---|---|---|---|---|---|---|---|---|"] + rows
+def report(rows, size_rows, failures, runs, limit, memory_limit, size_limit, summary, large_memory_limit=1.1, large_memory_runs=LARGE_MEMORY_RUNS):
+    lines = [f"`generate` time and peak memory, head against base: median of {runs} alternating runs; a shape fails at {limit:g} times the base's wall time or {memory_limit:g} times its peak memory ({min(memory_limit, large_memory_limit):g} times, over {max(runs, large_memory_runs)} runs, for {', '.join(sorted(LARGE_MEMORY_SHAPES))}).", "",
+             "| Shape | Runs | Base wall / CPU | Head wall / CPU | Head / base (wall) | Base peak | Head peak | Head / base (peak) | Generated code | Verdict |",
+             "|---|---|---|---|---|---|---|---|---|---|"] + rows
     lines += ["", f"`.safedi` size, head against base: a module fails at {size_limit:g} times the base's bytes.", "",
               "| Shape | Module | Base bytes | Head bytes | Head / base | Verdict |", "|---|---|---|---|---|---|"] + size_rows
     lines += [""] + [f"- {failure}" for failure in failures]
@@ -455,8 +467,8 @@ def self_test(directory):
         os.chmod(path, 0o755)
         return path
 
-    def expect(name, base, head, expected_failures, expected_row, expected_size_row=None, memory_limit=1.3, large_memory_shapes=frozenset()):
-        rows, size_rows, found = compare(base, head, f"{directory}/{name}", ["E16-seam"], 3, 2.0, memory_limit, 2.0, large_memory_shapes=large_memory_shapes)
+    def expect(name, base, head, expected_failures, expected_row, expected_size_row=None, memory_limit=1.3, large_memory_shapes=frozenset(), large_memory_runs=3):
+        rows, size_rows, found = compare(base, head, f"{directory}/{name}", ["E16-seam"], 3, 2.0, memory_limit, 2.0, large_memory_shapes=large_memory_shapes, large_memory_runs=large_memory_runs)
         if len(found) != expected_failures or expected_row not in rows[0] or (expected_size_row and expected_size_row not in size_rows[0]):
             failures.append(f"{name}: expected {expected_failures} failure(s), a row with {expected_row!r} and a size row with {expected_size_row!r}, got {found}, {rows} and {size_rows}")
 
@@ -481,6 +493,10 @@ def self_test(directory):
     expect("a-fifth-more-memory", held, holds_more, 0, "within the limits")
     expect("a-fifth-more-memory-of-a-large-shape", held, holds_more, 1, "**memory over the limit**", large_memory_shapes=frozenset(["E16-seam"]))
     expect("same-memory-of-a-large-shape", held, held, 0, "within the limits", large_memory_shapes=frozenset(["E16-seam"]))
+    # A large shape takes its own count of runs when that is more than every shape's 3, and the row gives the count.
+    expect("more-runs-of-a-large-shape", held, held, 0, "| E16-seam | 5 |", large_memory_shapes=frozenset(["E16-seam"]), large_memory_runs=5)
+    expect("no-fewer-runs-of-a-large-shape", held, held, 0, "| E16-seam | 3 |", large_memory_shapes=frozenset(["E16-seam"]), large_memory_runs=2)
+    expect("every-shape's-runs-of-an-ordinary-shape", held, held, 0, "| E16-seam | 3 |", large_memory_runs=5)
     expect("slower-and-more-memory", fast, tool("slower-and-more-memory", 0.2, allocates=64 * 1024 * 1024), 2, "**time and memory over the limit**")
     expect("head-refuses", fast, tool("head-refuses", 0.0, refuses=True), 1, "**failed**")
     expect("base-refuses", tool("base-refuses", 0.0, refuses=True), fast, 0, "not compared")
@@ -512,6 +528,7 @@ def main(arguments):
     limit = 2.0
     memory_limit = 1.3
     large_memory_limit = 1.1
+    large_memory_runs = LARGE_MEMORY_RUNS
     size_limit = 2.0
     shapes = list(SHAPES)
     summary = None
@@ -521,10 +538,12 @@ def main(arguments):
         argument = arguments.pop(0)
         if argument == "--self-test":
             self_testing = True
-        elif argument in ("--runs", "--limit", "--memory-limit", "--large-memory-limit", "--size-limit", "--shapes", "--summary") and arguments:
+        elif argument in ("--runs", "--large-memory-runs", "--limit", "--memory-limit", "--large-memory-limit", "--size-limit", "--shapes", "--summary") and arguments:
             value = arguments.pop(0)
             if argument == "--runs":
                 runs = int(value)
+            elif argument == "--large-memory-runs":
+                large_memory_runs = int(value)
             elif argument == "--limit":
                 limit = float(value)
             elif argument == "--memory-limit":
@@ -550,8 +569,8 @@ def main(arguments):
     if self_testing:
         return self_test(directory)
     else:
-        rows, size_rows, failures = compare(os.path.abspath(positional[0]), os.path.abspath(positional[1]), directory, shapes, runs, limit, memory_limit, size_limit, large_memory_limit)
-        report(rows, size_rows, failures, runs, limit, memory_limit, size_limit, summary, large_memory_limit)
+        rows, size_rows, failures = compare(os.path.abspath(positional[0]), os.path.abspath(positional[1]), directory, shapes, runs, limit, memory_limit, size_limit, large_memory_limit, large_memory_runs=large_memory_runs)
+        report(rows, size_rows, failures, runs, limit, memory_limit, size_limit, summary, large_memory_limit, large_memory_runs)
         return 1 if failures else 0
 
 

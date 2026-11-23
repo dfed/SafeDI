@@ -1391,6 +1391,9 @@ extension DependencyTreeGenerator {
 			let instantiable: Instantiable
 			/// The type with which the dependency can instead build `instantiable`.
 			let suggestedPropertyType: TypeDescription
+			/// The `Sendable` form of `suggestedPropertyType`, which the advice names besides it when the declaration of
+			/// `parent` does not say whether `parent` is `Sendable`, or `nil` when it does.
+			let sendableAlternative: TypeDescription?
 			let forwardedDeclarations: [LocatedProperty]
 			/// The type that declares the dependency.
 			let parent: TypeDescription
@@ -1401,7 +1404,7 @@ extension DependencyTreeGenerator {
 					SourceDiagnostic(
 						severity: .error,
 						location: dependency.declarationLocation,
-						message: "`\(dependency.property.asSource)` on `\(parent.asSource)` cannot build `\(instantiable.concreteInstantiable.asSource)`, which has @\(Dependency.Source.forwardedRawValue) properties that only an instantiator is passed. Declare it as `\(suggestedPropertyType.asSource)`.",
+						message: "`\(dependency.property.asSource)` on `\(parent.asSource)` cannot build `\(instantiable.concreteInstantiable.asSource)`, which has @\(Dependency.Source.forwardedRawValue) properties that only an instantiator is passed. Declare it as `\(suggestedPropertyType.asSource)`\(sendableAlternative.map { ", or as `\($0.asSource)` if `\(parent.asSource)` is Sendable" } ?? "").",
 					),
 				] + forwardedDeclarations.map {
 					SourceDiagnostic(
@@ -1663,6 +1666,29 @@ extension DependencyTreeGenerator {
 			/// generated holds above the receiver, so a declaration of `property` above the mocked type would leave the
 			/// receive hidden in that mock: the advice relabels them too. Each once, in the order the walk meets them.
 			let declarationsHidingReceiveInMocks: [HidingDeclaration]
+			/// Whether `property`'s type is at least as accessible as `instantiable`, so `instantiable` can forward it: a type's
+			/// `ForwardedProperties` typealias is as accessible as the type, and cannot name a less accessible type. Set on the
+			/// failure path, from the access proof, where the hint would advise forwarding (`withForwardingAccess(proof:)`).
+			var receiverCanForwardProperty = true
+
+			/// This property, with `receiverCanForwardProperty` read from `proof` where its hint would advise forwarding: the
+			/// type the receiver's declaration names is at least as accessible as the receiver, compared as Swift compares
+			/// a `ForwardedProperties` typealias with its type.
+			func withForwardingAccess(proof: TypeAccessProof) -> Self {
+				switch instantiatedDeclaration {
+				case .typeHasForwardedProperties, .typeIsNotInstantiable:
+					var property = self
+					let propertyTypeAccess = proof.access(
+						ofParameterTyped: self.property.typeDescription,
+						mentionedFrom: .declaration(instantiable),
+						admittedModules: [instantiable.moduleName],
+					).level
+					property.receiverCanForwardProperty = AccessLevel.normalized(propertyTypeAccess) >= AccessLevel.normalized(instantiable.effectiveTypeAccess)
+					return property
+				case .possible, .closesCycle, .closesCycleThrough:
+					return self
+				}
+			}
 
 			/// A declaration of a label that a receive beneath it in some tree is hidden by.
 			struct HidingDeclaration: Hashable {
@@ -1831,11 +1857,15 @@ extension DependencyTreeGenerator {
 							// The remedies of the cycle error a declaration would lead to, wherever it is declared.
 							"Declaring `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` would close a dependency cycle wherever it is declared, because the tree of `\(suggestedProperty.typeDescription.asInstantiatedType.asSource)` receives `\(requiredProperty.asSource)`, which requires `\(suggestedProperty.label)`. \(DependencyTreeGeneratorError.onlyIfAvailableRemedy)"
 						case .typeHasForwardedProperties:
-							"`\(typeName)` has @\(Dependency.Source.forwardedRawValue) properties, so SafeDI builds it only through an `Instantiator`, never as an @\(Dependency.Source.instantiatedRawValue) constant. Declare \(forwardingRemedy), to fix."
+							if receiverCanForwardProperty {
+								"`\(typeName)` has @\(Dependency.Source.forwardedRawValue) properties, so SafeDI builds it only through an `Instantiator`, never as an @\(Dependency.Source.instantiatedRawValue) constant. Declare \(forwardingRemedy), to fix."
+							} else {
+								"`\(typeName)` has @\(Dependency.Source.forwardedRawValue) properties, so SafeDI builds it only through an `Instantiator`, never as an @\(Dependency.Source.instantiatedRawValue) constant. `\(instantiable.concreteInstantiable.asSource)` can forward it only once `\(typeName)` is at least as accessible as `\(instantiable.concreteInstantiable.asSource)`."
+							}
 						case .typeIsNotInstantiable:
 							// A declaration that fulfills the type leads, as for an `@Instantiated` property of a type no declaration
 							// fulfills, and names the type as a declaration fulfills it, which spells an existential without `any`.
-							"No @\(InstantiableVisitor.macroName) declaration fulfills `\(fulfilledTypeName)`, so SafeDI cannot instantiate it. \(DependencyTreeGeneratorError.fulfillingDeclarationRemedy(typeName: fulfilledTypeName)), and declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain\(instantiatedDeclarationEnd) Or declare \(forwardingRemedy)."
+							"No @\(InstantiableVisitor.macroName) declaration fulfills `\(fulfilledTypeName)`, so SafeDI cannot instantiate it. \(DependencyTreeGeneratorError.fulfillingDeclarationRemedy(typeName: fulfilledTypeName)), and declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain\(instantiatedDeclarationEnd)\(receiverCanForwardProperty ? " Or declare \(forwardingRemedy)." : "")"
 						}
 					}
 					fixIts = []
