@@ -134,6 +134,23 @@ extension MockLowering {
 		/// `label: Type = default` text) listed among the flat received parameters as the emitter lists a seam's own mock's
 		/// builders: each before the first flat received parameter whose property's label sorts after the builder's, the rest
 		/// after the last, before the uncovered parameters.
+		// D1 lane hook (lane C): the names of the `@Sendable` autoclosure parameters, by the property each stands for.
+		var sendableAutoclosureNames: [Property: String] {
+			var names = [Property: String]()
+			for parameter in uncoveredRootParameters where parameter.isSendableAutoclosure {
+				names[parameter.property] = parameter.label
+			}
+			return names
+		}
+
+		/// The lines that read each `@Sendable` autoclosure parameter into a local before any builder function, which the
+		/// types that instantiate its value call (`ScopeGenerator.SendableAutoclosureParameter`).
+		func sendableAutoclosureLocalBindingLines(indent: String) -> [String] {
+			uncoveredRootParameters.filter(\.isSendableAutoclosure).map { parameter in
+				"\(indent)let \(MockLowering.sendableAutoclosureLocalName(of: parameter.label)) = \(parameter.label)"
+			}
+		}
+
 		func parameterLines(indent: String, builders: [(label: String, declaration: String)] = []) -> [String] {
 			var lines = (forwardedParameters + rootDefaultParameters).map { line(of: $0, indent: indent) }
 			var buildersToList = builders[...]
@@ -417,9 +434,9 @@ extension ScopeGenerator {
 		// A type that generates its dependency tree takes a builder for each hole type of its places in place of their
 		// parameters (`seamMockBuilders`), which lane C's family lowers.
 		guard !instantiable.generatesDependencyTree || uncoveredParameters.isEmpty else { return .unsupported(.holeSite) }
-		// A value a type built in a `@Sendable` builder function instantiates is a `@Sendable` autoclosure, which `mock()`
-		// reads into a local and each type that instantiates it calls; the lowering builds neither yet.
-		guard !uncoveredParameters.contains(where: \.isSendableAutoclosure) else { return .unsupported(.wrapper) }
+		// D1 lane hook (lane C): a value a type built in a `@Sendable` builder function instantiates is a `@Sendable`
+		// autoclosure, which `mock()` reads into a local and each type that instantiates it calls
+		// (`RootSignature.sendableAutoclosureLocalBindingLines(indent:)`, `Walk.sendableAutoclosureNames`).
 		let namedUncoveredParameters = zip(uncoveredParameters, uncoveredNames).map { parameter, name in
 			MockRootParameters.UncoveredParameter(
 				property: parameter.property,
@@ -435,7 +452,7 @@ extension ScopeGenerator {
 			rootDefaultParameters: rootDefaultParameters,
 			flatReceivedParameters: flatReceivedParameters,
 			uncoveredParameters: namedUncoveredParameters.map {
-				MockLowering.RootSignature.Parameter(property: $0.property, defaultExpression: nil, typeSource: $0.typeSource, name: $0.label)
+				MockLowering.RootSignature.Parameter(property: $0.property, defaultExpression: nil, typeSource: $0.isSendableAutoclosure ? "@autoclosure @escaping @Sendable () -> \($0.typeSource)" : $0.typeSource, name: $0.label)
 			},
 			uncoveredRootParameters: namedUncoveredParameters,
 			sharedValueDocumentation: namedUncoveredParameters.flatMap(\.sharedValueDocumentation),
@@ -628,7 +645,8 @@ extension ScopeGenerator {
 			parameters.append(MockRootParameters.UncoveredParameter(
 				property: property,
 				label: property.label,
-				typeSource: typesDeclaredEscaping.contains(property.typeDescription)
+				// D1 lane hook (lane C): a `@Sendable` autoclosure spells the value it returns, which `@escaping` cannot apply to.
+				typeSource: !propertiesInstantiatedInSendableFunction.contains(property) && typesDeclaredEscaping.contains(property.typeDescription)
 					? property.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource
 					: typeSource,
 				instantiatedType: dependency.asInstantiatedType,

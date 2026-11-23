@@ -53,6 +53,7 @@ extension ScopeGenerator {
 		// D1 lane hook (lane B): the uncovered dependencies named apart, which the types that instantiate them are passed, and
 		// a receive beneath reads, from the mocked type's own for its whole tree (`routingReceives`).
 		walk.uncoveredParameterNames = signature.uncoveredParameterNamesByLabelAndType
+		walk.sendableAutoclosureNames = signature.sendableAutoclosureNames
 		walk.rootOverrideNames = Set(signature.onlyIfAvailableOverrides.map(\.name))
 		let mockedTypeUncoveredProperties = instantiable.dependencies.compactMap { dependency -> Property? in
 			guard case .instantiated = dependency.source, signature.uncoveredProperties.contains(dependency.property) else { return nil }
@@ -88,6 +89,12 @@ extension ScopeGenerator {
 		// D1 lane hook (lane C): `mock()` first binds each builder a call passes up apart from its label, as it binds a flat
 		// parameter's `@Sendable` autoclosure, before anything else.
 		var bindingLines = walk.filledCallBuilders.leadingBindingLines(indent: bodyIndent)
+		// D1 lane hook (lane C): each `@Sendable` autoclosure parameter is read into a local, and the value of one the mocked
+		// type instantiates is bound under the parameter's name.
+		bindingLines.append(contentsOf: signature.sendableAutoclosureLocalBindingLines(indent: bodyIndent))
+		bindingLines.append(contentsOf: mockedTypeUncoveredProperties.compactMap { property in
+			signature.sendableAutoclosureNames[property].map { "\(bodyIndent)let \($0) = \(MockLowering.sendableAutoclosureLocalName(of: $0))()" }
+		})
 		// D1 lane hook (lane B): `mock()` then binds each override of what its tree receives only if available, which the
 		// receives beneath read.
 		// D1 lane hook (lane C): a public mock takes each as a parameter of `mock()` under the override's name, which binds it.
@@ -323,6 +330,8 @@ extension MockLowering {
 		var rootRenames = [String: [TypeDescription: String]]()
 		/// The names of the parameters of `mock()` named apart that uncovered dependencies are, by label and type.
 		var uncoveredParameterNames = [String: [TypeDescription: String]]()
+		// D1 lane hook (lane C): the `@Sendable` autoclosure parameters of `mock()`, by the property each stands for.
+		var sendableAutoclosureNames = [Property: String]()
 		/// The names the property nodes of the mock root's level are bound under.
 		var rootPropertyNodeBindingNames = Set<String>()
 		/// The labels the mock root's level names its nodes apart under.
@@ -861,6 +870,7 @@ extension MockLowering {
 				defaultFields: defaultFields,
 			)
 			node.cycleParameters = generator.cycleParameters.map(\.property)
+			node.sendableAutoclosureBindingNames = uncoveredInstantiatedProperties.compactMap { sendableAutoclosureNames[$0] }
 			// D1 lane hook (lane C): a node a public mock promotes at its root's level reads its caller's value first.
 			if parentConcreteType == nil, promotedProperties.contains(property) {
 				node.promotedParameterName = bindingName
@@ -869,7 +879,7 @@ extension MockLowering {
 			let lazilyInstantiatedInstanceProperties = generator.mockLoweringLazilyInstantiatedInstanceProperties
 			// D1 lane hook (lane D): a node whose configuration holds its default-valued parameters is built in a builder
 			// function, as `MockParameterNode.requiresFunctionWrapper` says.
-			guard node.hasChildren || isWrapped || !receiverBindings.isEmpty || !defaultFields.isEmpty else {
+			guard node.hasChildren || isWrapped || !receiverBindings.isEmpty || !defaultFields.isEmpty || !node.sendableAutoclosureBindingNames.isEmpty else {
 				guard let rule = Self.unsupportedRule(ofDependenciesOf: instantiable, isWrapped: isWrapped, inScope: scope, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties, unavailableProperties: unavailableProperties, childProperties: [], uncoveredProperties: uncoveredProperties) else {
 					lines.append(node.constantBindingLine(overrideRead: overrideRead, indent: indent))
 					return .lowered(node)
@@ -1101,6 +1111,10 @@ extension MockLowering {
 		/// The parameter of a public mock that holds the value its caller passed for the node, which the node's binding reads
 		/// first (`ScopeGenerator.passing(_:orBuilding:)`).
 		var promotedParameterName: String?
+		// D1 lane hook (lane C): the `@Sendable` autoclosure parameters of the values the node's type instantiates that the
+		// mock cannot build, each bound in its builder function from the local `mock()` reads it into.
+		/// The names of the `@Sendable` autoclosure parameters whose values the node's builder function binds.
+		var sendableAutoclosureBindingNames = [String]()
 
 		/// The node, configured in a configuration of its own where `children` hold a node that builds its type or its
 		/// construction takes a default-valued parameter.
@@ -1220,6 +1234,8 @@ extension MockLowering {
 		func receiverBindingLines(indent: String) -> [String] {
 			let bodyIndent = "\(indent)\(ScopeGenerator.standardIndent)"
 			return receiverBindings.map { "\(bodyIndent)let \($0.property.label): \($0.property.typeDescription.asSource) = \($0.name)" }
+				// D1 lane hook (lane C): then the value of each `@Sendable` autoclosure parameter it instantiates.
+				+ sendableAutoclosureBindingNames.map { "\(bodyIndent)let \($0) = \(MockLowering.sendableAutoclosureLocalName(of: $0))()" }
 		}
 
 		/// The lines that end the node's builder function, after its children's statements, and bind the node, whose
@@ -1228,7 +1244,7 @@ extension MockLowering {
 			let builder = ReservedName.configurationBuilderPropertyName
 			let bodyIndent = "\(indent)\(ScopeGenerator.standardIndent)"
 			// A constant's builder function always returns its construction (`BuilderBody`).
-			let returnPrefix = hasChildren || !receiverBindings.isEmpty || !isWrapped ? "return " : ""
+			let returnPrefix = hasChildren || !receiverBindings.isEmpty || !sendableAutoclosureBindingNames.isEmpty || !isWrapped ? "return " : ""
 			// A configuration's builder returns the concrete type, which an erased node wraps as its construction does.
 			let builderCall = isErased && hasConfiguration ? "\(erasedTypeSource)(\(builder)(\(builderArguments)))" : "\(builder)(\(builderArguments))"
 			var lines = ["\(bodyIndent)\(returnPrefix)\(constructionReading(override: overridePath, builderCall: builderCall))"]
@@ -1491,6 +1507,11 @@ extension MockLowering {
 			}
 		}
 		return false
+	}
+
+	/// The local `mock()` reads its `@Sendable` autoclosure parameter named `name` into, before any builder function.
+	static func sendableAutoclosureLocalName(of name: String) -> String {
+		"\(ReservedName.builderFunctionNamePrefix)\(name)".spelledAsJoinedIdentifier
 	}
 
 	static func builderFunctionName(boundAs bindingName: String) -> String {
