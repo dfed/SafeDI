@@ -1426,6 +1426,8 @@ extension MockLowering {
 				// A child beneath an edge in `cycleEdges` has no member in its parent's configuration, public or internal.
 				let recordedChildren = children.filter { child in child.concreteType.map { !isPruned($0, beneath: parentConcreteType) } ?? true }
 				var record = ConfigurationRecord(of: configuredNode, children: recordedChildren)
+				// D1 lane hook (lane B): what a configuration generated from the record imports.
+				record.fulfillers = configurationFulfillers(of: configuredNode)
 				// D1 lane hook (lane D): the construction the one-way check reads, with every child, pruned or not.
 				record.oneWayConstruction = OneWayConstruction(
 					of: configuredNode,
@@ -1438,6 +1440,7 @@ extension MockLowering {
 				// D1 lane hook (lane C): a public mock's node records the construction its type's construction function makes.
 				if buildsPublicMock {
 					record.publicConstruction = MockLowering.publicConstructionRecord(of: configuredNode, children: recordedChildren, orderedBy: generator)
+					record.publicConstruction?.fulfillers = record.fulfillers
 				}
 				configurationRecords.append(record)
 				finishConfiguredNode(configuredNode, recordIndex: configurationRecords.count - 1)
@@ -1447,6 +1450,8 @@ extension MockLowering {
 				var record = ConfigurationRecord(of: configuredNode, children: [])
 				record.publicConstruction = MockLowering.publicConstructionRecord(of: configuredNode, children: [], orderedBy: generator)
 				record.publicConstruction?.describesConfiguration = false
+				// D1 lane hook (lane B): what its construction function imports.
+				record.publicConstruction?.fulfillers = configurationFulfillers(of: configuredNode)
 				configurationRecords.append(record)
 				finishConfiguredNode(configuredNode, recordIndex: nil)
 			} else if configuredNode.hasConfiguration, configurationEntry.recordsBeneathRepeatedAncestor {
