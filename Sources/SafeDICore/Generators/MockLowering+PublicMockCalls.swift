@@ -26,7 +26,7 @@ extension ScopeGenerator {
 	/// (`stemsOfOptionalBuilders`) apart from `safeDIOverrides`, in label order.
 	///
 	/// A public mock names each builder as its plan does (`optionalBuilderNames`, by family), apart from every name of its body.
-	func filledCallBuilders(of orderedChildren: [OrderedChild], context: MockContext, rootBoundProperties: Set<Property>, passedUpBuilders: [MockLowering.RootSignature.PassedUpBuilder] = [], builderNaming: MockLowering.RootSignature.BuilderNaming? = nil, optionalBuilderNames: [MockRootParameters.SeamMockBuilder.Family: String]? = nil) -> MockLowering.Lowering<MockLowering.FilledCallBuilders> {
+	func filledCallBuilders(of orderedChildren: [OrderedChild], context: MockContext, rootBoundProperties: Set<Property>, passedUpBuilders: [MockLowering.RootSignature.PassedUpBuilder] = [], builderNaming: MockLowering.RootSignature.BuilderNaming? = nil, optionalBuilderNames: [MockRootParameters.SeamMockBuilder.Family: String]? = nil) throws -> MockLowering.Lowering<MockLowering.FilledCallBuilders> {
 		// Only a call of another module's public mock fills a builder, and a module that calls none, as most do, has no call to
 		// find in the tree.
 		guard !context.foreignPublicMocks.isEmpty else { return .lowered(.none) }
@@ -342,15 +342,8 @@ extension ScopeGenerator {
 		parameters.sort { $0.label < $1.label }
 		// A place of another module's public mock the tree builds inline reads the builder `mock()` takes for its hole type and
 		// family: inside a fill, where the fill's code reads it, and outside every fill, where the walk's node reads it.
-		let holeBuildersByInlinePlaceInFills: [ObjectIdentifier: FillPlaceBindings.HoleBuilder]
-		let inlinePlaceBuildersOutsideFills: [ObjectIdentifier: FillPlaceBindings.HoleBuilder]
-		do {
-			guard let outsideFills = try holeBuildersByInlinePlaceOutsideFills(of: orderedChildren, buildersByFamily: buildersByFamily, foreignPublicMocks: context.foreignPublicMocks) else { return .unsupported(.fill) }
-			inlinePlaceBuildersOutsideFills = outsideFills
-			holeBuildersByInlinePlaceInFills = try Self.holeBuildersByInlinePlaceInFills(of: filledCalls, buildersByFamily: buildersByFamily, foreignPublicMocks: context.foreignPublicMocks)
-		} catch {
-			return .unsupported(.fill)
-		}
+		let inlinePlaceBuildersOutsideFills = try holeBuildersByInlinePlaceOutsideFills(of: orderedChildren, buildersByFamily: buildersByFamily, foreignPublicMocks: context.foreignPublicMocks)
+		let holeBuildersByInlinePlaceInFills = try Self.holeBuildersByInlinePlaceInFills(of: filledCalls, buildersByFamily: buildersByFamily, foreignPublicMocks: context.foreignPublicMocks)
 		var filledCallBuilders = MockLowering.FilledCallBuilders(
 			calls: calls,
 			parameters: parameters,
@@ -409,47 +402,39 @@ extension ScopeGenerator {
 	}
 
 	/// The builder `mock()` takes for each place of another module's public mock that the tree of `orderedChildren` builds
-	/// inline outside the fills of its calls, keyed by the place's scope generator, as
-	/// `ScopeGenerator.holeBuildersByInlinePlace(in:buildersByFamily:foreignPublicMocks:)` finds them by node; or `nil` where
-	/// one generator is built at two places that read different builders, which a key by generator cannot tell apart.
-	/// Walked with a stack, since a tree can be as deep as the module has types.
+	/// inline outside the fills of its calls, keyed by the place's path of child indices (`OrderedChild.index`, one per level
+	/// beneath the root), as `ScopeGenerator.holeBuildersByInlinePlace(in:buildersByFamily:foreignPublicMocks:)` finds them
+	/// by node: a generator built at two places is two places. Walked with a stack, since a tree can be as deep as the module
+	/// has types.
 	private func holeBuildersByInlinePlaceOutsideFills(
 		of orderedChildren: [OrderedChild],
 		buildersByFamily: [MockRootParameters.SeamMockBuilder.Family: FillPlaceBindings.HoleBuilder],
 		foreignPublicMocks: [TypeDescription: SeamResolution.ForeignPublicMock],
-	) throws -> [ObjectIdentifier: FillPlaceBindings.HoleBuilder]? {
+	) throws -> [[Int]: FillPlaceBindings.HoleBuilder] {
 		guard !buildersByFamily.isEmpty, !foreignPublicMocks.isEmpty else { return [:] }
-		// The builder each generator reads, `nil` where it reads none, by the first place that builds it.
-		var holeBuilderByGenerator = [ObjectIdentifier: FillPlaceBindings.HoleBuilder?]()
-		// Each scope with whether a `@Sendable` builder function encloses it, the public mock built inline nearest above it,
-		// and the type its declaration instantiates, which a `fulfilledByType:` names.
-		var generatorsToVisit = orderedChildren.map { (generator: $0.generator, isInsideSendableFunction: false, publicMockBuiltInline: SeamResolution.ForeignPublicMock?.none, instantiatedType: TypeDescription?.none) }
-		while let (generator, isInsideSendableFunction, publicMockBuiltInline, declaredInstantiatedType) = generatorsToVisit.popLast() {
+		var holeBuilderByPath = [[Int]: FillPlaceBindings.HoleBuilder]()
+		// Each scope with its path, whether a `@Sendable` builder function encloses it, the public mock built inline nearest
+		// above it, and the type its declaration instantiates, which a `fulfilledByType:` names.
+		var generatorsToVisit = orderedChildren.map { (generator: $0.generator, path: [$0.index], isInsideSendableFunction: false, publicMockBuiltInline: SeamResolution.ForeignPublicMock?.none, instantiatedType: TypeDescription?.none) }
+		while let (generator, path, isInsideSendableFunction, publicMockBuiltInline, declaredInstantiatedType) = generatorsToVisit.popLast() {
 			// A scope that closes a cycle builds nothing, and a call's places are the call's.
 			guard case let .property(instantiable, property, _, _, false, _) = generator.scopeData, generator.publicMockCall == nil else { continue }
 			let instantiatedType = declaredInstantiatedType ?? property.typeDescription.asInstantiatedType
 			let requiresSendable = isInsideSendableFunction || generator.buildsInSendableFunction
-			var holeBuilder: FillPlaceBindings.HoleBuilder?
 			if let publicMockBuiltInline, try publicMockBuiltInline.visibleDeclarations().instantiables[instantiatedType] == nil {
 				let family = MockRootParameters.SeamMockBuilder.Family(
 					holeType: SeamSignature.HoleType(instantiatedType: instantiatedType.spelledCanonically, builtType: property.typeDescription.builtTypeOfWrapper.spelledCanonically),
 					isSendable: requiresSendable || property.propertyType.isSendable,
 				)
-				holeBuilder = buildersByFamily[family]
-			}
-			let key = ObjectIdentifier(generator)
-			if let recorded = holeBuilderByGenerator[key] {
-				guard recorded?.name == holeBuilder?.name, recorded?.isOptional == holeBuilder?.isOptional else { return nil }
-			} else {
-				holeBuilderByGenerator[key] = .some(holeBuilder)
+				holeBuilderByPath[path] = buildersByFamily[family]
 			}
 			let enclosingPublicMock = foreignPublicMocks[instantiable.concreteInstantiable] ?? publicMockBuiltInline
 			let instantiatedTypes = Dictionary(instantiable.dependencies.map { ($0.property, $0.asInstantiatedType) }, uniquingKeysWith: { first, _ in first })
-			generatorsToVisit += generator.orderedChildGenerators.map { child in
-				(child, requiresSendable, enclosingPublicMock, child.property.flatMap { instantiatedTypes[$0] })
+			generatorsToVisit += generator.orderedChildGeneratorsWithIndices.map { index, child in
+				(child, path + [index], requiresSendable, enclosingPublicMock, child.property.flatMap { instantiatedTypes[$0] })
 			}
 		}
-		return holeBuilderByGenerator.compactMapValues { $0 }
+		return holeBuilderByPath
 	}
 }
 
@@ -465,7 +450,7 @@ extension MockLowering.Walk {
 		path: String,
 		indent: String,
 		lines: inout [String],
-	) async -> MockLowering.Lowering<MockLowering.TreeNode> {
+	) async throws -> MockLowering.Lowering<MockLowering.TreeNode> {
 		guard let publicMockCall = generator.publicMockCall,
 		      case let .property(instantiable, property, forwardedProperties, erasedToConcreteExistential, isPropertyCycle, _) = generator.scopeData
 		else { return .unsupported(.publicMockCall) }
@@ -590,9 +575,12 @@ extension MockLowering.Walk {
 					value = wrapperName
 				} else if dependency.source.isReceived, let renamedName = renames[dependency.property.label]?[dependency.property.typeDescription] {
 					// D1 lane hook (lane C): a receive the mock names apart is bound again under its label in the call's builder
-					// function (`emitReceiverBindings`). An override closure or a fill beside it is not lowered yet.
-					guard overrideBuilders == nil, filledCall == nil, property.propertyType.isConstant else { return .unsupported(.publicMockCall) }
-					passedUpBuilderBindings.append("let \(dependency.property.label): \(dependency.property.typeDescription.asSource) = \(renamedName)")
+					// function (`emitReceiverBindings`): a call that fills a builder binds it with the leaf's other receives, after
+					// its fills. An override closure beside it is not lowered yet.
+					guard overrideBuilders == nil, filledCall != nil || property.propertyType.isConstant else { return .unsupported(.publicMockCall) }
+					if filledCall == nil {
+						passedUpBuilderBindings.append("let \(dependency.property.label): \(dependency.property.typeDescription.asSource) = \(renamedName)")
+					}
 					value = dependency.property.label
 				} else if dependency.source.isReceived, lazilyInstantiatedInstances.contains(dependency.property.asUnwrappedProperty) {
 					// A label the tree holds in both wrapper kinds is named apart, which is not lowered yet.
@@ -701,12 +689,7 @@ extension MockLowering.Walk {
 				filledCallBuilders.fillPlaceBindings.rootBindingNames[label]?[property.typeDescription] != nil
 			}) else { return .unsupported(.fill) }
 		}
-		let fillCode: String
-		do {
-			fillCode = try await generator.mockLoweringFillCode(propertiesGeneratedLater: filledCall.propertiesGeneratedLater, fillPlaceBindings: filledCallBuilders.fillPlaceBindings).joined(separator: "\n")
-		} catch {
-			return .unsupported(.fill)
-		}
+		let fillCode = try await generator.mockLoweringFillCode(propertiesGeneratedLater: filledCall.propertiesGeneratedLater, fillPlaceBindings: filledCallBuilders.fillPlaceBindings).joined(separator: "\n")
 		lines.append(contentsOf: extractionLines)
 		let functionDeclaration = "\(indent)\(functionDecorator)func \(functionName)(\(functionParameters)) -> \(typeName) {"
 		// The statements of the call's builder function before its call, unindented.
@@ -886,8 +869,8 @@ extension MockLowering {
 		/// The names a public mock's plan gives its optional builders, by family, which the builders are read under.
 		var optionalBuilderNames: [ScopeGenerator.MockRootParameters.SeamMockBuilder.Family: String]?
 		/// The builder `mock()` takes that each place of another module's public mock the tree builds inline outside every
-		/// fill reads, by the place's scope generator.
-		var holeBuildersByInlinePlace = [ObjectIdentifier: ScopeGenerator.FillPlaceBindings.HoleBuilder]()
+		/// fill reads, by the place's path of child indices beneath the root (`MockLowering.Walk.childIndexPath`).
+		var holeBuildersByInlinePlace = [[Int]: ScopeGenerator.FillPlaceBindings.HoleBuilder]()
 
 		/// No call fills a builder.
 		static let none = FilledCallBuilders(calls: [], parameters: [], fillPlaceBindings: ScopeGenerator.FillPlaceBindings(bindingsByGenerator: [:]))

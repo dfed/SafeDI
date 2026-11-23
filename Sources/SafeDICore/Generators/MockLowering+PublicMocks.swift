@@ -23,7 +23,7 @@ extension ScopeGenerator {
 	/// yet. A mock that takes no parameter and builds nothing but the type is the `mock()` and `__safeDI_mock()` pair, whose
 	/// guard hashes its empty signature; a mock with a tree is lowered by the walk (`lowerMockRootWithTree(of:context:)`),
 	/// which hands its nodes to `publicMockWithTree`.
-	func lowerPublicMockRoot(of instantiable: Instantiable, context: MockContext) async -> MockLowering.Result {
+	func lowerPublicMockRoot(of instantiable: Instantiable, context: MockContext) async throws -> MockLowering.Result {
 		guard let publicMockContext = context.publicMockContext else { return .unsupported(.publicMockRoot) }
 		guard propertiesToGenerate.isEmpty,
 		      instantiable.dependencies.isEmpty,
@@ -31,7 +31,7 @@ extension ScopeGenerator {
 		      let initializer = MockLowering.rootConstructionInitializer(of: instantiable),
 		      initializer.arguments.isEmpty
 		else {
-			return await lowerMockRootWithTree(of: instantiable, context: context)
+			return try await lowerMockRootWithTree(of: instantiable, context: context)
 		}
 		let plan = Self.publicMockPlan(
 			of: instantiable,

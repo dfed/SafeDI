@@ -298,14 +298,16 @@ public enum MockLowering {
 extension ScopeGenerator {
 	/// This mock root's code, lowered from its finished generator tree, or the first rule it meets that the lowering does
 	/// not lower yet.
-	func lowerMockRoot(context: MockContext) async -> MockLowering.Result {
+	// D1 lane hook (lane E): the walk rethrows what the steps it shares with the emitter throw, which replace the emitter's
+	// errors at the switch.
+	func lowerMockRoot(context: MockContext) async throws -> MockLowering.Result {
 		guard case let .root(instantiable, _) = scopeData else { return .unsupported(.publicMockRoot) }
 		// D1 lane hook (lane C): a public mock's root (`MockLowering+PublicMocks.swift`).
-		guard instantiable.generateMock != .public else { return await lowerPublicMockRoot(of: instantiable, context: context) }
+		guard instantiable.generateMock != .public else { return try await lowerPublicMockRoot(of: instantiable, context: context) }
 		guard propertiesToGenerate.isEmpty,
 		      instantiable.dependencies.isEmpty,
 		      (instantiable.mockInitializer ?? instantiable.initializer)?.arguments.contains(where: \.hasDefaultValue) == false
-		else { return await lowerMockRootWithTree(of: instantiable, context: context) }
+		else { return try await lowerMockRootWithTree(of: instantiable, context: context) }
 		return .lowered(Self.mockWithoutTree(of: instantiable, context: context))
 	}
 

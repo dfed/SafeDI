@@ -26,7 +26,7 @@
 extension ScopeGenerator {
 	/// The mock of `instantiable`, the mocked type of this root, whose tree is its generator's children, or the first rule
 	/// the walk meets that it does not lower yet.
-	func lowerMockRootWithTree(of instantiable: Instantiable, context: MockContext) async -> MockLowering.Result {
+	func lowerMockRootWithTree(of instantiable: Instantiable, context: MockContext) async throws -> MockLowering.Result {
 		// D1 lane hook: the mocked type's own parameters (forwarded, flat received, uncovered, defaults, hand-written mock).
 		// D1 lane hook (lane C): the mocked type's own parameters and construction meet no rule the walk does not lower: its
 		// hand-written mock builds it, internal or public (`MockLowering+HandWrittenMocks.swift`), and every dependency is a
@@ -95,7 +95,7 @@ extension ScopeGenerator {
 		let rootBoundProperties = signature.properties.union(overrideProperties).union(signature.lazilyInstantiatedProperties)
 		// D1 lane hook (lane C): the builders `mock()` takes optional for the places its calls fill.
 		// D1 lane hook (lane E): a call's builder of a family the calls pass up reads the builder `mock()` takes for it.
-		switch filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties, passedUpBuilders: signature.passedUpBuilders, builderNaming: signature.builderNaming) {
+		switch try filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties, passedUpBuilders: signature.passedUpBuilders, builderNaming: signature.builderNaming) {
 		case let .lowered(filledCallBuilders):
 			walk.filledCallBuilders = filledCallBuilders
 		case let .unsupported(rule):
@@ -103,7 +103,7 @@ extension ScopeGenerator {
 		}
 		// D1 lane hook (lane C): a public mock's calls read each builder under the internal name its plan gives it.
 		if let optionalBuilderNames = publicMockOptionalBuilderNames(of: instantiable, signature: signature, filledCallBuilders: walk.filledCallBuilders, context: context) {
-			switch filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties, optionalBuilderNames: optionalBuilderNames) {
+			switch try filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties, optionalBuilderNames: optionalBuilderNames) {
 			case let .lowered(filledCallBuilders):
 				walk.filledCallBuilders = filledCallBuilders
 			case let .unsupported(rule):
@@ -148,7 +148,7 @@ extension ScopeGenerator {
 		}
 		let rootReceiverBindingIndex = bindingLines.endIndex
 		let nodes: [MockLowering.TreeNode]
-		switch await walk.children(
+		switch try await walk.children(
 			of: orderedChildren,
 			loops: mockLoweringLoopMemberships,
 			inScope: signature.properties.union(overrideProperties).union(signature.lazilyInstantiatedProperties),
@@ -460,6 +460,9 @@ extension MockLowering {
 		var unavailableProperties = Set<Property>()
 		/// The properties built after the node being lowered, which its children are ordered by.
 		var propertiesGeneratedLater = Set<Property>()
+		// D1 lane hook (lane E): the path of child indices (`OrderedChild.index`) from the root to the node being lowered,
+		// which keys what the walk reads per place.
+		var childIndexPath = [Int]()
 
 		/// The nodes `generators` build, in generation order, where the nodes `scope` holds are bound before them, their
 		/// overrides at `path`, with their statements appended to `lines` at `indent`; or the first rule they meet.
@@ -470,7 +473,7 @@ extension MockLowering {
 			path: String,
 			indent: String,
 			lines: inout [String],
-		) async -> Lowering<[TreeNode]> {
+		) async throws -> Lowering<[TreeNode]> {
 			let generators = orderedChildren.map(\.generator)
 			let enclosingPropertiesGeneratedLater = propertiesGeneratedLater
 			defer { propertiesGeneratedLater = enclosingPropertiesGeneratedLater }
@@ -566,29 +569,31 @@ extension MockLowering {
 				propertiesGeneratedLater = orderedChildren[index].propertiesGeneratedLater
 				var memberLines = [String]()
 				pendingRenamedFunctionName = renamedFunctionNames?[index]
+				childIndexPath.append(orderedChildren[index].index)
 				// D1 lane hook: kinds of node (instantiators, wrappers, aliases, holes, calls).
 				let lowering: Lowering<TreeNode>
 				if membership == nil {
 					endLoopUnit(appendingTo: &lines)
-					lowering = await node(of: generator, bindingName: bindingName, inScope: scope, path: path, indent: indent, lines: &lines)
+					lowering = try await node(of: generator, bindingName: bindingName, inScope: scope, path: path, indent: indent, lines: &lines)
 				} else if case .property = generator.scopeData, generator.publicMockCall == nil || generator.valuesBindingsBeforeBuilderFunction.isEmpty {
 					// D1 lane hook (lane B): a call of another module's public mock on a loop reads in its function the members it
 					// rebinds there, and names its guard where its level makes it, before the loop's unit, as the emitter names it.
 					// D1 lane hook (lane E): a call that fills a builder names its guard inside its function, after its fills.
 					let memberScope = generator.publicMockCall == nil ? scope : scope.union(generator.reboundProperties)
-					lowering = await node(of: generator, bindingName: bindingName, inScope: memberScope, path: path, indent: indent, lines: &memberLines)
+					lowering = try await node(of: generator, bindingName: bindingName, inScope: memberScope, path: path, indent: indent, lines: &memberLines)
 					if case .lowered = lowering, generator.publicMockCall != nil, !generator.fillsABuilder {
 						lines.append(memberLines.removeFirst())
 					}
 				} else if case .alias = generator.scopeData {
 					// D1 lane hook (lane B): a rename the level declares of a member is bound with the loop's wrappers, after
 					// them, and its members' functions bind it again (`MockLowering.loopMembers`).
-					lowering = await node(of: generator, bindingName: bindingName, inScope: scope, path: path, indent: indent, lines: &memberLines)
+					lowering = try await node(of: generator, bindingName: bindingName, inScope: scope, path: path, indent: indent, lines: &memberLines)
 					lastLoopMemberLineCounts = MockLowering.LoopMemberLineCounts(prelude: 0, binding: memberLines.count)
 				} else {
 					// D1 lane hook (lane B): a call of another module's public mock on a loop.
 					lowering = .unsupported(.cycle)
 				}
+				childIndexPath.removeLast()
 				loopMembership = nil
 				// A node that builds its type in no builder function of its own leaves its level's name for it unread.
 				let leavesRenamedFunctionNameUnread = pendingRenamedFunctionName != nil
@@ -692,7 +697,7 @@ extension MockLowering {
 			path: String,
 			indent: String,
 			lines: inout [String],
-		) async -> Lowering<TreeNode> {
+		) async throws -> Lowering<TreeNode> {
 			if case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference) = generator.scopeData {
 				return aliasNode(of: generator, property: property, fulfillingProperty: fulfillingProperty, erasedToConcreteExistential: erasedToConcreteExistential, onlyIfAvailable: onlyIfAvailable, declarationReference: declarationReference, bindingName: bindingName, inScope: scope, indent: indent, lines: &lines)
 			} else {
@@ -705,12 +710,12 @@ extension MockLowering {
 					// D1 lane hook (lane C): a public mock binds the payload of a case of a place inside the call's fills before the
 					// call's builder function, as before any node's.
 					lines.append(contentsOf: generator.valuesBindingsBeforeBuilderFunction.map { "\(indent)\($0.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: [:]))" })
-					return await publicMockCallNode(of: generator, inScope: scope, path: path, indent: indent, lines: &lines)
+					return try await publicMockCallNode(of: generator, inScope: scope, path: path, indent: indent, lines: &lines)
 				}
 				guard !isPropertyCycle else {
 					return cycleClosingNode(of: generator, instantiable: instantiable, property: property, bindingName: bindingName, seamCall: seamCall, inScope: scope, indent: indent, lines: &lines)
 				}
-				switch await builtNode(
+				switch try await builtNode(
 					of: generator,
 					building: (instantiable, property, forwardedProperties, erasedToConcreteExistential, isPropertyCycle, seamCall),
 					boundAs: bindingName,
@@ -871,7 +876,7 @@ extension MockLowering {
 			path: String,
 			indent: String,
 			lines: inout [String],
-		) async -> Lowering<ConstantNode> {
+		) async throws -> Lowering<ConstantNode> {
 			let descending: DescendingBuiltNode
 			switch startBuiltNode(of: generator, building: built, boundAs: bindingName, inScope: scope, path: path, indent: indent, lines: &lines) {
 			case let .finished(lowering):
@@ -879,7 +884,7 @@ extension MockLowering {
 			case let .descending(started):
 				descending = started
 			}
-			let lowering = await children(
+			let lowering = try await children(
 				of: descending.orderedChildren,
 				loops: descending.generator.mockLoweringLoopMemberships,
 				inScope: descending.scope.union(descending.forwarded),
@@ -1209,7 +1214,7 @@ extension MockLowering {
 			node.cycleParameterArguments = cycleParameterArguments
 			// D1 lane hook (lane E): a place of another module's public mock the tree builds inline reads the builder `mock()`
 			// takes for its hole type and family (`MockLowering+PublicMockCalls.swift`).
-			if let inlinePlaceBuilder = filledCallBuilders.holeBuildersByInlinePlace[ObjectIdentifier(generator)] {
+			if let inlinePlaceBuilder = filledCallBuilders.holeBuildersByInlinePlace[childIndexPath] {
 				guard node.promotedParameterName == nil, ownLoopMembership == nil else { return .finished(.unsupported(.fill)) }
 				node.inlinePlace = InlinePlace(builder: inlinePlaceBuilder, overrideRead: overrideRead)
 			}
