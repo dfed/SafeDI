@@ -153,7 +153,8 @@ struct ConstructionScope: Sendable {
 /// map, and so by every tree built from it, so this is decided once per tree, from the tree's root.
 ///
 /// A tree that may take a later pass keys every place: a later pass reuses a place's generator from the pass before only
-/// through its entry (`ConstructionMemo.settledReuse`), and without one builds the place's whole subtree again, every pass.
+/// through the pass before's memo (`ConstructionMemo.Key.previousPass`), and without an entry builds the place's whole
+/// subtree again, every pass.
 struct ScopesBuiltAtOnePlace: Sendable {
 	/// The scopes `root`'s tree builds at one place, or `nil` where the tree may take more than one pass: where a scope it
 	/// reaches reaches itself again, through the scopes it builds or the fills of its calls (a cycle the tree closes, whose
