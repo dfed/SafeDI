@@ -269,6 +269,10 @@ extension ScopeGenerator {
 						.map(\.asValidatedForDependencyCycles.asUnwrappedProperty),
 				)
 		}
+		let tree = treeNames(of: instantiable)
+		// D1 lane hook (lane B): only a property node binds a non-optional value for its optional form; an alias only if
+		// available binds an optional one (`generateMockRootCode`'s `isProvidedByTree`).
+		let rootPropertyNodes = Set(tree.rootPropertyNodes)
 		let receivedNonOptionalProperties = Set(receivedProperties.filter { !$0.typeDescription.isOptional })
 		var flatReceivedProperties = [Property]()
 		var onlyIfAvailableReceivedProperties = [Property]()
@@ -279,7 +283,7 @@ extension ScopeGenerator {
 			      || !receivedNonOptionalProperties.contains(property.asUnwrappedProperty) && !forwardedProperties.contains(property.asUnwrappedProperty)
 			else { continue }
 			// A node the mock promotes for an optional receive binds its non-optional value, which provides this one.
-			guard property.typeDescription.isOptional || !propertiesToDeclare.contains(property.asOptionalProperty) else { return .unsupported(.flatParameter) }
+			guard property.typeDescription.isOptional || !rootPropertyNodes.contains(property.asOptionalProperty) else { return .unsupported(.flatParameter) }
 			guard !Self.provides(property, declaredProperties: propertiesToDeclare, forwardedProperties: []) else { continue }
 			// A property every receiver receives only if available is an override, defaulting to `nil`; one any requires is a
 			// parameter.
@@ -289,7 +293,6 @@ extension ScopeGenerator {
 				flatReceivedProperties.append(property)
 			}
 		}
-		let tree = treeNames(of: instantiable)
 		let uncoveredParameters = tree.uncoveredParameters
 		let forwardedAndDefaultLabels = Set(forwardedParameters.map(\.name)).union(rootDefaultParameters.map(\.name))
 		let treeBindingNames = Self.bindingNames(of: tree.rootPropertyNodes, besideParametersKeepingTheirLabels: forwardedAndDefaultLabels)
