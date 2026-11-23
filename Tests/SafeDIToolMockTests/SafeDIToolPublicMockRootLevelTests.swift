@@ -2341,35 +2341,29 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			case .forwarded:
 				"""
 				extension Detail {
-				    nonisolated public enum SafeDIScope_Api {
-				        nonisolated public struct api_Values {
-				            public let id: Int
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+				        public let api: (Int) -> __safeDI_Built
+
+				        public init(api: @escaping (Int) -> __safeDI_Built) {
+				            self.api = api
 				        }
 
-				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-				            public let api: (api_Values) -> __safeDI_Built
-
-				            public init(api: @escaping (api_Values) -> __safeDI_Built) {
-				                self.api = api
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.api = { _ in __safeDI_builder() }
-				            }
+				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				            self.init(api: { _ in __safeDI_builder() })
 				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public convenience init(__safeDI_id id: Int, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
-				        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values(id: id))
+				    public convenience init(__safeDI_id id: Int, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
+				        let api: any Api = __safeDI_apiBuilder.api(id)
 				        self.init(id: id, api: api)
 				    }
 				}
 
 				extension Detail {
-				    public enum __safeDI_Detail_4FD7A6651375681C {}
+				    public enum __safeDI_Detail_5BF800DF64AF87BC {}
 				}
 
 				#if DEBUG
@@ -2418,35 +2412,29 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			case .receivedThatMockCannotBuild:
 				"""
 				extension Detail {
-				    nonisolated public enum SafeDIScope_Api {
-				        nonisolated public struct api_Values {
-				            public let session: Session
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+				        public let api: (Session) -> __safeDI_Built
+
+				        public init(api: @escaping (Session) -> __safeDI_Built) {
+				            self.api = api
 				        }
 
-				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-				            public let api: (api_Values) -> __safeDI_Built
-
-				            public init(api: @escaping (api_Values) -> __safeDI_Built) {
-				                self.api = api
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.api = { _ in __safeDI_builder() }
-				            }
+				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				            self.init(api: { _ in __safeDI_builder() })
 				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public convenience init(__safeDI_session session: Session, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
-				        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values(session: session))
+				    public convenience init(__safeDI_session session: Session, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
+				        let api: any Api = __safeDI_apiBuilder.api(session)
 				        self.init(session: session, api: api)
 				    }
 				}
 
 				extension Detail {
-				    public enum __safeDI_Detail_6813EB4016CA9038 {}
+				    public enum __safeDI_Detail_4B1BB82FBB5FCB74 {}
 				}
 
 				#if DEBUG
@@ -2495,35 +2483,29 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			case .receivedOnlyIfAvailable:
 				"""
 				extension Detail {
-				    nonisolated public enum SafeDIScope_Api {
-				        nonisolated public struct api_Values {
-				            public let token: Token?
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+				        public let api: (Token?) -> __safeDI_Built
+
+				        public init(api: @escaping (Token?) -> __safeDI_Built) {
+				            self.api = api
 				        }
 
-				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-				            public let api: (api_Values) -> __safeDI_Built
-
-				            public init(api: @escaping (api_Values) -> __safeDI_Built) {
-				                self.api = api
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.api = { _ in __safeDI_builder() }
-				            }
+				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				            self.init(api: { _ in __safeDI_builder() })
 				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public convenience init(__safeDI_token token: Token?, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
-				        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values(token: token))
+				    public convenience init(__safeDI_token token: Token?, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
+				        let api: any Api = __safeDI_apiBuilder.api(token)
 				        self.init(token: token, api: api)
 				    }
 				}
 
 				extension Detail {
-				    public enum __safeDI_Detail_9D054B4263DD2A80 {}
+				    public enum __safeDI_Detail_1E431DCF4CE7D9F8 {}
 				}
 
 				#if DEBUG
@@ -2572,35 +2554,29 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			case .receivedLazilyInstantiated:
 				"""
 				extension Detail {
-				    nonisolated public enum SafeDIScope_Api {
-				        nonisolated public struct api_Values {
-				            public let session: LazilyInstantiated<Session>
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+				        public let api: (LazilyInstantiated<Session>) -> __safeDI_Built
+
+				        public init(api: @escaping (LazilyInstantiated<Session>) -> __safeDI_Built) {
+				            self.api = api
 				        }
 
-				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-				            public let api: (api_Values) -> __safeDI_Built
-
-				            public init(api: @escaping (api_Values) -> __safeDI_Built) {
-				                self.api = api
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.api = { _ in __safeDI_builder() }
-				            }
+				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				            self.init(api: { _ in __safeDI_builder() })
 				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public convenience init(__safeDI_session session: LazilyInstantiated<Session>, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
-				        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values(session: session))
+				    public convenience init(__safeDI_session session: LazilyInstantiated<Session>, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
+				        let api: any Api = __safeDI_apiBuilder.api(session)
 				        self.init(session: session, api: api)
 				    }
 				}
 
 				extension Detail {
-				    public enum __safeDI_Detail_95C32B3D7625FDE8 {}
+				    public enum __safeDI_Detail_DCB57C82D400ADD0 {}
 				}
 
 				#if DEBUG
@@ -2649,35 +2625,29 @@ struct SafeDIToolPublicMockRootLevelTests: ~Copyable {
 			case .receivedLazilyInstantiatedOnlyIfAvailable:
 				"""
 				extension Detail {
-				    nonisolated public enum SafeDIScope_Api {
-				        nonisolated public struct api_Values {
-				            public let session: LazilyInstantiated<Session>?
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+				        public let api: (LazilyInstantiated<Session>?) -> __safeDI_Built
+
+				        public init(api: @escaping (LazilyInstantiated<Session>?) -> __safeDI_Built) {
+				            self.api = api
 				        }
 
-				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-				            public let api: (api_Values) -> __safeDI_Built
-
-				            public init(api: @escaping (api_Values) -> __safeDI_Built) {
-				                self.api = api
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.api = { _ in __safeDI_builder() }
-				            }
+				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				            self.init(api: { _ in __safeDI_builder() })
 				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public convenience init(__safeDI_session session: LazilyInstantiated<Session>?, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
-				        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values(session: session))
+				    public convenience init(__safeDI_session session: LazilyInstantiated<Session>?, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
+				        let api: any Api = __safeDI_apiBuilder.api(session)
 				        self.init(session: session, api: api)
 				    }
 				}
 
 				extension Detail {
-				    public enum __safeDI_Detail_A6723096D4089A26 {}
+				    public enum __safeDI_Detail_6DF06B279E8F6E82 {}
 				}
 
 				#if DEBUG

@@ -512,36 +512,30 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		#endif
 
 		extension Inner {
-		    nonisolated public enum SafeDIScope_Api {
-		        nonisolated public struct api_Values {
-		            public let db: Db
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+		        public let api: (Db) -> __safeDI_Built
+
+		        public init(api: @escaping (Db) -> __safeDI_Built) {
+		            self.api = api
 		        }
 
-		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let api: (api_Values) -> __safeDI_Built
-
-		            public init(api: @escaping (api_Values) -> __safeDI_Built) {
-		                self.api = api
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.api = { _ in __safeDI_builder() }
-		            }
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(api: { _ in __safeDI_builder() })
 		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_db db: Db, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
-		        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values(db: db))
+		    public init(__safeDI_db db: Db, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
+		        let api: any Api = __safeDI_apiBuilder.api(db)
 		        self.init(db: db, api: api)
 		    }
 		}
 
 		extension Inner {
-		    public enum __safeDI_Inner_A1DB9859AB28893D {}
+		    public enum __safeDI_Inner_FCE996E4E101DCD3 {}
 		}
 
 		#if DEBUG
@@ -631,57 +625,39 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		#endif
 
 		extension F {
-		    nonisolated public enum SafeDIScope_Api {
-		        nonisolated public struct api_Values {
-		            public var db: Db { __safeDI_db.instance }
-		            public let k: K
-		            public let inner: Inner
-		            public let __safeDI_db: LazilyInstantiated<Db>
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+		        public let api: (LazilyInstantiated<Db>, K, Inner) -> __safeDI_Built
+		        public let inner: Inner.__safeDI_ApiCarrier<__safeDI_Built>
 
-		            init(db: LazilyInstantiated<Db>, k: K, inner: Inner) {
-		                __safeDI_db = db
-		                self.k = k
-		                self.inner = inner
-		            }
+		        public init(api: @escaping (LazilyInstantiated<Db>, K, Inner) -> __safeDI_Built, inner: Inner.__safeDI_ApiCarrier<__safeDI_Built>) {
+		            self.api = api
+		            self.inner = inner
 		        }
 
-		        nonisolated public struct inner_Values: Sendable {}
-
-		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let api: (api_Values) -> __safeDI_Built
-		            public let inner: (inner_Values) -> Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
-
-		            public init(api: @escaping (api_Values) -> __safeDI_Built, inner: @escaping (inner_Values) -> Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
-		                self.api = api
-		                self.inner = inner
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.api = { _ in __safeDI_builder() }
-		                self.inner = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		            }
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(api: { _, _, _ in __safeDI_builder() }, inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
 		    // SafeDI counts `Api` as `public`: no module it reads declares it narrower. If `Api` is `package` in a first-party module, run SafeDI on that module and list it among this module’s SafeDI dependencies.
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_db: @autoclosure @escaping () -> Db, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+		    public init(__safeDI_db: @autoclosure @escaping () -> Db, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let db = LazilyInstantiated<Db>(__safeDI_db)
 		        let k = K(db: db.instance)
 		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_A1DB9859AB28893D.self // If this line does not compile, compile the code SafeDI generates for module InnerMod into InnerMod: under Bazel, add InnerMod’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            return Inner(__safeDI_db: db.instance, __safeDI_apiBuilder: __safeDI_apiBuilder.inner(SafeDIScope_Api.inner_Values()))
+		            _ = Inner.__safeDI_Inner_FCE996E4E101DCD3.self // If this line does not compile, compile the code SafeDI generates for module InnerMod into InnerMod: under Bazel, add InnerMod’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            return Inner(__safeDI_db: db.instance, __safeDI_apiBuilder: __safeDI_apiBuilder.inner)
 		        }
 		        let inner: Inner = __safeDI_inner()
-		        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values(db: db, k: k, inner: inner))
+		        let api: any Api = __safeDI_apiBuilder.api(db, k, inner)
 		        self.init(k: k, api: api, inner: inner)
 		    }
 		}
 
 		extension F {
-		    public enum __safeDI_F_51B9E78A3A60947E {}
+		    public enum __safeDI_F_B6D9BD662693F0E4 {}
 		}
 
 		#if DEBUG
@@ -799,19 +775,19 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		    public init() {
 		        let db = Db()
 		        func __safeDI_f() -> F {
-		            _ = F.__safeDI_F_51B9E78A3A60947E.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_F() -> F.SafeDIScope_Api.__safeDI_Builder<any Api> {
+		            _ = F.__safeDI_F_B6D9BD662693F0E4.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_F() -> F.__safeDI_ApiCarrier<any Api> {
 		                .init(
-		                    api: { _ in
+		                    api: { scope_db, scope_k, scope_inner in
 		                        let api: any Api = Live(db: db)
 		                        return api
 		                    },
-		                    inner: { _ in __safeDI_apiBuilder_Inner() }
+		                    inner: __safeDI_apiBuilder_Inner()
 		                )
 		            }
-		            func __safeDI_apiBuilder_Inner() -> Inner.SafeDIScope_Api.__safeDI_Builder<any Api> {
-		                .init(api: { scope in
-		                    let db = scope.db
+		            func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		                .init(api: { scope_db in
+		                    let db = scope_db
 		                    let api: any Api = Live(db: db)
 		                    return api
 		                })
@@ -910,19 +886,19 @@ struct SafeDIToolCallingMockInnerPublicMockValueTests: ~Copyable {
 		    public init() {
 		        let db = Db()
 		        func __safeDI_f() -> F {
-		            _ = F.__safeDI_F_51B9E78A3A60947E.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            func __safeDI_apiBuilder_F() -> F.SafeDIScope_Api.__safeDI_Builder<any Api> {
+		            _ = F.__safeDI_F_B6D9BD662693F0E4.self // If this line does not compile, compile the code SafeDI generates for module Feat into Feat: under Bazel, add Feat’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            func __safeDI_apiBuilder_F() -> F.__safeDI_ApiCarrier<any Api> {
 		                .init(
-		                    api: { _ in
+		                    api: { scope_db, scope_k, scope_inner in
 		                        let api: any Api = Live(db: db)
 		                        return api
 		                    },
-		                    inner: { _ in __safeDI_apiBuilder_Inner() }
+		                    inner: __safeDI_apiBuilder_Inner()
 		                )
 		            }
-		            func __safeDI_apiBuilder_Inner() -> Inner.SafeDIScope_Api.__safeDI_Builder<any Api> {
-		                .init(api: { scope in
-		                    let db = scope.db
+		            func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		                .init(api: { scope_db in
+		                    let db = scope_db
 		                    let api: any Api = Live(db: db)
 		                    return api
 		                })

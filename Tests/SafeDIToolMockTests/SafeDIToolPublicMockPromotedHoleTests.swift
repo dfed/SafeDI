@@ -250,48 +250,38 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				#endif
 
 				extension D {
-				    nonisolated public enum SafeDIScope_Api {
-				        nonisolated public struct leaf_Values {
-				            public let d: SendableInstantiator<D>
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+				        public let leaf: (SendableInstantiator<D>) -> __safeDI_ApiCarrier_Leaf<__safeDI_Built>
+
+				        public init(leaf: @escaping (SendableInstantiator<D>) -> __safeDI_ApiCarrier_Leaf<__safeDI_Built>) {
+				            self.leaf = leaf
 				        }
 
-				        nonisolated public enum Leaf_Scope {
-				            nonisolated public struct api_Values {}
+				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				            self.init(leaf: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+				        }
+				    }
 
-				            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-				            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-				                public let api: (api_Values) -> __safeDI_Built
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public final class __safeDI_ApiCarrier_Leaf<__safeDI_Built> {
+				        public let api: () -> __safeDI_Built
 
-				                public init(api: @escaping (api_Values) -> __safeDI_Built) {
-				                    self.api = api
-				                }
-
-				                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                    self.api = { _ in __safeDI_builder() }
-				                }
-				            }
+				        public init(api: @escaping () -> __safeDI_Built) {
+				            self.api = api
 				        }
 
-				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-				            public let leaf: (leaf_Values) -> SafeDIScope_Api.Leaf_Scope.__safeDI_Builder<__safeDI_Built>
-
-				            public init(leaf: @escaping (leaf_Values) -> SafeDIScope_Api.Leaf_Scope.__safeDI_Builder<__safeDI_Built>) {
-				                self.leaf = leaf
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.leaf = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-				            }
+				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				            self.init(api: { __safeDI_builder() })
 				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public convenience init(__safeDI_d d: SendableInstantiator<D>, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
-				        let __safeDI_apiBuilder_leaf = __safeDI_apiBuilder.leaf(SafeDIScope_Api.leaf_Values(d: d))
+				    public convenience init(__safeDI_d d: SendableInstantiator<D>, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
+				        let __safeDI_apiBuilder_leaf = __safeDI_apiBuilder.leaf(d)
 				        func __safeDI_leaf() -> Leaf {
-				            let api: any Api = __safeDI_apiBuilder_leaf.api(SafeDIScope_Api.Leaf_Scope.api_Values())
+				            let api: any Api = __safeDI_apiBuilder_leaf.api()
 				            return Leaf(api: api, d: d)
 				        }
 				        let leaf: Leaf = __safeDI_leaf()
@@ -300,7 +290,7 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				}
 
 				extension D {
-				    public enum __safeDI_D_CB365CB5638FE581 {}
+				    public enum __safeDI_D_47FC6CF11998EC83 {}
 				}
 
 				#if DEBUG
@@ -3069,33 +3059,29 @@ struct SafeDIToolPublicMockPromotedHoleTests: ~Copyable {
 				#endif
 
 				extension Other {
-				    nonisolated public enum SafeDIScope_Api {
-				        nonisolated public struct api_Values {}
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+				        public let api: () -> __safeDI_Built
 
-				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-				            public let api: (api_Values) -> __safeDI_Built
+				        public init(api: @escaping () -> __safeDI_Built) {
+				            self.api = api
+				        }
 
-				            public init(api: @escaping (api_Values) -> __safeDI_Built) {
-				                self.api = api
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.api = { _ in __safeDI_builder() }
-				            }
+				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				            self.init(api: { __safeDI_builder() })
 				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public convenience init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
-				        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values())
+				    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
+				        let api: any Api = __safeDI_apiBuilder.api()
 				        self.init(api: api)
 				    }
 				}
 
 				extension Other {
-				    public enum __safeDI_Other_EEC56DF47DB28A2F {}
+				    public enum __safeDI_Other_D0DF39ED60BA8025 {}
 				}
 
 				#if DEBUG

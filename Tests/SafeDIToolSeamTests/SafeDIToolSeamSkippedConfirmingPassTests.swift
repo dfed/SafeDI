@@ -72,45 +72,36 @@ struct SafeDIToolSeamSkippedConfirmingPassTests: ~Copyable {
 
 		#expect(output.modules["Feature"]?.generatedFiles["Feature.swift"] == generatedFileHeader + """
 		extension Feature {
-		    nonisolated public enum SafeDIScope_Api {
-		        nonisolated public struct api_Values {
-		            public let featureBuilder: Instantiator<Feature>
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+		        public let api: (Instantiator<Feature>) -> __safeDI_Built
+		        public let featureBuilder: () -> Feature.__safeDI_ApiCarrier<__safeDI_Built>
+
+		        public init(api: @escaping (Instantiator<Feature>) -> __safeDI_Built, featureBuilder: @escaping () -> Feature.__safeDI_ApiCarrier<__safeDI_Built>) {
+		            self.api = api
+		            self.featureBuilder = featureBuilder
 		        }
 
-		        nonisolated public struct featureBuilder_Values: Sendable {}
-
-		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let api: (api_Values) -> __safeDI_Built
-		            public let featureBuilder: (featureBuilder_Values) -> Feature.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
-
-		            public init(api: @escaping (api_Values) -> __safeDI_Built, featureBuilder: @escaping (featureBuilder_Values) -> Feature.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
-		                self.api = api
-		                self.featureBuilder = featureBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.api = { _ in __safeDI_builder() }
-		                self.featureBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		            }
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(api: { _ in __safeDI_builder() }, featureBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public convenience init(__safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+		    public convenience init(__safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        func __safeDI_featureBuilder() -> Feature {
-		            _ = Feature.__safeDI_Feature_568097B2B4EF6032.self
-		            return Feature(__safeDI_apiBuilder: __safeDI_apiBuilder.featureBuilder(SafeDIScope_Api.featureBuilder_Values()))
+		            _ = Feature.__safeDI_Feature_57C4DCF55CDC41B4.self
+		            return Feature(__safeDI_apiBuilder: __safeDI_apiBuilder.featureBuilder())
 		        }
 		        let featureBuilder = Instantiator<Feature>(__safeDI_featureBuilder)
-		        let api: any Api = __safeDI_apiBuilder.api(SafeDIScope_Api.api_Values(featureBuilder: featureBuilder))
+		        let api: any Api = __safeDI_apiBuilder.api(featureBuilder)
 		        self.init(api: api, featureBuilder: featureBuilder)
 		    }
 		}
 
 		extension Feature {
-		    public enum __safeDI_Feature_568097B2B4EF6032 {}
+		    public enum __safeDI_Feature_57C4DCF55CDC41B4 {}
 		}
 		""")
 	}

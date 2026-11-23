@@ -935,7 +935,8 @@ public struct SeamSignature: Sendable {
 			/// `@Sendable` enum whose property is built in a `@Sendable` function, since what it returns can be a plain struct,
 			/// which that function could not capture.
 			public struct Member: Codable, Sendable {
-				public init(bindingName: String, valuesType: TypeDescription, fields: [Field], levelType: TypeDescription, bindingPath: [Property], isCalledInsideFunction: Bool) {
+				public init(bindingName: String, valuesType: TypeDescription, fields: [Field], levelType: TypeDescription, bindingPath: [Property], isCalledInsideFunction: Bool, isLetChild: Bool = false) {
+					self.isLetChild = isLetChild
 					self.bindingName = bindingName
 					self.valuesType = valuesType
 					self.fields = fields
@@ -950,6 +951,8 @@ public struct SeamSignature: Sendable {
 				public let levelType: TypeDescription
 				public let bindingPath: [Property]
 				public let isCalledInsideFunction: Bool
+				/// Whether the level is a carrier's `let` child (`ScopeEnum.Case.isLetChildOfCarrier`), read, not called.
+				public let isLetChild: Bool
 			}
 
 			/// A case's payload on a route: the name the seam's tree binds it under, before the case's property is built, the
@@ -999,7 +1002,7 @@ public struct SeamSignature: Sendable {
 					innerScope: innerScope.map { InnerScope(callPath: $0.callPath, innerKey: $0.innerKey, enumType: $0.enumType, builderLabel: $0.builderLabel, name: innerScopeName ?? $0.name) },
 					leadsIntoFill: leadsIntoFill,
 					member: memberBindingName.flatMap { name in
-						member.map { Member(bindingName: name, valuesType: $0.valuesType, fields: $0.fields, levelType: $0.levelType, bindingPath: $0.bindingPath, isCalledInsideFunction: $0.isCalledInsideFunction) }
+						member.map { Member(bindingName: name, valuesType: $0.valuesType, fields: $0.fields, levelType: $0.levelType, bindingPath: $0.bindingPath, isCalledInsideFunction: $0.isCalledInsideFunction, isLetChild: $0.isLetChild) }
 					},
 				)
 			}
@@ -1256,6 +1259,19 @@ public struct SeamSignature: Sendable {
 				case fill(innerKey: Key, innerEnumType: TypeDescription?, enumKey: Key, enumType: TypeDescription, isIndirect: Bool)
 			}
 
+			/// Whether a seam's carrier holds the case's child carrier as a `let`: a nested level whose member is handed no value,
+			/// outside every loop of levels (`isIndirect`, or, where the cases are not marked yet, `isInLoop` of the key of the
+			/// enum the case holds), so forming it once where the parent is formed ends and captures nothing; a `Sendable`
+			/// carrier holds only a `Sendable` child.
+			public func isLetChildOfCarrier(inSendableEnum: Bool, isInLoop: ((Key) -> Bool)? = nil) -> Bool {
+				switch kind {
+				case let .nested(enumKey, _, isIndirect), let .inner(enumKey, _, isIndirect):
+					!isIndirect && !(isInLoop?(enumKey) ?? false) && (values?.fields.isEmpty ?? true) && (!inSendableEnum || enumKey.isSendable)
+				case .place, .fill:
+					false
+				}
+			}
+
 			public let name: String
 			public internal(set) var kind: Kind
 			/// What the type the enum describes binds before the case's property; `nil` for a case of a `@Sendable` enum.
@@ -1266,12 +1282,13 @@ public struct SeamSignature: Sendable {
 			public let memberValuesTypeName: String?
 		}
 
-		public init(key: Key, typeName: String, rootTypeName: String? = nil, builderLabel: String, cases: [Case]) {
+		public init(key: Key, typeName: String, rootTypeName: String? = nil, builderLabel: String, cases: [Case], takesValuesPositionally: Bool = false) {
 			self.key = key
 			self.typeName = typeName
 			self.rootTypeName = rootTypeName
 			self.builderLabel = builderLabel
 			self.cases = cases
+			self.takesValuesPositionally = takesValuesPositionally
 		}
 
 		public let key: Key
@@ -1281,6 +1298,10 @@ public struct SeamSignature: Sendable {
 		/// The label of the builder this enum is handed to, which names its dispatcher.
 		public let builderLabel: String
 		public internal(set) var cases: [Case]
+		/// Whether this carrier enum's level hands its members their values positionally rather than in run structs: decided
+		/// once, by the seam's own module (`SeamCarrierValues.positionalLevels(of:memberAccess:)`), and recorded here, so a
+		/// caller reads the decision and never computes it again. `false` for every other enum.
+		public internal(set) var takesValuesPositionally: Bool
 		/// The enum's type, as a module that does not declare it spells it: qualified by the seam's type, through the root
 		/// enum.
 		var type: TypeDescription {
@@ -1933,6 +1954,7 @@ struct CalledBuilders: Sendable {
 		self.holeBySite = holeBySite
 		let enumsByKey = Dictionary(scopeEnums.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
 		self.enumsByKey = enumsByKey
+		carrierValuesBySeam = SeamCarrierValues.bySeam(of: scopeEnums)
 		var builderKeyByReachedPlace = [ReachedPlace: SeamSignature.ScopeEnum.Key]()
 		for builder in builders {
 			for site in SeamSignature.ScopeEnum.sitesReached(from: builder.enumKey, in: enumsByKey) {
@@ -1950,6 +1972,21 @@ struct CalledBuilders: Sendable {
 	let scopeEnums: [SeamSignature.ScopeEnum]
 	/// Each enum by its key.
 	let enumsByKey: [SeamSignature.ScopeEnum.Key: SeamSignature.ScopeEnum]
+	/// How each seam's carriers among the enums hand a level's values (`SeamCarrierValues`), by seam; a seam none of whose
+	/// levels is cut into runs has no entry.
+	let carrierValuesBySeam: [TypeDescription: SeamCarrierValues]
+
+	/// How a fill of `hole`'s place takes its case's values, where the case is a seam's carrier's.
+	func carrierUse(ofPlace hole: SeamSignature.Hole) -> SeamCarrierValues.Use? {
+		guard let enumPlace = hole.enumPlace, !enumPlace.values.isEmpty, let values = carrierValuesBySeam[hole.scopeSeamType], let level = SeamCarrierValues.level(ofEnum: enumPlace.enumType(qualifiedBy: nil)) else { return nil }
+		return values.use(ofLevel: level, count: enumPlace.values.count)
+	}
+
+	/// How a member of `scopeEnum`, a carrier's, takes `count` values, or `nil` where it takes them positionally.
+	func carrierUse(ofEnum scopeEnum: SeamSignature.ScopeEnum, count: Int) -> SeamCarrierValues.Use? {
+		guard count > 0, let values = carrierValuesBySeam[scopeEnum.key.seamType], let level = SeamCarrierValues.level(ofEnum: scopeEnum.type) else { return nil }
+		return values.use(ofLevel: level, count: count)
+	}
 
 	/// The enum key of the first builder of `hole`'s hole type, in builder order, whose enum reaches `hole`'s site, or `nil`
 	/// where none does: found once for the call, never once for each fill that asks.

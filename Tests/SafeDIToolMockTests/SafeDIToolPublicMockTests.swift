@@ -15386,37 +15386,42 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				#endif
 
 				extension FeedScreen {
-				    nonisolated public enum SafeDIScope_FeedService {
-				        nonisolated public struct service_Values {
-				            public let shared: SharedThing
-				            internal let store: FeedStore
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public struct __safeDI_Values2 {
+				        public let shared: SharedThing
+				        internal let store: FeedStore
+
+				        init(shared: SharedThing, store: FeedStore) {
+				            self.shared = shared
+				            self.store = store
+				        }
+				    }
+
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public final class __safeDI_FeedServiceCarrier<__safeDI_Built> {
+				        public let service: (__safeDI_Values2) -> __safeDI_Built
+
+				        public init(service: @escaping (__safeDI_Values2) -> __safeDI_Built) {
+				            self.service = service
 				        }
 
-				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-				            public let service: (service_Values) -> __safeDI_Built
-
-				            public init(service: @escaping (service_Values) -> __safeDI_Built) {
-				                self.service = service
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.service = { _ in __safeDI_builder() }
-				            }
+				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				            self.init(service: { _ in __safeDI_builder() })
 				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public convenience init(__safeDI_shared shared: SharedThing, __safeDI_feedServiceBuilder: SafeDIScope_FeedService.__safeDI_Builder<FeedService>) {
+				    public convenience init(__safeDI_shared shared: SharedThing, __safeDI_feedServiceBuilder: __safeDI_FeedServiceCarrier<FeedService>) {
 				        let store = FeedStore(shared: shared)
-				        let service: FeedService = __safeDI_feedServiceBuilder.service(SafeDIScope_FeedService.service_Values(shared: shared, store: store))
+				        let __safeDI__values2 = __safeDI_Values2(shared: shared, store: store)
+				        let service: FeedService = __safeDI_feedServiceBuilder.service(__safeDI__values2)
 				        self.init(shared: shared, store: store, service: service)
 				    }
 				}
 
 				extension FeedScreen {
-				    public enum __safeDI_FeedScreen_F057834D041E69F6 {}
+				    public enum __safeDI_FeedScreen_E8A29039E6D9BF60 {}
 				}
 
 				#if DEBUG
@@ -15514,37 +15519,42 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				#endif
 
 				extension FeedScreen {
-				    nonisolated public enum SafeDIScope_FeedService {
-				        nonisolated public struct service_Values {
-				            public let shared: SharedThing
-				            internal let store: FeedStore
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public struct __safeDI_Values2 {
+				        public let shared: SharedThing
+				        internal let store: FeedStore
+
+				        init(shared: SharedThing, store: FeedStore) {
+				            self.shared = shared
+				            self.store = store
+				        }
+				    }
+
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public final class __safeDI_FeedServiceCarrier<__safeDI_Built> {
+				        public let service: (__safeDI_Values2) -> __safeDI_Built
+
+				        public init(service: @escaping (__safeDI_Values2) -> __safeDI_Built) {
+				            self.service = service
 				        }
 
-				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-				            public let service: (service_Values) -> __safeDI_Built
-
-				            public init(service: @escaping (service_Values) -> __safeDI_Built) {
-				                self.service = service
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.service = { _ in __safeDI_builder() }
-				            }
+				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				            self.init(service: { _ in __safeDI_builder() })
 				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public convenience init(__safeDI_shared shared: SharedThing, __safeDI_feedServiceBuilder: SafeDIScope_FeedService.__safeDI_Builder<FeedService>) {
+				    public convenience init(__safeDI_shared shared: SharedThing, __safeDI_feedServiceBuilder: __safeDI_FeedServiceCarrier<FeedService>) {
 				        let store = FeedStore(shared: shared)
-				        let service: FeedService = __safeDI_feedServiceBuilder.service(SafeDIScope_FeedService.service_Values(shared: shared, store: store))
+				        let __safeDI__values2 = __safeDI_Values2(shared: shared, store: store)
+				        let service: FeedService = __safeDI_feedServiceBuilder.service(__safeDI__values2)
 				        self.init(shared: shared, store: store, service: service)
 				    }
 				}
 
 				extension FeedScreen {
-				    public enum __safeDI_FeedScreen_F057834D041E69F6 {}
+				    public enum __safeDI_FeedScreen_E8A29039E6D9BF60 {}
 				}
 				""",
 				"FeedScreen+SafeDIMock.swift": generatedFileHeader + """
@@ -15656,37 +15666,42 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				#endif
 
 				extension FeedScreen {
-				    nonisolated public enum SafeDIScope_FeedService {
-				        nonisolated public struct service_Values {
-				            public let shared: SharedThing
-				            internal let store: FeedStore
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public struct __safeDI_Values2 {
+				        public let shared: SharedThing
+				        internal let store: FeedStore
+
+				        init(shared: SharedThing, store: FeedStore) {
+				            self.shared = shared
+				            self.store = store
+				        }
+				    }
+
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public final class __safeDI_FeedServiceCarrier<__safeDI_Built> {
+				        public let service: (__safeDI_Values2) -> __safeDI_Built
+
+				        public init(service: @escaping (__safeDI_Values2) -> __safeDI_Built) {
+				            self.service = service
 				        }
 
-				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-				            public let service: (service_Values) -> __safeDI_Built
-
-				            public init(service: @escaping (service_Values) -> __safeDI_Built) {
-				                self.service = service
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.service = { _ in __safeDI_builder() }
-				            }
+				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				            self.init(service: { _ in __safeDI_builder() })
 				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public convenience init(__safeDI_shared shared: SharedThing, __safeDI_feedServiceBuilder: SafeDIScope_FeedService.__safeDI_Builder<FeedService>) {
+				    public convenience init(__safeDI_shared shared: SharedThing, __safeDI_feedServiceBuilder: __safeDI_FeedServiceCarrier<FeedService>) {
 				        let store = FeedStore(shared: shared)
-				        let service: FeedService = __safeDI_feedServiceBuilder.service(SafeDIScope_FeedService.service_Values(shared: shared, store: store))
+				        let __safeDI__values2 = __safeDI_Values2(shared: shared, store: store)
+				        let service: FeedService = __safeDI_feedServiceBuilder.service(__safeDI__values2)
 				        self.init(shared: shared, store: store, service: service)
 				    }
 				}
 
 				extension FeedScreen {
-				    public enum __safeDI_FeedScreen_F057834D041E69F6 {}
+				    public enum __safeDI_FeedScreen_E8A29039E6D9BF60 {}
 				}
 
 				#if DEBUG
@@ -15784,37 +15799,42 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				#endif
 
 				extension FeedScreen {
-				    nonisolated public enum SafeDIScope_FeedService {
-				        nonisolated public struct service_Values {
-				            public let shared: SharedThing
-				            internal let store: FeedStore
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public struct __safeDI_Values2 {
+				        public let shared: SharedThing
+				        internal let store: FeedStore
+
+				        init(shared: SharedThing, store: FeedStore) {
+				            self.shared = shared
+				            self.store = store
+				        }
+				    }
+
+				    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+				    nonisolated public final class __safeDI_FeedServiceCarrier<__safeDI_Built> {
+				        public let service: (__safeDI_Values2) -> __safeDI_Built
+
+				        public init(service: @escaping (__safeDI_Values2) -> __safeDI_Built) {
+				            self.service = service
 				        }
 
-				        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-				        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-				            public let service: (service_Values) -> __safeDI_Built
-
-				            public init(service: @escaping (service_Values) -> __safeDI_Built) {
-				                self.service = service
-				            }
-
-				            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-				                self.service = { _ in __safeDI_builder() }
-				            }
+				        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+				            self.init(service: { _ in __safeDI_builder() })
 				        }
 				    }
 
 				    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 				    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-				    public convenience init(__safeDI_shared shared: SharedThing, __safeDI_feedServiceBuilder: SafeDIScope_FeedService.__safeDI_Builder<FeedService>) {
+				    public convenience init(__safeDI_shared shared: SharedThing, __safeDI_feedServiceBuilder: __safeDI_FeedServiceCarrier<FeedService>) {
 				        let store = FeedStore(shared: shared)
-				        let service: FeedService = __safeDI_feedServiceBuilder.service(SafeDIScope_FeedService.service_Values(shared: shared, store: store))
+				        let __safeDI__values2 = __safeDI_Values2(shared: shared, store: store)
+				        let service: FeedService = __safeDI_feedServiceBuilder.service(__safeDI__values2)
 				        self.init(shared: shared, store: store, service: service)
 				    }
 				}
 
 				extension FeedScreen {
-				    public enum __safeDI_FeedScreen_F057834D041E69F6 {}
+				    public enum __safeDI_FeedScreen_E8A29039E6D9BF60 {}
 				}
 				""",
 				"FeedScreen+SafeDIMock.swift": generatedFileHeader + """

@@ -152,56 +152,37 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == [
 			"Feature.swift": generatedFileHeader + """
 			extension Hub {
-			    nonisolated public enum SafeDIScope_Api {
-			        nonisolated public struct aBuilder_Values {
-			            public var tag: Tag { __safeDI_tag.instance }
-			            public let __safeDI_tag: LazilyInstantiated<Tag>
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+			        public let aBuilder: (LazilyInstantiated<Tag>) -> __safeDI_ApiCarrier_A<__safeDI_Built>
 
-			            init(tag: LazilyInstantiated<Tag>) {
-			                __safeDI_tag = tag
-			            }
+			        public init(aBuilder: @escaping (LazilyInstantiated<Tag>) -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
+			            self.aBuilder = aBuilder
 			        }
 
-			        nonisolated public enum A_Scope {
-			            nonisolated public struct api_Values {
-			                public let tag: Tag
-			                public let reader: TagReader
-			                public let bBuilder: Instantiator<B>
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+			        }
+			    }
 
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let api: (api_Values) -> __safeDI_Built
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier_A<__safeDI_Built> {
+			        public let api: (Tag, TagReader, Instantiator<B>) -> __safeDI_Built
 
-			                public init(api: @escaping (api_Values) -> __safeDI_Built) {
-			                    self.api = api
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.api = { _ in __safeDI_builder() }
-			                }
-			            }
+			        public init(api: @escaping (Tag, TagReader, Instantiator<B>) -> __safeDI_Built) {
+			            self.api = api
 			        }
 
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let aBuilder: (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
-
-			            public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                self.aBuilder = aBuilder
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(api: { _, _, _ in __safeDI_builder() })
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+			    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 			        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
-			        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(SafeDIScope_Api.aBuilder_Values(tag: tag))
+			        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(tag)
 			        func __safeDI_aBuilder(tag: Tag) -> A {
 			            let reader = TagReader(tag: tag)
 			            func __safeDI_bBuilder(tag: Tag) -> B {
@@ -213,7 +194,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			            let bBuilder = Instantiator<B> {
 			                __safeDI_bBuilder(tag: $0)
 			            }
-			            let api: any Api = __safeDI_apiBuilder_aBuilder.api(SafeDIScope_Api.A_Scope.api_Values(tag: tag, reader: reader, bBuilder: bBuilder))
+			            let api: any Api = __safeDI_apiBuilder_aBuilder.api(tag, reader, bBuilder)
 			            return A(reader: reader, api: api, bBuilder: bBuilder)
 			        }
 			        let aBuilder = Instantiator<A> {
@@ -224,7 +205,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			}
 
 			extension Hub {
-			    public enum __safeDI_Hub_346ABA69B9079141 {}
+			    public enum __safeDI_Hub_F0045AB682C97BD1 {}
 			}
 			""",
 		])
@@ -238,12 +219,12 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    public convenience init() {
 			        let tag = Tag()
 			        func __safeDI_hub() -> Hub {
-			            _ = Hub.__safeDI_Hub_346ABA69B9079141.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIScope_Api.__safeDI_Builder<any Api> {
-			                .init(aBuilder: { _ in __safeDI_apiBuilder_Hub_A_Scope() })
+			            _ = Hub.__safeDI_Hub_F0045AB682C97BD1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
+			                .init(aBuilder: { values_tag in __safeDI_apiBuilder_Hub_A_Scope() })
 			            }
-			            func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.SafeDIScope_Api.A_Scope.__safeDI_Builder<any Api> {
-			                .init(api: { _ in
+			            func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.__safeDI_ApiCarrier_A<any Api> {
+			                .init(api: { scope_tag, scope_reader, scope_bBuilder in
 			                    let api: any Api = LiveApi()
 			                    return api
 			                })
@@ -269,56 +250,37 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == [
 			"Feature.swift": generatedFileHeader + """
 			extension Hub {
-			    nonisolated public enum SafeDIScope_Api {
-			        nonisolated public struct aBuilder_Values {
-			            public var tag: Tag? { __safeDI_tag.instance }
-			            public let __safeDI_tag: LazilyInstantiated<Tag?>
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+			        public let aBuilder: (LazilyInstantiated<Tag?>) -> __safeDI_ApiCarrier_A<__safeDI_Built>
 
-			            init(tag: LazilyInstantiated<Tag?>) {
-			                __safeDI_tag = tag
-			            }
+			        public init(aBuilder: @escaping (LazilyInstantiated<Tag?>) -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
+			            self.aBuilder = aBuilder
 			        }
 
-			        nonisolated public enum A_Scope {
-			            nonisolated public struct api_Values {
-			                public let tag: Tag?
-			                public let reader: TagReader
-			                public let bBuilder: Instantiator<B>
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+			        }
+			    }
 
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let api: (api_Values) -> __safeDI_Built
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier_A<__safeDI_Built> {
+			        public let api: (Tag?, TagReader, Instantiator<B>) -> __safeDI_Built
 
-			                public init(api: @escaping (api_Values) -> __safeDI_Built) {
-			                    self.api = api
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.api = { _ in __safeDI_builder() }
-			                }
-			            }
+			        public init(api: @escaping (Tag?, TagReader, Instantiator<B>) -> __safeDI_Built) {
+			            self.api = api
 			        }
 
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let aBuilder: (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
-
-			            public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                self.aBuilder = aBuilder
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(api: { _, _, _ in __safeDI_builder() })
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_tag: @autoclosure @escaping () -> Tag?, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+			    public init(__safeDI_tag: @autoclosure @escaping () -> Tag?, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 			        let tag = LazilyInstantiated<Tag?>(__safeDI_tag)
-			        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(SafeDIScope_Api.aBuilder_Values(tag: tag))
+			        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(tag)
 			        func __safeDI_aBuilder(tag: Tag?) -> A {
 			            let reader = TagReader(tag: tag)
 			            func __safeDI_bBuilder(tag: Tag) -> B {
@@ -330,7 +292,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			            let bBuilder = Instantiator<B> {
 			                __safeDI_bBuilder(tag: $0)
 			            }
-			            let api: any Api = __safeDI_apiBuilder_aBuilder.api(SafeDIScope_Api.A_Scope.api_Values(tag: tag, reader: reader, bBuilder: bBuilder))
+			            let api: any Api = __safeDI_apiBuilder_aBuilder.api(tag, reader, bBuilder)
 			            return A(reader: reader, api: api, bBuilder: bBuilder)
 			        }
 			        let aBuilder = Instantiator<A> {
@@ -341,7 +303,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			}
 
 			extension Hub {
-			    public enum __safeDI_Hub_6134D4B3B6522FF6 {}
+			    public enum __safeDI_Hub_DEB194DE58CBB6E2 {}
 			}
 			""",
 		])
@@ -355,12 +317,12 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    public convenience init() {
 			        let tag = Tag()
 			        func __safeDI_hub() -> Hub {
-			            _ = Hub.__safeDI_Hub_6134D4B3B6522FF6.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIScope_Api.__safeDI_Builder<any Api> {
-			                .init(aBuilder: { _ in __safeDI_apiBuilder_Hub_A_Scope() })
+			            _ = Hub.__safeDI_Hub_DEB194DE58CBB6E2.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
+			                .init(aBuilder: { values_tag in __safeDI_apiBuilder_Hub_A_Scope() })
 			            }
-			            func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.SafeDIScope_Api.A_Scope.__safeDI_Builder<any Api> {
-			                .init(api: { _ in
+			            func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.__safeDI_ApiCarrier_A<any Api> {
+			                .init(api: { scope_tag, scope_reader, scope_bBuilder in
 			                    let api: any Api = LiveApi()
 			                    return api
 			                })
@@ -385,56 +347,37 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + """
 		extension Hub {
-		    nonisolated public enum SafeDIScope_Api {
-		        nonisolated public struct a_Values {
-		            public var tag: Tag { __safeDI_tag.instance }
-		            public let __safeDI_tag: LazilyInstantiated<Tag>
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+		        public let a: (LazilyInstantiated<Tag>) -> __safeDI_ApiCarrier_A<__safeDI_Built>
 
-		            init(tag: LazilyInstantiated<Tag>) {
-		                __safeDI_tag = tag
-		            }
+		        public init(a: @escaping (LazilyInstantiated<Tag>) -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
+		            self.a = a
 		        }
 
-		        nonisolated public enum A_Scope {
-		            nonisolated public struct api_Values {
-		                public let tag: Tag
-		                public let reader: TagReader
-		                public let bBuilder: Instantiator<B>
-		            }
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(a: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+		        }
+		    }
 
-		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let api: (api_Values) -> __safeDI_Built
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiCarrier_A<__safeDI_Built> {
+		        public let api: (Tag, TagReader, Instantiator<B>) -> __safeDI_Built
 
-		                public init(api: @escaping (api_Values) -> __safeDI_Built) {
-		                    self.api = api
-		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.api = { _ in __safeDI_builder() }
-		                }
-		            }
+		        public init(api: @escaping (Tag, TagReader, Instantiator<B>) -> __safeDI_Built) {
+		            self.api = api
 		        }
 
-		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let a: (a_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
-
-		            public init(a: @escaping (a_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
-		                self.a = a
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.a = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		            }
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(api: { _, _, _ in __safeDI_builder() })
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+		    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
-		        let __safeDI_apiBuilder_a = __safeDI_apiBuilder.a(SafeDIScope_Api.a_Values(tag: tag))
+		        let __safeDI_apiBuilder_a = __safeDI_apiBuilder.a(tag)
 		        func __safeDI_a(tag: Tag) -> A {
 		            let reader = TagReader(tag: tag)
 		            func __safeDI_bBuilder(tag: Tag) -> B {
@@ -446,7 +389,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		            let bBuilder = Instantiator<B> {
 		                __safeDI_bBuilder(tag: $0)
 		            }
-		            let api: any Api = __safeDI_apiBuilder_a.api(SafeDIScope_Api.A_Scope.api_Values(tag: tag, reader: reader, bBuilder: bBuilder))
+		            let api: any Api = __safeDI_apiBuilder_a.api(tag, reader, bBuilder)
 		            return A(reader: reader, api: api, bBuilder: bBuilder)
 		        }
 		        let a = LazilyInstantiated<A> {
@@ -457,7 +400,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		}
 
 		extension Hub {
-		    public enum __safeDI_Hub_A9736CB86F3B26CB {}
+		    public enum __safeDI_Hub_6A71D1DD032F785B {}
 		}
 		"""])
 		#expect(output.modules["App"]?.generatedFiles == [
@@ -473,12 +416,12 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			        }
 			        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
 			        func __safeDI_hub() -> Hub {
-			            _ = Hub.__safeDI_Hub_A9736CB86F3B26CB.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIScope_Api.__safeDI_Builder<any Api> {
-			                .init(a: { _ in __safeDI_apiBuilder_Hub_A_Scope() })
+			            _ = Hub.__safeDI_Hub_6A71D1DD032F785B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
+			                .init(a: { values_tag in __safeDI_apiBuilder_Hub_A_Scope() })
 			            }
-			            func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.SafeDIScope_Api.A_Scope.__safeDI_Builder<any Api> {
-			                .init(api: { _ in
+			            func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.__safeDI_ApiCarrier_A<any Api> {
+			                .init(api: { scope_tag, scope_reader, scope_bBuilder in
 			                    let api: any Api = LiveApi()
 			                    return api
 			                })
@@ -504,52 +447,38 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == [
 			"Feature.swift": generatedFileHeader + """
 			extension Hub {
-			    nonisolated public enum SafeDIScope_Api {
-			        nonisolated public enum A_Scope {
-			            nonisolated public struct api_Values {
-			                public let tag: Tag
-			                public let reader: TagReader
-			                public let bBuilder: SendableInstantiator<B>
-			            }
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier_A<__safeDI_Built> {
+			        public let api: (Tag, TagReader, SendableInstantiator<B>) -> __safeDI_Built
 
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let api: (api_Values) -> __safeDI_Built
+			        public init(api: @escaping (Tag, TagReader, SendableInstantiator<B>) -> __safeDI_Built) {
+			            self.api = api
+			        }
 
-			                public init(api: @escaping (api_Values) -> __safeDI_Built) {
-			                    self.api = api
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.api = { _ in __safeDI_builder() }
-			                }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(api: { _, _, _ in __safeDI_builder() })
 			        }
 			    }
 
-			    nonisolated public enum SafeDISendableScope_Api {
-			        nonisolated public struct aBuilder_Values: Sendable {}
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiSendableCarrier<__safeDI_Built>: Sendable {
+			        public let aBuilder: @Sendable () -> __safeDI_ApiCarrier_A<__safeDI_Built>
 
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			            public let aBuilder: @Sendable (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
+			        public init(aBuilder: @escaping @Sendable () -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
+			            self.aBuilder = aBuilder
+			        }
 
-			            public init(aBuilder: @escaping @Sendable (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                self.aBuilder = aBuilder
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			            self.init(aBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_tag: @autoclosure @escaping @Sendable () -> Tag, __safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
+			    public init(__safeDI_tag: @autoclosure @escaping @Sendable () -> Tag, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 			        let tag = SendableLazilyInstantiated<Tag>(__safeDI_tag)
 			        @Sendable nonisolated func __safeDI_aBuilder(tag: Tag) -> A {
-			            let __safeDI_apiSendableBuilder_aBuilder = __safeDI_apiSendableBuilder.aBuilder(SafeDISendableScope_Api.aBuilder_Values())
+			            let __safeDI_apiSendableBuilder_aBuilder = __safeDI_apiSendableBuilder.aBuilder()
 			            let reader = TagReader(tag: tag)
 			            @Sendable nonisolated func __safeDI_bBuilder(tag: Tag) -> B {
 			                let aBuilder = SendableInstantiator<A> {
@@ -560,7 +489,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			            let bBuilder = SendableInstantiator<B> {
 			                __safeDI_bBuilder(tag: $0)
 			            }
-			            let api: any Api = __safeDI_apiSendableBuilder_aBuilder.api(SafeDIScope_Api.A_Scope.api_Values(tag: tag, reader: reader, bBuilder: bBuilder))
+			            let api: any Api = __safeDI_apiSendableBuilder_aBuilder.api(tag, reader, bBuilder)
 			            return A(reader: reader, api: api, bBuilder: bBuilder)
 			        }
 			        let aBuilder = SendableInstantiator<A> {
@@ -571,7 +500,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			}
 
 			extension Hub {
-			    public enum __safeDI_Hub_3697FF5A123AFB0B {}
+			    public enum __safeDI_Hub_EE786E17B6B93847 {}
 			}
 			""",
 		])
@@ -585,12 +514,12 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    public convenience init() {
 			        let tag = Tag()
 			        func __safeDI_hub() -> Hub {
-			            _ = Hub.__safeDI_Hub_3697FF5A123AFB0B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.SafeDISendableScope_Api.__safeDI_Builder<any Api> {
-			                .init(aBuilder: { _ in __safeDI_apiBuilder_Hub_A_Scope() })
+			            _ = Hub.__safeDI_Hub_EE786E17B6B93847.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.__safeDI_ApiSendableCarrier<any Api> {
+			                .init(aBuilder: { __safeDI_apiBuilder_Hub_A_Scope() })
 			            }
-			            @Sendable nonisolated func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.SafeDIScope_Api.A_Scope.__safeDI_Builder<any Api> {
-			                .init(api: { _ in
+			            @Sendable nonisolated func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.__safeDI_ApiCarrier_A<any Api> {
+			                .init(api: { scope_tag, scope_reader, scope_bBuilder in
 			                    let api: any Api = LiveApi()
 			                    return api
 			                })
@@ -616,56 +545,37 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == [
 			"Feature.swift": generatedFileHeader + """
 			extension Hub {
-			    nonisolated public enum SafeDIScope_Api {
-			        nonisolated public struct aBuilder_Values {
-			            public var tag: Tag { __safeDI_tag.instance }
-			            public let __safeDI_tag: LazilyInstantiated<Tag>
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+			        public let aBuilder: (LazilyInstantiated<Tag>) -> __safeDI_ApiCarrier_A<__safeDI_Built>
 
-			            init(tag: LazilyInstantiated<Tag>) {
-			                __safeDI_tag = tag
-			            }
+			        public init(aBuilder: @escaping (LazilyInstantiated<Tag>) -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
+			            self.aBuilder = aBuilder
 			        }
 
-			        nonisolated public enum A_Scope {
-			            nonisolated public struct api_Values {
-			                public let tag: Tag
-			                public let reader: TagReader
-			                public let bBuilder: Instantiator<B>
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+			        }
+			    }
 
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let api: (api_Values) -> __safeDI_Built
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier_A<__safeDI_Built> {
+			        public let api: (Tag, TagReader, Instantiator<B>) -> __safeDI_Built
 
-			                public init(api: @escaping (api_Values) -> __safeDI_Built) {
-			                    self.api = api
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.api = { _ in __safeDI_builder() }
-			                }
-			            }
+			        public init(api: @escaping (Tag, TagReader, Instantiator<B>) -> __safeDI_Built) {
+			            self.api = api
 			        }
 
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let aBuilder: (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
-
-			            public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                self.aBuilder = aBuilder
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(api: { _, _, _ in __safeDI_builder() })
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+			    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 			        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
-			        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(SafeDIScope_Api.aBuilder_Values(tag: tag))
+			        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(tag)
 			        func __safeDI_aBuilder(tag: Tag) -> A {
 			            let reader = TagReader(tag: tag)
 			            func __safeDI_bBuilder(tag: Tag) -> B {
@@ -677,7 +587,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			            let bBuilder = Instantiator<B> {
 			                __safeDI_bBuilder(tag: $0)
 			            }
-			            let api: any Api = __safeDI_apiBuilder_aBuilder.api(SafeDIScope_Api.A_Scope.api_Values(tag: tag, reader: reader, bBuilder: bBuilder))
+			            let api: any Api = __safeDI_apiBuilder_aBuilder.api(tag, reader, bBuilder)
 			            return A(reader: reader, api: api, bBuilder: bBuilder)
 			        }
 			        let aBuilder = Instantiator<A> {
@@ -688,7 +598,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			}
 
 			extension Hub {
-			    public enum __safeDI_Hub_346ABA69B9079141 {}
+			    public enum __safeDI_Hub_F0045AB682C97BD1 {}
 			}
 			""",
 		])
@@ -702,13 +612,13 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    public convenience init() {
 			        let tag = Tag()
 			        func __safeDI_hub() -> Hub {
-			            _ = Hub.__safeDI_Hub_346ABA69B9079141.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIScope_Api.__safeDI_Builder<any Api> {
-			                .init(aBuilder: { _ in __safeDI_apiBuilder_Hub_A_Scope() })
+			            _ = Hub.__safeDI_Hub_F0045AB682C97BD1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
+			                .init(aBuilder: { values_tag in __safeDI_apiBuilder_Hub_A_Scope() })
 			            }
-			            func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.SafeDIScope_Api.A_Scope.__safeDI_Builder<any Api> {
-			                .init(api: { scope in
-			                    let tag = scope.tag
+			            func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.__safeDI_ApiCarrier_A<any Api> {
+			                .init(api: { scope_tag, scope_reader, scope_bBuilder in
+			                    let tag = scope_tag
 			                    let api: any Api = LiveApi(tag: tag)
 			                    return api
 			                })
@@ -734,52 +644,38 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == [
 			"Feature.swift": generatedFileHeader + """
 			extension Hub {
-			    nonisolated public enum SafeDIScope_Api {
-			        nonisolated public enum A_Scope {
-			            nonisolated public struct api_Values {
-			                public let tag: Tag
-			                public let reader: TagReader
-			                public let bBuilder: SendableInstantiator<B>
-			            }
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier_A<__safeDI_Built> {
+			        public let api: (Tag, TagReader, SendableInstantiator<B>) -> __safeDI_Built
 
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let api: (api_Values) -> __safeDI_Built
+			        public init(api: @escaping (Tag, TagReader, SendableInstantiator<B>) -> __safeDI_Built) {
+			            self.api = api
+			        }
 
-			                public init(api: @escaping (api_Values) -> __safeDI_Built) {
-			                    self.api = api
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.api = { _ in __safeDI_builder() }
-			                }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(api: { _, _, _ in __safeDI_builder() })
 			        }
 			    }
 
-			    nonisolated public enum SafeDISendableScope_Api {
-			        nonisolated public struct aBuilder_Values: Sendable {}
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiSendableCarrier<__safeDI_Built>: Sendable {
+			        public let aBuilder: @Sendable () -> __safeDI_ApiCarrier_A<__safeDI_Built>
 
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built>: Sendable {
-			            public let aBuilder: @Sendable (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
+			        public init(aBuilder: @escaping @Sendable () -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
+			            self.aBuilder = aBuilder
+			        }
 
-			            public init(aBuilder: @escaping @Sendable (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                self.aBuilder = aBuilder
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
-			                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping @Sendable () -> __safeDI_Built) {
+			            self.init(aBuilder: { .init(__safeDI_noScope: __safeDI_builder) })
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_tag: @autoclosure @escaping @Sendable () -> Tag, __safeDI_apiSendableBuilder: SafeDISendableScope_Api.__safeDI_Builder<any Api>) {
+			    public init(__safeDI_tag: @autoclosure @escaping @Sendable () -> Tag, __safeDI_apiSendableBuilder: __safeDI_ApiSendableCarrier<any Api>) {
 			        let tag = SendableLazilyInstantiated<Tag>(__safeDI_tag)
 			        @Sendable nonisolated func __safeDI_aBuilder(tag: Tag) -> A {
-			            let __safeDI_apiSendableBuilder_aBuilder = __safeDI_apiSendableBuilder.aBuilder(SafeDISendableScope_Api.aBuilder_Values())
+			            let __safeDI_apiSendableBuilder_aBuilder = __safeDI_apiSendableBuilder.aBuilder()
 			            let reader = TagReader(tag: tag)
 			            @Sendable nonisolated func __safeDI_bBuilder(tag: Tag) -> B {
 			                let aBuilder = SendableInstantiator<A> {
@@ -790,7 +686,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			            let bBuilder = SendableInstantiator<B> {
 			                __safeDI_bBuilder(tag: $0)
 			            }
-			            let api: any Api = __safeDI_apiSendableBuilder_aBuilder.api(SafeDIScope_Api.A_Scope.api_Values(tag: tag, reader: reader, bBuilder: bBuilder))
+			            let api: any Api = __safeDI_apiSendableBuilder_aBuilder.api(tag, reader, bBuilder)
 			            return A(reader: reader, api: api, bBuilder: bBuilder)
 			        }
 			        let aBuilder = SendableInstantiator<A> {
@@ -801,7 +697,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			}
 
 			extension Hub {
-			    public enum __safeDI_Hub_3697FF5A123AFB0B {}
+			    public enum __safeDI_Hub_EE786E17B6B93847 {}
 			}
 			""",
 		])
@@ -815,13 +711,13 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    public convenience init() {
 			        let tag = Tag()
 			        func __safeDI_hub() -> Hub {
-			            _ = Hub.__safeDI_Hub_3697FF5A123AFB0B.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.SafeDISendableScope_Api.__safeDI_Builder<any Api> {
-			                .init(aBuilder: { _ in __safeDI_apiBuilder_Hub_A_Scope() })
+			            _ = Hub.__safeDI_Hub_EE786E17B6B93847.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            @Sendable nonisolated func __safeDI_apiSendableBuilder_Hub() -> Hub.__safeDI_ApiSendableCarrier<any Api> {
+			                .init(aBuilder: { __safeDI_apiBuilder_Hub_A_Scope() })
 			            }
-			            @Sendable nonisolated func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.SafeDIScope_Api.A_Scope.__safeDI_Builder<any Api> {
-			                .init(api: { scope in
-			                    let tag = scope.tag
+			            @Sendable nonisolated func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.__safeDI_ApiCarrier_A<any Api> {
+			                .init(api: { scope_tag, scope_reader, scope_bBuilder in
+			                    let tag = scope_tag
 			                    let api: any Api = LiveApi(tag: tag)
 			                    return api
 			                })
@@ -865,56 +761,37 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == [
 			"Feature.swift": generatedFileHeader + """
 			extension Hub {
-			    nonisolated public enum SafeDIScope_Api {
-			        nonisolated public struct aBuilder_Values {
-			            public var tag: Tag { __safeDI_tag.instance }
-			            public let __safeDI_tag: LazilyInstantiated<Tag>
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+			        public let aBuilder: (LazilyInstantiated<Tag>) -> __safeDI_ApiCarrier_A<__safeDI_Built>
 
-			            init(tag: LazilyInstantiated<Tag>) {
-			                __safeDI_tag = tag
-			            }
+			        public init(aBuilder: @escaping (LazilyInstantiated<Tag>) -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
+			            self.aBuilder = aBuilder
 			        }
 
-			        nonisolated public enum A_Scope {
-			            nonisolated public struct api_Values {
-			                public let tag: Tag
-			                public let reader: TagReader
-			                public let bBuilder: Instantiator<B>
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+			        }
+			    }
 
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let api: (api_Values) -> __safeDI_Built
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier_A<__safeDI_Built> {
+			        public let api: (Tag, TagReader, Instantiator<B>) -> __safeDI_Built
 
-			                public init(api: @escaping (api_Values) -> __safeDI_Built) {
-			                    self.api = api
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.api = { _ in __safeDI_builder() }
-			                }
-			            }
+			        public init(api: @escaping (Tag, TagReader, Instantiator<B>) -> __safeDI_Built) {
+			            self.api = api
 			        }
 
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let aBuilder: (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
-
-			            public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                self.aBuilder = aBuilder
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(api: { _, _, _ in __safeDI_builder() })
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+			    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 			        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
-			        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(SafeDIScope_Api.aBuilder_Values(tag: tag))
+			        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(tag)
 			        func __safeDI_aBuilder(tag: Tag) -> A {
 			            let reader = TagReader(tag: tag)
 			            func __safeDI_bBuilder(tag: Tag) -> B {
@@ -926,7 +803,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			            let bBuilder = Instantiator<B> {
 			                __safeDI_bBuilder(tag: $0)
 			            }
-			            let api: any Api = __safeDI_apiBuilder_aBuilder.api(SafeDIScope_Api.A_Scope.api_Values(tag: tag, reader: reader, bBuilder: bBuilder))
+			            let api: any Api = __safeDI_apiBuilder_aBuilder.api(tag, reader, bBuilder)
 			            return A(reader: reader, api: api, bBuilder: bBuilder)
 			        }
 			        let aBuilder = Instantiator<A> {
@@ -937,7 +814,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			}
 
 			extension Hub {
-			    public enum __safeDI_Hub_346ABA69B9079141 {}
+			    public enum __safeDI_Hub_F0045AB682C97BD1 {}
 			}
 
 			#if DEBUG
@@ -1082,12 +959,12 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    public convenience init() {
 			        let tag = Tag()
 			        func __safeDI_hub() -> Hub {
-			            _ = Hub.__safeDI_Hub_346ABA69B9079141.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIScope_Api.__safeDI_Builder<any Api> {
-			                .init(aBuilder: { _ in __safeDI_apiBuilder_Hub_A_Scope() })
+			            _ = Hub.__safeDI_Hub_F0045AB682C97BD1.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
+			                .init(aBuilder: { values_tag in __safeDI_apiBuilder_Hub_A_Scope() })
 			            }
-			            func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.SafeDIScope_Api.A_Scope.__safeDI_Builder<any Api> {
-			                .init(api: { _ in
+			            func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.__safeDI_ApiCarrier_A<any Api> {
+			                .init(api: { scope_tag, scope_reader, scope_bBuilder in
 			                    let api: any Api = LiveApi()
 			                    return api
 			                })
@@ -1118,56 +995,37 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == [
 			"Feature.swift": generatedFileHeader + """
 			extension Hub {
-			    nonisolated public enum SafeDIScope_Api {
-			        nonisolated public struct aBuilder_Values {
-			            package var tag: Tag { __safeDI_tag.instance }
-			            package let __safeDI_tag: LazilyInstantiated<Tag>
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+			        public let aBuilder: (LazilyInstantiated<Tag>) -> __safeDI_ApiCarrier_A<__safeDI_Built>
 
-			            init(tag: LazilyInstantiated<Tag>) {
-			                __safeDI_tag = tag
-			            }
+			        public init(aBuilder: @escaping (LazilyInstantiated<Tag>) -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
+			            self.aBuilder = aBuilder
 			        }
 
-			        nonisolated public enum A_Scope {
-			            nonisolated public struct api_Values {
-			                package let tag: Tag
-			                package let reader: TagReader
-			                package let bBuilder: Instantiator<B>
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+			        }
+			    }
 
-			            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			                public let api: (api_Values) -> __safeDI_Built
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ApiCarrier_A<__safeDI_Built> {
+			        public let api: (Tag, TagReader, Instantiator<B>) -> __safeDI_Built
 
-			                public init(api: @escaping (api_Values) -> __safeDI_Built) {
-			                    self.api = api
-			                }
-
-			                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                    self.api = { _ in __safeDI_builder() }
-			                }
-			            }
+			        public init(api: @escaping (Tag, TagReader, Instantiator<B>) -> __safeDI_Built) {
+			            self.api = api
 			        }
 
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let aBuilder: (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
-
-			            public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
-			                self.aBuilder = aBuilder
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(api: { _, _, _ in __safeDI_builder() })
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    package init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+			    package init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 			        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
-			        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(SafeDIScope_Api.aBuilder_Values(tag: tag))
+			        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(tag)
 			        func __safeDI_aBuilder(tag: Tag) -> A {
 			            let reader = TagReader(tag: tag)
 			            func __safeDI_bBuilder(tag: Tag) -> B {
@@ -1179,7 +1037,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			            let bBuilder = Instantiator<B> {
 			                __safeDI_bBuilder(tag: $0)
 			            }
-			            let api: any Api = __safeDI_apiBuilder_aBuilder.api(SafeDIScope_Api.A_Scope.api_Values(tag: tag, reader: reader, bBuilder: bBuilder))
+			            let api: any Api = __safeDI_apiBuilder_aBuilder.api(tag, reader, bBuilder)
 			            return A(reader: reader, api: api, bBuilder: bBuilder)
 			        }
 			        let aBuilder = Instantiator<A> {
@@ -1190,7 +1048,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			}
 
 			extension Hub {
-			    public enum __safeDI_Hub_DD408927480E1FF3 {}
+			    public enum __safeDI_Hub_57FE31E06C311ED5 {}
 			}
 			""",
 		])
@@ -1204,12 +1062,12 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 			    public convenience init() {
 			        let tag = Tag()
 			        func __safeDI_hub() -> Hub {
-			            _ = Hub.__safeDI_Hub_DD408927480E1FF3.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIScope_Api.__safeDI_Builder<any Api> {
-			                .init(aBuilder: { _ in __safeDI_apiBuilder_Hub_A_Scope() })
+			            _ = Hub.__safeDI_Hub_57FE31E06C311ED5.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
+			                .init(aBuilder: { values_tag in __safeDI_apiBuilder_Hub_A_Scope() })
 			            }
-			            func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.SafeDIScope_Api.A_Scope.__safeDI_Builder<any Api> {
-			                .init(api: { _ in
+			            func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.__safeDI_ApiCarrier_A<any Api> {
+			                .init(api: { scope_tag, scope_reader, scope_bBuilder in
 			                    let api: any Api = LiveApi()
 			                    return api
 			                })
@@ -1300,57 +1158,42 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		#endif
 
 		extension Hub {
-		    nonisolated public enum SafeDIScope_Api {
-		        nonisolated public struct aBuilder_Values {
-		            public var tag: Tag { __safeDI_tag.instance }
-		            public let __safeDI_tag: LazilyInstantiated<Tag>
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
+		        public let aBuilder: (LazilyInstantiated<Tag>) -> __safeDI_ApiCarrier_A<__safeDI_Built>
 
-		            init(tag: LazilyInstantiated<Tag>) {
-		                __safeDI_tag = tag
-		            }
+		        public init(aBuilder: @escaping (LazilyInstantiated<Tag>) -> __safeDI_ApiCarrier_A<__safeDI_Built>) {
+		            self.aBuilder = aBuilder
 		        }
 
-		        nonisolated public enum A_Scope {
-		            nonisolated public struct inner_Values: Sendable {}
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(aBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+		        }
+		    }
 
-		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let inner: (inner_Values) -> Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ApiCarrier_A<__safeDI_Built> {
+		        public let inner: Inner.__safeDI_ApiCarrier<__safeDI_Built>
 
-		                public init(inner: @escaping (inner_Values) -> Inner.SafeDIScope_Api.__safeDI_Builder<__safeDI_Built>) {
-		                    self.inner = inner
-		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.inner = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		                }
-		            }
+		        public init(inner: Inner.__safeDI_ApiCarrier<__safeDI_Built>) {
+		            self.inner = inner
 		        }
 
-		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let aBuilder: (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>
-
-		            public init(aBuilder: @escaping (aBuilder_Values) -> SafeDIScope_Api.A_Scope.__safeDI_Builder<__safeDI_Built>) {
-		                self.aBuilder = aBuilder
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.aBuilder = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		            }
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(inner: .init(__safeDI_noScope: __safeDI_builder))
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: SafeDIScope_Api.__safeDI_Builder<any Api>) {
+		    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_apiBuilder: __safeDI_ApiCarrier<any Api>) {
 		        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
-		        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(SafeDIScope_Api.aBuilder_Values(tag: tag))
+		        let __safeDI_apiBuilder_aBuilder = __safeDI_apiBuilder.aBuilder(tag)
 		        func __safeDI_aBuilder(tag: Tag) -> A {
 		            let reader = TagReader(tag: tag)
 		            func __safeDI_inner() -> Inner {
-		                _ = Inner.__safeDI_Inner_61E28C480FC4B293.self\(innerCallComment)
-		                return Inner(__safeDI_tag: tag, __safeDI_apiBuilder: __safeDI_apiBuilder_aBuilder.inner(SafeDIScope_Api.A_Scope.inner_Values()))
+		                _ = Inner.__safeDI_Inner_5483833909C8FF8D.self\(innerCallComment)
+		                return Inner(__safeDI_tag: tag, __safeDI_apiBuilder: __safeDI_apiBuilder_aBuilder.inner)
 		            }
 		            let inner: Inner = __safeDI_inner()
 		            func __safeDI_bBuilder(tag: Tag) -> B {
@@ -1372,7 +1215,7 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		}
 
 		extension Hub {
-		    public enum __safeDI_Hub_F3CB903333F994EF {}
+		    public enum __safeDI_Hub_D079BEC3A0471EAD {}
 		}
 		"""])
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
@@ -1387,16 +1230,16 @@ struct SafeDIToolSeamDeferredCycleParameterTests: ~Copyable {
 		    public convenience init() {
 		        let tag = Tag()
 		        func __safeDI_hub() -> Hub {
-		            _ = Hub.__safeDI_Hub_F3CB903333F994EF.self\(Self.callComment)
-		            func __safeDI_apiBuilder_Hub() -> Hub.SafeDIScope_Api.__safeDI_Builder<any Api> {
-		                .init(aBuilder: { _ in __safeDI_apiBuilder_Hub_A_Scope() })
+		            _ = Hub.__safeDI_Hub_D079BEC3A0471EAD.self\(Self.callComment)
+		            func __safeDI_apiBuilder_Hub() -> Hub.__safeDI_ApiCarrier<any Api> {
+		                .init(aBuilder: { values_tag in __safeDI_apiBuilder_Hub_A_Scope() })
 		            }
-		            func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.SafeDIScope_Api.A_Scope.__safeDI_Builder<any Api> {
-		                .init(inner: { _ in __safeDI_apiBuilder_Inner() })
+		            func __safeDI_apiBuilder_Hub_A_Scope() -> Hub.__safeDI_ApiCarrier_A<any Api> {
+		                .init(inner: __safeDI_apiBuilder_Inner())
 		            }
-		            func __safeDI_apiBuilder_Inner() -> Inner.SafeDIScope_Api.__safeDI_Builder<any Api> {
-		                .init(api: { scope in
-		                    let tag = scope.tag
+		            func __safeDI_apiBuilder_Inner() -> Inner.__safeDI_ApiCarrier<any Api> {
+		                .init(api: { scope_tag in
+		                    let tag = scope_tag
 		                    let api: any Api = LiveApi(tag: tag)
 		                    return api
 		                })

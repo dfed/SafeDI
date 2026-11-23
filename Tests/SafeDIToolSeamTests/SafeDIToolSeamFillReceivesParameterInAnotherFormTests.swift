@@ -268,44 +268,31 @@ struct SafeDIToolSeamFillReceivesParameterInAnotherFormTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == [
 			"Feature.swift": generatedFileHeader + """
 			extension Home {
-			    nonisolated public enum SafeDIScope_Service {
-			        nonisolated public struct service_Values {
-			            public var tag: Tag { __safeDI_tag.instance }
-			            public let reader: Reader
-			            public let __safeDI_tag: LazilyInstantiated<Tag>
+			    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+			    nonisolated public final class __safeDI_ServiceCarrier<__safeDI_Built> {
+			        public let service: (LazilyInstantiated<Tag>, Reader) -> __safeDI_Built
 
-			            init(tag: LazilyInstantiated<Tag>, reader: Reader) {
-			                __safeDI_tag = tag
-			                self.reader = reader
-			            }
+			        public init(service: @escaping (LazilyInstantiated<Tag>, Reader) -> __safeDI_Built) {
+			            self.service = service
 			        }
 
-			        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-			        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-			            public let service: (service_Values) -> __safeDI_Built
-
-			            public init(service: @escaping (service_Values) -> __safeDI_Built) {
-			                self.service = service
-			            }
-
-			            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-			                self.service = { _ in __safeDI_builder() }
-			            }
+			        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+			            self.init(service: { _, _ in __safeDI_builder() })
 			        }
 			    }
 
 			    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 			    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-			    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+			    public init(__safeDI_tag: @autoclosure @escaping () -> Tag, __safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
 			        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
 			        let reader = Reader(tag: tag.instance)
-			        let service: any Service = __safeDI_serviceBuilder.service(SafeDIScope_Service.service_Values(tag: tag, reader: reader))
+			        let service: any Service = __safeDI_serviceBuilder.service(tag, reader)
 			        self.init(reader: reader, service: service)
 			    }
 			}
 
 			extension Home {
-			    public enum __safeDI_Home_FAF86EC6D4486BDD {}
+			    public enum __safeDI_Home_3246A33D3BB184B5 {}
 			}
 			""",
 		])
@@ -322,9 +309,9 @@ struct SafeDIToolSeamFillReceivesParameterInAnotherFormTests: ~Copyable {
 			        }
 			        let tag = LazilyInstantiated<Tag>(__safeDI_tag)
 			        func __safeDI_home() -> Home {
-			            _ = Home.__safeDI_Home_FAF86EC6D4486BDD.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			            func __safeDI_serviceBuilder_Home() -> Home.SafeDIScope_Service.__safeDI_Builder<any Service> {
-			                .init(service: { _ in
+			            _ = Home.__safeDI_Home_3246A33D3BB184B5.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+			            func __safeDI_serviceBuilder_Home() -> Home.__safeDI_ServiceCarrier<any Service> {
+			                .init(service: { scope_tag, scope_reader in
 			                    let service: any Service = Impl(tag: tag)
 			                    return service
 			                })

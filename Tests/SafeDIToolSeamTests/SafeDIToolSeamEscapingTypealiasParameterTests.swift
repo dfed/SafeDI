@@ -448,56 +448,39 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		let file = try generatedFile(ofModuleNamed: "Feature", typeName: "Screen", in: output, under: integration)
 		#expect(file == generatedFileHeader + """
 		extension Screen {
-		    nonisolated public enum SafeDIScope_Service {
-		        nonisolated public struct owner_Values {
-		            public let onForward: OnTap
-		            public var config: Config { __safeDI_config.instance }
-		            public let __safeDI_config: LazilyInstantiated<Config>
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ServiceCarrier<__safeDI_Built> {
+		        public let owner: (@escaping OnTap, LazilyInstantiated<Config>) -> __safeDI_ServiceCarrier_ServiceOwner<__safeDI_Built>
 
-		            init(onForward: @escaping OnTap, config: LazilyInstantiated<Config>) {
-		                self.onForward = onForward
-		                __safeDI_config = config
-		            }
+		        public init(owner: @escaping (@escaping OnTap, LazilyInstantiated<Config>) -> __safeDI_ServiceCarrier_ServiceOwner<__safeDI_Built>) {
+		            self.owner = owner
 		        }
 
-		        nonisolated public enum ServiceOwner_Scope {
-		            nonisolated public struct service_Values {}
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(owner: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
+		        }
+		    }
 
-		            /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		            nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		                public let service: (service_Values) -> __safeDI_Built
+		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
+		    nonisolated public final class __safeDI_ServiceCarrier_ServiceOwner<__safeDI_Built> {
+		        public let service: () -> __safeDI_Built
 
-		                public init(service: @escaping (service_Values) -> __safeDI_Built) {
-		                    self.service = service
-		                }
-
-		                public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                    self.service = { _ in __safeDI_builder() }
-		                }
-		            }
+		        public init(service: @escaping () -> __safeDI_Built) {
+		            self.service = service
 		        }
 
-		        /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		        nonisolated public struct __safeDI_Builder<__safeDI_Built> {
-		            public let owner: (owner_Values) -> SafeDIScope_Service.ServiceOwner_Scope.__safeDI_Builder<__safeDI_Built>
-
-		            public init(owner: @escaping (owner_Values) -> SafeDIScope_Service.ServiceOwner_Scope.__safeDI_Builder<__safeDI_Built>) {
-		                self.owner = owner
-		            }
-
-		            public init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		                self.owner = { _ in .init(__safeDI_noScope: __safeDI_builder) }
-		            }
+		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
+		            self.init(service: { __safeDI_builder() })
 		        }
 		    }
 
 		    /// Only code SafeDI generates calls this initializer, and its shape can change in any release of SafeDI.
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
-		    public convenience init(__safeDI_onForward onForward: @escaping OnTap, __safeDI_config: @autoclosure @escaping () -> Config, __safeDI_serviceBuilder: SafeDIScope_Service.__safeDI_Builder<any Service>) {
+		    public convenience init(__safeDI_onForward onForward: @escaping OnTap, __safeDI_config: @autoclosure @escaping () -> Config, __safeDI_serviceBuilder: __safeDI_ServiceCarrier<any Service>) {
 		        let config = LazilyInstantiated<Config>(__safeDI_config)
-		        let __safeDI_serviceBuilder_owner = __safeDI_serviceBuilder.owner(SafeDIScope_Service.owner_Values(onForward: onForward, config: config))
+		        let __safeDI_serviceBuilder_owner = __safeDI_serviceBuilder.owner(onForward, config)
 		        func __safeDI_owner() -> ServiceOwner {
-		            let service: any Service = __safeDI_serviceBuilder_owner.service(SafeDIScope_Service.ServiceOwner_Scope.service_Values())
+		            let service: any Service = __safeDI_serviceBuilder_owner.service()
 		            return ServiceOwner(onForward: onForward, config: config.instance, service: service)
 		        }
 		        let owner: ServiceOwner = __safeDI_owner()
@@ -506,7 +489,7 @@ struct SafeDIToolSeamEscapingTypealiasParameterTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_239E7FD9F9C5644D {}
+		    public enum __safeDI_Screen_43C302479340C61B {}
 		}
 		""", "Unexpected output \(file)")
 	}

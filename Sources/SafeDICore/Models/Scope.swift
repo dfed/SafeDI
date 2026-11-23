@@ -673,7 +673,7 @@ extension ScopeRecord {
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			seamRoot: seamRoot,
 			mockBuilders: mockBuilders,
-			seamHoles: seamRoot.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.signature.holes, builders: $0.signature.builders, parameters: $0.signature.parameters, callRoutes: $0.signature.callRoutes, holdsLoopPayloadsInBoxes: true) }
+			seamHoles: seamRoot.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.signature.holes, builders: $0.signature.builders, parameters: $0.signature.parameters, callRoutes: $0.signature.callRoutes, scopeEnums: $0.signature.scopeEnums, holdsLoopPayloadsInBoxes: true) }
 				?? mockBuilders.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.holes, builders: $0.builders, callRoutes: $0.callRoutes) }
 				?? SeamHoles(),
 			sitePath: [],
@@ -1177,6 +1177,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 					callerReadLabels: caseFields?.callerReadLabels ?? [],
 				)
 				fill.innerScopeParameters = Self.innerScopeParameters(ofFillOf: hole, seamHoles: seamHoles, callPath: callPath, calledBuilders: scope.calledBuilders)
+				fill.carrierUse = scope.calledBuilders?.carrierUse(ofPlace: hole)
 				fill.mockRootBindingByLabel = mockRootBindingByLabelByCaseKey[caseKey] ?? [:]
 				// A label a route binds as a `LazilyInstantiated` and the caller hands from its own scope stays the wrapper, so the
 				// instance is created where the fill's tree reads it, as inline; where every read of it is only if available, the
@@ -1387,6 +1388,8 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 		/// up (`SeamHoles.innerScopes(at:innerKey:)`): for a seam's builder struct, the struct of the fill's own level, one per
 		/// hole type and family of the calling seam whose places it holds.
 		var innerScopeParameters = [SeamSignature.Hole.Field]()
+		/// How the fill takes its case's values where the case is a seam's carrier's (`SeamCarrierValues.Use`).
+		var carrierUse: SeamCarrierValues.Use?
 		/// Whether the fill is a member of a level function, a dispatcher that returns its enum's builder struct, and fills an
 		/// instantiator's place: it then returns the builder the wrapper keeps, which takes the forwarded value itself, rather
 		/// than the value it builds (`ScopeGenerator.fillReturnsWrapperBuilder`).
@@ -1687,6 +1690,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			ownerPropertyStack: childContextStack.propertiesInnermostFirst,
 			ownerConcreteTypeStack: childContextStack.concreteTypesInnermostFirst,
 			ownerLazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
+			carrierSite: seamHoles.carrierSite(at: sitePath + [property]),
 		))
 	}
 
@@ -2324,6 +2328,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 				labelsHandedAsMemo: fill.labelsHandedAsMemo,
 				plainMemoRoutesOfSendableWrapperReads: fill.plainMemoRoutesOfSendableWrapperReads,
 				memoOriginsByLabel: fill.memoOriginsByLabel,
+				carrierUse: fill.carrierUse,
 				child: builtGenerator,
 				cycleClosingRedeclaredLabels: &cycleClosingRedeclaredLabels,
 			)
@@ -2674,9 +2679,28 @@ struct SeamHoles: Sendable {
 		namesBoundForDeferredParameters = []
 		holdsLoopPayloadsInBoxes = false
 		namesBoundBySeam = GenerationWork.Shared([])
+		carrierValues = SeamCarrierValues()
+		carrierSitesByPath = [:]
 	}
 
-	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], parameters: [SeamSignature.Parameter] = [], callRoutes: [SeamSignature.CallRoute] = [], holdsLoopPayloadsInBoxes: Bool = false) {
+	/// How each carrier level's members take its values, and the runs the tree forms.
+	let carrierValues: SeamCarrierValues
+	/// For each site whose case is a carrier's, how its member takes its values, and the runs the tree forms just before it
+	/// where no payload binding at its path forms them.
+	private let carrierSitesByPath: [[Property]: CarrierSite]
+
+	/// How a place's member of a carrier takes its values (`SeamCarrierValues`), and the runs formed at its path.
+	struct CarrierSite: Sendable {
+		let use: SeamCarrierValues.Use
+		var formations: [ValuesBinding]
+	}
+
+	/// How the place at `sitePath` takes its values, where its case is a carrier's.
+	func carrierSite(at sitePath: [Property]) -> CarrierSite? {
+		carrierSitesByPath.isEmpty ? nil : carrierSitesByPath[sitePath]
+	}
+
+	init(seamType: TypeDescription, holes: [SeamSignature.Hole], builders: [SeamSignature.Builder], parameters: [SeamSignature.Parameter] = [], callRoutes: [SeamSignature.CallRoute] = [], scopeEnums: [SeamSignature.ScopeEnum] = [], holdsLoopPayloadsInBoxes: Bool = false) {
 		self.holdsLoopPayloadsInBoxes = holdsLoopPayloadsInBoxes
 		var routeCasesByCall = [RouteCall: RouteCase]()
 		let internalNameByEnum = Dictionary(builders.map { ($0.enumKey, $0.internalName) }, uniquingKeysWith: { first, _ in first })
@@ -2709,6 +2733,15 @@ struct SeamHoles: Sendable {
 				}
 			}
 		}
+		// The seam's own enums, signatures settled and their cases marked `indirect`, which decide whether a call's own member
+		// is a carrier's `let` child.
+		var scopeEnumByType = [TypeDescription: SeamSignature.ScopeEnum]()
+		for scopeEnum in scopeEnums where scopeEnum.key.seamType == seamType {
+			let type = SeamSignature.ScopeEnum.nestedType(named: scopeEnum.typeName, in: scopeEnum.rootTypeName)
+			if scopeEnumByType[type] == nil {
+				scopeEnumByType[type] = scopeEnum
+			}
+		}
 		for callRoute in callRoutes {
 			guard let builderName = internalNameByEnum[callRoute.rootKey] else { continue }
 			bindValues(of: callRoute.route, rootBuilderName: builderName)
@@ -2726,7 +2759,16 @@ struct SeamHoles: Sendable {
 				callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName }
 			} else {
 				callRoute.memberValuesType.map { memberValuesType in
-					"\(callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName } ?? builderName).\(callRoute.caseName)(\(memberValuesType.asSource)())"
+					let parentName = callRoute.route.last.flatMap { $0.innerScope?.name ?? $0.member?.bindingName } ?? builderName
+					if case let .nested(_, enumType, _) = memberValuesType, ReservedName.seamCarrier(ofEnum: enumType) != nil {
+						// A carrier's member for a call's own case takes no values: a `let` child is read, any other member called.
+						let isLetChild = scopeEnumByType[enumType].flatMap { scopeEnum in
+							scopeEnum.cases.first { $0.name == callRoute.caseName }?.isLetChildOfCarrier(inSendableEnum: scopeEnum.key.isSendable)
+						} ?? false
+						return isLetChild ? "\(parentName).\(callRoute.caseName)" : "\(parentName).\(callRoute.caseName)()"
+					} else {
+						return "\(parentName).\(callRoute.caseName)(\(memberValuesType.asSource)())"
+					}
 				}
 			}
 			routeCasesByCall[RouteCall(sitePath: callRoute.sitePath, innerKey: callRoute.innerKey)] = RouteCase(memberCall: memberCall)
@@ -2746,6 +2788,55 @@ struct SeamHoles: Sendable {
 			}
 		}
 		namesBoundForBuilders.formUnion(innerScopesByCall.values.flatMap { $0.map(\.name) })
+		// Each carrier level's runs (`SeamCarrierValues`): every member and place takes the struct of the run its values
+		// end, which the tree binds once in the body that binds the level, at the first path in it that takes the run or a
+		// later one, read as the path whose case takes the fewest values; a level's cases bind a prefix of one sequence, in
+		// the order the body builds them.
+		let carrierValues = SeamCarrierValues(scopeEnums: scopeEnums, ofSeam: seamType)
+		var carrierSitesByPath = [[Property]: CarrierSite]()
+		var formationsByPath = [[Property]: [ValuesBinding]]()
+		if !carrierValues.isEmpty {
+			struct Taker {
+				let path: [Property]
+				let fields: [SeamSignature.Hole.Field]
+			}
+			struct Body: Hashable {
+				let path: [Property]
+				let level: String
+			}
+			var takersByBody = [Body: [Taker]]()
+			for (path, bindings) in valuesBindingsByName {
+				for name in bindings.keys {
+					guard let binding = bindings[name], !binding.isLetChild, !binding.isCalledInsideFunction, case let .nested(_, enumType, _) = binding.type, let level = SeamCarrierValues.level(ofEnum: enumType), !binding.fields.isEmpty else { continue }
+					valuesBindingsByName[path]?[name]?.carrierUse = carrierValues.use(ofLevel: level, count: binding.fields.count)
+					takersByBody[Body(path: Array(path.dropLast()), level: level), default: []].append(Taker(path: path, fields: binding.fields))
+				}
+			}
+			for (path, hole) in sitesByPath {
+				guard hole.scopeSeamType == seamType, let enumPlace = hole.enumPlace, let level = SeamCarrierValues.level(ofEnum: enumPlace.enumType(qualifiedBy: nil)) else { continue }
+				let fields = enumPlace.values
+				guard !fields.isEmpty else { continue }
+				carrierSitesByPath[path] = CarrierSite(use: carrierValues.use(ofLevel: level, count: fields.count), formations: [])
+				takersByBody[Body(path: Array(path.dropLast()), level: level), default: []].append(Taker(path: path, fields: fields))
+			}
+			for (body, takers) in takersByBody {
+				// The takers in the order the body builds them, the path naming the property as a tie-break, which no shape a
+				// level's prefixes allow reaches: two paths of one body bind a different number of values.
+				let ordered = takers.sorted { ($0.fields.count, $0.path.map(\.asSource).joined(separator: ".")) < ($1.fields.count, $1.path.map(\.asSource).joined(separator: ".")) }
+				var previousEnd: Int?
+				for end in carrierValues.ends(ofLevel: body.level) {
+					guard let taker = ordered.first(where: { $0.fields.count >= end }) else { break }
+					let previousName = previousEnd.map { SeamCarrierValues.bindingName(ofLevel: body.level, end: $0) }
+					formationsByPath[taker.path, default: []].append(ValuesBinding(formingRunOf: body.level, end: end, fields: Array(taker.fields[(previousEnd ?? 0)..<end]), previousName: previousName))
+					previousEnd = end
+				}
+			}
+			for (path, formations) in formationsByPath where carrierSitesByPath[path] != nil && valuesBindingsByName[path] == nil {
+				carrierSitesByPath[path]?.formations = formations
+			}
+		}
+		self.carrierValues = carrierValues
+		self.carrierSitesByPath = carrierSitesByPath
 		self.innerScopesByCall = innerScopesByCall
 		self.carriedStructsByCall = carriedStructsByCall
 		// Each path's payloads are bound in the order of their names: none is read by another bound at the same path.
@@ -2758,7 +2849,7 @@ struct SeamHoles: Sendable {
 			if !insideFunction.isEmpty {
 				memberCallsInsideFunctionByPath[path] = insideFunction
 			}
-			valuesBindingsByPath[path] = orderedBindings.filter { !$0.isCalledInsideFunction }
+			valuesBindingsByPath[path] = (formationsByPath[path] ?? []) + orderedBindings.filter { !$0.isCalledInsideFunction }
 		}
 		self.memberCallsInsideFunctionByPath = memberCallsInsideFunctionByPath
 		self.seamType = seamType
@@ -2787,6 +2878,7 @@ struct SeamHoles: Sendable {
 		readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property> = [],
 		bindingNamesPassedByName: [String: String] = [:],
 		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:],
+		labeled: Bool = true,
 	) -> String {
 		fields.map { field in
 			let label = field.property.label
@@ -2796,8 +2888,38 @@ struct SeamHoles: Sendable {
 			} else {
 				name
 			}
-			return "\(label.spelledAsArgumentLabel): \(value)"
+			return labeled ? "\(label.spelledAsArgumentLabel): \(value)" : value
 		}.joined(separator: ", ")
+	}
+
+	/// The arguments a member of a seam's carrier is called with for `fields`, its case's values: the struct of the run
+	/// they end, as the seam's tree binds it, then each value after it, read as `valuesArguments` reads it.
+	static func carrierArguments(
+		of fields: [SeamSignature.Hole.Field],
+		use: SeamCarrierValues.Use?,
+		readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property>,
+		bindingNamesPassedByName: [String: String] = [:],
+		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:],
+	) -> String {
+		var arguments = use?.structBindingName.map { [$0] } ?? []
+		let extras = valuesArguments(of: Array(fields[use?.extras ?? 0..<fields.count]), readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames, labeled: false)
+		if !extras.isEmpty {
+			arguments.append(extras)
+		}
+		return arguments.joined(separator: ", ")
+	}
+
+	/// The name under which a member of a seam's carrier, or a fill it calls, takes `field` of a level's values, which a
+	/// builder struct's member took as the payload named `payloadName`: the payload's name joined with the field's label.
+	static func argumentName(of field: SeamSignature.Hole.Field, inPayloadNamed payloadName: String) -> String {
+		"\(payloadName)_\(field.property.label)".spelledAsJoinedIdentifier
+	}
+
+	/// What reads `field` from the arguments `argumentName(of:inPayloadNamed:)` names, as `<payload>.<field>` read it from a
+	/// payload struct: a deferred parameter's field is handed as its memo, whose instance is the value.
+	static func argumentRead(of field: SeamSignature.Hole.Field, inPayloadNamed payloadName: String, bindingMemo: Bool) -> String {
+		let name = argumentName(of: field, inPayloadNamed: payloadName)
+		return field.isDeferredParameter && !bindingMemo ? "\(name).\(Dependency.lazilyInstantiatedInstancePropertyName)" : name
 	}
 
 	/// The struct the member of a case returns, which the seam's tree binds just before the builder function of a property
@@ -2811,7 +2933,30 @@ struct SeamHoles: Sendable {
 			fields = member.fields
 			memberCall = (parentName, caseName)
 			isCalledInsideFunction = member.isCalledInsideFunction
+			isLetChild = member.isLetChild
+			carrierUse = nil
+			formsRunAfter = nil
 		}
+
+		/// The binding of the struct of a run of a carrier level's values (`SeamCarrierValues`): `fields`, the run's own,
+		/// after the struct of the run before it, bound as `previousName`.
+		init(formingRunOf level: String, end: Int, fields: [SeamSignature.Hole.Field], previousName: String?) {
+			bindingName = SeamCarrierValues.bindingName(ofLevel: level, end: end)
+			type = SeamCarrierValues.structType(ofLevel: level, end: end, qualifiedBy: nil)
+			boundType = type
+			self.fields = fields
+			memberCall = ("", "")
+			isCalledInsideFunction = false
+			isLetChild = false
+			carrierUse = nil
+			formsRunAfter = .some(previousName)
+		}
+
+		/// How the member takes its values, where its enum is a carrier's that hands them through run structs.
+		var carrierUse: SeamCarrierValues.Use?
+		/// For the binding of a run's struct, the binding of the run before it (`nil` inside for the first run); `nil` for a
+		/// member's binding.
+		let formsRunAfter: String??
 
 		let bindingName: String
 		let type: TypeDescription
@@ -2823,6 +2968,8 @@ struct SeamHoles: Sendable {
 		let memberCall: (parentName: String, caseName: String)
 		/// Whether the member is called at the top of the builder function of the binding's property, not before it.
 		let isCalledInsideFunction: Bool
+		/// Whether the struct is a carrier's `let` child, which the binding reads rather than calls.
+		let isLetChild: Bool
 
 		/// The line that binds the payload, each field read as
 		/// `valuesArguments(of:readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)` reads it.
@@ -2832,6 +2979,25 @@ struct SeamHoles: Sendable {
 
 		/// The value `line(readingInstancesOf:bindingNamesPassedByName:lazilyInstantiatedBindingNames:)` binds.
 		func expression(readingInstancesOf lazilyInstantiatedInstanceProperties: Set<Property>, bindingNamesPassedByName: [String: String] = [:], lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:]) -> String {
+			if let formsRunAfter {
+				// A run's struct, made of the run before it and the run's own values.
+				// The run before it is handed on with `consume`: the body forms each run once, after every member that reads the
+				// run before it, and no function captures a run's binding, so this is its last read. Without `consume`, Swift
+				// 6.2's -O copies the whole chain beneath at each hand-off (the seam initializer of the generate-time check's P2-40
+				// held 39 whole-chain `retain_value`s and 40 `release_value`s), which made a build of the tree five times slower.
+				var arguments = formsRunAfter.map { ["\(SeamCarrierValues.previousName): consume \($0)"] } ?? []
+				let values = SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)
+				if !values.isEmpty {
+					arguments.append(values)
+				}
+				return "\(type.asSource)(\(arguments.joined(separator: ", ")))"
+			}
+			if case let .nested(_, enumType, _) = type, ReservedName.seamCarrier(ofEnum: enumType) != nil {
+				// A seam's carrier takes the level's values as its member's arguments: the struct of the run they end, then any
+				// after it, and holds a level handed none as a `let`.
+				guard !isLetChild else { return "\(memberCall.parentName).\(memberCall.caseName)" }
+				return "\(memberCall.parentName).\(memberCall.caseName)(\(SeamHoles.carrierArguments(of: fields, use: carrierUse, readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)))"
+			}
 			let payload = "\(type.asSource)(\(SeamHoles.valuesArguments(of: fields, readingInstancesOf: lazilyInstantiatedInstanceProperties, bindingNamesPassedByName: bindingNamesPassedByName, lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames)))"
 			return "\(memberCall.parentName).\(memberCall.caseName)(\(payload))"
 		}
