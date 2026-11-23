@@ -136,6 +136,7 @@ extension MockLowering.Walk {
 			return publicConstructionArguments(of: construction, given: instantiable, dependencyArguments: dependencyArguments, nodePath: nodePath, overrideReachable: overrideReachable)
 		}
 		let handWrittenDefaults = handWrittenMockDefaultParameters[instantiable.concreteInstantiable, default: []]
+		let storesDefaultsAsClosures = sendableConfigurationTypeNames.contains(instantiable.concreteInstantiable.asSource)
 		let surfacedArguments = overrideReachable
 			? construction.callSiteArguments
 			: construction.callSiteArguments.filter { argument in
@@ -151,9 +152,12 @@ extension MockLowering.Walk {
 			let configurationRead = overrideReachable
 				? readingOverride("\(nodePath).\(argument.label)", localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(argument.label)")
 				: "\(instantiable.concreteInstantiable.asSource).\(ScopeGenerator.MockParameterNode.configurationStructName)().\(argument.label)"
-			// An `@autoclosure` parameter's field is a closure, called where the type is built.
-			let isAutoclosure = argument.typeDescription.strippingEscaping.autoclosureValueType != nil
-			return (label: argument.label.spelledAsArgumentLabel, value: isAutoclosure ? "\(configurationRead)()" : configurationRead)
+			// The field is a closure, called where the type is built, for an `@autoclosure` parameter, and for every value
+			// that is not a function where the configuration is `@Sendable`-typed (`resolveBuilderArguments`).
+			let typeDescription = argument.typeDescription.strippingEscaping
+			let isStoredAsClosure = typeDescription.autoclosureValueType != nil
+				|| (storesDefaultsAsClosures && !typeDescription.isClosure)
+			return (label: argument.label.spelledAsArgumentLabel, value: isStoredAsClosure ? "\(configurationRead)()" : configurationRead)
 		}
 	}
 
