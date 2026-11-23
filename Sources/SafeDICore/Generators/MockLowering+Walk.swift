@@ -1205,7 +1205,9 @@ extension MockLowering {
 				lines.append(node.constantBindingLine(overrideRead: overrideRead, indent: indent))
 				return .finished(node)
 			}
-			let startsExtraction = sendableOverrideExtractor == nil && generator.buildsInSendableFunction
+			// In `.v3Unstable`, a `@Sendable` builder function captures its node's configuration, which is `Sendable` beneath a
+			// wrapper, so only the override of a node with none, read from its parent's configuration, is extracted.
+			let startsExtraction = (!isV3 || (!hasConfiguration && !isInsideSendableFunction)) && sendableOverrideExtractor == nil && generator.buildsInSendableFunction
 			let enclosingExtractor = startsExtraction ? startExtraction(inFunctionNamed: node.functionName) : sendableOverrideExtractor
 			let wasInsideSendableFunction = isInsideSendableFunction
 			isInsideSendableFunction = node.requiresSendable

@@ -399,7 +399,8 @@ extension MockLowering.ConfigurationRecord {
 				"\(indent)/// Configures `\(concreteType.asSource.spelledWithoutBackticks)` wherever a mock builds it: as the mocked type, inside another mock’s tree, or on a later pass of",
 				"\(indent)/// a dependency cycle. A child field left `nil` reads the configuration of the nearest ancestor of the child’s type on its",
 				"\(indent)/// path, or that type’s defaults where there is none.",
-				"\(indent)struct \(ReservedName.mockOverridesTypeName) {",
+				// Beneath a wrapper, the configuration is read off the main actor, by a `@Sendable nonisolated` builder function.
+				"\(indent)\(requiresSendable ? "nonisolated " : "")struct \(ReservedName.mockOverridesTypeName) {",
 			]
 			: [
 				"\(indent)/// Configuration for how this type is constructed within a mock tree.",
