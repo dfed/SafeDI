@@ -1303,6 +1303,22 @@ extension MockLowering {
 			}
 		}
 
+		// D1 lane hook (lane C): a configuration `@Sendable`-typed takes each child's override `@Sendable`
+		// (`ScopeGenerator.configurationField`). A call of another module's public mock there is not lowered yet.
+		/// The node's member of a configuration `@Sendable`-typed, where the lowering spells it.
+		var sendableConfigurationFieldForm: MockLowering.ConfigurationRecord.ChildField.SendableForm? {
+			switch self {
+			case let .built(node):
+				node.hasConfiguration
+					? .init(typeSource: node.configurationTypeName, defaultValue: ".init()", configuredTypeName: node.instantiable.concreteInstantiable.asSource)
+					: .init(typeSource: "(@Sendable \(node.builderClosureType))?", defaultValue: "nil", configuredTypeName: nil)
+			case let .cycleClosing(_, _, concreteType):
+				.init(typeSource: "\(concreteType.asSource).\(ScopeGenerator.MockParameterNode.configurationStructName)", defaultValue: ".init()", configuredTypeName: concreteType.asSource)
+			case .alias, .publicMockCall:
+				nil
+			}
+		}
+
 		/// The concrete type the node builds, whose edge from its parent `cycleEdges` can prune; `nil` for a node that
 		/// builds none of its own.
 		var concreteType: TypeDescription? {
@@ -1538,8 +1554,10 @@ extension MockLowering.ConfigurationRecord {
 			usesMockInitializer: node.usesMockInitializer,
 			// A child's field is the one the overrides hold for a node at the root: its override, its configuration, or the
 			// overrides of the public mock it calls.
-			childFields: children.compactMap(\.overridesField).map { field in
-				ChildField(name: field.name, typeSource: field.typeSource, defaultValue: field.defaultValue)
+			childFields: children.compactMap { child in
+				child.overridesField.map { field in
+					ChildField(name: field.name, typeSource: field.typeSource, defaultValue: field.defaultValue, sendableForm: child.sendableConfigurationFieldForm)
+				}
 			},
 			concreteBuilderClosureType: node.concreteBuilderClosureType,
 			defaultFields: node.defaultFields,

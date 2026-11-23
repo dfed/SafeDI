@@ -159,6 +159,20 @@ public enum MockLowering {
 			let name: String
 			let typeSource: String
 			let defaultValue: String
+			// D1 lane hook (lane C): the field in a configuration `@Sendable`-typed, where the lowering spells it.
+			/// The field in a configuration `@Sendable`-typed (`ScopeGenerator.configurationField`'s `parentRequiresSendable`),
+			/// or `nil` where the lowering does not spell it yet.
+			var sendableForm: SendableForm?
+
+			/// A child's field in a configuration `@Sendable`-typed: a `@Sendable` closure, which is `Sendable`, or the
+			/// child's configuration, `Sendable` where it is `@Sendable`-typed too.
+			struct SendableForm: Sendable, Equatable {
+				let typeSource: String
+				let defaultValue: String
+				/// The type whose configuration the field is, which proves it `Sendable` where that configuration is
+				/// `@Sendable`-typed; `nil` for a `@Sendable` closure, always `Sendable`.
+				let configuredTypeName: String?
+			}
 		}
 	}
 
