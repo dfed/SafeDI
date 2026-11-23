@@ -327,10 +327,10 @@ extension MockLowering.Walk {
 		guard let publicMockCall = generator.publicMockCall,
 		      case let .property(instantiable, property, forwardedProperties, erasedToConcreteExistential, isPropertyCycle, _) = generator.scopeData
 		else { return .unsupported(.publicMockCall) }
+		// A call held in an erased type is wrapped in that type, as an inline construction is.
 		guard !isPropertyCycle,
-		      !erasedToConcreteExistential,
-		      property.propertyType.isConstant || [.instantiator, .sendableInstantiator].contains(property.propertyType),
-		      property.typeDescription.asInstantiatedType == instantiable.concreteInstantiable
+		      property.propertyType.isConstant || [.instantiator, .sendableInstantiator].contains(property.propertyType) || erasedToConcreteExistential && [.erasedInstantiator, .sendableErasedInstantiator].contains(property.propertyType),
+		      erasedToConcreteExistential || property.typeDescription.asInstantiatedType == instantiable.concreteInstantiable
 		else { return .unsupported(.publicMockCall) }
 		guard !rootLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
 		// The leaf takes the called tier's parameters as its mock's.
@@ -483,9 +483,12 @@ extension MockLowering.Walk {
 		if publicMockCall.takesOverrides {
 			arguments.append("\(ReservedName.mockOverridesParameterName): \(overridesAreSendable ? "\(overrideRead)?() ?? .init()" : overrideRead)")
 		}
-		let defaultCall = "\(instantiable.concreteInstantiable.asSource).\(publicMockCall.functionName)(\(arguments.joined(separator: ", ")))"
+		let unerasedCall = "\(instantiable.concreteInstantiable.asSource).\(publicMockCall.functionName)(\(arguments.joined(separator: ", ")))"
+		let defaultCall = erasedToConcreteExistential ? "\(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource)(\(unerasedCall))" : unerasedCall
 		let call: String
 		if let overrideBuilders {
+			// An override closure of a call held in an erased type is not lowered yet.
+			guard !erasedToConcreteExistential else { return .unsupported(.publicMockCall) }
 			// A builder's slot holds its label until here, so that each builder reads every value the call passes.
 			let handed = zip(initializer.arguments, overrideArguments).map { argument, value in
 				overrideBuilders[argument.innerLabel]?.expression(argumentByLabel: argumentByLabel, holeBuilder: holeBuilders[argument.innerLabel]) ?? value
