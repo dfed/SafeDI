@@ -438,7 +438,7 @@ extension ScopeRecord {
 			// shares it across every tree created with this memo, whatever the memo's own sharing, so that the oracle judges
 			// every reuse either sharing makes. The places it keys are the oracle's, not the tree's, so no test sees them.
 			var oracleMemo = constructionMemo.oracleMemo
-			let treeBuiltWithMemo = try ConstructionMemoOracle.$keyedPlaceObserver.withValue(nil) {
+			let treeBuiltWithMemo = try ConstructionMemoOracle.$keyedPlaceObserver.withValue(nil) { try ConstructionMemoOracle.$rebuildsReusedPlaces.withValue(ConstructionMemoOracle.reuseObserver) {
 				try createdTree(
 					in: table,
 					nearestDeclarations: nearestDeclarations,
@@ -452,7 +452,7 @@ extension ScopeRecord {
 					declaredTypeNames: declaredTypeNames,
 					constructionMemo: &oracleMemo,
 				)
-			}
+			} }
 			constructionMemo.oracleMemo = oracleMemo
 			// The reference tree is built with neither the memo nor the settled cycle parameter seed, so every
 			// graph compares the seeded build with the plain pass loop as well.
@@ -694,6 +694,12 @@ extension ScopeRecord {
 		let sharingSchedule = ConstructionSharingSchedule.current
 		var lookupCount = 0
 		let keyedPlaceObserver = ConstructionMemoOracle.keyedPlaceObserver
+		// Set only in the oracle's build with the memo: each place that reuses a generator is built again, and the two compared.
+		let reuseObserver = ConstructionMemoOracle.rebuildsReusedPlaces
+		// The places the oracle is building again where the tool reuses a generator, innermost last, each with the index its
+		// scope has on the stack, the reuse, its key, and whether the reuse is the pass before's settled generator, which the
+		// memo stores for the places after. What is built inside one is not stored: the tool does not build it.
+		var rebuiltPlaces = [(index: Int, reuse: ConstructionMemo.Reuse, key: ConstructionMemo.Key, storesEntry: Bool)]()
 		// The generators whose code this pass started or collected, each of which a place that reuses it does not start again.
 		var startedGenerators = Set<ObjectIdentifier>()
 		// Every generator this pass started or collected, in order: what each place's build started is the part of it from
@@ -712,8 +718,10 @@ extension ScopeRecord {
 						keyedPlaceObserver(scope.instantiable.concreteInstantiable.asSource)
 					}
 					let draw = key == nil ? nil : sharingSchedule?.draw(atLookup: &lookupCount)
+					// The generator another place built that this place reuses, and whether it is the pass before's settled one.
+					var found: (reuse: ConstructionMemo.Reuse, isSettledReuse: Bool)?
 					if let key, let reuse = memo.reuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property), drawing: draw) {
-						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
+						found = (reuse, false)
 					} else if let key, let reuse = settledPassMemo?.settledReuse(of: key, in: scopeGeneratorsUnderConstruction[index].childContext(ofChildBuilding: property)) {
 						// The pass before built this place's generator settled: building the place again would build it again.
 						// Its code starts as the build would have started it, and the memo holds it for the places after it.
@@ -723,8 +731,13 @@ extension ScopeRecord {
 							generatorsToStart?.append(group)
 							startLog.append(group)
 						}
-						memo.store(reuse.entry, for: key, keepingAlive: scope.identity)
-						scopeGeneratorsUnderConstruction[index].add(reusing: reuse)
+						found = (reuse, true)
+					}
+					if let key, let found, reuseObserver == nil {
+						if found.isSettledReuse {
+							memo.store(found.reuse.entry, for: key, keepingAlive: scope.identity)
+						}
+						scopeGeneratorsUnderConstruction[index].add(reusing: found.reuse)
 					} else {
 						var child = scopeGeneratorsUnderConstruction[index].childUnderConstruction(
 							scope: scope,
@@ -733,7 +746,12 @@ extension ScopeRecord {
 							erasedToConcreteExistential: erasedToConcreteExistential,
 							isKeyed: key != nil,
 						)
-						child.memoKey = key
+						if let key, let found {
+							// The oracle builds the place it reuses a generator at, and checks the two (`ConstructionMemoOracle.reuseObserver`).
+							rebuiltPlaces.append((scopeGeneratorsUnderConstruction.count, found.reuse, key, found.isSettledReuse))
+						} else {
+							child.memoKey = key
+						}
 						child.startLogIndex = startLog.groups.count
 						scopeGeneratorsUnderConstruction.append(child)
 					}
@@ -765,8 +783,20 @@ extension ScopeRecord {
 				} else {
 					// Filtered once, for the memo and the parent alike.
 					let readsAnsweredAbove = createdScope.readsAnsweredAbove
+					if let rebuilt = rebuiltPlaces.last, rebuilt.index == scopeGeneratorsUnderConstruction.count {
+						// The place is built again only for the oracle: the tree holds the reused generator, as it would unchecked,
+						// and the memo holds what it would, so what the oracle checks is the tree the tool builds.
+						rebuiltPlaces.removeLast()
+						reuseObserver?(scopeGenerator, rebuilt.reuse.entry.generator, readsAnsweredAbove.holdsAlike(rebuilt.reuse.reads))
+						if rebuilt.storesEntry, rebuiltPlaces.isEmpty {
+							memo.store(rebuilt.reuse.entry, for: rebuilt.key, keepingAlive: createdScope.builtScope.identity)
+						}
+						scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].add(reusing: rebuilt.reuse)
+						continue
+					}
 					let isSettled = createdScope.isSettled(building: scopeGenerator)
-					if let key = createdScope.memoKey, createdScope.isMemoizable {
+					// Inside a place the oracle builds again, nothing is stored: the tool does not build the place.
+					if let key = createdScope.memoKey, createdScope.isMemoizable, rebuiltPlaces.isEmpty {
 						memo.store(ConstructionMemo.Entry(
 							reads: readsAnsweredAbove,
 							generator: scopeGenerator,

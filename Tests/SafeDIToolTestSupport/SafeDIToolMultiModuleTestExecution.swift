@@ -603,7 +603,9 @@ func executeSafeDIToolMultiModuleTest(
 							// Every value a freeze interns must be one the interner is designed to meet there (`ConstructionInternerClosure`).
 							try await ConstructionInternerObservation.$missObserver.withValue(ConstructionInternerClosure.recordingMissesNotExcluded(handingOn: ConstructionInternerObservation.missObserver)) {
 								try await ConstructionInternerOrder.applying(.fromEnvironment) {
-									try await tool.generate()
+									try await ConstructionMemoOracle.$reuseObserver.withValue(ConstructionMemoChecks.recordingReuseDifferences(handingOn: ConstructionMemoOracle.reuseObserver)) {
+										try await tool.generate()
+									}
 								}
 							}
 						}
