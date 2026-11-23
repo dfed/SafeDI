@@ -74,9 +74,23 @@ extension MockLowering {
 		var properties = Set<Property>()
 		for dependency in instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) && dependency.property.typeDescription.isOptional {
 			let unwrapped = dependency.property.asUnwrappedProperty
-			guard nodeProperties.contains(unwrapped), renames[unwrapped.label]?[unwrapped.typeDescription] == nil, renames[unwrapped.label]?[dependency.property.typeDescription] == nil else { continue }
+			// D1 lane hook (lane B): a node named apart passes the receive its name (`rootOptionalFormRenames`).
+			guard nodeProperties.contains(unwrapped) else { continue }
 			properties.insert(dependency.property)
 		}
 		return properties
+	}
+
+	// D1 lane hook (lane B): the mocked type's receive only if available of a node's optional form is passed the name its
+	// node is bound apart under, as `generateReturnArgumentList` passes it.
+	/// The renames of `rootOptionalFormsProvidedByNodes`' receives whose node the root's level names apart, keyed by the
+	/// receive's optional type.
+	static func rootOptionalFormRenames(of properties: Set<Property>, renames: [String: [TypeDescription: String]]) -> [String: [TypeDescription: String]] {
+		var optionalFormRenames = [String: [TypeDescription: String]]()
+		for property in properties where renames[property.label]?[property.typeDescription] == nil {
+			guard let name = renames[property.label]?[property.asUnwrappedProperty.typeDescription] else { continue }
+			optionalFormRenames[property.label, default: [:]][property.typeDescription] = name
+		}
+		return optionalFormRenames
 	}
 }

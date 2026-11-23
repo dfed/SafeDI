@@ -175,7 +175,12 @@ extension ScopeGenerator {
 		let rootInstancesReadByValue = MockLowering.rootInstancesReadByValue(of: instantiable, among: lazilyInstantiatedInstances)
 		providedProperties.formUnion(rootInstancesReadByValue)
 		if instantiable.generateMock != .public {
-			providedProperties.formUnion(MockLowering.rootOptionalFormsProvidedByNodes(of: instantiable, nodeProperties: Set(nodes.map(\.property)).union(signature.properties), renames: rootRenames))
+			let rootOptionalForms = MockLowering.rootOptionalFormsProvidedByNodes(of: instantiable, nodeProperties: Set(nodes.map(\.property)).union(signature.properties), renames: rootRenames)
+			providedProperties.formUnion(rootOptionalForms)
+			// D1 lane hook (lane B): each such receive of a node named apart is passed the node's name.
+			for (label, names) in MockLowering.rootOptionalFormRenames(of: rootOptionalForms, renames: rootRenames) {
+				rootRenames[label, default: [:]].merge(names) { renamed, _ in renamed }
+			}
 		}
 		guard instantiable.dependencies.allSatisfy({ providedProperties.contains($0.property) }) else {
 			return .unsupported(.flatParameter)
