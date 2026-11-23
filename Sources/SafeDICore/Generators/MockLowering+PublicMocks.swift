@@ -147,8 +147,15 @@ extension ScopeGenerator {
 		let promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildrenComputedAfresh(propertiesGeneratedLater: []))
 		var promotedNodes = [(property: Property, name: String)]()
 		for node in nodes where promotedProperties.contains(node.property) {
-			guard let builtNode = node.builtNode else { return .unsupported(.publicMockRoot) }
-			promotedNodes.append((property: node.property, name: builtNode.bindingName))
+			switch node {
+			case let .built(builtNode):
+				promotedNodes.append((property: node.property, name: builtNode.bindingName))
+			case .publicMockCall:
+				// A promoted call is bound under its label (`publicMockCallNode`).
+				promotedNodes.append((property: node.property, name: node.property.label))
+			case .alias, .cycleClosing:
+				return .unsupported(.publicMockRoot)
+			}
 		}
 		let indent = Self.standardIndent
 		let bodyIndent = "\(indent)\(indent)"
