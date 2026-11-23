@@ -981,6 +981,12 @@ extension MockLowering {
 				node.promotedParameterName = bindingName
 			}
 			node.cycleParameterArguments = cycleParameterArguments
+			// D1 lane hook (lane E): a place of another module's public mock the tree builds inline reads the builder `mock()`
+			// takes for its hole type and family (`MockLowering+PublicMockCalls.swift`).
+			if let inlinePlaceBuilder = filledCallBuilders.holeBuildersByInlinePlace[ObjectIdentifier(generator)] {
+				guard node.promotedParameterName == nil, ownLoopMembership == nil else { return .unsupported(.fill) }
+				node.inlinePlace = InlinePlace(builder: inlinePlaceBuilder, overrideRead: overrideRead)
+			}
 			let lazilyInstantiatedInstanceProperties = generator.mockLoweringLazilyInstantiatedInstanceProperties
 			// D1 lane hook (lane D): a node whose configuration holds its default-valued parameters is built in a builder
 			// function, as `MockParameterNode.requiresFunctionWrapper` says.
@@ -1254,6 +1260,10 @@ extension MockLowering {
 		// mock cannot build, each bound in its builder function from the local `mock()` reads it into.
 		/// The names of the `@Sendable` autoclosure parameters whose values the node's builder function binds.
 		var sendableAutoclosureBindingNames = [String]()
+		// D1 lane hook (lane E): a place of another module's public mock built inline.
+		/// The builder `mock()` takes that the node reads where it is a place of another module's public mock the tree builds
+		/// inline, with the read of its override outside its builder function.
+		var inlinePlace: InlinePlace?
 
 		/// The node, configured in a configuration of its own where `children` hold a node that builds its type or its
 		/// construction takes a default-valued parameter.
@@ -1345,7 +1355,7 @@ extension MockLowering {
 			// D1 lane hook (lane C): a child the mock promotes for an optional receive, such as a value a called public mock
 			// builds when passed `nil`, is bound as the value it builds.
 			let annotation = isFulfilledByAnotherType && !isErased && nodePath != nil ? ": \(property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource)" : ""
-			return "\(indent)let \(bindingName)\(annotation) = \(passingPromotedValue(orBuilding: constructionReading(override: nodePath, builderCall: "\(ReservedName.configurationBuilderPropertyName)(\(builderArguments))")))"
+			return "\(indent)let \(bindingName)\(annotation) = \(passingPromotedValue(orBuilding: readingInlinePlaceBuilder(constructionReading(override: nodePath, builderCall: "\(ReservedName.configurationBuilderPropertyName)(\(builderArguments))"), override: nodePath)))"
 		}
 
 		/// `construction`, read after the value the public mock's caller passed for the node where it promotes the node.
@@ -1359,6 +1369,14 @@ extension MockLowering {
 			guard let overridePath else { return construction }
 			let builder = ReservedName.configurationBuilderPropertyName
 			return "if let \(builder) = \(overridePath) { \(builderCall) } else { \(construction) }"
+		}
+
+		/// `construction`, a constant's, read after the builder `mock()` takes where the node is a place of another module's
+		/// public mock built inline and no override at `overridePath` is set (`HoleBuilder.inlinePlaceValue`). A wrapper reads
+		/// the builder where it is made (`promotedBindingLines`).
+		private func readingInlinePlaceBuilder(_ construction: String, override overridePath: String?) -> String {
+			guard let inlinePlace, !isWrapped else { return construction }
+			return inlinePlace.builder.inlinePlaceValue(construction: construction, overrideExpression: overridePath)
 		}
 
 		/// The first line of the node's builder function, whose children's statements follow it.
@@ -1391,7 +1409,7 @@ extension MockLowering {
 			let returnPrefix = hasChildren || !receiverBindings.isEmpty || !sendableAutoclosureBindingNames.isEmpty || !isWrapped ? "return " : ""
 			// A configuration's builder returns the concrete type, which an erased node wraps as its construction does.
 			let builderCall = isErased && hasConfiguration ? "\(erasedTypeSource)(\(builder)(\(builderArguments)))" : "\(builder)(\(builderArguments))"
-			var lines = ["\(bodyIndent)\(returnPrefix)\(constructionReading(override: overridePath, builderCall: builderCall))"]
+			var lines = ["\(bodyIndent)\(returnPrefix)\(readingInlinePlaceBuilder(constructionReading(override: overridePath, builderCall: builderCall), override: overridePath))"]
 			lines.append("\(indent)}")
 			lines.append(contentsOf: promotedBindingLines(indent: indent))
 			return lines
@@ -1401,6 +1419,9 @@ extension MockLowering {
 		/// where it promotes the node.
 		func promotedBindingLines(indent: String) -> [String] {
 			guard let promotedParameterName else {
+				if let inlinePlace, isWrapped {
+					return inlinePlace.wrapperBindingLines(of: property.typeDescription, named: bindingName, handing: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent)
+				}
 				return MockLowering.bindingLines(of: property, boundAs: bindingName, callingFunctionNamed: functionName, forwardedProperties: forwardedProperties, cycleParameterArguments: cycleParameterArguments, indent: indent)
 			}
 			guard property.propertyType.isConstant else {
