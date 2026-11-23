@@ -28,9 +28,9 @@ extension ScopeGenerator {
 	/// the walk meets that it does not lower yet.
 	func lowerMockRootWithTree(of instantiable: Instantiable, context: MockContext) async -> MockLowering.Result {
 		// D1 lane hook: the mocked type's own parameters (forwarded, flat received, uncovered, defaults, hand-written mock).
-		if let rule = Self.unsupportedRuleOfMockedType(instantiable) {
-			return .unsupported(rule)
-		}
+		// D1 lane hook (lane C): the mocked type's own parameters and construction meet no rule the walk does not lower: its
+		// hand-written mock builds it, internal or public (`MockLowering+HandWrittenMocks.swift`), and every dependency is a
+		// node of its tree, a parameter of `mock()` or an override's binding, which the walk checks it binds.
 		// D1 lane hook (lane D): the parameters `mock()` takes before its overrides (`lowerRootSignature(of:context:)`).
 		let signature: MockLowering.RootSignature
 		switch lowerRootSignature(of: instantiable, context: context) {
@@ -172,18 +172,6 @@ extension ScopeGenerator {
 			return publicMockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, filledCallBuilders: walk.filledCallBuilders, configurations: walk.configurationRecords, context: context)
 		}
 		return .lowered(Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, builders: walk.filledCallBuilders.parameters, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, context: context), configurations: walk.configurationRecords)
-	}
-
-	/// The first rule the parameters and construction of the mocked type itself meet that the walk does not lower yet.
-	private static func unsupportedRuleOfMockedType(_ instantiable: Instantiable) -> MockLowering.Rule? {
-		// The initializer's default-valued arguments are parameters of `mock()` (`lowerRootSignature(of:context:)`).
-		// D1 lane hook (lane D): the mocked type's own hand-written mock builds it (`MockLowering+HandWrittenMocks.swift`), but a
-		// public mock's, which lane C's file builds.
-		guard instantiable.generateMock != .public || (instantiable.mockInitializer == nil && instantiable.customMockName == nil) else { return .handWrittenMock }
-		// D1 lane hook (lane B): every dependency of the mocked type is a node of its tree (a wrapper of any kind, erased or
-		// fulfilled by another type alike, a received wrapper the mock promotes, an alias), a parameter of `mock()` or an
-		// override's binding, which the walk checks it binds.
-		return nil
 	}
 
 	/// The mock of `instantiable` whose tree's top-level nodes are `nodes`, in generation order, bound by `bindingLines`:

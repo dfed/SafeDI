@@ -27,8 +27,8 @@ extension ScopeGenerator {
 		guard let publicMockContext = context.publicMockContext else { return .unsupported(.publicMockRoot) }
 		guard propertiesToGenerate.isEmpty,
 		      instantiable.dependencies.isEmpty,
-		      instantiable.mockInitializer == nil,
-		      let initializer = instantiable.initializer,
+		      // D1 lane hook (lane C): the type's own hand-written mock builds it where it has one.
+		      let initializer = MockLowering.rootConstructionInitializer(of: instantiable),
 		      initializer.arguments.isEmpty
 		else {
 			return await lowerMockRootWithTree(of: instantiable, context: context)
@@ -52,19 +52,16 @@ extension ScopeGenerator {
 		)
 		let typeName = instantiable.concreteInstantiable.asSource
 		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
-		let construction = if instantiable.declarationType.isExtension {
-			"\(typeName).\(InstantiableVisitor.instantiateMethodName)()"
-		} else {
-			"\(typeName)()"
-		}
+		let construction = MockLowering.rootConstruction(of: instantiable, argumentList: "")
+		let returnType = MockLowering.rootReturnType(of: instantiable)
 		let code = """
 		extension \(typeName) {
-		    \(mockAttributesPrefix)public static func mock() -> \(typeName) {
+		    \(mockAttributesPrefix)public static func mock() -> \(returnType) {
 		        \(typeName).\(ReservedName.publicMockFunctionName)()
 		    }
 
 		    /// Only code SafeDI generates calls this function, and its shape can change in any release of SafeDI.
-		    \(mockAttributesPrefix)public static func \(ReservedName.publicMockFunctionName)() -> \(typeName) {
+		    \(mockAttributesPrefix)public static func \(ReservedName.publicMockFunctionName)() -> \(returnType) {
 		        \(construction)
 		    }
 		}
@@ -204,19 +201,16 @@ extension ScopeGenerator {
 		}
 		var body = plan.defaultResolutions
 		body.append(contentsOf: bindingLines)
-		let argumentList = instantiable.initializer.map { initializer in
+		// D1 lane hook (lane C): the mocked type's own hand-written mock builds it where it has one, and `mock()` returns what
+		// that mock returns (lane D's `MockLowering+HandWrittenMocks.swift`).
+		let argumentList = MockLowering.rootConstructionInitializer(of: instantiable).map { initializer in
 			MockLowering.rootArgumentList(of: initializer, given: instantiable.dependencies, renames: rootRenames, passingNilTo: unavailableProperties)
-		} ?? ""
-		let construction = if instantiable.declarationType.isExtension {
-			"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
-		} else {
-			"\(typeName)(\(argumentList))"
-		}
-		body.append("\(bodyIndent)return \(construction)")
+		} ?? Instantiable.incorrectlyConfiguredComment
+		body.append("\(bodyIndent)return \(MockLowering.rootConstruction(of: instantiable, argumentList: argumentList))")
 		lines.append(contentsOf: Self.publicMockTiers(
 			of: plan,
 			typeName: typeName,
-			returnType: typeName,
+			returnType: MockLowering.rootReturnType(of: instantiable),
 			attributesPrefix: mockAttributesPrefix,
 			narrowestBody: body,
 			unreadTypeComment: publicMockContext.unreadTypeComment,
@@ -251,7 +245,7 @@ extension ScopeGenerator {
 		var forwardedDefaults = [String: ForwardedParameterDefault]()
 		for dependency in forwardedDependencies {
 			let label = dependency.property.label
-			if let constructionDefault = instantiable.initializer?.arguments.first(where: { $0.innerLabel == label })?.defaultValueExpression {
+			if let constructionDefault = MockLowering.rootConstructionInitializer(of: instantiable)?.arguments.first(where: { $0.innerLabel == label })?.defaultValueExpression {
 				forwardedDefaults[label] = .constructionDefault(constructionDefault)
 			} else if let mockDefault = context.flatParameterMockDefaults[dependency.property.typeDescription] {
 				forwardedDefaults[label] = .handWrittenMock(mockDefault)
