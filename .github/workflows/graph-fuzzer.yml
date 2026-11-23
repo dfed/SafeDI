@@ -75,6 +75,10 @@ on:
         description: With `coverage`, the commit or branch to list changes since, or empty for the merge base with main of the commit the run is dispatched on.
         required: false
         default: ''
+      remedy_variants:
+        description: MEASUREMENT ONLY, removed before landing. The accepted remedy variants compiled per rejected seed (SAFEDI_GRAPH_FUZZER_REMEDY_VARIANTS), or empty for every one.
+        required: false
+        default: ''
       release_acceptance:
         description: Instead of the fuzzing above, check that every graph of the base, seam and public mock corpora that SafeDI 2.3.0 accepts still compiles and builds the same values. The inputs above are ignored.
         type: boolean
@@ -127,6 +131,7 @@ jobs:
       ITERATIONS: ${{ inputs.iterations || 'corpus' }}
       STARTING_SEED: ${{ inputs.starting_seed || '0' }}
       FEATURES: ${{ inputs.features || '' }}
+      REMEDY_VARIANTS: ${{ inputs.remedy_variants || '' }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
@@ -144,6 +149,7 @@ jobs:
         run: swift build -c release -Xswiftc -enable-testing --traits sourceBuild --build-tests
       - name: Run Graph Fuzzer
         run: |
+          if [ -n "$REMEDY_VARIANTS" ]; then export SAFEDI_GRAPH_FUZZER_REMEDY_VARIANTS="$REMEDY_VARIANTS"; fi
           SAFEDI_GRAPH_FUZZER_FEATURES="$FEATURES" \
           SAFEDI_GRAPH_FUZZER_ITERATIONS="$ITERATIONS" \
           SAFEDI_GRAPH_FUZZER_STARTING_SEED="$STARTING_SEED" \
