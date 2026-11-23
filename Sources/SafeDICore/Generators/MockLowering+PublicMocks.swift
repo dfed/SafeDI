@@ -134,6 +134,7 @@ extension ScopeGenerator {
 		bindingLines: [String],
 		rootRenames: [String: [TypeDescription: String]],
 		unavailableProperties: Set<Property>,
+		instancesReadByValue: Set<Property>,
 		filledCallBuilders: MockLowering.FilledCallBuilders,
 		configurations: [MockLowering.ConfigurationRecord],
 		context: MockContext,
@@ -204,7 +205,7 @@ extension ScopeGenerator {
 		// D1 lane hook (lane C): the mocked type's own hand-written mock builds it where it has one, and `mock()` returns what
 		// that mock returns (lane D's `MockLowering+HandWrittenMocks.swift`).
 		let argumentList = MockLowering.rootConstructionInitializer(of: instantiable).map { initializer in
-			MockLowering.rootArgumentList(of: initializer, given: instantiable.dependencies, renames: rootRenames, passingNilTo: unavailableProperties)
+			MockLowering.rootArgumentList(of: initializer, given: instantiable.dependencies, renames: rootRenames, passingNilTo: unavailableProperties, readingInstancesOf: instancesReadByValue)
 		} ?? Instantiable.incorrectlyConfiguredComment
 		body.append("\(bodyIndent)return \(MockLowering.rootConstruction(of: instantiable, argumentList: argumentList))")
 		lines.append(contentsOf: Self.publicMockTiers(

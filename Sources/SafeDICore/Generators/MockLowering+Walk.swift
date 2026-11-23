@@ -161,8 +161,9 @@ extension ScopeGenerator {
 		var providedProperties = Set(nodes.map(\.property)).union(signature.properties).union(overrideProperties).union(unavailableOptionalProperties).union(signature.lazilyInstantiatedProperties)
 		// D1 lane hook (lane D): the mocked type's own receive or instantiation of a lazy wrapper's instance is passed the
 		// wrapper's instance, and a receive only if available of a node's optional form is passed the node, as
-		// `generateReturnArgumentList` passes them. A public mock's root is lane C's (`publicMockWithTree`).
-		let rootInstancesReadByValue = instantiable.generateMock == .public ? [] : MockLowering.rootInstancesReadByValue(of: instantiable, among: lazilyInstantiatedInstances)
+		// `generateReturnArgumentList` passes them.
+		// D1 lane hook (lane C): a public mock's root passes its instances alike (`publicMockWithTree`).
+		let rootInstancesReadByValue = MockLowering.rootInstancesReadByValue(of: instantiable, among: lazilyInstantiatedInstances)
 		providedProperties.formUnion(rootInstancesReadByValue)
 		if instantiable.generateMock != .public {
 			providedProperties.formUnion(MockLowering.rootOptionalFormsProvidedByNodes(of: instantiable, nodeProperties: Set(nodes.map(\.property)), renames: rootRenames))
@@ -177,7 +178,7 @@ extension ScopeGenerator {
 		// D1 lane hook (lane C): a public mock's tiers, overrides and guard (`MockLowering+PublicMocks.swift`).
 		guard instantiable.generateMock != .public else {
 			// D1 lane hook (lane C): a public mock's parameters named apart and its values passed `nil`, as the internal mock's.
-			return publicMockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, filledCallBuilders: walk.filledCallBuilders, configurations: walk.configurationRecords, context: context)
+			return publicMockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, filledCallBuilders: walk.filledCallBuilders, configurations: walk.configurationRecords, context: context)
 		}
 		return .lowered(Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, builders: walk.filledCallBuilders.parameters, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, context: context), configurations: walk.configurationRecords)
 	}
@@ -1525,8 +1526,7 @@ extension MockLowering {
 			switch generator.scopeData {
 			case let .alias(_, fulfillingProperty, _, onlyIfAvailable, _):
 				// D1 lane hook (lane B): an alias bound to `nil` reads nothing (`emitAliasBinding`).
-				guard fulfillingProperty.label == label, !ScopeGenerator.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: child.unavailableProperties) else { continue }
-				guard wrapperNames[fulfillingProperty.typeDescription] == nil else { continue }
+				guard fulfillingProperty.label == label, !ScopeGenerator.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: child.unavailableProperties), wrapperNames[fulfillingProperty.typeDescription] == nil else { continue }
 				// D1 lane hook (lane B): an alias of a lazy wrapper's instance.
 				guard !generator.mockLoweringLazilyInstantiatedInstanceProperties.contains(fulfillingProperty.asUnwrappedProperty) else { return nil }
 				guard names[fulfillingProperty.typeDescription] != nil else { return true }
