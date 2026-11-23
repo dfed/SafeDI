@@ -43,6 +43,12 @@ extension ScopeGenerator {
 				rootChildLabels.insert(property.label)
 			}
 		}
+		// A non-optional `LazilyInstantiated` or `SendableLazilyInstantiated` the root's level binds offers its instance too,
+		// which a fill reading the value by value reads.
+		for property in rootLevelProperties where property.typeDescription.unwrapped == property.typeDescription {
+			guard let instanceType = property.typeDescription.lazilyInstantiatedInstanceType else { continue }
+			rootLevelProperties.insert(Property(label: property.label, typeDescription: instanceType))
+		}
 		for child in orderedChildren where child.generator.publicMockCall != nil && child.generator.fillsABuilder {
 			let generator = child.generator
 			guard let publicMockCall = generator.publicMockCall,
@@ -53,7 +59,6 @@ extension ScopeGenerator {
 			else { return .unsupported(.fill) }
 			// A fill that reads a value of the caller's scope reads what the mock binds or offers for it.
 			for fill in generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: child.propertiesGeneratedLater).map(\.generator) {
-				// A fill that reads a value the mock root binds apart from its label rebinds it, which is not lowered yet.
 				// A fill that reads the caller's own value from a root binding named apart from its label binds the label to that
 				// name, which is lowered where a parameter or an override is named apart, never a root child the walk names apart.
 				guard case .fill = fill.scopeData,
