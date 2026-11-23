@@ -86,6 +86,7 @@ extension ScopeGenerator {
 		walk.buildsPublicMock = instantiable.generateMock == .public
 		// D1 lane hook (lane C): the nodes a public mock promotes, each bound from its caller's value when passed one.
 		walk.promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildren)
+		walk.publicMockLeadingParameterNames = Set(signature.parameters.map(\.name))
 		// D1 lane hook (lane B): each override binds its receive's label, in the optional form a receive only if available
 		// reads.
 		let overrideProperties = Set(signature.onlyIfAvailableOverrides.flatMap { override in
@@ -443,6 +444,11 @@ extension MockLowering {
 		// D1 lane hook (lane C): the properties of the nodes a public mock promotes at its root's level, each bound from the
 		// parameter its caller passes, named as the node's binding (`MockLowering+PublicMocks.swift` checks the name).
 		var promotedProperties = Set<Property>()
+		// D1 lane hook (lane D): the names of the parameters the public mock takes for its promoted nodes where a name differs
+		// from the node's binding, and the names of its other parameters, which those names keep apart from
+		// (`MockLowering.publicMockPromotedParameterNames`).
+		var promotedParameterNames = [Property: String]()
+		var publicMockLeadingParameterNames = Set<String>()
 		// D1 lane hook (lane B): the extractor of the `@Sendable` builder function the walk is inside, and the names of each
 		// level it is in, from which such a function's locals are claimed (`MockLowering+Wrappers.swift`).
 		var sendableOverrideExtractor: ScopeGenerator.SendableOverrideExtractor?
@@ -501,6 +507,14 @@ extension MockLowering {
 					rootBindingNames[label, default: [:]].merge(names) { _, wrapperName in wrapperName }
 				}
 				filledCallBuilders.bindingRootNames(rootBindingNames)
+				// D1 lane hook (lane D): the public mock's parameters for the nodes it promotes, named as its plan names them.
+				promotedParameterNames = MockLowering.publicMockPromotedParameterNames(
+					of: zip(generators, bindingNames).compactMap { generator, bindingName in
+						guard let property = generator.property, let bindingName, promotedProperties.contains(property) else { return nil }
+						return (property, bindingName)
+					},
+					besideParametersNamed: publicMockLeadingParameterNames,
+				)
 				// D1 lane hook (lane B): the names the root's property nodes are bound under, which a rebinding of the mocked
 				// type's own receive would redeclare.
 				for (generator, bindingName) in zip(generators, bindingNames) {
@@ -1202,7 +1216,7 @@ extension MockLowering {
 			node.sendableAutoclosureBindings = uncoveredInstantiatedProperties.compactMap { sendableAutoclosureBindings[$0] }
 			// D1 lane hook (lane C): a node a public mock promotes at its root's level reads its caller's value first.
 			if parentConcreteType == nil, promotedProperties.contains(property) {
-				node.promotedParameterName = bindingName
+				node.promotedParameterName = promotedParameterNames[property] ?? bindingName
 			}
 			node.cycleParameterArguments = cycleParameterArguments
 			// D1 lane hook (lane E): a place of another module's public mock the tree builds inline reads the builder `mock()`
