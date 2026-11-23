@@ -174,6 +174,9 @@ extension MockLowering.Walk {
 		nodePath: String,
 		overrideReachable: Bool,
 	) -> [(label: String, value: String)] {
+		// A `@Sendable`-typed configuration stores every default as a `@Sendable` closure, which the read calls
+		// (`ScopeGenerator.publicBuilderArguments`).
+		let storesDefaultsAsClosures = sendableConfigurationTypeNames.contains(instantiable.concreteInstantiable.asSource)
 		var dependencyValues = dependencyArguments[...]
 		return construction.callSiteArguments.compactMap { argument in
 			if instantiable.dependencies.contains(where: argument.isFulfilled(by:)) {
@@ -181,6 +184,7 @@ extension MockLowering.Walk {
 			}
 			let value = if overrideReachable {
 				readingOverride("\(nodePath).\(argument.label)", localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(argument.label)")
+					+ (storesDefaultsAsClosures ? "()" : "")
 			} else if let defaultParameter = construction.defaultParameters.first(where: { $0.label == argument.label }),
 			          // The construction's own default decides, as the emitter's does, whatever default the provider evaluates.
 			          MockLowering.DefaultField(of: defaultParameter, handWrittenMockDefaultParameters: []).hasPublicProvider
