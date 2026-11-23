@@ -105,6 +105,8 @@ extension MockLowering {
 			// D1 lane hook (lane D): the places of a seam's own internal mock the builder builds, each the uncovered dependency
 			// it stands for, named as its parameter would have been (`MockLowering+SeamMockBuilders.swift`).
 			let places: [ScopeGenerator.MockRootParameters.UncoveredParameter]
+			// D1 lane hook (lane E): the hole type and family the builder builds, which a call's builder of that family joins.
+			let family: ScopeGenerator.MockRootParameters.SeamMockBuilder.Family
 			/// The adapters of the builder to the properties whose form takes a value it does not take.
 			var adapters = [Adapter]()
 
