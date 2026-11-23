@@ -231,16 +231,15 @@ extension DependencyTreeGenerator {
 					let position = boundPosition()
 					// A member of the property's loop of builders (`ScopeGenerator.ReceivedBuilderLoops`) is still being built where
 					// the loop's payloads are bound, before the loop's first function: the property's own function wraps again what
-					// its tree receives of it. It is bound later than the payload, as the declarations after the property are.
-					var fields = [SeamSignature.Hole.Field]()
-					var labelsBoundLater = Set(declarations[position...].map(\.property.label) + [property.label])
-					for field in declarations[..<position] {
-						if let fieldChild = childrenByProperty[field.property], build.areMembersOfOneLoop(childAt: fieldChild.index, childIndex) {
-							labelsBoundLater.insert(field.property.label)
-						} else {
-							fields.append(field)
-						}
-					}
+					// its tree receives of it. It is bound later than the payload, as the declarations after the property are. A loop
+					// is built as one unit, so its members are consecutive declarations, and the case's values end at the first: a
+					// prefix of the level's one sequence, as every case's are.
+					let prefixLength = declarations[..<position].firstIndex { field in
+						guard let fieldChild = childrenByProperty[field.property] else { return false }
+						return build.areMembersOfOneLoop(childAt: fieldChild.index, childIndex)
+					} ?? position
+					let fields = Array(declarations[..<prefixLength])
+					let labelsBoundLater = Set(declarations[prefixLength...].map(\.property.label) + [property.label])
 					if child.holeSite != nil {
 						plainCases.append(DraftCase(property: property, kind: .place, fields: fields, labelsBoundLater: labelsBoundLater))
 					} else if isCall, let innerKey = innerKey(handedUpBy: child, isSendable: false) {
@@ -506,16 +505,10 @@ extension DependencyTreeGenerator {
 		// The enums' components, as `markingIndirectCases` will read them once signatures settle: a carrier's enums reach no
 		// other seam's, so this hole type's enums decide which of its cases are in a loop of levels.
 		let componentByKey = Self.componentByKey(of: result.enums)
-		func holdsEnumOfItsOwnComponent(_ enumCase: SeamSignature.ScopeEnum.Case, of enumKey: SeamSignature.ScopeEnum.Key) -> Bool {
-			let heldKey: SeamSignature.ScopeEnum.Key
-			switch enumCase.kind {
-			case let .nested(key, _, _), let .inner(key, _, _):
-				heldKey = key
-			case .place, .fill:
-				return false
-			}
-			// `componentByKey` holds every key of this hole type's enums, `enumKey` among them.
-			return componentByKey[heldKey] == componentByKey[enumKey]
+		// Whether the enum of `heldKey`, which a case of `enumKey`'s enum holds, is in that enum's component.
+		// `componentByKey` holds every key of this hole type's enums, `enumKey` among them.
+		func isInComponent(of enumKey: SeamSignature.ScopeEnum.Key) -> (SeamSignature.ScopeEnum.Key) -> Bool {
+			{ heldKey in componentByKey[heldKey] == componentByKey[enumKey] }
 		}
 		/// The step of `caseOfProperty`'s case, whose payload the seam's tree binds before building the last property of
 		/// `bindingPrefix`, or builds where the place or the call is, when `bindingPrefix` is `nil`.
@@ -549,7 +542,7 @@ extension DependencyTreeGenerator {
 					levelType: ReservedName.levelType(ofEnum: heldEnumType, built: builderBuiltType),
 					bindingPath: bindingPrefix,
 					isCalledInsideFunction: caseOfProperty.described.isSendable && buildsInSendableFunction,
-					isLetChild: ReservedName.seamCarrier(ofEnum: enumType) != nil && enumCase.isLetChildOfCarrier(inSendableEnum: caseOfProperty.described.isSendable, isInLoop: holdsEnumOfItsOwnComponent(enumCase, of: key(of: caseOfProperty.described))),
+					isLetChild: ReservedName.seamCarrier(ofEnum: enumType) != nil && enumCase.isLetChildOfCarrier(inSendableEnum: caseOfProperty.described.isSendable, isInLoop: isInComponent(of: key(of: caseOfProperty.described))),
 				)
 			}
 			guard let values = enumCase.values, let enumType else {
@@ -1010,7 +1003,10 @@ extension DependencyTreeGenerator {
 		private var innerKeysHandedUpByCall = [ObjectIdentifier: InnerKeysHandedUp]()
 		private var casePropertiesByBuild = [ObjectIdentifier: CaseProperties]()
 
-		/// What `type`, built by `build`, binds before each of its properties (`levelDeclarations`), computed once per build.
+		/// What `type` binds before each of its properties (`levelDeclarations`), read from `build`, the first build any hole
+		/// type reads: the level's one sequence, computed once per type, of which every case of every hole type takes a prefix
+		/// (`SeamCarrierValues` cuts a carrier level's runs from it). Every build of a type that closes no cycle binds the same
+		/// declarations in the same order, since the order is the type's.
 		mutating func declarations(
 			of build: ScopeGenerator,
 			as type: TypeDescription,
@@ -1021,8 +1017,7 @@ extension DependencyTreeGenerator {
 			proof: TypeAccessProof,
 			instantiables: [TypeDescription: Instantiable],
 		) -> [SeamSignature.Hole.Field] {
-			let key = BuildOfType(build: ObjectIdentifier(build), type: type)
-			if let declarations = declarationsByBuild[key] {
+			if let declarations = declarationsByType[type] {
 				return declarations
 			}
 			let isSeamRoot = type == seam.concreteInstantiable
@@ -1040,7 +1035,7 @@ extension DependencyTreeGenerator {
 				proof: proof,
 				instantiables: instantiables,
 			)
-			declarationsByBuild[key] = declarations
+			declarationsByType[type] = declarations
 			return declarations
 		}
 
@@ -1060,13 +1055,8 @@ extension DependencyTreeGenerator {
 		private let reboundPropertiesOfAnyBuild: [TypeDescription: [Property]]
 		private let receivesBoundAgainOfAnyBuild: [TypeDescription: [Property]]
 		private let labelsNoRootChildDeclares: Set<String>
-		private var declarationsByBuild = [BuildOfType: [SeamSignature.Hole.Field]]()
+		private var declarationsByType = [TypeDescription: [SeamSignature.Hole.Field]]()
 		private var childrenByPropertyByBuild = [ObjectIdentifier: [Property: (index: Int, generator: ScopeGenerator)]]()
-
-		private struct BuildOfType: Hashable {
-			let build: ObjectIdentifier
-			let type: TypeDescription
-		}
 	}
 
 	/// What the scope `build` builds declares, in the order it binds the declarations, each as a field of a payload struct:

@@ -48,13 +48,12 @@ struct SeamCarrierValues: Sendable {
 	}
 
 	/// The runs of each level of `scopeEnums`' plain carriers of `seamType`'s enums, which the seam's module recorded on them.
-	/// A level whose enums take their values positionally (`ScopeEnum.takesValuesPositionally`), or whose cases' values are
-	/// not prefixes of one sequence, takes no struct.
+	/// A level whose enums take their values positionally (`ScopeEnum.takesValuesPositionally`) takes no struct.
 	init(scopeEnums: [SeamSignature.ScopeEnum], ofSeam seamType: TypeDescription?) {
 		let levels = Self.levels(of: scopeEnums, ofSeam: seamType)
 		var endsByLevel = [String: [Int]]()
 		var levelsInEnumOrder = [String]()
-		for level in levels where !level.takesValuesPositionally && !level.isInconsistent {
+		for level in levels where !level.takesValuesPositionally {
 			endsByLevel[level.name] = level.lengths.sorted()
 			levelsInEnumOrder.append(level.name)
 		}
@@ -67,19 +66,18 @@ struct SeamCarrierValues: Sendable {
 	/// carriers' `public` members at. Only the seam's own module asks, and records the answer on the enums.
 	static func positionalLevels(of ownEnums: [SeamSignature.ScopeEnum], memberAccess: AccessLevel) -> Set<String> {
 		var positional = Set<String>()
-		for level in levels(of: ownEnums, ofSeam: nil) where !level.isInconsistent && level.longest.count <= maximumPositionalValues && !level.longest.contains(where: { AccessLevel.normalized($0.access) < AccessLevel.normalized(memberAccess) }) {
+		for level in levels(of: ownEnums, ofSeam: nil) where level.longest.count <= maximumPositionalValues && !level.longest.contains(where: { AccessLevel.normalized($0.access) < AccessLevel.normalized(memberAccess) }) {
 			positional.insert(level.name)
 		}
 		return positional
 	}
 
-	/// A level of a seam's plain carriers: its values' lengths across its cases, its longest values, and whether those are
-	/// prefixes of one sequence.
+	/// A level of a seam's plain carriers: the lengths its cases' values take, each a prefix of the level's one sequence of
+	/// values (`SeamScopeEnumsByType` cuts every case of every hole type from what the type binds), and the longest of them.
 	private struct Level {
 		let name: String
 		var lengths = Set<Int>()
 		var longest = [SeamSignature.Hole.Field]()
-		var isInconsistent = false
 		var takesValuesPositionally = false
 	}
 
@@ -102,13 +100,9 @@ struct SeamCarrierValues: Sendable {
 				}
 				levels[index].takesValuesPositionally = levels[index].takesValuesPositionally || scopeEnum.takesValuesPositionally
 				levels[index].lengths.insert(fields.count)
-				let longest = levels[index].longest
-				let shorter = longest.count < fields.count ? longest : fields
-				let longer = longest.count < fields.count ? fields : longest
-				if !zip(shorter, longer).allSatisfy({ $0.property == $1.property && $0.property.typeDescription.asSource == $1.property.typeDescription.asSource && $0.deferral == $1.deferral }) {
-					levels[index].isInconsistent = true
+				if levels[index].longest.count < fields.count {
+					levels[index].longest = fields
 				}
-				levels[index].longest = longer
 			}
 		}
 		return levels

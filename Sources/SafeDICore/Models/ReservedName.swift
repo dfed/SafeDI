@@ -195,28 +195,27 @@ public enum ReservedName: Hashable, Sendable {
 	}
 
 	/// The name of the carrier of a seam's level whose scope enum is `enumType`, and the seam's type where `enumType` is
-	/// spelled qualified by it: `__safeDI_<Stem>Carrier` for a root enum `SafeDIScope_<Stem>`, `…SendableCarrier` for
-	/// `SafeDISendableScope_<Stem>`, followed by `_<enum>` for an enum nested in the root. `nil` where `enumType` is no
-	/// seam's scope enum.
+	/// spelled qualified by it (`seamCarrier(ofEnumNamed:nestedIn:)`); `nil` where `enumType` is no seam's scope enum.
 	static func seamCarrier(ofEnum enumType: TypeDescription) -> (name: String, seamType: TypeDescription?, isSendable: Bool, describedTypeName: String?)? {
+		enumType.simpleNameAndGenerics.flatMap { seamCarrier(ofEnumNamed: $0.name, nestedIn: $0.parentType) }
+	}
+
+	/// The name of the carrier of a seam's level whose scope enum is named `name`, nested in `parentType`, and the seam's
+	/// type where the enum is spelled qualified by it: `__safeDI_<Stem>Carrier` for a root enum `SafeDIScope_<Stem>`,
+	/// `…SendableCarrier` for `SafeDISendableScope_<Stem>`, followed by `_<enum>` for an enum nested in the root. `nil`
+	/// where the enum is no seam's scope enum. A scope enum is nominal, so it is read by its name and the type it is nested
+	/// in, never by the shape of a type spelling.
+	static func seamCarrier(ofEnumNamed name: String, nestedIn parentType: TypeDescription?) -> (name: String, seamType: TypeDescription?, isSendable: Bool, describedTypeName: String?)? {
 		let rootName: String
 		var nestedName: String?
-		var seamType: TypeDescription?
-		switch enumType {
-		case let .simple(name, _):
-			rootName = name
-		case let .nested(name, .simple(parentName, _), _) where parentName.hasPrefix(seamCarrierScopeTypeNamePrefix) || parentName.hasPrefix(sendableSeamCarrierScopeTypeNamePrefix):
-			rootName = parentName
+		let seamType: TypeDescription?
+		if let parent = parentType?.simpleNameAndGenerics, parent.name.hasPrefix(seamCarrierScopeTypeNamePrefix) || parent.name.hasPrefix(sendableSeamCarrierScopeTypeNamePrefix) {
+			rootName = parent.name
 			nestedName = name
-		case let .nested(name, .nested(parentName, grandparentType, _), _) where parentName.hasPrefix(seamCarrierScopeTypeNamePrefix) || parentName.hasPrefix(sendableSeamCarrierScopeTypeNamePrefix):
-			rootName = parentName
-			nestedName = name
-			seamType = grandparentType
-		case let .nested(name, parentType, _):
+			seamType = parent.parentType
+		} else {
 			rootName = name
 			seamType = parentType
-		case .void, .composition, .optional, .implicitlyUnwrappedOptional, .some, .any, .metatype, .attributed, .array, .dictionary, .tuple, .closure, .variadic, .unknown:
-			return nil
 		}
 		let stem: String
 		let isSendable: Bool

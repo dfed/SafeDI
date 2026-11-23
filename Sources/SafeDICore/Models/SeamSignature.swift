@@ -1260,12 +1260,13 @@ public struct SeamSignature: Sendable {
 			}
 
 			/// Whether a seam's carrier holds the case's child carrier as a `let`: a nested level whose member is handed no value,
-			/// outside every loop of levels (`isIndirect`, or `isInLoop` where the cases are not marked yet), so forming it once
-			/// where the parent is formed ends and captures nothing; a `Sendable` carrier holds only a `Sendable` child.
-			public func isLetChildOfCarrier(inSendableEnum: Bool, isInLoop: Bool = false) -> Bool {
+			/// outside every loop of levels (`isIndirect`, or, where the cases are not marked yet, `isInLoop` of the key of the
+			/// enum the case holds), so forming it once where the parent is formed ends and captures nothing; a `Sendable`
+			/// carrier holds only a `Sendable` child.
+			public func isLetChildOfCarrier(inSendableEnum: Bool, isInLoop: ((Key) -> Bool)? = nil) -> Bool {
 				switch kind {
 				case let .nested(enumKey, _, isIndirect), let .inner(enumKey, _, isIndirect):
-					!isIndirect && !isInLoop && (values?.fields.isEmpty ?? true) && (!inSendableEnum || enumKey.isSendable)
+					!isIndirect && !(isInLoop?(enumKey) ?? false) && (values?.fields.isEmpty ?? true) && (!inSendableEnum || enumKey.isSendable)
 				case .place, .fill:
 					false
 				}
