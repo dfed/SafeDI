@@ -775,7 +775,7 @@ extension MockLowering {
 			let builder = ReservedName.configurationBuilderPropertyName
 			// D1 lane hook (lane D): a default-valued parameter is a field of the node's configuration (`MockLowering+Defaults.swift`).
 			let defaultFields: [DefaultField]
-			switch configurationDefaultFields(of: instantiable, usesMockInitializer: usesMockInitializer, startsExtraction: sendableOverrideExtractor == nil && generator.buildsInSendableFunction) {
+			switch configurationDefaultFields(of: instantiable, usesMockInitializer: usesMockInitializer) {
 			case let .lowered(lowered):
 				defaultFields = lowered
 			case let .unsupported(rule):
@@ -837,6 +837,14 @@ extension MockLowering {
 				hasConfiguration ? "\(nodePath).\(builder)" : nodePath,
 				localNameSuffix: "\(GeneratedCodeText.overrideRelativePath(of: nodePath))_\(builder)",
 			)
+			let dependencyArguments = MockLowering.argumentValues(
+				of: initializer,
+				given: instantiable.dependencies,
+				lazilyInstantiatedInstanceProperties: generator.mockLoweringLazilyInstantiatedInstanceProperties,
+				unavailableProperties: unavailableProperties,
+				bindingNamesPassedByName: MockLowering.passingWrappersByName(argumentLazilyInstantiatedNames, to: instantiable.dependencies, besides: bindingNamesPassedByName),
+				uncoveredParameterNames: uncoveredParameterNames,
+			)
 			var node = ConstantNode(
 				property: property,
 				bindingName: bindingName,
@@ -854,14 +862,7 @@ extension MockLowering {
 					of: initializer,
 					given: instantiable,
 					usesMockInitializer: usesMockInitializer,
-					dependencyArguments: MockLowering.argumentValues(
-						of: initializer,
-						given: instantiable.dependencies,
-						lazilyInstantiatedInstanceProperties: generator.mockLoweringLazilyInstantiatedInstanceProperties,
-						unavailableProperties: unavailableProperties,
-						bindingNamesPassedByName: MockLowering.passingWrappersByName(argumentLazilyInstantiatedNames, to: instantiable.dependencies, besides: bindingNamesPassedByName),
-						uncoveredParameterNames: uncoveredParameterNames,
-					),
+					dependencyArguments: dependencyArguments,
 					nodePath: nodePath,
 					overrideReachable: overrideReachable,
 				),
@@ -955,7 +956,19 @@ extension MockLowering {
 			}
 			// The construction is inside the function, so a function that starts the extraction reads its own override
 			// into a local too, after its children's.
+			// D1 lane hook (lane C): and the defaults it reads from its configuration: an instantiator's before its override, a
+			// constant's after it, in the order the emitter reads them (`generateInstantiatorBinding`, the constant branch of
+			// `generateMockBodyBindings`).
+			func readingDefaultsInsideFunction() -> [(label: String, value: String)] {
+				constructionArguments(of: initializer, given: instantiable, usesMockInitializer: usesMockInitializer, dependencyArguments: dependencyArguments, nodePath: nodePath, overrideReachable: overrideReachable)
+			}
+			if startsExtraction, isWrapped, !defaultFields.isEmpty {
+				node.arguments = readingDefaultsInsideFunction()
+			}
 			let functionOverrideRead = startsExtraction ? overrideRead.map { readingOverride($0, localNameSuffix: builder) } : overrideRead
+			if startsExtraction, !isWrapped, !defaultFields.isEmpty {
+				node.arguments = readingDefaultsInsideFunction()
+			}
 			let preludeLines = startsExtraction ? endExtraction(restoring: enclosingExtractor, indent: indent) : []
 			lines.insert(contentsOf: preludeLines, at: declarationIndex)
 			let configuredNode = node.configured(byChildren: children)
@@ -1091,7 +1104,8 @@ extension MockLowering {
 		// D1 lane hook (lane B): what the construction is handed, a lazy wrapper's instance included, and whether the node
 		// is built in a `@Sendable` builder function of its own or inside one.
 		/// The labels and values of the construction's arguments, in the initializer's order.
-		let arguments: [(label: String, value: String)]
+		// D1 lane hook (lane C): read again inside a `@Sendable` builder function the node starts the extraction of.
+		var arguments: [(label: String, value: String)]
 		/// Whether the node's builder function is `@Sendable`.
 		let buildsInSendableFunction: Bool
 		/// Whether the node is built in or as a `@Sendable` builder function, so its override closure is `@Sendable`.

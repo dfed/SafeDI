@@ -105,16 +105,12 @@ extension MockLowering {
 
 extension MockLowering.Walk {
 	/// The fields of the configuration of a node of `instantiable` for its construction's default-valued parameters, with
-	/// the defaults the type's hand-written mock declares; or the rule of a node that starts the extraction of a `@Sendable`
-	/// builder function, whose defaults the emitter reads inside it. A node built with its type's hand-written mock
+	/// the defaults the type's hand-written mock declares. A node built with its type's hand-written mock
 	/// (`usesMockInitializer`) takes the mock's default-valued parameters.
-	func configurationDefaultFields(of instantiable: Instantiable, usesMockInitializer: Bool, startsExtraction: Bool) -> MockLowering.Lowering<[MockLowering.DefaultField]> {
+	func configurationDefaultFields(of instantiable: Instantiable, usesMockInitializer: Bool) -> MockLowering.Lowering<[MockLowering.DefaultField]> {
 		let construction = ScopeGenerator.MockConstruction(instantiable: instantiable, useMockInitializer: usesMockInitializer, builderTypesDeclaredEscaping: [])
 		let handWrittenDefaults = handWrittenMockDefaultParameters[instantiable.concreteInstantiable, default: []]
 		let defaultFields = construction.defaultParameters.map { MockLowering.DefaultField(of: $0, handWrittenMockDefaultParameters: handWrittenDefaults) }
-		// A `@Sendable`-typed configuration stores each default as a `@Sendable` closure, which `constructionArguments` calls;
-		// its struct is lowered by the configuration family.
-		guard defaultFields.isEmpty || !startsExtraction else { return .unsupported(.wrapper) }
 		return .lowered(defaultFields)
 	}
 

@@ -378,7 +378,9 @@ extension MockLowering.ConstantNode {
 		let record = MockLowering.PublicConstructionRecord(of: self, children: children)
 		guard record.arguments.count == arguments.count else { return .unsupported(.defaultValuedParameter) }
 		let bodyIndent = "\(indent)\(ScopeGenerator.standardIndent)"
-		let returnPrefix = hasChildren || !receiverBindings.isEmpty || !defaultFields.isEmpty ? "return " : ""
+		// D1 lane hook (lane C): an instantiator's builder function writes `return` only before statements of its own, as
+		// `builderFunctionEndLines` says, its defaults' reads included.
+		let returnPrefix = hasChildren || !receiverBindings.isEmpty || !sendableAutoclosureBindingNames.isEmpty || !isWrapped ? "return " : ""
 		let erasedTo: TypeDescription? = if isErased {
 			isWrapped ? property.typeDescription.asInstantiatedTypeSpelledAsDeclared : property.typeDescription
 		} else {
