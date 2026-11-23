@@ -63,15 +63,15 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            #sourceLocation(file: "\(fixtures["Screen.swift"])", line: 10)
 		            let currentSession: Session = session
 		            #sourceLocation()
-		            func __safeDI_stepBuilder() -> Step {
-		                let session = Session()
-		                let screenBuilder = Instantiator<Screen> {
-		                    __safeDI_screenBuilder(session: session)
-		                }
-		                return Step(session: session, screenBuilder: screenBuilder)
-		            }
 		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
 		            return Screen(session: session, currentSession: currentSession, stepBuilder: stepBuilder)
+		        }
+		        func __safeDI_stepBuilder() -> Step {
+		            let session = Session()
+		            let screenBuilder = Instantiator<Screen> {
+		                __safeDI_screenBuilder(session: session)
+		            }
+		            return Step(session: session, screenBuilder: screenBuilder)
 		        }
 		        let screenBuilder = Instantiator<Screen> {
 		            __safeDI_screenBuilder(session: session)
@@ -106,18 +106,15 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        }
 		        let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
 		        func __safeDI_t3Builder(t1Builder: Instantiator<T1>) -> T3 {
-		            func __safeDI_t0Builder() -> T0 {
-		                func __safeDI_t1Builder() -> T1 {
-		                    T1()
-		                }
-		                let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
-		                let t3Builder = Instantiator<T3> {
-		                    __safeDI_t3Builder(t1Builder: t1Builder)
-		                }
-		                return T0(t1Builder: t1Builder, t3Builder: t3Builder)
-		            }
 		            let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
 		            return T3(t0Builder: t0Builder, t1Builder: t1Builder)
+		        }
+		        func __safeDI_t0Builder() -> T0 {
+		            let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
+		            let t3Builder = Instantiator<T3> {
+		                __safeDI_t3Builder(t1Builder: t1Builder)
+		            }
+		            return T0(t1Builder: t1Builder, t3Builder: t3Builder)
 		        }
 		        let t3Builder = Instantiator<T3> {
 		            __safeDI_t3Builder(t1Builder: t1Builder)
@@ -145,22 +142,19 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		            Session()
 		        }
 		        let session = LazilyInstantiated<Session>(__safeDI_session)
-		        func __safeDI_t3Builder(session: Session) -> T3 {
-		            func __safeDI_t0Builder() -> T0 {
-		                func __safeDI_session() -> Session {
-		                    Session()
-		                }
-		                let session = LazilyInstantiated<Session>(__safeDI_session)
-		                let t3Builder = Instantiator<T3> {
-		                    __safeDI_t3Builder(session: session.instance)
-		                }
-		                return T0(session: session, t3Builder: t3Builder)
-		            }
+		        func __safeDI_t3Builder(session: LazilyInstantiated<Session>) -> T3 {
 		            let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
-		            return T3(session: session, t0Builder: t0Builder)
+		            return T3(session: session.instance, t0Builder: t0Builder)
+		        }
+		        func __safeDI_t0Builder() -> T0 {
+		            let session = LazilyInstantiated<Session>(__safeDI_session)
+		            let t3Builder = Instantiator<T3> {
+		                __safeDI_t3Builder(session: session)
+		            }
+		            return T0(session: session, t3Builder: t3Builder)
 		        }
 		        let t3Builder = Instantiator<T3> {
-		            __safeDI_t3Builder(session: session.instance)
+		            __safeDI_t3Builder(session: session)
 		        }
 		        self.init(session: session, t3Builder: t3Builder)
 		    }
@@ -263,18 +257,15 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        let session = LazilyInstantiated<Session>(__safeDI_session)
 		        func __safeDI_t3Builder(session: LazilyInstantiated<Session>) -> T3 {
 		            let reader = Reader(session: session.instance)
-		            func __safeDI_t0Builder() -> T0 {
-		                func __safeDI_session() -> Session {
-		                    Session()
-		                }
-		                let session = LazilyInstantiated<Session>(__safeDI_session)
-		                let t3Builder = Instantiator<T3> {
-		                    __safeDI_t3Builder(session: session)
-		                }
-		                return T0(session: session, t3Builder: t3Builder)
-		            }
 		            let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
 		            return T3(session: session, reader: reader, t0Builder: t0Builder)
+		        }
+		        func __safeDI_t0Builder() -> T0 {
+		            let session = LazilyInstantiated<Session>(__safeDI_session)
+		            let t3Builder = Instantiator<T3> {
+		                __safeDI_t3Builder(session: session)
+		            }
+		            return T0(session: session, t3Builder: t3Builder)
 		        }
 		        let t3Builder = Instantiator<T3> {
 		            __safeDI_t3Builder(session: session)
@@ -312,16 +303,16 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    public convenience init() {
 		        let session = Session()
 		        func __safeDI_t3Builder(session: Session) -> T3 {
-		            func __safeDI_t0Builder(session: Session) -> T0 {
-		                let t3Builder = Instantiator<T3> {
-		                    __safeDI_t3Builder(session: session)
-		                }
-		                return T0(session: session, t3Builder: t3Builder)
-		            }
 		            let t0Builder = Instantiator<T0> {
 		                __safeDI_t0Builder(session: $0)
 		            }
 		            return T3(session: session, t0Builder: t0Builder)
+		        }
+		        func __safeDI_t0Builder(session: Session) -> T0 {
+		            let t3Builder = Instantiator<T3> {
+		                __safeDI_t3Builder(session: session)
+		            }
+		            return T0(session: session, t3Builder: t3Builder)
 		        }
 		        let t3Builder = Instantiator<T3> {
 		            __safeDI_t3Builder(session: session)
@@ -365,21 +356,21 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    public convenience init() {
 		        let session = Session()
 		        func __safeDI_t3Builder(session: Session, optionalSession: Session?) -> T3 {
-		            func __safeDI_t0Builder() -> T0 {
-		                let stepSession = Session()
-		                #sourceLocation(file: "\(fixtures["T0.swift"])", line: 11)
-		                let session: Session = stepSession
-		                #sourceLocation()
-		                #sourceLocation(file: "\(fixtures["T0.swift"])", line: 12)
-		                let optionalSession: Session = stepSession
-		                #sourceLocation()
-		                let t3Builder = Instantiator<T3> {
-		                    __safeDI_t3Builder(session: session, optionalSession: optionalSession)
-		                }
-		                return T0(stepSession: stepSession, session: session, optionalSession: optionalSession, t3Builder: t3Builder)
-		            }
 		            let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
 		            return T3(session: session, optionalSession: optionalSession, t0Builder: t0Builder)
+		        }
+		        func __safeDI_t0Builder() -> T0 {
+		            let stepSession = Session()
+		            #sourceLocation(file: "\(fixtures["T0.swift"])", line: 11)
+		            let session: Session = stepSession
+		            #sourceLocation()
+		            #sourceLocation(file: "\(fixtures["T0.swift"])", line: 12)
+		            let optionalSession: Session = stepSession
+		            #sourceLocation()
+		            let t3Builder = Instantiator<T3> {
+		                __safeDI_t3Builder(session: session, optionalSession: optionalSession)
+		            }
+		            return T0(stepSession: stepSession, session: session, optionalSession: optionalSession, t3Builder: t3Builder)
 		        }
 		        let t3Builder = Instantiator<T3> {
 		            __safeDI_t3Builder(session: session, optionalSession: nil)
@@ -576,22 +567,24 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        let b = B()
 		        let c = C()
 		        func __safeDI_t3Builder(a: A, b: B, c: C) -> T3 {
-		            func __safeDI_t0Builder() -> T0 {
-		                let a = A()
-		                let c = C()
-		                func __safeDI_t2Builder() -> T2 {
-		                    let b = B()
-		                    let c = C()
-		                    let t3Builder = Instantiator<T3> {
-		                        __safeDI_t3Builder(a: a, b: b, c: c)
-		                    }
-		                    return T2(b: b, c: c, t3Builder: t3Builder)
-		                }
-		                let t2Builder = Instantiator<T2>(__safeDI_t2Builder)
-		                return T0(a: a, c: c, t2Builder: t2Builder)
-		            }
 		            let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
 		            return T3(a: a, b: b, c: c, t0Builder: t0Builder)
+		        }
+		        func __safeDI_t0Builder() -> T0 {
+		            let a = A()
+		            let c = C()
+		            let t2Builder = Instantiator<T2> {
+		                __safeDI_t2Builder(a: a)
+		            }
+		            return T0(a: a, c: c, t2Builder: t2Builder)
+		        }
+		        func __safeDI_t2Builder(a: A) -> T2 {
+		            let b = B()
+		            let c = C()
+		            let t3Builder = Instantiator<T3> {
+		                __safeDI_t3Builder(a: a, b: b, c: c)
+		            }
+		            return T2(b: b, c: c, t3Builder: t3Builder)
 		        }
 		        let t3Builder = Instantiator<T3> {
 		            __safeDI_t3Builder(a: a, b: b, c: c)
@@ -641,24 +634,24 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    public convenience init() {
 		        let x = X()
 		        func __safeDI_aBuilder(x: X) -> A {
-		            func __safeDI_bBuilder(x: X) -> B {
-		                func __safeDI_cBuilder() -> C {
-		                    let x = X()
-		                    let bBuilder = Instantiator<B> {
-		                        __safeDI_bBuilder(x: x)
-		                    }
-		                    return C(x: x, bBuilder: bBuilder)
-		                }
-		                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(x: x)
-		                }
-		                return B(x: x, cBuilder: cBuilder, aBuilder: aBuilder)
-		            }
 		            let bBuilder = Instantiator<B> {
 		                __safeDI_bBuilder(x: x)
 		            }
 		            return A(x: x, bBuilder: bBuilder)
+		        }
+		        func __safeDI_bBuilder(x: X) -> B {
+		            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(x: x)
+		            }
+		            return B(x: x, cBuilder: cBuilder, aBuilder: aBuilder)
+		        }
+		        func __safeDI_cBuilder() -> C {
+		            let x = X()
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_bBuilder(x: x)
+		            }
+		            return C(x: x, bBuilder: bBuilder)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(x: x)
@@ -709,35 +702,37 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        let w = W()
 		        func __safeDI_qBuilder(w: W) -> Q {
 		            let e = E(w: w)
-		            func __safeDI_gBuilder() -> G {
-		                let w = W()
-		                let z = Z()
-		                func __safeDI_sBuilder(z: Z, w: W) -> S {
-		                    func __safeDI_cBuilder() -> C {
-		                        let qBuilder = Instantiator<Q> {
-		                            __safeDI_qBuilder(w: w)
-		                        }
-		                        return C(qBuilder: qBuilder)
-		                    }
-		                    let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-		                    func __safeDI_dBuilder() -> D {
-		                        let w = W()
-		                        let z = Z()
-		                        let sBuilder = Instantiator<S> {
-		                            __safeDI_sBuilder(z: z, w: w)
-		                        }
-		                        return D(w: w, z: z, sBuilder: sBuilder)
-		                    }
-		                    let dBuilder = Instantiator<D>(__safeDI_dBuilder)
-		                    return S(z: z, cBuilder: cBuilder, dBuilder: dBuilder)
-		                }
-		                let sBuilder = Instantiator<S> {
-		                    __safeDI_sBuilder(z: z, w: w)
-		                }
-		                return G(w: w, z: z, sBuilder: sBuilder)
-		            }
 		            let gBuilder = Instantiator<G>(__safeDI_gBuilder)
 		            return Q(e: e, gBuilder: gBuilder)
+		        }
+		        func __safeDI_gBuilder() -> G {
+		            let w = W()
+		            let z = Z()
+		            let sBuilder = Instantiator<S> {
+		                __safeDI_sBuilder(z: z, w: w)
+		            }
+		            return G(w: w, z: z, sBuilder: sBuilder)
+		        }
+		        func __safeDI_sBuilder(z: Z, w: W) -> S {
+		            let cBuilder = Instantiator<C> {
+		                __safeDI_cBuilder(w: w)
+		            }
+		            let dBuilder = Instantiator<D>(__safeDI_dBuilder)
+		            return S(z: z, cBuilder: cBuilder, dBuilder: dBuilder)
+		        }
+		        func __safeDI_cBuilder(w: W) -> C {
+		            let qBuilder = Instantiator<Q> {
+		                __safeDI_qBuilder(w: w)
+		            }
+		            return C(qBuilder: qBuilder)
+		        }
+		        func __safeDI_dBuilder() -> D {
+		            let w = W()
+		            let z = Z()
+		            let sBuilder = Instantiator<S> {
+		                __safeDI_sBuilder(z: z, w: w)
+		            }
+		            return D(w: w, z: z, sBuilder: sBuilder)
 		        }
 		        let qBuilder = Instantiator<Q> {
 		            __safeDI_qBuilder(w: w)
@@ -801,23 +796,19 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		try await expectGeneratedTree(of: fixture, root: "Root", equals: """
 		extension Root {
 		    public convenience init() {
-		        func __safeDI_t3Builder(t1Builder: Instantiator<T1>?) -> T3 {
-		            func __safeDI_t0Builder() -> T0 {
-		                func __safeDI_t1Builder() -> Other {
-		                    Other()
-		                }
-		                let t1Builder = Instantiator<Other>(__safeDI_t1Builder)
-		                let t3Builder = Instantiator<T3> {
-		                    __safeDI_t3Builder(t1Builder: nil)
-		                }
-		                return T0(t1Builder: t1Builder, t3Builder: t3Builder)
-		            }
+		        func __safeDI_t3Builder() -> T3 {
 		            let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
-		            return T3(t0Builder: t0Builder, t1Builder: t1Builder)
+		            return T3(t0Builder: t0Builder, t1Builder: nil)
 		        }
-		        let t3Builder = Instantiator<T3> {
-		            __safeDI_t3Builder(t1Builder: nil)
+		        func __safeDI_t0Builder() -> T0 {
+		            let t1Builder = Instantiator<Other>(__safeDI_t1Builder)
+		            let t3Builder = Instantiator<T3>(__safeDI_t3Builder)
+		            return T0(t1Builder: t1Builder, t3Builder: t3Builder)
 		        }
+		        func __safeDI_t1Builder() -> Other {
+		            Other()
+		        }
+		        let t3Builder = Instantiator<T3>(__safeDI_t3Builder)
 		        self.init(t3Builder: t3Builder)
 		    }
 		}
@@ -851,21 +842,17 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		try await expectGeneratedTree(of: fixture, root: "Root", equals: """
 		extension Root {
 		    public convenience init() {
-		        func __safeDI_t3Builder(session: Session?) -> T3 {
-		            func __safeDI_t0Builder() -> T0 {
-		                let session = Other()
-		                let reader = Reader(session: nil)
-		                let t3Builder = Instantiator<T3> {
-		                    __safeDI_t3Builder(session: nil)
-		                }
-		                return T0(session: session, reader: reader, t3Builder: t3Builder)
-		            }
+		        func __safeDI_t3Builder() -> T3 {
 		            let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
-		            return T3(session: session, t0Builder: t0Builder)
+		            return T3(session: nil, t0Builder: t0Builder)
 		        }
-		        let t3Builder = Instantiator<T3> {
-		            __safeDI_t3Builder(session: nil)
+		        func __safeDI_t0Builder() -> T0 {
+		            let session = Other()
+		            let reader = Reader(session: nil)
+		            let t3Builder = Instantiator<T3>(__safeDI_t3Builder)
+		            return T0(session: session, reader: reader, t3Builder: t3Builder)
 		        }
+		        let t3Builder = Instantiator<T3>(__safeDI_t3Builder)
 		        self.init(t3Builder: t3Builder)
 		    }
 		}
@@ -933,15 +920,15 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    public convenience init() {
 		        func __safeDI_t3Builder(session: Session) -> T3 {
 		            let child = Child(session: nil)
-		            func __safeDI_t0Builder() -> T0 {
-		                let session = Other()
-		                let t3Builder = Instantiator<T3> {
-		                    __safeDI_t3Builder(session: $0)
-		                }
-		                return T0(session: session, t3Builder: t3Builder)
-		            }
 		            let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
 		            return T3(session: session, child: child, t0Builder: t0Builder)
+		        }
+		        func __safeDI_t0Builder() -> T0 {
+		            let session = Other()
+		            let t3Builder = Instantiator<T3> {
+		                __safeDI_t3Builder(session: $0)
+		            }
+		            return T0(session: session, t3Builder: t3Builder)
 		        }
 		        let t3Builder = Instantiator<T3> {
 		            __safeDI_t3Builder(session: $0)
@@ -984,16 +971,16 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    public convenience init() {
 		        let session = Session()
 		        func __safeDI_screenBuilder(session: Session) -> Screen {
-		            func __safeDI_stepBuilder() -> Step {
-		                let session = Session()
-		                let screenBuilder = Instantiator<Screen> {
-		                    __safeDI_screenBuilder(session: session)
-		                }
-		                return Step(session: session, screenBuilder: screenBuilder)
-		            }
 		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
 		            let reader = Reader(session: session)
 		            return Screen(stepBuilder: stepBuilder, reader: reader)
+		        }
+		        func __safeDI_stepBuilder() -> Step {
+		            let session = Session()
+		            let screenBuilder = Instantiator<Screen> {
+		                __safeDI_screenBuilder(session: session)
+		            }
+		            return Step(session: session, screenBuilder: screenBuilder)
 		        }
 		        let screenBuilder = Instantiator<Screen> {
 		            __safeDI_screenBuilder(session: session)
@@ -1091,15 +1078,15 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    public convenience init() {
 		        let session = Session()
 		        @Sendable func __safeDI_screenBuilder(session: Session) -> Screen {
-		            @Sendable func __safeDI_stepBuilder() -> Step {
-		                let session = Session()
-		                let screenBuilder = SendableInstantiator<Screen> {
-		                    __safeDI_screenBuilder(session: session)
-		                }
-		                return Step(session: session, screenBuilder: screenBuilder)
-		            }
 		            let stepBuilder = SendableInstantiator<Step>(__safeDI_stepBuilder)
 		            return Screen(session: session, stepBuilder: stepBuilder)
+		        }
+		        @Sendable func __safeDI_stepBuilder() -> Step {
+		            let session = Session()
+		            let screenBuilder = SendableInstantiator<Screen> {
+		                __safeDI_screenBuilder(session: session)
+		            }
+		            return Step(session: session, screenBuilder: screenBuilder)
 		        }
 		        let screenBuilder = SendableInstantiator<Screen> {
 		            __safeDI_screenBuilder(session: session)
@@ -1229,15 +1216,15 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    public convenience init() {
 		        let session = Session()
 		        func __safeDI_screenBuilder(count: Int, name: String, session: Session) -> Screen {
-		            func __safeDI_stepBuilder() -> Step {
-		                let session = Session()
-		                let screenBuilder = ErasedInstantiator<Screen.ForwardedProperties, AnyScreen> {
-		                    AnyScreen(__safeDI_screenBuilder(count: $0.count, name: $0.name, session: session))
-		                }
-		                return Step(session: session, screenBuilder: screenBuilder)
-		            }
 		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
 		            return Screen(name: name, count: count, session: session, stepBuilder: stepBuilder)
+		        }
+		        func __safeDI_stepBuilder() -> Step {
+		            let session = Session()
+		            let screenBuilder = ErasedInstantiator<Screen.ForwardedProperties, AnyScreen> {
+		                AnyScreen(__safeDI_screenBuilder(count: $0.count, name: $0.name, session: session))
+		            }
+		            return Step(session: session, screenBuilder: screenBuilder)
 		        }
 		        let screenBuilder = ErasedInstantiator<Screen.ForwardedProperties, AnyScreen> {
 		            AnyScreen(__safeDI_screenBuilder(count: $0.count, name: $0.name, session: session))
@@ -1342,31 +1329,33 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    public convenience init() {
 		        let session = Session()
 		        func __safeDI_screenBuilder(session: Session) -> Screen {
-		            func __safeDI_stepBuilder() -> Step {
-		                let session = Session()
-		                let screenBuilder = Instantiator<Screen> {
-		                    __safeDI_screenBuilder(session: session)
-		                }
-		                return Step(session: session, screenBuilder: screenBuilder)
-		            }
 		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
-		            func __safeDI_otherBuilder() -> Other {
-		                func __safeDI_innerBuilder(session: Session) -> Inner {
-		                    let screenBuilder = Instantiator<Screen> {
-		                        __safeDI_screenBuilder(session: session)
-		                    }
-		                    return Inner(session: session, screenBuilder: screenBuilder)
-		                }
-		                let innerBuilder = Instantiator<Inner> {
-		                    __safeDI_innerBuilder(session: $0)
-		                }
-		                let screenBuilder = Instantiator<Screen> {
-		                    __safeDI_screenBuilder(session: session)
-		                }
-		                return Other(innerBuilder: innerBuilder, screenBuilder: screenBuilder)
+		            let otherBuilder = Instantiator<Other> {
+		                __safeDI_otherBuilder(session: session)
 		            }
-		            let otherBuilder = Instantiator<Other>(__safeDI_otherBuilder)
 		            return Screen(session: session, stepBuilder: stepBuilder, otherBuilder: otherBuilder)
+		        }
+		        func __safeDI_stepBuilder() -> Step {
+		            let session = Session()
+		            let screenBuilder = Instantiator<Screen> {
+		                __safeDI_screenBuilder(session: session)
+		            }
+		            return Step(session: session, screenBuilder: screenBuilder)
+		        }
+		        func __safeDI_otherBuilder(session: Session) -> Other {
+		            let innerBuilder = Instantiator<Inner> {
+		                __safeDI_innerBuilder(session: $0)
+		            }
+		            let screenBuilder = Instantiator<Screen> {
+		                __safeDI_screenBuilder(session: session)
+		            }
+		            return Other(innerBuilder: innerBuilder, screenBuilder: screenBuilder)
+		        }
+		        func __safeDI_innerBuilder(session: Session) -> Inner {
+		            let screenBuilder = Instantiator<Screen> {
+		                __safeDI_screenBuilder(session: session)
+		            }
+		            return Inner(session: session, screenBuilder: screenBuilder)
 		        }
 		        let screenBuilder = Instantiator<Screen> {
 		            __safeDI_screenBuilder(session: session)
@@ -1499,19 +1488,19 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		try await expectGeneratedTree(of: fixture, root: "Root", equals: """
 		extension Root {
 		    public convenience init() {
-		        func __safeDI_hostBuilder(box: Box<Int>, config: Feature.Config, name: Name, onTap: @escaping () -> Void, service: any Service) -> Host {
-		            func __safeDI_t3Builder(onTap: @escaping () -> Void, service: any Service, config: Feature.Config, box: Box<Int>, name: Name) -> T3 {
-		                func __safeDI_t0Builder(box: Box<Int>, config: Feature.Config, name: Name, onTap: @escaping () -> Void, service: any Service) -> T0 {
-		                    let t3Builder = Instantiator<T3> {
-		                        __safeDI_t3Builder(onTap: onTap, service: service, config: config, box: box, name: name)
-		                    }
-		                    return T0(onTap: onTap, service: service, config: config, box: box, name: name, t3Builder: t3Builder)
-		                }
-		                let t0Builder = Instantiator<T0> {
-		                    __safeDI_t0Builder(box: $0.box, config: $0.config, name: $0.name, onTap: $0.onTap, service: $0.service)
-		                }
-		                return T3(onTap: onTap, service: service, config: config, box: box, name: name, t0Builder: t0Builder)
+		        func __safeDI_t3Builder(onTap: @escaping () -> Void, service: any Service, config: Feature.Config, box: Box<Int>, name: Name) -> T3 {
+		            let t0Builder = Instantiator<T0> {
+		                __safeDI_t0Builder(box: $0.box, config: $0.config, name: $0.name, onTap: $0.onTap, service: $0.service)
 		            }
+		            return T3(onTap: onTap, service: service, config: config, box: box, name: name, t0Builder: t0Builder)
+		        }
+		        func __safeDI_t0Builder(box: Box<Int>, config: Feature.Config, name: Name, onTap: @escaping () -> Void, service: any Service) -> T0 {
+		            let t3Builder = Instantiator<T3> {
+		                __safeDI_t3Builder(onTap: onTap, service: service, config: config, box: box, name: name)
+		            }
+		            return T0(onTap: onTap, service: service, config: config, box: box, name: name, t3Builder: t3Builder)
+		        }
+		        func __safeDI_hostBuilder(box: Box<Int>, config: Feature.Config, name: Name, onTap: @escaping () -> Void, service: any Service) -> Host {
 		            let t3Builder = Instantiator<T3> {
 		                __safeDI_t3Builder(onTap: onTap, service: service, config: config, box: box, name: name)
 		            }
@@ -2016,18 +2005,18 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    public convenience init() {
 		        let renamed = X(renamed: nil)
 		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                let x = X(renamed: nil)
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		                let renamed: X? = x
-		                #sourceLocation()
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
-		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let x = X(renamed: nil)
+		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		            let renamed: X? = x
+		            #sourceLocation()
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed)
+		            }
+		            return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(renamed: renamed)
@@ -2127,18 +2116,18 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        let renamed: X? = x0
 		        #sourceLocation()
 		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                let x = X(renamed: nil)
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		                let renamed: X? = x
-		                #sourceLocation()
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
-		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let x = X(renamed: nil)
+		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		            let renamed: X? = x
+		            #sourceLocation()
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed)
+		            }
+		            return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(renamed: renamed)
@@ -2237,19 +2226,19 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                let x = X(renamed: nil)
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
-		                let renamed: X? = x
-		                #sourceLocation()
-		                let y = Y(renamed: renamed)
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return Mid(x: x, renamed: renamed, y: y, aBuilder: aBuilder)
-		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let x = X(renamed: nil)
+		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
+		            let renamed: X? = x
+		            #sourceLocation()
+		            let y = Y(renamed: renamed)
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed)
+		            }
+		            return Mid(x: x, renamed: renamed, y: y, aBuilder: aBuilder)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(renamed: nil)
@@ -2454,18 +2443,18 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_aBuilder(renamed: (any XProtocol)?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                let x: any XProtocol = X(renamed: nil)
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		                let renamed: (any XProtocol)? = x
-		                #sourceLocation()
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
-		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let x: any XProtocol = X(renamed: nil)
+		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		            let renamed: (any XProtocol)? = x
+		            #sourceLocation()
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed)
+		            }
+		            return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(renamed: nil)
@@ -2597,27 +2586,27 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_bBuilder(renamed: X?) -> B {
-		                func __safeDI_midBuilder() -> Mid {
-		                    let x = X(renamed: nil)
-		                    #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
-		                    let renamed: X? = x
-		                    #sourceLocation()
-		                    let bBuilder = Instantiator<B> {
-		                        __safeDI_bBuilder(renamed: renamed)
-		                    }
-		                    let aBuilder = Instantiator<A> {
-		                        __safeDI_aBuilder(renamed: renamed)
-		                    }
-		                    return Mid(x: x, renamed: renamed, bBuilder: bBuilder, aBuilder: aBuilder)
-		                }
-		                let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-		                return B(renamed: renamed, midBuilder: midBuilder)
-		            }
 		            let bBuilder = Instantiator<B> {
 		                __safeDI_bBuilder(renamed: renamed)
 		            }
 		            return A(renamed: renamed, bBuilder: bBuilder)
+		        }
+		        func __safeDI_bBuilder(renamed: X?) -> B {
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return B(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let x = X(renamed: nil)
+		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
+		            let renamed: X? = x
+		            #sourceLocation()
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_bBuilder(renamed: renamed)
+		            }
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed)
+		            }
+		            return Mid(x: x, renamed: renamed, bBuilder: bBuilder, aBuilder: aBuilder)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(renamed: nil)
@@ -2729,27 +2718,19 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_renamed() -> X {
-		            func __safeDI_aBuilder(renamed: X?) -> A {
-		                func __safeDI_midBuilder() -> Mid {
-		                    func __safeDI_x() -> X {
-		                        let aBuilder = Instantiator<A> {
-		                            __safeDI_aBuilder(renamed: nil)
-		                        }
-		                        return X(renamed: nil, aBuilder: aBuilder)
-		                    }
-		                    let x: X = __safeDI_x()
-		                    #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 9)
-		                    let renamed: X? = x
-		                    #sourceLocation()
-		                    return Mid(x: x, renamed: renamed)
-		                }
-		                let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-		                return A(renamed: renamed, midBuilder: midBuilder)
-		            }
-		            let aBuilder = Instantiator<A> {
-		                __safeDI_aBuilder(renamed: nil)
-		            }
+		            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		            return X(renamed: nil, aBuilder: aBuilder)
+		        }
+		        func __safeDI_aBuilder() -> A {
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return A(renamed: nil, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let x: X = __safeDI_renamed()
+		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 9)
+		            let renamed: X? = x
+		            #sourceLocation()
+		            return Mid(x: x, renamed: renamed)
 		        }
 		        let renamed: X = __safeDI_renamed()
 		        self.init(renamed: renamed)
@@ -2901,15 +2882,15 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                let renamed = X(renamed: nil)
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return Mid(renamed: renamed, aBuilder: aBuilder)
-		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let renamed = X(renamed: nil)
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed)
+		            }
+		            return Mid(renamed: renamed, aBuilder: aBuilder)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(renamed: nil)
@@ -2996,22 +2977,22 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        let renamed = X(renamed: nil)
-		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                func __safeDI_renamed() -> X {
-		                    X(renamed: nil)
-		                }
-		                let renamed = LazilyInstantiated<X>(__safeDI_renamed)
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed.instance)
-		                }
-		                return Mid(renamed: renamed, aBuilder: aBuilder)
-		            }
+		        func __safeDI_aBuilder(renamed: LazilyInstantiated<X>) -> A {
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-		            return A(renamed: renamed, midBuilder: midBuilder)
+		            return A(renamed: renamed.instance, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let renamed = LazilyInstantiated<X>(__safeDI_renamed)
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed)
+		            }
+		            return Mid(renamed: renamed, aBuilder: aBuilder)
+		        }
+		        func __safeDI_renamed() -> X {
+		            X(renamed: nil)
 		        }
 		        let aBuilder = Instantiator<A> {
-		            __safeDI_aBuilder(renamed: renamed)
+		            __safeDI_aBuilder(renamed: LazilyInstantiated<X> { renamed })
 		        }
 		        self.init(renamed: renamed, aBuilder: aBuilder)
 		    }
@@ -3108,19 +3089,15 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        }
 		        let renamed: X = __safeDI_renamed()
 		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                func __safeDI_renamed() -> X {
-		                    let leaf = Leaf(renamed: nil)
-		                    return X(leaf: leaf)
-		                }
-		                let renamed: X = __safeDI_renamed()
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return Mid(renamed: renamed, aBuilder: aBuilder)
-		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let renamed: X = __safeDI_renamed()
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed)
+		            }
+		            return Mid(renamed: renamed, aBuilder: aBuilder)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(renamed: renamed)
@@ -3222,20 +3199,20 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    public convenience init() {
 		        let renamed = X(renamed: nil)
 		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                let renamed = X(renamed: nil)
-		                func __safeDI_sibling() -> Sibling {
-		                    let renamed = X(renamed: nil)
-		                    return Sibling(renamed: renamed)
-		                }
-		                let sibling: Sibling = __safeDI_sibling()
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return Mid(renamed: renamed, sibling: sibling, aBuilder: aBuilder)
-		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let renamed = X(renamed: nil)
+		            let sibling: Sibling = __safeDI_sibling()
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed)
+		            }
+		            return Mid(renamed: renamed, sibling: sibling, aBuilder: aBuilder)
+		        }
+		        func __safeDI_sibling() -> Sibling {
+		            let renamed = X(renamed: nil)
+		            return Sibling(renamed: renamed)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(renamed: renamed)
@@ -3338,24 +3315,24 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    public convenience init() {
 		        let renamed = X(renamed: nil)
 		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_bBuilder(renamed: X?) -> B {
-		                func __safeDI_midBuilder() -> Mid {
-		                    let renamed = X(renamed: nil)
-		                    let bBuilder = Instantiator<B> {
-		                        __safeDI_bBuilder(renamed: renamed)
-		                    }
-		                    let aBuilder = Instantiator<A> {
-		                        __safeDI_aBuilder(renamed: renamed)
-		                    }
-		                    return Mid(renamed: renamed, bBuilder: bBuilder, aBuilder: aBuilder)
-		                }
-		                let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-		                return B(renamed: renamed, midBuilder: midBuilder)
-		            }
 		            let bBuilder = Instantiator<B> {
 		                __safeDI_bBuilder(renamed: renamed)
 		            }
 		            return A(renamed: renamed, bBuilder: bBuilder)
+		        }
+		        func __safeDI_bBuilder(renamed: X?) -> B {
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return B(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let renamed = X(renamed: nil)
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_bBuilder(renamed: renamed)
+		            }
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed)
+		            }
+		            return Mid(renamed: renamed, bBuilder: bBuilder, aBuilder: aBuilder)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(renamed: renamed)
@@ -3474,42 +3451,36 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                func __safeDI_renamed() -> X {
-		                    func __safeDI_bBuilder(renamed: X?) -> B {
-		                        let leaf = Leaf(renamed: renamed)
-		                        func __safeDI_cBuilder() -> C {
-		                            func __safeDI_source() -> X {
-		                                let bBuilder = Instantiator<B> {
-		                                    __safeDI_bBuilder(renamed: nil)
-		                                }
-		                                return X(renamed: nil, bBuilder: bBuilder)
-		                            }
-		                            let source: X = __safeDI_source()
-		                            #sourceLocation(file: "\(fixtures["C.swift"])", line: 10)
-		                            let renamed: X? = source
-		                            #sourceLocation()
-		                            let bBuilder = Instantiator<B> {
-		                                __safeDI_bBuilder(renamed: renamed)
-		                            }
-		                            return C(source: source, renamed: renamed, bBuilder: bBuilder)
-		                        }
-		                        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
-		                        return B(renamed: renamed, leaf: leaf, cBuilder: cBuilder)
-		                    }
-		                    let bBuilder = Instantiator<B> {
-		                        __safeDI_bBuilder(renamed: nil)
-		                    }
-		                    return X(renamed: nil, bBuilder: bBuilder)
-		                }
-		                let renamed: X = __safeDI_renamed()
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return Mid(renamed: renamed, aBuilder: aBuilder)
-		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let renamed: X = __safeDI_renamed()
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed)
+		            }
+		            return Mid(renamed: renamed, aBuilder: aBuilder)
+		        }
+		        func __safeDI_renamed() -> X {
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_bBuilder(renamed: nil)
+		            }
+		            return X(renamed: nil, bBuilder: bBuilder)
+		        }
+		        func __safeDI_bBuilder(renamed: X?) -> B {
+		            let leaf = Leaf(renamed: renamed)
+		            let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+		            return B(renamed: renamed, leaf: leaf, cBuilder: cBuilder)
+		        }
+		        func __safeDI_cBuilder() -> C {
+		            let source: X = __safeDI_renamed()
+		            #sourceLocation(file: "\(fixtures["C.swift"])", line: 10)
+		            let renamed: X? = source
+		            #sourceLocation()
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_bBuilder(renamed: renamed)
+		            }
+		            return C(source: source, renamed: renamed, bBuilder: bBuilder)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(renamed: nil)
@@ -3635,21 +3606,15 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        }
 		        let renamed: X = __safeDI_renamed()
 		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                func __safeDI_renamed() -> X {
-		                    #sourceLocation(file: "\(fixtures["X.swift"])", line: 7)
-		                    let previous: X? = nil
-		                    #sourceLocation()
-		                    return X(previous: previous)
-		                }
-		                let renamed: X = __safeDI_renamed()
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return Mid(renamed: renamed, aBuilder: aBuilder)
-		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let renamed: X = __safeDI_renamed()
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed)
+		            }
+		            return Mid(renamed: renamed, aBuilder: aBuilder)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(renamed: renamed)
@@ -3763,38 +3728,38 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                func __safeDI_source() -> X {
-		                    func __safeDI_leaf() -> Leaf {
-		                        #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
-		                        let renamed: X? = nil
-		                        #sourceLocation()
-		                        let leaf2 = Leaf2(renamed: renamed)
-		                        return Leaf(renamed: renamed, leaf2: leaf2)
-		                    }
-		                    let leaf: Leaf = __safeDI_leaf()
-		                    return X(leaf: leaf)
-		                }
-		                let source: X = __safeDI_source()
-		                func __safeDI_renamed() -> X {
-		                    func __safeDI_leaf() -> Leaf {
-		                        #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
-		                        let renamed: X? = source
-		                        #sourceLocation()
-		                        let leaf2 = Leaf2(renamed: renamed)
-		                        return Leaf(renamed: renamed, leaf2: leaf2)
-		                    }
-		                    let leaf: Leaf = __safeDI_leaf()
-		                    return X(leaf: leaf)
-		                }
-		                let renamed: X = __safeDI_renamed()
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return Mid(source: source, renamed: renamed, aBuilder: aBuilder)
-		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let source: X = __safeDI_source()
+		            let renamed: X = __safeDI_renamed(source: source)
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed)
+		            }
+		            return Mid(source: source, renamed: renamed, aBuilder: aBuilder)
+		        }
+		        func __safeDI_source() -> X {
+		            let leaf: Leaf = __safeDI_leaf()
+		            return X(leaf: leaf)
+		        }
+		        func __safeDI_leaf() -> Leaf {
+		            #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
+		            let renamed: X? = nil
+		            #sourceLocation()
+		            let leaf2 = Leaf2(renamed: renamed)
+		            return Leaf(renamed: renamed, leaf2: leaf2)
+		        }
+		        func __safeDI_renamed(source: X) -> X {
+		            let leaf: Leaf = __safeDI_leaf_(source: source)
+		            return X(leaf: leaf)
+		        }
+		        func __safeDI_leaf_(source: X) -> Leaf {
+		            #sourceLocation(file: "\(fixtures["Leaf.swift"])", line: 8)
+		            let renamed: X? = source
+		            #sourceLocation()
+		            let leaf2 = Leaf2(renamed: renamed)
+		            return Leaf(renamed: renamed, leaf2: leaf2)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(renamed: nil)
@@ -3915,23 +3880,23 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    public convenience init() {
 		        let renamed = X(renamed: nil)
 		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                let x = X(renamed: nil)
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
-		                let renamed: X? = x
-		                #sourceLocation()
-		                func __safeDI_inner() -> Inner {
-		                    let renamed = X(renamed: nil)
-		                    return Inner(renamed: renamed)
-		                }
-		                let inner: Inner = __safeDI_inner()
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return Mid(x: x, renamed: renamed, inner: inner, aBuilder: aBuilder)
-		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let x = X(renamed: nil)
+		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
+		            let renamed: X? = x
+		            #sourceLocation()
+		            let inner: Inner = __safeDI_inner()
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed)
+		            }
+		            return Mid(x: x, renamed: renamed, inner: inner, aBuilder: aBuilder)
+		        }
+		        func __safeDI_inner() -> Inner {
+		            let renamed = X(renamed: nil)
+		            return Inner(renamed: renamed)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(renamed: renamed)
@@ -4057,31 +4022,25 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_renamed() -> X {
-		            func __safeDI_aBuilder(renamed: X?) -> A {
-		                let leaf = Leaf(renamed: renamed)
-		                func __safeDI_midBuilder() -> Mid {
-		                    func __safeDI_source() -> X {
-		                        let aBuilder = Instantiator<A> {
-		                            __safeDI_aBuilder(renamed: nil)
-		                        }
-		                        return X(aBuilder: aBuilder)
-		                    }
-		                    let source: X = __safeDI_source()
-		                    #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		                    let renamed: X? = source
-		                    #sourceLocation()
-		                    let aBuilder = Instantiator<A> {
-		                        __safeDI_aBuilder(renamed: renamed)
-		                    }
-		                    return Mid(source: source, renamed: renamed, aBuilder: aBuilder)
-		                }
-		                let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
-		                return A(renamed: renamed, leaf: leaf, midBuilder: midBuilder)
-		            }
 		            let aBuilder = Instantiator<A> {
 		                __safeDI_aBuilder(renamed: nil)
 		            }
 		            return X(aBuilder: aBuilder)
+		        }
+		        func __safeDI_aBuilder(renamed: X?) -> A {
+		            let leaf = Leaf(renamed: renamed)
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return A(renamed: renamed, leaf: leaf, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let source: X = __safeDI_renamed()
+		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		            let renamed: X? = source
+		            #sourceLocation()
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed)
+		            }
+		            return Mid(source: source, renamed: renamed, aBuilder: aBuilder)
 		        }
 		        let renamed: X = __safeDI_renamed()
 		        self.init(renamed: renamed)
@@ -4183,15 +4142,15 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        let renamed: X? = other
 		        #sourceLocation()
 		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                let renamed = X(renamed: nil)
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return Mid(renamed: renamed, aBuilder: aBuilder)
-		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let renamed = X(renamed: nil)
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed)
+		            }
+		            return Mid(renamed: renamed, aBuilder: aBuilder)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(renamed: renamed)
@@ -4577,16 +4536,16 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    public convenience init() {
 		        let theme = Theme()
 		        func __safeDI_editor(theme: Theme) -> Editor {
-		            func __safeDI_previewBuilder() -> Preview {
-		                let theme = Theme()
-		                let editor = LazilyInstantiated<Editor> {
-		                    __safeDI_editor(theme: theme)
-		                }
-		                return Preview(theme: theme, editor: editor)
-		            }
 		            let previewBuilder = Instantiator<Preview>(__safeDI_previewBuilder)
 		            let toolbar = Toolbar(theme: theme)
 		            return Editor(previewBuilder: previewBuilder, toolbar: toolbar)
+		        }
+		        func __safeDI_previewBuilder() -> Preview {
+		            let theme = Theme()
+		            let editor = LazilyInstantiated<Editor> {
+		                __safeDI_editor(theme: theme)
+		            }
+		            return Preview(theme: theme, editor: editor)
 		        }
 		        let editor: Editor = __safeDI_editor(theme: theme)
 		        self.init(theme: theme, editor: editor)
@@ -4625,14 +4584,14 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    public convenience init() {
 		        let theme = Theme()
 		        func __safeDI_editor(theme: Theme) -> Editor {
-		            func __safeDI_previewBuilder() -> Preview {
-		                let theme = Theme()
-		                let editor: Editor = __safeDI_editor(theme: theme)
-		                return Preview(theme: theme, editor: editor)
-		            }
 		            let previewBuilder = Instantiator<Preview>(__safeDI_previewBuilder)
 		            let toolbar = Toolbar(theme: theme)
 		            return Editor(previewBuilder: previewBuilder, toolbar: toolbar)
+		        }
+		        func __safeDI_previewBuilder() -> Preview {
+		            let theme = Theme()
+		            let editor: Editor = __safeDI_editor(theme: theme)
+		            return Preview(theme: theme, editor: editor)
 		        }
 		        let editor = LazilyInstantiated<Editor> {
 		            __safeDI_editor(theme: theme)
@@ -4690,15 +4649,15 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    public convenience init() {
 		        func __safeDI_aBuilder(x: Y?) -> A {
 		            let c = C(x: x)
-		            func __safeDI_sBuilder() -> S {
-		                let x = Y()
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(x: x)
-		                }
-		                return S(x: x, aBuilder: aBuilder)
-		            }
 		            let sBuilder = Instantiator<S>(__safeDI_sBuilder)
 		            return A(c: c, sBuilder: sBuilder)
+		        }
+		        func __safeDI_sBuilder() -> S {
+		            let x = Y()
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(x: x)
+		            }
+		            return S(x: x, aBuilder: aBuilder)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(x: nil)
@@ -4744,15 +4703,15 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		        func __safeDI_aBuilder(x: X) -> A {
 		            let b = B(x: x)
 		            let c = C(x: nil)
-		            func __safeDI_sBuilder() -> S {
-		                let x = X()
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(x: x)
-		                }
-		                return S(x: x, aBuilder: aBuilder)
-		            }
 		            let sBuilder = Instantiator<S>(__safeDI_sBuilder)
 		            return A(b: b, c: c, sBuilder: sBuilder)
+		        }
+		        func __safeDI_sBuilder() -> S {
+		            let x = X()
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(x: x)
+		            }
+		            return S(x: x, aBuilder: aBuilder)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(x: x)
@@ -5285,15 +5244,15 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    public convenience init() {
 		        let renamed = X(renamed: nil)
 		        \(sendable)func __safeDI_aBuilder(renamed: \(parameterType)) -> A {
-		            \(sendable)func __safeDI_midBuilder() -> Mid {
-		                let renamed = X(renamed: nil)
-		                let aBuilder = \(wrapper.generatedType) {
-		                    \(aBuiltWith("renamed"))
-		                }
-		                return Mid(renamed: renamed, aBuilder: aBuilder)
-		            }
 		            let midBuilder = \(wrapper.hopWrapper)<Mid>(__safeDI_midBuilder)
 		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        \(sendable)func __safeDI_midBuilder() -> Mid {
+		            let renamed = X(renamed: nil)
+		            let aBuilder = \(wrapper.generatedType) {
+		                \(aBuiltWith("renamed"))
+		            }
+		            return Mid(renamed: renamed, aBuilder: aBuilder)
 		        }
 		        let aBuilder = \(wrapper.generatedType) {
 		            \(aBuiltWith("renamed"))
@@ -5423,18 +5382,18 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_aBuilder(renamed: \(type)?) -> A {
-		            func __safeDI_midBuilder() -> Mid {
-		                let x\(xAnnotation) = \(spelling.constructedType)(renamed: nil)
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		                let renamed: \(type)? = x
-		                #sourceLocation()
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
-		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let x\(xAnnotation) = \(spelling.constructedType)(renamed: nil)
+		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		            let renamed: \(type)? = x
+		            #sourceLocation()
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed)
+		            }
+		            return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(renamed: nil)
@@ -5518,37 +5477,41 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		let midConstruction = switch aliasPosition {
 		case .besideCycleClosingScope:
 			"""
-			                let aBuilder = \(wrapper.generatedType) {
-			                    \(aBuiltWith("renamed"))
-			                }
-			                return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
+			            let aBuilder = \(wrapper.generatedType) {
+			                \(aBuiltWith("renamed"))
+			            }
+			            return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
+			        }
 			"""
 		case .aboveCycleClosingScopesType:
+			// `Inner`'s function reads `renamed` from `Mid`'s alias, so it takes it as a parameter.
 			"""
-			                \(sendable)func __safeDI_innerBuilder() -> Inner {
-			                    let aBuilder = \(wrapper.generatedType) {
-			                        \(aBuiltWith("renamed"))
-			                    }
-			                    return Inner(aBuilder: aBuilder)
-			                }
-			                let innerBuilder = \(wrapper.hopWrapper)<Inner>(__safeDI_innerBuilder)
-			                return Mid(x: x, renamed: renamed, innerBuilder: innerBuilder)
+			            let innerBuilder = \(wrapper.hopWrapper)<Inner> {
+			                __safeDI_innerBuilder(renamed: renamed)
+			            }
+			            return Mid(x: x, renamed: renamed, innerBuilder: innerBuilder)
+			        }
+			        \(sendable)func __safeDI_innerBuilder(renamed: X?) -> Inner {
+			            let aBuilder = \(wrapper.generatedType) {
+			                \(aBuiltWith("renamed"))
+			            }
+			            return Inner(aBuilder: aBuilder)
+			        }
 			"""
 		}
 		return """
 		extension Root {
 		    public convenience init() {
 		        \(sendable)func __safeDI_aBuilder(renamed: X?) -> A {
-		            \(sendable)func __safeDI_midBuilder() -> Mid {
-		                let x = X(renamed: nil)
-		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
-		                let renamed: X? = x
-		                #sourceLocation()
-		\(midConstruction)
-		            }
 		            let midBuilder = \(wrapper.hopWrapper)<Mid>(__safeDI_midBuilder)
 		            return A(renamed: renamed, midBuilder: midBuilder)
 		        }
+		        \(sendable)func __safeDI_midBuilder() -> Mid {
+		            let x = X(renamed: nil)
+		            #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		            let renamed: X? = x
+		            #sourceLocation()
+		\(midConstruction)
 		        let aBuilder = \(wrapper.generatedType) {
 		            \(aBuiltWith("nil"))
 		        }
@@ -5738,6 +5701,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 
 		""" : ""
 		let rootArgument = rootDeclaresYBuilder ? "yBuilder" : "nil"
+		// `Z` builds its own `yBuilder` inside a `@Sendable` function, so its function is another than the root's, named apart.
+		let zYBuilderFunction = rootDeclaresYBuilder ? "__safeDI_yBuilder_" : "__safeDI_yBuilder"
 		let rootInitializerArguments = rootDeclaresYBuilder ? "yBuilder: yBuilder, t3Builder: t3Builder" : "t3Builder: t3Builder"
 		let handBuiltRootYBuilder = rootDeclaresYBuilder ? "        let yBuilder = Instantiator<Y> { Y() }\n" : ""
 		let handBuiltRootInitializerArguments = rootDeclaresYBuilder ? "yBuilder: yBuilder, t3Builder: Instantiator<T3> { t3(yBuilder: yBuilder) }" : "t3Builder: Instantiator<T3> { t3(yBuilder: nil) }"
@@ -5746,22 +5711,22 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		    public convenience init() {
 		\(rootYBuilderDeclaration)        @Sendable func __safeDI_t3Builder(yBuilder: Instantiator<Y>?) -> T3 {
 		            let w = W(yBuilder: yBuilder)
-		            func __safeDI_t0Builder() -> T0 {
-		                @Sendable func __safeDI_zBuilder() -> Z {
-		                    func __safeDI_yBuilder() -> Y {
-		                        Y()
-		                    }
-		                    let yBuilder = Instantiator<Y>(__safeDI_yBuilder)
-		                    let t3Builder = Instantiator<T3> {
-		                        __safeDI_t3Builder(yBuilder: yBuilder)
-		                    }
-		                    return Z(yBuilder: yBuilder, t3Builder: t3Builder)
-		                }
-		                let zBuilder = SendableInstantiator<Z>(__safeDI_zBuilder)
-		                return T0(zBuilder: zBuilder)
-		            }
 		            let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
 		            return T3(w: w, t0Builder: t0Builder)
+		        }
+		        @Sendable func __safeDI_t0Builder() -> T0 {
+		            let zBuilder = SendableInstantiator<Z>(__safeDI_zBuilder)
+		            return T0(zBuilder: zBuilder)
+		        }
+		        @Sendable func __safeDI_zBuilder() -> Z {
+		            let yBuilder = Instantiator<Y>(\(zYBuilderFunction))
+		            let t3Builder = Instantiator<T3> {
+		                __safeDI_t3Builder(yBuilder: yBuilder)
+		            }
+		            return Z(yBuilder: yBuilder, t3Builder: t3Builder)
+		        }
+		        @Sendable func \(zYBuilderFunction)() -> Y {
+		            Y()
 		        }
 		        let t3Builder = Instantiator<T3> {
 		            __safeDI_t3Builder(yBuilder: \(rootArgument))

@@ -171,12 +171,12 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 			extension First {
 			    public convenience init() {
 			        @Sendable func __safeDI_a() -> A {
-			            @Sendable func __safeDI_cBuilder() -> C {
-			                let a: A = __safeDI_a()
-			                return C(a: a)
-			            }
 			            let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
 			            return A(cBuilder: cBuilder)
+			        }
+			        @Sendable func __safeDI_cBuilder() -> C {
+			            let a: A = __safeDI_a()
+			            return C(a: a)
 			        }
 			        let a = LazilyInstantiated<A>(__safeDI_a)
 			        self.init(a: a)
@@ -191,12 +191,12 @@ struct SafeDIToolConstructionMemoTests: ~Copyable {
 			extension Second {
 			    public convenience init() {
 			        @Sendable func __safeDI_a() -> A {
-			            @Sendable func __safeDI_cBuilder() -> C {
-			                let a: A = __safeDI_a()
-			                return C(a: a)
-			            }
 			            let cBuilder = SendableInstantiator<C>(__safeDI_cBuilder)
 			            return A(cBuilder: cBuilder)
+			        }
+			        @Sendable func __safeDI_cBuilder() -> C {
+			            let a: A = __safeDI_a()
+			            return C(a: a)
 			        }
 			        let a: A = __safeDI_a()
 			        self.init(a: a)
