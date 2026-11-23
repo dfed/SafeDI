@@ -134,6 +134,8 @@ extension MockLowering {
 		/// The node's type, which the walk inserted among the configured types around it, unless one there has it.
 		fileprivate let insertedType: String?
 		fileprivate let wasBeneathRepeatedConfiguredAncestor: Bool
+		/// The order in which the walk entered the node's children, among every configured node's of the root.
+		let walkOrder: Int
 	}
 }
 
@@ -146,7 +148,9 @@ extension MockLowering.Walk {
 			recordsConfiguration: !repeatsAncestor && !isBeneathRepeatedConfiguredAncestor,
 			insertedType: repeatsAncestor ? nil : typeName,
 			wasBeneathRepeatedConfiguredAncestor: isBeneathRepeatedConfiguredAncestor,
+			walkOrder: configuredNodesEntered,
 		)
+		configuredNodesEntered += 1
 		isBeneathRepeatedConfiguredAncestor = isBeneathRepeatedConfiguredAncestor || repeatsAncestor
 		return entry
 	}

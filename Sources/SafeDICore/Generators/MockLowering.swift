@@ -49,6 +49,13 @@ public enum MockLoweringShadow {
 		case mergedCode
 		/// The module's shared configuration code (`MockGenerationResult.mockConfigurationCode`), absent included.
 		case moduleConfigurations
+		// D1 lane hook (lane D): the one-way check read from the records (`MockLowering+OneWay.swift`).
+		/// The module's diagnostics of types built both with and without their hand-written mocks
+		/// (`validateConfigurationsAreBuiltOneWay`), none included.
+		case oneWayDiagnostics
+		// D1 lane hook (lane D): `query needs` read from the lowering's signature (`MockLowering+Signature.swift`).
+		/// The uncovered parameters `query needs` reports of a mock root (`MockRootParameters.flatUncoveredParameters`).
+		case queryNeeds
 	}
 
 	public enum Outcome: Sendable, Equatable {
@@ -143,6 +150,9 @@ public enum MockLowering {
 		// D1 lane hook (lane D): the fields for the node's construction's default-valued parameters.
 		/// The configuration's fields for the node's construction's default-valued parameters, after its children's.
 		var defaultFields = [DefaultField]()
+		// D1 lane hook (lane D): what the one-way check reads of the node (`MockLowering+OneWay.swift`).
+		/// The construction the node builds its type with, as the one-way check reads it.
+		var oneWayConstruction: OneWayConstruction?
 
 		/// A field that configures a child of the node: its configuration, or an optional builder closure.
 		struct ChildField: Sendable, Equatable {
