@@ -132,10 +132,11 @@ extension ScopeGenerator {
 		var passedUpBuilderByFamily = [MockRootParameters.SeamMockBuilder.Family: MockLowering.RootSignature.PassedUpBuilder]()
 		var ownHoleTypes = [SeamSignature.HoleType]()
 		var passedUpHoleTypes = [(holeType: SeamSignature.HoleType, receivedProperty: Property)]()
+		// The signature's builders by family, in its order.
+		var signatureFamilies = [(family: MockRootParameters.SeamMockBuilder.Family, builder: MockLowering.RootSignature.PassedUpBuilder)]()
 		if !passedUpBuilders.isEmpty {
-			// Beside places inside the fills, which claim their families' builders between the seam's own places and those the
-			// calls pass up, a builder of the signature is not lowered yet.
-			guard fillPlaces.isEmpty, optionalBuilderNames == nil else { return .unsupported(.publicMockCall) }
+			// Beside a public mock's own builder names, a builder of the signature is not lowered yet.
+			guard optionalBuilderNames == nil else { return .unsupported(.publicMockCall) }
 			for builder in passedUpBuilders {
 				let family: MockRootParameters.SeamMockBuilder.Family
 				if let place = builder.places.first {
@@ -150,6 +151,7 @@ extension ScopeGenerator {
 				}
 				guard passedUpBuilderByFamily[family] == nil else { return .unsupported(.publicMockCall) }
 				passedUpBuilderByFamily[family] = builder
+				signatureFamilies.append((family, builder))
 				if let firstProperty = builder.properties.first {
 					passedUpHoleTypes.append((family.holeType, firstProperty))
 				} else if !ownHoleTypes.contains(family.holeType) {
@@ -193,15 +195,69 @@ extension ScopeGenerator {
 		for (holeType, _) in passedUpHoleTypes where !signatureHoleTypes.contains(holeType) {
 			signatureHoleTypes.append(holeType)
 		}
-		let requiredStems = DependencyTreeGenerator.stems(of: requiredHoleTypes + signatureHoleTypes)
 		let allFamilies = Self.filledFamilies(of: filledCalls)
 		let families = allFamilies.filter { fillPlacesByFamily[$0.family] == nil && passedUpBuilderByFamily[$0.family] == nil }
-		let stems = Self.stemsOfOptionalBuilders(
-			of: families.map { ($0.family.holeType, $0.receivedProperty) },
-			besideOwnHoleTypes: requiredHoleTypes + ownHoleTypes,
-			passedUpHoleTypes: passedUpHoleTypes,
-			requiredStems: requiredStems,
-		)
+		let requiredStems: [SeamSignature.HoleType: String]
+		let stems: [SeamSignature.HoleType: String]
+		// Beside places inside the fills, the families of the signature's builders and of the fills' places are one list, as
+		// `seamMockBuilders` orders it: those of the seam's own places, then those of the fills' places, then those only the
+		// calls pass up, labeled in that order; the label and type of each builder of the signature are checked against it.
+		var labelByFillPlaceFamily: [MockRootParameters.SeamMockBuilder.Family: String]?
+		var allocatorBesideFillPlaces: GeneratedNameAllocator?
+		if !fillPlaces.isEmpty, !signatureFamilies.isEmpty {
+			guard let builderNaming else { return .unsupported(.publicMockCall) }
+			var familiesInOrder = signatureFamilies.filter { !$0.builder.places.isEmpty }.map(\.family)
+			for family in requiredFamilies where !familiesInOrder.contains(family) {
+				familiesInOrder.append(family)
+			}
+			for (family, _) in signatureFamilies where !familiesInOrder.contains(family) {
+				familiesInOrder.append(family)
+			}
+			var holeTypes = [SeamSignature.HoleType]()
+			for family in familiesInOrder where !holeTypes.contains(family.holeType) {
+				holeTypes.append(family.holeType)
+			}
+			requiredStems = DependencyTreeGenerator.stems(of: holeTypes)
+			var allocator = GeneratedNameAllocator(reserving: builderNaming.otherParameterLabels)
+			var labelByFamily = [MockRootParameters.SeamMockBuilder.Family: String]()
+			for family in familiesInOrder {
+				let stem = requiredStems[family.holeType, default: ""]
+				labelByFamily[family] = allocator.claim(family.isSendable ? DependencyTreeGenerator.sendableBuilderLabel(ofStem: stem) : DependencyTreeGenerator.plainBuilderLabel(ofStem: stem))
+			}
+			for (family, builder) in signatureFamilies {
+				guard labelByFamily[family] == builder.label else { return .unsupported(.publicMockCall) }
+				// A builder of the signature that fills' places join takes the type of every place it builds.
+				guard let joinedPlaces = fillPlacesByFamily[family] else { continue }
+				guard builder.properties.isEmpty,
+				      MockRootParameters.SeamMockBuilder.parameterType(ofPlaceProperties: builder.places.map(\.property) + joinedPlaces.map(\.dependency.property), in: family).asSource == builder.typeSource
+				else { return .unsupported(.publicMockCall) }
+			}
+			labelByFillPlaceFamily = labelByFamily
+			allocatorBesideFillPlaces = allocator
+			var ownHoleTypesInOrder = [SeamSignature.HoleType]()
+			var passedUpHoleTypesInOrder = [(holeType: SeamSignature.HoleType, receivedProperty: Property)]()
+			for family in familiesInOrder {
+				if let firstProperty = passedUpBuilderByFamily[family]?.properties.first {
+					passedUpHoleTypesInOrder.append((family.holeType, firstProperty))
+				} else {
+					ownHoleTypesInOrder.append(family.holeType)
+				}
+			}
+			stems = Self.stemsOfOptionalBuilders(
+				of: families.map { ($0.family.holeType, $0.receivedProperty) },
+				besideOwnHoleTypes: ownHoleTypesInOrder,
+				passedUpHoleTypes: passedUpHoleTypesInOrder,
+				requiredStems: requiredStems,
+			)
+		} else {
+			requiredStems = DependencyTreeGenerator.stems(of: requiredHoleTypes + signatureHoleTypes)
+			stems = Self.stemsOfOptionalBuilders(
+				of: families.map { ($0.family.holeType, $0.receivedProperty) },
+				besideOwnHoleTypes: requiredHoleTypes + ownHoleTypes,
+				passedUpHoleTypes: passedUpHoleTypes,
+				requiredStems: requiredStems,
+			)
+		}
 		// An internal mock names its builders as `seamMockBuilders` does, apart from what the signature says
 		// they are named apart from (`RootSignature.BuilderNaming`); otherwise a builder labeled as another parameter of
 		// `mock()` or a name of the tree is named apart, which is not lowered yet.
@@ -218,7 +274,11 @@ extension ScopeGenerator {
 		// The label of each builder `mock()` takes, the required ones' first, then the optional ones', each with whether a
 		// call fills places of it.
 		var requiredLabels = [String]()
-		for family in requiredFamilies {
+		if let labelByFillPlaceFamily, let allocatorBesideFillPlaces {
+			labels = allocatorBesideFillPlaces
+			requiredLabels = requiredFamilies.map { labelByFillPlaceFamily[$0, default: ""] }
+		}
+		for family in requiredFamilies where labelByFillPlaceFamily == nil {
 			let stem = requiredStems[family.holeType, default: ""]
 			let label = labels.claim(family.isSendable ? DependencyTreeGenerator.sendableBuilderLabel(ofStem: stem) : DependencyTreeGenerator.plainBuilderLabel(ofStem: stem))
 			guard exactNaming != nil || !namesFillsDeclare.contains(label) && !namesBuildersAvoid.contains(label) else { return .unsupported(.fill) }
@@ -250,7 +310,7 @@ extension ScopeGenerator {
 			let namesBoundInTheTree = exactNaming.namesBoundInTheTree.union(fillPlaces.isEmpty ? [] : namesFillsDeclare)
 			let namesBoundInTheTreeAndFills = namesBoundInTheTree.union(namesFillsDeclare)
 			var buildersInLabelOrder = [(label: String, fillsPlaces: Bool, passedUpInternalName: String?)]()
-			for (family, label) in zip(requiredFamilies, requiredLabels) {
+			for (family, label) in zip(requiredFamilies, requiredLabels) where passedUpBuilderByFamily[family] == nil {
 				buildersInLabelOrder.append((label, allFamilies.contains { $0.family == family }, nil))
 			}
 			for passedUpBuilder in passedUpBuilders {
@@ -282,10 +342,14 @@ extension ScopeGenerator {
 		var buildersByFamily = [MockRootParameters.SeamMockBuilder.Family: FillPlaceBindings.HoleBuilder]()
 		var fillPlaceBindingsInOrder = [(order: Int, generator: ObjectIdentifier, binding: SendableAutoclosureParameter)]()
 		for (family, label) in zip(requiredFamilies, requiredLabels) {
-			let internalName = internalNameByLabel[label] ?? label
+			// A family of the signature's builders, which the fills' places join, is the signature's parameter already.
+			let joinedBuilder = passedUpBuilderByFamily[family]
+			let internalName = joinedBuilder?.internalName ?? internalNameByLabel[label] ?? label
 			let places = fillPlacesByFamily[family, default: []]
-			let parameterType = MockRootParameters.SeamMockBuilder.parameterType(ofPlaceProperties: places.map(\.dependency.property), in: family)
-			parameters.append((label, "\(label): \(parameterType.asSource)"))
+			if joinedBuilder == nil {
+				let parameterType = MockRootParameters.SeamMockBuilder.parameterType(ofPlaceProperties: places.map(\.dependency.property), in: family)
+				parameters.append((label, "\(label): \(parameterType.asSource)"))
+			}
 			for place in places {
 				fillPlaceBindingsInOrder.append((place.order, place.generator, SendableAutoclosureParameter(name: place.dependency.property.label, localName: internalName, valueType: place.dependency.property.typeDescription)))
 			}
@@ -455,7 +519,7 @@ extension MockLowering.Walk {
 		else { return .unsupported(.publicMockCall) }
 		// A call held in an erased type is wrapped in that type, as an inline construction is.
 		guard !isPropertyCycle,
-		      property.propertyType.isConstant || [.instantiator, .sendableInstantiator].contains(property.propertyType) || erasedToConcreteExistential && [.erasedInstantiator, .sendableErasedInstantiator].contains(property.propertyType),
+		      property.propertyType.isConstant || [.instantiator, .sendableInstantiator, .lazilyInstantiated, .sendableLazilyInstantiated].contains(property.propertyType) || erasedToConcreteExistential && [.erasedInstantiator, .sendableErasedInstantiator].contains(property.propertyType),
 		      erasedToConcreteExistential || property.typeDescription.asInstantiatedType == instantiable.concreteInstantiable
 		else { return .unsupported(.publicMockCall) }
 		guard !rootLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
