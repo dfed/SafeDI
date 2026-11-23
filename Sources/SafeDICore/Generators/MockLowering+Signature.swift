@@ -50,6 +50,9 @@ extension MockLowering {
 		/// The `@Instantiated` dependencies of the mocked type and of the types of its tree that the mock cannot build, the
 		/// mocked type's first, then in the order the walk of the tree first meets them.
 		let uncoveredParameters: [Parameter]
+		/// The same uncovered parameters, each named as `mock()` takes it, with the types that create it, as
+		/// `MockRootParameters.flatUncoveredParameters` holds them.
+		let uncoveredRootParameters: [ScopeGenerator.MockRootParameters.UncoveredParameter]
 		/// The lines that document, above `mock()`, each uncovered parameter several types create
 		/// (`MockRootParameters.UncoveredParameter.sharedValueDocumentation`).
 		let sharedValueDocumentation: [String]
@@ -99,6 +102,7 @@ extension MockLowering {
 				rootDefaultParameters: rootDefaultParameters,
 				flatReceivedParameters: flatReceivedParameters.filter { !properties.contains($0.property) },
 				uncoveredParameters: uncoveredParameters,
+				uncoveredRootParameters: uncoveredRootParameters,
 				sharedValueDocumentation: sharedValueDocumentation,
 				onlyIfAvailableOverrides: onlyIfAvailableOverrides,
 				renamesByLabelAndType: renamesByLabelAndType,
@@ -141,6 +145,15 @@ extension ScopeGenerator {
 	/// The parameters of this mock root's `mock()` other than its overrides, or the first rule they meet that the lowering
 	/// does not lower yet.
 	func lowerRootSignature(of instantiable: Instantiable, context: MockContext) -> MockLowering.Lowering<MockLowering.RootSignature> {
+		lowerRootSignature(of: instantiable, flatParameterMockDefaults: context.flatParameterMockDefaults)
+	}
+
+	/// The same, read with the defaults of the module's flat parameters, which is all of the module's mock context the
+	/// signature reads, so that `query needs`, which has no mock context, reads the same signature.
+	func lowerRootSignature(
+		of instantiable: Instantiable,
+		flatParameterMockDefaults: [TypeDescription: FlatParameterMockDefault],
+	) -> MockLowering.Lowering<MockLowering.RootSignature> {
 		var forwardedParameters = [MockLowering.RootSignature.Parameter]()
 		for dependency in instantiable.dependencies.sorted(by: { $0.property < $1.property }) where dependency.source == .forwarded {
 			// A forwarded wrapper declares the forms of its instance beside it, which the tree's receives read.
@@ -149,7 +162,7 @@ extension ScopeGenerator {
 			let constructionDefault = instantiable.initializer?.arguments.first { $0.innerLabel == dependency.property.label }?.defaultValueExpression
 			forwardedParameters.append(MockLowering.RootSignature.Parameter(
 				property: dependency.property,
-				defaultExpression: constructionDefault ?? context.flatParameterMockDefaults[dependency.property.typeDescription]?.expression,
+				defaultExpression: constructionDefault ?? flatParameterMockDefaults[dependency.property.typeDescription]?.expression,
 			))
 		}
 		var rootDefaultParameters = [MockLowering.RootSignature.Parameter]()
@@ -245,7 +258,7 @@ extension ScopeGenerator {
 		let flatReceivedParameters = zip(flatReceivedProperties, flatReceivedNames).map { property, name in
 			MockLowering.RootSignature.Parameter(
 				property: property,
-				defaultExpression: context.flatParameterMockDefaults[property.typeDescription]?.expression,
+				defaultExpression: flatParameterMockDefaults[property.typeDescription]?.expression,
 				name: name,
 			)
 		}
@@ -272,6 +285,7 @@ extension ScopeGenerator {
 			uncoveredParameters: namedUncoveredParameters.map {
 				MockLowering.RootSignature.Parameter(property: $0.property, defaultExpression: nil, typeSource: $0.typeSource, name: $0.label)
 			},
+			uncoveredRootParameters: namedUncoveredParameters,
 			sharedValueDocumentation: namedUncoveredParameters.flatMap(\.sharedValueDocumentation),
 			onlyIfAvailableOverrides: onlyIfAvailableOverrides,
 			renamesByLabelAndType: renamesByLabelAndType,
@@ -478,5 +492,42 @@ extension ScopeGenerator {
 			},
 			namesDeclaredInBuilderFunctions: namesDeclaredInBuilderFunctions,
 		)
+	}
+}
+
+extension MockLoweringShadow {
+	/// How the uncovered parameters `query needs` reports of the mock root `mockRoot`, whose mocked type is `instantiable`,
+	/// read from the lowering's signature, compare with `emitted`, the emitter's (`MockRootParameters.flatUncoveredParameters`).
+	static func queryComparison(
+		of mockRoot: ScopeGenerator,
+		instantiable: Instantiable,
+		flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault],
+		emitted: [ScopeGenerator.MockRootParameters.UncoveredParameter],
+	) async -> Comparison {
+		let outcome = await mockRoot.queryNeedsOutcome(of: instantiable, flatParameterMockDefaults: flatParameterMockDefaults, comparingWith: text(of: emitted))
+		return Comparison(mockedType: instantiable.concreteInstantiable.asSource, outcome: outcome, subject: .queryNeeds)
+	}
+
+	/// Each parameter on a line of its own, as `query needs` reads it: its name, type, instantiated type and creating types.
+	fileprivate static func text(of parameters: [ScopeGenerator.MockRootParameters.UncoveredParameter]) -> String {
+		parameters.map { parameter in
+			"\(parameter.label): \(parameter.typeSource) (\(parameter.instantiatedType.asSource)) created by \(parameter.creatingTypes.map(\.asSource).joined(separator: ", "))"
+		}.joined(separator: "\n")
+	}
+}
+
+extension ScopeGenerator {
+	/// How the uncovered parameters of this mock root's lowered signature compare with `emittedText`.
+	fileprivate func queryNeedsOutcome(
+		of instantiable: Instantiable,
+		flatParameterMockDefaults: [TypeDescription: FlatParameterMockDefault],
+		comparingWith emittedText: String,
+	) -> MockLoweringShadow.Outcome {
+		switch lowerRootSignature(of: instantiable, flatParameterMockDefaults: flatParameterMockDefaults) {
+		case let .lowered(signature):
+			MockLoweringShadow.outcome(comparing: .lowered(MockLoweringShadow.text(of: signature.uncoveredRootParameters)), with: emittedText)
+		case let .unsupported(rule):
+			.unsupported(rule)
+		}
 	}
 }
