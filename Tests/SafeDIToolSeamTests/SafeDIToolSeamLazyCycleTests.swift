@@ -105,18 +105,15 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			        }
 			        let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
 			        func __safeDI_t3Builder(t1Builder: Instantiator<T1>) -> T3 {
-			            func __safeDI_t0Builder() -> T0 {
-			                func __safeDI_t1Builder() -> T1 {
-			                    T1()
-			                }
-			                let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
-			                let t3Builder = Instantiator<T3> {
-			                    __safeDI_t3Builder(t1Builder: t1Builder)
-			                }
-			                return T0(t1Builder: t1Builder, t3Builder: t3Builder)
-			            }
 			            let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
 			            return T3(t0Builder: t0Builder, t1Builder: t1Builder)
+			        }
+			        func __safeDI_t0Builder() -> T0 {
+			            let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
+			            let t3Builder = Instantiator<T3> {
+			                __safeDI_t3Builder(t1Builder: t1Builder)
+			            }
+			            return T0(t1Builder: t1Builder, t3Builder: t3Builder)
 			        }
 			        let t3Builder = Instantiator<T3> {
 			            __safeDI_t3Builder(t1Builder: t1Builder)
@@ -296,18 +293,18 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_aBuilder(renamed: X?) -> A {
-			            func __safeDI_midBuilder() -> Mid {
-			                let x = X(renamed: nil)
-			                #sourceLocation(file: "\(inlineOutput.fixtures["Mid.swift"])", line: 10)
-			                let renamed: X? = x
-			                #sourceLocation()
-			                let aBuilder = Instantiator<A> {
-			                    __safeDI_aBuilder(renamed: renamed)
-			                }
-			                return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
-			            }
 			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 			            return A(renamed: renamed, midBuilder: midBuilder)
+			        }
+			        func __safeDI_midBuilder() -> Mid {
+			            let x = X(renamed: nil)
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Mid.swift"])", line: 10)
+			            let renamed: X? = x
+			            #sourceLocation()
+			            let aBuilder = Instantiator<A> {
+			                __safeDI_aBuilder(renamed: renamed)
+			            }
+			            return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
 			        }
 			        let aBuilder = Instantiator<A> {
 			            __safeDI_aBuilder(renamed: nil)
@@ -400,32 +397,32 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_service() -> Service {
-		                func __safeDI_routerBuilder() -> Router {
-		                    let x = X(renamed: nil)
-		                    #sourceLocation(file: "\(inlineAppOutput.fixtures["Router.swift"])", line: 9)
-		                    let renamed: X? = x
-		                    #sourceLocation()
-		                    return Router(x: x, renamed: renamed)
-		                }
-		                let routerBuilder = ErasedInstantiator<(), AnyRouting> {
-		                    AnyRouting(__safeDI_routerBuilder())
-		                }
-		                return Service(routerBuilder: routerBuilder)
-		            }
 		            let service: Service = __safeDI_service()
-		            func __safeDI_midBuilder() -> Mid {
-		                let x = X(renamed: nil)
-		                #sourceLocation(file: "\(inlineAppOutput.fixtures["Mid.swift"])", line: 10)
-		                let renamed: X? = x
-		                #sourceLocation()
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
-		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 		            return A(renamed: renamed, service: service, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let x = X(renamed: nil)
+		            #sourceLocation(file: "\(inlineAppOutput.fixtures["Mid.swift"])", line: 10)
+		            let renamed: X? = x
+		            #sourceLocation()
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed)
+		            }
+		            return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
+		        }
+		        func __safeDI_service() -> Service {
+		            let routerBuilder = ErasedInstantiator<(), AnyRouting> {
+		                AnyRouting(__safeDI_routerBuilder())
+		            }
+		            return Service(routerBuilder: routerBuilder)
+		        }
+		        func __safeDI_routerBuilder() -> Router {
+		            let x = X(renamed: nil)
+		            #sourceLocation(file: "\(inlineAppOutput.fixtures["Router.swift"])", line: 9)
+		            let renamed: X? = x
+		            #sourceLocation()
+		            return Router(x: x, renamed: renamed)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(renamed: nil)
@@ -514,26 +511,26 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    public convenience init() {
 		        let renamed = X(renamed: nil)
 		        func __safeDI_aBuilder(renamed: X?) -> A {
-		            func __safeDI_service() -> Service {
-		                func __safeDI_routerBuilder() -> Router {
-		                    let renamed = X(renamed: nil)
-		                    return Router(renamed: renamed)
-		                }
-		                let routerBuilder = ErasedInstantiator<(), AnyRouting> {
-		                    AnyRouting(__safeDI_routerBuilder())
-		                }
-		                return Service(routerBuilder: routerBuilder)
-		            }
 		            let service: Service = __safeDI_service()
-		            func __safeDI_midBuilder() -> Mid {
-		                let renamed = X(renamed: nil)
-		                let aBuilder = Instantiator<A> {
-		                    __safeDI_aBuilder(renamed: renamed)
-		                }
-		                return Mid(renamed: renamed, aBuilder: aBuilder)
-		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
 		            return A(renamed: renamed, service: service, midBuilder: midBuilder)
+		        }
+		        func __safeDI_midBuilder() -> Mid {
+		            let renamed = X(renamed: nil)
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: renamed)
+		            }
+		            return Mid(renamed: renamed, aBuilder: aBuilder)
+		        }
+		        func __safeDI_service() -> Service {
+		            let routerBuilder = ErasedInstantiator<(), AnyRouting> {
+		                AnyRouting(__safeDI_routerBuilder())
+		            }
+		            return Service(routerBuilder: routerBuilder)
+		        }
+		        func __safeDI_routerBuilder() -> Router {
+		            let renamed = X(renamed: nil)
+		            return Router(renamed: renamed)
 		        }
 		        let aBuilder = Instantiator<A> {
 		            __safeDI_aBuilder(renamed: renamed)
@@ -619,16 +616,13 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			        }
 			        let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
 			        func __safeDI_t3(t1Builder: Instantiator<T1>) -> T3 {
-			            func __safeDI_t0Builder() -> T0 {
-			                func __safeDI_t1Builder() -> T1 {
-			                    T1()
-			                }
-			                let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
-			                let t3: T3 = __safeDI_t3(t1Builder: t1Builder)
-			                return T0(t1Builder: t1Builder, t3: t3)
-			            }
 			            let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
 			            return T3(t0Builder: t0Builder, t1Builder: t1Builder)
+			        }
+			        func __safeDI_t0Builder() -> T0 {
+			            let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
+			            let t3: T3 = __safeDI_t3(t1Builder: t1Builder)
+			            return T0(t1Builder: t1Builder, t3: t3)
 			        }
 			        let t3: T3 = __safeDI_t3(t1Builder: t1Builder)
 			        self.init(t1Builder: t1Builder, t3: t3)

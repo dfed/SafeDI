@@ -206,7 +206,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_chainToken: @autoclosure @escaping @Sendable () -> ChainToken?) {
 		        let chainToken = SendableLazilyInstantiated<ChainToken?>(__safeDI_chainToken)
-		        @Sendable func __safeDI_leafBuilder() -> ChainLeaf {
+		        @Sendable nonisolated func __safeDI_leafBuilder() -> ChainLeaf {
 		            ChainLeaf(chainToken: chainToken.instance)
 		        }
 		        let leafBuilder = SendableInstantiator<ChainLeaf>(__safeDI_leafBuilder)
@@ -465,7 +465,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		    /// To call this type from code you write, set `generatePlainDependencyTreeInitializers: true` in this module’s `#SafeDIConfiguration`.
 		    public convenience init(__safeDI_chainToken: @autoclosure @escaping @Sendable () -> ChainToken) {
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
-		        @Sendable func __safeDI_leafBuilder() -> ChainLeaf {
+		        @Sendable nonisolated func __safeDI_leafBuilder() -> ChainLeaf {
 		            ChainLeaf(chainToken: chainToken.instance)
 		        }
 		        let leafBuilder = SendableInstantiator<ChainLeaf>(__safeDI_leafBuilder)
@@ -595,7 +595,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values) -> any HoleService {
 		                let chainToken = scope.chainToken
 		                func __safeDI_holeService() -> HoleImpl {
-		                    @Sendable func __safeDI_leafBuilder() -> ChainLeaf {
+		                    @Sendable nonisolated func __safeDI_leafBuilder() -> ChainLeaf {
 		                        ChainLeaf(chainToken: chainToken)
 		                    }
 		                    let leafBuilder = SendableInstantiator<ChainLeaf>(__safeDI_leafBuilder)
@@ -659,7 +659,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            func __safeDI_holeServiceBuilder_Seam_holeService(_ scope: Seam.SafeDIScope_HoleService.holeService_Values) -> any HoleService {
 		                let chainToken = scope.chainToken
 		                func __safeDI_holeService() -> HoleImpl {
-		                    @Sendable func __safeDI_readerBuilder() -> TokenReader {
+		                    @Sendable nonisolated func __safeDI_readerBuilder() -> TokenReader {
 		                        #sourceLocation(file: "\(tokenReaderPath)", line: 8)
 		                        let token: ChainToken = chainToken
 		                        #sourceLocation()
@@ -1956,7 +1956,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
-		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		        @Sendable nonisolated func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
@@ -2268,7 +2268,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Mid.__safeDI_Mid_91488962FEFEFE32.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: ChainToken) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
-		                    @Sendable func __safeDI_readerBuilder() -> TokenReader {
+		                    @Sendable nonisolated func __safeDI_readerBuilder() -> TokenReader {
 		                        TokenReader(chainToken: chainToken)
 		                    }
 		                    let readerBuilder = SendableInstantiator<TokenReader>(__safeDI_readerBuilder)
@@ -3190,7 +3190,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
-		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		        @Sendable nonisolated func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
@@ -4102,7 +4102,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
-		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		        @Sendable nonisolated func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
@@ -5588,7 +5588,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
-		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		        @Sendable nonisolated func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
@@ -5896,7 +5896,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
-		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		        @Sendable nonisolated func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
@@ -6231,7 +6231,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
-		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		        @Sendable nonisolated func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
@@ -6767,7 +6767,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
-		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		        @Sendable nonisolated func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
@@ -7032,7 +7032,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
-		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		        @Sendable nonisolated func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
@@ -7296,7 +7296,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
-		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		        @Sendable nonisolated func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
@@ -7561,7 +7561,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
-		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		        @Sendable nonisolated func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
@@ -7890,7 +7890,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
-		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		        @Sendable nonisolated func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
@@ -7898,7 +7898,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Mid.__safeDI_Mid_787AB232D7981AEF.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
-		                    @Sendable func __safeDI_readerHolder() -> WrapperReader {
+		                    @Sendable nonisolated func __safeDI_readerHolder() -> WrapperReader {
 		                        WrapperReader(chainToken: chainToken)
 		                    }
 		                    let readerHolder = SendableInstantiator<WrapperReader>(__safeDI_readerHolder)
@@ -8221,7 +8221,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
-		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		        @Sendable nonisolated func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
@@ -8229,7 +8229,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Mid.__safeDI_Mid_787AB232D7981AEF.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
-		                    @Sendable func __safeDI_readerHolder() -> WrapperReader {
+		                    @Sendable nonisolated func __safeDI_readerHolder() -> WrapperReader {
 		                        WrapperReader(chainToken: chainToken)
 		                    }
 		                    let readerHolder = SendableLazilyInstantiated<WrapperReader>(__safeDI_readerHolder)
@@ -8552,7 +8552,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
-		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		        @Sendable nonisolated func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
@@ -8560,7 +8560,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Mid.__safeDI_Mid_787AB232D7981AEF.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
-		                    @Sendable func __safeDI_leafBuilder() -> ChainLeaf {
+		                    @Sendable nonisolated func __safeDI_leafBuilder() -> ChainLeaf {
 		                        ChainLeaf(chainToken: chainToken.instance)
 		                    }
 		                    let leafBuilder = SendableInstantiator<ChainLeaf>(__safeDI_leafBuilder)
@@ -8884,7 +8884,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
-		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		        @Sendable nonisolated func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
@@ -8892,7 +8892,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Mid.__safeDI_Mid_91488962FEFEFE32.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
-		                    @Sendable func __safeDI_readerHolder() -> WrapperReader {
+		                    @Sendable nonisolated func __safeDI_readerHolder() -> WrapperReader {
 		                        WrapperReader(chainToken: chainToken)
 		                    }
 		                    let readerHolder = SendableInstantiator<WrapperReader>(__safeDI_readerHolder)
@@ -9138,7 +9138,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
-		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		        @Sendable nonisolated func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
@@ -9146,7 +9146,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 		            _ = Mid.__safeDI_Mid_8BCF8E47E0BA286F.self // If this line does not compile, compile the code SafeDI generates for module Other into Other: under Bazel, add Other’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_thingServiceBuilder_Mid_Worker_Scope_thing(_ scope: Mid.SafeDIScope_ThingService.Worker_Scope.thing_Values, chainToken: SendableLazilyInstantiated<ChainToken>) -> any ThingService {
 		                func __safeDI_thing() -> ThingImpl {
-		                    @Sendable func __safeDI_leafBuilder() -> ChainLeaf {
+		                    @Sendable nonisolated func __safeDI_leafBuilder() -> ChainLeaf {
 		                        ChainLeaf(chainToken: chainToken)
 		                    }
 		                    let leafBuilder = SendableInstantiator<ChainLeaf>(__safeDI_leafBuilder)
@@ -9409,7 +9409,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
-		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		        @Sendable nonisolated func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)
@@ -9678,7 +9678,7 @@ struct SafeDIToolSeamPassedUpDeferredFieldTests: ~Copyable {
 
 		extension TopRoot {
 		    public convenience init() {
-		        @Sendable func __safeDI_chainToken() -> ChainToken {
+		        @Sendable nonisolated func __safeDI_chainToken() -> ChainToken {
 		            ChainToken()
 		        }
 		        let chainToken = SendableLazilyInstantiated<ChainToken>(__safeDI_chainToken)

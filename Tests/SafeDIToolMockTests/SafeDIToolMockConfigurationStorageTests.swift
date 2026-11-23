@@ -251,7 +251,7 @@ struct SafeDIToolMockConfigurationStorageTests: ~Copyable {
 			        let __safeDI_childBuilder__childBuilder_grand_safeDIBuilder = safeDIOverrides.childBuilder.grand
 			        let __safeDI_childBuilder__childBuilder_capacity = safeDIOverrides.childBuilder.capacity
 			        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder
-			        @Sendable func __safeDI_childBuilder() -> Child {
+			        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 			            let grand = if let safeDIBuilder = __safeDI_childBuilder__childBuilder_grand_safeDIBuilder { safeDIBuilder() } else { Grand() }
 			            return if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(grand, __safeDI_childBuilder__childBuilder_capacity()) } else { Child(grand: grand, capacity: __safeDI_childBuilder__childBuilder_capacity()) }
 			        }
@@ -377,7 +377,7 @@ struct SafeDIToolMockConfigurationStorageTests: ~Copyable {
 			    ) -> Root {
 			        let __safeDI_childBuilder__childBuilder_capacity = safeDIOverrides.childBuilder.capacity
 			        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder
-			        @Sendable func __safeDI_childBuilder() -> Child {
+			        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 			            if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder(__safeDI_childBuilder__childBuilder_capacity()) } else { Child(capacity: __safeDI_childBuilder__childBuilder_capacity()) }
 			        }
 			        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)
@@ -508,7 +508,7 @@ struct SafeDIToolMockConfigurationStorageTests: ~Copyable {
 			    ) -> Root {
 			        let user: User? = safeDIOverrides.user
 			        let __safeDI_childBuilder__safeDIBuilder = safeDIOverrides.childBuilder
-			        @Sendable func __safeDI_childBuilder() -> Child {
+			        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 			            if let safeDIBuilder = __safeDI_childBuilder__safeDIBuilder { safeDIBuilder() } else { Child() }
 			        }
 			        let childBuilder = SendableInstantiator<Child>(__safeDI_childBuilder)

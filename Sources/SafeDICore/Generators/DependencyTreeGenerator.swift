@@ -517,7 +517,9 @@ public actor DependencyTreeGenerator {
 	/// The declarations of `instantiables` in the order a generator interns them: the order of their keys, which no arrival
 	/// order decides, or the order the tests set (`ConstructionInternerObservation.declarationOrder`).
 	static func declarationsInInterningOrder(of instantiables: [TypeDescription: Instantiable]) -> [Instantiable] {
-		let declarations = instantiables.sorted { TypeDescription.precedesInScopeOrder($0.key, $1.key) }.map(\.value)
+		let declarations = instantiables.map { (order: TypeDescription.ScopeOrderKey($0.key), declaration: $0.value) }
+			.sorted { $0.order.precedes($1.order) }
+			.map(\.declaration)
 		guard let declarationOrder = ConstructionInternerObservation.declarationOrder else { return declarations }
 		return declarationOrder(declarations.count).map { declarations[$0] }
 	}

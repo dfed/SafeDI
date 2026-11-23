@@ -442,7 +442,7 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		            func __safeDI_serviceBuilder_Inner_service(_ scope: Inner.SafeDIScope_Service.service_Values) -> any Service {
 		                let token = scope.__safeDI_token
 		                func __safeDI_service() -> ServiceImpl {
-		                    @Sendable func __safeDI_wrapperReader() -> WrapperReader {
+		                    @Sendable nonisolated func __safeDI_wrapperReader() -> WrapperReader {
 		                        WrapperReader(token: token)
 		                    }
 		                    let wrapperReader = SendableInstantiator<WrapperReader>(__safeDI_wrapperReader)
@@ -582,13 +582,13 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		    ) -> Top {
 		        func __safeDI_outer() -> Outer {
 		            let __safeDI_token__safeDIBuilder = safeDIOverrides.outer.token
-		            @Sendable func __safeDI_token() -> Token {
+		            @Sendable nonisolated func __safeDI_token() -> Token {
 		                if let safeDIBuilder = __safeDI_token__safeDIBuilder { safeDIBuilder() } else { Token() }
 		            }
 		            let token = SendableLazilyInstantiated<Token>(__safeDI_token)
 		            func __safeDI_inner() -> Inner {
 		                let __safeDI_leafBuilder__safeDIBuilder = safeDIOverrides.outer.inner.leafBuilder
-		                @Sendable func __safeDI_leafBuilder() -> Leaf {
+		                @Sendable nonisolated func __safeDI_leafBuilder() -> Leaf {
 		                    if let safeDIBuilder = __safeDI_leafBuilder__safeDIBuilder { safeDIBuilder(token.instance) } else { Leaf(token: token.instance) }
 		                }
 		                let leafBuilder = SendableInstantiator<Leaf>(__safeDI_leafBuilder)
@@ -799,13 +799,13 @@ struct SafeDIToolSeamCarriedWrapperReadTests: ~Copyable {
 		        func __safeDI_top() -> Top {
 		            func __safeDI_outer() -> Outer {
 		                let __safeDI_token__safeDIBuilder = safeDIOverrides.top.outer.token
-		                @Sendable func __safeDI_token() -> Token {
+		                @Sendable nonisolated func __safeDI_token() -> Token {
 		                    if let safeDIBuilder = __safeDI_token__safeDIBuilder { safeDIBuilder() } else { Token() }
 		                }
 		                let token = SendableLazilyInstantiated<Token>(__safeDI_token)
 		                func __safeDI_inner() -> Inner {
 		                    let __safeDI_leafBuilder__safeDIBuilder = safeDIOverrides.top.outer.inner.leafBuilder
-		                    @Sendable func __safeDI_leafBuilder() -> Leaf {
+		                    @Sendable nonisolated func __safeDI_leafBuilder() -> Leaf {
 		                        if let safeDIBuilder = __safeDI_leafBuilder__safeDIBuilder { safeDIBuilder(token.instance) } else { Leaf(token: token.instance) }
 		                    }
 		                    let leafBuilder = SendableInstantiator<Leaf>(__safeDI_leafBuilder)

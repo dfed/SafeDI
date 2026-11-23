@@ -102,11 +102,23 @@ extension Initializer {
 		unavailableProperties: Set<Property>? = nil,
 		lazilyInstantiatedInstanceProperties: Set<Property> = [],
 	) throws(GenerationError) -> String {
-		try createDependencyAndArgumentBinding(given: dependencies)
-			.map {
-				Self.argument($0.argument, passing: $0.dependency, unavailableProperties: unavailableProperties, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties)
-			}
+		try createInitializerArguments(given: dependencies, unavailableProperties: unavailableProperties, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties)
+			.map(\.argument.spelled)
 			.joined(separator: ", ")
+	}
+
+	/// The arguments `createInitializerArgumentList` spells, each with the dependency it passes.
+	func createInitializerArguments(
+		given dependencies: [Dependency],
+		unavailableProperties: Set<Property>? = nil,
+		lazilyInstantiatedInstanceProperties: Set<Property> = [],
+	) throws(GenerationError) -> [(argument: CallArgument, dependency: Dependency)] {
+		try createDependencyAndArgumentBinding(given: dependencies).map {
+			(
+				argument: Self.argument($0.argument, passing: $0.dependency, unavailableProperties: unavailableProperties, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties),
+				dependency: $0.dependency,
+			)
+		}
 	}
 
 	/// The argument list of a generated call of this hand-written mock that a fill makes: each argument one of `dependencies`
@@ -123,7 +135,7 @@ extension Initializer {
 		var parts = [String]()
 		for argument in arguments {
 			if let dependency = dependencies.first(where: argument.isFulfilled(by:)) {
-				parts.append(Self.argument(argument, passing: dependency, unavailableProperties: unavailableProperties, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties))
+				parts.append(Self.argument(argument, passing: dependency, unavailableProperties: unavailableProperties, lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties).spelled)
 			} else if !argument.hasDefaultValue {
 				parts.append(CallArgument(label: argument.label, source: .binding(label: argument.innerLabel)).spelled)
 			}
@@ -138,7 +150,7 @@ extension Initializer {
 		passing dependency: Dependency,
 		unavailableProperties: Set<Property>?,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
-	) -> String {
+	) -> CallArgument {
 		let source: ArgumentSource = if let unavailableProperties, unavailableProperties.contains(dependency.property) {
 			.nil
 		} else if !lazilyInstantiatedInstanceProperties.isEmpty,
@@ -149,6 +161,6 @@ extension Initializer {
 		} else {
 			.binding(label: argument.innerLabel)
 		}
-		return CallArgument(label: argument.label, source: source).spelled
+		return CallArgument(label: argument.label, source: source)
 	}
 }

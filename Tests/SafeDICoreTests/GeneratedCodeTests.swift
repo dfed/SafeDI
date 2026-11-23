@@ -76,6 +76,12 @@ struct GeneratedCodeTests {
 	}
 
 	@Test
+	func spelled_writesPlaceCodeAsItIs_whenPlanHoldsPlace() {
+		let place = PlacePlan(code: .text("x\ny"))
+		#expect(GeneratedCode.indented(.place(place), by: "\t").spelled() == "\tx\n\ty")
+	}
+
+	@Test
 	func spelled_returnsWhatReindentingEveryLevelReturns_forTwentyThousandSeededPlans() {
 		var generator = SeededGenerator(seed: 0x5AFED1)
 		var mismatches = [String]()
@@ -105,12 +111,14 @@ struct GeneratedCodeTests {
 				: GeneratedCodeText.indentingNonEmptyLines(of: reindentingEveryLevel(code), by: indentation)
 		case let .spelled(text):
 			text
+		case let .place(plan):
+			reindentingEveryLevel(plan.code)
 		}
 	}
 
 	private static func randomCode(depth: Int, using generator: inout SeededGenerator) -> GeneratedCode {
 		let tokens = ["x", "\n", "\r", "é", "\u{301}", " ", "\n\n", "\r\n"]
-		let kind = depth == 0 ? 0 : Int(generator.next() % 5)
+		let kind = depth == 0 ? 0 : Int(generator.next() % 6)
 		switch kind {
 		case 0:
 			let count = Int(generator.next() % 5)
@@ -121,8 +129,10 @@ struct GeneratedCodeTests {
 		case 3:
 			let indentations = ["", "\t", "    ", "\r"]
 			return .indented(randomCode(depth: depth - 1, using: &generator), by: indentations[Int(generator.next() % UInt64(indentations.count))])
-		default:
+		case 4:
 			return .spelled(randomCode(depth: depth - 1, using: &generator))
+		default:
+			return .place(PlacePlan(code: randomCode(depth: depth - 1, using: &generator)))
 		}
 	}
 }

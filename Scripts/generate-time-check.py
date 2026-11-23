@@ -46,6 +46,14 @@ The shapes (every name invented; `--shapes` picks among them, default all):
                        instantiating model i, both receiving `Service`, and a root in module `App` that instantiates
                        `Service` and every seam. Computing a module's seam signatures once took time that grew with
                        the square of its seams, which made this shape take 2.6 times as long on Linux.
+  H1200-seam           twelve hundred seams in module `Feature`, seam i instantiating leaf i and `any Api`, which
+                       only `DefaultApi` in module `App` fulfills, so each seam has a hole and the root in `App`,
+                       which instantiates every seam, fills twelve hundred of them.
+  M80x80-calling-mocks eighty protocols in module `Base`; `F` in module `Feat`, `generateMock: .public`, instantiating
+                       one value of each, none of which its module fulfills; and in module `App` an implementation
+                       of each protocol and eighty types with `generateMock: true` that each instantiate `F`, so
+                       each of the eighty mocks calls the public mock of `F` and fills eighty hole types. At thirty
+                       of each a run took 0.16 s, too near the 0.1 s a shape must lose before it can fail.
 
 The four shapes below are the ones whose peak memory is the largest, each one module with no seam, as a project that
 has not adopted seams writes its graph. They take the tighter memory limit (see "Peak memory"):
@@ -194,6 +202,35 @@ def shape_i(count):
     return [("Feature", [], feature), ("App", ["Feature"], "import Feature\nimport SafeDI\n\n" + app)]
 
 
+def shape_h(count):
+    feature = "import SafeDI\n\npublic protocol Api {}\n\n"
+    for seam in range(count):
+        feature += declaration("@Instantiable", f"Leaf{seam}", [])
+        feature += declaration("@Instantiable(generateDependencyTree: true)", f"Seam{seam}", [("@Instantiated", "leaf", f"Leaf{seam}"), ("@Instantiated", "api", "any Api")])
+    app = declaration("@Instantiable(fulfillingAdditionalTypes: [Api.self])", "DefaultApi", [], conformances="Api, Instantiable")
+    app += declaration("@Instantiable(isRoot: true)", "Root", [("@Instantiated", f"seam{seam}", f"Seam{seam}") for seam in range(count)])
+    return [("Feature", [], feature), ("App", ["Feature"], "import Feature\nimport SafeDI\n\n" + app)]
+
+
+def shape_m(hole_types, mocks):
+    """`mocks` mocks in `App` that each call the public mock of `F` in `Feat` and fill its `hole_types` hole types."""
+    base = "import SafeDI\n\n" + "".join(f"public protocol Api{hole}: Sendable {{ func value() -> Int }}\n" for hole in range(hole_types))
+    properties = [(f"api{hole}", f"any Api{hole}") for hole in range(hole_types)]
+    lines = ["@Instantiable(generateMock: .public)", "public struct F: Instantiable {", "\tinit(" + ", ".join(f"{label}: {type_}" for label, type_ in properties) + ") {"]
+    lines += [f"\t\tself.{label} = {label}" for label, _ in properties]
+    lines += ["\t}", ""]
+    lines += [f"\t@Instantiated let {label}: {type_}" for label, type_ in properties]
+    lines += ["", "\tpublic func total() -> Int { " + " + ".join(f"{label}.value()" for label, _ in properties) + " }", "}", ""]
+    feat = "import Base\nimport SafeDI\n\n" + "\n".join(lines)
+    lines = []
+    for hole in range(hole_types):
+        lines += [f"@Instantiable(fulfillingAdditionalTypes: [(any Api{hole}).self])", f"public struct Live{hole}: Api{hole}, Instantiable {{", "\tpublic init() {}", f"\tpublic func value() -> Int {{ {hole + 1} }}", "}", ""]
+    for mock in range(mocks):
+        lines += ["@Instantiable(generateMock: true)", f"public struct Root{mock}: Instantiable {{", "\tpublic init(f: F) { self.f = f }", "", "\t@Instantiated let f: F", "\tpublic func total() -> Int { f.total() }", "}", ""]
+    app = "import Base\nimport Feat\nimport SafeDI\n\n" + "\n".join(lines)
+    return [("Base", [], base), ("Feat", ["Base"], feat), ("App", ["Base", "Feat"], app)]
+
+
 def shape_s(count, seed, mocks):
     """One module: `count` screens that hold builders of three other screens each, chosen by `seed`."""
     generator = random.Random(seed)
@@ -237,6 +274,8 @@ SHAPES = {
     "E24-sendable-builder": lambda: shape_e(24, seam=True, variant="sendable-builder"),
     "E24-lazy": lambda: shape_e(24, seam=True, variant="lazy"),
     "I800-seam": lambda: shape_i(800),
+    "H1200-seam": lambda: shape_h(1200),
+    "M80x80-calling-mocks": lambda: shape_m(80, 80),
     "S12-mocks": lambda: shape_s(12, seed=5, mocks=True),
     "S16": lambda: shape_s(16, seed=1, mocks=False),
     "E32-inline-mocks": lambda: shape_e(32, seam=False, variant="mocks"),
