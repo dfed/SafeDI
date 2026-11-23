@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/bash
 # Scripts/fuzzer-coverage-report.sh RUN [BASE]   (default BASE: the merge base with upstream/main, or origin/main
 # where no `upstream` remote exists)
 # Prints the generator lines changed since BASE that no fuzzer corpus graph executed, from the coverage a run uploaded
@@ -12,24 +12,25 @@ set -euo pipefail
 run=${1:?usage: Scripts/fuzzer-coverage-report.sh RUN [BASE]}
 repository=()
 if [[ $run == *github.com/*/*/actions/runs/* ]]; then
-	repository=${run#*github.com/}; repository=(--repo "${repository%%/actions/runs/*}")
+	slug=${run#*github.com/}; repository=(--repo "${slug%%/actions/runs/*}")
 fi
 run=${run##*/runs/}; run=${run%%/*}
 root=$(git rev-parse --show-toplevel); cd "$root"
 # A fork's `origin/main` can be behind the repository it was forked from, which would count that repository's newer
 # commits as this change's.
 main=origin/main; git rev-parse --verify --quiet upstream/main >/dev/null && main=upstream/main
-base=${2:-$(git merge-base $main HEAD)}
+base=${2:-$(git merge-base "$main" HEAD)}
 if [[ $(uname) == Darwin ]]; then caches=$HOME/Library/Caches; else caches=${XDG_CACHE_HOME:-$HOME/.cache}; fi
 mkdir -p "$caches/SafeDIFuzzerCoverage"
 directory=$(mktemp -d "$caches/SafeDIFuzzerCoverage/run-$run.XXXXXX")
 trap 'rm -rf "$directory"' EXIT
-gh run download "$run" "${repository[@]}" --name fuzzer-coverage --dir "$directory"
+# macOS's bash 3.2 reads an empty array as unset under `set -u`, hence the `+`.
+gh run download "$run" ${repository[@]+"${repository[@]}"} --name fuzzer-coverage --dir "$directory"
 head=$(<"$directory/head.txt")
 # The lines head changes since its merge base with BASE, as the run's report lists them.
 base=$(git merge-base "$(git rev-parse "$base^{commit}")" "$head")
 if [[ $(git rev-parse HEAD) != "$head" ]]; then
-	print -u2 "warning: HEAD is not $head, which the coverage was built from; line numbers may not match."
+	echo >&2 "warning: HEAD is not $head, which the coverage was built from; line numbers may not match."
 fi
 # The exports name the CI checkout's absolute paths; map them onto this checkout.
 for name in corpus.lcov corpus-functions.json suite.lcov; do
@@ -41,8 +42,8 @@ arguments=(--corpus "$directory/local-corpus.lcov" --functions "$directory/local
 if [[ -f "$directory/local-suite.lcov" ]]; then
 	arguments+=(--suite "$directory/local-suite.lcov")
 fi
-for shard in ${(f)"$(<"$directory/missing-shards.txt")"}; do
-	arguments+=(--missing-shard "$shard")
-done
+while IFS= read -r shard; do
+	[[ -n $shard ]] && arguments+=(--missing-shard "$shard")
+done <"$directory/missing-shards.txt"
 git diff -U0 --no-color "$base" "$head" -- 'Sources/SafeDICore/*.swift' 'Sources/SafeDIToolLibrary/*.swift' \
 	| python3 Scripts/fuzzer-changed-line-coverage.py "${arguments[@]}"
