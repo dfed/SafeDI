@@ -194,6 +194,9 @@ extension ScopeGenerator {
 			else { return .unsupported(.publicMockCall) }
 			let name = ScopeGenerator.functionName(toBuildPropertyNamed: property.label)
 			guard !builderFunctionNames.contains(name) else { return .unsupported(.publicMockCall) }
+			// A builder whose label another value the tree receives has is named apart (`mockRootParameterNames(of:)`), which
+			// is not lowered yet.
+			guard !receivedProperties.contains(where: { $0.label == property.label && $0 != property }) else { return .unsupported(.siblingLabelCollision) }
 			names[property] = name
 		}
 		return .lowered(names)
@@ -395,6 +398,8 @@ extension MockLowering.Walk {
 			return .unsupported(.fill)
 		}
 		lines.append("\(indent)func \(functionName)() -> \(typeName) {")
+		// The members a `@Sendable` family's places inside the fills read, which the call's builder function calls at its top.
+		lines.append(contentsOf: generator.memberCallsInsideBuilderFunction.map { "\(innerIndent)\($0.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: [:]))" })
 		for line in fillCode.split(separator: "\n", omittingEmptySubsequences: false) where !fillCode.isEmpty {
 			lines.append(line.isEmpty ? "" : "\(innerIndent)\(line)")
 		}
