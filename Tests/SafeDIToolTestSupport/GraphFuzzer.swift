@@ -1354,6 +1354,19 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// `HoleAnalytics` `package`, which the scope struct carries as a `package` field, read by `HoleImpl` in the seam's
 	/// package.
 	case holeNarrowerField
+	/// `HoleWideSeam`, a leaf seam the root builds, binds 7 values before its place of a hole, so that its level holds one
+	/// fewer than the most a carrier takes positionally (`SeamCarrierValues.maximumPositionalValues`).
+	case holeLevelOfSevenValues
+	/// The same, with 8 values: the most a carrier takes positionally.
+	case holeLevelOfEightValues
+	/// The same, with 9 values: one more than a carrier takes positionally, so the level's values travel in run structs.
+	case holeLevelOfNineValues
+	/// The same, with 12 values.
+	case holeLevelOfTwelveValues
+	/// One of those values `package` on a `public` seam: narrower than the carrier's members, so it travels in a run struct.
+	case holeLevelWithPackageValueOnPublicSeam
+	/// Every one of those values `package` on a `package` seam: as visible as the carrier's members, so they stay positional.
+	case holeLevelOfPackageValuesOnPackageSeam
 	/// `HoleImpl` reads `holeAnalytics` through an alias or only if available.
 	case holeAliasOrOnlyIfAvailable
 	/// `HoleImpl` reads `holeAnalytics` only if available.
@@ -5771,6 +5784,10 @@ enum GraphFuzzerGenerator {
 			let drawsCrossPackage = holeRolls.crossPackage.percentChance(30)
 			let crossPackageRoll = holeRolls.crossPackage.integer(in: 0...9)
 			let drawsNarrowerField = holeRolls.narrowerField.percentChance(15)
+			let drawsWideLevel = holeRolls.wideLevel.percentChance(40)
+			let wideLevelValueCount = holeRolls.wideLevel.element(of: [7, 8, 9, 12])
+			let wideLevelNarrowsOneValue = holeRolls.wideLevel.percentChance(50)
+			let wideLevelNarrowedIndex = holeRolls.wideLevel.integer(in: 0...(wideLevelValueCount - 1))
 			let drawsAliasedRead = holeRolls.aliasedRead.percentChance(20)
 			let readsOnlyIfAvailable = holeRolls.aliasedRead.percentChance(50)
 			let ownerAliasesField = holeRolls.aliasedRead.percentChance(50)
@@ -5983,6 +6000,47 @@ enum GraphFuzzerGenerator {
 				seamModuleDeclarations[0].access = .package
 				proofTypeAccess[analyticsName] = .package
 				seamModuleDeclarations[ownerIndex].properties.removeAll { $0.label == "holeAnalytics" }
+			}
+			// A wide level: `HoleWideSeam`, a seam of the seam's module that the root builds beside the rest, binds
+			// `holeWide1`… before its one place of a hole of its own, `HoleWideService`, which `HoleWideImpl` fills beside
+			// the roots, reading the last value. So the level its builders take holds `wideLevelValueCount` values – 7, 8, 9
+			// or 12, both sides of the most a carrier takes positionally – and, a leaf seam with nothing else drawn on it, it
+			// is declared with carriers whatever else the graph draws. Half of these on a `public` seam make one of them
+			// `package`, which only a run struct can carry, since a value narrower than the seam's type never crosses a member
+			// positionally; a `package` seam makes every one `package`, which stays positional at that access. Never with the
+			// fillers in another package, which could not name a `package` type.
+			var wideSeamDeclarations = [TypeDeclaration]()
+			var wideRootProperties = [PropertyDeclaration]()
+			if drawsWideLevel {
+				let wideServiceName = name("HoleWideService")
+				let narrowsValues = (wideLevelNarrowsOneValue || serviceAccess == .package) && !fillsFromOtherPackage
+				var wideProperties = [PropertyDeclaration]()
+				for index in 1...wideLevelValueCount {
+					var value = instantiable("HoleWide\(index)", module: .seamModule)
+					if narrowsValues, serviceAccess == .package || index - 1 == wideLevelNarrowedIndex {
+						value.access = .package
+						proofTypeAccess[value.name] = .package
+					}
+					wideSeamDeclarations.append(value)
+					wideProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeWide\(index)", type: value.name))
+				}
+				wideProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeWideService", type: "any \(wideServiceName)"))
+				var wideSeam = instantiable("HoleWideSeam", module: .seamModule, properties: wideProperties)
+				wideSeam.instantiableArguments = ["generateDependencyTree: true"]
+				if serviceAccess == .package {
+					proofTypeAccess[wideServiceName] = .package
+					proofTypeAccess[wideSeam.name] = .package
+					wideSeam.access = .package
+					wideSeam.initializerAccess = .internal
+				}
+				wideSeam.additionalDeclarations.append("\(serviceAccess.modifier)protocol \(wideServiceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+				wideSeamDeclarations.append(wideSeam)
+				var wideImpl = instantiable("HoleWideImpl", module: fillerModule, properties: [PropertyDeclaration(attribute: "@Received", label: "holeWide\(wideLevelValueCount)", type: name("HoleWide\(wideLevelValueCount)"))])
+				wideImpl.instantiableArguments = ["fulfillingAdditionalTypes: [\(wideServiceName).self]"]
+				wideImpl.additionalConformances.append(wideServiceName)
+				wideImpl.fillsHole = true
+				wideSeamDeclarations.append(wideImpl)
+				wideRootProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeWideSeam", type: wideSeam.name))
 			}
 			var impl = instantiable("HoleImpl", module: fillerModule)
 			impl.instantiableArguments = ["fulfillingAdditionalTypes: [\(serviceName).self]"]
@@ -6944,6 +7002,7 @@ enum GraphFuzzerGenerator {
 			}
 			rootProperties.append(rootCall)
 			rootProperties += nestedRootProperties
+			rootProperties += wideRootProperties
 			if fillsFromOtherPackage {
 				var otherRoot = instantiable("HoleOtherRoot", module: .otherPackageCaller, properties: rootProperties)
 				otherRoot.instantiableArguments = ["isRoot: true"]
@@ -6951,7 +7010,7 @@ enum GraphFuzzerGenerator {
 			} else {
 				declarations[0].properties += rootProperties
 			}
-			return declarations + [seam] + seamModuleDeclarations + [impl] + callerDeclarations
+			return declarations + [seam] + seamModuleDeclarations + [impl] + callerDeclarations + wideSeamDeclarations
 		}
 
 		/// The generators of `addingHoleShapes`' further rolls, one apiece, each seeded from the graph's seed.
@@ -6959,6 +7018,7 @@ enum GraphFuzzerGenerator {
 			init(seed: UInt64) {
 				crossPackage = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6543726F73)
 				narrowerField = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654E617272)
+				wideLevel = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6557696465)
 				aliasedRead = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C65416C6961)
 				mocks = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654D6F636B)
 				namespace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654E616D65)
@@ -6992,6 +7052,9 @@ enum GraphFuzzerGenerator {
 
 			var crossPackage: GraphFuzzerRandomNumberGenerator
 			var narrowerField: GraphFuzzerRandomNumberGenerator
+			/// A level of 7, 8, 9 or 12 values on `HoleWideSeam`, now and then with values narrower than the carrier's members
+			/// (`holeLevelOf…Values`, `holeLevelWithPackageValueOnPublicSeam`, `holeLevelOfPackageValuesOnPackageSeam`).
+			var wideLevel: GraphFuzzerRandomNumberGenerator
 			var aliasedRead: GraphFuzzerRandomNumberGenerator
 			var mocks: GraphFuzzerRandomNumberGenerator
 			var namespace: GraphFuzzerRandomNumberGenerator
@@ -11905,6 +11968,22 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		if fixture.swiftFileContent.contains(where: { $0.contains("package final class \(prefix)HoleAnalytics: ") }) {
 			features.insert(.holeNarrowerField)
+		}
+		let wideValueCount = properties(of: "HoleWideSeam").count { $0.label.hasPrefix("holeWide") && $0.label != "holeWideService" }
+		switch wideValueCount {
+		case 7:
+			features.insert(.holeLevelOfSevenValues)
+		case 8:
+			features.insert(.holeLevelOfEightValues)
+		case 9:
+			features.insert(.holeLevelOfNineValues)
+		case 12:
+			features.insert(.holeLevelOfTwelveValues)
+		default:
+			break
+		}
+		if (1...max(wideValueCount, 1)).contains(where: { index in fixture.swiftFileContent.contains { $0.contains("package final class \(prefix)HoleWide\(index): ") } }) {
+			features.insert(features.contains(.holeProtocolPackage) ? .holeLevelOfPackageValuesOnPackageSeam : .holeLevelWithPackageValueOnPublicSeam)
 		}
 		// `HoleImpl`'s read of `holeAnalytics`, which other draws' only-if-available reads of their own labels leave alone.
 		let analyticsReads = implProperties.filter { $0.label == "holeAnalytics" || $0.attribute.contains("fulfilledByDependencyNamed: \"holeAnalytics\"") }
