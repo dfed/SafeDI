@@ -95,7 +95,7 @@ extension ScopeGenerator {
 		let rootBoundProperties = signature.properties.union(overrideProperties).union(signature.lazilyInstantiatedProperties)
 		// D1 lane hook (lane C): the builders `mock()` takes optional for the places its calls fill.
 		// D1 lane hook (lane E): a call's builder of a family the calls pass up reads the builder `mock()` takes for it.
-		switch filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties, passedUpBuilders: signature.passedUpBuilders) {
+		switch filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties, passedUpBuilders: signature.passedUpBuilders, builderNaming: signature.builderNaming) {
 		case let .lowered(filledCallBuilders):
 			walk.filledCallBuilders = filledCallBuilders
 		case let .unsupported(rule):
@@ -117,7 +117,19 @@ extension ScopeGenerator {
 		// D1 lane hook (lane C): `mock()` first binds each builder a call passes up apart from its label, as it binds a flat
 		// parameter's `@Sendable` autoclosure, before anything else.
 		walk.filledCallBuilders.passedUpBuilderNames = signature.passedUpBuilderNames
-		var bindingLines = signature.passedUpBuilderBindingLines(indent: bodyIndent)
+		// D1 lane hook (lane E): with each builder `mock()` takes for its calls' places that it binds apart, in label order.
+		var builderBindingLines = walk.filledCallBuilders.builderBindingLines
+		// D1 lane hook (lane C): then the adapters of a builder passed up, which drop the value a call's form takes.
+		for builder in signature.passedUpBuilders {
+			if builder.internalName != builder.label {
+				builderBindingLines.append((builder.label, "let \(builder.internalName) = \(builder.label)"))
+			}
+			for adapter in builder.adapters {
+				builderBindingLines.append((builder.label, "let \(adapter.name): \(adapter.typeSource) = { _ in \(builder.internalName)() }"))
+			}
+		}
+		// A stable sort keeps a builder's binding before its adapters.
+		var bindingLines = builderBindingLines.enumerated().sorted { ($0.element.label, $0.offset) < ($1.element.label, $1.offset) }.map { "\(bodyIndent)\($0.element.line)" }
 		// D1 lane hook (lane C): the mocked type's own receive of a builder its tree's calls pass up is bound again under its
 		// label, as a receive of a flat parameter named apart is at the mock root.
 		for dependency in instantiable.dependencies where dependency.source.isReceived {

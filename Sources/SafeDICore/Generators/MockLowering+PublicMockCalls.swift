@@ -26,7 +26,7 @@ extension ScopeGenerator {
 	/// (`stemsOfOptionalBuilders`) apart from `safeDIOverrides`, in label order.
 	///
 	/// A public mock names each builder as its plan does (`optionalBuilderNames`, by family), apart from every name of its body.
-	func filledCallBuilders(of orderedChildren: [OrderedChild], context: MockContext, rootBoundProperties: Set<Property>, passedUpBuilders: [MockLowering.RootSignature.PassedUpBuilder] = [], optionalBuilderNames: [MockRootParameters.SeamMockBuilder.Family: String]? = nil) -> MockLowering.Lowering<MockLowering.FilledCallBuilders> {
+	func filledCallBuilders(of orderedChildren: [OrderedChild], context: MockContext, rootBoundProperties: Set<Property>, passedUpBuilders: [MockLowering.RootSignature.PassedUpBuilder] = [], builderNaming: MockLowering.RootSignature.BuilderNaming? = nil, optionalBuilderNames: [MockRootParameters.SeamMockBuilder.Family: String]? = nil) -> MockLowering.Lowering<MockLowering.FilledCallBuilders> {
 		// Only a call of another module's public mock fills a builder, and a module that calls none, as most do, has no call to
 		// find in the tree.
 		guard !context.foreignPublicMocks.isEmpty else { return .lowered(.none) }
@@ -181,38 +181,103 @@ extension ScopeGenerator {
 			passedUpHoleTypes: passedUpHoleTypes,
 			requiredStems: requiredStems,
 		)
-		var labels = GeneratedNameAllocator(reserving: Set(passedUpBuilders.map(\.label)).union([ReservedName.mockOverridesParameterName]))
-		var parameters = [(label: String, declaration: String)]()
-		var holeBuildersByCall = [ObjectIdentifier: [String: FillPlaceBindings.HoleBuilder]]()
-		var buildersByFamily = [MockRootParameters.SeamMockBuilder.Family: FillPlaceBindings.HoleBuilder]()
-		// A builder labeled as another parameter of `mock()` or a name of the tree is named apart, which is not lowered yet.
+		// An internal mock that is no seam names its builders as `seamMockBuilders` does, apart from what the signature says
+		// they are named apart from (`RootSignature.BuilderNaming`); otherwise a builder labeled as another parameter of
+		// `mock()` or a name of the tree is named apart, which is not lowered yet.
+		var exactNaming: MockLowering.RootSignature.BuilderNaming?
+		if let builderNaming, optionalBuilderNames == nil, case let .root(instantiable, _) = scopeData, !instantiable.generatesDependencyTree {
+			exactNaming = builderNaming
+		}
+		var labels = GeneratedNameAllocator(reserving: Set(passedUpBuilders.map(\.label)).union(exactNaming?.otherParameterLabels ?? [ReservedName.mockOverridesParameterName]))
 		var namesBuildersAvoid = namesBoundInTheTree.union(receivedProperties.map(\.label))
 		if case let .root(instantiable, _) = scopeData {
 			namesBuildersAvoid.formUnion(instantiable.dependencies.map(\.property.label))
 			namesBuildersAvoid.formUnion((instantiable.initializer?.arguments ?? []).map(\.innerLabel))
 		}
-		var fillPlaceBindingsInOrder = [(order: Int, generator: ObjectIdentifier, binding: SendableAutoclosureParameter)]()
+		// The label of each builder `mock()` takes, the required ones' first, then the optional ones', each with whether a
+		// call fills places of it.
+		var requiredLabels = [String]()
 		for family in requiredFamilies {
 			let stem = requiredStems[family.holeType, default: ""]
 			let label = labels.claim(family.isSendable ? DependencyTreeGenerator.sendableBuilderLabel(ofStem: stem) : DependencyTreeGenerator.plainBuilderLabel(ofStem: stem))
-			guard !namesFillsDeclare.contains(label), !namesBuildersAvoid.contains(label) else { return .unsupported(.fill) }
+			guard exactNaming != nil || !namesFillsDeclare.contains(label) && !namesBuildersAvoid.contains(label) else { return .unsupported(.fill) }
+			requiredLabels.append(label)
+		}
+		var optionalLabels = [String]()
+		for filled in families {
+			let stem = stems[filled.family.holeType, default: ""]
+			if let optionalBuilderNames {
+				guard let name = optionalBuilderNames[filled.family] else { return .unsupported(.fill) }
+				optionalLabels.append(name)
+			} else {
+				let label = labels.claim(filled.family.isSendable ? DependencyTreeGenerator.sendableBuilderLabel(ofStem: stem) : DependencyTreeGenerator.plainBuilderLabel(ofStem: stem))
+				if exactNaming == nil {
+					// A builder whose label a name of the tree or of the fills has is called by a name apart, which `mock()` binds.
+					guard !namesFillsDeclare.contains(label), !namesBoundInTheTree.contains(label) else { return .unsupported(.fill) }
+					// Beside a required builder, a label another parameter of `mock()` has is named apart, which is not lowered yet.
+					guard fillPlaces.isEmpty && !passesUpBuilders || !namesBuildersAvoid.contains(label) else { return .unsupported(.fill) }
+				}
+				optionalLabels.append(label)
+			}
+		}
+		// The name `mock()` binds each builder under: its label, or, where a name of the tree has it (or of the fills, for a
+		// builder a call fills places of, and for every builder beside places inside the fills), a name apart from the tree's
+		// builder functions and names, claimed in label order, which `mock()` first binds to the label.
+		var internalNameByLabel = [String: String]()
+		var builderBindingLines = [(label: String, line: String)]()
+		if let exactNaming {
+			let namesBoundInTheTree = exactNaming.namesBoundInTheTree.union(fillPlaces.isEmpty ? [] : namesFillsDeclare)
+			let namesBoundInTheTreeAndFills = namesBoundInTheTree.union(namesFillsDeclare)
+			var buildersInLabelOrder = [(label: String, fillsPlaces: Bool, passedUpInternalName: String?)]()
+			for (family, label) in zip(requiredFamilies, requiredLabels) {
+				buildersInLabelOrder.append((label, allFamilies.contains { $0.family == family }, nil))
+			}
+			for passedUpBuilder in passedUpBuilders {
+				let fillsPlaces = allFamilies.contains { passedUpBuilderByFamily[$0.family]?.label == passedUpBuilder.label }
+				buildersInLabelOrder.append((passedUpBuilder.label, fillsPlaces, passedUpBuilder.internalName))
+			}
+			for label in optionalLabels {
+				buildersInLabelOrder.append((label, true, nil))
+			}
+			buildersInLabelOrder.sort { $0.label < $1.label }
+			var names = GeneratedNameAllocator(reserving: exactNaming.builderFunctionNames.union(namesBoundInTheTreeAndFills))
+			for builder in buildersInLabelOrder {
+				let internalName = (builder.fillsPlaces ? namesBoundInTheTreeAndFills : namesBoundInTheTree).contains(builder.label)
+					? names.claim(ScopeGenerator.functionName(toBuildPropertyNamed: builder.label))
+					: builder.label
+				if let passedUpInternalName = builder.passedUpInternalName {
+					// The signature binds a builder the calls pass up, apart from the tree's names alone.
+					guard passedUpInternalName == internalName else { return .unsupported(.publicMockCall) }
+				} else {
+					internalNameByLabel[builder.label] = internalName
+					if internalName != builder.label {
+						builderBindingLines.append((builder.label, "let \(internalName) = \(builder.label)"))
+					}
+				}
+			}
+		}
+		var parameters = [(label: String, declaration: String)]()
+		var holeBuildersByCall = [ObjectIdentifier: [String: FillPlaceBindings.HoleBuilder]]()
+		var buildersByFamily = [MockRootParameters.SeamMockBuilder.Family: FillPlaceBindings.HoleBuilder]()
+		var fillPlaceBindingsInOrder = [(order: Int, generator: ObjectIdentifier, binding: SendableAutoclosureParameter)]()
+		for (family, label) in zip(requiredFamilies, requiredLabels) {
+			let internalName = internalNameByLabel[label] ?? label
 			let places = fillPlacesByFamily[family, default: []]
 			let parameterType = MockRootParameters.SeamMockBuilder.parameterType(ofPlaceProperties: places.map(\.dependency.property), in: family)
 			parameters.append((label, "\(label): \(parameterType.asSource)"))
 			for place in places {
-				fillPlaceBindingsInOrder.append((place.order, place.generator, SendableAutoclosureParameter(name: place.dependency.property.label, localName: label, valueType: place.dependency.property.typeDescription)))
+				fillPlaceBindingsInOrder.append((place.order, place.generator, SendableAutoclosureParameter(name: place.dependency.property.label, localName: internalName, valueType: place.dependency.property.typeDescription)))
 			}
-			let holeBuilder = FillPlaceBindings.HoleBuilder(name: label, isOptional: false)
+			let holeBuilder = FillPlaceBindings.HoleBuilder(name: internalName, isOptional: false)
 			buildersByFamily[family] = holeBuilder
 			for callBuilder in allFamilies.first(where: { $0.family == family })?.callBuilders ?? [] {
 				holeBuildersByCall[callBuilder.call, default: [:]][callBuilder.label] = holeBuilder
 			}
 		}
-		// A family a call fills that a call passes up too reads the builder passed up, which `mock()` takes already. Its
-		// internal name is apart from the tree's names alone, where the emitter's is apart from the fills' too.
+		// A family a call fills that a call passes up too reads the builder passed up, which `mock()` takes already.
 		for filled in allFamilies {
 			guard let passedUpBuilder = passedUpBuilderByFamily[filled.family] else { continue }
-			guard !namesFillsDeclare.contains(passedUpBuilder.label), !namesFillsDeclare.contains(passedUpBuilder.internalName) else { return .unsupported(.publicMockCall) }
+			guard exactNaming != nil || !namesFillsDeclare.contains(passedUpBuilder.label) && !namesFillsDeclare.contains(passedUpBuilder.internalName) else { return .unsupported(.publicMockCall) }
 			let holeBuilder = FillPlaceBindings.HoleBuilder(name: passedUpBuilder.internalName, isOptional: false)
 			buildersByFamily[filled.family] = holeBuilder
 			for callBuilder in filled.callBuilders {
@@ -228,22 +293,10 @@ extension ScopeGenerator {
 		for (_, generator, binding) in fillPlaceBindingsInOrder.sorted(by: { $0.order < $1.order }) {
 			fillPlaceBindingsByGenerator[generator, default: []].append(binding)
 		}
-		for filled in families {
-			let stem = stems[filled.family.holeType, default: ""]
-			let label: String
-			if let optionalBuilderNames {
-				guard let name = optionalBuilderNames[filled.family] else { return .unsupported(.fill) }
-				label = name
-			} else {
-				label = labels.claim(filled.family.isSendable ? DependencyTreeGenerator.sendableBuilderLabel(ofStem: stem) : DependencyTreeGenerator.plainBuilderLabel(ofStem: stem))
-				// A builder whose label a name of the tree or of the fills has is called by a name apart, which `mock()` binds.
-				guard !namesFillsDeclare.contains(label), !namesBoundInTheTree.contains(label) else { return .unsupported(.fill) }
-				// Beside a required builder, a label another parameter of `mock()` has is named apart, which is not lowered yet.
-				guard fillPlaces.isEmpty && !passesUpBuilders || !namesBuildersAvoid.contains(label) else { return .unsupported(.fill) }
-			}
+		for (filled, label) in zip(families, optionalLabels) {
 			let parameterType = MockRootParameters.SeamMockBuilder.parameterType(ofPlaceProperties: filled.placeProperties, in: filled.family)
 			parameters.append((label, "\(label): \(TypeDescription.optional(parameterType.strippingEscaping).asSource) = nil"))
-			let holeBuilder = FillPlaceBindings.HoleBuilder(name: label, isOptional: true)
+			let holeBuilder = FillPlaceBindings.HoleBuilder(name: internalNameByLabel[label] ?? label, isOptional: true)
 			buildersByFamily[filled.family] = holeBuilder
 			for callBuilder in filled.callBuilders {
 				holeBuildersByCall[callBuilder.call, default: [:]][callBuilder.label] = holeBuilder
@@ -269,6 +322,7 @@ extension ScopeGenerator {
 		filledCallBuilders.families = families
 		filledCallBuilders.holeBuildersByInlinePlace = inlinePlaceBuildersOutsideFills
 		filledCallBuilders.namesFillsDeclare = namesFillsDeclare
+		filledCallBuilders.builderBindingLines = builderBindingLines
 		filledCallBuilders.optionalBuilderNames = optionalBuilderNames
 		return .lowered(filledCallBuilders)
 	}
@@ -760,6 +814,9 @@ extension MockLowering {
 		var families = [ScopeGenerator.FilledFamily]()
 		/// The labels the calls' fills declare, which a public mock's optional builders are named apart from.
 		var namesFillsDeclare = Set<String>()
+		/// The lines that bind each builder `mock()` takes for the calls' places under its internal name where that is not
+		/// its label, with the label, which orders them among the signature's passed-up builders (`RootSignature.passedUpBuilders`).
+		var builderBindingLines = [(label: String, line: String)]()
 		/// The names a public mock's plan gives its optional builders, by family, which the builders are read under.
 		var optionalBuilderNames: [ScopeGenerator.MockRootParameters.SeamMockBuilder.Family: String]?
 		/// The builder `mock()` takes that each place of another module's public mock the tree builds inline outside every
