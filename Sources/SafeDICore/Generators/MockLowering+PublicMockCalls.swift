@@ -310,7 +310,7 @@ extension MockLowering.Walk {
 		else { return .unsupported(.publicMockCall) }
 		guard !isPropertyCycle,
 		      !erasedToConcreteExistential,
-		      property.propertyType.isConstant || [.instantiator, .sendableInstantiator].contains(property.propertyType) && forwardedProperties.isEmpty,
+		      property.propertyType.isConstant || [.instantiator, .sendableInstantiator].contains(property.propertyType),
 		      property.typeDescription.asInstantiatedType == instantiable.concreteInstantiable
 		else { return .unsupported(.publicMockCall) }
 		guard !rootLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
@@ -401,11 +401,14 @@ extension MockLowering.Walk {
 				// A value the call passes is the root level's binding of its label, which an optional parameter takes as it is, or
 				// the instance of the lazy wrapper the tree holds of it, read at the call (`dependencyArgument`).
 				guard let dependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }),
-				      dependency.source != .forwarded,
 				      !generator.unavailableOptionalProperties.contains(dependency.property)
 				else { return .unsupported(.publicMockCall) }
 				let value: String
-				if dependency.source.isReceived,
+				if dependency.source == .forwarded {
+					// A value the called type forwards is the parameter of the builder function the instantiator holds.
+					guard forwardedProperties.contains(dependency.property) else { return .unsupported(.publicMockCall) }
+					value = dependency.property.label
+				} else if dependency.source.isReceived,
 				   lazilyInstantiatedInstances.contains(dependency.property.asUnwrappedProperty),
 				   let wrapperName = lazilyInstantiatedNamesOfLabels[dependency.property.label].flatMap({ namesByType in
 				   	[Dependency.lazilyInstantiatedType, Dependency.sendableLazilyInstantiatedType].compactMap { namesByType[.simple(name: $0, generics: [dependency.property.typeDescription.unwrapped])] }.first
@@ -460,6 +463,12 @@ extension MockLowering.Walk {
 		let typeName = property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource
 		let functionName = ScopeGenerator.functionName(toBuildPropertyNamed: property.label)
 		let functionDecorator = generator.buildsInSendableFunction ? "@Sendable " : ""
+		// The values an instantiator's builder function takes from the instantiator, in label order, which the call passes on.
+		let forwarded = forwardedProperties.sorted { $0.label < $1.label }
+		let functionParameters = forwarded.map { "\($0.label): \($0.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: generator.typesDeclaredEscaping).asSource)" }.joined(separator: ", ")
+		func instantiatorBindingLines() -> [String] {
+			MockLowering.wrapperBindingLines(of: property.typeDescription, named: property.label, handing: functionName, forwardedProperties: forwarded, indent: indent)
+		}
 		// A call held in an instantiator is made in the builder function the instantiator holds.
 		let isInstantiator = !property.propertyType.isConstant
 		// A call a public mock promotes at its root's level reads its caller's value first, which only a plain call's binding
@@ -478,10 +487,10 @@ extension MockLowering.Walk {
 				return .lowered(.publicMockCall(node))
 			}
 			if isInstantiator {
-				lines.append("\(indent)\(functionDecorator)func \(functionName)() -> \(typeName) {")
+				lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionParameters)) -> \(typeName) {")
 				lines.append("\(indent)\(ScopeGenerator.standardIndent)\(call)")
 				lines.append("\(indent)}")
-				lines.append("\(indent)let \(property.label) = \(property.typeDescription.asSource)(\(functionName))")
+				lines.append(contentsOf: instantiatorBindingLines())
 			} else {
 				lines.append("\(indent)let \(property.label) = \(isPromoted ? ScopeGenerator.passing(property.label, orBuilding: call) : call)")
 			}
@@ -493,7 +502,7 @@ extension MockLowering.Walk {
 		} catch {
 			return .unsupported(.fill)
 		}
-		lines.append("\(indent)\(functionDecorator)func \(functionName)() -> \(typeName) {")
+		lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionParameters)) -> \(typeName) {")
 		// The members a `@Sendable` family's places inside the fills read, which the call's builder function calls at its top.
 		lines.append(contentsOf: generator.memberCallsInsideBuilderFunction.map { "\(innerIndent)\($0.line(bindingNamesPassedByName: enclosingBindingNamesPassedByName, lazilyInstantiatedBindingNames: [:]))" })
 		for line in fillCode.split(separator: "\n", omittingEmptySubsequences: false) where !fillCode.isEmpty {
@@ -502,7 +511,11 @@ extension MockLowering.Walk {
 		lines.append("\(innerIndent)\(publicMockCall.guardLine(for: instantiable.concreteInstantiable))")
 		lines.append("\(innerIndent)return \(call)")
 		lines.append("\(indent)}")
-		lines.append(isInstantiator ? "\(indent)let \(property.label) = \(property.typeDescription.asSource)(\(functionName))" : "\(indent)let \(property.label): \(typeName) = \(functionName)()")
+		if isInstantiator {
+			lines.append(contentsOf: instantiatorBindingLines())
+		} else {
+			lines.append("\(indent)let \(property.label): \(typeName) = \(functionName)()")
+		}
 		return .lowered(.publicMockCall(node))
 	}
 }
