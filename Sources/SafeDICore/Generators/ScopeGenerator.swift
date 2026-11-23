@@ -6430,6 +6430,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		bodyPropertiesGeneratedLater(propertiesGeneratedLater)
 	}
 
+	// D1 lane hook (lane B): the mock lowering builds a node's construction inside its builder function, where its cycle
+	// parameters and rebound properties are bound, as the emitter does.
+	/// `bodyUnavailableProperties(_:)`, read by the mock lowering.
+	nonisolated func mockLoweringBodyUnavailableProperties(_ unavailableProperties: Set<Property>) -> Set<Property> {
+		bodyUnavailableProperties(unavailableProperties)
+	}
+
 	/// The name of the builder function this scope, which closes a property cycle on `closedOnDeclaration` and is built for
 	/// `property`, calls or hands its wrapper: the function of the declaration it repeats, as the scopes enclosing it named
 	/// it. The two properties share a label, which the function is named after unless a rename moved it.

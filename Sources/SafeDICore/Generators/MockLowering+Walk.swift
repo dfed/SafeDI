@@ -718,9 +718,10 @@ extension MockLowering {
 			guard isWrapped || forwardedProperties.isEmpty else { return .unsupported(.wrapper) }
 			let forwarded = instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted { $0.label < $1.label }
 			// D1 lane hook (lane B): a receive only if available the node is built where nothing provides is passed `nil`.
-			// A member of a loop of builders is passed the wrappers its function makes again, as production passes them
+			// A member of a loop of builders is passed the wrappers its function makes again, and its type the parameters a lazy
+			// cycle closing on its function takes, as production passes them
 			// (`ownUnavailableProperties` in `ScopeGenerator`).
-			let unavailableProperties = generator.reboundProperties.isEmpty ? unavailableProperties : unavailableProperties.subtracting(generator.reboundProperties.flatMap(CycleParameter.forms(providedBy:)))
+			let unavailableProperties = generator.mockLoweringBodyUnavailableProperties(unavailableProperties)
 			// D1 lane hook (lane D): a node whose type's hand-written mock returns a type its property can hold is built with the
 			// mock, as `MockConstruction(useMockInitializer:)` says, where the mock returns the concrete type, in an internal mock.
 			let usesMockInitializer = instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType)
