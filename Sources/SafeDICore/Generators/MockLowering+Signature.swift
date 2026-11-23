@@ -841,13 +841,12 @@ extension ScopeGenerator {
 			))
 		}
 		// The families of the builders the calls pass up, which only a tree that passes one up walks for.
-		let passedUpBuilderFamilies: [Property: (family: MockRootParameters.SeamMockBuilder.Family, isCapturedBySendableFunction: Bool)]
-		if passedUpBuilderProperties.isEmpty {
-			passedUpBuilderFamilies = [:]
+		let passedUpBuilderFamilies: [Property: (family: MockRootParameters.SeamMockBuilder.Family, isCapturedBySendableFunction: Bool)] = if passedUpBuilderProperties.isEmpty {
+			[:]
 		} else if case let .lowered(families) = self.passedUpBuilderFamilies(of: orderedChildGenerators) {
-			passedUpBuilderFamilies = families
+			families
 		} else {
-			passedUpBuilderFamilies = [:]
+			[:]
 		}
 		return TreeNames(
 			uncoveredParameters: parameters,
