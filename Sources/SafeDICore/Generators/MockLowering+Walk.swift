@@ -104,6 +104,7 @@ extension ScopeGenerator {
 		}
 		// D1 lane hook (lane C): `mock()` first binds each builder a call passes up apart from its label, as it binds a flat
 		// parameter's `@Sendable` autoclosure, before anything else.
+		walk.filledCallBuilders.readPassedUpBuilders(underParameterNames: Dictionary(signature.flatReceivedParameters.map { ($0.property, $0.name) }, uniquingKeysWith: { first, _ in first }))
 		var bindingLines = walk.filledCallBuilders.leadingBindingLines(indent: bodyIndent)
 		// D1 lane hook (lane C): each `@Sendable` autoclosure parameter is read into a local, and the value of one the mocked
 		// type instantiates is bound under the parameter's name.
@@ -1610,7 +1611,11 @@ extension MockLowering {
 			case let .hole(_, _, site?):
 				guard site.builderLabel == label else { continue }
 				guard names[site.builtType] != nil else { return true }
-			case .root, .hole, .fill:
+			// D1 lane hook (lane C): a fill of a call of another module's public mock is generated with production emission,
+			// which the emitter's walk of the mock tree does not enter (`receiveReadsLabelByName(_:beneath:…)`).
+			case .fill:
+				continue
+			case .root, .hole:
 				return nil
 			}
 		}
