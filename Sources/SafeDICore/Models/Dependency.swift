@@ -223,6 +223,16 @@ extension Dependency.Source {
 			false
 		}
 	}
+
+	/// Whether the dependency is `@Instantiated`.
+	var isInstantiated: Bool {
+		switch self {
+		case .instantiated:
+			true
+		case .received, .aliased, .forwarded:
+			false
+		}
+	}
 }
 
 extension Dependency {
