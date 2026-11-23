@@ -187,12 +187,12 @@ extension ScopeGenerator {
 		}
 		var rootDefaultParameters = [MockLowering.RootSignature.Parameter]()
 		for (argument, defaultExpression) in Self.defaultValuedMockParameterArguments(of: instantiable) {
-			// `mock()` takes an `@autoclosure` as one and passes its call, so the value is evaluated where the type is built.
-			guard argument.typeDescription.strippingEscaping.autoclosureValueType == nil else { return .unsupported(.defaultValuedParameter) }
+			// `mock()` takes an `@autoclosure` as one and passes its call, so the value is evaluated where the type is built. A
+			// throwing one is taken as one that does not throw, since `mock()` calls it outside any function that throws.
 			rootDefaultParameters.append(MockLowering.RootSignature.Parameter(
 				property: Property(label: argument.label, typeDescription: argument.typeDescription),
 				defaultExpression: defaultExpression,
-				typeSource: argument.typeDescription.asFunctionParameter.asSource,
+				typeSource: argument.typeDescription.autoclosureTakenWithoutThrowing.asFunctionParameter.asSource,
 			))
 		}
 		// D1 lane hook (lane C): the mock takes no parameter or override for what only calls of other modules' public mocks
