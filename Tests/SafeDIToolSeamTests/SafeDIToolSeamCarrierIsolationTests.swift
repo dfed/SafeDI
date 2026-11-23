@@ -74,39 +74,6 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 
 		extension Home {
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		    nonisolated public struct __safeDI_ScreenValues2 {
-		        public let id: Int
-		        public let model: Model
-
-		        init(id: Int, model: Model) {
-		            self.id = id
-		            self.model = model
-		        }
-		    }
-
-		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		    nonisolated public struct __safeDI_ScreenValues3 {
-		        public let previous: __safeDI_ScreenValues2
-		        public let api: any Api
-
-		        init(previous: __safeDI_ScreenValues2, api: any Api) {
-		            self.previous = previous
-		            self.api = api
-		        }
-		    }
-
-		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
-		    nonisolated public struct __safeDI_WorkValues2 {
-		        public let id: Int
-		        public let model: Model
-
-		        init(id: Int, model: Model) {
-		            self.id = id
-		            self.model = model
-		        }
-		    }
-
-		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		    nonisolated public final class __safeDI_ApiCarrier<__safeDI_Built> {
 		        public let screenBuilder: __safeDI_ApiCarrier_Screen<__safeDI_Built>
 
@@ -121,29 +88,29 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		    nonisolated public final class __safeDI_ApiCarrier_Screen<__safeDI_Built> {
-		        public let api: (__safeDI_ScreenValues2) -> __safeDI_Built
-		        public let detailBuilder: (__safeDI_ScreenValues3) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>
+		        public let api: (Int, Model) -> __safeDI_Built
+		        public let detailBuilder: (Int, Model, any Api) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>
 
-		        public init(api: @escaping (__safeDI_ScreenValues2) -> __safeDI_Built, detailBuilder: @escaping (__safeDI_ScreenValues3) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
+		        public init(api: @escaping (Int, Model) -> __safeDI_Built, detailBuilder: @escaping (Int, Model, any Api) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 		            self.api = api
 		            self.detailBuilder = detailBuilder
 		        }
 
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(api: { _ in __safeDI_builder() }, detailBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+		            self.init(api: { _, _ in __safeDI_builder() }, detailBuilder: { _, _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
 		    /// Only code SafeDI generates reads this type, and its shape can change in any release of SafeDI.
 		    nonisolated public final class __safeDI_ApiCarrier_Work<__safeDI_Built> {
-		        public let detailBuilder: (__safeDI_WorkValues2) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>
+		        public let detailBuilder: (Int, Model) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>
 
-		        public init(detailBuilder: @escaping (__safeDI_WorkValues2) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
+		        public init(detailBuilder: @escaping (Int, Model) -> __safeDI_ApiCarrier_Detail<__safeDI_Built>) {
 		            self.detailBuilder = detailBuilder
 		        }
 
 		        public convenience init(__safeDI_noScope __safeDI_builder: @escaping () -> __safeDI_Built) {
-		            self.init(detailBuilder: { _ in .init(__safeDI_noScope: __safeDI_builder) })
+		            self.init(detailBuilder: { _, _ in .init(__safeDI_noScope: __safeDI_builder) })
 		        }
 		    }
 
@@ -179,10 +146,8 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 		        let __safeDI_apiBuilder_screenBuilder = __safeDI_apiBuilder.screenBuilder
 		        func __safeDI_screenBuilder(id: Int) -> Screen {
 		            let model = Model(id: id)
-		            let __safeDI_Screen_values2 = __safeDI_ScreenValues2(id: id, model: model)
-		            let api: any Api = __safeDI_apiBuilder_screenBuilder.api(__safeDI_Screen_values2)
-		            let __safeDI_Screen_values3 = __safeDI_ScreenValues3(previous: consume __safeDI_Screen_values2, api: api)
-		            let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder_screenBuilder.detailBuilder(__safeDI_Screen_values3)
+		            let api: any Api = __safeDI_apiBuilder_screenBuilder.api(id, model)
+		            let __safeDI_apiBuilder_detailBuilder = __safeDI_apiBuilder_screenBuilder.detailBuilder(id, model, api)
 		            func __safeDI_detailBuilder() -> Detail {
 		                let api: any Api = __safeDI_apiBuilder_detailBuilder.api()
 		                return Detail(api: api)
@@ -196,8 +161,7 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 		        @Sendable nonisolated func __safeDI_workBuilder(id: Int) -> Work {
 		            let __safeDI_apiSendableBuilder_workBuilder = __safeDI_apiSendableBuilder.workBuilder()
 		            let model = Model(id: id)
-		            let __safeDI_Work_values2 = __safeDI_WorkValues2(id: id, model: model)
-		            let __safeDI_apiSendableBuilder_detailBuilder = __safeDI_apiSendableBuilder_workBuilder.detailBuilder(__safeDI_Work_values2)
+		            let __safeDI_apiSendableBuilder_detailBuilder = __safeDI_apiSendableBuilder_workBuilder.detailBuilder(id, model)
 		            func __safeDI_detailBuilder() -> Detail {
 		                let api: any Api = __safeDI_apiSendableBuilder_detailBuilder.api()
 		                return Detail(api: api)
@@ -233,13 +197,13 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 		            }
 		            func __safeDI_apiBuilder_Home_Screen_Scope() -> Home.__safeDI_ApiCarrier_Screen<any Api> {
 		                .init(
-		                    api: { scope in
-		                        let id = scope.id
-		                        let model = scope.model
+		                    api: { scope_id, scope_model in
+		                        let id = scope_id
+		                        let model = scope_model
 		                        let api: any Api = Impl(id: id, model: model)
 		                        return api
 		                    },
-		                    detailBuilder: { values in __safeDI_apiBuilder_Home_Detail_Scope(id: values.previous.id, model: values.previous.model) }
+		                    detailBuilder: { values_id, values_model, values_api in __safeDI_apiBuilder_Home_Detail_Scope(id: values_id, model: values_model) }
 		                )
 		            }
 		            @Sendable nonisolated func __safeDI_apiBuilder_Home_Detail_Scope(id: Int, model: Model) -> Home.__safeDI_ApiCarrier_Detail<any Api> {
@@ -252,7 +216,7 @@ struct SafeDIToolSeamCarrierIsolationTests: ~Copyable {
 		                .init(workBuilder: { __safeDI_apiBuilder_Home_Work_Scope() })
 		            }
 		            @Sendable nonisolated func __safeDI_apiBuilder_Home_Work_Scope() -> Home.__safeDI_ApiCarrier_Work<any Api> {
-		                .init(detailBuilder: { values in __safeDI_apiBuilder_Home_Detail_Scope(id: values.id, model: values.model) })
+		                .init(detailBuilder: { values_id, values_model in __safeDI_apiBuilder_Home_Detail_Scope(id: values_id, model: values_model) })
 		            }
 		            return Home(__safeDI_apiBuilder: __safeDI_apiBuilder_Home(), __safeDI_apiSendableBuilder: __safeDI_apiSendableBuilder_Home())
 		        }

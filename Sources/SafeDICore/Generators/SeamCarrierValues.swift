@@ -18,101 +18,100 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Foundation
-
 /// How a seam's carriers hand a level's values to their members: the one place that decides it, which the carrier's
 /// declaration, the seam's tree and the caller's carrier all read, each computing it from the same enums.
 ///
 /// A level's values are what its type binds before a case's property, so the values of one level's cases are prefixes
-/// of one sequence. The values are cut into runs at the lengths the level's cases take (each plain carrier enum of the
-/// level, across hole types), and each run is a struct, `__safeDI_<Level>Values<end>`, holding the run's fields and the
-/// struct of the run before it as `previous`. The seam's tree forms each run's struct once, where it first binds a
-/// case of that length, from the one before, and a member takes exactly the struct of its case's length. So a member
-/// takes one argument however many values its level binds, a run's fields are spelled once per level, and every value
-/// keeps the access its type proves: a struct field at its own access, never a positional argument of a wider member.
-///
-/// The internal switch `transport` keeps the other forms beside it for measurement: one struct per level, of the shortest
-/// case's values, with every later value positional (E), and the run structs with a level of few public values taken
-/// positionally (the hybrid). Only one form ships; the others are deleted before review.
+/// of one sequence. A level whose longest case takes at most `maximumPositionalValues` values, each at least as visible as
+/// the carrier's `public` members are where the seam's type caps them (`ScopeEnum.carrierMemberAccess`), hands them
+/// positionally: a struct costs a narrow level more to form and copy than its few arguments do. Every other level is cut
+/// into runs at the lengths its cases take (each plain carrier enum of the level, across hole types), and each run is a
+/// struct, `__safeDI_<Level>Values<end>`, holding the run's fields and the struct of the run before it as `previous`. The
+/// seam's tree forms each run's struct once, where it first binds a case of that length, from the one before, and a member
+/// takes exactly the struct of its case's length. So a member of a wide level takes one argument however many values its
+/// level binds, a run's fields are spelled once per level rather than once per member, which positional values would
+/// grow with the square of the level, and a value narrower than the carrier keeps the access its type proves: a struct
+/// field at its own access, never a positional argument of a wider member.
 struct SeamCarrierValues: Sendable {
-	/// How a level's values travel to its members.
-	enum Transport {
-		/// Only the shortest case's values end a run (a member takes that struct and the rest of its values positionally).
-		case singleStruct
-		/// Every distinct length of a level's cases ends a run of its own (a member takes exactly its struct).
-		case runStructs
-		/// As `runStructs`, but a level whose longest case takes at most `maximumPositionalValues` values, each as wide as
-		/// the public carrier, takes no struct: its members take their values positionally.
-		case hybrid(maximumPositionalValues: Int)
-	}
-
-	/// The form this build generates; `SAFEDI_CARRIER_TRANSPORT` (`E`, `E2`, or `H<K>`) picks another for measurement.
-	static let transport: Transport = {
-		let setting = ProcessInfo.processInfo.environment["SAFEDI_CARRIER_TRANSPORT"] ?? "E2"
-		if setting == "E" {
-			return .singleStruct
-		}
-		if setting.hasPrefix("H"), let maximum = Int(setting.dropFirst()) {
-			return .hybrid(maximumPositionalValues: maximum)
-		}
-		return .runStructs
-	}()
-
-	static var chainsEveryRun: Bool {
-		if case .singleStruct = transport {
-			return false
-		}
-		return true
-	}
+	/// The most values a level hands its members positionally, chosen from compile and run times of wide and deep seams.
+	static let maximumPositionalValues = 8
 
 	/// Where each run of each level ends, by level, ascending.
 	private let endsByLevel: [String: [Int]]
+	/// The levels cut into runs, in the order the enums first meet them, never by name: renaming a type reorders nothing.
+	private let levelsInEnumOrder: [String]
 
 	/// No level: a tree whose seam declares no carrier with values.
 	init() {
 		endsByLevel = [:]
+		levelsInEnumOrder = []
 	}
 
-	/// The runs of each level of `scopeEnums`' plain carriers of `seamType`'s enums. A level whose cases' values are not
-	/// prefixes of one sequence takes no struct: its members take their values positionally.
+	/// The runs of each level of `scopeEnums`' plain carriers of `seamType`'s enums, which the seam's module recorded on them.
+	/// A level whose enums take their values positionally (`ScopeEnum.takesValuesPositionally`), or whose cases' values are
+	/// not prefixes of one sequence, takes no struct.
 	init(scopeEnums: [SeamSignature.ScopeEnum], ofSeam seamType: TypeDescription?) {
-		var longestByLevel = [String: [SeamSignature.Hole.Field]]()
-		var lengthsByLevel = [String: Set<Int>]()
-		var inconsistentLevels = Set<String>()
+		let levels = Self.levels(of: scopeEnums, ofSeam: seamType)
+		var endsByLevel = [String: [Int]]()
+		var levelsInEnumOrder = [String]()
+		for level in levels where !level.takesValuesPositionally && !level.isInconsistent {
+			endsByLevel[level.name] = level.lengths.sorted()
+			levelsInEnumOrder.append(level.name)
+		}
+		self.endsByLevel = endsByLevel
+		self.levelsInEnumOrder = levelsInEnumOrder
+	}
+
+	/// The levels among `ownEnums` that take their values positionally: those whose longest case takes at most
+	/// `maximumPositionalValues` values, each at least as visible as `memberAccess`, the access the seam's type caps its
+	/// carriers' `public` members at. Only the seam's own module asks, and records the answer on the enums.
+	static func positionalLevels(of ownEnums: [SeamSignature.ScopeEnum], memberAccess: AccessLevel) -> Set<String> {
+		var positional = Set<String>()
+		for level in levels(of: ownEnums, ofSeam: nil) where !level.isInconsistent && level.longest.count <= maximumPositionalValues && !level.longest.contains(where: { AccessLevel.normalized($0.access) < AccessLevel.normalized(memberAccess) }) {
+			positional.insert(level.name)
+		}
+		return positional
+	}
+
+	/// A level of a seam's plain carriers: its values' lengths across its cases, its longest values, and whether those are
+	/// prefixes of one sequence.
+	private struct Level {
+		let name: String
+		var lengths = Set<Int>()
+		var longest = [SeamSignature.Hole.Field]()
+		var isInconsistent = false
+		var takesValuesPositionally = false
+	}
+
+	/// The levels of `scopeEnums`' plain carriers of `seamType`'s enums (every seam's where `nil`) that bind values, in the
+	/// order the enums first meet them, never by name: renaming a type reorders nothing.
+	private static func levels(of scopeEnums: [SeamSignature.ScopeEnum], ofSeam seamType: TypeDescription?) -> [Level] {
+		var levels = [Level]()
+		var indexByName = [String: Int]()
 		for scopeEnum in scopeEnums where seamType == nil || scopeEnum.key.seamType == seamType {
-			guard let level = Self.level(ofEnum: scopeEnum.type) else { continue }
+			guard let name = level(ofEnum: scopeEnum.type) else { continue }
 			for enumCase in scopeEnum.cases {
 				guard let fields = enumCase.values?.fields, !fields.isEmpty else { continue }
-				lengthsByLevel[level, default: []].insert(fields.count)
-				let longest = longestByLevel[level] ?? []
+				let index: Int
+				if let existing = indexByName[name] {
+					index = existing
+				} else {
+					index = levels.count
+					indexByName[name] = index
+					levels.append(Level(name: name))
+				}
+				levels[index].takesValuesPositionally = levels[index].takesValuesPositionally || scopeEnum.takesValuesPositionally
+				levels[index].lengths.insert(fields.count)
+				let longest = levels[index].longest
 				let shorter = longest.count < fields.count ? longest : fields
 				let longer = longest.count < fields.count ? fields : longest
 				if !zip(shorter, longer).allSatisfy({ $0.property == $1.property && $0.property.typeDescription.asSource == $1.property.typeDescription.asSource && $0.deferral == $1.deferral }) {
-					inconsistentLevels.insert(level)
+					levels[index].isInconsistent = true
 				}
-				longestByLevel[level] = longer
+				levels[index].longest = longer
 			}
 		}
-		var endsByLevel = [String: [Int]]()
-		for (level, lengths) in lengthsByLevel where !inconsistentLevels.contains(level) {
-			let sorted = lengths.sorted()
-			if case let .hybrid(maximumPositionalValues) = Self.transport, let longest = longestByLevel[level], longest.count <= maximumPositionalValues, !longest.contains(where: { $0.access < .public }) {
-				continue
-			}
-			if Self.chainsEveryRun {
-				endsByLevel[level] = sorted
-			} else {
-				// One struct of the shortest case's values, and a run more wherever the values after the last run hold one
-				// narrower than the public carrier, which travels only as a struct field at its own access.
-				let fields = longestByLevel[level] ?? []
-				var ends = Array(sorted.prefix(1))
-				for length in sorted.dropFirst() where fields[(ends.last ?? 0)..<length].contains(where: { $0.access < .public }) {
-					ends.append(length)
-				}
-				endsByLevel[level] = ends
-			}
-		}
-		self.endsByLevel = endsByLevel
+		return levels
 	}
 
 	/// The runs of each seam's levels among `scopeEnums`, by seam.
@@ -234,13 +233,13 @@ struct SeamCarrierValues: Sendable {
 	/// The name of a run's struct's field that holds the run before it.
 	static let previousName = "previous"
 
-	/// The declarations of every level's structs, in level order then run order, each `nonisolated` and as visible as
+	/// The declarations of every level's structs, in the order the enums first meet the levels, then run order, each `nonisolated` and as visible as
 	/// the carrier it is handed through, each field at its own access.
 	func declarations(fieldsByLevel: [String: [SeamSignature.Hole.Field]], typesDeclaredEscaping: Set<TypeDescription>, indent: String) -> [String] {
 		var declarations = [String]()
 		let memberIndent = indent + ScopeGenerator.standardIndent
 		let bodyIndent = memberIndent + ScopeGenerator.standardIndent
-		for level in endsByLevel.keys.sorted() {
+		for level in levelsInEnumOrder {
 			guard let fields = fieldsByLevel[level] else { continue }
 			var start = 0
 			for end in ends(ofLevel: level) where end <= fields.count {
