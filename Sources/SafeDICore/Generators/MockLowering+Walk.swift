@@ -94,7 +94,8 @@ extension ScopeGenerator {
 		// D1 lane hook (lane E): what `mock()` binds under its label before its tree, which a call's fill reads.
 		let rootBoundProperties = signature.properties.union(overrideProperties).union(signature.lazilyInstantiatedProperties)
 		// D1 lane hook (lane C): the builders `mock()` takes optional for the places its calls fill.
-		switch filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties) {
+		// D1 lane hook (lane E): a call's builder of a family the calls pass up reads the builder `mock()` takes for it.
+		switch filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties, passedUpBuilders: signature.passedUpBuilders) {
 		case let .lowered(filledCallBuilders):
 			walk.filledCallBuilders = filledCallBuilders
 		case let .unsupported(rule):
