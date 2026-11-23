@@ -81,14 +81,17 @@ extension ScopeGenerator {
 				return .unsupported(rule)
 			}
 		}
-		// D1 lane hook (lane B): `mock()` first binds each override of what its tree receives only if available, which the
+		// D1 lane hook (lane C): `mock()` first binds each builder a call passes up apart from its label, as it binds a flat
+		// parameter's `@Sendable` autoclosure, before anything else.
+		var bindingLines = walk.filledCallBuilders.leadingBindingLines(indent: bodyIndent)
+		// D1 lane hook (lane B): `mock()` then binds each override of what its tree receives only if available, which the
 		// receives beneath read.
 		// D1 lane hook (lane C): a public mock takes each as a parameter of `mock()` under the override's name, which binds it.
-		var bindingLines = instantiable.generateMock == .public ? [] : signature.onlyIfAvailableOverrides.map { override in
-			"\(bodyIndent)let \(override.name): \(override.typeDescription.asSource) = \(ReservedName.mockOverridesParameterName).\(override.name)"
+		if instantiable.generateMock != .public {
+			bindingLines.append(contentsOf: signature.onlyIfAvailableOverrides.map { override in
+				"\(bodyIndent)let \(override.name): \(override.typeDescription.asSource) = \(ReservedName.mockOverridesParameterName).\(override.name)"
+			})
 		}
-		// D1 lane hook (lane C): `mock()` first binds each builder a call passes up apart from its label.
-		bindingLines.append(contentsOf: walk.filledCallBuilders.leadingBindingLines(indent: bodyIndent))
 		let rootReceiverBindingIndex = bindingLines.endIndex
 		// D1 lane hook (lane B): each override binds its receive's label, in the optional form a receive only if available
 		// reads.
