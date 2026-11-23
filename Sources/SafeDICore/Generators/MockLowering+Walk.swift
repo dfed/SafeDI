@@ -729,10 +729,14 @@ extension MockLowering {
 			      !usesMockInitializer || instantiable.mockCallReturnType == instantiable.concreteInstantiable,
 			      initializer.arguments.allSatisfy({ argument in argument.hasDefaultValue || instantiable.dependencies.contains(where: argument.isFulfilled(by:)) })
 			else { return .unsupported(.handWrittenMock) }
-			guard !rootLabels.contains(property.label) || (bindingName != property.label && rootPropertiesNamedApartFromParameters.contains(property)), labels.insert(bindingName).inserted else { return .unsupported(.siblingLabelCollision) }
+			// D1 lane hook (lane B): a node inside a builder function binds its label again there, hiding the root's binding of
+			// it from the node's subtree, as Swift's lookup does; only a node of the root's level is named apart from it.
+			guard !bodyLabels.isEmpty || !rootLabels.contains(property.label) || (bindingName != property.label && rootPropertiesNamedApartFromParameters.contains(property)), labels.insert(bindingName).inserted else { return .unsupported(.siblingLabelCollision) }
 			dependencyLabelsInTree.formUnion(instantiable.dependencies.map(\.property.label))
 
-			let orderedChildren = generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: propertiesGeneratedLater)
+			// D1 lane hook (lane B): the node's builder function binds what it rebinds and its cycle parameters before its
+			// children, as the emitter orders them (`bodyPropertiesGeneratedLater`).
+			let orderedChildren = generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: generator.mockLoweringBodyPropertiesGeneratedLater(propertiesGeneratedLater))
 			let childGenerators = orderedChildren.map(\.generator)
 			// D1 lane hook (lane B): a member of a loop of builders first rebinds the members its tree receives
 			// (`MockLowering+Loops.swift`).

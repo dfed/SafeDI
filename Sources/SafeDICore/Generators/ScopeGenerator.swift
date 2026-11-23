@@ -6424,6 +6424,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return propertiesGeneratedLater.subtracting(bodyProvidedForms.map(\.asUnwrappedProperty))
 	}
 
+	// D1 lane hook (lane B): the mock lowering orders a node's children as the emitter does, inside its builder function.
+	/// `bodyPropertiesGeneratedLater(_:)`, read by the mock lowering.
+	nonisolated func mockLoweringBodyPropertiesGeneratedLater(_ propertiesGeneratedLater: Set<Property>) -> Set<Property> {
+		bodyPropertiesGeneratedLater(propertiesGeneratedLater)
+	}
+
 	/// The name of the builder function this scope, which closes a property cycle on `closedOnDeclaration` and is built for
 	/// `property`, calls or hands its wrapper: the function of the declaration it repeats, as the scopes enclosing it named
 	/// it. The two properties share a label, which the function is named after unless a rename moved it.
