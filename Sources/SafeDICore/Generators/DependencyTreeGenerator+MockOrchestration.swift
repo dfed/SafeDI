@@ -259,10 +259,32 @@ extension DependencyTreeGenerator {
 		// The second whole-module gate, not run by `requirements(of:)`; see
 		// the note above `validateSendableBuildersCaptureNoNonSendableWrapper`. It runs after the roots' code is generated,
 		// so that an error generating a root's code is reported first, as when the gate read each tree after it.
-		let nodesReadingConfiguration = try Self.validateConfigurationsAreBuiltOneWay(
-			configurationNodesByConstruction: generatedRootsAndSummaries.map(\.configurationNodesByConstruction),
-			mockDeclarationLocations: mockDeclarationLocations,
-		)
+		let oneWayCheck = Result {
+			try Self.validateConfigurationsAreBuiltOneWay(
+				configurationNodesByConstruction: generatedRootsAndSummaries.map(\.configurationNodesByConstruction),
+				mockDeclarationLocations: mockDeclarationLocations,
+			)
+		}
+		// Stage D1's shadow of the one-way check, which only the tests set: the check read from the records of every root's
+		// lowering, compared with the diagnostics above.
+		// D1 lane hook (lane D): compared in `MockLowering+OneWay.swift`.
+		if let shadowObserver = MockLoweringShadow.observer {
+			let loweredRoots = zip(mockRoots, generatedRootsAndSummaries).compactMap { mockRoot, generatedRootAndSummary in
+				generatedRootAndSummary.lowered.map { (mockedType: mockRoot.instantiable.concreteInstantiable, lowered: $0) }
+			}
+			let emittedDiagnostics: [SourceDiagnostic] = switch oneWayCheck {
+			case .success:
+				[]
+			case let .failure(error):
+				(error as? DependencyTreeGeneratorError)?.sourceDiagnostics ?? []
+			}
+			shadowObserver(MockLoweringShadow.oneWayComparison(
+				of: loweredRoots,
+				mockDeclarationLocations: mockDeclarationLocations,
+				emittedDiagnostics: emittedDiagnostics,
+			))
+		}
+		let nodesReadingConfiguration = try oneWayCheck.get()
 
 		let rootedTypeNames = Set(generatedRoots.map(\.root.typeDescription.asSource))
 		// Deduplicate configuration types by type name across all roots.
@@ -923,8 +945,8 @@ extension DependencyTreeGenerator {
 			return DependencyTreeGeneratorError.ConfigurationBuiltTwoWays(
 				concreteType: concreteType,
 				mockDeclarationLocations: Array(mockDeclarationLocations[concreteType, default: []]),
-				builtByMock: builtByMock,
-				builtWithoutMock: builtWithoutMock,
+				builtByMock: .init(of: builtByMock),
+				builtWithoutMock: .init(of: builtWithoutMock),
 			)
 		}
 		guard conflicts.isEmpty else {
@@ -1698,5 +1720,18 @@ extension DependencyTreeGenerator {
 		}
 		guard !typesNoDeclarationCanFulfill.isEmpty else { return }
 		throw noInstantiableFoundErrors(of: typesNoDeclarationCanFulfill)
+	}
+}
+
+extension DependencyTreeGenerator.DependencyTreeGeneratorError.ConfigurationBuiltTwoWays.BuiltConstruction {
+	/// The construction the emitter's `builtNode` describes.
+	init(of builtNode: ScopeGenerator.BuiltMockParameterNode) {
+		self.init(
+			property: builtNode.node.property,
+			parent: builtNode.parent.asSource,
+			mockRoot: builtNode.mockRoot,
+			customMockName: builtNode.node.customMockName,
+			isExtensionBased: builtNode.node.isExtensionBased,
+		)
 	}
 }
