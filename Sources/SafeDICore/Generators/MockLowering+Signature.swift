@@ -192,8 +192,9 @@ extension ScopeGenerator {
 	) -> MockLowering.Lowering<MockLowering.RootSignature> {
 		var forwardedParameters = [MockLowering.RootSignature.Parameter]()
 		for dependency in instantiable.dependencies.sorted(by: { $0.property < $1.property }) where dependency.source == .forwarded {
-			// The default the initializer gives the parameter of its label wins over the hand-written mock its type has.
-			let constructionDefault = instantiable.initializer?.arguments.first { $0.innerLabel == dependency.property.label }?.defaultValueExpression
+			// The default the construction (the type's own hand-written mock, else its initializer) gives the parameter of its
+			// label wins over the hand-written mock the parameter's type has.
+			let constructionDefault = MockLowering.rootConstructionInitializer(of: instantiable)?.arguments.first { $0.innerLabel == dependency.property.label }?.defaultValueExpression
 			forwardedParameters.append(MockLowering.RootSignature.Parameter(
 				property: dependency.property,
 				defaultExpression: constructionDefault ?? flatParameterMockDefaults[dependency.property.typeDescription]?.expression,

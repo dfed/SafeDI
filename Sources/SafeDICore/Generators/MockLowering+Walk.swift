@@ -177,7 +177,9 @@ extension ScopeGenerator {
 	/// The first rule the parameters and construction of the mocked type itself meet that the walk does not lower yet.
 	private static func unsupportedRuleOfMockedType(_ instantiable: Instantiable) -> MockLowering.Rule? {
 		// The initializer's default-valued arguments are parameters of `mock()` (`lowerRootSignature(of:context:)`).
-		guard instantiable.mockInitializer == nil, instantiable.customMockName == nil, instantiable.initializer != nil else { return .handWrittenMock }
+		// D1 lane hook (lane D): the mocked type's own hand-written mock builds it (`MockLowering+HandWrittenMocks.swift`), but a
+		// public mock's, which lane C's file builds.
+		guard MockLowering.rootConstructionInitializer(of: instantiable) != nil, instantiable.generateMock != .public || (instantiable.mockInitializer == nil && instantiable.customMockName == nil) else { return .handWrittenMock }
 		// D1 lane hook (lane B): every dependency of the mocked type is a node of its tree (a wrapper of any kind, erased or
 		// fulfilled by another type alike, a received wrapper the mock promotes, an alias), a parameter of `mock()` or an
 		// override's binding, which the walk checks it binds.
@@ -215,16 +217,14 @@ extension ScopeGenerator {
 		lines.append(contentsOf: signature.sharedValueDocumentationLines(indent: indent))
 		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
 		lines.append(parameterLines.joined(separator: ",\n"))
-		lines.append("\(indent)) -> \(instantiable.concreteInstantiable.asSource) {")
+		// D1 lane hook (lane D): the type the mocked type's hand-written mock returns.
+		lines.append("\(indent)) -> \(MockLowering.rootReturnType(of: instantiable)) {")
 		lines.append(contentsOf: bindingLines)
-		let argumentList = instantiable.initializer.map { initializer in
+		// D1 lane hook (lane D): the mocked type built with its hand-written mock where it has one.
+		let argumentList = MockLowering.rootConstructionInitializer(of: instantiable).map { initializer in
 			MockLowering.rootArgumentList(of: initializer, given: instantiable.dependencies, renames: rootRenames, passingNilTo: unavailableProperties)
 		} ?? ""
-		let construction = if instantiable.declarationType.isExtension {
-			"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"
-		} else {
-			"\(typeName)(\(argumentList))"
-		}
+		let construction = MockLowering.rootConstruction(of: instantiable, argumentList: argumentList)
 		lines.append("\(bodyIndent)return \(construction)")
 		lines.append("\(indent)}")
 		lines.append("}")
@@ -371,6 +371,8 @@ extension MockLowering {
 		var isBeneathRepeatedConfiguredAncestor = false
 		// D1 lane hook (lane D): how many configured nodes' children the walk entered, which orders the one-way check's reads.
 		var configuredNodesEntered = 0
+		// D1 lane hook (lane D): the configured children each configured node around the walk has finished, innermost last.
+		var finishedConfiguredChildren = [[MockLowering.FinishedConfiguredChild]]()
 		// D1 lane hook (lane C): the builders `mock()` takes optional for the places its calls fill, and the calls not reached yet.
 		var filledCallBuilders = FilledCallBuilders.none
 		// D1 lane hook (lane C): a public mock builds each configured node with its type's construction function.
@@ -585,7 +587,7 @@ extension MockLowering {
 				// An alias of a label named apart reads the name it is handed; one the mock root's level names apart is bound
 				// under its name.
 				let aliasBindingName = bindingName ?? property.label
-				guard aliasBindingName != property.label || !labelsNoAliasBindsAgain.contains(property.label), labels.insert(aliasBindingName).inserted else { return .unsupported(.siblingLabelCollision) }
+				guard aliasBindingName != property.label || !bodyLabels.isEmpty || !labelsNoAliasBindsAgain.contains(property.label), labels.insert(aliasBindingName).inserted else { return .unsupported(.siblingLabelCollision) }
 				let alias = AliasBinding(
 					property: property,
 					bindingName: aliasBindingName,
@@ -735,14 +737,18 @@ extension MockLowering {
 			// D1 lane hook (lane C): a public mock builds such a node with its construction function, as an internal mock does
 			// with the mock (`publicConstructionArguments`).
 			guard let initializer = usesMockInitializer ? instantiable.mockInitializer : instantiable.initializer,
-			      // D1 lane hook (lane C): a public mock's construction function returns what the mock returns.
-			      !usesMockInitializer || buildsPublicMock || instantiable.mockCallReturnType == instantiable.concreteInstantiable,
+			      // D1 lane hook (lanes C and D): a node whose hand-written mock returns another of the type's types is built with
+			      // it, an internal mock's as its property holds it, a public mock's by its construction function.
 			      initializer.arguments.allSatisfy({ argument in argument.hasDefaultValue || instantiable.dependencies.contains(where: argument.isFulfilled(by:)) })
 			else { return .unsupported(.handWrittenMock) }
-			guard !rootLabels.contains(property.label) || (bindingName != property.label && rootPropertiesNamedApartFromParameters.contains(property)), labels.insert(bindingName).inserted else { return .unsupported(.siblingLabelCollision) }
+			// D1 lane hook (lane B): a node inside a builder function binds its label again there, hiding the root's binding of
+			// it from the node's subtree, as Swift's lookup does; only a node of the root's level is named apart from it.
+			guard !bodyLabels.isEmpty || !rootLabels.contains(property.label) || (bindingName != property.label && rootPropertiesNamedApartFromParameters.contains(property)), labels.insert(bindingName).inserted else { return .unsupported(.siblingLabelCollision) }
 			dependencyLabelsInTree.formUnion(instantiable.dependencies.map(\.property.label))
 
-			let orderedChildren = generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: propertiesGeneratedLater)
+			// D1 lane hook (lane B): the node's builder function binds what it rebinds and its cycle parameters before its
+			// children, as the emitter orders them (`bodyPropertiesGeneratedLater`).
+			let orderedChildren = generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: generator.mockLoweringBodyPropertiesGeneratedLater(propertiesGeneratedLater))
 			let childGenerators = orderedChildren.map(\.generator)
 			// D1 lane hook (lane B): a member of a loop of builders first rebinds the members its tree receives
 			// (`MockLowering+Loops.swift`).
@@ -825,7 +831,7 @@ extension MockLowering {
 			var bindingNamesPassedByName = [String: String]()
 			if !childGenerators.isEmpty {
 				for binding in receiverBindings {
-					switch MockLowering.receiveReadsLabelByName(binding.property.label, beneath: childGenerators, renames: renames) {
+					switch MockLowering.receiveReadsLabelByName(binding.property.label, beneath: orderedChildren, renames: renames) {
 					case true?:
 						bindingNamesPassedByName[binding.property.label] = binding.name
 					case false?:
@@ -934,7 +940,7 @@ extension MockLowering {
 				indent: "\(indent)\(ScopeGenerator.standardIndent)",
 				lines: &lines,
 			)
-			leavingConfiguredNode(configurationEntry)
+			let finishedChildren = leavingConfiguredNode(configurationEntry)
 			parentConcreteType = enclosingParentConcreteType
 			overridePathReachable = enclosingOverridePathReachable
 			renames = enclosingRenames
@@ -995,6 +1001,7 @@ extension MockLowering {
 					record.publicConstruction = MockLowering.publicConstructionRecord(of: configuredNode, children: recordedChildren, orderedBy: generator)
 				}
 				configurationRecords.append(record)
+				finishConfiguredNode(configuredNode, recordIndex: configurationRecords.count - 1)
 			} else if buildsPublicMock, configuredNode.hasConfiguration {
 				// D1 lane hook (lane C): every node a public mock builds with a construction function declares it, beneath a
 				// repeated configured ancestor too (`ScopeGenerator.collectPublicConstructionNodes`).
@@ -1002,6 +1009,12 @@ extension MockLowering {
 				record.publicConstruction = MockLowering.publicConstructionRecord(of: configuredNode, children: [], orderedBy: generator)
 				record.publicConstruction?.describesConfiguration = false
 				configurationRecords.append(record)
+				finishConfiguredNode(configuredNode, recordIndex: nil)
+			} else if configuredNode.hasConfiguration, configurationEntry.recordsBeneathRepeatedAncestor {
+				// D1 lane hook (lane D): a node beneath a repeated ancestor records what the module's choice reads.
+				recordBeneathRepeatedAncestor(configuredNode, children: children, finishedChildren: finishedChildren)
+			} else if configuredNode.hasConfiguration {
+				finishConfiguredNode(configuredNode, recordIndex: nil)
 			}
 			// D1 lane hook (lane C): a public mock's configured node calls its type's construction function.
 			var endLines: [String]
@@ -1498,16 +1511,18 @@ extension MockLowering {
 	/// Whether a receive among `generators`, or beneath them up to a node that declares `label`, reads `label` by name: a
 	/// receive or an alias's fulfilling property whose form `renames` does not name apart; or `nil` where the walk cannot
 	/// tell yet (`ScopeGenerator.receiveReadsLabelByName`).
-	static func receiveReadsLabelByName(_ label: String, beneath generators: [ScopeGenerator], renames: [String: [TypeDescription: String]]) -> Bool? {
+	static func receiveReadsLabelByName(_ label: String, beneath children: [ScopeGenerator.OrderedChild], renames: [String: [TypeDescription: String]]) -> Bool? {
 		let names = renames[label] ?? [:]
 		// A stack of its own, since a mock tree can be as deep as the module has types.
-		var generatorsToVisit = generators
-		while let generator = generatorsToVisit.popLast() {
+		var childrenToVisit = children
+		while let child = childrenToVisit.popLast() {
+			let generator = child.generator
 			switch generator.scopeData {
 			case let .alias(_, fulfillingProperty, _, onlyIfAvailable, _):
-				guard fulfillingProperty.label == label else { continue }
-				// D1 lane hook (lane B): an alias bound to `nil`, or of a lazy wrapper's instance.
-				guard !onlyIfAvailable, !generator.mockLoweringLazilyInstantiatedInstanceProperties.contains(fulfillingProperty.asUnwrappedProperty) else { return nil }
+				// D1 lane hook (lane B): an alias bound to `nil` reads nothing (`emitAliasBinding`).
+				guard fulfillingProperty.label == label, !ScopeGenerator.aliasIsBoundToNil(onlyIfAvailable: onlyIfAvailable, fulfillingProperty: fulfillingProperty, unavailableProperties: child.unavailableProperties) else { continue }
+				// D1 lane hook (lane B): an alias of a lazy wrapper's instance.
+				guard !generator.mockLoweringLazilyInstantiatedInstanceProperties.contains(fulfillingProperty.asUnwrappedProperty) else { return nil }
 				guard names[fulfillingProperty.typeDescription] != nil else { return true }
 			case let .property(instantiable, _, _, _, isPropertyCycle, seamCall):
 				guard seamCall == nil else { return nil }
@@ -1519,7 +1534,7 @@ extension MockLowering {
 				// The builder function of a node that instantiates, forwards or renames the label declares it, and what is
 				// beneath reads that.
 				if !isPropertyCycle, !instantiable.dependencies.contains(where: { !$0.source.isReceived && $0.property.label == label }) {
-					generatorsToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: []).map(\.generator))
+					childrenToVisit.append(contentsOf: generator.orderedChildrenComputedAfresh(propertiesGeneratedLater: generator.mockLoweringBodyPropertiesGeneratedLater(child.propertiesGeneratedLater)))
 				}
 			// D1 lane hook (lane C): a site of a public mock's hole binds its property from the builder's label, as an alias
 			// binds its own (`MockAliasNode.holeSite`).
