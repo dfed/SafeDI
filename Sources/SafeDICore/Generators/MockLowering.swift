@@ -153,6 +153,9 @@ public enum MockLowering {
 		// D1 lane hook (lane D): what the one-way check reads of the node (`MockLowering+OneWay.swift`).
 		/// The construction the node builds its type with, as the one-way check reads it.
 		var oneWayConstruction: OneWayConstruction?
+		// D1 lane hook (lane D): a node beneath a repeated ancestor (`MockLowering+Configurations.swift`).
+		/// Where the node is beneath a node whose type repeats one around it, what the module's choice of such a node reads.
+		var beneathRepeatedAncestor: BeneathRepeatedAncestor?
 
 		/// A field that configures a child of the node: its configuration, or an optional builder closure.
 		struct ChildField: Sendable, Equatable {

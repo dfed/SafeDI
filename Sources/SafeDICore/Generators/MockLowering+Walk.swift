@@ -360,6 +360,8 @@ extension MockLowering {
 		var isBeneathRepeatedConfiguredAncestor = false
 		// D1 lane hook (lane D): how many configured nodes' children the walk entered, which orders the one-way check's reads.
 		var configuredNodesEntered = 0
+		// D1 lane hook (lane D): the configured children each configured node around the walk has finished, innermost last.
+		var finishedConfiguredChildren = [[MockLowering.FinishedConfiguredChild]]()
 		// D1 lane hook (lane C): the builders `mock()` takes optional for the places its calls fill, and the calls not reached yet.
 		var filledCallBuilders = FilledCallBuilders.none
 		// D1 lane hook (lane C): a public mock builds each configured node with its type's construction function.
@@ -924,7 +926,7 @@ extension MockLowering {
 				indent: "\(indent)\(ScopeGenerator.standardIndent)",
 				lines: &lines,
 			)
-			leavingConfiguredNode(configurationEntry)
+			let finishedChildren = leavingConfiguredNode(configurationEntry)
 			parentConcreteType = enclosingParentConcreteType
 			overridePathReachable = enclosingOverridePathReachable
 			renames = enclosingRenames
@@ -973,6 +975,12 @@ extension MockLowering {
 					record.publicConstruction = MockLowering.publicConstructionRecord(of: configuredNode, children: recordedChildren, orderedBy: generator)
 				}
 				configurationRecords.append(record)
+				finishConfiguredNode(configuredNode, recordIndex: configurationRecords.count - 1)
+			} else if configuredNode.hasConfiguration, configurationEntry.recordsBeneathRepeatedAncestor {
+				// D1 lane hook (lane D): a node beneath a repeated ancestor records what the module's choice reads.
+				recordBeneathRepeatedAncestor(configuredNode, children: children, finishedChildren: finishedChildren)
+			} else if configuredNode.hasConfiguration {
+				finishConfiguredNode(configuredNode, recordIndex: nil)
 			}
 			// D1 lane hook (lane C): a public mock's configured node calls its type's construction function.
 			var endLines: [String]
