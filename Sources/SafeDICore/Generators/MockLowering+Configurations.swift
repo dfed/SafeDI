@@ -55,7 +55,7 @@ extension MockLowering {
 		// lowering does not spell there is not lowered yet.
 		guard !loweredRoots.contains(where: { $0.records.contains { record in
 			sendableConfigurationTypeNames.contains(record.concreteType.asSource)
-				&& record.publicConstruction == nil && record.childFields.contains { $0.sendableForm == nil }
+				&& record.publicConstruction == nil && record.childFieldSources.contains(where: \.lacksSendableForm)
 		} }) else {
 			return .unsupported(.wrapper)
 		}
