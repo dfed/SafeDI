@@ -75,9 +75,15 @@ extension ScopeGenerator {
 			[override.receivedProperty, Property(label: override.receivedProperty.label, typeDescription: override.typeDescription)]
 		})
 		// D1 lane hook (lane E): what `mock()` binds under its label before its tree, which a call's fill reads.
-		let rootBoundProperties = signature.properties.union(overrideProperties)
+		let rootBoundProperties = signature.properties.union(overrideProperties).union(signature.lazilyInstantiatedProperties)
+		// D1 lane hook (lane E): the names `mock()` binds a parameter, an override or a wrapper apart from its label under, which
+		// a fill reading the caller's own value binds the label to (`FillPlaceBindings.rootBindingNames`).
+		var rootBindingNames = signature.renamesByLabelAndType
+		for (label, names) in signature.lazilyInstantiatedBindingNamesByLabelAndType {
+			rootBindingNames[label, default: [:]].merge(names) { _, wrapperName in wrapperName }
+		}
 		// D1 lane hook (lane C): the builders `mock()` takes optional for the places its calls fill.
-		switch filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties) {
+		switch filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties, rootBindingNames: rootBindingNames) {
 		case let .lowered(filledCallBuilders):
 			walk.filledCallBuilders = filledCallBuilders
 		case let .unsupported(rule):
@@ -85,7 +91,7 @@ extension ScopeGenerator {
 		}
 		// D1 lane hook (lane C): a public mock's calls read each builder under the internal name its plan gives it.
 		if let optionalBuilderNames = publicMockOptionalBuilderNames(of: instantiable, signature: signature, filledCallBuilders: walk.filledCallBuilders, context: context) {
-			switch filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties, optionalBuilderNames: optionalBuilderNames) {
+			switch filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties, rootBindingNames: rootBindingNames, optionalBuilderNames: optionalBuilderNames) {
 			case let .lowered(filledCallBuilders):
 				walk.filledCallBuilders = filledCallBuilders
 			case let .unsupported(rule):
