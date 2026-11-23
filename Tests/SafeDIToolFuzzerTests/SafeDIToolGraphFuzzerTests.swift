@@ -6505,6 +6505,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// family it reads that it applied none to.
 		var remedyCounts = [GraphFuzzerRemedyKind: (judged: Int, failed: Int)]()
 		var unremediedSiteCount = 0
+		var acceptedRemedyCount = 0
 		var knownIssueCount = 0
 		var failureCount = 0
 		// Batches run concurrently, one per core, but their findings are recorded in the run's seed order, so the report and
@@ -6650,6 +6651,9 @@ struct SafeDIToolGraphFuzzerTests {
 								if remedyRun.failureLine != nil {
 									remedyCounts[remedyRun.remedy.kind, default: (0, 0)].failed += 1
 								}
+								if case .accepted = remedyRun.outcome {
+									acceptedRemedyCount += 1
+								}
 							}
 							if case let .rejected(diagnostics) = result.outcome {
 								unremediedSiteCount += GraphFuzzerRemedies.unremediedSiteCount(of: result.fixture, diagnostics: diagnostics)
@@ -6758,12 +6762,12 @@ struct SafeDIToolGraphFuzzerTests {
 		if let pinnedValueOracleCounts = corpus.valueOracleCounts {
 			report.append("value-oracle \(corpus.name) \(valueOracleCounts.reportField) \(pinnedValueOracleCounts.reportField)")
 		}
-		// The remedy oracle's judgments by kind, as `judged/failed`, and the sites it applied no remedy to, which no pin checks:
-		// the remedy oracle's unit tests hold a representative of each kind. It reads base and seam corpus graphs, in one
-		// module or split.
+		// The remedy oracle's judgments by kind, as `judged/failed`, the sites it applied no remedy to, and the remedied graphs
+		// the tool accepts, whose code the run compiles, which no pin checks: the remedy oracle's unit tests hold a
+		// representative of each kind. It reads base and seam corpus graphs, in one module or split.
 		if corpus.features.isEmpty || corpus.features == [.generateDependencyTree] {
 			let counts = GraphFuzzerRemedyKind.allCases.map { "\($0.rawValue)=\(remedyCounts[$0]?.judged ?? 0)/\(remedyCounts[$0]?.failed ?? 0)" }.joined(separator: ",")
-			report.append("remedies \(corpus.name) \(counts) unremedied=\(unremediedSiteCount)")
+			report.append("remedies \(corpus.name) \(counts) unremedied=\(unremediedSiteCount) accepted=\(acceptedRemedyCount)")
 		}
 		// What the run cost: its wall seconds, the CPU seconds of the test process and of its child processes, and for each
 		// phase the seconds batches spent in it, the CPU seconds of the processes it ran, and their number, which ci.yml's
@@ -6895,7 +6899,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one compile and one link.
 	static let smokeSeeds: [UInt64] = [4, 5, 12, 18, 25, 30, 40, 53, 59, 62, 70, 86, 94, 97, 98, 99, 133, 161, 212, 267, 304, 327, 378, 466, 520, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_002, 4_224, 4_516, 5_889, 6_388]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x3B932EAFF8DF5E1F
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x1259F63886987DD8
 
 	/// The remedies the remedy oracle applies in the smoke batch's rejected graphs. `SafeDIToolGraphFuzzerRemedyTests`
 	/// holds a representative of every kind.
@@ -6905,7 +6909,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x92B26BD3FE048921
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xE21DC45A231C0FB9
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -7521,7 +7525,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// rejects as it rejects the seam whose own tree receives both forms. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 24, 31, 68, 78, 84, 92, 93, 151, 153, 164, 180, 215, 227, 273, 277, 304, 309, 347, 468, 594, 605, 705, 743, 850, 881, 892, 934, 969, 1_010, 1_020, 1_450, 1_815, 1_837, 1_890, 1_986, 2_006, 3_575, 4_668]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xD0C61D568DCBD395
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xF2A720371AB6F397
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -7886,6 +7890,11 @@ struct SafeDIToolGraphFuzzerTests {
 			+ (seamCorpusSeedsAddedToInheritedShapes[knownIssue.reason] ?? [])).sorted()
 		return seeds.isEmpty ? nil : GraphFuzzerKnownIssue(reason: knownIssue.reason, signatures: knownIssue.signatures, seeds: seeds)
 	} + [
+		GraphFuzzerKnownIssue(
+			reason: remedyForwardsTypeNarrowerThanForwardingTypeReason,
+			signatures: [.macroRejectsFixture(containing: "type alias cannot be declared public because its underlying type uses")],
+			seeds: [316, 954],
+		),
 		GraphFuzzerKnownIssue(
 			reason: labelSortedPassThroughReason,
 			signatures: [.renamedGraphDiffers(.dependencyTreeListOrder)],
@@ -8662,14 +8671,14 @@ struct SafeDIToolGraphFuzzerTests {
 	/// pass-throughs, 21 and 848 beside both a builder order and the lazy cycle's configuration field, and 1959 beside
 	/// that field, and are listed with them; 107, 1051 and 1504 fail the remedy oracle's seam shape instead; 593, 617
 	/// and the other seeds from 1000 no longer fail it. The remedy oracle's `@Sendable` builder shape fails 167 in the
-	/// base corpus only. Seed 1329 failed the remedy oracle's seam fill shape that forwards a value into a lazy wrapper's type
+	/// base corpus only, as does the forward-receive remedy whose mock does not compile, 907. Seed 1329 failed the remedy oracle's seam fill shape that forwards a value into a lazy wrapper's type
 	/// instead, which the fill error's advice to declare that wrapper as an instantiator fixed. The hole draw's value outside a `@Sendable` function lands
 	/// in 338, 1042, 1072 and 1492, which the tool rejects, 338 and 1072 with that draw's error: 338 failed its inherited
 	/// shape before the draw, and 1042, 1072 and 1492 failed theirs no longer.
 	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [
 		7, 14, 21, 27, 35, 45, 51, 107, 114, 116, 157, 167, 204, 264, 265, 272, 281, 300, 309, 323, 338, 342, 364,
 		371, 381, 383, 431, 434, 455, 461, 476, 508, 525, 527, 545, 548, 567, 577, 593, 595, 617, 624, 628, 632, 634,
-		657, 695, 714, 728, 735, 742, 749, 751, 768, 772, 774, 786, 801, 808, 836, 840, 847, 848, 886, 903, 912, 940,
+		657, 695, 714, 728, 735, 742, 749, 751, 768, 772, 774, 786, 801, 808, 836, 840, 847, 848, 886, 903, 907, 912, 940,
 		948, 953, 993, 1_024, 1_029, 1_035, 1_042, 1_044, 1_051, 1_061, 1_072, 1_073, 1_081, 1_084, 1_092, 1_139, 1_145, 1_147,
 		1_149, 1_163, 1_300, 1_301, 1_322, 1_329, 1_335, 1_352, 1_362, 1_366, 1_369, 1_372, 1_432, 1_433, 1_434, 1_436,
 		1_447, 1_464, 1_483, 1_492, 1_504, 1_521, 1_524, 1_525, 1_531, 1_559, 1_561, 1_563, 1_567, 1_572, 1_580, 1_602,
@@ -8681,6 +8690,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
 	private static let seamCorpusSeedsAddedToInheritedShapes: [String: [UInt64]] = [
 		lazyCycleConfigurationFieldReason: [135, 1_049, 1_215, 1_289, 1_293],
+		remedyForwardedReceiveAdvisesWrapperThatIsNotSendableReason: [1_883],
 	]
 
 	/// Seeds whose seam has two or more pass-throughs. They are sorted by label – kept by ruling: a parameter order
@@ -9290,6 +9300,9 @@ struct SafeDIToolGraphFuzzerTests {
 	static let remedyRelabelLeavesSeamLabelInTwoFormsReason = "An error at a receive that a declaration of its label hides advises relabeling the hiding declaration, which leaves a seam's tree receiving the label in two forms, which a seam rejects (\"Receive `t0Builder` the same way in every type of the tree\"; seed 1935: relabeling `t0Builder: SendableInstantiator<S1935_T0>` on `S1935_T2` leaves `S1935_T1` receiving `t0Builder: Instantiator<S1935_T0>?` and `S1935_T4` receiving `t0Builder: Instantiator<S1935_T0>`)"
 	static let remedySeamProvidingWrapperUndeclaredReason = "A seam's error for one label its tree receives in two forms advises declaring on the seam the wrapper that provides the others, which no type that builds the seam declares, so the seam's receive is then unfulfilled, or a dependency cycle through the wrapper's type (seed 871: `FormsUser` -> `FormsScreen` -> `FormsUser`; remedyRuns_leaveNoErrorAtTheSeam_whenTheProvidingFormIsAWrapperTheSeamsCallerDoesNotDeclare: Root declares `user: S1_User` and builds S1_Seam, which receives `user: LazilyInstantiated<S1_User>?` only if available and builds S1_Child, which requires `user: S1_User`, and the error says to declare `@Received let user: LazilyInstantiated<S1_User>` on S1_Seam). Plan row I8 owns the fix"
 	static let valueOracleSendableTreeReceivingInstantiatorReason = "A value-oracle fixture limit: a root's mock accepts a `SendableInstantiator` tree that receives a non-`Sendable` `Instantiator` from outside, which production rejects under any host, so the fixture that calls the mock beside production is rejected (Intended: an oracle limit, not a SafeDI defect; seed 2764: `S2764_Root1` builds `t3Builder: SendableInstantiator<S2764_T1>`, and `S2764_T1` receives `t2Builder: Instantiator<S2764_T2>`, which cannot be received inside a `@Sendable` function)"
+	static let remedyForwardedReceiveBuiltAsConstantInMockReason = "A forward-receive remedy the tool accepts leaves a type no root reaches building the receiver as a constant, which production would report (\"Declare it as `Instantiator<T>`.\") and a mock that builds that type does not, so the mock builds the receiver without the value it now forwards and does not compile (minimal graph: `Child` declares `@Forwarded let value: Value`, `Parent` declares `@Instantiated let child: Child`, and `Root`, with `generateMock: true`, declares `@Received let parent: Parent`, which no root builds; its mock writes `Child(value: value)` with no `value` in scope). Production checks the builder only in the types a root reaches, and a mock only on the mock root’s own children"
+	static let remedyForwardedReceiveAdvisesWrapperThatIsNotSendableReason = "An error at a constant `@Instantiated` property whose type now forwards a value advises \"Declare it as `Instantiator<T>`.\" by the property’s own wrapper kind alone, so inside a type that conforms to `Sendable` it names the wrapper that is not `Sendable`, and a forward-receive remedy that follows it leaves a fixture that does not compile (\"stored property … of 'Sendable'-conforming class … has non-Sendable type 'Instantiator<…>'\"); there it should name `SendableInstantiator<T>`, and likewise for the erased and lazy forms. Minimal graph: `Child` declares `@Forwarded let value: Value`, and `Parent`, a `final class` that conforms to `Sendable`, declares `@Instantiated let child: Child`"
+	static let remedyForwardsTypeNarrowerThanForwardingTypeReason = "A forward-receive remedy the tool accepts declares `@Forwarded let x: X` on a `public` type whose initializer is narrower, where `X` is `package` or `internal`, and the macro declares `ForwardedProperties` at the type’s own access, `public typealias ForwardedProperties = X`, which does not compile (\"type alias cannot be declared public because its underlying type uses a package type\"); the advice cannot know the type’s access, so the typealias should take the narrowest of the type’s access and the forwarded types’ (seam seeds 316 and 954: `ProofLock`, `public` with a `package` or `internal` initializer, forwards `proofPin: ProofPin`, `package` or `internal`). Minimal graph: `public final class Lock` with `package init(pin: Pin)` declares `@Forwarded let pin: Pin`, and `Pin` is `package`"
 	static let remedySendableWrapperNamesOneDeclarationReason = "An error at a receive inside a `@Sendable` function advises declaring the captured property as its `Sendable` wrapper on the one root its chain starts at, and at the receive, where another root declares the property, or another type receives it, as the wrapper that is not `Sendable`: the receive is then unfulfilled beneath the other root, or hidden beneath the other receiver (remedyRuns_leaveNoErrorAtTheReceive_whenAnotherRootDeclaresThePropertyTheSendableBuilderCannotCapture: Root0 builds T1 through `SendableInstantiator<T1>` and Root1 as a constant, each declares `t2Builder: Instantiator<T2>`, and T1 receives it). Naming every declaration whose `@Sendable` chain reaches the receive leaves out, in the base corpus's seeds 1436 and 4829, a root that reaches it on a chain that is not `@Sendable`, or the mock of a type that receives it"
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
@@ -9448,6 +9461,16 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: remedyDeclarationClosesCycleThroughRootReason,
 			signatures: [.remedyLeavesErrorAtSite(.instantiateOnRoot, containing: "Dependency cycle: ")],
 			seeds: [4_864],
+		),
+		GraphFuzzerKnownIssue(
+			reason: remedyForwardedReceiveBuiltAsConstantInMockReason,
+			signatures: [.compilerError(containing: "The forward-receive remedy, ")],
+			seeds: [907],
+		),
+		GraphFuzzerKnownIssue(
+			reason: remedyForwardedReceiveAdvisesWrapperThatIsNotSendableReason,
+			signatures: [.macroRejectsFixture(containing: "has non-Sendable type 'Instantiator<")],
+			seeds: [1_071, 1_642, 2_184, 3_899, 4_373],
 		),
 		GraphFuzzerKnownIssue(
 			reason: remedySendableWrapperNamesOneDeclarationReason,
