@@ -229,11 +229,15 @@ extension DependencyTreeGenerator {
 				foreignPublicMocks: foreignPublicMocks,
 			)
 			async let fulfillers = mockRoot.fulfillersOfMock(mockDefaults: flatParameterMockDefaults)
-			let code = try await mockRoot.generateCode(codeGeneration: .mock(mockContext))
-			// Stage D1's shadow, which only the tests set: the lowering of the same root, compared with the emitter's code.
-			var lowered: MockLowering.Result?
+			// SWITCH PROTOTYPE: the lowering produces every root it lowers.
+			let loweredRoot = try await mockRoot.lowerMockRoot(context: mockContext)
+			let code: String = if case let .lowered(loweredCode, _) = loweredRoot {
+				loweredCode
+			} else {
+				try await mockRoot.generateCode(codeGeneration: .mock(mockContext))
+			}
+			var lowered: MockLowering.Result? = loweredRoot
 			if let shadowObserver = MockLoweringShadow.observer {
-				let loweredRoot = try await mockRoot.lowerMockRoot(context: mockContext)
 				shadowObserver(MockLoweringShadow.Comparison(
 					mockedType: instantiable.concreteInstantiable.asSource,
 					outcome: MockLoweringShadow.outcome(comparing: loweredRoot, with: code),
@@ -264,6 +268,13 @@ extension DependencyTreeGenerator {
 				configurationNodesByConstruction: generatedRootsAndSummaries.map(\.configurationNodesByConstruction),
 				mockDeclarationLocations: mockDeclarationLocations,
 			)
+		}
+		// SWITCH PROTOTYPE: the lowering's one-way check decides the error.
+		let loweredRootsForSwitch = zip(mockRoots, generatedRootsAndSummaries).compactMap { mockRoot, generatedRootAndSummary in
+			generatedRootAndSummary.lowered.map { (mockedType: mockRoot.instantiable.concreteInstantiable, lowered: $0) }
+		}
+		if case let .lowered(conflicts) = MockLowering.configurationsBuiltTwoWays(of: loweredRootsForSwitch, mockDeclarationLocations: mockDeclarationLocations), !conflicts.isEmpty {
+			throw DependencyTreeGeneratorError.configurationBuiltTwoWays(conflicts)
 		}
 		// Stage D1's shadow of the one-way check, which only the tests set: the check read from the records of every root's
 		// lowering, compared with the diagnostics above.
@@ -392,7 +403,7 @@ extension DependencyTreeGenerator {
 			}
 		}
 
-		let mergedGeneratedRoots = generatedRoots.map { result in
+		var mergedGeneratedRoots = generatedRoots.map { result in
 			let configurationCode = rootedConfigurationExtensions[result.root.typeDescription.asSource].map { structCode in
 				generateMockConfigurationCode(
 					configurationExtensions: [ConfigurationExtension(typeName: result.root.typeDescription.asSource, structCode: structCode)],
@@ -412,7 +423,7 @@ extension DependencyTreeGenerator {
 			)
 		}
 
-		let mockConfigurationCode: String? = if sharedConfigurationExtensions.isEmpty, publicConfigurationDeclarations.isEmpty {
+		var mockConfigurationCode: String? = if sharedConfigurationExtensions.isEmpty, publicConfigurationDeclarations.isEmpty {
 			nil
 		} else {
 			generateMockConfigurationCode(
@@ -447,6 +458,29 @@ extension DependencyTreeGenerator {
 			) {
 				shadowObserver(comparison)
 			}
+		}
+
+		// SWITCH PROTOTYPE: the lowering's configurations.
+		if case let .lowered((mergedCodes, configurationCode, configurationFulfillers)) = MockLowering.configurationCode(
+			of: zip(generatedRootsAndSummaries, mergedGeneratedRoots).compactMap { generatedRootAndSummary, mergedRoot in
+				generatedRootAndSummary.lowered.map {
+					MockLowering.LoweredRoot(
+						mockedType: mergedRoot.typeDescription,
+						lowered: $0,
+						emittedMergedCode: mergedRoot.code,
+						mockedTypeFulfiller: typeDescriptionToFulfillingInstantiableMap[mergedRoot.typeDescription].flatMap(FulfillerImports.Fulfiller.init(instantiable:)),
+					)
+				}
+			},
+			mockConditionalCompilation: mockConditionalCompilation,
+			sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+			publicMockContext: publicMockContext,
+		) {
+			mergedGeneratedRoots = zip(mergedGeneratedRoots, mergedCodes).map { root, code in
+				GeneratedRoot(typeDescription: root.typeDescription, sourceFilePath: root.sourceFilePath, code: code, fulfillers: root.fulfillers)
+			}
+			mockConfigurationCode = configurationCode
+			mockConfigurationFulfillers = configurationFulfillers
 		}
 
 		// Freeing the mock roots' trees keeps a core busy for a while on a large module, and nothing generated waits for it.
