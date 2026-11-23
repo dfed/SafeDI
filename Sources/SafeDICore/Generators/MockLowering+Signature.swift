@@ -192,8 +192,6 @@ extension ScopeGenerator {
 	) -> MockLowering.Lowering<MockLowering.RootSignature> {
 		var forwardedParameters = [MockLowering.RootSignature.Parameter]()
 		for dependency in instantiable.dependencies.sorted(by: { $0.property < $1.property }) where dependency.source == .forwarded {
-			// A forwarded wrapper declares the forms of its instance beside it, which the tree's receives read.
-			guard dependency.property.propertyType.isConstant else { return .unsupported(.wrapper) }
 			// The default the initializer gives the parameter of its label wins over the hand-written mock its type has.
 			let constructionDefault = instantiable.initializer?.arguments.first { $0.innerLabel == dependency.property.label }?.defaultValueExpression
 			forwardedParameters.append(MockLowering.RootSignature.Parameter(
