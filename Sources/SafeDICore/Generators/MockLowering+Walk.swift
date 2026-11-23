@@ -1663,7 +1663,7 @@ extension MockLowering {
 		func builderFunctionDeclarationLine(indent: String) -> String {
 			let builtType = property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource
 			let parameters = forwardedProperties.map { "\($0.label): \($0.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping).asSource)" }
-			let decorator = buildsInSendableFunction ? "@Sendable " : ""
+			let decorator = ScopeGenerator.localFunctionPrefix(isSendable: buildsInSendableFunction)
 			var parameterList = parameters.joined(separator: ", ")
 			if !cycleParameters.isEmpty {
 				parameterList += (parameterList.isEmpty ? "" : ", ") + cycleParameters.initializerFunctionParametersSource(amongTypesDeclaredEscaping: typesDeclaredEscaping)

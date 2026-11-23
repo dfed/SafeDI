@@ -700,7 +700,7 @@ extension MockLowering.Walk {
 		}
 		let typeName = property.typeDescription.asInstantiatedTypeSpelledAsDeclared.asSource
 		let functionName = ScopeGenerator.functionName(toBuildPropertyNamed: property.label)
-		let functionDecorator = generator.buildsInSendableFunction ? "@Sendable " : ""
+		let functionDecorator = ScopeGenerator.localFunctionPrefix(isSendable: generator.buildsInSendableFunction)
 		// The values an instantiator's builder function takes from the instantiator, in label order, which the call passes on.
 		let forwarded = forwardedProperties.sorted { $0.label < $1.label }
 		let functionParameters = forwarded.map { "\($0.label): \($0.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: generator.typesDeclaredEscaping).asSource)" }.joined(separator: ", ")
