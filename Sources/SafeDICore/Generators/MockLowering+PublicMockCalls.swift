@@ -384,7 +384,7 @@ extension MockLowering.Walk {
 					overrideArguments.append(dependency.property.label)
 				}
 				passedUpBuilderBindings.append("let \(dependency.property.label): \(dependency.property.typeDescription.strippingEscaping.asSource) = \(builderName)")
-				arguments.append(labeled(".init(__safeDI_noScope: \(dependency.property.label))", as: argument))
+				arguments.append(labeled(".init(\(ReservedName.noScopeArgumentLabel): \(dependency.property.label))", as: argument))
 			} else if let builderStruct = structValuesByLabel[argument.innerLabel] {
 				let fillsStruct = builderStruct.replacingOccurrences(of: "\n\(ScopeGenerator.standardIndent)", with: "\n\(innerIndent)")
 				arguments.append(labeled(holeBuilders[argument.innerLabel]?.structValue(fillsStruct: fillsStruct) ?? fillsStruct, as: argument))
