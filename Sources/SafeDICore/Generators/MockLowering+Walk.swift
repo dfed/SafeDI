@@ -327,6 +327,11 @@ extension MockLowering {
 		/// function a body between a cycle closer and the node it repeats declares under that node's label would hide the
 		/// node's function from the closer.
 		var bodyLabels = [Set<String>]()
+		// D1 lane hook (lane B): the labels of the nodes each body declares a builder function for, which a cycle-closing
+		// node, declaring none, is not among.
+		/// The labels of the children of each body of `bodyLabels` that build a property, which a closer's reference could
+		/// resolve to.
+		var bodyBuiltLabels = [Set<String>]()
 		/// The names a receive is handed in place of its label, by label and then type: a node named apart from a sibling
 		/// that shares its label (`ScopeGenerator.disambiguatePropertyLabels(for:)`), which its receivers bind again under
 		/// the label in their builder functions, until a declaration of the label hides it.
@@ -689,7 +694,7 @@ extension MockLowering {
 			      generator.closedOnDeclaration?.concreteType == instantiable.concreteInstantiable,
 			      let closedOn = ancestorDeclarationsByLabel[property.label]?.last,
 			      closedOn.declaration == generator.closedOnDeclaration,
-			      !bodyLabels[closedOn.bodyLevel..<(bodyLabels.count - 1)].contains(where: { $0.contains(property.label) })
+			      !bodyBuiltLabels[closedOn.bodyLevel..<(bodyBuiltLabels.count - 1)].contains(where: { $0.contains(property.label) })
 			else { return .unsupported(.cycle) }
 			let forwardedProperties = instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property).sorted { $0.label < $1.label }
 			// D1 lane hook (lane B): a closer of any wrapper kind hands the function to its wrapper, inside a `@Sendable`
@@ -955,6 +960,10 @@ extension MockLowering {
 			let insertedAncestor = ancestorTypes.insert(cycleNodeKey).inserted
 			ancestorDeclarationsByLabel[property.label, default: []].append((ScopeGenerator.BuiltDeclaration(property: property, concreteType: instantiable.concreteInstantiable), functionName: node.functionName, bodyLevel: bodyLabels.count))
 			bodyLabels.append(Set(childGenerators.compactMap(\.property?.label)))
+			bodyBuiltLabels.append(Set(childGenerators.compactMap { child in
+				guard case let .property(_, property, _, _, isPropertyCycle, _) = child.scopeData, !isPropertyCycle else { return nil }
+				return property.label
+			}))
 			let siblingLabels = labels
 			labels = []
 			let enclosingParentConcreteType = parentConcreteType
@@ -986,6 +995,7 @@ extension MockLowering {
 			labels = siblingLabels
 			ancestorDeclarationsByLabel[property.label]?.removeLast()
 			bodyLabels.removeLast()
+			bodyBuiltLabels.removeLast()
 			if insertedAncestor {
 				ancestorTypes.remove(cycleNodeKey)
 			}
