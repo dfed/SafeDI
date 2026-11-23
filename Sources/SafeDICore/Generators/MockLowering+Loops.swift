@@ -218,6 +218,23 @@ extension MockLowering.Walk {
 		lastLoopMemberLineCounts = nil
 	}
 
+	/// The lines of a call of another module's public mock that is a member, `property`, of the loop being lowered, at
+	/// `indent`: its builder function, declared by `functionDeclaration`, which first rebinds the members its tree
+	/// receives, then holds `bodyLines` and returns `call`; then its wrapper's binding where its level binds it. `nil` where
+	/// its function takes parameters a lazy cycle needs, which the call does not pass yet.
+	mutating func loopMemberCallLines(of generator: ScopeGenerator, property: Property, functionDeclaration: String, bodyLines: [String], call: String, indent: String) -> [String]? {
+		let bodyIndent = "\(indent)\(ScopeGenerator.standardIndent)"
+		guard let loopMembership, let member = loopMembers[property], member.receivedFunctionName == nil, let rebindingLines = MockLowering.rebindingLines(of: generator.reboundProperties, among: loopMembers, ownProperty: property, indent: bodyIndent) else { return nil }
+		let statements = rebindingLines + bodyLines.map { "\(bodyIndent)\($0)" }
+		var lines = [functionDeclaration] + statements
+		lines.append("\(bodyIndent)\(statements.isEmpty ? "" : "return ")\(call)")
+		lines.append("\(indent)}")
+		let bindingLines = loopMembership.declaresBinding ? MockLowering.memberBindingLines(of: member, handing: member.functionName, indent: indent) : []
+		lines.append(contentsOf: bindingLines)
+		lastLoopMemberLineCounts = MockLowering.LoopMemberLineCounts(prelude: 0, binding: bindingLines.count)
+		return lines
+	}
+
 	/// Appends the loop being emitted, if any, to `lines`.
 	mutating func endLoopUnit(appendingTo lines: inout [String]) {
 		if let loopUnit {
