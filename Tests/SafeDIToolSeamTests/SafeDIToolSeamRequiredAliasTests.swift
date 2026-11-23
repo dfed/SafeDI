@@ -95,14 +95,14 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        let token = Token()
+			        func __safeDI_detail() -> Detail {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			            let authToken: Token? = token
+			            #sourceLocation()
+			            let child = Child(authToken: authToken)
+			            return Detail(authToken: authToken, child: child)
+			        }
 			        func __safeDI_screen() -> Screen {
-			            func __safeDI_detail() -> Detail {
-			                #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Token? = token
-			                #sourceLocation()
-			                let child = Child(authToken: authToken)
-			                return Detail(authToken: authToken, child: child)
-			            }
 			            let detail: Detail = __safeDI_detail()
 			            return Screen(detail: detail)
 			        }
@@ -165,14 +165,14 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        let token = Token(screen: nil)
+			        func __safeDI_detail() -> Detail {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			            let authToken: Token? = token
+			            #sourceLocation()
+			            let child = Child(authToken: authToken)
+			            return Detail(authToken: authToken, child: child)
+			        }
 			        func __safeDI_screen() -> Screen {
-			            func __safeDI_detail() -> Detail {
-			                #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Token? = token
-			                #sourceLocation()
-			                let child = Child(authToken: authToken)
-			                return Detail(authToken: authToken, child: child)
-			            }
 			            let detail: Detail = __safeDI_detail()
 			            return Screen(detail: detail)
 			        }
@@ -367,18 +367,18 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        let token = Token()
+			        func __safeDI_inner() -> Inner {
+			            let detail: Detail = __safeDI_detail()
+			            return Inner(detail: detail)
+			        }
+			        func __safeDI_detail() -> Detail {
+			            #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			            let authToken: Token? = token
+			            #sourceLocation()
+			            let child = Child(authToken: authToken)
+			            return Detail(authToken: authToken, child: child)
+			        }
 			        func __safeDI_screen() -> Screen {
-			            func __safeDI_inner() -> Inner {
-			                func __safeDI_detail() -> Detail {
-			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
-			                    let authToken: Token? = token
-			                    #sourceLocation()
-			                    let child = Child(authToken: authToken)
-			                    return Detail(authToken: authToken, child: child)
-			                }
-			                let detail: Detail = __safeDI_detail()
-			                return Inner(detail: detail)
-			            }
 			            let inner: Inner = __safeDI_inner()
 			            return Screen(inner: inner)
 			        }
