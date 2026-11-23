@@ -101,8 +101,10 @@ extension ScopeGenerator {
 			guard filledCall.filledBuilders.count + publicMockCall.passedUpBuilders.count == publicMockCall.builders.count else { return .unsupported(.fill) }
 			for callInsideFill in callPlaces.calls {
 				guard let calledMock = callInsideFill.generator.publicMockCall,
-				      calledMock.passedUpBuilders.isEmpty,
-				      callInsideFill.filledBuilders.count + callInsideFill.reenteredBuilders.count == calledMock.builders.count
+				      // A builder a call inside a fill passes up is a builder `mock()` takes (`RootSignature.passedUpBuilders`),
+				      // which the fill reads by its label; one it passes a function an enclosing call declares reads what that
+				      // call's fills read.
+				      callInsideFill.filledBuilders.count + callInsideFill.reenteringBuilderCount + calledMock.passedUpBuilders.count == calledMock.builders.count
 				else { return .unsupported(.fill) }
 			}
 			namesFillsDeclare.formUnion(callPlaces.declaredLabels)

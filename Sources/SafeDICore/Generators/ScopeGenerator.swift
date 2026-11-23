@@ -9060,6 +9060,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
+		// D1 lane hook (lane E): every builder the call passes a function an enclosing call declares, re-entering it, its
+		// root level function's or a level's beneath it (`PublicMockLevelFunctions.Member.reentry`).
+		/// The number of builders the call passes a level function or dispatcher an enclosing call declares, by name.
+		var reenteringBuilderCount: Int {
+			generator.builderCallArguments.count { $0.builderStruct == nil && $0.enclosingFill != nil }
+		}
+
 		/// Each builder the call passes the level function of an enclosing call's builder, re-entering it, with the nearest
 		/// enclosing call that passes that function and its label there: the call passes what the enclosing call passes.
 		var reenteredBuilders: [(label: String, enclosingCall: ScopeGenerator, enclosingLabel: String)] {
