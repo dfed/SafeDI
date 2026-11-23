@@ -1333,8 +1333,9 @@ extension MockLowering {
 	}
 
 	/// A node of a mock's tree: one that builds its type, an alias of a value bound before it, or a call of another module's
-	/// public mock.
-	enum TreeNode {
+	/// public mock. Indirect, so that the walk's many copies of a node, in its parent's children and in the records, share
+	/// one box rather than copying every field of a `ConstantNode`.
+	indirect enum TreeNode {
 		case built(ConstantNode)
 		case alias(AliasBinding)
 		// D1 lane hook (lane C): a call of another module's public mock (`MockLowering+PublicMocks.swift`).
