@@ -459,7 +459,9 @@ extension MockLowering.Walk {
 		      property.propertyType.isConstant || [.instantiator, .sendableInstantiator, .lazilyInstantiated, .sendableLazilyInstantiated].contains(property.propertyType) || erasedToConcreteExistential && [.erasedInstantiator, .sendableErasedInstantiator].contains(property.propertyType),
 		      erasedToConcreteExistential || property.typeDescription.asInstantiatedType == instantiable.concreteInstantiable
 		else { return .unsupported(.publicMockCall) }
-		guard !rootLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
+		// D1 lane hook (lane B): a call inside a builder function binds its label again there, hiding the root's binding of
+		// it, as a built node does.
+		guard !bodyLabels.isEmpty || !rootLabels.contains(property.label), labels.insert(property.label).inserted else { return .unsupported(.siblingLabelCollision) }
 		// The leaf takes the called tier's parameters as its mock's.
 		let constructionInitializer = instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType) ? instantiable.mockInitializer : instantiable.initializer
 		guard let initializer = constructionInitializer else { return .unsupported(.publicMockCall) }

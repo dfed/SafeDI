@@ -211,6 +211,137 @@ struct SafeDIToolCallingMockOnlyIfAvailableOverrideTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_bindsCallUnderOverridesLabelInsideBuilderFunction_whenTypeBuiltInInstantiatorCallsPublicMockOfLabelMockReceivesOnlyIfAvailable() async throws {
+		// `Screen` receives `cache` only if available, so its mock binds the override `cache`, and `Home`, built in
+		// `homeBuilder`’s function, calls `Cache`’s public mock for its own `cache`, bound under the label inside that
+		// function, where it hides the override.
+		let modules = Self.modules(screen: """
+		import Core
+		import SafeDI
+
+		@Instantiable(generateMock: true)
+		public struct Screen: Instantiable {
+		    public init(cache: Cache?, homeBuilder: Instantiator<Home>) {
+		        self.cache = cache
+		        self.homeBuilder = homeBuilder
+		    }
+
+		    @Received(onlyIfAvailable: true) let cache: Cache?
+		    @Instantiated let homeBuilder: Instantiator<Home>
+		}
+
+		@Instantiable
+		public struct Home: Instantiable {
+		    public init(cache: Cache) {
+		        self.cache = cache
+		    }
+
+		    @Instantiated let cache: Cache
+		}
+		""")
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            homeBuilder: Home.SafeDIMockConfiguration = .init(),
+		            cache: Cache? = nil,
+		            filter: (any FilterProtocol)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                homeBuilder: homeBuilder
+		            )
+		            self.cache = cache
+		            self.filter = filter
+		        }
+
+		        var homeBuilder: Home.SafeDIMockConfiguration { __safeDI_storage.homeBuilder }
+		        let cache: Cache?
+		        let filter: (any FilterProtocol)?
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                homeBuilder: Home.SafeDIMockConfiguration
+		            ) {
+		                self.homeBuilder = homeBuilder
+		            }
+
+		            let homeBuilder: Home.SafeDIMockConfiguration
+		        }
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let cache: Cache? = safeDIOverrides.cache
+		        let filter: (any FilterProtocol)? = safeDIOverrides.filter
+		        func __safeDI_homeBuilder() -> Home {
+		            _ = Cache.__safeDI_Cache_mock_215B449271BCAB93.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            let cache = Cache.__safeDI_mock(filter: filter, safeDIOverrides: safeDIOverrides.homeBuilder.cache)
+		            return if let safeDIBuilder = safeDIOverrides.homeBuilder.safeDIBuilder { safeDIBuilder(cache) } else { Home(cache: cache) }
+		        }
+		        let homeBuilder = Instantiator<Home>(__safeDI_homeBuilder)
+		        return Screen(cache: cache, homeBuilder: homeBuilder)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Home {
+		    /// Configuration for how this type is constructed within a mock tree.
+		    struct SafeDIMockConfiguration {
+		        init(
+		            cache: Cache.SafeDIOverrides = .init(),
+		            _ safeDIBuilder: ((Cache) -> Home)? = nil
+		        ) {
+		            __safeDI_storage = __safeDI_Storage(
+		                cache: cache,
+		                safeDIBuilder: safeDIBuilder
+		            )
+		        }
+
+		        var cache: Cache.SafeDIOverrides { __safeDI_storage.cache }
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        var safeDIBuilder: ((Cache) -> Home)? { __safeDI_storage.safeDIBuilder }
+
+		        private let __safeDI_storage: __safeDI_Storage
+
+		        private final class __safeDI_Storage {
+		            init(
+		                cache: Cache.SafeDIOverrides,
+		                safeDIBuilder: ((Cache) -> Home)?
+		            ) {
+		                self.cache = cache
+		                self.safeDIBuilder = safeDIBuilder
+		            }
+
+		            let cache: Cache.SafeDIOverrides
+		            let safeDIBuilder: ((Cache) -> Home)?
+		        }
+		    }
+		}
+		#endif
+
+		"""])
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [
+			DifferentialValueProbe("Screen.mock()"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesOverrideAndPassesItToCall_whenListedCallersPublicMockCallReceivesValueOnlyIfAvailable() async throws {
 		let modules = Self.modules(screen: """
 		import Core
