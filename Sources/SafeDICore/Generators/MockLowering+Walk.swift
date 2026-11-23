@@ -86,7 +86,6 @@ extension ScopeGenerator {
 		walk.buildsPublicMock = instantiable.generateMock == .public
 		// D1 lane hook (lane C): the nodes a public mock promotes, each bound from its caller's value when passed one.
 		walk.promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildren)
-		walk.publicMockLeadingParameterNames = Set(signature.parameters.map(\.name))
 		// D1 lane hook (lane B): each override binds its receive's label, in the optional form a receive only if available
 		// reads.
 		let overrideProperties = Set(signature.onlyIfAvailableOverrides.flatMap { override in
@@ -102,13 +101,36 @@ extension ScopeGenerator {
 		case let .unsupported(rule):
 			return .unsupported(rule)
 		}
-		// D1 lane hook (lane C): a public mock's calls read each builder under the internal name its plan gives it.
-		if let optionalBuilderNames = publicMockOptionalBuilderNames(of: instantiable, signature: signature, filledCallBuilders: walk.filledCallBuilders, context: context) {
-			switch try filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties, optionalBuilderNames: optionalBuilderNames) {
-			case let .lowered(filledCallBuilders):
-				walk.filledCallBuilders = filledCallBuilders
-			case let .unsupported(rule):
-				return .unsupported(rule)
+		// D1 lane hook (lane B): a public mock's plan, computed once from the names the root's level binds its nodes under,
+		// names the parameters its promoted nodes read their callers' values from, and the builders its calls read, which the
+		// walk and the mock's tiers both take from it. A level the walk cannot name gets no plan: the walk stops at it first.
+		var publicMockRootPlan: PublicMockPlan?
+		if instantiable.generateMock == .public, let publicMockContext = context.publicMockContext, let rootBindingNames = walk.rootLevelBindingNames(of: orderedChildren.map(\.generator)) {
+			let plan = publicMockPlan(
+				of: instantiable,
+				signature: signature,
+				// A promoted call is bound under its label (`publicMockCallNode`).
+				promotedNodes: zip(orderedChildren, rootBindingNames).compactMap { child, bindingName in
+					guard let property = child.generator.mockLoweringBuiltProperty, let bindingName, walk.promotedProperties.contains(property) else { return nil }
+					return (property: property, name: child.generator.publicMockCall == nil ? bindingName : property.label)
+				},
+				filledCallBuilders: walk.filledCallBuilders,
+				// A public mock takes each property received only if available as a parameter, so only the tree's property
+				// nodes make a `SafeDIOverrides`; a place is bound as an alias.
+				hasOverrides: orderedChildren.contains { $0.generator.mockLoweringBuiltProperty != nil },
+				context: context,
+				publicMockContext: publicMockContext,
+			)
+			walk.promotedParameterNames = plan.promotedParameterNames
+			publicMockRootPlan = plan
+			// D1 lane hook (lane C): a public mock's calls read each builder under the internal name its plan gives it.
+			if !walk.filledCallBuilders.families.isEmpty {
+				switch try filledCallBuilders(of: orderedChildren, context: context, rootBoundProperties: rootBoundProperties, optionalBuilderNames: plan.optionalBuilderNames) {
+				case let .lowered(filledCallBuilders):
+					walk.filledCallBuilders = filledCallBuilders
+				case let .unsupported(rule):
+					return .unsupported(rule)
+				}
 			}
 		}
 		// D1 lane hook (lane C): `mock()` first binds each builder a call passes up apart from its label, as it binds a flat
@@ -219,7 +241,7 @@ extension ScopeGenerator {
 		// D1 lane hook (lane C): a public mock's tiers, overrides and guard (`MockLowering+PublicMocks.swift`).
 		guard instantiable.generateMock != .public else {
 			// D1 lane hook (lane C): a public mock's parameters named apart and its values passed `nil`, as the internal mock's.
-			return publicMockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, filledCallBuilders: walk.filledCallBuilders, configurations: walk.configurationRecords, context: context)
+			return publicMockWithTree(of: instantiable, plan: publicMockRootPlan, signature: signature, nodes: nodes, bindingLines: bindingLines, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, configurations: walk.configurationRecords, context: context)
 		}
 		return .lowered(Self.mockWithTree(of: instantiable, signature: signature, nodes: nodes, bindingLines: bindingLines, builders: (walk.filledCallBuilders.parameters + signature.placeOnlyBuilderDeclarations).sorted { $0.label < $1.label }, rootRenames: rootRenames, unavailableProperties: unavailableOptionalProperties, instancesReadByValue: rootInstancesReadByValue, context: context), configurations: walk.configurationRecords)
 	}
@@ -442,13 +464,11 @@ extension MockLowering {
 		// builder function reads (`ScopeGenerator.MockParameterNode.ValuesBinding.line`).
 		var enclosingBindingNamesPassedByName = [String: String]()
 		// D1 lane hook (lane C): the properties of the nodes a public mock promotes at its root's level, each bound from the
-		// parameter its caller passes, named as the node's binding (`MockLowering+PublicMocks.swift` checks the name).
+		// parameter its caller passes, named as its plan names it (`promotedParameterNames`).
 		var promotedProperties = Set<Property>()
-		// D1 lane hook (lane D): the names of the parameters the public mock takes for its promoted nodes where a name differs
-		// from the node's binding, and the names of its other parameters, which those names keep apart from
-		// (`MockLowering.publicMockPromotedParameterNames`).
+		// D1 lane hook (lane D): the names of the parameters the public mock takes for its promoted nodes, as its plan names
+		// them (`PublicMockPlan.promotedParameterNames`).
 		var promotedParameterNames = [Property: String]()
-		var publicMockLeadingParameterNames = Set<String>()
 		// D1 lane hook (lane B): the extractor of the `@Sendable` builder function the walk is inside, and the names of each
 		// level it is in, from which such a function's locals are claimed (`MockLowering+Wrappers.swift`).
 		var sendableOverrideExtractor: ScopeGenerator.SendableOverrideExtractor?
@@ -510,14 +530,6 @@ extension MockLowering {
 					rootBindingNames[label, default: [:]].merge(names) { _, wrapperName in wrapperName }
 				}
 				filledCallBuilders.bindingRootNames(rootBindingNames)
-				// D1 lane hook (lane D): the public mock's parameters for the nodes it promotes, named as its plan names them.
-				promotedParameterNames = MockLowering.publicMockPromotedParameterNames(
-					of: zip(generators, bindingNames).compactMap { generator, bindingName in
-						guard let property = generator.property, let bindingName, promotedProperties.contains(property) else { return nil }
-						return (property, bindingName)
-					},
-					besideParametersNamed: publicMockLeadingParameterNames,
-				)
 				// D1 lane hook (lane B): the names the root's property nodes are bound under, which a rebinding of the mocked
 				// type's own receive would redeclare.
 				for (generator, bindingName) in zip(generators, bindingNames) {
@@ -678,6 +690,15 @@ extension MockLowering {
 		/// Names apart each alias of the mock root's level, among `generators`, whose label a property node of the level, or a
 		/// flat received parameter of `mock()`, binds, as `ScopeGenerator.renamingAliases` does: `<label>_<simplified type>`,
 		/// `_` appended while the name is taken, set as the alias's entry of `bindingNames`.
+		/// The names the mock root's level, `generators`, binds its nodes under, as the walk names them when it reaches the
+		/// level, or `nil` where the walk stops there; named on a copy, so the walk's own record of the names it keeps apart
+		/// starts empty.
+		func rootLevelBindingNames(of generators: [ScopeGenerator]) -> [String?]? {
+			var walk = self
+			guard case let .lowered(bindingNames) = walk.levelBindingNames(of: generators) else { return nil }
+			return bindingNames
+		}
+
 		private mutating func nameRootAliasesApart(among generators: [ScopeGenerator], bindingNames: inout [String?]) {
 			let propertyNodeNames = Set(zip(generators, bindingNames).compactMap { generator, bindingName in
 				generator.mockLoweringBuiltProperty == nil ? nil : bindingName

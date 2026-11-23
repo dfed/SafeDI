@@ -129,32 +129,24 @@ extension ScopeGenerator {
 	/// it meets that the lowering does not lower yet.
 	func publicMockWithTree(
 		of instantiable: Instantiable,
+		plan: PublicMockPlan?,
 		signature: MockLowering.RootSignature,
 		nodes: [MockLowering.TreeNode],
 		bindingLines: [String],
 		rootRenames: [String: [TypeDescription: String]],
 		unavailableProperties: Set<Property>,
 		instancesReadByValue: Set<Property>,
-		filledCallBuilders: MockLowering.FilledCallBuilders,
 		configurations: [MockLowering.ConfigurationRecord],
 		context: MockContext,
 	) -> MockLowering.Result {
-		guard let publicMockContext = context.publicMockContext else { return .unsupported(.publicMockRoot) }
-		// Each dependency the mock promotes to its root is an optional parameter, named as the node's binding, which the walk
-		// binds the node from. A name the parameters take apart from the binding's is not lowered yet.
+		// D1 lane hook (lane B): the plan the walk named the promoted nodes' parameters and the calls' builders from.
+		guard let publicMockContext = context.publicMockContext, let plan else { return .unsupported(.publicMockRoot) }
+		// Each dependency the mock promotes to its root is an optional parameter, which the walk binds the node from.
 		let promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildrenComputedAfresh(propertiesGeneratedLater: []))
-		var promotedNodes = [(property: Property, name: String)]()
-		// D1 lane hook (lane D): the name of the parameter the walk read each promoted node's value from.
-		var promotedParameterNamesRead = [Property: String]()
 		for node in nodes where promotedProperties.contains(node.property) {
 			switch node {
-			case let .built(builtNode):
-				promotedNodes.append((property: node.property, name: builtNode.bindingName))
-				promotedParameterNamesRead[node.property] = builtNode.promotedParameterName ?? builtNode.bindingName
-			case .publicMockCall:
-				// A promoted call is bound under its label (`publicMockCallNode`).
-				promotedNodes.append((property: node.property, name: node.property.label))
-				promotedParameterNamesRead[node.property] = node.property.label
+			case .built, .publicMockCall:
+				continue
 			case .alias, .cycleClosing:
 				return .unsupported(.publicMockRoot)
 			}
@@ -166,9 +158,6 @@ extension ScopeGenerator {
 		// A public mock takes each property received only if available as a parameter, so only the tree's nodes make a
 		// `SafeDIOverrides`.
 		let hasOverrides = nodes.contains(where: \.isPropertyNode)
-		let plan = publicMockPlan(of: instantiable, signature: signature, promotedNodes: promotedNodes, filledCallBuilders: filledCallBuilders, hasOverrides: hasOverrides, context: context, publicMockContext: publicMockContext)
-		// The walk read each optional builder under the internal name the plan gives it.
-		guard promotedNodes.allSatisfy({ plan.promotedParameterNames[$0.property] == promotedParameterNamesRead[$0.property] }), plan.optionalBuilderNames == (filledCallBuilders.optionalBuilderNames ?? [:]) else { return .unsupported(.publicMockRoot) }
 		var lines = ["extension \(typeName) {"]
 		if !plan.providerDeclarations.isEmpty {
 			// The providers of the type's own optional-typed defaults, which the parameters default to.
@@ -235,7 +224,7 @@ extension ScopeGenerator {
 	/// The plan of the public mock of `instantiable`, whose root's signature is `signature`, that promotes `promotedNodes`,
 	/// under the names given, and takes the builders its calls fill (`filledCallBuilders`) optional, as `publicMockPlan`
 	/// plans it from the emitter's parameter tree.
-	private func publicMockPlan(
+	func publicMockPlan(
 		of instantiable: Instantiable,
 		signature: MockLowering.RootSignature,
 		promotedNodes: [(property: Property, name: String)],
@@ -300,29 +289,6 @@ extension ScopeGenerator {
 			filledFamilies: filledCallBuilders.families.isEmpty ? nil : (families: filledCallBuilders.families, namesInBody: publicMockNamesInBody(namesFillsDeclare: filledCallBuilders.namesFillsDeclare)),
 			context: publicMockContext,
 		)
-	}
-
-	/// The names of the builders a public mock takes optional, by family, which the walk reads them under: the internal names
-	/// its plan gives them, computed before the walk names the nodes it promotes, from their labels, which
-	/// `publicMockWithTree` checks the plan from the walk's names gives too. `nil` where its calls fill no builder.
-	func publicMockOptionalBuilderNames(
-		of instantiable: Instantiable,
-		signature: MockLowering.RootSignature,
-		filledCallBuilders: MockLowering.FilledCallBuilders,
-		context: MockContext,
-	) -> [MockRootParameters.SeamMockBuilder.Family: String]? {
-		guard instantiable.generateMock == .public, let publicMockContext = context.publicMockContext, !filledCallBuilders.families.isEmpty else { return nil }
-		let promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildrenComputedAfresh(propertiesGeneratedLater: []))
-		let plan = publicMockPlan(
-			of: instantiable,
-			signature: signature,
-			promotedNodes: propertiesToGenerate.compactMap(\.property).filter(promotedProperties.contains).map { (property: $0, name: $0.label) },
-			filledCallBuilders: filledCallBuilders,
-			hasOverrides: !propertiesToGenerate.isEmpty,
-			context: context,
-			publicMockContext: publicMockContext,
-		)
-		return plan.optionalBuilderNames
 	}
 
 	/// The names the narrowest tier's body of this root's public mock declares beside its parameters, apart from which its
