@@ -80,6 +80,9 @@ extension MockLowering {
 	static func publicConfigurationDeclarations(
 		of records: [PublicConstructionRecord],
 		context: PublicMockContext,
+		// D1 lane hook (lane C): the configurations `@Sendable`-typed, as a type a `Sendable` wrapper builds anywhere in the
+		// module has (`MockContext.sendableConfigurationTypeNames`).
+		sendableConfigurationTypeNames: Set<String>,
 	) -> Lowering<[String]> {
 		var recordsByType = [TypeDescription: [PublicConstructionRecord]]()
 		var typesInOrder = [TypeDescription]()
@@ -103,6 +106,7 @@ extension MockLowering {
 				constructionRecords: constructionRecords,
 				configurationTypeName: configurationTypeName,
 				context: context,
+				requiresSendable: sendableConfigurationTypeNames.contains(type.asSource),
 			))
 		}
 		return .lowered(declarations)
@@ -115,18 +119,19 @@ extension MockLowering {
 		constructionRecords: [PublicConstructionRecord],
 		configurationTypeName: String,
 		context: PublicMockContext,
+		requiresSendable: Bool,
 	) -> String {
 		let concreteType = record.concreteType
 		let admittedModules: Set<String?> = [context.moduleName, context.moduleNameByType[concreteType]]
 		var members = record.childMembers.map { member in
-			publicMember(member, context: context, admittedModules: admittedModules, requiresSendable: false)
+			publicMember(member, context: context, admittedModules: admittedModules, requiresSendable: requiresSendable)
 		}
 		// Each default-valued parameter: optional, with `nil` keeping the declaration's default, unless the parameter is
 		// optional itself, which the member holds as it is, defaulting to what the declaration's default evaluates to.
 		for defaultField in record.defaultFields {
-			members.append(publicDefaultMember(of: defaultField, concreteType: concreteType, context: context, admittedModules: admittedModules))
+			members.append(publicDefaultMember(of: defaultField, concreteType: concreteType, context: context, admittedModules: admittedModules, requiresSendable: requiresSendable))
 		}
-		let builderType = record.builderType
+		let builderType = record.builderType(requiresSendable: requiresSendable)
 		members.append(PublicStructMember(
 			name: ReservedName.configurationBuilderPropertyName,
 			typeSource: builderType,
@@ -158,7 +163,7 @@ extension MockLowering {
 			lines.append("\(ScopeGenerator.standardIndent)nonisolated static func \(PublicMockContext.providerName(label: provider.label))() -> \(provider.publicValueType.asSource) { \(provider.publicDefaultExpression) }")
 		}
 		for constructionRecord in constructionRecords {
-			lines.append(contentsOf: constructionRecord.constructionFunctionLines)
+			lines.append(contentsOf: constructionRecord.constructionFunctionLines(requiresSendable: requiresSendable))
 		}
 		lines.append("}")
 		// A public member's default names its provider through a module-level function, which a public declaration's default
@@ -175,6 +180,7 @@ extension MockLowering {
 		concreteType: TypeDescription,
 		context: PublicMockContext,
 		admittedModules: Set<String?>,
+		requiresSendable: Bool,
 	) -> PublicStructMember {
 		let valueType = defaultField.publicValueType
 		let access = context.access(ofTypes: [valueType], admittedModules: admittedModules).level
@@ -185,7 +191,7 @@ extension MockLowering {
 				access: access,
 				defaultExpression: "nil",
 				omittedValue: "nil",
-				requiresSendable: false,
+				requiresSendable: requiresSendable,
 				documentation: "`nil` keeps the default of `\(concreteType.asSource)`’s `\(defaultField.label.spelledWithoutBackticks)`.",
 			)
 		}
@@ -197,7 +203,7 @@ extension MockLowering {
 			access: access,
 			defaultExpression: defaultField.hasPublicProvider ? (access == .public ? forwarder : provider) : "nil",
 			omittedValue: defaultField.hasPublicProvider ? provider : "nil",
-			requiresSendable: false,
+			requiresSendable: requiresSendable,
 			documentation: "The default of `\(concreteType.asSource)`’s `\(defaultField.label.spelledWithoutBackticks)` unless set.",
 		)
 	}
@@ -277,14 +283,15 @@ extension MockLowering.PublicConstructionRecord {
 		usesMockInitializer ? ReservedName.publicMockFunctionName : "\(ReservedName.builderFunctionNamePrefix)init"
 	}
 
-	/// The type of the builder that overrides the construction: optional, handed each argument, returning the concrete type.
-	var builderType: String {
-		"((\(builderParameterTypes.map(\.asSource).joined(separator: ", "))) -> \(concreteType.asSource))?"
+	/// The type of the builder that overrides the construction: optional, handed each argument, returning the concrete type,
+	/// `@Sendable` where the configuration is `@Sendable`-typed.
+	func builderType(requiresSendable: Bool) -> String {
+		"(\(requiresSendable ? "@Sendable " : "")(\(builderParameterTypes.map(\.asSource).joined(separator: ", "))) -> \(concreteType.asSource))?"
 	}
 
 	/// The construction function, indented as a member of its type's extension: it calls the builder when it is set, and
 	/// otherwise the construction, with the isolation the construction spells.
-	var constructionFunctionLines: [String] {
+	func constructionFunctionLines(requiresSendable: Bool) -> [String] {
 		let indent = ScopeGenerator.standardIndent
 		let builderName = ReservedName.configurationBuilderPropertyName
 		var parameters = [String]()
@@ -308,7 +315,7 @@ extension MockLowering.PublicConstructionRecord {
 				values.append(name)
 			}
 		}
-		parameters.append("\(builderName): \(builderType)")
+		parameters.append("\(builderName): \(builderType(requiresSendable: requiresSendable))")
 		let constructionArguments = zip(arguments, values).map { argument, value in
 			argument.label == "_" ? value : "\(argument.label.spelledAsArgumentLabel): \(value)"
 		}.joined(separator: ", ")
