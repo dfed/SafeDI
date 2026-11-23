@@ -482,15 +482,23 @@ extension MockLowering {
 			) { _, innerFunctionName in innerFunctionName }
 			let renamedFunctionNames = ScopeGenerator.mockLoweringBuilderFunctionNames(of: generators, boundAs: bindingNames, enclosingFunctionNames: enclosingFunctionNames)
 			// A loop member's functions are named from its binding (`MockLowering.loopMembers`), so a loop is not lowered
-			// renamed yet, nor a level whose hole held in a wrapper, the one node with a declaration that builds no property,
-			// the emitter names among its nodes' functions.
+			// renamed yet.
 			let renamesFunction = renamedFunctionNames?.contains(where: { $0 != nil }) ?? false
-			guard !renamesFunction || !loops.contains(where: { $0 != nil }) && !generators.contains(where: { $0.declaration != nil && $0.mockLoweringBuiltProperty == nil }) else { return .unsupported(.cycle) }
+			guard !renamesFunction || !loops.contains(where: { $0 != nil }) else { return .unsupported(.cycle) }
 			if !bodyFunctionNames.isEmpty {
 				var functionNames = Set<String>()
 				for (index, (generator, bindingName)) in zip(generators, bindingNames).enumerated() {
-					guard case let .property(_, property, _, _, isPropertyCycle, _) = generator.scopeData, !isPropertyCycle else { continue }
-					functionNames.insert(renamedFunctionNames?[index] ?? MockLowering.builderFunctionName(boundAs: bindingName ?? property.label))
+					switch generator.scopeData {
+					case let .property(_, property, _, _, isPropertyCycle, _) where !isPropertyCycle:
+						functionNames.insert(renamedFunctionNames?[index] ?? MockLowering.builderFunctionName(boundAs: bindingName ?? property.label))
+					case .hole:
+						// A site held in a wrapper declares the function the level names for it.
+						if let holeFunctionName = renamedFunctionNames?[index] {
+							functionNames.insert(holeFunctionName)
+						}
+					case .root, .fill, .alias, .property:
+						continue
+					}
 				}
 				bodyFunctionNames[bodyFunctionNames.count - 1] = functionNames
 			}

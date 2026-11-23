@@ -6507,6 +6507,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			))
 			generatorIndices.append(index)
 		}
+		// A site of a hole held in a wrapper declares the function the wrapper is built around, named after the level's
+		// properties' functions, as the emitter's `holeSitesBuildingWrappers` are.
+		for (index, generator) in generators.enumerated() {
+			guard case let .hole(property, _, site) = generator.scopeData, site != nil, !property.propertyType.isConstant else { continue }
+			candidates.append(BuilderFunctionCandidate(
+				property: property,
+				declaration: BuiltDeclaration(property: property, concreteType: property.typeDescription.asInstantiatedType),
+				name: nil,
+				declaresFunction: true,
+				cycleClosedOnDeclarations: [],
+				isReferencedByCycleClosingScope: false,
+				referencedFillNames: [],
+			))
+			generatorIndices.append(index)
+		}
 		guard candidates.contains(where: { !$0.cycleClosedOnDeclarations.isEmpty || $0.isReferencedByCycleClosingScope }) else { return nil }
 		var names = [String?](repeating: nil, count: generators.count)
 		for (candidateIndex, builderFunctionNames) in builderFunctionNames(for: candidates, enclosingFunctionNames: enclosingFunctionNames).enumerated() {
