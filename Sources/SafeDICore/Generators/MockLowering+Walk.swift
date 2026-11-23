@@ -115,10 +115,17 @@ extension ScopeGenerator {
 		walk.filledCallBuilders.passedUpBuilderNames = signature.passedUpBuilderNames
 		// D1 lane hook (lane E): with each builder `mock()` takes for its calls' places that it binds apart, in label order.
 		var builderBindingLines = walk.filledCallBuilders.builderBindingLines
-		for builder in signature.passedUpBuilders where builder.internalName != builder.label {
-			builderBindingLines.append((builder.label, "let \(builder.internalName) = \(builder.label)"))
+		// D1 lane hook (lane C): then the adapters of a builder passed up, which drop the value a call's form takes.
+		for builder in signature.passedUpBuilders {
+			if builder.internalName != builder.label {
+				builderBindingLines.append((builder.label, "let \(builder.internalName) = \(builder.label)"))
+			}
+			for adapter in builder.adapters {
+				builderBindingLines.append((builder.label, "let \(adapter.name): \(adapter.typeSource) = { _ in \(builder.internalName)() }"))
+			}
 		}
-		var bindingLines = builderBindingLines.sorted { $0.label < $1.label }.map { "\(bodyIndent)\($0.line)" }
+		// A stable sort keeps a builder's binding before its adapters.
+		var bindingLines = builderBindingLines.enumerated().sorted { ($0.element.label, $0.offset) < ($1.element.label, $1.offset) }.map { "\(bodyIndent)\($0.element.line)" }
 		// D1 lane hook (lane C): the mocked type's own receive of a builder its tree's calls pass up is bound again under its
 		// label, as a receive of a flat parameter named apart is at the mock root.
 		for dependency in instantiable.dependencies where dependency.source.isReceived {

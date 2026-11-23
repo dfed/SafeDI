@@ -102,6 +102,15 @@ extension MockLowering {
 			let properties: [Property]
 			/// The parameter's type as `mock()` declares it.
 			let typeSource: String
+			/// The adapters of the builder to the properties whose form takes a value it does not take.
+			var adapters = [Adapter]()
+
+			/// A builder that takes nothing, adapted to a call's form that takes a value, which it drops.
+			struct Adapter {
+				let property: Property
+				let name: String
+				let typeSource: String
+			}
 		}
 
 		/// The name each property a call's leaf receives a passed-up builder as reads it under.
@@ -110,6 +119,9 @@ extension MockLowering {
 			for builder in passedUpBuilders {
 				for property in builder.properties {
 					names[property] = builder.internalName
+				}
+				for adapter in builder.adapters {
+					names[adapter.property] = adapter.name
 				}
 			}
 			return names
@@ -130,7 +142,8 @@ extension MockLowering {
 		/// The properties the forwarded, received and uncovered parameters bind, which every node of the tree is built after.
 		/// The default-valued ones are the initializer's alone.
 		var properties: Set<Property> {
-			Set((forwardedParameters + flatReceivedParameters + uncoveredParameters).map(\.property))
+			// D1 lane hook (lane C): every property a call's leaf receives a passed-up builder as, in whichever form.
+			Set((forwardedParameters + flatReceivedParameters + uncoveredParameters).map(\.property)).union(passedUpBuilders.flatMap(\.properties))
 		}
 
 		/// The names the parameters and the overrides' bindings bind, which no node of the tree may bind again.
@@ -604,7 +617,7 @@ extension ScopeGenerator {
 	/// adapts, are not lowered yet.
 	private static func passedUpBuilders(
 		of properties: [Property],
-		families: [Property: (family: MockRootParameters.SeamMockBuilder.Family, isCapturedBySendableFunction: Bool)],
+		families: [Property: MockLowering.PassedUpBuilderFamily],
 		otherParameterLabels: Set<String>,
 		namesBoundInTheTree: Set<String>,
 		builderFunctionNames: Set<String>,
@@ -637,20 +650,46 @@ extension ScopeGenerator {
 			guard let first = familyProperties.first else { continue }
 			let stem = stems[family.holeType, default: ""]
 			let label = labels.claim(family.isSendable ? DependencyTreeGenerator.sendableBuilderLabel(ofStem: stem) : DependencyTreeGenerator.plainBuilderLabel(ofStem: stem))
-			let parameterType = passedUpType(of: first).asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)
-			guard familyProperties.allSatisfy({ passedUpType(of: $0).strippingEscaping.asSource == parameterType.strippingEscaping.asSource }) else { return .unsupported(.publicMockCall) }
+			let agreedType = passedUpType(of: first).asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)
+			// Where the calls pass the builder up in other forms, it takes the form of every place they pass up together.
+			let parameterType = familyProperties.allSatisfy { passedUpType(of: $0).strippingEscaping.asSource == agreedType.strippingEscaping.asSource }
+				? agreedType
+				: MockRootParameters.SeamMockBuilder.parameterType(ofPlaceProperties: familyProperties.flatMap { families[$0]?.placeProperties ?? [] }, in: family)
 			builders.append((label, family, parameterType))
 		}
 		builders.sort { $0.label < $1.label }
 		var names = GeneratedNameAllocator(reserving: builderFunctionNames.union(namesBoundInTheTree))
-		return .lowered(builders.map { builder in
-			MockLowering.RootSignature.PassedUpBuilder(
+		var internalNames = [String]()
+		for builder in builders {
+			internalNames.append(namesBoundInTheTree.contains(builder.label) ? names.claim(ScopeGenerator.functionName(toBuildPropertyNamed: builder.label)) : builder.label)
+		}
+		// A call that passes the builder up in a form that takes a value, where the builder takes nothing, is handed an adapter,
+		// named apart from the builders, the tree's builder functions and the locals `mock()` binds for its parameters.
+		names.reserve(otherParameterLabels.union(properties.map(\.label)).map { ScopeGenerator.functionName(toBuildPropertyNamed: $0) })
+		func takesValue(_ builderType: TypeDescription) -> Bool {
+			if case .nested = builderType.strippingEscaping {
+				true
+			} else {
+				false
+			}
+		}
+		var passedUpBuilders = [MockLowering.RootSignature.PassedUpBuilder]()
+		for (builder, internalName) in zip(builders, internalNames) {
+			var adapters = [MockLowering.RootSignature.PassedUpBuilder.Adapter]()
+			if !takesValue(builder.typeDescription) {
+				for property in propertiesByFamily[builder.family, default: []] where takesValue(passedUpType(of: property)) {
+					adapters.append(.init(property: property, name: names.claim(ScopeGenerator.functionName(toBuildPropertyNamed: builder.label)), typeSource: passedUpType(of: property).strippingEscaping.asSource))
+				}
+			}
+			passedUpBuilders.append(MockLowering.RootSignature.PassedUpBuilder(
 				label: builder.label,
-				internalName: namesBoundInTheTree.contains(builder.label) ? names.claim(ScopeGenerator.functionName(toBuildPropertyNamed: builder.label)) : builder.label,
+				internalName: internalName,
 				properties: propertiesByFamily[builder.family, default: []],
 				typeSource: builder.typeDescription.asSource,
-			)
-		})
+				adapters: adapters,
+			))
+		}
+		return .lowered(passedUpBuilders)
 	}
 
 	/// The names the property nodes at a mock root's level, `properties`, are bound under, as
@@ -693,7 +732,7 @@ extension ScopeGenerator {
 		/// receives it as (`PublicMockCall.passesUpBuilder(receivedAs:)`).
 		let passedUpBuilderProperties: Set<Property>
 		/// The family of each of those builders, with whether a `@Sendable` builder function captures it.
-		let passedUpBuilderFamilies: [Property: (family: MockRootParameters.SeamMockBuilder.Family, isCapturedBySendableFunction: Bool)]
+		let passedUpBuilderFamilies: [Property: MockLowering.PassedUpBuilderFamily]
 		/// The names of the builder functions of every node of the tree, which a builder bound apart is named apart from.
 		let builderFunctionNames: Set<String>
 	}
@@ -880,7 +919,7 @@ extension ScopeGenerator {
 			))
 		}
 		// The families of the builders the calls pass up, which only a tree that passes one up walks for.
-		let passedUpBuilderFamilies: [Property: (family: MockRootParameters.SeamMockBuilder.Family, isCapturedBySendableFunction: Bool)] = if passedUpBuilderProperties.isEmpty {
+		let passedUpBuilderFamilies: [Property: MockLowering.PassedUpBuilderFamily] = if passedUpBuilderProperties.isEmpty {
 			[:]
 		} else if case let .lowered(families) = self.passedUpBuilderFamilies(of: orderedChildGenerators) {
 			families
