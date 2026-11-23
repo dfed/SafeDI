@@ -135,15 +135,3 @@ extension MockLowering {
 		}
 	}
 }
-
-extension ScopeGenerator {
-	/// Whether this is a hole without a site, which a tree built to compute a seam's signature, or a seam's own internal
-	/// mock, holds for a place a builder builds: it generates nothing.
-	nonisolated var mockLoweringIsHoleWithoutSite: Bool {
-		if case .hole(_, _, nil) = scopeData {
-			true
-		} else {
-			false
-		}
-	}
-}

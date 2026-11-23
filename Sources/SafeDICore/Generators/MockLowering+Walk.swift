@@ -468,22 +468,13 @@ extension MockLowering {
 		/// The nodes `generators` build, in generation order, where the nodes `scope` holds are bound before them, their
 		/// overrides at `path`, with their statements appended to `lines` at `indent`; or the first rule they meet.
 		mutating func children(
-			of allOrderedChildren: [ScopeGenerator.OrderedChild],
-			loops allLoops: [LoopMembership?] = [],
+			of orderedChildren: [ScopeGenerator.OrderedChild],
+			loops: [LoopMembership?] = [],
 			inScope scope: Set<Property>,
 			path: String,
 			indent: String,
 			lines: inout [String],
 		) async -> Lowering<[TreeNode]> {
-			// D1 lane hook (lane D): a hole without a site, in the tree of a seam's own internal mock, generates nothing and is
-			// no node of its level: a builder of `mock()` builds its place, which the type that instantiates it binds.
-			var orderedChildren = allOrderedChildren
-			var loops = allLoops
-			if allOrderedChildren.contains(where: \.generator.mockLoweringIsHoleWithoutSite) {
-				let keptIndices = allOrderedChildren.indices.filter { !allOrderedChildren[$0].generator.mockLoweringIsHoleWithoutSite }
-				orderedChildren = keptIndices.map { allOrderedChildren[$0] }
-				loops = keptIndices.map { $0 < allLoops.count ? allLoops[$0] : nil }
-			}
 			let generators = orderedChildren.map(\.generator)
 			let enclosingPropertiesGeneratedLater = propertiesGeneratedLater
 			defer { propertiesGeneratedLater = enclosingPropertiesGeneratedLater }
