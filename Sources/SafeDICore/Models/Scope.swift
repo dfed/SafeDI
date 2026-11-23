@@ -673,7 +673,7 @@ extension ScopeRecord {
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			seamRoot: seamRoot,
 			mockBuilders: mockBuilders,
-			seamHoles: seamRoot.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.signature.holes, builders: $0.signature.builders, parameters: $0.signature.parameters, callRoutes: $0.signature.callRoutes, scopeEnums: $0.signature.scopeEnums, holdsLoopPayloadsInBoxes: true) }
+			seamHoles: seamRoot.map { SeamHoles(of: $0, seamType: instantiable.concreteInstantiable) }
 				?? mockBuilders.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.holes, builders: $0.builders, callRoutes: $0.callRoutes) }
 				?? SeamHoles(),
 			sitePath: [],
@@ -3516,5 +3516,97 @@ extension Property {
 		} else {
 			[self, unwrappedProperty]
 		}
+	}
+}
+
+extension SeamHoles {
+	/// The holes, builders and routes of `seamRoot`, the seam root of `seamType`, as a tree of the seam reads them.
+	init(of seamRoot: ScopeGenerator.SeamRoot, seamType: TypeDescription) {
+		self.init(seamType: seamType, holes: seamRoot.signature.holes, builders: seamRoot.signature.builders, parameters: seamRoot.signature.parameters, callRoutes: seamRoot.signature.callRoutes, scopeEnums: seamRoot.signature.scopeEnums, holdsLoopPayloadsInBoxes: true)
+	}
+}
+
+extension ScopeGenerator {
+	/// The tree rooted at `tree`, the tree the first signature pass of `seamType` built, made again for the seam's
+	/// emission from its final seam root, `seamRoot`: each generator is made again (`init(reseating:children:sitePath:seamRoot:seamHoles:namesBoundBySeam:)`)
+	/// once its children are, in index order, and a generator several places share is made again once and shared alike.
+	/// Its code starts as a tree built for emission would start it (`ScopeGeneratorUnderConstruction.scopeGenerator(collectingGeneratorsToStartInto:startedGenerators:startLog:)`).
+	/// Only a tree that `DependencyTreeGenerator.confirmingPassFindsNothingNew` let settle is made again: it holds no
+	/// call, fill or hole passed up, and its root's parameters are the final ones (see `seam-signature-passes.md`).
+	static func reseating(treeRootedAt tree: ScopeGenerator, of seamType: TypeDescription, seamRoot: SeamRoot) -> ScopeGenerator {
+		ScopeGeneratorUnderConstruction.reseating(treeRootedAt: tree, seamHoles: SeamHoles(of: seamRoot, seamType: seamType), seamRoot: seamRoot)
+	}
+}
+
+extension ScopeGeneratorUnderConstruction {
+	/// See `ScopeGenerator.reseating(treeRootedAt:of:seamRoot:)`.
+	fileprivate static func reseating(treeRootedAt tree: ScopeGenerator, seamHoles: SeamHoles, seamRoot: ScopeGenerator.SeamRoot) -> ScopeGenerator {
+		let namesBoundBySeam = GenerationWork.taking(seamHoles.namesBoundBySeam, by: .joiningNamesBoundBySeam)
+		/// A generator being made again, whose children are made again first.
+		struct Reseating {
+			let generator: ScopeGenerator
+			let sitePath: [Property]
+			var children = [ScopeGenerator]()
+			/// As `ScopeGeneratorUnderConstruction.subtreeScopeCount` counts it.
+			var subtreeScopeCount = 1
+			var smallSubtrees = [SmallSubtree]()
+
+			/// Adds `child`, made again, with the scopes in its subtree, or `nil` for an alias or a hole, which counts none.
+			mutating func add(_ child: ScopeGenerator, subtreeScopeCount childScopeCount: Int?) {
+				children.append(child)
+				guard let childScopeCount else { return }
+				subtreeScopeCount += childScopeCount
+				if childScopeCount < ScopeGeneratorUnderConstruction.scopeCountOfLargeSubtree {
+					smallSubtrees.append(SmallSubtree(generator: child, scopeCount: childScopeCount))
+				}
+			}
+		}
+		// A tree can be as deep as the module has types, so it is walked on a stack of its own.
+		var stack = [Reseating(generator: tree, sitePath: [])]
+		var reseatedByGenerator = [ObjectIdentifier: (generator: ScopeGenerator, subtreeScopeCount: Int)]()
+		var startedGenerators = Set<ObjectIdentifier>()
+		// Replaced by the root's new generator, made last.
+		var reseatedTree = tree
+		while !stack.isEmpty {
+			let index = stack.count - 1
+			let children = stack[index].generator.children
+			if stack[index].children.count < children.count {
+				let child = children[stack[index].children.count]
+				if let reseated = reseatedByGenerator[ObjectIdentifier(child)] {
+					stack[index].add(reseated.generator, subtreeScopeCount: child.builtInstantiable == nil ? nil : reseated.subtreeScopeCount)
+				} else {
+					stack.append(Reseating(generator: child, sitePath: stack[index].sitePath + (child.property.map { [$0] } ?? [])))
+				}
+				continue
+			}
+			let reseating = stack.removeLast()
+			let reseated = ScopeGenerator(
+				reseating: reseating.generator,
+				children: reseating.children,
+				sitePath: reseating.sitePath,
+				seamRoot: seamRoot,
+				seamHoles: seamHoles,
+				namesBoundBySeam: namesBoundBySeam,
+			)
+			// A large subtree starts its own code and that of the small subtrees directly beneath it, in groups, as
+			// `scopeGenerator(collectingGeneratorsToStartInto:startedGenerators:startLog:)` starts a tree built for emission.
+			if reseating.subtreeScopeCount >= scopeCountOfLargeSubtree {
+				var groupsStartingNow = groupsOfLargeSubtreeSize(reseating.smallSubtrees)
+				groupsStartingNow.append([reseated])
+				for group in groupsStartingNow {
+					let group = group.filter { startedGenerators.insert(ObjectIdentifier($0)).inserted }
+					guard !group.isEmpty else { continue }
+					startCodeGeneration(of: group, spellsPlans: group.first !== reseated)
+				}
+			}
+			if stack.isEmpty {
+				reseatedTree = reseated
+			} else {
+				reseatedByGenerator[ObjectIdentifier(reseating.generator)] = (reseated, reseating.subtreeScopeCount)
+				// An alias or a hole is no scope of the count.
+				stack[stack.count - 1].add(reseated, subtreeScopeCount: reseating.generator.builtInstantiable == nil ? nil : reseating.subtreeScopeCount)
+			}
+		}
+		return reseatedTree
 	}
 }

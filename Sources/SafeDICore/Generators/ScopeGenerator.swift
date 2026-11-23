@@ -1388,6 +1388,252 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		constructsWithHandWrittenMock = false
 	}
 
+	/// A generator of a seam's tree that the seam's first signature pass built, made again for the seam's emission from
+	/// its final signature, `seamRoot`, and `seamHoles`, the `SeamHoles` that signature gives, with `children` in its own
+	/// children's place, each already made again: what the generator's construction read of `SeamHoles`, and what it
+	/// worked out from its children's, is found again; everything else is the first pass's, which the final signature
+	/// leaves alone (see `seam-signature-passes.md`). `sitePath` is the generator's path from the seam's root, its own property
+	/// last, and `namesBoundBySeam` what `SeamHoles.namesBoundBySeam` names, joined once for the whole tree.
+	///
+	/// Every stored property is set here, as `ReseatedField.byStoredProperty` classifies it: the compiler requires each
+	/// `let`, and a test requires the classification to name every stored property, `var`s included.
+	///
+	/// The tree holds no call of a seam or a public mock, no fill and no hole passed up (`confirmingPassFindsNothingNew`),
+	/// so none of the fields those set needs to be found again.
+	init(
+		reseating generator: ScopeGenerator,
+		children: [ScopeGenerator],
+		sitePath: [Property],
+		seamRoot: SeamRoot,
+		seamHoles: SeamHoles,
+		namesBoundBySeam: Set<String>,
+	) {
+		var fields = generator.seamAndFillFieldsStorage?.fields ?? SeamAndFillFields()
+		var scopeData = generator.scopeData
+		var fieldsCarriedBySites = generator.fieldsCarriedBySites
+		var builtInstantiable: Instantiable?
+		switch generator.scopeData {
+		case let .hole(property, erasedToConcreteExistential, _):
+			let site = seamHoles.site(at: sitePath)
+			let carrierSite = seamHoles.carrierSite(at: sitePath)
+			scopeData = .hole(property: property, erasedToConcreteExistential: erasedToConcreteExistential, site: site)
+			fields.valuesBindings = carrierSite?.formations ?? []
+			fields.siteCarrierUse = carrierSite?.use
+			fieldsCarriedBySites = Set((site.map(Self.fieldsCarried(by:)) ?? []).map(\.property))
+		case let .root(instantiable, _):
+			scopeData = .root(instantiable: instantiable, seamRoot: seamRoot)
+			builtInstantiable = instantiable
+		case let .property(instantiable, _, _, _, _, _):
+			builtInstantiable = instantiable
+		case .alias, .fill:
+			break
+		}
+		if let builtInstantiable {
+			fields.valuesBindings = seamHoles.valuesBindings(at: sitePath)
+			fields.memberCallsInsideFunction = seamHoles.memberCallsInsideFunction(at: sitePath)
+			fields.namesBoundBySeam = namesBoundBySeam
+			let loopBoxes = Self.loopBoxes(
+				holdsLoopPayloadsInBoxes: seamHoles.holdsLoopPayloadsInBoxes,
+				receivedBuilderLoops: generator.receivedBuilderLoops,
+				children: children,
+			)
+			fields.boxedLoops = loopBoxes.boxedLoops
+			fields.loopLevelsTypesInTree = loopBoxes.loopLevelsTypesInTree
+			fieldsCarriedBySites = Self.fieldsCarriedBySites(
+				containsBuildSite: generator.containsBuildSite,
+				fill: nil,
+				instantiable: builtInstantiable,
+				children: children,
+			)
+		}
+		self.scopeData = scopeData
+		seamAndFillFieldsStorage = SeamAndFillFieldsStorage.storing(fields)
+		self.fieldsCarriedBySites = fieldsCarriedBySites
+		propertiesToGenerateSlot = DeferredReleaseSlot(children)
+		description = generator.description
+		receivedProperties = generator.receivedProperties
+		receivedOnlyByPublicMockCalls = generator.receivedOnlyByPublicMockCalls
+		passedByPublicMockCalls = generator.passedByPublicMockCalls
+		ownerPropertyStack = generator.ownerPropertyStack
+		ownerConcreteTypeStack = generator.ownerConcreteTypeStack
+		closedOnFillPathDeclarationsBeneath = generator.closedOnFillPathDeclarationsBeneath
+		requiredReceivedProperties = generator.requiredReceivedProperties
+		unwrappedOptionalRequiredReceivedProperties = generator.unwrappedOptionalRequiredReceivedProperties
+		onlyIfAvailableUnwrappedReceivedProperties = generator.onlyIfAvailableUnwrappedReceivedProperties
+		onlyIfAvailableAliasFulfillingProperty = generator.onlyIfAvailableAliasFulfillingProperty
+		requiredOnlyIfAvailableAliasProperties = generator.requiredOnlyIfAvailableAliasProperties
+		requiredAliasFulfillingProperties = generator.requiredAliasFulfillingProperties
+		cycleClosedOnDeclarations = generator.cycleClosedOnDeclarations
+		isReferencedByCycleClosingScope = generator.isReferencedByCycleClosingScope
+		closedOnDeclaration = generator.closedOnDeclaration
+		declaration = generator.declaration
+		cycleParameters = generator.cycleParameters
+		cycleParameterUnavailableProperties = generator.cycleParameterUnavailableProperties
+		callSiteLazilyInstantiatedInstanceProperties = generator.callSiteLazilyInstantiatedInstanceProperties
+		foundCycleParameters = generator.foundCycleParameters
+		unpassableCycleLabelsInTree = generator.unpassableCycleLabelsInTree
+		cycleParametersChangedInTree = generator.cycleParametersChangedInTree
+		receivedBuilderLoops = generator.receivedBuilderLoops
+		receivedBuilderLoopsChangedInTree = generator.receivedBuilderLoopsChangedInTree
+		publicMockLevelReentriesChangedInTree = generator.publicMockLevelReentriesChangedInTree
+		reboundProperties = generator.reboundProperties
+		cycleClosedOnDeclarationsReferencedFromSendableFunction = generator.cycleClosedOnDeclarationsReferencedFromSendableFunction
+		buildsInSendableFunction = generator.buildsInSendableFunction
+		declaresBuilderFunction = generator.declaresBuilderFunction
+		childrenTakePartInCycle = generator.childrenTakePartInCycle
+		holdsCycleClosingScope = generator.holdsCycleClosingScope
+		cycleParameterSearchInputs = generator.cycleParameterSearchInputs
+		typesDeclaredEscaping = generator.typesDeclaredEscaping
+		unavailableOptionalProperties = generator.unavailableOptionalProperties
+		onlyIfAvailableDependencies = generator.onlyIfAvailableDependencies
+		propertiesToDeclare = generator.propertiesToDeclare
+		instantiatedDependenciesNotGenerated = generator.instantiatedDependenciesNotGenerated
+		passesUpBuilder = generator.passesUpBuilder
+		holdsCallReenteringEnclosingFill = generator.holdsCallReenteringEnclosingFill
+		fillStructBoundLabelsChangedInTree = generator.fillStructBoundLabelsChangedInTree
+		fillBindsDeferredFieldsFromStruct = generator.fillBindsDeferredFieldsFromStruct
+		fillEmitsCode = generator.fillEmitsCode
+		isBuiltByFill = generator.isBuiltByFill
+		fillReturnsWrapperBuilder = generator.fillReturnsWrapperBuilder
+		treeHoldsCallOrFill = generator.treeHoldsCallOrFill
+		treeHoldsSendableFunction = generator.treeHoldsSendableFunction
+		containsBuildSite = generator.containsBuildSite
+		placeHoldingProperties = generator.placeHoldingProperties
+		lazilyInstantiatedInstanceProperties = generator.lazilyInstantiatedInstanceProperties
+		fulfillingPropertyIsLazilyInstantiatedInstance = generator.fulfillingPropertyIsLazilyInstantiatedInstance
+		declaredLazilyInstantiatedInstanceProperty = generator.declaredLazilyInstantiatedInstanceProperty
+		fulfillingBindingIsOptional = generator.fulfillingBindingIsOptional
+		fulfillingExpression = generator.fulfillingExpression
+		property = generator.property
+		constructsWithHandWrittenMock = generator.constructsWithHandWrittenMock
+	}
+
+	/// How `init(reseating:children:sitePath:seamRoot:seamHoles:namesBoundBySeam:)` sets a stored property.
+	enum ReseatedField: Sendable {
+		/// Taken from the first pass's generator: its construction read nothing of `SeamHoles` into it, and nothing of a
+		/// child that is made again.
+		case copied
+		/// Found again from the final `SeamHoles`, the final seam root, or the children made again.
+		case recomputed
+		/// A cache code generation fills, empty in every new generator.
+		case startsEmpty
+
+		/// Every stored property of a generator, as reflection names it, with how reseating sets it. A stored property
+		/// added to `ScopeGenerator` must be added here, which a test checks, and set as this says.
+		static let byStoredProperty: [String: ReseatedField] = [
+			"description": .copied,
+			"receivedProperties": .copied,
+			"receivedOnlyByPublicMockCalls": .copied,
+			"passedByPublicMockCalls": .copied,
+			"ownerPropertyStack": .copied,
+			"ownerConcreteTypeStack": .copied,
+			"closedOnFillPathDeclarationsBeneath": .copied,
+			"scopeData": .recomputed,
+			"seamAndFillFieldsStorage": .recomputed,
+			"requiredReceivedProperties": .copied,
+			"unwrappedOptionalRequiredReceivedProperties": .copied,
+			"onlyIfAvailableUnwrappedReceivedProperties": .copied,
+			"onlyIfAvailableAliasFulfillingProperty": .copied,
+			"requiredOnlyIfAvailableAliasProperties": .copied,
+			"requiredAliasFulfillingProperties": .copied,
+			"cycleClosedOnDeclarations": .copied,
+			"isReferencedByCycleClosingScope": .copied,
+			"closedOnDeclaration": .copied,
+			"declaration": .copied,
+			"cycleParameters": .copied,
+			"cycleParameterUnavailableProperties": .copied,
+			"callSiteLazilyInstantiatedInstanceProperties": .copied,
+			"foundCycleParameters": .copied,
+			"unpassableCycleLabelsInTree": .copied,
+			"cycleParametersChangedInTree": .copied,
+			"receivedBuilderLoops": .copied,
+			"receivedBuilderLoopsChangedInTree": .copied,
+			"publicMockLevelReentriesChangedInTree": .copied,
+			"reboundProperties": .copied,
+			"cycleClosedOnDeclarationsReferencedFromSendableFunction": .copied,
+			"buildsInSendableFunction": .copied,
+			"declaresBuilderFunction": .copied,
+			"childrenTakePartInCycle": .copied,
+			"holdsCycleClosingScope": .copied,
+			"cycleParameterSearchInputs": .copied,
+			"typesDeclaredEscaping": .copied,
+			"unavailableOptionalProperties": .copied,
+			"onlyIfAvailableDependencies": .copied,
+			"propertiesToGenerateSlot": .recomputed,
+			"propertiesToDeclare": .copied,
+			"instantiatedDependenciesNotGenerated": .copied,
+			"passesUpBuilder": .copied,
+			"holdsCallReenteringEnclosingFill": .copied,
+			"fillStructBoundLabelsChangedInTree": .copied,
+			"fillBindsDeferredFieldsFromStruct": .copied,
+			"fillEmitsCode": .copied,
+			"isBuiltByFill": .copied,
+			"fillReturnsWrapperBuilder": .copied,
+			"treeHoldsCallOrFill": .copied,
+			"treeHoldsSendableFunction": .copied,
+			"containsBuildSite": .copied,
+			"placeHoldingProperties": .copied,
+			"fieldsCarriedBySites": .recomputed,
+			"lazilyInstantiatedInstanceProperties": .copied,
+			"fulfillingPropertyIsLazilyInstantiatedInstance": .copied,
+			"declaredLazilyInstantiatedInstanceProperty": .copied,
+			"fulfillingBindingIsOptional": .copied,
+			"fulfillingExpression": .copied,
+			"property": .copied,
+			"constructsWithHandWrittenMock": .copied,
+			"fillCodeByKey": .startsEmpty,
+			"unavailablePropertiesToGenerateCodeTask": .startsEmpty,
+			"unavailablePropertiesToGeneratedCode": .startsEmpty,
+			"rootMockParameterTreeTask": .startsEmpty,
+			"finishedRootMockParameterTree": .startsEmpty,
+			"$__lazy_storage_$_orderedPropertyToGenerateIndices": .startsEmpty,
+			"$__lazy_storage_$_orderedIndexByUnwrappedProperty": .startsEmpty,
+			"$__lazy_storage_$_firstOrderedIndexByProperty": .startsEmpty,
+		]
+
+		/// Every field of `SeamAndFillFields`, as reflection names it, with how reseating sets it: those a seam's tree finds
+		/// in `SeamHoles` or from its children are found again, and the rest, which only a call, a fill or a mock sets,
+		/// are copied. A field added to `SeamAndFillFields` must be added here, which a test checks.
+		static let bySeamAndFillField: [String: ReseatedField] = [
+			"publicMockCall": .copied,
+			"mockBuilders": .copied,
+			"fillCallerReads": .copied,
+			"publicMockLevelFunctions": .copied,
+			"fillKey": .copied,
+			"fillFields": .copied,
+			"fillCaseHoles": .copied,
+			"holeCallArguments": .copied,
+			"builderCallArguments": .copied,
+			"fillDispatchers": .copied,
+			"passedUpHoles": .copied,
+			"referencedFillNamesByKey": .copied,
+			"publicMockLevelReentries": .copied,
+			"fillStructBoundLabels": .copied,
+			"fillDeferredLabelsHiddenByReenteringCalls": .copied,
+			"fillDeferredLabelsReadInsideSendableFunction": .copied,
+			"fillSendableWrapperReads": .copied,
+			"fillLabelsReadOnlyAsPlaceField": .copied,
+			"fillLabelsHandedAsMemo": .copied,
+			"fillPlainMemoRoutesOfSendableWrapperReads": .copied,
+			"fillMemoOriginsByLabel": .copied,
+			"fillKeysReferencedFromSendableFunction": .copied,
+			"sendableFillKeys": .copied,
+			"inlinableFillKeys": .copied,
+			"namedFillKeys": .copied,
+			"valuesBindings": .recomputed,
+			"memberCallsInsideFunction": .recomputed,
+			"innerScopesCalledWithForwardedValue": .copied,
+			"namesBoundBySeam": .recomputed,
+			"boxedLoops": .recomputed,
+			"loopLevelsTypesInTree": .recomputed,
+			"builtInlineSeamComment": .copied,
+			"publicMockOverrideBuilders": .copied,
+			"fillFieldSelection": .copied,
+			"siteCarrierUse": .recomputed,
+			"fillCarrierUse": .copied,
+		]
+	}
+
 	/// The generator of a fill: the function the module that calls a seam generates for one of its holes, which binds
 	/// the fields of the site's scope struct that `child`, the generator of the hole's property as the fulfilling
 	/// type builds it, reads. The fields it binds from the struct, those `boundLabels` names, are declared here, so a
@@ -5480,6 +5726,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///   child after the siblings it depends upon, in which a mock's `SafeDIOverrides` and each configuration take their
 	///   members (`MockParameterNode.inlineOrderPosition`).
 	nonisolated func computeOrderedPropertyToGenerateIndices(startingCarriersLast: Bool = true) -> [Int] {
+		// No child, or one, has no sibling to order against, and is generated whether or not it declares a property: most
+		// scopes of a tree are leaves.
+		guard propertiesToGenerate.count > 1 else { return Array(propertiesToGenerate.indices) }
 		let siblingGraph = Self.siblingGraph(of: propertiesToGenerate, requiredOnlyIfAvailableAliasProperties: requiredOnlyIfAvailableAliasProperties)
 		// Each child is ordered as a unit of its own, but a loop of builders that receive one another, which is ordered as
 		// one unit (see `ReceivedBuilderLoops`): a receive inside a loop reads a rebinding in the receiving member's function,
@@ -6207,6 +6456,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `orderedChildren(propertiesGeneratedLater:)`, with the order computed afresh, for a walk of a seam's tree
 	/// that reads what generation will emit without awaiting each generator.
 	nonisolated func orderedChildrenComputedAfresh(propertiesGeneratedLater: Set<Property>) -> [OrderedChild] {
+		guard !propertiesToGenerate.isEmpty else { return [] }
 		let orderedIndices = computeOrderedPropertyToGenerateIndices()
 		return orderedChildren(
 			propertiesGeneratedLater: propertiesGeneratedLater,

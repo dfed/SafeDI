@@ -1005,6 +1005,8 @@ extension DependencyTreeGenerator {
 		let componentByKey = componentByKey(of: ownEnums)
 		return seamRoots.map { seamRoot in
 			guard let seamRoot else { return nil }
+			// A seam none of whose enums is in a cycle keeps its signature, whose call shape assigning the enums computes again.
+			guard seamRoot.signature.scopeEnums.contains(where: { componentByKey[$0.key] != nil }) else { return seamRoot }
 			// The enums are marked in a copy, assigned once, since each assignment computes the signature's call shape again.
 			var signature = seamRoot.signature
 			signature.scopeEnums = markingIndirectCases(of: seamRoot.signature.scopeEnums, componentByKey: componentByKey)
@@ -1012,14 +1014,23 @@ extension DependencyTreeGenerator {
 		}
 	}
 
-	/// The strongly connected component of each of `ownEnums` among them, by key: an index shared by the enums of one
-	/// component. The components are found in the order of the keys' spellings.
+	/// The strongly connected component of each of `ownEnums` among them that holds another of them, by key: an index
+	/// shared by the enums of one component. An enum that holds none of them is alone in its component, so it has no entry,
+	/// and no case is marked for it. The components are found in the order of the keys' spellings.
 	static func componentByKey(of ownEnums: [SeamSignature.ScopeEnum]) -> [SeamSignature.ScopeEnum.Key: Int] {
-		var edges = [SeamSignature.ScopeEnum.Key: [SeamSignature.ScopeEnum.Key]]()
+		var heldKeys = [SeamSignature.ScopeEnum.Key: [SeamSignature.ScopeEnum.Key]]()
 		for scopeEnum in ownEnums {
-			edges[scopeEnum.key] = scopeEnum.cases.compactMap(SeamSignature.ScopeEnum.heldKey(of:))
+			heldKeys[scopeEnum.key] = scopeEnum.cases.compactMap(SeamSignature.ScopeEnum.heldKey(of:))
 		}
-		let nodes = edges.keys.sorted { $0.spelling < $1.spelling }
+		// Every enum of a cycle holds another enum of it, so the enums that hold none of `ownEnums` are left out.
+		var edges = [SeamSignature.ScopeEnum.Key: [SeamSignature.ScopeEnum.Key]]()
+		for (key, held) in heldKeys {
+			let ownHeld = held.filter { heldKeys[$0] != nil }
+			if !ownHeld.isEmpty {
+				edges[key] = ownHeld
+			}
+		}
+		let nodes = edges.keys.map { (key: $0, spelling: $0.spelling) }.sorted { $0.spelling < $1.spelling }.map(\.key)
 		var componentByKey = [SeamSignature.ScopeEnum.Key: Int]()
 		for (index, component) in stronglyConnectedComponents(of: nodes, edges: { edges[$0, default: []].filter { edges[$0] != nil } }).enumerated() {
 			for key in component {
