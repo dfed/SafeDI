@@ -143,7 +143,7 @@ struct SafeDIToolMockWrapperKindsOrderTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> C {
 		        let __safeDI_token_SendableLazilyInstantiated__Token__safeDIBuilder = safeDIOverrides.token_SendableLazilyInstantiated__Token
-		        @Sendable func __safeDI_token_SendableLazilyInstantiated__Token() -> Token {
+		        @Sendable nonisolated func __safeDI_token_SendableLazilyInstantiated__Token() -> Token {
 		            if let safeDIBuilder = __safeDI_token_SendableLazilyInstantiated__Token__safeDIBuilder { safeDIBuilder() } else { Token() }
 		        }
 		        let token_SendableLazilyInstantiated__Token = SendableLazilyInstantiated<Token>(__safeDI_token_SendableLazilyInstantiated__Token)

@@ -565,7 +565,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let __safeDI_session__safeDIBuilder = safeDIOverrides.session
-			        @Sendable func __safeDI_session() -> Session {
+			        @Sendable nonisolated func __safeDI_session() -> Session {
 			            if let safeDIBuilder = __safeDI_session__safeDIBuilder { safeDIBuilder() } else { Session.instantiate() }
 			        }
 			        let session = SendableLazilyInstantiated<Session>(__safeDI_session)
@@ -647,7 +647,7 @@ struct SafeDIToolCallingMockOnlyIfAvailableReentryTests: ~Copyable {
 			        safeDIOverrides: SafeDIOverrides = .init()
 			    ) -> Root {
 			        let __safeDI_session__safeDIBuilder = safeDIOverrides.session
-			        @Sendable func __safeDI_session() -> Session {
+			        @Sendable nonisolated func __safeDI_session() -> Session {
 			            if let safeDIBuilder = __safeDI_session__safeDIBuilder { safeDIBuilder() } else { Session.instantiate() }
 			        }
 			        let session = SendableLazilyInstantiated<Session>(__safeDI_session)

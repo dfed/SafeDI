@@ -194,13 +194,13 @@ struct SafeDIToolCodeGenerationSendableCaptureRemedyTests: ~Copyable {
 			"A+SafeDI.swift": generatedFileHeader + """
 			extension Root2 {
 			    public convenience init() {
-			        @Sendable func __safeDI_childBuilder() -> Child {
+			        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 			            Child()
 			        }
 			        let childBuilder = SendableErasedInstantiator<(), AnyChild> {
 			            AnyChild(__safeDI_childBuilder())
 			        }
-			        @Sendable func __safeDI_settingsBuilder() -> Settings {
+			        @Sendable nonisolated func __safeDI_settingsBuilder() -> Settings {
 			            Settings(childBuilder: childBuilder)
 			        }
 			        let settingsBuilder = SendableInstantiator<Settings>(__safeDI_settingsBuilder)
@@ -211,13 +211,13 @@ struct SafeDIToolCodeGenerationSendableCaptureRemedyTests: ~Copyable {
 			"B+SafeDI.swift": generatedFileHeader + """
 			extension Root0 {
 			    public convenience init() {
-			        @Sendable func __safeDI_childBuilder() -> Child {
+			        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 			            Child()
 			        }
 			        let childBuilder = SendableErasedInstantiator<(), AnyChild> {
 			            AnyChild(__safeDI_childBuilder())
 			        }
-			        @Sendable func __safeDI_settingsBuilder() -> Settings {
+			        @Sendable nonisolated func __safeDI_settingsBuilder() -> Settings {
 			            Settings(childBuilder: childBuilder)
 			        }
 			        let settingsBuilder = SendableInstantiator<Settings>(__safeDI_settingsBuilder)
@@ -228,13 +228,13 @@ struct SafeDIToolCodeGenerationSendableCaptureRemedyTests: ~Copyable {
 			"C+SafeDI.swift": generatedFileHeader + """
 			extension Root1 {
 			    public convenience init() {
-			        @Sendable func __safeDI_childBuilder() -> Child {
+			        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 			            Child()
 			        }
 			        let childBuilder = SendableErasedInstantiator<(), AnyChild> {
 			            AnyChild(__safeDI_childBuilder())
 			        }
-			        @Sendable func __safeDI_settingsBuilder() -> Settings {
+			        @Sendable nonisolated func __safeDI_settingsBuilder() -> Settings {
 			            Settings(childBuilder: childBuilder)
 			        }
 			        let settingsBuilder = SendableInstantiator<Settings>(__safeDI_settingsBuilder)
@@ -359,11 +359,11 @@ struct SafeDIToolCodeGenerationSendableCaptureRemedyTests: ~Copyable {
 			"Root0+SafeDI.swift": generatedFileHeader + """
 			extension Root0 {
 			    public convenience init() {
-			        @Sendable func __safeDI_analytics() -> Analytics {
+			        @Sendable nonisolated func __safeDI_analytics() -> Analytics {
 			            Analytics()
 			        }
 			        let analytics = SendableLazilyInstantiated<Analytics>(__safeDI_analytics)
-			        @Sendable func __safeDI_settingsBuilder() -> Settings {
+			        @Sendable nonisolated func __safeDI_settingsBuilder() -> Settings {
 			            Settings(analytics: analytics.instance)
 			        }
 			        let settingsBuilder = SendableInstantiator<Settings>(__safeDI_settingsBuilder)
@@ -374,11 +374,11 @@ struct SafeDIToolCodeGenerationSendableCaptureRemedyTests: ~Copyable {
 			"Root1+SafeDI.swift": generatedFileHeader + """
 			extension Root1 {
 			    public convenience init() {
-			        @Sendable func __safeDI_analytics() -> Analytics {
+			        @Sendable nonisolated func __safeDI_analytics() -> Analytics {
 			            Analytics()
 			        }
 			        let analytics = SendableLazilyInstantiated<Analytics>(__safeDI_analytics)
-			        @Sendable func __safeDI_settingsBuilder() -> Settings {
+			        @Sendable nonisolated func __safeDI_settingsBuilder() -> Settings {
 			            Settings(analytics: analytics.instance)
 			        }
 			        let settingsBuilder = SendableInstantiator<Settings>(__safeDI_settingsBuilder)
@@ -526,10 +526,10 @@ struct SafeDIToolCodeGenerationSendableCaptureRemedyTests: ~Copyable {
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public convenience init() {
-			        @Sendable func __safeDI_childBuilder() -> Child {
+			        @Sendable nonisolated func __safeDI_childBuilder() -> Child {
 			            Child()
 			        }
-			        @Sendable func __safeDI_settingsBuilder(childBuilder: SendableInstantiator<Child>) -> Settings {
+			        @Sendable nonisolated func __safeDI_settingsBuilder(childBuilder: SendableInstantiator<Child>) -> Settings {
 			            Settings(childBuilder: childBuilder)
 			        }
 			        func __safeDI_screenA() -> ScreenA {

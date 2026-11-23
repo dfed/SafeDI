@@ -65,7 +65,6 @@ struct BuiltPlaceRecord: Sendable {
 	/// The path key's name of the place's function.
 	let functionName: String
 	let isSendable: Bool
-	let isNonisolated: Bool
 	let typesDeclaredEscaping: Set<TypeDescription>
 	/// What ends the line that constructs the type.
 	let lineEnd: String

@@ -72,9 +72,10 @@ struct SafeDIToolSeamDeepSendableTests: ~Copyable {
 		])
 		#expect(seamLines.filter { $0.contains(".carried_Sendable(SafeDISendableScope_Gadget") }.count == carrierCount + 1)
 		#expect(seamLines.filter { $0.contains(".held(SafeDISendableScope_Gadget") }.count == 1)
-		// One level function for the root enum and one for each carrier's enum.
+		// One level function for the root enum and one for each carrier's enum, each returning its level's builder struct; the
+		// fill of `held`, which returns the gadget, is no level function.
 		let generatedFill = try #require(output.modules["App"]?.generatedFiles["App.swift"])
-		#expect(generatedFill.split(separator: "\n").filter { $0.contains("@Sendable nonisolated func __safeDI_gadgetSendableBuilder_Host") }.count == carrierCount + 2)
+		#expect(generatedFill.split(separator: "\n").filter { $0.contains("@Sendable nonisolated func __safeDI_gadgetSendableBuilder_Host") && $0.contains(".__safeDI_Builder<any Gadget> {") }.count == carrierCount + 2)
 	}
 
 	// MARK: Private

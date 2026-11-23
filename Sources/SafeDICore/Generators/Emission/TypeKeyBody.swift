@@ -727,7 +727,6 @@ private struct TypeKeyLayout {
 			"\(record.isExtension)",
 			record.lineEnd,
 			"\(isInSendableFamily)",
-			"\(record.isNonisolated)",
 			record.forwardedProperties.map(\.asSource).joined(separator: ","),
 			reads[body].joined(separator: ","),
 		]
@@ -1247,7 +1246,6 @@ private struct TypeKeyLayout {
 			functionCode[owner] = BuilderNode(
 				name: functionNames[owner],
 				isSendable: isDecorated[owner],
-				isNonisolated: representative.isNonisolated,
 				parameters: parameters,
 				typesDeclaredEscaping: typesDeclaredEscaping,
 				returnType: representative.concreteType,

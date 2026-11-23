@@ -119,14 +119,14 @@ struct SafeDIToolSeamKeywordLabelTests: ~Copyable {
 		    public init() {
 		        func __safeDI_host() -> Host {
 		            _ = Host.__safeDI_Host_9E11DF95B1FD32CE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature’s safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-		            @Sendable func __safeDI_gadgetSendableBuilder_Host_Type() -> any Gadget {
-		                @Sendable func __safeDI_Type() -> LiveGadget {
+		            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Host_Type() -> any Gadget {
+		                @Sendable nonisolated func __safeDI_Type() -> LiveGadget {
 		                    LiveGadget()
 		                }
 		                return __safeDI_Type()
 		            }
-		            @Sendable func __safeDI_gadgetSendableBuilder_Host_Protocol() -> any Gadget {
-		                @Sendable func __safeDI_Protocol() -> LiveGadget {
+		            @Sendable nonisolated func __safeDI_gadgetSendableBuilder_Host_Protocol() -> any Gadget {
+		                @Sendable nonisolated func __safeDI_Protocol() -> LiveGadget {
 		                    LiveGadget()
 		                }
 		                return __safeDI_Protocol()

@@ -290,7 +290,7 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 			equals: """
 			extension Root {
 			    public convenience init() {
-			        @Sendable func __safeDI_itemBuilder() -> Item {
+			        @Sendable nonisolated func __safeDI_itemBuilder() -> Item {
 			            Item()
 			        }
 			        func __safeDI_leaf() -> Leaf {
@@ -298,11 +298,11 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 			            return Leaf(itemBuilder: itemBuilder)
 			        }
 			        let leaf: Leaf = __safeDI_leaf()
-			        @Sendable func __safeDI_leaf_() -> Leaf {
+			        @Sendable nonisolated func __safeDI_leaf_() -> Leaf {
 			            let itemBuilder = SendableInstantiator<Item>(__safeDI_itemBuilder)
 			            return Leaf(itemBuilder: itemBuilder)
 			        }
-			        @Sendable func __safeDI_hostBuilder() -> Host {
+			        @Sendable nonisolated func __safeDI_hostBuilder() -> Host {
 			            let leaf: Leaf = __safeDI_leaf_()
 			            return Host(leaf: leaf)
 			        }
@@ -330,22 +330,22 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 			equals: """
 			extension Root {
 			    public convenience init() {
-			        @Sendable func __safeDI_a(cache: Cache) -> A {
+			        @Sendable nonisolated func __safeDI_a(cache: Cache) -> A {
 			            let leafBuilder = Instantiator<Leaf> {
 			                __safeDI_leafBuilder(cache: cache)
 			            }
 			            return A(leafBuilder: leafBuilder)
 			        }
-			        @Sendable func __safeDI_leafBuilder(cache: Cache) -> Leaf {
+			        @Sendable nonisolated func __safeDI_leafBuilder(cache: Cache) -> Leaf {
 			            Leaf(cache: cache)
 			        }
-			        @Sendable func __safeDI_b(cache: Cache) -> B {
+			        @Sendable nonisolated func __safeDI_b(cache: Cache) -> B {
 			            let leafBuilder = Instantiator<Leaf> {
 			                __safeDI_leafBuilder(cache: cache)
 			            }
 			            return B(leafBuilder: leafBuilder)
 			        }
-			        @Sendable func __safeDI_hostBuilder() -> Host {
+			        @Sendable nonisolated func __safeDI_hostBuilder() -> Host {
 			            let cache = Cache()
 			            let a: A = __safeDI_a(cache: cache)
 			            let b: B = __safeDI_b(cache: cache)
@@ -1014,8 +1014,8 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == ["Root+SafeDI.swift": generatedFileHeader + """
 		extension Root {
 		    public convenience init() {
-		        @Sendable func __safeDI_t2Builder(t1: T1, t0: T1?) -> T2 {
-		            @Sendable func __safeDI_t1Builder(t0: T0?) -> T1 {
+		        @Sendable nonisolated func __safeDI_t2Builder(t1: T1, t0: T1?) -> T2 {
+		            @Sendable nonisolated func __safeDI_t1Builder(t0: T0?) -> T1 {
 		                let t2Builder = SendableInstantiator<T2> {
 		                    __safeDI_t2Builder(t1: $0, t0: nil)
 		                }
@@ -1034,8 +1034,8 @@ struct SafeDIToolTypeKeyTests: ~Copyable {
 		        }
 		        func __safeDI_t0Builder() -> T0 {
 		            func __safeDI_t1Builder(t1: T1) -> T2 {
-		                @Sendable func __safeDI_t1Builder(t0: T0?, t1: T1?) -> T1 {
-		                    @Sendable func __safeDI_t2Builder(t1: T1) -> T2 {
+		                @Sendable nonisolated func __safeDI_t1Builder(t0: T0?, t1: T1?) -> T1 {
+		                    @Sendable nonisolated func __safeDI_t2Builder(t1: T1) -> T2 {
 		                        let t1Builder = SendableInstantiator<T1> {
 		                            __safeDI_t1Builder(t0: $0, t1: t1)
 		                        }
