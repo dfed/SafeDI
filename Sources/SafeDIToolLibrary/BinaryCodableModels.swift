@@ -496,6 +496,8 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("packageName", \.packageName),
 				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
 				BinaryLayoutField("isInsideCompilerDecidedBlock", \.isInsideCompilerDecidedBlock),
+				BinaryLayoutField("conformanceListNamesSendable", \.conformanceListNamesSendable),
+				BinaryLayoutField("conformanceListNamesOtherTypes", \.conformanceListNamesOtherTypes),
 				BinaryLayoutField("dependencyLabelsInUnselectedClauses", \.dependencyLabelsInUnselectedClauses),
 				BinaryLayoutField("dependencyLabelsInsideConditionalBlocks", \.dependencyLabelsInsideConditionalBlocks),
 			],
@@ -539,6 +541,8 @@ extension Instantiable: BinarySchemaMember {
 		)
 		sourceFilePath = try reader.readOptional(flaggedIn: &fieldFlags) as String?
 		isInsideCompilerDecidedBlock = fieldFlags.next()
+		conformanceListNamesSendable = fieldFlags.next()
+		conformanceListNamesOtherTypes = fieldFlags.next()
 		dependencyLabelsInUnselectedClauses = try reader.read()
 		dependencyLabelsInsideConditionalBlocks = try reader.read()
 		try fieldFlags.finish()
@@ -578,6 +582,8 @@ extension Instantiable: BinarySchemaMember {
 			writer.writeOptional(packageName, flaggedIn: &fieldFlags)
 			writer.writeOptional(sourceFilePath, flaggedIn: &fieldFlags)
 			fieldFlags.append(isInsideCompilerDecidedBlock)
+			fieldFlags.append(conformanceListNamesSendable)
+			fieldFlags.append(conformanceListNamesOtherTypes)
 			writer.write(dependencyLabelsInUnselectedClauses)
 			writer.write(dependencyLabelsInsideConditionalBlocks)
 		}

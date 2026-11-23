@@ -404,14 +404,23 @@ extension DependencyTreeGenerator {
 		guard dependency.property.propertyType.isConstant || dependency.property.propertyType.isLazilyInstantiated else { return nil }
 		let forwardedDependencies = instantiable.dependencies.filter(\.isForwarded)
 		guard !forwardedDependencies.isEmpty else { return nil }
-		return .instantiableHasForwardedProperty(.init(
-			dependency: dependency,
-			instantiable: instantiable,
-			suggestedPropertyType: Self.instantiatorType(
+		// The suggestion is `Sendable` when the property’s wrapper is, or when `parent`’s declaration lists `Sendable`,
+		// which requires each stored property to be. Any other conformance may make `parent` `Sendable` in a way only
+		// another declaration says, which a module’s generation may not read, so the advice then names both forms.
+		let isSendable = dependency.property.propertyType.isSendable || parent.conformanceListNamesSendable
+		func suggestedPropertyType(isSendable: Bool) -> TypeDescription {
+			Self.instantiatorType(
 				building: instantiable,
 				forwarding: forwardedDependencies.map(\.property),
 				for: dependency,
-			),
+				isSendable: isSendable,
+			)
+		}
+		return .instantiableHasForwardedProperty(.init(
+			dependency: dependency,
+			instantiable: instantiable,
+			suggestedPropertyType: suggestedPropertyType(isSendable: isSendable),
+			sendableAlternative: isSendable || !parent.conformanceListNamesOtherTypes ? nil : suggestedPropertyType(isSendable: true),
 			forwardedDeclarations: forwardedDependencies.map {
 				DependencyTreeGeneratorError.LocatedProperty(property: $0.property, declarationLocation: $0.declarationLocation)
 			},
@@ -425,19 +434,19 @@ extension DependencyTreeGenerator {
 	/// be used on an `Instantiator`, so a property with that argument gets an `ErasedInstantiator` of the type the
 	/// property declares, such as `ErasedInstantiator<String, AnyChild>` for `child: AnyChild` when `Child`
 	/// forwards a `String`. The forwarded properties are spelled out rather than as `Child.ForwardedProperties`,
-	/// which the module that declares the property may not be able to see. The suggestion is `Sendable` when the
-	/// property is, and the type an erased instantiator builds is not optional.
+	/// which the module that declares the property may not be able to see. The suggestion is `Sendable` when
+	/// `isSendable`, and the type an erased instantiator builds is not optional.
 	private static func instantiatorType(
 		building instantiable: Instantiable,
 		forwarding forwardedProperties: [Property],
 		for dependency: Dependency,
+		isSendable: Bool,
 	) -> TypeDescription {
-		let propertyType = dependency.property.propertyType
 		if case .instantiated(fulfillingTypeDescription: .some, _) = dependency.source {
 			let declaredType = dependency.property.typeDescription.unwrapped
 			let builtType = declaredType.lazilyInstantiatedInstanceType?.unwrapped ?? declaredType
 			return .simple(
-				name: propertyType.isSendable ? Dependency.sendableErasedInstantiatorType : Dependency.erasedInstantiatorType,
+				name: isSendable ? Dependency.sendableErasedInstantiatorType : Dependency.erasedInstantiatorType,
 				generics: [
 					forwardedProperties.asForwardedPropertiesTypeDescription,
 					builtType,
@@ -445,7 +454,7 @@ extension DependencyTreeGenerator {
 			)
 		} else {
 			return .simple(
-				name: propertyType.isSendable ? Dependency.sendableInstantiatorType : Dependency.instantiatorType,
+				name: isSendable ? Dependency.sendableInstantiatorType : Dependency.instantiatorType,
 				generics: [instantiable.concreteInstantiable],
 			)
 		}

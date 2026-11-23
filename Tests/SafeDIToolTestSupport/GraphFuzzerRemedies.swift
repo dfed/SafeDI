@@ -812,7 +812,8 @@ enum GraphFuzzerRemedies {
 
 	/// `remedy`, a `forwardReceive` remedy, with the declarations the errors of `diagnostics`, the tool's on the remedied
 	/// graph, state for what builds a type that now forwards a property: "… cannot build `T`, which has @Forwarded
-	/// properties that only an instantiator is passed. Declare it as `Instantiator<T>`.", and an erased instantiator's
+	/// properties that only an instantiator is passed. Declare it as `Instantiator<T>`." (or "… `Instantiator<T>`, or as
+	/// `SendableInstantiator<T>` if `P` is Sendable."), and an erased instantiator's
 	/// "The first generic argument of … Declare it as `ErasedInstantiator<X, AnyT>`.". Each such property takes the type
 	/// its error states. An error `originalDiagnostics`, the tool's on the graph before the remedy, reports too is not the
 	/// remedy's to follow. Returns `nil` when no error states such a declaration, or one cannot be applied.
@@ -829,12 +830,14 @@ enum GraphFuzzerRemedies {
 			guard let error = ReportedError(diagnosticLine),
 			      !originalMessages.contains(error.message),
 			      isForwardedBuilderError(error.message),
-			      error.message.hasSuffix("`."),
 			      let declarationStart = error.message.range(of: declarationMarker, options: .backwards),
+			      let declarationEnd = error.message[declarationStart.upperBound...].firstIndex(of: "`"),
 			      let site = files.site(of: error),
 			      retypedSites.insert(site).inserted
 			else { continue }
-			let declaredType = String(error.message[declarationStart.upperBound...].dropLast("`.".count))
+			// The first form the error names: where the declaring type’s declaration does not say whether it is
+			// `Sendable`, the error names the plain form, then the `Sendable` one.
+			let declaredType = String(error.message[declarationStart.upperBound..<declarationEnd])
 			guard files.edit(typeNamed: site.typeName, { properties in
 				properties.map { $0.label == site.label ? GraphFuzzerRemedyProperty(attribute: $0.attribute, label: $0.label, type: declaredType) : $0 }
 			}) else { return nil }
