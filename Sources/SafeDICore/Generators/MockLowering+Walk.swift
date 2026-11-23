@@ -293,6 +293,8 @@ extension MockLowering {
 		/// (`ScopeGenerator.collectUniqueConfigurationTypes`).
 		var configuredAncestorTypes = Set<String>()
 		var isBeneathRepeatedConfiguredAncestor = false
+		// D1 lane hook (lane D): how many configured nodes' children the walk entered, which orders the one-way check's reads.
+		var configuredNodesEntered = 0
 		// D1 lane hook (lane C): the builders `mock()` takes optional for the places its calls fill, and the calls not reached yet.
 		var filledCallBuilders = FilledCallBuilders.none
 		// D1 lane hook (lane C): a public mock builds each configured node with its type's construction function.
@@ -862,12 +864,21 @@ extension MockLowering {
 			let preludeLines = startsExtraction ? endExtraction(restoring: enclosingExtractor, indent: indent) : []
 			lines.insert(contentsOf: preludeLines, at: declarationIndex)
 			let configuredNode = node.configured(byChildren: children)
+			let oneWayParentConcreteType = parentConcreteType
 			// D1 lane hook (lane D): a node whose type repeats a configured node around it, or beneath one, records nothing.
 			if configuredNode.hasConfiguration, configurationEntry.recordsConfiguration {
 				let parentConcreteType = instantiable.concreteInstantiable.asSource
 				// A child beneath an edge in `cycleEdges` has no member in its parent's configuration, public or internal.
 				let recordedChildren = children.filter { child in child.concreteType.map { !isPruned($0, beneath: parentConcreteType) } ?? true }
 				var record = ConfigurationRecord(of: configuredNode, children: recordedChildren)
+				// D1 lane hook (lane D): the construction the one-way check reads, with every child, pruned or not.
+				record.oneWayConstruction = OneWayConstruction(
+					of: configuredNode,
+					children: children,
+					parentConcreteType: oneWayParentConcreteType,
+					isBeneathCycleEdge: !overrideReachable,
+					walkOrder: configurationEntry.walkOrder,
+				)
 				// D1 lane hook (lane C): a public mock's node records the construction its type's construction function makes.
 				if buildsPublicMock {
 					record.publicConstruction = MockLowering.publicConstructionRecord(of: configuredNode, children: recordedChildren, orderedBy: generator)

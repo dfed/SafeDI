@@ -67,7 +67,7 @@ public enum MockLoweringShadowChecks {
 				switch comparison.subject {
 				case .mockCode:
 					state.record(comparison)
-				case .mergedCode, .moduleConfigurations:
+				case .mergedCode, .moduleConfigurations, .oneWayDiagnostics:
 					configurationState.record(comparison)
 				}
 			}
