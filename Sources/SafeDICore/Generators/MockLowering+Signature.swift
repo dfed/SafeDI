@@ -345,7 +345,13 @@ extension ScopeGenerator {
 		// A flat received parameter is named apart from the other parameters, the overrides and the root's tree bindings.
 		let flatReceivedNames = Self.namesApart(
 			preferredNames: flatReceivedProperties.map(\.label),
-			typeDescriptions: flatReceivedProperties.map(\.typeDescription),
+			// D1 lane hook (lane C): a public mock's wrapper parameter is named apart by the value it stands for, as the
+			// emitter names the instance it takes as that wrapper (`publicMockWrapperParameters`).
+			typeDescriptions: flatReceivedProperties.map { property in
+				instantiable.generateMock == .public && property.typeDescription.lazilyInstantiatedInstanceType != nil
+					? property.asValidatedForDependencyCycles.typeDescription
+					: property.typeDescription
+			},
 			namesInScope: forwardedAndDefaultLabels
 				.union(uncoveredNames)
 				.union(onlyIfAvailableReceivedProperties.filter { !onlyPublicMockCallsReceive.contains($0) }.map(\.label))
