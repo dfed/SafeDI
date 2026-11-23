@@ -1463,7 +1463,9 @@ extension MockLowering {
 				}
 				parts.append("\(argument.label.spelledAsArgumentLabel): \(renames[argument.innerLabel]?[dependency.property.typeDescription] ?? argument.innerLabel)")
 			} else if argument.hasDefaultValue, !argument.isLeftToItsDefault {
-				parts.append("\(argument.label.spelledAsArgumentLabel): \(argument.label)")
+				// D1 lane hook (lane D): an `@autoclosure` parameter of `mock()` is passed its call.
+				let parameterValue = argument.typeDescription.strippingEscaping.autoclosureValueType == nil ? argument.label : "\(argument.label)()"
+				parts.append("\(argument.label.spelledAsArgumentLabel): \(parameterValue)")
 			}
 		}
 		return parts.joined(separator: ", ")
