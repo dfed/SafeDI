@@ -723,6 +723,7 @@ extension ScopeRecord {
 						? scopeGeneratorsUnderConstruction[index].memoKey(
 							ofChildBuilding: scope,
 							as: property,
+							id: propertyID,
 							erasedToConcreteExistential: erasedToConcreteExistential,
 							previousPass: subtreeDigests.digest(
 								of: scopeGeneratorsUnderConstruction[index].previousPassChildGenerator,
@@ -1549,7 +1550,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	}
 
 	/// The key this scope's generator is stored under once it exists, or `nil` for a root, a fill, or a scope the memo does
-	/// not cover (see `memoKey(ofChildBuilding:as:erasedToConcreteExistential:)`).
+	/// not cover (see `memoKey(ofChildBuilding:as:id:erasedToConcreteExistential:previousPass:)`).
 	var memoKey: ConstructionMemo.Key?
 
 	/// How many groups of generators the pass had started or collected when this scope's build began (see `createScopeGenerator`'s
@@ -1778,11 +1779,11 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 	/// up in a construction memo, or `nil` where the child reads context the memo's log does not cover: it is inside a fill,
 	/// or in a tree with holes (see `ConstructionMemo`).
 	/// - Parameter previousPass: The digest of what the child's build reads of the pass before (`SubtreeDigests`).
-	func memoKey(ofChildBuilding scope: ConstructionScope, as property: Property, erasedToConcreteExistential: Bool, previousPass: SubtreeDigests.ID) -> ConstructionMemo.Key? {
+	func memoKey(ofChildBuilding scope: ConstructionScope, as property: Property, id propertyID: PropertyID, erasedToConcreteExistential: Bool, previousPass: SubtreeDigests.ID) -> ConstructionMemo.Key? {
 		guard enclosingFills.isEmpty, seamHoles.isEmpty, fill == nil else { return nil }
 		return ConstructionMemo.Key(
 			scope: ObjectIdentifier(scope.identity),
-			property: property,
+			property: propertyID,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
 			startsCodeGeneration: startsCodeGeneration,
@@ -1791,7 +1792,7 @@ private struct ScopeGeneratorUnderConstruction: Sendable {
 			mayPassNil: nearestDeclarations(ofChildBuilding: property).mayPassNil,
 			lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 			reboundProperties: childReboundProperties,
-			spellings: Property.spellingsForConstructionMemo(of: property, childLazilyInstantiatedInstanceProperties, childReboundProperties),
+			spellings: Property.spellingsForConstructionMemo(of: childLazilyInstantiatedInstanceProperties, childReboundProperties),
 			previousPass: previousPass,
 		)
 	}

@@ -97,7 +97,8 @@ struct ConstructionMemo {
 	struct Key: Hashable {
 		/// The scope the place builds, by its `ScopeRecord`.
 		let scope: ObjectIdentifier
-		let property: Property
+		/// The property the place builds, by its exact ID, which tells apart every two spellings generated code could write.
+		let property: PropertyID
 		let erasedToConcreteExistential: Bool
 		let forMockGeneration: Bool
 		let startsCodeGeneration: Bool
@@ -109,9 +110,9 @@ struct ConstructionMemo {
 		/// The received properties in scope at the place only as the instance of a `LazilyInstantiated` property.
 		let lazilyInstantiatedInstanceProperties: Set<Property>
 		let reboundProperties: Set<Property>
-		/// The spellings of `property`'s type and of each property of the two sets, sorted, as UTF-8 bytes, which generated code spells as
-		/// declared: `==` reads `any P` as `P`, so it alone would let a place reuse a generator that spells its property
-		/// otherwise.
+		/// The spellings of each property of the two sets, sorted, as UTF-8 bytes, one entry per set, which generated code
+		/// spells as declared: `==` reads `any P` as `P`, so it alone would let a place reuse a generator that spells a
+		/// property otherwise. Both sets are empty at nearly every place, so neither is interned.
 		let spellings: [[UInt8]]
 		/// What the place's build reads of the generators the pass before created for its subtree, with the settled cycle
 		/// parameters a `CycleParameterSeed` gives it in place of what they found (`SubtreeDigests`): empty in a first pass.
@@ -610,10 +611,10 @@ extension Property {
 		"\(label): \(typeDescription.asSource)"
 	}
 
-	/// The spellings of `property`'s and `properties`' types, for a construction memo's key (see `ConstructionMemo.Key`).
-	static func spellingsForConstructionMemo(of property: Property, _ propertySets: Set<Property>...) -> [[UInt8]] {
-		var spellings = [Array(property.spelling.utf8)]
-		for properties in propertySets where !properties.isEmpty {
+	/// The spellings of each set's properties, one entry per set, for a construction memo's key (see `ConstructionMemo.Key`).
+	static func spellingsForConstructionMemo(of propertySets: Set<Property>...) -> [[UInt8]] {
+		var spellings = [[UInt8]]()
+		for properties in propertySets {
 			spellings.append(Array(properties.map(\.spelling).sortedByUTF8().joined(separator: ",").utf8))
 		}
 		return spellings
