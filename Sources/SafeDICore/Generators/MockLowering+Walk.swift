@@ -911,7 +911,8 @@ extension MockLowering {
 					else { continue }
 					// D1 lane hook (lane C): a public mock's wrapper parameter is read by name, its instance where the
 					// construction reads it, with no binding again (`dependencyArgument`, `lazilyInstantiatedBindingNames`).
-					if buildsPublicMock {
+					// A wrapper node the root's level names apart is bound again, as any receive named apart is.
+					if buildsPublicMock, !rootPropertyNodeBindingNames.contains(wrapper.name) {
 						publicWrapperParametersReadByName[dependency.property.label] = wrapper.name
 					} else {
 						receiverBindings.append(wrapper)
@@ -925,7 +926,7 @@ extension MockLowering {
 			var bindingNamesPassedByName = publicWrapperParametersReadByName
 			if !childGenerators.isEmpty {
 				for binding in receiverBindings {
-					switch MockLowering.receiveReadsLabelByName(binding.property.label, beneath: orderedChildren, renames: renames, lazilyInstantiatedNames: functionLazilyInstantiatedNames, isPublicMock: buildsPublicMock) {
+					switch MockLowering.receiveReadsLabelByName(binding.property.label, beneath: orderedChildren, renames: renames, lazilyInstantiatedNames: functionLazilyInstantiatedNames, publicMockNodeBindingNames: buildsPublicMock ? rootPropertyNodeBindingNames : nil) {
 					case true?:
 						bindingNamesPassedByName[binding.property.label] = binding.name
 					case false?:
@@ -1644,14 +1645,15 @@ extension MockLowering {
 	/// Whether a receive among `generators`, or beneath them up to a node that declares `label`, reads `label` by name: a
 	/// receive or an alias's fulfilling property whose form `renames` does not name apart; or `nil` where the walk cannot
 	/// tell yet (`ScopeGenerator.receiveReadsLabelByName`).
-	static func receiveReadsLabelByName(_ label: String, beneath children: [ScopeGenerator.OrderedChild], renames: [String: [TypeDescription: String]], lazilyInstantiatedNames: [String: [TypeDescription: String]], isPublicMock: Bool) -> Bool? {
+	static func receiveReadsLabelByName(_ label: String, beneath children: [ScopeGenerator.OrderedChild], renames: [String: [TypeDescription: String]], lazilyInstantiatedNames: [String: [TypeDescription: String]], publicMockNodeBindingNames: Set<String>?) -> Bool? {
 		let names = renames[label] ?? [:]
 		// D1 lane hook (lane C): a receive of a wrapper the mock names apart reads that name, not the label.
 		let wrapperNames = lazilyInstantiatedNames[label] ?? [:]
 		// A wrapper's instance is read through a wrapper the flat parameters name apart. A public mock's wrapper parameter is
 		// none: the emitter names apart the instance it stands for (`publicMockWrapperParameters`), and
-		// `dependencyArgument` reads the wrapper by name.
-		let flatWrapperNames = isPublicMock ? [:] : names
+		// `dependencyArgument` reads the wrapper by name. A wrapper node the root's level names apart is one, read through its
+		// name.
+		let flatWrapperNames = publicMockNodeBindingNames.map { nodeBindingNames in names.filter { nodeBindingNames.contains($0.value) } } ?? names
 		// A stack of its own, since a mock tree can be as deep as the module has types.
 		var childrenToVisit = children
 		while let child = childrenToVisit.popLast() {
