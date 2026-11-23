@@ -52,65 +52,93 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		conformanceListNamesSendable: Bool = false,
 		conformanceListNamesOtherTypes: Bool = false,
 	) {
-		instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
-		self.declarationLocation = declarationLocation
-		self.isRoot = isRoot
-		self.generatesDependencyTree = generatesDependencyTree
-		self.initializer = initializer
-		self.otherInitializers = otherInitializers
-		self.dependencies = dependencies
-		self.declarationType = declarationType
-		self.access = access
-		self.enclosingTypeAccess = enclosingTypeAccess
-		self.generatedInitializerAttributes = generatedInitializerAttributes
-		self.mockAttributes = mockAttributes
-		self.declarationIsolation = declarationIsolation
-		self.generateMock = generateMock
-		self.mockOnly = mockOnly
-		self.moduleName = moduleName
-		rarelySetFields = RarelySetFieldsBox(holding: RarelySetFields(
-			enclosingExtensionAccess: enclosingExtensionAccess,
-			mockGenerationArgumentRange: mockGenerationArgumentRange,
-			mockInitializer: mockInitializer,
-			mockReturnType: mockReturnType,
-			customMockName: customMockName,
-			mockDeclarationLocation: mockDeclarationLocation,
-			mockDeclarationAccess: mockDeclarationAccess,
-			mockDeclarationModuleName: mockDeclarationModuleName,
-			mockDeclarationPackageName: mockDeclarationPackageName,
+		storage = Storage(Fields(
+			instantiableTypes: [instantiableType] + (additionalInstantiables ?? []),
+			sourceFilePath: nil,
+			declarationLocation: declarationLocation,
+			rarelySetFields: RarelySetFieldsBox(holding: RarelySetFields(
+				enclosingExtensionAccess: enclosingExtensionAccess,
+				mockGenerationArgumentRange: mockGenerationArgumentRange,
+				mockInitializer: mockInitializer,
+				mockReturnType: mockReturnType,
+				customMockName: customMockName,
+				mockDeclarationLocation: mockDeclarationLocation,
+				mockDeclarationAccess: mockDeclarationAccess,
+				mockDeclarationModuleName: mockDeclarationModuleName,
+				mockDeclarationPackageName: mockDeclarationPackageName,
+			)),
+			isRoot: isRoot,
+			generatesDependencyTree: generatesDependencyTree,
+			initializer: initializer,
+			otherInitializers: otherInitializers,
+			dependencies: dependencies,
+			declarationType: declarationType,
+			access: access,
+			enclosingTypeAccess: enclosingTypeAccess,
+			generatedInitializerAttributes: generatedInitializerAttributes,
+			mockAttributes: mockAttributes,
+			declarationIsolation: declarationIsolation,
+			generateMock: generateMock,
+			mockOnly: mockOnly,
+			moduleName: moduleName,
+			packageName: packageName,
+			conformanceListNamesSendable: conformanceListNamesSendable,
+			conformanceListNamesOtherTypes: conformanceListNamesOtherTypes,
 		))
-		self.packageName = packageName
-		self.conformanceListNamesSendable = conformanceListNamesSendable
-		self.conformanceListNamesOtherTypes = conformanceListNamesOtherTypes
 	}
 
 	// MARK: Public
 
 	/// The types that can be fulfilled with this Instantiable.
-	public private(set) var instantiableTypes: [TypeDescription]
+	public private(set) var instantiableTypes: [TypeDescription] {
+		get { storage.fields.instantiableTypes }
+		set { updateFields { $0.instantiableTypes = newValue } }
+	}
+
 	/// The concrete type that fulfills `instantiableTypes`.
 	public var concreteInstantiable: TypeDescription {
 		instantiableTypes[0]
 	}
 
 	/// Whether the instantiable type is a root of a dependency graph.
-	public let isRoot: Bool
+	public var isRoot: Bool {
+		storage.fields.isRoot
+	}
+
 	/// Whether SafeDI generates the type's dependency tree in the module that declares it, as an initializer that
 	/// takes what the tree needs from outside as parameters, which every other tree calls instead of building the
 	/// tree again. Never `true` together with `isRoot` or `mockOnly`, and never on an extension: the macro rejects
 	/// each.
-	public let generatesDependencyTree: Bool
+	public var generatesDependencyTree: Bool {
+		storage.fields.generatesDependencyTree
+	}
+
 	/// A memberwise initializer for the concrete instantiable type.
 	/// If `nil`, the Instantiable type is incorrectly configured.
-	public private(set) var initializer: Initializer?
+	public private(set) var initializer: Initializer? {
+		get { storage.fields.initializer }
+		set { updateFields { $0.initializer = newValue } }
+	}
+
 	/// The type declaration's initializers other than `initializer`, in declaration order, which SafeDI never
 	/// constructs the type with. An initializer SafeDI generates for the type must not redeclare one of them. Empty
 	/// for an extension-based instantiable.
-	public private(set) var otherInitializers: [Initializer]
+	public private(set) var otherInitializers: [Initializer] {
+		get { storage.fields.otherInitializers }
+		set { updateFields { $0.otherInitializers = newValue } }
+	}
+
 	/// The ordered dependencies of this Instantiable.
-	public private(set) var dependencies: [Dependency]
+	public private(set) var dependencies: [Dependency] {
+		get { storage.fields.dependencies }
+		set { updateFields { $0.dependencies = newValue } }
+	}
+
 	/// The declaration type of the Instantiable’s concrete type.
-	public let declarationType: DeclarationType
+	public var declarationType: DeclarationType {
+		storage.fields.declarationType
+	}
+
 	/// The access spelled on the declaration this Instantiable was found on: the type declaration, or, for an
 	/// extension-based Instantiable, the extension, whose members default to it (`fileprivate` for a `private`
 	/// extension). Its level is `internal` when the declaration spells none. An extension's `instantiate()` records the
@@ -118,12 +146,18 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// both. A hand-written mock method may be declared in another declaration that is merged into this one, so the
 	/// access of the declaration that declares it is `mockDeclarationAccess`, and the access spelled on the method
 	/// itself is on `mockInitializer`.
-	public let access: AccessDeclaration
+	public var access: AccessDeclaration {
+		storage.fields.access
+	}
+
 	/// The access spelled on each class, actor, struct, and enum declaration in the file that encloses the declaration
 	/// this Instantiable was found on, outermost first. Each caps the declaration's effective access. Empty when no
 	/// type declaration encloses it, which is always the case for an extension-based Instantiable, whose own `access`
 	/// is the extension's.
-	public let enclosingTypeAccess: [AccessDeclaration]
+	public var enclosingTypeAccess: [AccessDeclaration] {
+		storage.fields.enclosingTypeAccess
+	}
+
 	/// The access spelled on the extension that encloses the declaration this Instantiable was found on, if one does.
 	/// An extension is declared at file scope, so it can only be outermost. Unlike an enclosing type, it caps nothing:
 	/// it is only the default access of the one declaration directly inside it – the first entry of
@@ -139,15 +173,24 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// and each tier of a type with `generateDependencyTree: true`: the macro's
 	/// `generatedAttributes` when it is given, else its `generatedInitializerAttributes`. The declaration's own: a
 	/// `mockOnly` declaration merged into this one contributes none, as for `mockAttributes`.
-	public let generatedInitializerAttributes: String
+	public var generatedInitializerAttributes: String {
+		storage.fields.generatedInitializerAttributes
+	}
+
 	/// Attributes to add to the generated `mock()` method (e.g. `"@MainActor"`): the macro's `generatedAttributes` when
 	/// it is given, else its `mockAttributes`. The declaration's own: a `mockOnly` declaration merged into this one,
 	/// whose hand-written mock the generated `mock()` calls, contributes none.
-	public let mockAttributes: String
+	public var mockAttributes: String {
+		storage.fields.mockAttributes
+	}
+
 	/// The isolation spelled on the type declaration this Instantiable was found on, which a member generated in an
 	/// extension of the type inherits: its global actor attribute (`"@MainActor"`), `"nonisolated"`, or `nil` when it
 	/// spells neither. Always `nil` for an extension-based Instantiable, whose extension a generated member is not in.
-	public let declarationIsolation: String?
+	public var declarationIsolation: String? {
+		storage.fields.declarationIsolation
+	}
+
 	/// Whether the `mock()` generated for this type is isolated to a global actor: the type declaration spells one, or
 	/// `mockAttributes` does.
 	public var generatedMockIsGlobalActorIsolated: Bool {
@@ -155,7 +198,10 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	}
 
 	/// Whether to generate a `mock()` method for this type, and with what access: the `generateMock:` argument.
-	public let generateMock: MockGeneration
+	public var generateMock: MockGeneration {
+		storage.fields.generateMock
+	}
+
 	/// Whether a `mock()` method is generated for this type, with any access.
 	public var generatesMock: Bool {
 		generateMock.generatesMock
@@ -176,7 +222,10 @@ public struct Instantiable: Codable, Hashable, Sendable {
 
 	/// Whether this declaration exists solely for mock generation (user provides a hand-written mock method).
 	/// When `true`, no `init`/`instantiate()` or `Instantiable` conformance is required.
-	public let mockOnly: Bool
+	public var mockOnly: Bool {
+		storage.fields.mockOnly
+	}
+
 	/// A user-defined `static func mock(...)` method, if one exists.
 	/// When present, mock generation calls this method instead of `init` or `instantiate`.
 	public var mockInitializer: Initializer? {
@@ -237,12 +286,19 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// name it gives an included module, which can be several path components (`Home/Sources`) and need not be the
 	/// compiler's, so nothing may compare a name `query` records with one a build recorded: it serves only to group a
 	/// query's declarations by module.
-	public var moduleName: String?
+	public var moduleName: String? {
+		get { storage.fields.moduleName }
+		set { updateFields { $0.moduleName = newValue } }
+	}
+
 	/// The package of the module that declares this Instantiable, which decides where a `package` declaration is visible:
 	/// the name a build system hands the compiler as `-package-name`, or, under SwiftPM, the package's identity, of which
 	/// `-package-name` carries the C99-mangled form (`swift-syntax` becomes `swift_syntax`), so a diagnostic that names
 	/// the package must mangle it. `nil` when SafeDITool does not know it, as for `moduleName`.
-	public var packageName: String?
+	public var packageName: String? {
+		get { storage.fields.packageName }
+		set { updateFields { $0.packageName = newValue } }
+	}
 
 	/// Returns a copy of this Instantiable with mock-related fields replaced by those from `mockProvider`.
 	/// Used when merging a production `@Instantiable` with a `mockOnly` declaration for the same type.
@@ -396,26 +452,42 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// reads, though only once in what the compiler compiles. Syntax alone decides it, so it is the same whatever
 	/// conditions the file is walked with: a walk that reaches the declaration at all records the same value, which keeps
 	/// scan's cache sound without any condition joining `consultedCompilationConditions`.
-	public var isInsideCompilerDecidedBlock = false
+	public var isInsideCompilerDecidedBlock: Bool {
+		get { storage.fields.isInsideCompilerDecidedBlock }
+		set { updateFields { $0.isInsideCompilerDecidedBlock = newValue } }
+	}
 
 	/// Whether the type’s declaration lists `Sendable` among what it conforms to, which requires each stored property
 	/// to be of a `Sendable` type. `@unchecked Sendable` is not counted, since it accepts a property of any type.
-	public var conformanceListNamesSendable = false
+	public var conformanceListNamesSendable: Bool {
+		get { storage.fields.conformanceListNamesSendable }
+		set { updateFields { $0.conformanceListNamesSendable = newValue } }
+	}
 
 	/// Whether the type’s declaration lists a type besides `Instantiable` and a counted `Sendable`, such as a protocol
 	/// or `@unchecked Sendable`, which may or may not make the type `Sendable`: only that type’s declaration says, and a
 	/// module’s generation may not read it. Advice that depends on whether the type is `Sendable` names both forms.
-	public var conformanceListNamesOtherTypes = false
+	public var conformanceListNamesOtherTypes: Bool {
+		get { storage.fields.conformanceListNamesOtherTypes }
+		set { updateFields { $0.conformanceListNamesOtherTypes = newValue } }
+	}
 
 	/// The labels of the dependencies the declaration's members declare in the `#if` clauses SafeDITool's evaluation did
 	/// not select, in source order, each once, with the first such clause that declares it: what a hand-written mock may
 	/// take that this build's declaration does not declare. Empty where every clause is read, as the macro reads them.
 	/// Only blocks whose clauses guard SafeDI content are skipped, and their conditions are consulted, so scan's cache
 	/// of it is sound.
-	public var dependencyLabelsInUnselectedClauses = [DependencyLabelInUnselectedClause]()
+	public var dependencyLabelsInUnselectedClauses: [DependencyLabelInUnselectedClause] {
+		get { storage.fields.dependencyLabelsInUnselectedClauses }
+		set { updateFields { $0.dependencyLabelsInUnselectedClauses = newValue } }
+	}
+
 	/// The labels of `dependencies` declared inside an `#if` block, in declaration order: those a hand-written mock moved
 	/// into another clause may not find. Covered by the same consulted conditions as `dependencyLabelsInUnselectedClauses`.
-	public var dependencyLabelsInsideConditionalBlocks = [String]()
+	public var dependencyLabelsInsideConditionalBlocks: [String] {
+		get { storage.fields.dependencyLabelsInsideConditionalBlocks }
+		set { updateFields { $0.dependencyLabelsInsideConditionalBlocks = newValue } }
+	}
 
 	/// A dependency label a member declares in an `#if` clause SafeDITool's evaluation did not select, with that clause.
 	public struct DependencyLabelInUnselectedClause: Codable, Hashable, Sendable {
@@ -450,25 +522,92 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// The path to the source file that declared this Instantiable, as the build system supplied it.
 	/// `scan` rewrites it to a project-relative form so cached module info matches manifest entries;
 	/// `declarationLocation.filePath` keeps the path exactly as parsed for diagnostics.
-	public var sourceFilePath: String?
+	public var sourceFilePath: String? {
+		get { storage.fields.sourceFilePath }
+		set { updateFields { $0.sourceFilePath = newValue } }
+	}
+
 	/// Where the decorated declaration begins in source: its first attribute, as for `Dependency.declarationLocation`.
 	/// `nil` only when the declaration was parsed without a file context – macro expansion walks a detached
 	/// declaration – and such values never reach the dependency tree generator, which only consumes
 	/// instantiables that `SafeDITool` parsed from files.
-	public let declarationLocation: Dependency.DeclarationLocation?
+	public var declarationLocation: Dependency.DeclarationLocation? {
+		storage.fields.declarationLocation
+	}
 
 	// MARK: Rarely set fields
 
 	/// The fields few declarations set – a hand-written mock's, an enclosing extension's access, a `generateMock:`
 	/// argument's range, a name a run distinguishes the type by – behind one reference, `nil` while every one is `nil`:
 	/// a module's declarations are held at once, and storing these in every `Instantiable` more than doubled its size.
-	private var rarelySetFields: RarelySetFieldsBox?
+	private var rarelySetFields: RarelySetFieldsBox? {
+		storage.fields.rarelySetFields
+	}
 
 	/// Sets the rarely set fields to what `update` makes of them, keeping no box while every one is `nil`.
 	private mutating func updateRarelySetFields(_ update: (inout RarelySetFields) -> Void) {
 		var fields = rarelySetFields?.fields ?? RarelySetFields()
 		update(&fields)
-		rarelySetFields = RarelySetFieldsBox(holding: fields)
+		updateFields { $0.rarelySetFields = RarelySetFieldsBox(holding: fields) }
+	}
+
+	// MARK: Storage
+
+	/// Every stored field, behind one reference (`Storage`): an `Instantiable` is copied into and out of scopes, records
+	/// and signatures many times per type, and copying the fields themselves retained and released each of them.
+	private var storage: Storage
+
+	/// Sets the fields to what `update` makes of them, in a new `Storage`, which is never changed once made.
+	private mutating func updateFields(_ update: (inout Fields) -> Void) {
+		var fields = storage.fields
+		update(&fields)
+		storage = Storage(fields)
+	}
+
+	/// The fields an `Instantiable` stores, which `Storage` holds.
+	private struct Fields: Hashable, Sendable {
+		var instantiableTypes: [TypeDescription]
+		var sourceFilePath: String?
+		var declarationLocation: Dependency.DeclarationLocation?
+		var rarelySetFields: RarelySetFieldsBox?
+		var isRoot: Bool
+		var generatesDependencyTree: Bool
+		var initializer: Initializer?
+		var otherInitializers: [Initializer]
+		var dependencies: [Dependency]
+		var declarationType: DeclarationType
+		var access: AccessDeclaration
+		var enclosingTypeAccess: [AccessDeclaration]
+		var generatedInitializerAttributes: String
+		var mockAttributes: String
+		var declarationIsolation: String?
+		var generateMock: MockGeneration
+		var mockOnly: Bool
+		var moduleName: String?
+		var packageName: String?
+		var isInsideCompilerDecidedBlock = false
+		var conformanceListNamesSendable: Bool
+		var conformanceListNamesOtherTypes: Bool
+		var dependencyLabelsInUnselectedClauses = [DependencyLabelInUnselectedClause]()
+		var dependencyLabelsInsideConditionalBlocks = [String]()
+	}
+
+	/// `Fields` behind a reference, compared and hashed by its fields, so an `Instantiable` equals another exactly when it
+	/// did with the fields stored inline.
+	private final class Storage: Hashable, Sendable {
+		init(_ fields: Fields) {
+			self.fields = fields
+		}
+
+		let fields: Fields
+
+		static func == (lhs: Storage, rhs: Storage) -> Bool {
+			lhs === rhs || lhs.fields == rhs.fields
+		}
+
+		func hash(into hasher: inout Hasher) {
+			hasher.combine(fields)
+		}
 	}
 
 	private struct RarelySetFields: Hashable, Sendable {
@@ -579,40 +718,42 @@ extension Instantiable {
 
 	public init(from decoder: any Decoder) throws {
 		let container = try decoder.container(keyedBy: CodingKeys.self)
-		instantiableTypes = try container.decode([TypeDescription].self, forKey: .instantiableTypes)
-		isRoot = try container.decode(Bool.self, forKey: .isRoot)
-		generatesDependencyTree = try container.decode(Bool.self, forKey: .generatesDependencyTree)
-		initializer = try container.decodeIfPresent(Initializer.self, forKey: .initializer)
-		otherInitializers = try container.decode([Initializer].self, forKey: .otherInitializers)
-		dependencies = try container.decode([Dependency].self, forKey: .dependencies)
-		declarationType = try container.decode(DeclarationType.self, forKey: .declarationType)
-		access = try container.decode(AccessDeclaration.self, forKey: .access)
-		enclosingTypeAccess = try container.decode([AccessDeclaration].self, forKey: .enclosingTypeAccess)
-		generatedInitializerAttributes = try container.decode(String.self, forKey: .generatedInitializerAttributes)
-		mockAttributes = try container.decode(String.self, forKey: .mockAttributes)
-		declarationIsolation = try container.decodeIfPresent(String.self, forKey: .declarationIsolation)
-		generateMock = try container.decode(MockGeneration.self, forKey: .generateMock)
-		mockOnly = try container.decode(Bool.self, forKey: .mockOnly)
-		moduleName = try container.decodeIfPresent(String.self, forKey: .moduleName)
-		packageName = try container.decodeIfPresent(String.self, forKey: .packageName)
-		isInsideCompilerDecidedBlock = try container.decode(Bool.self, forKey: .isInsideCompilerDecidedBlock)
-		conformanceListNamesSendable = try container.decodeIfPresent(Bool.self, forKey: .conformanceListNamesSendable) ?? false
-		conformanceListNamesOtherTypes = try container.decodeIfPresent(Bool.self, forKey: .conformanceListNamesOtherTypes) ?? false
-		dependencyLabelsInUnselectedClauses = try container.decode([DependencyLabelInUnselectedClause].self, forKey: .dependencyLabelsInUnselectedClauses)
-		dependencyLabelsInsideConditionalBlocks = try container.decode([String].self, forKey: .dependencyLabelsInsideConditionalBlocks)
-		sourceFilePath = try container.decodeIfPresent(String.self, forKey: .sourceFilePath)
-		declarationLocation = try container.decodeIfPresent(Dependency.DeclarationLocation.self, forKey: .declarationLocation)
-		rarelySetFields = RarelySetFieldsBox(holding: RarelySetFields(
-			enclosingExtensionAccess: try container.decodeIfPresent(AccessDeclaration.self, forKey: .enclosingExtensionAccess),
-			mockGenerationArgumentRange: try container.decodeIfPresent(Dependency.SourceRange.self, forKey: .mockGenerationArgumentRange),
-			mockInitializer: try container.decodeIfPresent(Initializer.self, forKey: .mockInitializer),
-			mockReturnType: try container.decodeIfPresent(TypeDescription.self, forKey: .mockReturnType),
-			customMockName: try container.decodeIfPresent(String.self, forKey: .customMockName),
-			mockDeclarationLocation: try container.decodeIfPresent(Dependency.DeclarationLocation.self, forKey: .mockDeclarationLocation),
-			mockDeclarationAccess: try container.decodeIfPresent(AccessDeclaration.self, forKey: .mockDeclarationAccess),
-			mockDeclarationModuleName: try container.decodeIfPresent(String.self, forKey: .mockDeclarationModuleName),
-			mockDeclarationPackageName: try container.decodeIfPresent(String.self, forKey: .mockDeclarationPackageName),
-			declaredName: try container.decodeIfPresent(TypeDescription.self, forKey: .declaredName),
+		storage = try Storage(Fields(
+			instantiableTypes: container.decode([TypeDescription].self, forKey: .instantiableTypes),
+			sourceFilePath: container.decodeIfPresent(String.self, forKey: .sourceFilePath),
+			declarationLocation: container.decodeIfPresent(Dependency.DeclarationLocation.self, forKey: .declarationLocation),
+			rarelySetFields: RarelySetFieldsBox(holding: RarelySetFields(
+				enclosingExtensionAccess: container.decodeIfPresent(AccessDeclaration.self, forKey: .enclosingExtensionAccess),
+				mockGenerationArgumentRange: container.decodeIfPresent(Dependency.SourceRange.self, forKey: .mockGenerationArgumentRange),
+				mockInitializer: container.decodeIfPresent(Initializer.self, forKey: .mockInitializer),
+				mockReturnType: container.decodeIfPresent(TypeDescription.self, forKey: .mockReturnType),
+				customMockName: container.decodeIfPresent(String.self, forKey: .customMockName),
+				mockDeclarationLocation: container.decodeIfPresent(Dependency.DeclarationLocation.self, forKey: .mockDeclarationLocation),
+				mockDeclarationAccess: container.decodeIfPresent(AccessDeclaration.self, forKey: .mockDeclarationAccess),
+				mockDeclarationModuleName: container.decodeIfPresent(String.self, forKey: .mockDeclarationModuleName),
+				mockDeclarationPackageName: container.decodeIfPresent(String.self, forKey: .mockDeclarationPackageName),
+				declaredName: container.decodeIfPresent(TypeDescription.self, forKey: .declaredName),
+			)),
+			isRoot: container.decode(Bool.self, forKey: .isRoot),
+			generatesDependencyTree: container.decode(Bool.self, forKey: .generatesDependencyTree),
+			initializer: container.decodeIfPresent(Initializer.self, forKey: .initializer),
+			otherInitializers: container.decode([Initializer].self, forKey: .otherInitializers),
+			dependencies: container.decode([Dependency].self, forKey: .dependencies),
+			declarationType: container.decode(DeclarationType.self, forKey: .declarationType),
+			access: container.decode(AccessDeclaration.self, forKey: .access),
+			enclosingTypeAccess: container.decode([AccessDeclaration].self, forKey: .enclosingTypeAccess),
+			generatedInitializerAttributes: container.decode(String.self, forKey: .generatedInitializerAttributes),
+			mockAttributes: container.decode(String.self, forKey: .mockAttributes),
+			declarationIsolation: container.decodeIfPresent(String.self, forKey: .declarationIsolation),
+			generateMock: container.decode(MockGeneration.self, forKey: .generateMock),
+			mockOnly: container.decode(Bool.self, forKey: .mockOnly),
+			moduleName: container.decodeIfPresent(String.self, forKey: .moduleName),
+			packageName: container.decodeIfPresent(String.self, forKey: .packageName),
+			isInsideCompilerDecidedBlock: container.decode(Bool.self, forKey: .isInsideCompilerDecidedBlock),
+			conformanceListNamesSendable: container.decodeIfPresent(Bool.self, forKey: .conformanceListNamesSendable) ?? false,
+			conformanceListNamesOtherTypes: container.decodeIfPresent(Bool.self, forKey: .conformanceListNamesOtherTypes) ?? false,
+			dependencyLabelsInUnselectedClauses: container.decode([DependencyLabelInUnselectedClause].self, forKey: .dependencyLabelsInUnselectedClauses),
+			dependencyLabelsInsideConditionalBlocks: container.decode([String].self, forKey: .dependencyLabelsInsideConditionalBlocks),
 		))
 	}
 
@@ -656,5 +797,14 @@ extension Instantiable {
 		try container.encodeIfPresent(declaredName, forKey: .declaredName)
 		try container.encodeIfPresent(sourceFilePath, forKey: .sourceFilePath)
 		try container.encodeIfPresent(declarationLocation, forKey: .declarationLocation)
+	}
+}
+
+// MARK: - CustomReflectable
+
+/// Reflects each stored field under its own name, as when each was stored in the struct rather than in `Storage`.
+extension Instantiable: CustomReflectable {
+	public var customMirror: Mirror {
+		Mirror(self, children: Mirror(reflecting: storage.fields).children, displayStyle: .struct)
 	}
 }

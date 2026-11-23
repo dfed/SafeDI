@@ -198,7 +198,10 @@ extension DependencyTreeGenerator {
 	/// no pass-through – which is built with that initializer wherever a tree reaches it, as any other type is, and
 	/// whose file holds no code. Computed once per run, from the signatures of the foreign seams, `foreignSeamRoots`, and
 	/// over the proof of every type's access the public mock context reads too, `ownAccessProof`.
-	private func computeSeamRoots(validatedWorld: ValidatedWorld, foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?], ownAccessProof: OwnAccessProof) throws -> [TypeDescription: ScopeGenerator.SeamRoot?] {
+	/// Beside them, the tree the first signature pass built of each seam this module generates that the pass settled
+	/// without the pass that confirms it, which emission makes again rather than building anew
+	/// (`ScopeGenerator.reseating(treeRootedAt:of:seamRoot:)`).
+	private func computeSeamRoots(validatedWorld: ValidatedWorld, foreignSeamRoots: [TypeDescription: ScopeGenerator.SeamRoot?], ownAccessProof: OwnAccessProof) throws -> (seamRoots: [TypeDescription: ScopeGenerator.SeamRoot?], firstPassTrees: [TypeDescription: ScopeGenerator]) {
 		var seamRoots = foreignSeamRoots
 		GenerationLayerObservation.record(.seamSignatures(ofModule: seams.currentModule.moduleName, inCallersView: false), inRunOf: seams.currentModule.moduleName)
 		let ownComputation = try Self.seamSignatures(
@@ -213,6 +216,8 @@ extension DependencyTreeGenerator {
 			checkingModule: emittingModuleToCheck,
 			proof: { ownAccessProof.proof },
 			internerSpace: internerSpace,
+			builtInlineSeamComment: { self.builtInlineSeamComment(for: $0) },
+			keepsFirstPassTrees: true,
 		)
 		var errors = ownComputation.errors
 		// Each generated seam is computed again over the declarations its callers see, when those differ from this
@@ -287,7 +292,7 @@ extension DependencyTreeGenerator {
 		for (seamType, seamRoot) in ownComputation.seamRoots {
 			seamRoots[seamType] = seamRoot
 		}
-		return seamRoots
+		return (seamRoots, ownComputation.firstPassTrees)
 	}
 
 	/// The parameters of `ownSignature` a seam's callers would not pass as this run declares them: those
@@ -424,7 +429,7 @@ extension DependencyTreeGenerator {
 		unreadTypeComment: UnreadTypeComment?,
 		ownAccessProof: OwnAccessProof,
 	) throws -> (roots: [RootScopeInfo], rootsOfOtherModules: [Instantiable], storedSeamSignatures: [StoredSeamSignature]) {
-		let seamRoots = try computeSeamRoots(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, ownAccessProof: ownAccessProof)
+		var (seamRoots, firstPassTrees) = try computeSeamRoots(validatedWorld: validatedWorld, foreignSeamRoots: foreignSeamRoots, ownAccessProof: ownAccessProof)
 		// The generated code ends each construction with the comment the validated scopes would carry, the call of a
 		// seam's tier included, whose construction the leaf's initializer at the tier's level describes.
 		let seamScopeMap = Self.createSeamScopeMapping(
@@ -488,17 +493,38 @@ extension DependencyTreeGenerator {
 			var seamRoot = seamRoot
 			seamRoot.unreadTypeComment = unreadTypeComment
 			seamRoot.generatesPlainInitializers = seams.generatesPlainDependencyTreeInitializers
-			rootScopeGenerators.append(try RootScopeInfo(
+			let finalSeamRoot = seamRoot
+			let declaredTypeNames = declaredTypeNames
+			func builtTree(startingCodeGeneration startsCodeGeneration: Bool) throws -> ScopeGenerator {
+				try Self.seamRootGenerator(
+					rootScope: seamRootScope,
+					in: .seamWorld(seamWorld),
+					seamRoot: finalSeamRoot,
+					startsCodeGeneration: startsCodeGeneration,
+					declaredTypeNames: declaredTypeNames,
+				)
+			}
+			// A tree its first signature pass settled is made again from the final signature, which it holds as the tree
+			// built here would (`seam-signature-passes.md`); the pass's tree is released once it is.
+			let scopeGenerator: ScopeGenerator
+			if let firstPassTree = firstPassTrees.removeValue(forKey: seam.concreteInstantiable) {
+				scopeGenerator = ScopeGenerator.reseating(treeRootedAt: firstPassTree, of: seam.concreteInstantiable, seamRoot: seamRoot)
+				if let observer = SeamTreeReuseObservation.comparesBuiltTrees {
+					let treeBuiltAnew = try builtTree(startingCodeGeneration: false)
+					observer(ReusedSeamTree(
+						signature: StoredSeamSignature(seamType: seam.concreteInstantiable, signature: finalSeamRoot.signature),
+						reusedTreeCode: { try await scopeGenerator.generateCode() },
+						builtTreeCode: { try await treeBuiltAnew.generateCode() },
+					))
+				}
+			} else {
+				scopeGenerator = try builtTree(startingCodeGeneration: true)
+			}
+			rootScopeGenerators.append(RootScopeInfo(
 				typeDescription: seam.concreteInstantiable,
 				instantiable: seam,
 				sourceFilePath: seam.sourceFilePath,
-				scopeGenerator: Self.seamRootGenerator(
-					rootScope: seamRootScope,
-					in: .seamWorld(seamWorld),
-					seamRoot: seamRoot,
-					startsCodeGeneration: true,
-					declaredTypeNames: declaredTypeNames,
-				),
+				scopeGenerator: scopeGenerator,
 			))
 		}
 		// The signature of each seam this module generates, sorted by seam, which its module info carries for the modules
@@ -679,6 +705,8 @@ extension DependencyTreeGenerator {
 		checkingModule: EmittingModule?,
 		proof makeProof: () -> TypeAccessProof,
 		internerSpace: ConstructionInternerSpace,
+		builtInlineSeamComment: (Instantiable) -> String? = { _ in nil },
+		keepsFirstPassTrees: Bool = false,
 	) throws -> SeamSignatureComputation {
 		let seamInstantiables = seamTypes.sorted().compactMap { instantiables[$0] }.filter(\.generatesDependencyTree)
 		guard !seamInstantiables.isEmpty else { return SeamSignatureComputation(seamRoots: [:], errors: [], failedSeams: [], proof: nil) }
@@ -702,6 +730,7 @@ extension DependencyTreeGenerator {
 			seams: seams,
 			aliasDeclarationReferences: aliasDeclarationReferences,
 			checkingModule: checkingModule,
+			builtInlineSeamComment: builtInlineSeamComment,
 		)
 		let baseFrozenScopeMap = FrozenScopeMap(freezing: baseScopeMap.lazy.map { (key: $0.key, scope: $0.value) }, interningIn: internerSpace)
 		func initialSeamRoot(of seam: Instantiable) -> ScopeGenerator.SeamRoot {
@@ -718,6 +747,7 @@ extension DependencyTreeGenerator {
 		var seamRoots: [TypeDescription: ScopeGenerator.SeamRoot?] = Dictionary(seamInstantiables.map { ($0.concreteInstantiable, initialSeamRoot(of: $0)) }, uniquingKeysWith: { first, _ in first })
 		var errors = [DependencyTreeGeneratorError]()
 		var failedSeams = Set<TypeDescription>()
+		var firstPassTrees = [TypeDescription: ScopeGenerator]()
 		// A seam's parameters depend on the signatures of the seams its tree reaches, so the seams are settled inner
 		// first: each strongly connected component of the seam-reaches-seam graph, in reverse topological order, sees
 		// the final signatures of the seams it reaches outside it, and only seams that reach one another are
@@ -767,6 +797,8 @@ extension DependencyTreeGenerator {
 			let maySkipConfirmingPass = componentSeams.count == 1 && !seamComponents.seamsReachingThemselves.contains(componentSeams[0].concreteInstantiable)
 			var isFirstPass = true
 			var skippedPass: SkippedPass?
+			// The first pass's tree of a seam that pass settles, kept for emission where the computation keeps them.
+			var firstPassTree: ScopeGenerator?
 			for _ in 0..<Self.seamSignatureComputationLimit(forComponentOf: component.count) {
 				let scopeMap = Self.createSeamScopeMapping(
 					in: instantiables,
@@ -777,6 +809,7 @@ extension DependencyTreeGenerator {
 					seams: seams,
 					aliasDeclarationReferences: aliasDeclarationReferences,
 					checkingModule: checkingModule,
+					builtInlineSeamComment: builtInlineSeamComment,
 				)
 				let scopeInstantiables = scopeMap.mapValues(\.instantiable)
 				let rootScopes = componentSeams.map { seam in
@@ -834,6 +867,10 @@ extension DependencyTreeGenerator {
 						}
 						if isFirstPass, maySkipConfirmingPass {
 							skipsConfirmingPass = Self.confirmingPassFindsNothingNew(after: seamRoot, startingFrom: initialSeamRoot(of: seam), in: generator)
+							// A seam equal to its own initializer generates no tree, so its pass's tree is released at once.
+							if skipsConfirmingPass, keepsFirstPassTrees, seamRoot != nil {
+								firstPassTree = generator
+							}
 						}
 						seamRoots[seam.concreteInstantiable] = seamRoot
 					} catch let error as DependencyTreeGeneratorError {
@@ -906,6 +943,10 @@ extension DependencyTreeGenerator {
 			}
 			errors += errorsOfLastPass
 			failedSeams.formUnion(failedSeamsOfLastPass)
+			// Kept only for a component of one seam that its first pass settled with a signature and no error.
+			if let firstPassTree {
+				firstPassTrees[componentSeams[0].concreteInstantiable] = firstPassTree
+			}
 		}
 		// Every enum of a cycle is generated by one module, whose seams are the ones settled here.
 		let seamTypesInOrder = seamRoots.keys.sorted()
@@ -913,7 +954,7 @@ extension DependencyTreeGenerator {
 		for (seamType, seamRoot) in zip(seamTypesInOrder, markedSeamRoots) {
 			seamRoots[seamType] = seamRoot
 		}
-		return SeamSignatureComputation(seamRoots: seamRoots, errors: errors, failedSeams: failedSeams, proof: proof)
+		return SeamSignatureComputation(seamRoots: seamRoots, errors: errors, failedSeams: failedSeams, proof: proof, firstPassTrees: firstPassTrees)
 	}
 
 	/// What `seamSignatures` computed: each seam's signature, the errors of the last pass of each component, and the
@@ -925,6 +966,9 @@ extension DependencyTreeGenerator {
 		/// The proof of every type's access the computation read, which says what a parameter's access depends on.
 		/// `nil` when the computation has no seam, which builds no proof.
 		let proof: TypeAccessProof?
+		/// Where the computation keeps them, the tree the first pass built of each seam that pass settled without the
+		/// pass that confirms it, with a signature and no error, by seam (see `seam-signature-passes.md`).
+		var firstPassTrees = [TypeDescription: ScopeGenerator]()
 	}
 
 	/// The strongly connected components of the graph in which a seam reaches another when its tree, built from
@@ -1171,8 +1215,7 @@ extension DependencyTreeGenerator {
 	///     `nil` where the caller runs no check: a caller SafeDI was not told the identity of, one every declaration
 	///     of which is `public`, or another module, whose own run checks its constructions.
 	///   - builtInlineSeamComment: The comment the generated code ends each construction of a scope's type with
-	///     (`DependencyTreeGenerator.builtInlineSeamComment(for:)`). None where the map only computes signatures, which
-	///     emits nothing.
+	///     (`DependencyTreeGenerator.builtInlineSeamComment(for:)`).
 	private static func createSeamScopeMapping(
 		in instantiables: [TypeDescription: Instantiable],
 		reachableTypeDescriptions: Set<TypeDescription>,
@@ -1182,7 +1225,7 @@ extension DependencyTreeGenerator {
 		seams: SeamResolution,
 		aliasDeclarationReferences: AliasDeclarationReferences,
 		checkingModule: EmittingModule?,
-		builtInlineSeamComment: (Instantiable) -> String? = { _ in nil },
+		builtInlineSeamComment: (Instantiable) -> String?,
 	) -> [TypeDescription: Scope] {
 		var typeDescriptionToScopeMap = [TypeDescription: Scope]()
 		var scopes = [Scope]()
@@ -2124,6 +2167,24 @@ public enum SeamSignatureObservation {
 	/// (`DependencyTreeGenerator.confirmingPassFindsNothingNew`), after running that pass anyway as every second pass runs:
 	/// the two must find the same signature. The tool generates from the first pass's either way.
 	@TaskLocal public static var confirmsSkippedPasses: (@Sendable (SkippedConfirmingPass) -> Void)?
+}
+
+/// Observes the trees of the seams this module generates that emission makes again from their first signature pass's
+/// tree (`ScopeGenerator.reseating(treeRootedAt:of:seamRoot:)`), for tests.
+public enum SeamTreeReuseObservation {
+	/// Called, when set, for each seam whose tree emission made again, with the code of that tree and of the tree built
+	/// anew as emission builds every other seam's: the two must be the same text.
+	@TaskLocal public static var comparesBuiltTrees: (@Sendable (ReusedSeamTree) -> Void)?
+}
+
+/// A seam whose tree emission made again from its first signature pass's, with the code of both trees.
+public struct ReusedSeamTree: Sendable {
+	/// The seam's final signature, from which both trees are made.
+	public let signature: StoredSeamSignature
+	/// The code of the tree made again, which the tool generates.
+	public let reusedTreeCode: @Sendable () async throws -> String
+	/// The code of the tree built anew from the final signature.
+	public let builtTreeCode: @Sendable () async throws -> String
 }
 
 /// A seam's signature from the first pass that settled it, and the one the confirming pass the tool skipped finds.

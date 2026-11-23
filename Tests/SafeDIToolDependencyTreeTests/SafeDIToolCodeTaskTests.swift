@@ -105,14 +105,36 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_startsTasksForFewScopes_whenTreeIsCreatedAgainForItsLazyCycle() async throws {
 		// The step builds a session of its own, which the screen it builds again receives: the tree is created a second time
-		// with the parameter the screen's builder function takes. The first pass starts its scopes' code as it creates them,
-		// and the second once its tree exists: 10 tasks each, the ternary tree's 9 and one for the root's two other small
-		// subtrees, which group together (32 each without the construction memo, and 42 with a task for each small subtree).
-		// Every scope of both passes started early: 2,196.
+		// with the parameter the screen's builder function takes. The seam's first signature pass settles it, so emission
+		// makes that pass's tree again rather than creating it twice, and starts its code once: 10 tasks, the ternary tree's
+		// 9 and one for the root's two other small subtrees, which group together. A tree emission created twice started 10
+		// on each pass (32 each without the construction memo, and 42 with a task for each small subtree); every scope of
+		// both passes started early, 2,196.
 		let cycle = [
 			seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Received let session: Session", "@Instantiated let stepBuilder: Instantiator<Step>"]),
 			seamFixtureType(named: "Step", isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
 			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
+		]
+		let starts = try await countCodeTaskStarts(of: Self.ternaryTree(
+			depth: Self.depth,
+			beneath: ["Root"],
+			rootDeclarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"],
+		) + cycle)
+		#expect(starts == 10)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_startsTasksForFewScopes_whenSeamThatTakesAParameterIsCreatedAgainForItsLazyCycle() async throws {
+		// The tree of `generate_startsTasksForFewScopes_whenTreeIsCreatedAgainForItsLazyCycle`, whose screen also receives a
+		// token nothing in the tree provides. The seam takes the token, so its first signature pass does not settle it, and
+		// emission creates its tree anew: twice, for the lazy cycle. The second creation reuses each place the first built
+		// settled, and starts again the groups the first started beneath it: 10 tasks on each creation, 20.
+		let cycle = [
+			seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Received let session: Session", "@Received let token: Token", "@Instantiated let stepBuilder: Instantiator<Step>"]),
+			seamFixtureType(named: "Step", isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
+			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Token", isFinalClass: true, declarations: []),
 		]
 		let starts = try await countCodeTaskStarts(of: Self.ternaryTree(
 			depth: Self.depth,
@@ -125,7 +147,7 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 	@Test
 	@available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
 	mutating func generate_writesSameCode_whenEarlyStartsFinishInAnyOrder() async throws {
-		// The tree created twice for its lazy cycle starts 20 tasks early, 10 on each pass, as
+		// The tree its lazy cycle has created twice starts 10 tasks early once emission makes it again, as
 		// `generate_startsTasksForFewScopes_whenTreeIsCreatedAgainForItsLazyCycle` counts. Each run forces the order in which
 		// they finish, and the code must be what a run whose starts race writes.
 		let fixture = Self.ternaryTree(
@@ -171,7 +193,7 @@ struct SafeDIToolCodeTaskTests: ~Copyable {
 				)
 			}
 			// Every start took its turn in the order forced.
-			#expect(await ordering.turnsTaken() == order(20))
+			#expect(await ordering.turnsTaken() == order(10))
 			#expect(ordered.dependencyTreeFiles == racing.dependencyTreeFiles)
 		}
 	}
