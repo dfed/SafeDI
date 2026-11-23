@@ -482,12 +482,14 @@ extension MockLowering {
 			// D1 lane hook (lane B): a level whose nodes take part in a cycle renames a builder function that would hide an
 			// enclosing one a cycle-closing node beneath refers to, as the emitter does.
 			// Each declaration's ancestors are listed under its one label, innermost last, which the closer resolves to.
-			let enclosingFunctionNames = Dictionary(
-				ancestorDeclarationsByLabel.values.joined()
-					.filter { $0.functionName != MockLowering.builderFunctionName(boundAs: $0.declaration.property.label) }
-					.map { ($0.declaration, $0.functionName) },
-			) { _, innerFunctionName in innerFunctionName }
-			let renamedFunctionNames = ScopeGenerator.mockLoweringBuilderFunctionNames(of: generators, boundAs: bindingNames, enclosingFunctionNames: enclosingFunctionNames)
+			// The enclosing names are gathered only for a level that names a function apart, which nearly no level does.
+			let renamedFunctionNames = ScopeGenerator.mockLoweringBuilderFunctionNames(of: generators, boundAs: bindingNames) {
+				Dictionary(
+					ancestorDeclarationsByLabel.values.joined()
+						.filter { $0.functionName != MockLowering.builderFunctionName(boundAs: $0.declaration.property.label) }
+						.map { ($0.declaration, $0.functionName) },
+				) { _, innerFunctionName in innerFunctionName }
+			}
 			// A loop member's functions are named from its binding (`MockLowering.loopMembers`), so a loop is not lowered
 			// renamed yet.
 			let renamesFunction = renamedFunctionNames?.contains(where: { $0 != nil }) ?? false

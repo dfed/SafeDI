@@ -6484,13 +6484,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	// cycle-closing nodes refer to, as the mock emitter does (`generateMockBodyBindings`).
 	/// The name of the builder function of each of `generators`, one level of a mock's tree whose property nodes are bound
 	/// as `bindingNames` says, where `builderFunctionNames(for:enclosingFunctionNames:)` renames it, else `nil`; or `nil`
-	/// where no property node of the level takes part in a cycle, as the emitter skips such a level. The emitter also names
-	/// a hole held in a wrapper among them, which the lowering does not lower on such a level.
+	/// where no property node of the level takes part in a cycle, as the emitter skips such a level. A site of a hole held in
+	/// a wrapper is named among them after the property nodes, as the emitter names it. `enclosingFunctionNames` is asked
+	/// only for a level that takes part in a cycle.
 	nonisolated static func mockLoweringBuilderFunctionNames(
 		of generators: [ScopeGenerator],
 		boundAs bindingNames: [String?],
-		enclosingFunctionNames: [BuiltDeclaration: String],
+		enclosingFunctionNames: () -> [BuiltDeclaration: String],
 	) -> [String?]? {
+		// A level renames a function only where a node on it closes a cycle or is closed on, which nearly no level has.
+		guard generators.contains(where: { !$0.cycleClosedOnDeclarations.isEmpty || $0.isReferencedByCycleClosingScope }) else { return nil }
 		var candidates = [BuilderFunctionCandidate]()
 		var generatorIndices = [Int]()
 		for (index, generator) in generators.enumerated() {
@@ -6524,7 +6527,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		guard candidates.contains(where: { !$0.cycleClosedOnDeclarations.isEmpty || $0.isReferencedByCycleClosingScope }) else { return nil }
 		var names = [String?](repeating: nil, count: generators.count)
-		for (candidateIndex, builderFunctionNames) in builderFunctionNames(for: candidates, enclosingFunctionNames: enclosingFunctionNames).enumerated() {
+		for (candidateIndex, builderFunctionNames) in builderFunctionNames(for: candidates, enclosingFunctionNames: enclosingFunctionNames()).enumerated() {
 			names[generatorIndices[candidateIndex]] = builderFunctionNames.functionName
 		}
 		return names

@@ -27,6 +27,9 @@ extension ScopeGenerator {
 	///
 	/// A public mock names each builder as its plan does (`optionalBuilderNames`, by family), apart from every name of its body.
 	func filledCallBuilders(of orderedChildren: [OrderedChild], context: MockContext, rootBoundProperties: Set<Property>, optionalBuilderNames: [MockRootParameters.SeamMockBuilder.Family: String]? = nil) -> MockLowering.Lowering<MockLowering.FilledCallBuilders> {
+		// Only a call of another module's public mock fills a builder, and a module that calls none, as most do, has no call to
+		// find in the tree.
+		guard !context.foreignPublicMocks.isEmpty else { return .lowered(.none) }
 		var calls = [MockLowering.FilledCallBuilders.Call]()
 		var filledCalls = [FilledCall]()
 		var namesFillsDeclare = Set<String>()
