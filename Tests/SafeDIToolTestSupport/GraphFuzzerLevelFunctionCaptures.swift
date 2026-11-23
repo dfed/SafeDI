@@ -32,7 +32,8 @@ import SwiftSyntax
 ///   build the case its closure takes: it is counted, not judged, since it captures an outer level's values on purpose.
 /// - A **member closure** is a closure passed as a labeled argument (`__safeDI_noScope` aside) of an `.init(…)` call
 ///   whose nearest enclosing function declaration is a level function. It belongs to that function alone: a function
-///   declared inside a level function is judged on its own.
+///   declared inside a level function is judged on its own. It is judged on its first parameter, the values struct,
+///   unless that is a carrier member's positional value (`scope_id`), which holds one value and is judged as a read.
 /// - A **fill function** is a function of the same file whose return type is not a builder struct, whose first
 ///   parameter's type's last member ends in `_Values`, and which a member closure hands its parameter, whole, as that
 ///   first, unlabeled argument of a direct call.
@@ -59,9 +60,10 @@ import SwiftSyntax
 /// counted nor judged. The retention oracle, which runs the code, stays the gate; this check is its first signal, and the
 /// only one in a run without compiles.
 struct GraphFuzzerLevelFunctionCaptures: Equatable {
-	/// Judges every file of `generatedFiles`, in the order of the files' names.
+	/// Judges every file of `generatedFiles` that names a builder struct or a carrier, in the order of the files' names:
+	/// a file that names neither declares no level function.
 	init(generatedFiles: [String: String]) {
-		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where contents.contains(Self.builderStructName) {
+		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where contents.contains(Self.builderStructName) || contents.contains(Self.carrierNameWord) {
 			let tree = Parser.parse(source: contents)
 			let file = FileJudgment(fileName: fileName, tree: tree)
 			findings += file.findings
@@ -130,6 +132,8 @@ struct GraphFuzzerLevelFunctionCaptures: Equatable {
 	static let noScopeLabel = "__safeDI_noScope"
 	static let valuesStructSuffix = "_Values"
 	static let carrierNamePattern = #"^__safeDI_\w+Carrier(_\w+)?$"#
+	/// A word every carrier's name holds, which a file must contain to declare a level function that returns one.
+	static let carrierNameWord = "Carrier"
 	static let carrierValuesNamePattern = #"^__safeDI_\w*Values\d+$"#
 	static let scopeEnumPrefixes = ["SafeDIScope_", "SafeDISendableScope_", "SafeDIMockScope_", "SafeDISendableMockScope_"]
 }
@@ -277,7 +281,10 @@ private struct FileJudgment {
 		return collector.memberClosures
 	}
 
-	/// The name of `closure`'s one parameter, or `nil` when it names none (`_`, or no signature).
+	/// The name of `closure`'s values struct parameter, its first, or `nil` when it names none (`_`, or no signature) or
+	/// its first is a carrier member's positional value: a carrier's member closure takes a run struct under the payload's
+	/// name (`scope`, `values`, `__safeDI_serviceValues`, with any `_` appended to name it apart) and each positional value under that name joined
+	/// with its label (`scope_id`, `values_first`), which holds one value, so handing it on keeps nothing inline frees.
 	private static func namedParameter(of closure: ClosureExprSyntax) -> String? {
 		let names: [String] = switch closure.signature?.parameterClause {
 		case let .simpleInput(parameters)?:
@@ -287,7 +294,10 @@ private struct FileJudgment {
 		case nil:
 			[]
 		}
-		return names.first.flatMap { $0 == "_" ? nil : $0 }
+		guard let first = names.first, first != "_" else { return nil }
+		let payloadName = first.hasPrefix("__safeDI_") ? first.dropFirst("__safeDI_".count) : Substring(first)
+		guard !payloadName.reversed().drop(while: { $0 == "_" }).contains("_") else { return nil }
+		return first
 	}
 
 	/// A reference to the judged parameter, and whether a closure or a local function lies between it and the judged
