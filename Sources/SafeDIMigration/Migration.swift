@@ -84,21 +84,17 @@ public struct SourceFile: Equatable, Sendable {
 /// How the rewriter applies what is not decided yet.
 public struct MigrationOptions: Equatable, Sendable {
 	public init(
-		optInArgumentLabel: String = "fakeGeneration",
-		optInArgumentValue: String = ".v3",
 		modulesWithoutConfiguration: [String] = [],
 		ordersArgumentsByRoleFile: Bool = false,
 	) {
-		self.optInArgumentLabel = optInArgumentLabel
-		self.optInArgumentValue = optInArgumentValue
 		self.modulesWithoutConfiguration = modulesWithoutConfiguration
 		self.ordersArgumentsByRoleFile = ordersArgumentsByRoleFile
 	}
 
 	/// The `#SafeDIConfiguration` argument that opts a module into the 3.0 shape, added to or updated in every
-	/// configuration. Its name is not decided; the default is the build plan's example.
-	public let optInArgumentLabel: String
-	public let optInArgumentValue: String
+	/// configuration (Dan, 2026-11-23: one app-wide switch, which 3.0 removes).
+	public static let optInArgumentLabel = "apiVersion"
+	public static let optInArgumentValue = ".v3Unstable"
 	/// The path of a configuration file to create for each module that declares no `#SafeDIConfiguration`.
 	public let modulesWithoutConfiguration: [String]
 	/// THREE-ZERO 2.1, a candidate: orders each `mock()` call's arguments, and those of its `safeDIOverrides: .init(…)`,
@@ -139,6 +135,9 @@ public enum MigrationEdit: String, CaseIterable, Sendable {
 	case receivedNilDropped = "received dependency nil (build it) argument dropped"
 	case receivedOverrideMovedToBuilt = "received dependency override moved to a .built(…) argument"
 	case receivedOverrideClosureMovedToBuilt = "of which an override closure, as .built(.init(closure))"
+	case receivedWithoutConfigurationKept = "received dependency with nothing to configure kept as a plain value"
+	case receivedOverrideClosureCalled = "received dependency override closure called once in place (nothing to configure)"
+	case builderRelabeled = "builder argument relabeled to the property’s label (3.0 sub-decision 1)"
 	case argumentsReordered = "arguments reordered by the role file (THREE-ZERO 2.1)"
 }
 

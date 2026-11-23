@@ -467,6 +467,46 @@ struct MigrationCallTests {
 	}
 
 	@Test
+	func migrate_relabelsBuilderToPropertyLabel_whenRoleFileNamesFakeLabel() {
+		#expect(migratedText("""
+		let panel = Panel.mock(id: 1, rowBuilder: { Row() }, imageLoadingBuilder: { ImageLoader() })
+		""") == """
+		let panel = Panel.fake(id: 1, rowBuilder: { Row() }, imageLoader: { ImageLoader() })
+		""")
+	}
+
+	@Test
+	func migrate_keepsPlainValue_whenReceivedDependencyHasNothingToConfigure() {
+		#expect(migratedText("""
+		let panel = Panel.mock(id: 1, cache: cache)
+		""") == """
+		let panel = Panel.fake(id: 1, cache: cache)
+		""")
+	}
+
+	@Test
+	func migrate_callsOverrideClosureInPlace_whenReceivedDependencyHasNothingToConfigure() {
+		#expect(migratedText("""
+		let panel = Panel.mock(id: 1, safeDIOverrides: .init(cache: { Cache() }))
+		""") == """
+		let panel = Panel.fake(id: 1, cache: { Cache() }())
+		""")
+	}
+
+	@Test
+	func migrate_keepsOverrideAndReportsSite_whenReceivedDependencyWithNothingToConfigureHasLiteralOverride() {
+		let result = migrate("""
+		let panel = Panel.mock(id: 1, safeDIOverrides: .init(cache: .init()))
+		""")
+		#expect(result.rewrittenFiles == [SourceFile(path: "Calls.swift", text: """
+		let panel = Panel.fake(id: 1, safeDIOverrides: .init(cache: .init()))
+		""")])
+		#expect(result.findings == [
+			finding(.receivedBuildableOverrideNotLiteral, line: 1, column: 13, "Panel.mock(id: 1, safeDIOverrides: .init(cache: .init()))"),
+		])
+	}
+
+	@Test
 	func migrate_renamesOnlyAndReportsSite_whenReceivedDependencyIsPassedTwice() {
 		let result = migrate("""
 		let panel = Panel.mock(id: 1, session: session, safeDIOverrides: .init(session: .init()))

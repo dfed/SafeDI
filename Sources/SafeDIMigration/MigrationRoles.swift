@@ -89,6 +89,8 @@ public struct MigrationRoles: Codable, Equatable, Sendable {
 			fieldLabel: String? = nil,
 			hasFlatParameter: Bool = true,
 			overridesField: String? = nil,
+			fakeLabel: String? = nil,
+			hasConfiguration: Bool = true,
 		) {
 			self.label = label
 			self.role = role
@@ -98,6 +100,8 @@ public struct MigrationRoles: Codable, Equatable, Sendable {
 			self.fieldLabel = fieldLabel
 			self.hasFlatParameter = hasFlatParameter
 			self.overridesField = overridesField
+			self.fakeLabel = fakeLabel
+			self.hasConfiguration = hasConfiguration
 		}
 
 		public init(from decoder: any Decoder) throws {
@@ -110,6 +114,8 @@ public struct MigrationRoles: Codable, Equatable, Sendable {
 			fieldLabel = try container.decodeIfPresent(String.self, forKey: .fieldLabel)
 			hasFlatParameter = try container.decodeIfPresent(Bool.self, forKey: .hasFlatParameter) ?? true
 			overridesField = try container.decodeIfPresent(String.self, forKey: .overridesField)
+			fakeLabel = try container.decodeIfPresent(String.self, forKey: .fakeLabel)
+			hasConfiguration = try container.decodeIfPresent(Bool.self, forKey: .hasConfiguration) ?? true
 		}
 
 		/// The 2.x argument label, as a call writes it.
@@ -128,6 +134,12 @@ public struct MigrationRoles: Codable, Equatable, Sendable {
 		public let hasFlatParameter: Bool
 		/// For `receivedBuildable`: the 2.x `SafeDIOverrides` field that configures the same dependency.
 		public let overridesField: String?
+		/// For `publicMockBuilder`: the 3.0 `fake()` label, the place's property label (sub-decision 1, Dan 2026-11-23),
+		/// where it is not `label`.
+		public let fakeLabel: String?
+		/// For `receivedBuildable`: whether the dependency's type has anything to configure. Where it has nothing,
+		/// 3.0 keeps a plain `label: T? = nil` (sub-decision 4, Dan 2026-11-23).
+		public let hasConfiguration: Bool
 	}
 
 	/// What a parameter stands for; see the schema's table of roles.

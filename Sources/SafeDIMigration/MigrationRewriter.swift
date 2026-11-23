@@ -48,8 +48,8 @@ final class MigrationRewriter: SyntaxRewriter {
 	private(set) var log: MigrationLog
 
 	/// The configuration file created for a module that declares no `#SafeDIConfiguration`.
-	static func newConfigurationFile(options: MigrationOptions) -> String {
-		"import SafeDI\n\n#SafeDIConfiguration(\(options.optInArgumentLabel): \(options.optInArgumentValue))\n"
+	static func newConfigurationFile(options _: MigrationOptions) -> String {
+		"import SafeDI\n\n#SafeDIConfiguration(\(MigrationOptions.optInArgumentLabel): \(MigrationOptions.optInArgumentValue))\n"
 	}
 
 	// MARK: Enclosing types
@@ -107,11 +107,11 @@ final class MigrationRewriter: SyntaxRewriter {
 			if let renamed = Self.configurationLabelRenames[label], let token = argument.label {
 				log.count(.configurationLabelRenamed)
 				argument.label = Self.renamed(token, to: renamed)
-			} else if label == options.optInArgumentLabel {
+			} else if label == MigrationOptions.optInArgumentLabel {
 				hasOptIn = true
-				if argument.expression.trimmedDescription != options.optInArgumentValue {
+				if argument.expression.trimmedDescription != MigrationOptions.optInArgumentValue {
 					log.count(.optInSettingUpdated)
-					argument.expression = Self.expression(options.optInArgumentValue)
+					argument.expression = Self.expression(MigrationOptions.optInArgumentValue)
 						.with(\.leadingTrivia, argument.expression.leadingTrivia)
 						.with(\.trailingTrivia, argument.expression.trailingTrivia)
 				}
@@ -122,9 +122,9 @@ final class MigrationRewriter: SyntaxRewriter {
 			log.count(.optInSettingAdded)
 			arguments.append(LabeledExprSyntax(
 				leadingTrivia: Self.leadingTriviaOfNewArgument(in: node.arguments),
-				label: .identifier(options.optInArgumentLabel),
+				label: .identifier(MigrationOptions.optInArgumentLabel),
 				colon: .colonToken(trailingTrivia: .space),
-				expression: Self.expression(options.optInArgumentValue),
+				expression: Self.expression(MigrationOptions.optInArgumentValue),
 			))
 		}
 		var rewritten = node
@@ -291,8 +291,15 @@ final class MigrationRewriter: SyntaxRewriter {
 			let label = argument.label?.text ?? ""
 			let parameter = flatParameters[label] ?? MigrationRoles.Parameter(label: label, role: .forwarded)
 			switch parameter.role {
-			case .forwarded, .outsideValue, .holeBuilder, .publicMockBuilder:
+			case .forwarded, .outsideValue, .holeBuilder:
 				keptArguments.append(argument)
+			case .publicMockBuilder:
+				if let fakeLabel = parameter.fakeLabel, let argumentLabel = argument.label, fakeLabel != label {
+					log.count(.builderRelabeled)
+					keptArguments.append(argument.with(\.label, Self.renamed(argumentLabel, to: fakeLabel)))
+				} else {
+					keptArguments.append(argument)
+				}
 			case .uncovered:
 				keptArguments.append(argument.with(\.expression, builder(of: argument, parameter: parameter, original: original)))
 			case .rootDefault:
@@ -306,7 +313,10 @@ final class MigrationRewriter: SyntaxRewriter {
 					keptArguments.append(argument)
 				}
 			case .receivedBuildable:
-				if argument.expression.is(NilLiteralExprSyntax.self) {
+				if !parameter.hasConfiguration {
+					log.count(.receivedWithoutConfigurationKept)
+					keptArguments.append(argument)
+				} else if argument.expression.is(NilLiteralExprSyntax.self) {
 					log.count(.receivedNilDropped)
 				} else {
 					log.count(.receivedValueWrappedAsInstance)
@@ -329,10 +339,23 @@ final class MigrationRewriter: SyntaxRewriter {
 					fields.append(field)
 					continue
 				}
+				if !parameter.hasConfiguration, field.expression.is(ClosureExprSyntax.self) {
+					// Sub-decision 4 (Dan, 2026-11-23): a type with nothing to configure keeps `x: T? = nil`, and a
+					// closure override is called once in place, as 2.x built a received root dependency once.
+					log.count(.receivedOverrideClosureCalled)
+					removedField = true
+					builtArguments.append(LabeledExprSyntax(
+						leadingTrivia: Self.leadingTriviaOfNewArgument(in: call.arguments),
+						label: .identifier(parameter.label),
+						colon: .colonToken(trailingTrivia: .space),
+						expression: Self.expression("\(field.expression.trimmedDescription)()"),
+					))
+					continue
+				}
 				let configuration: ExprSyntax
-				if let literal = field.expression.as(FunctionCallExprSyntax.self), Self.isConfigurationLiteral(literal) {
+				if parameter.hasConfiguration, let literal = field.expression.as(FunctionCallExprSyntax.self), Self.isConfigurationLiteral(literal) {
 					configuration = field.expression.trimmed
-				} else if field.expression.is(ClosureExprSyntax.self) {
+				} else if parameter.hasConfiguration, field.expression.is(ClosureExprSyntax.self) {
 					// A 2.x override closure is the configuration's builder in 3.0 (design note, "Migration rules settled after the rewriter spike").
 					log.count(.receivedOverrideClosureMovedToBuilt)
 					configuration = Self.wrapped(field.expression.trimmed, in: ".init")
@@ -381,7 +404,7 @@ final class MigrationRewriter: SyntaxRewriter {
 
 		var arguments = keptArguments + builtArguments
 		if options.ordersArgumentsByRoleFile {
-			let labelsInRoleOrder = mockedType.parameters.map(\.label)
+			let labelsInRoleOrder = mockedType.parameters.map { $0.fakeLabel ?? $0.label }
 			let ordered = arguments.enumerated().sorted {
 				let lhs = labelsInRoleOrder.firstIndex(of: $0.element.label?.text ?? "") ?? 0
 				let rhs = labelsInRoleOrder.firstIndex(of: $1.element.label?.text ?? "") ?? 0

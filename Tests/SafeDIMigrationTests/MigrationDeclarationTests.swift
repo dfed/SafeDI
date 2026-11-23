@@ -91,7 +91,7 @@ struct MigrationDeclarationTests {
 		#SafeDIConfiguration(additionalMocksToGenerate: [Store.self], mockConditionalCompilation: "DEBUG")
 		""")
 		#expect(result.rewrittenFiles == [SourceFile(path: "Calls.swift", text: """
-		#SafeDIConfiguration(additionalFakesToGenerate: [Store.self], fakeConditionalCompilation: "DEBUG", fakeGeneration: .v3)
+		#SafeDIConfiguration(additionalFakesToGenerate: [Store.self], fakeConditionalCompilation: "DEBUG", apiVersion: .v3Unstable)
 		""")])
 		#expect(result.editCounts == [.configurationLabelRenamed: 2, .optInSettingAdded: 1])
 	}
@@ -107,36 +107,28 @@ struct MigrationDeclarationTests {
 		#SafeDIConfiguration(
 			additionalImportedModules: ["Feature"],
 			additionalDirectoriesToInclude: ["Generated"],
-			fakeGeneration: .v3
+			apiVersion: .v3Unstable
 		)
 		""")
 	}
 
 	@Test
 	func migrate_addsOptInWithParentheses_whenConfigurationTakesNoArguments() {
-		#expect(migratedText("#SafeDIConfiguration") == "#SafeDIConfiguration(fakeGeneration: .v3)")
+		#expect(migratedText("#SafeDIConfiguration") == "#SafeDIConfiguration(apiVersion: .v3Unstable)")
 	}
 
 	@Test
 	func migrate_updatesOptIn_whenConfigurationSetsAnotherValue() {
-		let result = migrate("#SafeDIConfiguration(fakeGeneration: .v2)")
-		#expect(result.rewrittenFiles == [SourceFile(path: "Calls.swift", text: "#SafeDIConfiguration(fakeGeneration: .v3)")])
+		let result = migrate("#SafeDIConfiguration(apiVersion: .v2)")
+		#expect(result.rewrittenFiles == [SourceFile(path: "Calls.swift", text: "#SafeDIConfiguration(apiVersion: .v3Unstable)")])
 		#expect(result.editCounts == [.optInSettingUpdated: 1])
 	}
 
 	@Test
 	func migrate_leavesConfiguration_whenConfigurationAlreadyOptsIn() {
-		let result = migrate("#SafeDIConfiguration(fakeGeneration: .v3)")
+		let result = migrate("#SafeDIConfiguration(apiVersion: .v3Unstable)")
 		#expect(result.rewrittenFiles == [])
 		#expect(result.editCounts == [:])
-	}
-
-	@Test
-	func migrate_usesOptionsOptIn_whenOptionsNameAnotherSetting() {
-		#expect(migratedText(
-			"#SafeDIConfiguration()",
-			options: MigrationOptions(optInArgumentLabel: "mockShape", optInArgumentValue: ".threeZero"),
-		) == "#SafeDIConfiguration(mockShape: .threeZero)")
 	}
 
 	@Test
@@ -152,8 +144,8 @@ struct MigrationDeclarationTests {
 			options: MigrationOptions(modulesWithoutConfiguration: ["Feature/SafeDIConfiguration.swift", "App/SafeDIConfiguration.swift"]),
 		)
 		#expect(result.rewrittenFiles == [
-			SourceFile(path: "App/SafeDIConfiguration.swift", text: "import SafeDI\n\n#SafeDIConfiguration(fakeGeneration: .v3)\n"),
-			SourceFile(path: "Feature/SafeDIConfiguration.swift", text: "import SafeDI\n\n#SafeDIConfiguration(fakeGeneration: .v3)\n"),
+			SourceFile(path: "App/SafeDIConfiguration.swift", text: "import SafeDI\n\n#SafeDIConfiguration(apiVersion: .v3Unstable)\n"),
+			SourceFile(path: "Feature/SafeDIConfiguration.swift", text: "import SafeDI\n\n#SafeDIConfiguration(apiVersion: .v3Unstable)\n"),
 		])
 		#expect(result.editCounts == [.configurationFileCreated: 2])
 	}
@@ -387,13 +379,13 @@ struct MigrationConfigurationPositionTests {
 		}
 		""") == """
 		enum Configuration {
-			#SafeDIConfiguration(additionalImportedModules: [], fakeGeneration: .v3)
+			#SafeDIConfiguration(additionalImportedModules: [], apiVersion: .v3Unstable)
 		}
 		""")
 	}
 
 	@Test
 	func migrate_addsOptInBeforeFollowingLine_whenConfigurationTakesNoArgumentsAndLineContinues() {
-		#expect(migratedText("#SafeDIConfiguration\nlet x = 1") == "#SafeDIConfiguration(fakeGeneration: .v3)\nlet x = 1")
+		#expect(migratedText("#SafeDIConfiguration\nlet x = 1") == "#SafeDIConfiguration(apiVersion: .v3Unstable)\nlet x = 1")
 	}
 }

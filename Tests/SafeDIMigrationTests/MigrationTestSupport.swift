@@ -47,7 +47,9 @@ extension MigrationRoles {
 		MockedType(type: "Panel", module: "Feature", isPublic: true, takesOverrides: true, parameters: [
 			Parameter(label: "id", role: .forwarded),
 			Parameter(label: "session", role: .receivedBuildable, overridesField: "session"),
+			Parameter(label: "cache", role: .receivedBuildable, overridesField: "cache", hasConfiguration: false),
 			Parameter(label: "rowBuilder", role: .publicMockBuilder),
+			Parameter(label: "imageLoadingBuilder", role: .publicMockBuilder, fakeLabel: "imageLoader"),
 			Parameter(label: "serviceBuilder", role: .holeBuilder),
 			Parameter(label: "theme", role: .rootDefault),
 			Parameter(label: "title", role: .rootDefault, isOptionalType: true),
