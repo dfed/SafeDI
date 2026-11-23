@@ -422,11 +422,13 @@ extension MockLowering.Walk {
 			} else {
 				// A value the call passes is the root level's binding of its label, which an optional parameter takes as it is, or
 				// the instance of the lazy wrapper the tree holds of it, read at the call (`dependencyArgument`).
-				guard let dependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }),
-				      !generator.unavailableOptionalProperties.contains(dependency.property)
-				else { return .unsupported(.publicMockCall) }
+				guard let dependency = instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }) else { return .unsupported(.publicMockCall) }
 				let value: String
-				if dependency.source == .forwarded {
+				if generator.unavailableOptionalProperties.contains(dependency.property) {
+					// A value the call's leaf receives only if available that nothing provides where the call is made, or that a
+					// `@Sendable` function would capture, is passed `nil` (`constructionArgumentList(of:unavailableProperties:)`).
+					value = "nil"
+				} else if dependency.source == .forwarded {
 					// A value the called type forwards is the parameter of the builder function the instantiator holds.
 					guard forwardedProperties.contains(dependency.property) else { return .unsupported(.publicMockCall) }
 					value = dependency.property.label
@@ -499,15 +501,17 @@ extension MockLowering.Walk {
 		// The values an instantiator's builder function takes from the instantiator, in label order, which the call passes on.
 		let forwarded = forwardedProperties.sorted { $0.label < $1.label }
 		let functionParameters = forwarded.map { "\($0.label): \($0.typeDescription.asFunctionParameter(amongTypesDeclaredEscaping: generator.typesDeclaredEscaping).asSource)" }.joined(separator: ", ")
+		// A call a public mock promotes at its root's level reads its caller's value first, which only a call with no fill and
+		// no builder bound again is lowered for.
+		let isPromoted = parentConcreteType == nil && promotedProperties.contains(property)
 		func instantiatorBindingLines() -> [String] {
-			MockLowering.wrapperBindingLines(of: property.typeDescription, named: property.label, handing: functionName, forwardedProperties: forwarded, indent: indent)
+			isPromoted
+				? [MockLowering.promotedWrapperBindingLine(of: property.typeDescription, named: property.label, passing: property.label, handing: functionName, forwardedProperties: forwarded, indent: indent)]
+				: MockLowering.wrapperBindingLines(of: property.typeDescription, named: property.label, handing: functionName, forwardedProperties: forwarded, indent: indent)
 		}
 		// A call held in an instantiator is made in the builder function the instantiator holds.
 		let isInstantiator = !property.propertyType.isConstant
-		// A call a public mock promotes at its root's level reads its caller's value first, which only a plain call's binding
-		// is lowered for.
-		let isPromoted = parentConcreteType == nil && promotedProperties.contains(property)
-		guard !isPromoted || filledCall == nil && passedUpBuilderBindings.isEmpty && !isInstantiator else { return .unsupported(.publicMockCall) }
+		guard !isPromoted || filledCall == nil && passedUpBuilderBindings.isEmpty else { return .unsupported(.publicMockCall) }
 		guard let filledCall else {
 			lines.append("\(indent)\(publicMockCall.guardLine(for: instantiable.concreteInstantiable))")
 			lines.append(contentsOf: extractionLines)
