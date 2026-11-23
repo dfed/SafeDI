@@ -63,11 +63,17 @@ extension MockLowering {
 		var rootedStructs = [String: String]()
 		var sharedExtensions = [(typeName: String, structCode: String)]()
 		let recordsInRootOrder = zip(roots, loweredRoots).sorted { $0.0.mockedType < $1.0.mockedType }.map(\.1.records)
+		let recordsReadingConfiguration = Self.recordsReadingConfiguration(of: loweredRoots.map(\.records))
 		for records in recordsInRootOrder {
 			// A public mock's records describe its module-level configurations, which are lowered after these.
 			for record in records where record.publicConstruction == nil && record.beneathRepeatedAncestor == nil && seenTypeNames.insert(record.concreteType.asSource).inserted {
 				let typeName = record.concreteType.asSource
-				let structCode = record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)
+				// The first record can be of a node that reads no overrides from the configuration, beneath a cycle edge,
+				// built the other way from the nodes that read them: the configuration describes those that read them.
+				let structRecord = recordsReadingConfiguration[record.concreteType].flatMap { recordReadingConfiguration in
+					recordReadingConfiguration.oneWayConstruction?.requirements == record.oneWayConstruction?.requirements ? nil : recordReadingConfiguration
+				} ?? record
+				let structCode = structRecord.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)
 				if rootedTypeNames.contains(typeName) {
 					rootedStructs[typeName] = structCode
 				} else {
@@ -118,6 +124,28 @@ extension MockLowering {
 			? nil
 			: Self.configurationCode(extensions: sharedExtensions, publicDeclarations: publicDeclarations, mockConditionalCompilation: mockConditionalCompilation)
 		return .lowered((mergedCodes: mergedCodes, configurationCode: configurationCode))
+	}
+
+	/// For each type, the first record, across `recordsByRoot` in the roots' order and each root's records in the order its
+	/// walk entered them, of a node that reads its configuration, no edge in `cycleEdges` above it: of one built with the
+	/// type's initializer where there is one, else of one built with its hand-written mock, as
+	/// `DependencyTreeGenerator.validateConfigurationsAreBuiltOneWay` returns its nodes.
+	private static func recordsReadingConfiguration(of recordsByRoot: [[ConfigurationRecord]]) -> [TypeDescription: ConfigurationRecord] {
+		var firstRecords = [TypeDescription: (builtWithoutMock: ConfigurationRecord?, builtByMock: ConfigurationRecord?)]()
+		for records in recordsByRoot {
+			let recordsInWalkOrder = records.compactMap { record in record.oneWayConstruction.map { (record: record, construction: $0) } }
+				.sorted { $0.construction.walkOrder < $1.construction.walkOrder }
+			for (record, construction) in recordsInWalkOrder where !construction.isBeneathCycleEdge {
+				var first = firstRecords[record.concreteType] ?? (builtWithoutMock: nil, builtByMock: nil)
+				if record.usesMockInitializer {
+					first.builtByMock = first.builtByMock ?? record
+				} else {
+					first.builtWithoutMock = first.builtWithoutMock ?? record
+				}
+				firstRecords[record.concreteType] = first
+			}
+		}
+		return firstRecords.compactMapValues { $0.builtWithoutMock ?? $0.builtByMock }
 	}
 
 	/// The records `recordsInRootOrder`, each root's records in roots' type order, generate a configuration from beneath
