@@ -144,13 +144,17 @@ extension ScopeGenerator {
 		// binds the node from. A name the parameters take apart from the binding's is not lowered yet.
 		let promotedProperties = publicMockPromotedProperties(of: instantiable, among: orderedChildrenComputedAfresh(propertiesGeneratedLater: []))
 		var promotedNodes = [(property: Property, name: String)]()
+		// D1 lane hook (lane D): the name of the parameter the walk read each promoted node's value from.
+		var promotedParameterNamesRead = [Property: String]()
 		for node in nodes where promotedProperties.contains(node.property) {
 			switch node {
 			case let .built(builtNode):
 				promotedNodes.append((property: node.property, name: builtNode.bindingName))
+				promotedParameterNamesRead[node.property] = builtNode.promotedParameterName ?? builtNode.bindingName
 			case .publicMockCall:
 				// A promoted call is bound under its label (`publicMockCallNode`).
 				promotedNodes.append((property: node.property, name: node.property.label))
+				promotedParameterNamesRead[node.property] = node.property.label
 			case .alias, .cycleClosing:
 				return .unsupported(.publicMockRoot)
 			}
@@ -164,7 +168,7 @@ extension ScopeGenerator {
 		let hasOverrides = nodes.contains(where: \.isPropertyNode)
 		let plan = publicMockPlan(of: instantiable, signature: signature, promotedNodes: promotedNodes, filledCallBuilders: filledCallBuilders, hasOverrides: hasOverrides, context: context, publicMockContext: publicMockContext)
 		// The walk read each optional builder under the internal name the plan gives it.
-		guard promotedNodes.allSatisfy({ plan.promotedParameterNames[$0.property] == $0.name }), plan.optionalBuilderNames == (filledCallBuilders.optionalBuilderNames ?? [:]) else { return .unsupported(.publicMockRoot) }
+		guard promotedNodes.allSatisfy({ plan.promotedParameterNames[$0.property] == promotedParameterNamesRead[$0.property] }), plan.optionalBuilderNames == (filledCallBuilders.optionalBuilderNames ?? [:]) else { return .unsupported(.publicMockRoot) }
 		var lines = ["extension \(typeName) {"]
 		if !plan.providerDeclarations.isEmpty {
 			// The providers of the type's own optional-typed defaults, which the parameters default to.
