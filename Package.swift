@@ -310,6 +310,47 @@ let package = Package(
 			],
 		),
 
+		// SPIKE (3.0 migrate rewriter, never to land as is): rewrites a 2.x project's sources to the 3.0 mock API from a
+		// role file that says what each generated `mock()` parameter stands for.
+		.target(
+			name: "SafeDIMigration",
+			dependencies: [
+				.product(name: "SwiftParser", package: "swift-syntax"),
+				.product(name: "SwiftSyntax", package: "swift-syntax"),
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+		.testTarget(
+			name: "SafeDIMigrationTests",
+			dependencies: [
+				"SafeDIMigration",
+				.product(name: "SwiftParser", package: "swift-syntax"),
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+
+		.executableTarget(
+			name: "SafeDIMigrateSpike",
+			dependencies: [
+				"SafeDIMigration",
+				.product(name: "SwiftParser", package: "swift-syntax"),
+			],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+		.executableTarget(
+			name: "SafeDIMigrateCorpusDump",
+			dependencies: ["SafeDIToolTestSupport"],
+			swiftSettings: [
+				.swiftLanguageMode(.v6),
+			],
+		),
+
 		// Core
 		.target(
 			name: "SafeDICore",

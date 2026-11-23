@@ -10146,6 +10146,76 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			)
 		}
 
+		// SPIKE (3.0 migrate rewriter, spike branch only, never to land): each `mock()` parameter's role, in the role
+		// file's format (`designs/3.0-spikes/migrate-roles-schema.md`), when SAFEDI_MIGRATE_ROLES is set.
+		let migrationRolesLine = ProcessInfo.processInfo.environment["SAFEDI_MIGRATE_ROLES"] == nil ? "" : {
+			func escaped(_ string: String) -> String {
+				string.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+			}
+			func record(_ label: String, _ role: String, _ extra: String = "") -> String {
+				"{\"label\":\"\(escaped(label))\",\"role\":\"\(role)\"\(extra)}"
+			}
+			func isClosureType(_ type: TypeDescription) -> Bool {
+				let source = type.asSource
+				return source.hasPrefix("()") || source.hasPrefix("@Sendable ()") || source.hasPrefix("@escaping ()")
+			}
+			let ownInstantiatedLabels = Set(instantiable.dependencies.compactMap { dependency -> String? in
+				if case .instantiated = dependency.source {
+					dependency.property.label
+				} else {
+					nil
+				}
+			})
+			var records = [String]()
+			if let publicMockPlan {
+				for parameter in publicMockPlan.parameters {
+					switch parameter.role {
+					case .forwarded:
+						records.append(record(parameter.name, "forwarded"))
+					case .constructionDefault:
+						records.append(record(parameter.name, "rootDefault", ",\"isOptionalType\":\(parameter.type.isOptional && parameter.defaultKind != .provider)"))
+					case let .received(property, isRequired):
+						if parameter.builder != nil {
+							records.append(record(parameter.name, "publicMockBuilder"))
+						} else if isRequired {
+							records.append(record(parameter.name, "outsideValue"))
+						} else if let field = treePropertyNodes.first(where: { $0.propertyLabel == property.label })
+							.flatMap({ rootLabelMap[$0.propertyLabel]?[$0.typeDescription] })
+						{
+							records.append(record(parameter.name, "receivedBuildable", ",\"overridesField\":\"\(escaped(field))\""))
+						} else {
+							records.append(record(parameter.name, "receivedBuildable"))
+						}
+					case .overrides:
+						break
+					case .optionalBuilder:
+						records.append(record(parameter.name, "publicMockBuilder"))
+					}
+				}
+			} else {
+				for dependency in forwardedDependencies {
+					records.append(record(dependency.property.label, "forwarded"))
+				}
+				for rootDefault in rootDefaultParameters {
+					records.append(record(rootDefault.label, "rootDefault", ",\"isOptionalType\":\(rootDefault.typeDescription.isOptional)"))
+				}
+				for flatReceived in flatReceivedParameters {
+					records.append(record(flatReceived.label, "outsideValue"))
+				}
+				for builder in parameters.seamMockBuilders {
+					records.append(record(builder.label, "holeBuilder"))
+				}
+				for uncovered in flatUncoveredParameters {
+					records.append(record(uncovered.label, "uncovered", ",\"isSendableAutoclosure\":\(uncovered.isSendableAutoclosure),\"isClosureType\":\(isClosureType(uncovered.property.typeDescription))"))
+				}
+				for node in treePropertyNodes where !ownInstantiatedLabels.contains(node.propertyLabel) {
+					let field = rootLabelMap[node.propertyLabel]?[node.typeDescription] ?? node.propertyLabel
+					records.append(record(node.propertyLabel, "receivedBuildable", ",\"hasFlatParameter\":false,\"overridesField\":\"\(escaped(field))\""))
+				}
+			}
+			return "// safedi-migrate-roles: {\"type\":\"\(escaped(instantiable.concreteInstantiable.asSource))\",\"isPublic\":\(publicMock != nil),\"takesOverrides\":\(hasOverridableTree),\"parameters\":[\(records.joined(separator: ","))]}\n"
+		}()
+
 		guard hasTree || hasFlatParameters else {
 			let argumentList = try instantiable.generateArgumentList(
 				unavailableProperties: unavailableOptionalProperties,
@@ -10184,7 +10254,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 				"""
 			}
-			return wrapInConditionalCompilation(code, mockConditionalCompilation: context.mockConditionalCompilation)
+			return migrationRolesLine + wrapInConditionalCompilation(code, mockConditionalCompilation: context.mockConditionalCompilation)
 		}
 
 		// 4. Build the mock method.
@@ -10572,7 +10642,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			lines.append("}")
 		}
 
-		return Self.mockCode(releasingLines: &lines, mockConditionalCompilation: context.mockConditionalCompilation)
+		return migrationRolesLine + Self.mockCode(releasingLines: &lines, mockConditionalCompilation: context.mockConditionalCompilation)
 	}
 
 	/// `lines` joined by line breaks and wrapped as `wrapInConditionalCompilation(_:mockConditionalCompilation:)` wraps
