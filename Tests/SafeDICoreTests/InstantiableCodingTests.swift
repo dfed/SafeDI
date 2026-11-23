@@ -44,7 +44,7 @@ struct InstantiableCodingTests {
 		let object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(instantiable)) as? [String: Any])
 
 		#expect(object.keys.sorted() == [
-			"access", "customMockName", "declarationLocation", "declarationType", "dependencies",
+			"access", "conformanceListNamesOtherTypes", "conformanceListNamesSendable", "customMockName", "declarationLocation", "declarationType", "dependencies",
 			"dependencyLabelsInUnselectedClauses", "dependencyLabelsInsideConditionalBlocks", "enclosingTypeAccess",
 			"generateMock", "generatedInitializerAttributes", "generatesDependencyTree", "initializer", "instantiableTypes",
 			"isInsideCompilerDecidedBlock", "isRoot", "mockAttributes", "mockDeclarationAccess", "mockDeclarationLocation",
@@ -70,7 +70,7 @@ struct InstantiableCodingTests {
 
 	private static let declarationsSettingRarelySetFields = """
 	@Instantiable(generateMock: true, customMockName: "fake")
-	public struct Screen: Instantiable {
+	public struct Screen: Instantiable, Sendable, Hashable {
 	    public init() {}
 	    public static func fake() -> Screen { Screen() }
 	}

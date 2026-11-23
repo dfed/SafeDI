@@ -2525,6 +2525,49 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsErrorSuggestingBothInstantiators_whenReceivedDependencyTheMockBuildsConformsToProtocolAndInstantiatesTypeWithForwardedPropertyAsConstant() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Parent.swift"]):4:5: error: `child: Child` on `Parent` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `Instantiator<Child>`, or as `SendableInstantiator<Child>` if `Parent` is Sendable.
+				\(fixtures["Child.swift"]):4:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct Root: Instantiable {
+					    public init(parent: Parent) { self.parent = parent }
+					    @Received let parent: Parent
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Parent: Instantiable, ParentProtocol {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+
+					public protocol ParentProtocol: Sendable {}
+					""",
+					"""
+					@Instantiable
+					public struct Child: Instantiable {
+					    public init(name: String) { self.name = name }
+					    @Forwarded let name: String
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenInstantiatedDependencyInstantiatesTypeWithForwardedPropertyAsConstant() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
