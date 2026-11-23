@@ -386,7 +386,7 @@ extension MockLowering.ConstantNode {
 		let bodyIndent = "\(indent)\(ScopeGenerator.standardIndent)"
 		// D1 lane hook (lane C): an instantiator's builder function writes `return` only before statements of its own, as
 		// `builderFunctionEndLines` says, its defaults' reads included.
-		let returnPrefix = hasChildren || !receiverBindings.isEmpty || !sendableAutoclosureBindingNames.isEmpty || !isWrapped ? "return " : ""
+		let returnPrefix = hasChildren || !receiverBindings.isEmpty || !sendableAutoclosureBindings.isEmpty || !isWrapped ? "return " : ""
 		let erasedTo: TypeDescription? = if isErased {
 			isWrapped ? property.typeDescription.asInstantiatedTypeSpelledAsDeclared : property.typeDescription
 		} else {

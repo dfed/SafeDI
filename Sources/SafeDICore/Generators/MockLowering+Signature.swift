@@ -91,6 +91,22 @@ extension MockLowering {
 			let properties: [Property]
 			/// The parameter's type as `mock()` declares it.
 			let typeSource: String
+			// D1 lane hook (lane D): the places of a seam's own internal mock the builder builds, each the uncovered dependency
+			// it stands for, named as its parameter would have been (`MockLowering+SeamMockBuilders.swift`).
+			let places: [ScopeGenerator.MockRootParameters.UncoveredParameter]
+		}
+
+		// D1 lane hook (lane D): the builders that only build places, which no call passes up, each listed among the flat
+		// received parameters by its label, in label order.
+		var placeOnlyBuilderDeclarations: [(label: String, declaration: String)] {
+			passedUpBuilders.compactMap { builder in
+				builder.properties.isEmpty ? (builder.label, "\(builder.label): \(builder.typeSource)") : nil
+			}
+		}
+
+		// D1 lane hook (lane D): the properties of the places the builders build, which `mock()` takes no parameter of.
+		var placeProperties: [Property] {
+			passedUpBuilders.flatMap { $0.places.map(\.property) }
 		}
 
 		/// The lines that bind each builder a call passes up under its internal name where that is not its label, before
@@ -127,7 +143,7 @@ extension MockLowering {
 		/// The properties the forwarded, received and uncovered parameters bind, which every node of the tree is built after.
 		/// The default-valued ones are the initializer's alone.
 		var properties: Set<Property> {
-			Set((forwardedParameters + flatReceivedParameters + uncoveredParameters).map(\.property))
+			Set((forwardedParameters + flatReceivedParameters + uncoveredParameters).map(\.property)).union(placeProperties)
 		}
 
 		/// The names the parameters and the overrides' bindings bind, which no node of the tree may bind again.
@@ -135,12 +151,15 @@ extension MockLowering {
 			// D1 lane hook (lane C): a builder a call passes up that `mock()` binds apart is in scope under that name alone,
 			// which the tree's names are apart from, so a node may bind its label.
 			let internalNameByLabel = Dictionary(passedUpBuilders.map { ($0.label, $0.internalName) }, uniquingKeysWith: { first, _ in first })
-			return Set(parameters.map { internalNameByLabel[$0.name] ?? $0.name }).union(onlyIfAvailableOverrides.map(\.name))
+			return Set(parameters.map { internalNameByLabel[$0.name] ?? $0.name })
+				.union(onlyIfAvailableOverrides.map(\.name))
+				// D1 lane hook (lane D): a builder that only builds places is in scope under its internal name.
+				.union(passedUpBuilders.filter(\.properties.isEmpty).map(\.internalName))
 		}
 
 		/// The properties of the `@Instantiated` dependencies the mock cannot build, which a type of the tree is passed.
 		var uncoveredProperties: Set<Property> {
-			Set(uncoveredParameters.map(\.property))
+			Set(uncoveredParameters.map(\.property)).union(placeProperties)
 		}
 
 		/// The lines that document, above `mock()`, each parameter several types create, at `indent`.
@@ -177,13 +196,20 @@ extension MockLowering {
 		/// `label: Type = default` text) listed among the flat received parameters as the emitter lists a seam's own mock's
 		/// builders: each before the first flat received parameter whose property's label sorts after the builder's, the rest
 		/// after the last, before the uncovered parameters.
-		// D1 lane hook (lane C): the names of the `@Sendable` autoclosure parameters, by the property each stands for.
-		var sendableAutoclosureNames: [Property: String] {
-			var names = [Property: String]()
+		// D1 lane hook (lane C): the `@Sendable` autoclosure parameters, by the property each stands for.
+		// D1 lane hook (lane D): and each place a builder builds, which the type that instantiates it binds from the builder
+		// (`ScopeGenerator.SendableAutoclosureParameter.binding`).
+		var sendableAutoclosureBindings: [Property: ScopeGenerator.SendableAutoclosureParameter] {
+			var bindings = [Property: ScopeGenerator.SendableAutoclosureParameter]()
 			for parameter in uncoveredRootParameters where parameter.isSendableAutoclosure {
-				names[parameter.property] = parameter.label
+				bindings[parameter.property] = ScopeGenerator.SendableAutoclosureParameter(name: parameter.label, localName: MockLowering.sendableAutoclosureLocalName(of: parameter.label))
 			}
-			return names
+			for builder in passedUpBuilders {
+				for place in builder.places {
+					bindings[place.property] = ScopeGenerator.SendableAutoclosureParameter(name: place.label, localName: builder.internalName, valueType: place.property.typeDescription)
+				}
+			}
+			return bindings
 		}
 
 		/// The lines that read each `@Sendable` autoclosure parameter into a local before any builder function, which the
@@ -392,6 +418,28 @@ extension ScopeGenerator {
 				.union(onlyIfAvailableReceivedProperties.map(\.label)),
 			hiddenEntries: tree.uncoveredIndicesHiddenWhereReferenced,
 		)
+		// D1 lane hook (lane C): a value a type built in a `@Sendable` builder function instantiates is a `@Sendable`
+		// autoclosure, which `mock()` reads into a local and each type that instantiates it calls
+		// (`RootSignature.sendableAutoclosureLocalBindingLines(indent:)`, `Walk.sendableAutoclosureBindings`).
+		let namedUncoveredParameters = zip(uncoveredParameters, uncoveredNames).map { parameter, name in
+			MockRootParameters.UncoveredParameter(
+				property: parameter.property,
+				label: name,
+				typeSource: parameter.typeSource,
+				instantiatedType: parameter.instantiatedType,
+				isSendableAutoclosure: parameter.isSendableAutoclosure,
+				creatingTypes: parameter.creatingTypes,
+			)
+		}
+		// D1 lane hook (lane D): a type that generates its dependency tree takes, in its internal mock, a builder for each
+		// hole type and family of its places in place of their parameters (`seamMockBuilders`), and the other parameters are
+		// named apart from the builders, not from the places, which keep the names their parameters would have had.
+		let takesBuildersForPlaces = instantiable.generatesDependencyTree && instantiable.generateMock != .public
+		// A public mock of such a type takes its places' builders through its holes, which the lowering does not lower yet.
+		guard !instantiable.generatesDependencyTree || takesBuildersForPlaces || uncoveredParameters.isEmpty else { return .unsupported(.holeSite) }
+		let places = takesBuildersForPlaces ? namedUncoveredParameters : []
+		let flatUncoveredParameters = takesBuildersForPlaces ? [] : namedUncoveredParameters
+		let flatUncoveredNames = flatUncoveredParameters.map(\.label)
 		// D1 lane hook (lane C): an internal mock's override of what only calls of other modules' public mocks receive is
 		// named after the others, and apart from them and the flat received parameters, which keep their names beside it.
 		let onlyPublicMockCallsReceive: Set<Property> = instantiable.generateMock == .public || receivedOnlyByPublicMockCalls.isEmpty
@@ -402,12 +450,13 @@ extension ScopeGenerator {
 		// type and family, which `mock()` takes in place of the flat parameters of the properties the calls' leaves receive it
 		// as (`seamMockBuilders`); the other flat parameters are named without them.
 		let passedUpBuilders: [MockLowering.RootSignature.PassedUpBuilder]
-		switch Self.passedUpBuilders(
-			of: flatReceivedProperties.filter { tree.passedUpBuilderProperties.contains($0) },
+		switch MockLowering.seamMockBuilders(
+			places: places,
+			passedUpProperties: flatReceivedProperties.filter { tree.passedUpBuilderProperties.contains($0) },
 			families: tree.passedUpBuilderFamilies,
 			otherParameterLabels: forwardedAndDefaultLabels
 				.union(onlyIfAvailableReceivedProperties.filter { !onlyPublicMockCallsReceive.contains($0) }.map(\.label))
-				.union(uncoveredNames)
+				.union(flatUncoveredNames)
 				.union([ReservedName.mockOverridesParameterName])
 				.union(flatReceivedProperties.filter { !tree.passedUpBuilderProperties.contains($0) }.map(\.label)),
 			namesBoundInTheTree: treeBindingNames.union(namesDeclaredInBuilderFunctions),
@@ -432,7 +481,7 @@ extension ScopeGenerator {
 					: wrapperByInstanceBesideForwardedProperty[property]?.typeDescription ?? property.typeDescription
 			},
 			namesInScope: forwardedAndDefaultLabels
-				.union(uncoveredNames)
+				.union(flatUncoveredNames)
 				.union(builderLabels)
 				.union(onlyIfAvailableReceivedProperties.filter { !onlyPublicMockCallsReceive.contains($0) }.map(\.label))
 				.union(treeBindingNames),
@@ -451,13 +500,13 @@ extension ScopeGenerator {
 		let ownOverrides = Self.onlyIfAvailableOverrides(
 			for: onlyIfAvailableReceivedProperties.filter { !onlyPublicMockCallsReceive.contains($0) },
 			namedAfter: wrapperByInstanceBesideForwardedProperty,
-			namesInMockScope: forwardedAndDefaultLabels.union(uncoveredNames).union(treeBindingNames),
+			namesInMockScope: forwardedAndDefaultLabels.union(flatUncoveredNames).union(treeBindingNames),
 			reservedNames: Set(otherFlatReceivedNames).union(builderLabels).union(namesDeclaredInBuilderFunctions),
 		)
 		let overridesOnlyPublicMockCallsReceive = onlyPublicMockCallsReceive.isEmpty ? [] : Self.onlyIfAvailableOverrides(
 			for: onlyIfAvailableReceivedProperties.filter { onlyPublicMockCallsReceive.contains($0) },
 			namedAfter: wrapperByInstanceBesideForwardedProperty,
-			namesInMockScope: forwardedAndDefaultLabels.union(uncoveredNames).union(treeBindingNames).union(otherFlatReceivedNames).union(builderLabels).union(ownOverrides.map(\.name)),
+			namesInMockScope: forwardedAndDefaultLabels.union(flatUncoveredNames).union(treeBindingNames).union(otherFlatReceivedNames).union(builderLabels).union(ownOverrides.map(\.name)),
 			reservedNames: Set(otherFlatReceivedNames).union(builderLabels).union(namesDeclaredInBuilderFunctions),
 		)
 		var ownOverridesInOrder = ownOverrides.makeIterator()
@@ -484,7 +533,7 @@ extension ScopeGenerator {
 			},
 			typeDescriptions: lazilyInstantiatedPropertiesToBind.map(\.asValidatedForDependencyCycles.typeDescription),
 			namesInScope: forwardedAndDefaultLabels
-				.union(uncoveredNames)
+				.union(flatUncoveredNames)
 				.union(onlyIfAvailableReceivedProperties.filter { !onlyPublicMockCallsReceive.contains($0) }.map(\.label))
 				.union(flatReceivedProperties.map(\.label))
 				.union(flatReceivedNames)
@@ -503,10 +552,10 @@ extension ScopeGenerator {
 			if let index = flatReceivedProperties.firstIndex(of: instanceProperty) {
 				lazilyInstantiatedBindings.append((bindingName, "\(wrapperTypeSource) { \(flatReceivedNames[index]) }"))
 			} else if tree.mockedTypeUncoveredProperties.contains(instanceProperty),
-			          let index = uncoveredParameters.firstIndex(where: { $0.property == instanceProperty })
+			          let parameter = flatUncoveredParameters.first(where: { $0.property == instanceProperty })
 			{
 				// The instance is the parameter of a dependency the mocked type instantiates, which is always passed.
-				lazilyInstantiatedBindings.append((bindingName, "\(wrapperTypeSource) { \(uncoveredNames[index]) }"))
+				lazilyInstantiatedBindings.append((bindingName, "\(wrapperTypeSource) { \(parameter.label) }"))
 			} else if let index = flatReceivedProperties.firstIndex(of: Property(label: instanceProperty.label, typeDescription: .optional(instanceProperty.typeDescription))) {
 				lazilyInstantiatedBindings.append((bindingName, "\(flatReceivedNames[index]).map { instance in \(wrapperTypeSource) { instance } }"))
 			} else {
@@ -544,31 +593,15 @@ extension ScopeGenerator {
 			let position = flatReceivedParameters.firstIndex { $0.property.label > builder.label } ?? flatReceivedParameters.endIndex
 			flatReceivedParameters.insert(.init(property: property, defaultExpression: nil, typeSource: builder.typeSource, name: builder.label), at: position)
 		}
-		// A type that generates its dependency tree takes a builder for each hole type of its places in place of their
-		// parameters (`seamMockBuilders`), which lane C's family lowers.
-		guard !instantiable.generatesDependencyTree || uncoveredParameters.isEmpty else { return .unsupported(.holeSite) }
-		// D1 lane hook (lane C): a value a type built in a `@Sendable` builder function instantiates is a `@Sendable`
-		// autoclosure, which `mock()` reads into a local and each type that instantiates it calls
-		// (`RootSignature.sendableAutoclosureLocalBindingLines(indent:)`, `Walk.sendableAutoclosureNames`).
-		let namedUncoveredParameters = zip(uncoveredParameters, uncoveredNames).map { parameter, name in
-			MockRootParameters.UncoveredParameter(
-				property: parameter.property,
-				label: name,
-				typeSource: parameter.typeSource,
-				instantiatedType: parameter.instantiatedType,
-				isSendableAutoclosure: parameter.isSendableAutoclosure,
-				creatingTypes: parameter.creatingTypes,
-			)
-		}
 		var signature = MockLowering.RootSignature(
 			forwardedParameters: forwardedParameters,
 			rootDefaultParameters: rootDefaultParameters,
 			flatReceivedParameters: flatReceivedParameters,
-			uncoveredParameters: namedUncoveredParameters.map {
+			uncoveredParameters: flatUncoveredParameters.map {
 				MockLowering.RootSignature.Parameter(property: $0.property, defaultExpression: nil, typeSource: $0.isSendableAutoclosure ? "@autoclosure @escaping @Sendable () -> \($0.typeSource)" : $0.typeSource, name: $0.label)
 			},
-			uncoveredRootParameters: namedUncoveredParameters,
-			sharedValueDocumentation: namedUncoveredParameters.flatMap(\.sharedValueDocumentation),
+			uncoveredRootParameters: flatUncoveredParameters,
+			sharedValueDocumentation: flatUncoveredParameters.flatMap(\.sharedValueDocumentation),
 			onlyIfAvailableOverrides: onlyIfAvailableOverrides,
 			renamesByLabelAndType: renamesByLabelAndType,
 			uncoveredParameterNamesByLabelAndType: uncoveredParameterNamesByLabelAndType,
@@ -581,65 +614,8 @@ extension ScopeGenerator {
 		// D1 lane hook (lane B): the overrides' bindings, and the receives of parameters and overrides named apart, are
 		// `mock()`'s and the walk's (`lowerMockRootWithTree(of:context:)`).
 		// No two parameters or bindings of `mock()` share a name: the emitter names them apart.
-		guard signature.labels.count == signature.parameters.count + signature.onlyIfAvailableOverrides.count else { return .unsupported(.siblingLabelCollision) }
+		guard signature.labels.count == signature.parameters.count + signature.onlyIfAvailableOverrides.count + signature.placeOnlyBuilderDeclarations.count else { return .unsupported(.siblingLabelCollision) }
 		return .lowered(signature)
-	}
-
-	/// The builders `mock()` takes for the builders its tree's calls pass up, received as `properties`, in the mock's order,
-	/// as `seamMockBuilders` makes them for a mock that takes no other builder: one per hole type and family, in the order
-	/// the properties first meet it, labeled from its hole type's stem apart from `otherParameterLabels`, in label order;
-	/// each bound under a name apart from `builderFunctionNames` where `namesBoundInTheTree` holds its label. Or the first
-	/// rule they meet: a property whose family is unknown, and a builder its calls pass up in another form, which `mock()`
-	/// adapts, are not lowered yet.
-	private static func passedUpBuilders(
-		of properties: [Property],
-		families: [Property: (family: MockRootParameters.SeamMockBuilder.Family, isCapturedBySendableFunction: Bool)],
-		otherParameterLabels: Set<String>,
-		namesBoundInTheTree: Set<String>,
-		builderFunctionNames: Set<String>,
-		typesDeclaredEscaping: Set<TypeDescription>,
-	) -> MockLowering.Lowering<[MockLowering.RootSignature.PassedUpBuilder]> {
-		guard !properties.isEmpty else { return .lowered([]) }
-		var familiesInOrder = [MockRootParameters.SeamMockBuilder.Family]()
-		var propertiesByFamily = [MockRootParameters.SeamMockBuilder.Family: [Property]]()
-		for property in properties {
-			guard let family = families[property]?.family else { return .unsupported(.publicMockCall) }
-			if propertiesByFamily[family] == nil {
-				familiesInOrder.append(family)
-			}
-			propertiesByFamily[family, default: []].append(property)
-		}
-		var holeTypes = [SeamSignature.HoleType]()
-		for family in familiesInOrder where !holeTypes.contains(family.holeType) {
-			holeTypes.append(family.holeType)
-		}
-		let stems = DependencyTreeGenerator.stems(of: holeTypes)
-		// The type a builder is taken as: `@Sendable` where a `@Sendable` builder function captures it, an instantiator's
-		// `Builder` through its `Sendable` twin.
-		func passedUpType(of property: Property) -> TypeDescription {
-			families[property]?.isCapturedBySendableFunction == true && !property.typeDescription.isSendableFunction ? property.typeDescription.asSendableBuilder : property.typeDescription
-		}
-		var labels = GeneratedNameAllocator(reserving: otherParameterLabels)
-		var builders = [(label: String, family: MockRootParameters.SeamMockBuilder.Family, typeDescription: TypeDescription)]()
-		for family in familiesInOrder {
-			let familyProperties = propertiesByFamily[family, default: []]
-			guard let first = familyProperties.first else { continue }
-			let stem = stems[family.holeType, default: ""]
-			let label = labels.claim(family.isSendable ? DependencyTreeGenerator.sendableBuilderLabel(ofStem: stem) : DependencyTreeGenerator.plainBuilderLabel(ofStem: stem))
-			let parameterType = passedUpType(of: first).asFunctionParameter(amongTypesDeclaredEscaping: typesDeclaredEscaping)
-			guard familyProperties.allSatisfy({ passedUpType(of: $0).strippingEscaping.asSource == parameterType.strippingEscaping.asSource }) else { return .unsupported(.publicMockCall) }
-			builders.append((label, family, parameterType))
-		}
-		builders.sort { $0.label < $1.label }
-		var names = GeneratedNameAllocator(reserving: builderFunctionNames.union(namesBoundInTheTree))
-		return .lowered(builders.map { builder in
-			MockLowering.RootSignature.PassedUpBuilder(
-				label: builder.label,
-				internalName: namesBoundInTheTree.contains(builder.label) ? names.claim(ScopeGenerator.functionName(toBuildPropertyNamed: builder.label)) : builder.label,
-				properties: propertiesByFamily[builder.family, default: []],
-				typeSource: builder.typeDescription.asSource,
-			)
-		})
 	}
 
 	/// The names the property nodes at a mock root's level, `properties`, are bound under, as
