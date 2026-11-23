@@ -239,6 +239,7 @@ extension ScopeGenerator {
 		// (`generateMockRootCode`'s `lazilyInstantiatedReceivedProperties`), where the tree provides neither the wrapper nor
 		// its instance and the mocked type forwards no form of the label.
 		let tree = treeNames(of: instantiable)
+		let mockedTypeUncoveredWrapperInstances = Set(tree.mockedTypeUncoveredProperties.compactMap(\.asLazilyInstantiatedInstanceProperty))
 		var wrappedReceivedProperties = [Property]()
 		if instantiable.generateMock == .public {
 			let receivedLabels = receivedProperties.map(\.label)
@@ -253,12 +254,12 @@ extension ScopeGenerator {
 				      !isFulfilledByForwardedProperty(property)
 				else { continue }
 				let instance = property.asValidatedForDependencyCycles
-				// The instance of a wrapper the mocked type instantiates and the mock cannot build provides only that wrapper,
-				// which the lowering does not lower yet.
-				guard !tree.mockedTypeUncoveredProperties.contains(where: { $0.asLazilyInstantiatedInstanceProperty == instance.asUnwrappedProperty }) else { return .unsupported(.wrapper) }
 				// An instance the mocked type instantiates and the mock cannot build is the parameter `mock()` takes, which the
-				// wrapper is made from. Any other the tree provides is not made into the wrapper: the mock takes the wrapper as it is.
+				// wrapper is made from. The instance of a wrapper the mocked type instantiates and the mock cannot build provides
+				// only that wrapper, so the mock takes the instance too, as it builds a wrapper of the other kind beside one it
+				// builds. Any other instance the tree provides is not made into the wrapper: the mock takes the wrapper as it is.
 				guard tree.mockedTypeUncoveredProperties.contains(instance.asUnwrappedProperty)
+					|| mockedTypeUncoveredWrapperInstances.contains(instance.asUnwrappedProperty)
 					|| !Self.provides(instance, declaredProperties: propertiesToDeclare, forwardedProperties: [])
 				else { continue }
 				// The instance of one beside a property of its label and type the mocked type forwards is named apart from it,
@@ -295,7 +296,9 @@ extension ScopeGenerator {
 			else { continue }
 			// A node the mock promotes for an optional receive binds its non-optional value, which provides this one.
 			guard property.typeDescription.isOptional || !propertiesToDeclare.contains(property.asOptionalProperty) else { return .unsupported(.flatParameter) }
-			guard !Self.provides(property, declaredProperties: propertiesToDeclare, forwardedProperties: []) else { continue }
+			guard mockedTypeUncoveredWrapperInstances.contains(property.asUnwrappedProperty)
+				|| !Self.provides(property, declaredProperties: propertiesToDeclare, forwardedProperties: [])
+			else { continue }
 			// A property every receiver receives only if available is an override, defaulting to `nil`; one any requires is a
 			// parameter.
 			if onlyIfAvailableUnwrappedReceivedProperties.contains(property.asUnwrappedProperty) {

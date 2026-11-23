@@ -60,7 +60,9 @@ extension ScopeGenerator {
 			return dependency.property
 		}
 		walk.renames = MockLowering.removingRenames(hiddenBy: mockedTypeUncoveredProperties, from: walk.renames)
-		walk.lazilyInstantiatedNames = MockLowering.removingRenames(hiddenBy: mockedTypeUncoveredProperties, from: walk.lazilyInstantiatedNames)
+		// D1 lane hook (lane C): no wrapper `mock()` binds is hidden by the mocked type's own uncovered dependencies, which
+		// the emitter routes through the flat renames alone: a promoted sibling's receive of the other wrapper kind around
+		// such a dependency's instance is passed the wrapper `mock()` makes of the instance it takes.
 		MockLowering.routeReceives(of: mockedTypeUncoveredProperties, toParametersNamed: walk.uncoveredParameterNames, in: &walk.renames)
 		walk.rootParametersKeepingTheirLabels = (signature.forwardedParameters + signature.rootDefaultParameters).map(\.property)
 		// D1 lane hook (lane D): the defaults a type's hand-written mock declares, which its configuration's fields take.
