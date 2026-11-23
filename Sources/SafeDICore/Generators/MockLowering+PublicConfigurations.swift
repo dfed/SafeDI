@@ -86,7 +86,9 @@ extension MockLowering {
 	) -> Lowering<[String]> {
 		var recordsByType = [TypeDescription: [PublicConstructionRecord]]()
 		var typesInOrder = [TypeDescription]()
-		for record in records {
+		// D1 lane hook (lane C): the types every root configures above its repeated ancestors, then those configured only
+		// beneath them (`DependencyTreeGenerator.configurationsBeneathRepeatedAncestors`).
+		for record in records.filter(\.describesConfiguration) + records.filter({ !$0.describesConfiguration }) {
 			if recordsByType[record.concreteType] == nil {
 				typesInOrder.append(record.concreteType)
 			}
@@ -94,8 +96,10 @@ extension MockLowering {
 		}
 		var declarations = [String]()
 		for type in typesInOrder {
+			// A type configured only beneath a repeated ancestor takes its configuration from a node built with its initializer
+			// wherever one is.
 			guard let typeRecords = recordsByType[type],
-			      let structRecord = typeRecords.first,
+			      let structRecord = typeRecords.first(where: \.describesConfiguration) ?? typeRecords.first(where: { !$0.usesMockInitializer }) ?? typeRecords.first,
 			      let configurationTypeName = context.configurationTypeNameByType[type]
 			else { continue }
 			let constructionRecords = [false, true].compactMap { usesMockInitializer in
@@ -270,7 +274,9 @@ extension MockLowering.PublicConstructionRecord {
 			isExtensionBased: construction.isExtensionBased,
 			customMockName: construction.customMockName,
 			constructionIsolation: construction.constructionIsolation,
-			constructionReturnType: construction.concreteType,
+			// D1 lane hook (lane C): what the hand-written mock returns, for a node built with it
+			// (`MockParameterNode.constructionReturnType`).
+			constructionReturnType: construction.constructionReturnType,
 			arguments: construction.callSiteArguments.map { Argument(label: $0.label, innerLabel: $0.innerLabel, typeDescription: $0.typeDescription) },
 			builderParameterTypes: construction.builderParameterTypes,
 			childMembers: children.compactMap(ChildMember.init(of:)),

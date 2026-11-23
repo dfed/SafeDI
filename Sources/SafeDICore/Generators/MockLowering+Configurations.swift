@@ -64,16 +64,41 @@ extension MockLowering {
 		var rootedStructs = [String: String]()
 		var sharedExtensions = [(typeName: String, structCode: String)]()
 		let recordsInRootOrder = zip(roots, loweredRoots).sorted { $0.0.mockedType < $1.0.mockedType }.map(\.1.records)
+		let recordsReadingConfiguration = Self.recordsReadingConfiguration(of: loweredRoots.map(\.records))
 		for records in recordsInRootOrder {
 			// A public mock's records describe its module-level configurations, which are lowered after these.
-			for record in records where record.publicConstruction == nil && seenTypeNames.insert(record.concreteType.asSource).inserted {
+			for record in records where record.publicConstruction == nil && record.beneathRepeatedAncestor == nil && seenTypeNames.insert(record.concreteType.asSource).inserted {
 				let typeName = record.concreteType.asSource
-				let structCode = record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)
+				// The first record can be of a node that reads no overrides from the configuration, beneath a cycle edge,
+				// built the other way from the nodes that read them: the configuration describes those that read them.
+				let structRecord = recordsReadingConfiguration[record.concreteType].flatMap { recordReadingConfiguration in
+					recordReadingConfiguration.oneWayConstruction?.requirements == record.oneWayConstruction?.requirements ? nil : recordReadingConfiguration
+				} ?? record
+				let structCode = structRecord.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)
 				if rootedTypeNames.contains(typeName) {
 					rootedStructs[typeName] = structCode
 				} else {
 					sharedExtensions.append((typeName: typeName, structCode: structCode))
 				}
+			}
+		}
+		// Then the configurations beneath repeated ancestors, a public mock's before an internal mock's, as
+		// `generateMockCode` takes them.
+		for isPublicMock in [true, false] {
+			switch Self.configurationsBeneathRepeatedAncestors(of: recordsInRootOrder, isPublicMock: isPublicMock) {
+			case let .lowered(records):
+				// A public mock's configuration there is a module-level declaration, which this lowering does not lower yet.
+				guard !isPublicMock || records.isEmpty else { return .unsupported(.cycle) }
+				for record in records where seenTypeNames.insert(record.concreteType.asSource).inserted {
+					let typeName = record.concreteType.asSource
+					if rootedTypeNames.contains(typeName) {
+						rootedStructs[typeName] = record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)
+					} else {
+						sharedExtensions.append((typeName: typeName, structCode: record.configurationStruct(amongConfigurationsTypedSendable: sendableConfigurationTypeNames)))
+					}
+				}
+			case let .unsupported(rule):
+				return .unsupported(rule)
 			}
 		}
 		let mergedCodes = zip(roots, loweredRoots).map { root, loweredRoot in
@@ -100,6 +125,113 @@ extension MockLowering {
 			? nil
 			: Self.configurationCode(extensions: sharedExtensions, publicDeclarations: publicDeclarations, mockConditionalCompilation: mockConditionalCompilation)
 		return .lowered((mergedCodes: mergedCodes, configurationCode: configurationCode))
+	}
+
+	/// For each type, the first record, across `recordsByRoot` in the roots' order and each root's records in the order its
+	/// walk entered them, of a node that reads its configuration, no edge in `cycleEdges` above it: of one built with the
+	/// type's initializer where there is one, else of one built with its hand-written mock, as
+	/// `DependencyTreeGenerator.validateConfigurationsAreBuiltOneWay` returns its nodes.
+	private static func recordsReadingConfiguration(of recordsByRoot: [[ConfigurationRecord]]) -> [TypeDescription: ConfigurationRecord] {
+		var firstRecords = [TypeDescription: (builtWithoutMock: ConfigurationRecord?, builtByMock: ConfigurationRecord?)]()
+		for records in recordsByRoot {
+			let recordsInWalkOrder = records.compactMap { record in record.oneWayConstruction.map { (record: record, construction: $0) } }
+				.sorted { $0.construction.walkOrder < $1.construction.walkOrder }
+			for (record, construction) in recordsInWalkOrder where !construction.isBeneathCycleEdge {
+				var first = firstRecords[record.concreteType] ?? (builtWithoutMock: nil, builtByMock: nil)
+				if record.usesMockInitializer {
+					first.builtByMock = first.builtByMock ?? record
+				} else {
+					first.builtWithoutMock = first.builtWithoutMock ?? record
+				}
+				firstRecords[record.concreteType] = first
+			}
+		}
+		return firstRecords.compactMapValues { $0.builtWithoutMock ?? $0.builtByMock }
+	}
+
+	/// The records `recordsInRootOrder`, each root's records in roots' type order, generate a configuration from beneath
+	/// their repeated ancestors, for the mocks of one kind, in the order `generateMockCode` generates them
+	/// (`DependencyTreeGenerator.configurationsBeneathRepeatedAncestors`): each type a construction there reads the
+	/// configuration of, and each type whose configuration one of their configurations nests, transitively, unless a node of
+	/// the kind above every repeated ancestor configures the type; each from a node built with its initializer wherever one
+	/// is, else from one built with its hand-written mock. A nested configuration of a node that records none, as one that
+	/// closes a cycle, is not lowered yet.
+	private static func configurationsBeneathRepeatedAncestors(
+		of recordsInRootOrder: [[ConfigurationRecord]],
+		isPublicMock: Bool,
+	) -> Lowering<[ConfigurationRecord]> {
+		struct Candidate {
+			let rootIndex: Int
+			let record: ConfigurationRecord
+		}
+		struct Construction: Hashable {
+			let concreteType: TypeDescription
+			let usesMockInitializer: Bool
+		}
+		var typesConfiguredAbove = Set<TypeDescription>()
+		for records in recordsInRootOrder {
+			for record in records where record.beneathRepeatedAncestor == nil && (record.publicConstruction != nil) == isPublicMock {
+				typesConfiguredAbove.insert(record.concreteType)
+			}
+		}
+		var candidates = [Candidate]()
+		var candidateConstructions = Set<Construction>()
+		func addCandidate(_ record: ConfigurationRecord, ofRootAt rootIndex: Int) -> Bool {
+			let isNew = !typesConfiguredAbove.contains(record.concreteType)
+				&& candidateConstructions.insert(Construction(concreteType: record.concreteType, usesMockInitializer: record.usesMockInitializer)).inserted
+			if isNew {
+				candidates.append(Candidate(rootIndex: rootIndex, record: record))
+			}
+			return isNew
+		}
+		for (rootIndex, records) in recordsInRootOrder.enumerated() {
+			for record in records {
+				guard let beneath = record.beneathRepeatedAncestor, beneath.isPublicMock == isPublicMock, beneath.readsConfiguration else { continue }
+				_ = addCandidate(record, ofRootAt: rootIndex)
+			}
+		}
+		var readTypes = [TypeDescription]()
+		for candidate in candidates where !readTypes.contains(candidate.record.concreteType) {
+			readTypes.append(candidate.record.concreteType)
+		}
+
+		var chosenCandidates = [TypeDescription: Candidate]()
+		var neededTypes = Set<TypeDescription>()
+		var foundCandidate: Bool
+		repeat {
+			chosenCandidates = [:]
+			for candidate in candidates {
+				let type = candidate.record.concreteType
+				if let chosen = chosenCandidates[type] {
+					if chosen.record.usesMockInitializer, !candidate.record.usesMockInitializer {
+						chosenCandidates[type] = candidate
+					}
+				} else {
+					chosenCandidates[type] = candidate
+				}
+			}
+			foundCandidate = false
+			neededTypes = Set(readTypes)
+			var typesToWalk = readTypes
+			while let type = typesToWalk.popLast() {
+				guard let chosen = chosenCandidates[type] else { continue }
+				for child in chosen.record.beneathRepeatedAncestor?.nestedChildren ?? [] where !typesConfiguredAbove.contains(child.concreteType) {
+					guard let recordIndex = child.recordIndex else { return .unsupported(.cycle) }
+					if addCandidate(recordsInRootOrder[chosen.rootIndex][recordIndex], ofRootAt: chosen.rootIndex) {
+						foundCandidate = true
+					}
+					if neededTypes.insert(child.concreteType).inserted {
+						typesToWalk.append(child.concreteType)
+					}
+				}
+			}
+		} while foundCandidate
+
+		var typesInOrder = [TypeDescription]()
+		for candidate in candidates where neededTypes.contains(candidate.record.concreteType) && !typesInOrder.contains(candidate.record.concreteType) {
+			typesInOrder.append(candidate.record.concreteType)
+		}
+		return .lowered(typesInOrder.compactMap { chosenCandidates[$0]?.record })
 	}
 
 	/// The code that declares each of `extensions`' structs in an extension of its type, then `publicDeclarations`, under the
@@ -141,6 +273,40 @@ extension MockLowering {
 		fileprivate let wasBeneathRepeatedConfiguredAncestor: Bool
 		/// The order in which the walk entered the node's children, among every configured node's of the root.
 		let walkOrder: Int
+
+		/// Whether the node records the configuration the module's mocks may generate from a node beneath a repeated ancestor:
+		/// its type repeats no configured node around it, and it is beneath a node that does.
+		var recordsBeneathRepeatedAncestor: Bool {
+			insertedType != nil && wasBeneathRepeatedConfiguredAncestor
+		}
+	}
+
+	/// A configured node whose children the walk finished, as its parent reads it: its property, and the index of its
+	/// record among the root's, `nil` where it records none.
+	struct FinishedConfiguredChild {
+		let property: Property
+		let recordIndex: Int?
+	}
+}
+
+extension MockLowering.ConfigurationRecord {
+	/// What `DependencyTreeGenerator.configurationsBeneathRepeatedAncestors` reads of a node beneath a node whose type
+	/// repeats one around it (`ScopeGenerator.ConfigurationTypes.nodesBeneathRepeatedAncestors`).
+	struct BeneathRepeatedAncestor: Sendable, Equatable {
+		/// Whether code generated for the node reads its type's configuration: an internal mock's construction that reads a
+		/// configuration built afresh, or any node a public mock builds with a construction function.
+		let readsConfiguration: Bool
+		let isPublicMock: Bool
+		/// The children whose configurations the node's configuration nests
+		/// (`ScopeGenerator.childrenWithNestedConfigurations(of:cycleEdges:)`), in order.
+		let nestedChildren: [NestedChild]
+	}
+
+	/// A child whose configuration a configuration nests: its type, and the index of its record among the root's, `nil`
+	/// where it records none, as a node that closes a cycle or repeats a type around it.
+	struct NestedChild: Sendable, Equatable {
+		let concreteType: TypeDescription
+		let recordIndex: Int?
 	}
 }
 
@@ -157,15 +323,59 @@ extension MockLowering.Walk {
 		)
 		configuredNodesEntered += 1
 		isBeneathRepeatedConfiguredAncestor = isBeneathRepeatedConfiguredAncestor || repeatsAncestor
+		finishedConfiguredChildren.append([])
 		return entry
 	}
 
-	/// Leaves the children `entry` entered.
-	mutating func leavingConfiguredNode(_ entry: MockLowering.ConfiguredNodeEntry) {
+	/// Leaves the children `entry` entered, returning the configured ones the walk finished.
+	mutating func leavingConfiguredNode(_ entry: MockLowering.ConfiguredNodeEntry) -> [MockLowering.FinishedConfiguredChild] {
 		if let insertedType = entry.insertedType {
 			configuredAncestorTypes.remove(insertedType)
 		}
 		isBeneathRepeatedConfiguredAncestor = entry.wasBeneathRepeatedConfiguredAncestor
+		return finishedConfiguredChildren.popLast() ?? []
+	}
+
+	/// Tells the configured node around `node` that the walk finished it, with the index of its record, if any.
+	mutating func finishConfiguredNode(_ node: MockLowering.ConstantNode, recordIndex: Int?) {
+		guard !finishedConfiguredChildren.isEmpty else { return }
+		finishedConfiguredChildren[finishedConfiguredChildren.count - 1].append(MockLowering.FinishedConfiguredChild(property: node.property, recordIndex: recordIndex))
+	}
+
+	/// Records the configuration of `node`, beneath a node whose type repeats one around it, with what the module's choice
+	/// among such nodes reads (`ScopeGenerator.collectUniqueConfigurationTypes`): whether code generated for it reads the
+	/// configuration, and the records of the children its configuration nests, which the walk finished as `finishedChildren`.
+	mutating func recordBeneathRepeatedAncestor(
+		_ node: MockLowering.ConstantNode,
+		children: [MockLowering.TreeNode],
+		finishedChildren: [MockLowering.FinishedConfiguredChild],
+	) {
+		let parentConcreteType = node.instantiable.concreteInstantiable.asSource
+		// A child beneath an edge in `cycleEdges` has no member in its parent's configuration.
+		let recordedChildren = children.filter { child in child.concreteType.map { !isPruned($0, beneath: parentConcreteType) } ?? true }
+		var record = MockLowering.ConfigurationRecord(of: node, children: recordedChildren)
+		record.beneathRepeatedAncestor = MockLowering.ConfigurationRecord.BeneathRepeatedAncestor(
+			readsConfiguration: buildsPublicMock || readsConfigurationBuiltAfresh(of: node.instantiable, usesMockInitializer: node.usesMockInitializer),
+			isPublicMock: buildsPublicMock,
+			nestedChildren: recordedChildren.compactMap { child in
+				switch child {
+				case let .built(childNode):
+					childNode.hasConfiguration
+						? MockLowering.ConfigurationRecord.NestedChild(
+							concreteType: childNode.instantiable.concreteInstantiable,
+							recordIndex: finishedChildren.first(where: { $0.property == childNode.property })?.recordIndex,
+						)
+						: nil
+				case let .cycleClosing(_, _, concreteType):
+					MockLowering.ConfigurationRecord.NestedChild(concreteType: concreteType, recordIndex: nil)
+				case .alias, .publicMockCall:
+					// A call of another module's public mock nests that mock's overrides, no configuration.
+					nil
+				}
+			},
+		)
+		configurationRecords.append(record)
+		finishConfiguredNode(node, recordIndex: configurationRecords.count - 1)
 	}
 }
 

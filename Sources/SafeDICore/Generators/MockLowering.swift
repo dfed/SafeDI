@@ -153,6 +153,9 @@ public enum MockLowering {
 		// D1 lane hook (lane D): what the one-way check reads of the node (`MockLowering+OneWay.swift`).
 		/// The construction the node builds its type with, as the one-way check reads it.
 		var oneWayConstruction: OneWayConstruction?
+		// D1 lane hook (lane D): a node beneath a repeated ancestor (`MockLowering+Configurations.swift`).
+		/// Where the node is beneath a node whose type repeats one around it, what the module's choice of such a node reads.
+		var beneathRepeatedAncestor: BeneathRepeatedAncestor?
 
 		/// A field that configures a child of the node: its configuration, or an optional builder closure.
 		struct ChildField: Sendable, Equatable {
@@ -194,6 +197,11 @@ public enum MockLowering {
 		let constructionIsolation: String?
 		/// What the construction returns: the concrete type, or what a hand-written mock returns.
 		let constructionReturnType: TypeDescription
+		// D1 lane hook (lane C): a node beneath a repeated configured ancestor records only the construction it builds
+		// with, which declares a construction function (`ScopeGenerator.collectPublicConstructionNodes`).
+		/// Whether the record describes the type's module-level configuration too, as the node that records the
+		/// configuration's does.
+		var describesConfiguration = true
 		/// The construction's arguments, in the order it takes them.
 		let arguments: [Argument]
 		/// The types the builder that overrides the construction is handed, one per argument.
@@ -262,7 +270,9 @@ extension ScopeGenerator {
 		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
 		let returnType = (instantiable.mockCallReturnType ?? instantiable.concreteInstantiable).asSource
 		let argumentList = (instantiable.mockInitializer ?? instantiable.initializer)?
-			.createMockInitializerArgumentList(given: instantiable.dependencies, unavailableProperties: unavailableProperties) ?? ""
+			.createMockInitializerArgumentList(given: instantiable.dependencies, unavailableProperties: unavailableProperties)
+			// D1 lane hook (lane D): a type whose declaration the macro rejects is built with the comment that says so.
+			?? Instantiable.incorrectlyConfiguredComment
 		let construction = if instantiable.mockInitializer != nil {
 			"\(typeName).\(instantiable.customMockName ?? InstantiableVisitor.mockMethodName)(\(argumentList))"
 		} else if instantiable.declarationType.isExtension {
