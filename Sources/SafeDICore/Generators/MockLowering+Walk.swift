@@ -543,7 +543,9 @@ extension MockLowering {
 				guard case let .alias(property, _, _, _, _) = generator.scopeData else { return nil }
 				return (index, property)
 			}
-			let redeclaredNames = propertyNodeNames.union(rootFlatReceivedLabels)
+			// D1 lane hook (lane B): the root binds each override of what its tree receives only if available under its name
+			// before the tree, as it binds its property nodes (`MockRootTopLevelNames.rootBindingNames`).
+			let redeclaredNames = propertyNodeNames.union(rootFlatReceivedLabels).union(rootOverrideNames)
 			var takenNames = propertyNodeNames.union(rootLabels).union(aliases.map(\.property.label))
 			for alias in aliases where redeclaredNames.contains(alias.property.label) {
 				var name = "\(alias.property.label)_\(alias.property.typeDescription.simplified.asIdentifier)".spelledAsJoinedIdentifier
